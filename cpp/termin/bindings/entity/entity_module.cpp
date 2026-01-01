@@ -104,14 +104,19 @@ NB_MODULE(_entity_native, m) {
         .def("start", &CxxComponent::start)
         .def("update", &CxxComponent::update)
         .def("fixed_update", &CxxComponent::fixed_update)
-        .def("editor_update", &CxxComponent::editor_update)
         .def("on_destroy", &CxxComponent::on_destroy)
-        .def("on_enable", &CxxComponent::on_enable)
-        .def("on_disable", &CxxComponent::on_disable)
+        .def("on_editor_start", &CxxComponent::on_editor_start)
+        .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
+        .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
+        .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
+        .def("on_added", &CxxComponent::on_added)
+        .def("on_removed", &CxxComponent::on_removed)
         .def("type_name", &CxxComponent::type_name)
         .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
-        .def("mark_for_removal", &CxxComponent::mark_for_removal)
-        .def_prop_ro("pending_destroy", &CxxComponent::pending_destroy)
+        .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
+        .def_prop_ro("started", &CxxComponent::started)
+        .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
+        .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
         .def_prop_rw("entity",
             [](CxxComponent& c) -> nb::object {
                 if (c.entity.valid()) {
@@ -126,18 +131,21 @@ NB_MODULE(_entity_native, m) {
                     c.entity = nb::cast<Entity>(value);
                 }
             })
-        .def_prop_ro("scene", [](CxxComponent& c) -> nb::object {
-            return c.scene;
-        })
         .def("c_component_ptr", [](CxxComponent& c) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(c.c_component());
         })
-        .def("serialize", [](CxxComponent& c) -> nb::object {
-            return c.serialize_with_inspect();
+        .def("serialize", [](CxxComponent& c) -> nb::dict {
+            nos::trent t = c.serialize();
+            return nb::cast<nb::dict>(trent_to_py(t));
         })
-        .def("deserialize_data", [](CxxComponent& c, nb::object data, nb::object context) {
-            c.deserialize_with_inspect(data);
-        }, nb::arg("data"), nb::arg("context") = nb::none());
+        .def("serialize_data", [](CxxComponent& c) -> nb::dict {
+            nos::trent t = c.serialize_data();
+            return nb::cast<nb::dict>(trent_to_py(t));
+        })
+        .def("deserialize_data", [](CxxComponent& c, nb::dict data) {
+            nos::trent t = py_to_trent(data);
+            c.deserialize_data(t);
+        }, nb::arg("data"));
 
     // --- ComponentRegistry ---
     nb::class_<ComponentRegistry>(m, "ComponentRegistry")
