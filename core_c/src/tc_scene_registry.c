@@ -1,6 +1,7 @@
 // tc_scene_registry.c - Global scene registry implementation
 #include "../include/tc_scene_registry.h"
 #include "../include/tc_scene.h"
+#include "../include/tc_entity_pool.h"
 #include "../include/tc_log.h"
 #include "../include/termin_core.h"
 #include <stdlib.h>
@@ -199,4 +200,71 @@ tc_scene_info* tc_scene_registry_get_all_info(size_t* count) {
 
     *count = g_registry->count;
     return infos;
+}
+
+// ============================================================================
+// Entity enumeration
+// ============================================================================
+
+// Helper for collecting entity info
+typedef struct {
+    tc_scene_entity_info* infos;
+    size_t count;
+    size_t capacity;
+    tc_entity_pool* pool;
+} EntityCollector;
+
+static bool collect_entity_info(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    EntityCollector* c = (EntityCollector*)user_data;
+
+    if (c->count >= c->capacity) {
+        // Grow array
+        size_t new_cap = c->capacity == 0 ? 64 : c->capacity * 2;
+        tc_scene_entity_info* new_infos = (tc_scene_entity_info*)realloc(
+            c->infos, new_cap * sizeof(tc_scene_entity_info)
+        );
+        if (!new_infos) return false;
+        c->infos = new_infos;
+        c->capacity = new_cap;
+    }
+
+    tc_scene_entity_info* info = &c->infos[c->count++];
+    info->name = tc_entity_pool_name(pool, id);
+    info->uuid = tc_entity_pool_uuid(pool, id);
+    info->component_count = tc_entity_pool_component_count(pool, id);
+    info->visible = tc_entity_pool_visible(pool, id);
+    info->active = tc_entity_pool_active(pool, id);
+
+    return true;
+}
+
+tc_scene_entity_info* tc_scene_get_entities(int scene_id, size_t* count) {
+    if (!count) return NULL;
+    *count = 0;
+
+    if (!g_registry) return NULL;
+
+    // Find scene by ID
+    tc_scene* scene = NULL;
+    for (size_t i = 0; i < g_registry->count; i++) {
+        if (g_registry->entries[i].id == scene_id) {
+            scene = g_registry->entries[i].scene;
+            break;
+        }
+    }
+
+    if (!scene) return NULL;
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    if (!pool) return NULL;
+
+    size_t entity_count = tc_entity_pool_count(pool);
+    if (entity_count == 0) return NULL;
+
+    EntityCollector collector = { NULL, 0, 0, pool };
+
+    tc_entity_pool_foreach(pool, collect_entity_info, &collector);
+
+    *count = collector.count;
+    return collector.infos;
 }

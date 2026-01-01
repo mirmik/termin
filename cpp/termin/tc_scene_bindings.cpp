@@ -316,6 +316,25 @@ void bind_tc_scene(nb::module_& m) {
         }
         return result;
     }, "Get info for all scenes in registry");
+
+    m.def("tc_scene_get_entities", [](int scene_id) {
+        nb::list result;
+        size_t count = 0;
+        tc_scene_entity_info* infos = tc_scene_get_entities(scene_id, &count);
+        if (infos) {
+            for (size_t i = 0; i < count; ++i) {
+                nb::dict d;
+                d["name"] = infos[i].name ? std::string(infos[i].name) : "";
+                d["uuid"] = infos[i].uuid ? std::string(infos[i].uuid) : "";
+                d["component_count"] = infos[i].component_count;
+                d["visible"] = infos[i].visible;
+                d["active"] = infos[i].active;
+                result.append(d);
+            }
+            free(infos);
+        }
+        return result;
+    }, nb::arg("scene_id"), "Get entities for a scene by ID");
 }
 
 } // namespace termin

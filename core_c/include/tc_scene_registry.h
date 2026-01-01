@@ -65,6 +65,23 @@ typedef bool (*tc_scene_iter_fn)(tc_scene* scene, int id, void* user_data);
 // Iterate over all scenes
 TC_API void tc_scene_registry_foreach(tc_scene_iter_fn callback, void* user_data);
 
+// ============================================================================
+// Entity enumeration for a scene
+// ============================================================================
+
+typedef struct tc_scene_entity_info {
+    const char* name;
+    const char* uuid;
+    size_t component_count;
+    bool visible;
+    bool active;
+} tc_scene_entity_info;
+
+// Get entity info for a scene by scene ID
+// Returns array of tc_scene_entity_info (caller must free)
+// Sets *count to number of entities
+TC_API tc_scene_entity_info* tc_scene_get_entities(int scene_id, size_t* count);
+
 #ifdef __cplusplus
 }
 #endif

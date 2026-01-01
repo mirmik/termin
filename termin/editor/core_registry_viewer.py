@@ -1,7 +1,7 @@
 """
 Dialog for viewing internal state of core_c registries.
 
-Shows meshes, scenes, and other resources stored in C hash tables.
+Shows meshes, scenes, entities and other resources stored in C hash tables.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
+    QListWidget,
+    QListWidgetItem,
     QTextEdit,
     QPushButton,
     QLabel,
@@ -22,7 +24,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from termin.mesh._mesh_native import tc_mesh_get_all_info, tc_mesh_count
-from termin._native.scene import tc_scene_registry_get_all_info, tc_scene_registry_count
+from termin._native.scene import (
+    tc_scene_registry_get_all_info,
+    tc_scene_registry_count,
+    tc_scene_get_entities,
+)
 
 
 class CoreRegistryViewer(QDialog):
@@ -38,7 +44,9 @@ class CoreRegistryViewer(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Core Registry Viewer")
-        self.setMinimumSize(900, 550)
+        self.setMinimumSize(1000, 600)
+
+        self._selected_scene_id: int | None = None
 
         self._init_ui()
         self.refresh()
@@ -47,9 +55,9 @@ class CoreRegistryViewer(QDialog):
         """Create dialog UI."""
         layout = QVBoxLayout(self)
 
-        # Main splitter: tabs on left, details on right
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        layout.addWidget(splitter)
+        # Main splitter: content on left, details on right
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        layout.addWidget(main_splitter)
 
         # Left side: tabs
         left_widget = QWidget()
@@ -57,6 +65,7 @@ class CoreRegistryViewer(QDialog):
         left_layout.setContentsMargins(0, 0, 0, 0)
 
         self._tab_widget = QTabWidget()
+        self._tab_widget.currentChanged.connect(self._on_tab_changed)
         left_layout.addWidget(self._tab_widget)
 
         # Meshes tab
@@ -66,14 +75,43 @@ class CoreRegistryViewer(QDialog):
         self._meshes_tree.itemClicked.connect(self._on_mesh_clicked)
         self._tab_widget.addTab(self._meshes_tree, "Meshes")
 
-        # Scenes tab
-        self._scenes_tree = QTreeWidget()
-        self._scenes_tree.setHeaderLabels(["Name", "Entities", "Update", "Fixed"])
-        self._scenes_tree.setAlternatingRowColors(True)
-        self._scenes_tree.itemClicked.connect(self._on_scene_clicked)
-        self._tab_widget.addTab(self._scenes_tree, "Scenes")
+        # Scenes tab - with splitter for scenes and entities lists
+        scenes_widget = QWidget()
+        scenes_layout = QHBoxLayout(scenes_widget)
+        scenes_layout.setContentsMargins(0, 0, 0, 0)
 
-        splitter.addWidget(left_widget)
+        # Scenes list
+        scenes_left = QWidget()
+        scenes_left_layout = QVBoxLayout(scenes_left)
+        scenes_left_layout.setContentsMargins(0, 0, 0, 0)
+        scenes_left_layout.addWidget(QLabel("Scenes"))
+
+        self._scenes_list = QListWidget()
+        self._scenes_list.setAlternatingRowColors(True)
+        self._scenes_list.itemClicked.connect(self._on_scene_clicked)
+        scenes_left_layout.addWidget(self._scenes_list)
+
+        # Entities list
+        entities_right = QWidget()
+        entities_right_layout = QVBoxLayout(entities_right)
+        entities_right_layout.setContentsMargins(0, 0, 0, 0)
+        self._entities_label = QLabel("Entities")
+        entities_right_layout.addWidget(self._entities_label)
+
+        self._entities_list = QListWidget()
+        self._entities_list.setAlternatingRowColors(True)
+        self._entities_list.itemClicked.connect(self._on_entity_clicked)
+        entities_right_layout.addWidget(self._entities_list)
+
+        scenes_splitter = QSplitter(Qt.Orientation.Horizontal)
+        scenes_splitter.addWidget(scenes_left)
+        scenes_splitter.addWidget(entities_right)
+        scenes_splitter.setSizes([200, 300])
+
+        scenes_layout.addWidget(scenes_splitter)
+        self._tab_widget.addTab(scenes_widget, "Scenes")
+
+        main_splitter.addWidget(left_widget)
 
         # Right side: details panel
         right_widget = QWidget()
@@ -89,10 +127,10 @@ class CoreRegistryViewer(QDialog):
         self._details_text.setFontFamily("monospace")
         right_layout.addWidget(self._details_text)
 
-        splitter.addWidget(right_widget)
+        main_splitter.addWidget(right_widget)
 
         # Set splitter proportions (60% left, 40% right)
-        splitter.setSizes([540, 360])
+        main_splitter.setSizes([600, 400])
 
         # Status bar
         self._status_label = QLabel()
@@ -113,12 +151,23 @@ class CoreRegistryViewer(QDialog):
 
         layout.addLayout(button_layout)
 
+    def _on_tab_changed(self, index: int) -> None:
+        """Clear details when switching tabs."""
+        self._details_text.clear()
+
     def refresh(self) -> None:
         """Refresh all tabs."""
         self._refresh_meshes()
         self._refresh_scenes()
         self._update_status()
         self._details_text.clear()
+        self._entities_list.clear()
+        self._selected_scene_id = None
+        self._entities_label.setText("Entities")
+
+    # =========================================================================
+    # Meshes
+    # =========================================================================
 
     def _refresh_meshes(self) -> None:
         """Refresh mesh list from tc_mesh registry."""
@@ -172,32 +221,32 @@ class CoreRegistryViewer(QDialog):
         ]
         self._details_text.setText("\n".join(lines))
 
+    # =========================================================================
+    # Scenes
+    # =========================================================================
+
     def _refresh_scenes(self) -> None:
         """Refresh scene list from tc_scene registry."""
-        self._scenes_tree.clear()
+        self._scenes_list.clear()
 
         infos = tc_scene_registry_get_all_info()
         for info in sorted(infos, key=lambda x: x["id"]):
             name = info["name"] or f"Scene #{info['id']}"
-            entities = str(info["entity_count"])
-            update = str(info["update_count"])
-            fixed = str(info["fixed_update_count"])
+            text = f"{name} ({info['entity_count']} entities)"
 
-            item = QTreeWidgetItem([name, entities, update, fixed])
-            item.setData(0, Qt.ItemDataRole.UserRole, ("scene", info))
-            self._scenes_tree.addTopLevelItem(item)
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, info)
+            self._scenes_list.addItem(item)
 
-        for i in range(4):
-            self._scenes_tree.resizeColumnToContents(i)
-
-    def _on_scene_clicked(self, item: QTreeWidgetItem, column: int) -> None:
-        """Show scene details in details panel."""
-        data = item.data(0, Qt.ItemDataRole.UserRole)
-        if data is None or data[0] != "scene":
+    def _on_scene_clicked(self, item: QListWidgetItem) -> None:
+        """Show scene details and load entities."""
+        info = item.data(Qt.ItemDataRole.UserRole)
+        if info is None:
             return
 
-        info = data[1]
+        self._selected_scene_id = info["id"]
         self._show_scene_details(info)
+        self._load_entities(info["id"])
 
     def _show_scene_details(self, info: dict) -> None:
         """Display scene details in the details panel."""
@@ -216,6 +265,59 @@ class CoreRegistryViewer(QDialog):
             f"Fixed update:   {info['fixed_update_count']}",
         ]
         self._details_text.setText("\n".join(lines))
+
+    def _load_entities(self, scene_id: int) -> None:
+        """Load entities for the selected scene."""
+        self._entities_list.clear()
+
+        entities = tc_scene_get_entities(scene_id)
+        self._entities_label.setText(f"Entities ({len(entities)})")
+
+        for entity in sorted(entities, key=lambda x: x["name"] or x["uuid"]):
+            name = entity["name"] or "(unnamed)"
+            comp_count = entity["component_count"]
+
+            # Add status indicators
+            status = ""
+            if not entity["active"]:
+                status += " [inactive]"
+            if not entity["visible"]:
+                status += " [hidden]"
+
+            text = f"{name} ({comp_count} comp){status}"
+
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, entity)
+            self._entities_list.addItem(item)
+
+    def _on_entity_clicked(self, item: QListWidgetItem) -> None:
+        """Show entity details in details panel."""
+        info = item.data(Qt.ItemDataRole.UserRole)
+        if info is None:
+            return
+
+        self._show_entity_details(info)
+
+    def _show_entity_details(self, info: dict) -> None:
+        """Display entity details in the details panel."""
+        lines = [
+            "=== ENTITY ===",
+            "",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            f"UUID:           {info['uuid']}",
+            "",
+            "--- State ---",
+            f"Active:         {info['active']}",
+            f"Visible:        {info['visible']}",
+            "",
+            "--- Components ---",
+            f"Count:          {info['component_count']}",
+        ]
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
+    # Utils
+    # =========================================================================
 
     def _format_bytes(self, size: int) -> str:
         """Format size in human-readable form."""

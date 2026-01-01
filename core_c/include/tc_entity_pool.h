@@ -176,6 +176,16 @@ TC_POOL_API tc_entity_id tc_entity_pool_migrate(
     tc_entity_pool* src_pool, tc_entity_id src_id,
     tc_entity_pool* dst_pool);
 
+// ============================================================================
+// Iteration
+// ============================================================================
+
+// Iterator callback: return true to continue, false to stop
+typedef bool (*tc_entity_iter_fn)(tc_entity_pool* pool, tc_entity_id id, void* user_data);
+
+// Iterate over all alive entities
+TC_POOL_API void tc_entity_pool_foreach(tc_entity_pool* pool, tc_entity_iter_fn callback, void* user_data);
+
 #ifdef __cplusplus
 }
 #endif

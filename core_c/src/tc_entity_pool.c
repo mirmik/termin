@@ -1119,3 +1119,20 @@ tc_entity_id tc_entity_pool_migrate(
 
     return dst_id;
 }
+
+// ============================================================================
+// Iteration
+// ============================================================================
+
+void tc_entity_pool_foreach(tc_entity_pool* pool, tc_entity_iter_fn callback, void* user_data) {
+    if (!pool || !callback) return;
+
+    for (size_t i = 0; i < pool->capacity; i++) {
+        if (pool->alive[i]) {
+            tc_entity_id id = { (uint32_t)i, pool->generations[i] };
+            if (!callback(pool, id, user_data)) {
+                break;
+            }
+        }
+    }
+}
