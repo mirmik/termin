@@ -149,11 +149,12 @@ public:
     // nos::trent serialize_data() const;
     // void deserialize_data(const nos::trent& data);
 
-private:
-    void recreate_overridden_material();
-
+protected:
     // GPU mesh cache (uploaded buffers)
     MeshGPU _mesh_gpu;
+
+private:
+    void recreate_overridden_material();
 };
 
 REGISTER_COMPONENT(MeshRenderer, Component);
