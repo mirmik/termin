@@ -214,6 +214,7 @@ set_target_properties(entity_lib PROPERTIES
 # Entity native module (Component, Entity, EntityHandle, registries) - nanobind
 nanobind_add_module(_entity_native
     termin/bindings/entity/entity_module.cpp
+    termin/bindings/entity/entity_bindings.cpp
 )
 target_link_libraries(_entity_native PRIVATE entity_lib trent)
 target_compile_options(_entity_native PRIVATE
