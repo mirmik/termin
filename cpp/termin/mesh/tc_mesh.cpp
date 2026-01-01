@@ -5,13 +5,14 @@ namespace termin {
 
 TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
                           const std::string& override_name,
+                          const std::string& override_uuid,
                           const tc_vertex_layout* custom_layout) {
     if (mesh.vertices.empty()) {
         return TcMesh();
     }
 
-    // Use uuid from mesh if provided, otherwise compute from data
-    std::string uuid_str = mesh.uuid;
+    // Use override_uuid if provided, otherwise use mesh.uuid
+    std::string uuid_str = override_uuid.empty() ? mesh.uuid : override_uuid;
 
     // Check if already in registry
     if (!uuid_str.empty()) {

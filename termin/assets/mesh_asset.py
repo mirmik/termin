@@ -229,12 +229,10 @@ class MeshAsset(DataAsset[TcMesh]):
         mesh3: Mesh3,
         name: str = "mesh",
         source_path: Path | str | None = None,
+        uuid: str | None = None,
     ) -> "MeshAsset":
         """Create MeshAsset from existing Mesh3 (CPU mesh)."""
-        # Create TcMesh from Mesh3 (registers in tc_mesh registry)
-        print(f"[DEBUG] MeshAsset.from_mesh3: name={name}, mesh3.uuid={mesh3.uuid}")
-        tc_mesh = TcMesh.from_mesh3(mesh3, name)
-        print(f"[DEBUG] MeshAsset.from_mesh3: tc_mesh.uuid={tc_mesh.uuid}, is_valid={tc_mesh.is_valid}")
+        tc_mesh = TcMesh.from_mesh3(mesh3, name, uuid or "")
         return cls(mesh_data=tc_mesh, name=name, source_path=source_path)
 
     @classmethod

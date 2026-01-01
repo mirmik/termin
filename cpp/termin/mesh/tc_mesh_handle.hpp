@@ -77,9 +77,10 @@ public:
     }
 
     // Create TcMesh from Mesh3 (CPU mesh)
-    // Uses Mesh3's uuid for caching if available, registers in tc_mesh registry
+    // Uses override_uuid if provided, otherwise Mesh3's uuid for caching
     static TcMesh from_mesh3(const Mesh3& mesh,
                              const std::string& override_name = "",
+                             const std::string& override_uuid = "",
                              const tc_vertex_layout* custom_layout = nullptr);
 
     // Create TcMesh from raw interleaved vertex data

@@ -250,33 +250,40 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
     )
 
     registered = []
-    print("[DEBUG] register_builtin_meshes called")
 
     # Cube with correct UVs (texture on each face)
     if "Cube" not in rm._mesh_assets:
-        cube = MeshAsset.from_mesh3(TexturedCubeMesh(size=1.0), name="Cube")
+        cube = MeshAsset.from_mesh3(
+            TexturedCubeMesh(size=1.0), name="Cube", uuid=BUILTIN_UUIDS["Cube"]
+        )
         rm.register_mesh_asset("Cube", cube, uuid=BUILTIN_UUIDS["Cube"])
         registered.append("Cube")
 
     # Sphere
     if "Sphere" not in rm._mesh_assets:
-        sphere = MeshAsset.from_mesh3(UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16), name="Sphere")
+        sphere = MeshAsset.from_mesh3(
+            UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16),
+            name="Sphere", uuid=BUILTIN_UUIDS["Sphere"]
+        )
         rm.register_mesh_asset("Sphere", sphere, uuid=BUILTIN_UUIDS["Sphere"])
         registered.append("Sphere")
 
     # Plane
     if "Plane" not in rm._mesh_assets:
-        plane = MeshAsset.from_mesh3(PlaneMesh(width=1.0, depth=1.0), name="Plane")
+        plane = MeshAsset.from_mesh3(
+            PlaneMesh(width=1.0, depth=1.0), name="Plane", uuid=BUILTIN_UUIDS["Plane"]
+        )
         rm.register_mesh_asset("Plane", plane, uuid=BUILTIN_UUIDS["Plane"])
         registered.append("Plane")
 
     # Cylinder
     if "Cylinder" not in rm._mesh_assets:
-        cylinder = MeshAsset.from_mesh3(CylinderMesh(radius=0.5, height=1.0), name="Cylinder")
+        cylinder = MeshAsset.from_mesh3(
+            CylinderMesh(radius=0.5, height=1.0), name="Cylinder", uuid=BUILTIN_UUIDS["Cylinder"]
+        )
         rm.register_mesh_asset("Cylinder", cylinder, uuid=BUILTIN_UUIDS["Cylinder"])
         registered.append("Cylinder")
 
-    print(f"[DEBUG] register_builtin_meshes registered: {registered}")
     return registered
 
 

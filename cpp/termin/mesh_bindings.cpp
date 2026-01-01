@@ -253,9 +253,9 @@ void bind_mesh(nb::module_& m) {
             if (!h.mesh || !h.mesh->indices || h.mesh->index_count == 0) return nb::none();
             return make_array_1d(h.mesh->indices, h.mesh->index_count);
         })
-        .def_static("from_mesh3", [](const Mesh3& mesh, std::string name) {
-            return TcMesh::from_mesh3(mesh, name);
-        }, nb::arg("mesh"), nb::arg("name") = "")
+        .def_static("from_mesh3", [](const Mesh3& mesh, std::string name, std::string uuid) {
+            return TcMesh::from_mesh3(mesh, name, uuid);
+        }, nb::arg("mesh"), nb::arg("name") = "", nb::arg("uuid") = "")
         .def_static("from_interleaved", [](
                 nb::ndarray<nb::c_contig, nb::device::cpu> vertices,
                 size_t vertex_count,
