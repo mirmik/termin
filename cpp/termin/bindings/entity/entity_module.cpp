@@ -150,13 +150,18 @@ NB_MODULE(_entity_native, m) {
     // --- ComponentRegistry ---
     nb::class_<ComponentRegistry>(m, "ComponentRegistry")
         .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
-        .def("register_component", &ComponentRegistry::register_component,
-             nb::arg("name"), nb::arg("factory"), nb::arg("kind") = TC_PYTHON_COMPONENT)
+        .def("register_native", &ComponentRegistry::register_native,
+             nb::arg("name"), nb::arg("factory"))
+        .def("register_python", &ComponentRegistry::register_python,
+             nb::arg("name"), nb::arg("cls"))
+        .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("create", &ComponentRegistry::create, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def_prop_ro("component_names", [](ComponentRegistry& reg) {
-            return reg.get_all_names();
+            return reg.list_all();
         })
+        .def("list_native", &ComponentRegistry::list_native)
+        .def("list_python", &ComponentRegistry::list_python)
         .def("clear", &ComponentRegistry::clear);
 
     // --- EntityHandle ---
@@ -164,7 +169,8 @@ NB_MODULE(_entity_native, m) {
         .def(nb::init<>())
         .def(nb::init<const std::string&>(), nb::arg("uuid"))
         .def_rw("uuid", &EntityHandle::uuid)
-        .def("valid", &EntityHandle::valid)
+        .def("valid", &EntityHandle::is_valid)
+        .def("is_valid", &EntityHandle::is_valid)
         .def("get", [](EntityHandle& h) -> nb::object {
             Entity e = h.get();
             if (e.valid()) return nb::cast(e);
