@@ -11,7 +11,6 @@ from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.mesh import TcMesh
-from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.entity import Entity
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.materials.default_material import DefaultMaterial
