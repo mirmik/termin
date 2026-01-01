@@ -166,6 +166,12 @@ target_compile_options(_texture_native PRIVATE
 # Find OpenGL (needed by _graphics_native and _native)
 find_package(OpenGL REQUIRED)
 
+# Disable optimizations for glad.c (large file, slow to compile with -O2)
+set_source_files_properties(
+    termin/render/glad/src/glad.c
+    PROPERTIES COMPILE_OPTIONS "-O0"
+)
+
 # Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles) - nanobind
 nanobind_add_module(_graphics_native
     termin/bindings/graphics/graphics_module.cpp
