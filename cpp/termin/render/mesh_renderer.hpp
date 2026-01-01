@@ -123,6 +123,11 @@ public:
      */
     std::set<std::string> phase_marks() const { return get_phase_marks(); }
 
+    /**
+     * Get GPU mesh cache for direct draw calls.
+     */
+    MeshGPU& mesh_gpu() { return _mesh_gpu; }
+
     // --- Rendering ---
 
     /**

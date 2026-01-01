@@ -173,12 +173,10 @@ class DepthPass(RenderFramePass):
             model = ent.model_matrix()
             depth_material.apply(model, view, proj, graphics=graphics, context_key=key)
 
-            if mr.mesh is not None:
-                mesh_handle = mr.mesh
-                tc_mesh = mesh_handle.get()
-                gpu = mesh_handle.gpu
-                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-                    gpu.draw(render_ctx, tc_mesh.mesh, mesh_handle.version)
+            tc_mesh = mr.mesh
+            if tc_mesh is not None and tc_mesh.is_valid:
+                gpu = mr.mesh_gpu
+                gpu.draw(render_ctx, tc_mesh.mesh, tc_mesh.version)
 
             # TODO: реализовать дебаг через debugger_window
 

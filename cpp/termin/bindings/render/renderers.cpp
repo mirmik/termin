@@ -226,7 +226,10 @@ void bind_renderers(nb::module_& m) {
         .def("get_phases_for_mark", &MeshRenderer::get_phases_for_mark,
             nb::arg("phase_mark"))
         .def("get_geometry_draws", &MeshRenderer::get_geometry_draws,
-            nb::arg("phase_mark") = "");
+            nb::arg("phase_mark") = "")
+        .def_prop_ro("mesh_gpu", [](MeshRenderer& self) -> MeshGPU& {
+            return self.mesh_gpu();
+        }, nb::rv_policy::reference_internal);
 
     // SkinnedMeshRenderer - inherits from MeshRenderer
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
