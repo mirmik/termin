@@ -163,13 +163,9 @@ void bind_renderers(nb::module_& m) {
                 // Try TcMesh first
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
                     self->mesh = nb::cast<TcMesh>(mesh_arg);
-                } else if (nb::isinstance<MeshHandle>(mesh_arg)) {
-                    // Extract TcMesh from MeshHandle (for backwards compatibility)
-                    MeshHandle handle = nb::cast<MeshHandle>(mesh_arg);
-                    self->mesh = handle.get();
-                } else if (nb::hasattr(mesh_arg, "resource")) {
-                    // MeshAsset - get resource (TcMesh)
-                    nb::object res = mesh_arg.attr("resource");
+                } else if (nb::hasattr(mesh_arg, "mesh_data")) {
+                    // MeshAsset - get mesh_data (TcMesh)
+                    nb::object res = mesh_arg.attr("mesh_data");
                     if (nb::isinstance<TcMesh>(res)) {
                         self->mesh = nb::cast<TcMesh>(res);
                     }
@@ -244,13 +240,9 @@ void bind_renderers(nb::module_& m) {
                 // Try TcMesh first
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
                     self->mesh = nb::cast<TcMesh>(mesh_arg);
-                } else if (nb::isinstance<MeshHandle>(mesh_arg)) {
-                    // Extract TcMesh from MeshHandle (for backwards compatibility)
-                    MeshHandle handle = nb::cast<MeshHandle>(mesh_arg);
-                    self->mesh = handle.get();
-                } else if (nb::hasattr(mesh_arg, "resource")) {
-                    // MeshAsset - get resource (TcMesh)
-                    nb::object res = mesh_arg.attr("resource");
+                } else if (nb::hasattr(mesh_arg, "mesh_data")) {
+                    // MeshAsset - get mesh_data (TcMesh)
+                    nb::object res = mesh_arg.attr("mesh_data");
                     if (nb::isinstance<TcMesh>(res)) {
                         self->mesh = nb::cast<TcMesh>(res);
                     }

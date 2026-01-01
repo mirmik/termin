@@ -23,7 +23,6 @@ void register_kind_handlers();
 
 void bind_assets(nb::module_& m) {
     // Note: TextureData is now in _texture_native module
-    // Note: MeshHandle is now in _mesh_native module
 
     // ========== TextureHandle ==========
     nb::class_<TextureHandle>(m, "TextureHandle")
