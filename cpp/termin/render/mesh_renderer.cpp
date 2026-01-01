@@ -9,12 +9,18 @@ MeshRenderer::MeshRenderer() {
     install_drawable_vtable(&_c);
 }
 
-void MeshRenderer::set_mesh(const MeshHandle& handle) {
-    mesh = handle;
+void MeshRenderer::set_mesh(const TcMesh& m) {
+    mesh = m;
 }
 
 void MeshRenderer::set_mesh_by_name(const std::string& name) {
-    mesh = MeshHandle::from_name(name);
+    // Lookup mesh by name in tc_mesh registry
+    tc_mesh* m = tc_mesh_get_by_name(name.c_str());
+    if (m) {
+        mesh = TcMesh(m);
+    } else {
+        mesh = TcMesh();
+    }
 }
 
 Material* MeshRenderer::get_material() const {
@@ -103,12 +109,10 @@ std::set<std::string> MeshRenderer::get_phase_marks() const {
 }
 
 void MeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
-    TcMesh mesh_data = mesh.get();
-    MeshGPU* gpu = mesh.gpu();
-    if (!mesh_data.is_valid() || gpu == nullptr) {
+    if (!mesh.is_valid()) {
         return;
     }
-    gpu->draw(context, mesh_data.mesh, mesh.version());
+    _mesh_gpu.draw(context, mesh.mesh, mesh.version());
 }
 
 std::vector<MaterialPhase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {

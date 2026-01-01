@@ -2059,6 +2059,12 @@ class ResourceManager:
                 get_by_name=self._get_ui_handle,
                 find_name=self._find_ui_handle_name,
             )
+        if kind == "tc_mesh":
+            return HandleAccessors(
+                list_names=self._list_tc_mesh_names,
+                get_by_name=self._get_tc_mesh_by_name,
+                find_name=self._find_tc_mesh_name,
+            )
         return None
 
     # Handle accessors for MaterialHandle
@@ -2163,6 +2169,24 @@ class ResourceManager:
             asset = handle.get_asset()
             if asset is not None:
                 return asset.name
+        return None
+
+    # Handle accessors for TcMesh (direct mesh from tc_mesh registry)
+    def _list_tc_mesh_names(self) -> list[str]:
+        """Get list of all mesh names from tc_mesh registry."""
+        from termin.mesh import TcMesh
+        return TcMesh.list_all_names()
+
+    def _get_tc_mesh_by_name(self, name: str) -> Optional["TcMesh"]:
+        """Get TcMesh by name from registry."""
+        from termin.mesh import TcMesh
+        return TcMesh.from_name(name)
+
+    def _find_tc_mesh_name(self, mesh: Any) -> Optional[str]:
+        """Find name for a TcMesh."""
+        from termin.mesh import TcMesh
+        if isinstance(mesh, TcMesh) and mesh.is_valid():
+            return mesh.name
         return None
 
     def get_handle_by_uuid(self, kind: str, uuid: str) -> Any:

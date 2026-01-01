@@ -4,6 +4,7 @@
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/render/render.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/mesh/tc_mesh_handle.hpp"
 #include <iostream>
 
 #ifdef _WIN32
@@ -159,13 +160,23 @@ void bind_renderers(nb::module_& m) {
             self->cast_shadow = cast_shadow;
 
             if (!mesh_arg.is_none()) {
-                if (nb::isinstance<MeshHandle>(mesh_arg)) {
-                    self->mesh = nb::cast<MeshHandle>(mesh_arg);
-                } else if (nb::hasattr(mesh_arg, "_handle")) {
-                    nb::object handle = mesh_arg.attr("_handle");
-                    if (nb::isinstance<MeshHandle>(handle)) {
-                        self->mesh = nb::cast<MeshHandle>(handle);
+                // Try TcMesh first
+                if (nb::isinstance<TcMesh>(mesh_arg)) {
+                    self->mesh = nb::cast<TcMesh>(mesh_arg);
+                } else if (nb::isinstance<MeshHandle>(mesh_arg)) {
+                    // Extract TcMesh from MeshHandle (for backwards compatibility)
+                    MeshHandle handle = nb::cast<MeshHandle>(mesh_arg);
+                    self->mesh = handle.get();
+                } else if (nb::hasattr(mesh_arg, "resource")) {
+                    // MeshAsset - get resource (TcMesh)
+                    nb::object res = mesh_arg.attr("resource");
+                    if (nb::isinstance<TcMesh>(res)) {
+                        self->mesh = nb::cast<TcMesh>(res);
                     }
+                } else if (nb::isinstance<nb::str>(mesh_arg)) {
+                    // String - lookup by name
+                    std::string name = nb::cast<std::string>(mesh_arg);
+                    self->set_mesh_by_name(name);
                 }
             }
 
@@ -180,8 +191,8 @@ void bind_renderers(nb::module_& m) {
             }
         }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
         .def_prop_rw("mesh",
-            [](MeshRenderer& self) -> MeshHandle& { return self.mesh; },
-            [](MeshRenderer& self, const MeshHandle& h) { self.mesh = h; },
+            [](MeshRenderer& self) -> TcMesh& { return self.mesh; },
+            [](MeshRenderer& self, const TcMesh& m) { self.mesh = m; },
             nb::rv_policy::reference_internal)
         .def_prop_rw("material",
             [](MeshRenderer& self) -> MaterialHandle& { return self.material; },
@@ -189,8 +200,8 @@ void bind_renderers(nb::module_& m) {
             nb::rv_policy::reference_internal)
         .def_rw("cast_shadow", &MeshRenderer::cast_shadow)
         .def_rw("_override_material", &MeshRenderer::_override_material)
-        .def("mesh_handle", [](MeshRenderer& self) -> MeshHandle& {
-            return self.mesh_handle();
+        .def("get_mesh", [](MeshRenderer& self) -> TcMesh& {
+            return self.get_mesh();
         }, nb::rv_policy::reference_internal)
         .def("material_handle", [](MeshRenderer& self) -> MaterialHandle& {
             return self.material_handle();
@@ -230,13 +241,23 @@ void bind_renderers(nb::module_& m) {
             self->cast_shadow = cast_shadow;
 
             if (!mesh_arg.is_none()) {
-                if (nb::isinstance<MeshHandle>(mesh_arg)) {
-                    self->mesh = nb::cast<MeshHandle>(mesh_arg);
-                } else if (nb::hasattr(mesh_arg, "_handle")) {
-                    nb::object handle = mesh_arg.attr("_handle");
-                    if (nb::isinstance<MeshHandle>(handle)) {
-                        self->mesh = nb::cast<MeshHandle>(handle);
+                // Try TcMesh first
+                if (nb::isinstance<TcMesh>(mesh_arg)) {
+                    self->mesh = nb::cast<TcMesh>(mesh_arg);
+                } else if (nb::isinstance<MeshHandle>(mesh_arg)) {
+                    // Extract TcMesh from MeshHandle (for backwards compatibility)
+                    MeshHandle handle = nb::cast<MeshHandle>(mesh_arg);
+                    self->mesh = handle.get();
+                } else if (nb::hasattr(mesh_arg, "resource")) {
+                    // MeshAsset - get resource (TcMesh)
+                    nb::object res = mesh_arg.attr("resource");
+                    if (nb::isinstance<TcMesh>(res)) {
+                        self->mesh = nb::cast<TcMesh>(res);
                     }
+                } else if (nb::isinstance<nb::str>(mesh_arg)) {
+                    // String - lookup by name
+                    std::string name = nb::cast<std::string>(mesh_arg);
+                    self->set_mesh_by_name(name);
                 }
             }
 

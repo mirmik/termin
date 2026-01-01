@@ -271,6 +271,21 @@ void bind_mesh(nb::module_& m) {
            nb::arg("layout"), nb::arg("name") = "", nb::arg("uuid") = "")
         .def_static("from_uuid", &TcMesh::from_uuid, nb::arg("uuid"))
         .def_static("get_or_create", &TcMesh::get_or_create, nb::arg("uuid"))
+        .def_static("from_name", [](const std::string& name) {
+            tc_mesh* m = tc_mesh_get_by_name(name.c_str());
+            return m ? TcMesh(m) : TcMesh();
+        }, nb::arg("name"))
+        .def_static("list_all_names", []() {
+            std::vector<std::string> names;
+            tc_mesh_foreach([](const tc_mesh* mesh, void* user_data) -> bool {
+                auto* vec = static_cast<std::vector<std::string>*>(user_data);
+                if (mesh && mesh->name) {
+                    vec->push_back(mesh->name);
+                }
+                return true;
+            }, &names);
+            return names;
+        })
         .def("__repr__", [](const TcMesh& h) {
             if (!h.mesh) return std::string("<TcMesh invalid>");
             return "<TcMesh vertices=" + std::to_string(h.mesh->vertex_count) +

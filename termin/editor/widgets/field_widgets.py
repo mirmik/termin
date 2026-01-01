@@ -656,6 +656,7 @@ class FieldWidgetFactory:
         if kind in (
             "material_handle",
             "mesh_handle",
+            "tc_mesh",
             "skeleton_handle",
             "voxel_grid_handle",
             "navmesh_handle",

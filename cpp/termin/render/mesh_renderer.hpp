@@ -6,10 +6,12 @@
 
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/component.hpp"
+#include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/render/material.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/render/mesh_gpu.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 
 namespace termin {
@@ -17,13 +19,13 @@ namespace termin {
 /**
  * MeshRenderer - component that renders a mesh with a material.
  *
- * Stores mesh via MeshHandle and material via MaterialHandle.
+ * Stores mesh directly as TcMesh (GPU-ready mesh from registry).
  * Supports material override for per-instance customization.
  */
 class MeshRenderer : public Component, public Drawable {
 public:
-    // Mesh to render
-    MeshHandle mesh;
+    // Mesh to render (GPU-ready, from tc_mesh registry)
+    TcMesh mesh;
 
     // Material for rendering
     MaterialHandle material;
@@ -36,7 +38,7 @@ public:
     Material* _overridden_material = nullptr;
 
     // INSPECT_FIELD registrations
-    INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "mesh_handle")
+    INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
     INSPECT_FIELD(MeshRenderer, material, "Material", "material_handle")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
 
@@ -46,18 +48,18 @@ public:
     // --- Mesh ---
 
     /**
-     * Get mesh handle.
+     * Get mesh reference.
      */
-    MeshHandle& mesh_handle() { return mesh; }
-    const MeshHandle& mesh_handle() const { return mesh; }
+    TcMesh& get_mesh() { return mesh; }
+    const TcMesh& get_mesh() const { return mesh; }
 
     /**
-     * Set mesh by handle.
+     * Set mesh directly.
      */
-    void set_mesh(const MeshHandle& handle);
+    void set_mesh(const TcMesh& m);
 
     /**
-     * Set mesh by name (lookup in ResourceManager).
+     * Set mesh by name (lookup in tc_mesh registry).
      */
     void set_mesh_by_name(const std::string& name);
 
@@ -149,6 +151,9 @@ public:
 
 private:
     void recreate_overridden_material();
+
+    // GPU mesh cache (uploaded buffers)
+    MeshGPU _mesh_gpu;
 };
 
 REGISTER_COMPONENT(MeshRenderer, Component);

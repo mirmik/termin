@@ -2,6 +2,7 @@
 #include <nanobind/stl/string.h>
 
 #include "termin/mesh_bindings.hpp"
+#include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
@@ -89,6 +90,95 @@ void register_mesh_kind() {
     );
 }
 
+void register_tc_mesh_kind() {
+    // C++ handler for tc_mesh kind (TcMesh directly, without MeshHandle wrapper)
+    tc::KindRegistry::instance().register_cpp("tc_mesh",
+        // serialize: std::any(TcMesh) → trent
+        [](const std::any& value) -> nos::trent {
+            const termin::TcMesh& m = std::any_cast<const termin::TcMesh&>(value);
+            nos::trent result;
+            result.init(nos::trent_type::dict);
+            if (m.is_valid()) {
+                result["uuid"] = std::string(m.uuid());
+                result["name"] = std::string(m.name());
+            }
+            return result;
+        },
+        // deserialize: trent → std::any(TcMesh)
+        [](const nos::trent& t) -> std::any {
+            if (!t.is_dict()) return termin::TcMesh();
+            auto& dict = t.as_dict();
+            auto it = dict.find("uuid");
+            if (it == dict.end() || !it->second.is_string()) {
+                return termin::TcMesh();
+            }
+            std::string uuid = it->second.as_string();
+            return termin::TcMesh::from_uuid(uuid);
+        },
+        // to_python: std::any(TcMesh) → nb::object
+        [](const std::any& value) -> nb::object {
+            return nb::cast(std::any_cast<const termin::TcMesh&>(value));
+        }
+    );
+
+    // Python handler for tc_mesh kind
+    tc::KindRegistry::instance().register_python("tc_mesh",
+        // serialize
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            termin::TcMesh mesh = nb::cast<termin::TcMesh>(obj);
+            nb::dict d;
+            if (mesh.is_valid()) {
+                d["uuid"] = nb::str(mesh.uuid());
+                d["name"] = nb::str(mesh.name());
+            }
+            return d;
+        }),
+        // deserialize
+        nb::cpp_function([](nb::object data) -> nb::object {
+            if (!nb::isinstance<nb::dict>(data)) {
+                return nb::cast(termin::TcMesh());
+            }
+            nb::dict d = nb::cast<nb::dict>(data);
+            if (!d.contains("uuid")) {
+                return nb::cast(termin::TcMesh());
+            }
+            std::string uuid = nb::cast<std::string>(d["uuid"]);
+            return nb::cast(termin::TcMesh::from_uuid(uuid));
+        }),
+        // convert
+        nb::cpp_function([](nb::object value) -> nb::object {
+            if (value.is_none()) {
+                return nb::cast(termin::TcMesh());
+            }
+            if (nb::isinstance<termin::TcMesh>(value)) {
+                return value;
+            }
+            // Try MeshHandle (extract TcMesh from it)
+            if (nb::isinstance<termin::MeshHandle>(value)) {
+                termin::MeshHandle handle = nb::cast<termin::MeshHandle>(value);
+                return nb::cast(handle.get());
+            }
+            // Try MeshAsset (has 'resource' attribute returning TcMesh)
+            if (nb::hasattr(value, "resource")) {
+                nb::object res = value.attr("resource");
+                if (nb::isinstance<termin::TcMesh>(res)) {
+                    return res;
+                }
+            }
+            // Try string (lookup by name)
+            if (nb::isinstance<nb::str>(value)) {
+                std::string name = nb::cast<std::string>(value);
+                tc_mesh* m = tc_mesh_get_by_name(name.c_str());
+                if (m) {
+                    return nb::cast(termin::TcMesh(m));
+                }
+            }
+            tc::Log::error("tc_mesh convert failed: cannot convert to TcMesh");
+            return nb::cast(termin::TcMesh());
+        })
+    );
+}
+
 } // anonymous namespace
 
 NB_MODULE(_mesh_native, m) {
@@ -100,6 +190,7 @@ NB_MODULE(_mesh_native, m) {
     // Bind MeshHandle
     bind_mesh_handle(m);
 
-    // Register mesh kind handler for InspectRegistry
-    register_mesh_kind();
+    // Register kind handlers for InspectRegistry
+    register_mesh_kind();      // mesh_handle kind (for backwards compatibility)
+    register_tc_mesh_kind();   // tc_mesh kind (new, direct TcMesh)
 }
