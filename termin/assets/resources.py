@@ -2185,7 +2185,7 @@ class ResourceManager:
     def _find_tc_mesh_name(self, mesh: Any) -> Optional[str]:
         """Find name for a TcMesh."""
         from termin.mesh import TcMesh
-        if isinstance(mesh, TcMesh) and mesh.is_valid():
+        if isinstance(mesh, TcMesh) and mesh.is_valid:
             return mesh.name
         return None
 
