@@ -144,7 +144,10 @@ static tc::TcKind* generate_list_handler(const std::string& kind) {
 }
 
 void bind_inspect(nb::module_& m) {
-    // Register builtin kind handlers
+    // Register C++ builtin kinds (bool, int, float, string, etc.)
+    tc::register_builtin_kinds();
+
+    // Register Python-specific kind handlers (enum)
     register_builtin_kind_handlers();
 
     // Set handler generator callback (runs in nanobind module context)

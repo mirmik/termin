@@ -148,12 +148,10 @@ class GizmoPass(RenderFramePass):
             shader.set_uniform_vec4("u_color", (0.0, 0.0, 0.0, alpha))
             model = ent.model_matrix()
             shader.set_uniform_matrix4("u_model", model)
-            mesh_handle = mr.mesh
-            if mesh_handle is not None:
-                tc_mesh = mesh_handle.get()
-                gpu = mesh_handle.gpu
-                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-                    gpu.draw(ctx_render, tc_mesh.mesh, mesh_handle.version)
+            tc_mesh = mr.mesh
+            if tc_mesh is not None and tc_mesh.is_valid:
+                gpu = mr.mesh_gpu
+                gpu.draw(ctx_render, tc_mesh.mesh, tc_mesh.version)
             index += 1
 
         # возвращаем нормальное состояние

@@ -39,6 +39,10 @@ void register_tc_mesh_kind() {
         // to_python: std::any(TcMesh) → nb::object
         [](const std::any& value) -> nb::object {
             return nb::cast(std::any_cast<const termin::TcMesh&>(value));
+        },
+        // from_python: nb::object → std::any(TcMesh)
+        [](nb::object value) -> std::any {
+            return nb::cast<termin::TcMesh>(value);
         }
     );
 

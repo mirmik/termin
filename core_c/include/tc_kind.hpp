@@ -9,6 +9,7 @@
 #include <any>
 #include <nanobind/nanobind.h>
 #include "trent/trent.h"
+#include "tc_log.h"
 
 // DLL export/import macros (same as InspectRegistry)
 #ifdef _WIN32
@@ -35,7 +36,8 @@ struct TcKind {
     struct CppVtable {
         std::function<nos::trent(const std::any&)> serialize;
         std::function<std::any(const nos::trent&)> deserialize;
-        std::function<nb::object(const std::any&)> to_python;  // for inspector get()
+        std::function<nb::object(const std::any&)> to_python;    // std::any → nb::object
+        std::function<std::any(nb::object)> from_python;         // nb::object → std::any
     } cpp;
 
     // Python vtable - works with nb::object and nb::dict
@@ -105,12 +107,14 @@ public:
         const std::string& name,
         std::function<nos::trent(const std::any&)> serialize,
         std::function<std::any(const nos::trent&)> deserialize,
-        std::function<nb::object(const std::any&)> to_python = nullptr
+        std::function<nb::object(const std::any&)> to_python = nullptr,
+        std::function<std::any(nb::object)> from_python = nullptr
     ) {
         auto& kind = get_or_create(name);
         kind.cpp.serialize = std::move(serialize);
         kind.cpp.deserialize = std::move(deserialize);
         kind.cpp.to_python = std::move(to_python);
+        kind.cpp.from_python = std::move(from_python);
         kind._has_cpp = true;
     }
 
@@ -152,12 +156,31 @@ public:
     }
 
     // Convert std::any to nb::object using registered to_python handler
-    nb::object to_python_cpp(const std::string& kind_name, const std::any& value) {
+    nb::object to_python(const std::string& kind_name, const std::any& value) {
         auto* kind = get(kind_name);
-        if (kind && kind->cpp.to_python) {
-            return kind->cpp.to_python(value);
+        if (!kind) {
+            tc_log_warn("to_python: kind '%s' not registered", kind_name.c_str());
+            return nb::none();
         }
-        return nb::none();
+        if (!kind->cpp.to_python) {
+            tc_log_warn("to_python: kind '%s' has no to_python handler", kind_name.c_str());
+            return nb::none();
+        }
+        return kind->cpp.to_python(value);
+    }
+
+    // Convert nb::object to std::any using registered from_python handler
+    std::any from_python(const std::string& kind_name, nb::object value) {
+        auto* kind = get(kind_name);
+        if (!kind) {
+            tc_log_warn("from_python: kind '%s' not registered", kind_name.c_str());
+            return std::any{};
+        }
+        if (!kind->cpp.from_python) {
+            tc_log_warn("from_python: kind '%s' has no from_python handler", kind_name.c_str());
+            return std::any{};
+        }
+        return kind->cpp.from_python(value);
     }
 
     // ========================================================================
@@ -228,6 +251,10 @@ void register_cpp_handle_kind(const std::string& kind_name) {
         [](const std::any& value) -> nb::object {
             const H& h = std::any_cast<const H&>(value);
             return nb::cast(h);
+        },
+        // from_python: nb::object → std::any(H)
+        [](nb::object value) -> std::any {
+            return nb::cast<H>(value);
         }
     );
 
@@ -278,7 +305,96 @@ void register_cpp_handle_kind(const std::string& kind_name) {
                 result.append(nb::cast(h));
             }
             return result;
+        },
+        // from_python: nb::list → std::any(vector<H>)
+        [](nb::object value) -> std::any {
+            std::vector<H> vec;
+            for (auto item : value) {
+                vec.push_back(nb::cast<H>(item));
+            }
+            return vec;
         }
+    );
+}
+
+// Register builtin kinds (bool, int, float, double, string)
+inline void register_builtin_kinds() {
+    auto& reg = KindRegistry::instance();
+
+    // bool
+    reg.register_cpp("bool",
+        [](const std::any& v) { return nos::trent(std::any_cast<bool>(v)); },
+        [](const nos::trent& t) -> std::any { return t.as_bool(); },
+        [](const std::any& v) { return nb::cast(std::any_cast<bool>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<bool>(v); }
+    );
+    reg.register_cpp("checkbox",
+        [](const std::any& v) { return nos::trent(std::any_cast<bool>(v)); },
+        [](const nos::trent& t) -> std::any { return t.as_bool(); },
+        [](const std::any& v) { return nb::cast(std::any_cast<bool>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<bool>(v); }
+    );
+
+    // int
+    reg.register_cpp("int",
+        [](const std::any& v) { return nos::trent(static_cast<int64_t>(std::any_cast<int>(v))); },
+        [](const nos::trent& t) -> std::any { return static_cast<int>(t.as_numer()); },
+        [](const std::any& v) { return nb::cast(std::any_cast<int>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<int>(v); }
+    );
+    reg.register_cpp("slider_int",
+        [](const std::any& v) { return nos::trent(static_cast<int64_t>(std::any_cast<int>(v))); },
+        [](const nos::trent& t) -> std::any { return static_cast<int>(t.as_numer()); },
+        [](const std::any& v) { return nb::cast(std::any_cast<int>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<int>(v); }
+    );
+
+    // float
+    reg.register_cpp("float",
+        [](const std::any& v) { return nos::trent(static_cast<double>(std::any_cast<float>(v))); },
+        [](const nos::trent& t) -> std::any { return static_cast<float>(t.as_numer()); },
+        [](const std::any& v) { return nb::cast(std::any_cast<float>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<float>(v); }
+    );
+    reg.register_cpp("slider",
+        [](const std::any& v) { return nos::trent(static_cast<double>(std::any_cast<float>(v))); },
+        [](const nos::trent& t) -> std::any { return static_cast<float>(t.as_numer()); },
+        [](const std::any& v) { return nb::cast(std::any_cast<float>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<float>(v); }
+    );
+    reg.register_cpp("drag_float",
+        [](const std::any& v) { return nos::trent(static_cast<double>(std::any_cast<float>(v))); },
+        [](const nos::trent& t) -> std::any { return static_cast<float>(t.as_numer()); },
+        [](const std::any& v) { return nb::cast(std::any_cast<float>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<float>(v); }
+    );
+
+    // double
+    reg.register_cpp("double",
+        [](const std::any& v) { return nos::trent(std::any_cast<double>(v)); },
+        [](const nos::trent& t) -> std::any { return t.as_numer(); },
+        [](const std::any& v) { return nb::cast(std::any_cast<double>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<double>(v); }
+    );
+
+    // string
+    reg.register_cpp("string",
+        [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
+        [](const nos::trent& t) -> std::any { return t.as_string(); },
+        [](const std::any& v) { return nb::cast(std::any_cast<std::string>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<std::string>(v); }
+    );
+    reg.register_cpp("text",
+        [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
+        [](const nos::trent& t) -> std::any { return t.as_string(); },
+        [](const std::any& v) { return nb::cast(std::any_cast<std::string>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<std::string>(v); }
+    );
+    reg.register_cpp("multiline_text",
+        [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
+        [](const nos::trent& t) -> std::any { return t.as_string(); },
+        [](const std::any& v) { return nb::cast(std::any_cast<std::string>(v)); },
+        [](nb::object v) -> std::any { return nb::cast<std::string>(v); }
     );
 }
 

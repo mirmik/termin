@@ -159,6 +159,10 @@ void register_kind_handlers() {
         [](const std::any& value) -> nb::object {
             const EntityHandle& h = std::any_cast<const EntityHandle&>(value);
             return nb::cast(h);
+        },
+        // from_python: nb::object → std::any(EntityHandle)
+        [](nb::object value) -> std::any {
+            return nb::cast<EntityHandle>(value);
         }
     );
 

@@ -478,53 +478,7 @@ public:
     }
 
     // ========================================================================
-    // Builtin type conversion helpers
-    // ========================================================================
-
-    // Convert std::any to nb::object for builtin types
-    // Returns nb::none() if not a builtin type (caller should use KindRegistry)
-    static nb::object any_to_nb_builtin(const std::any& val) {
-        if (auto* v = std::any_cast<bool>(&val)) return nb::cast(*v);
-        if (auto* v = std::any_cast<int>(&val)) return nb::cast(*v);
-        if (auto* v = std::any_cast<int64_t>(&val)) return nb::cast(*v);
-        if (auto* v = std::any_cast<float>(&val)) return nb::cast(*v);
-        if (auto* v = std::any_cast<double>(&val)) return nb::cast(*v);
-        if (auto* v = std::any_cast<std::string>(&val)) return nb::cast(*v);
-        return nb::none();
-    }
-
-    // Convert nb::object to std::any for builtin types based on kind
-    // Returns empty std::any if not a builtin kind (caller should use KindRegistry)
-    static std::any nb_to_any_builtin(nb::object value, const std::string& kind) {
-        if (kind == "bool" || kind == "checkbox") {
-            return nb::cast<bool>(value);
-        }
-        if (kind == "int" || kind == "slider_int") {
-            return nb::cast<int>(value);
-        }
-        if (kind == "float" || kind == "slider" || kind == "drag_float") {
-            return nb::cast<float>(value);
-        }
-        if (kind == "double") {
-            return nb::cast<double>(value);
-        }
-        if (kind == "string" || kind == "text" || kind == "multiline_text") {
-            return nb::cast<std::string>(value);
-        }
-        return std::any{};
-    }
-
-    // Check if kind is a builtin type
-    static bool is_builtin_kind(const std::string& kind) {
-        return kind == "bool" || kind == "checkbox" ||
-               kind == "int" || kind == "slider_int" ||
-               kind == "float" || kind == "slider" || kind == "drag_float" ||
-               kind == "double" ||
-               kind == "string" || kind == "text" || kind == "multiline_text";
-    }
-
-    // ========================================================================
-    // Field access (Python interop - converts C++ fields via nb::cast)
+    // Field access (Python interop)
     // ========================================================================
 
     nb::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
@@ -533,24 +487,13 @@ public:
                 if (f.py_getter) {
                     return f.py_getter(obj);
                 }
-                // C++ field - get via cpp_getter
                 if (f.cpp_getter) {
                     std::any val = f.cpp_getter(obj);
-                    // Try builtin types first
-                    nb::object result = any_to_nb_builtin(val);
+                    nb::object result = KindRegistry::instance().to_python(f.kind, val);
                     if (!result.is_none()) {
                         return result;
                     }
-                    // Custom kinds - use to_python handler
-                    result = KindRegistry::instance().to_python_cpp(f.kind, val);
-                    if (!result.is_none()) {
-                        return result;
-                    }
-                    // Fallback: serialize to trent and convert (returns dict, not object!)
-                    tc_log_warn("get %s.%s (kind=%s): no to_python handler, returning dict",
-                        type_name.c_str(), field_path.c_str(), f.kind.c_str());
-                    nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
-                    return trent_to_nb_compat(t);
+                    throw nb::type_error(("No to_python handler for kind: " + f.kind).c_str());
                 }
                 throw nb::type_error(("No getter for field: " + field_path).c_str());
             }
@@ -562,25 +505,16 @@ public:
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 if (f.py_setter) {
-                    nb::object converted = convert_value_for_kind(value, f.kind);
-                    f.py_setter(obj, converted);
+                    f.py_setter(obj, value);
                     return;
                 }
-                // C++ field - set via cpp_setter
                 if (f.cpp_setter) {
-                    // Try builtin types first
-                    std::any val = nb_to_any_builtin(value, f.kind);
+                    std::any val = KindRegistry::instance().from_python(f.kind, value);
                     if (val.has_value()) {
                         f.cpp_setter(obj, val);
                         return;
                     }
-                    // Custom kinds - use KindRegistry
-                    nos::trent t = nb_to_trent_compat(value);
-                    val = KindRegistry::instance().deserialize_cpp(f.kind, t);
-                    if (val.has_value()) {
-                        f.cpp_setter(obj, val);
-                    }
-                    return;
+                    throw nb::type_error(("No from_python handler for kind: " + f.kind).c_str());
                 }
                 throw nb::type_error(("No setter for field: " + field_path).c_str());
             }
@@ -589,32 +523,8 @@ public:
     }
 
     // ========================================================================
-    // Value conversion
-    // ========================================================================
-
-    nb::object convert_value_for_kind(nb::object value, const std::string& kind) {
-        auto* handler = get_kind_handler(kind);
-        if (handler && handler->has_python()) {
-            return handler->python.convert(value);
-        }
-        return value;
-    }
-
-    // ========================================================================
     // Serialization
     // ========================================================================
-
-    // Convert std::any to trent for builtin types
-    // Returns nil trent if not a builtin type
-    static nos::trent any_to_trent_builtin(const std::any& val) {
-        if (auto* v = std::any_cast<bool>(&val)) return nos::trent(*v);
-        if (auto* v = std::any_cast<int>(&val)) return nos::trent(static_cast<int64_t>(*v));
-        if (auto* v = std::any_cast<int64_t>(&val)) return nos::trent(*v);
-        if (auto* v = std::any_cast<float>(&val)) return nos::trent(static_cast<double>(*v));
-        if (auto* v = std::any_cast<double>(&val)) return nos::trent(*v);
-        if (auto* v = std::any_cast<std::string>(&val)) return nos::trent(*v);
-        return nos::trent::nil();
-    }
 
     nos::trent serialize_all(void* obj, const std::string& type_name) const {
         nos::trent result;
@@ -624,7 +534,6 @@ public:
             if (f.non_serializable) continue;
 
             if (f.py_getter) {
-                // Python field
                 nb::object val = f.py_getter(obj);
                 auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
                 if (handler && handler->has_python()) {
@@ -634,16 +543,8 @@ public:
                     result[f.path] = nb_to_trent_compat(val);
                 }
             } else if (f.cpp_getter) {
-                // C++ field
                 std::any val = f.cpp_getter(obj);
-                // Try builtin types first
-                nos::trent t = any_to_trent_builtin(val);
-                if (!t.is_nil()) {
-                    result[f.path] = t;
-                    continue;
-                }
-                // Custom kinds - use KindRegistry
-                t = KindRegistry::instance().serialize_cpp(f.kind, val);
+                nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
                 result[f.path] = t;
             }
         }
@@ -662,34 +563,23 @@ public:
             if (field_data.is_none()) continue;
 
             if (f.backend == TypeBackend::Cpp) {
-                // C++ field: nb::object → std::any → cpp_setter
                 if (!f.cpp_setter) {
-                    tc_log_warn("deserialize %s.%s (kind=%s, backend=Cpp): no cpp_setter",
-                        type_name.c_str(), f.path.c_str(), f.kind.c_str());
+                    tc_log_warn("deserialize %s.%s: no cpp_setter", type_name.c_str(), f.path.c_str());
                     continue;
                 }
 
-                // Try builtin types first
-                std::any val = nb_to_any_builtin(field_data, f.kind);
-                if (val.has_value()) {
-                    f.cpp_setter(ptr, val);
-                    continue;
-                }
-
-                // Custom kinds - use KindRegistry
+                // Deserialize via trent (handles both primitives and complex types)
                 nos::trent t = nb_to_trent_compat(field_data);
-                val = KindRegistry::instance().deserialize_cpp(f.kind, t);
+                std::any val = KindRegistry::instance().deserialize_cpp(f.kind, t);
                 if (val.has_value()) {
                     f.cpp_setter(ptr, val);
                 } else {
-                    tc_log_warn("deserialize %s.%s (kind=%s): no cpp handler, value not set",
+                    tc_log_warn("deserialize %s.%s (kind=%s): deserialize_cpp failed",
                         type_name.c_str(), f.path.c_str(), f.kind.c_str());
                 }
             } else {
-                // Python field
                 if (!f.py_setter) {
-                    tc_log_warn("deserialize %s.%s (kind=%s, backend=Python): no py_setter",
-                        type_name.c_str(), f.path.c_str(), f.kind.c_str());
+                    tc_log_warn("deserialize %s.%s: no py_setter", type_name.c_str(), f.path.c_str());
                     continue;
                 }
 
