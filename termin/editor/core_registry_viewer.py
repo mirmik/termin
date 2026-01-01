@@ -10,11 +10,14 @@ from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
+    QSplitter,
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
+    QTextEdit,
     QPushButton,
     QLabel,
+    QWidget,
 )
 from PyQt6.QtCore import Qt
 
@@ -35,7 +38,7 @@ class CoreRegistryViewer(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Core Registry Viewer")
-        self.setMinimumSize(700, 450)
+        self.setMinimumSize(900, 550)
 
         self._init_ui()
         self.refresh()
@@ -44,25 +47,54 @@ class CoreRegistryViewer(QDialog):
         """Create dialog UI."""
         layout = QVBoxLayout(self)
 
-        # Tabs for different registries
+        # Main splitter: tabs on left, details on right
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        layout.addWidget(splitter)
+
+        # Left side: tabs
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
         self._tab_widget = QTabWidget()
-        layout.addWidget(self._tab_widget)
+        left_layout.addWidget(self._tab_widget)
 
         # Meshes tab
         self._meshes_tree = QTreeWidget()
-        self._meshes_tree.setHeaderLabels(["UUID", "Name", "Vertices", "Indices", "Refs", "Memory"])
+        self._meshes_tree.setHeaderLabels(["Name", "Vertices", "Triangles", "Memory"])
         self._meshes_tree.setAlternatingRowColors(True)
         self._meshes_tree.itemClicked.connect(self._on_mesh_clicked)
         self._tab_widget.addTab(self._meshes_tree, "Meshes")
 
         # Scenes tab
         self._scenes_tree = QTreeWidget()
-        self._scenes_tree.setHeaderLabels(["ID", "Name", "Entities", "Pending", "Update", "Fixed Update"])
+        self._scenes_tree.setHeaderLabels(["Name", "Entities", "Update", "Fixed"])
         self._scenes_tree.setAlternatingRowColors(True)
         self._scenes_tree.itemClicked.connect(self._on_scene_clicked)
         self._tab_widget.addTab(self._scenes_tree, "Scenes")
 
-        # Status
+        splitter.addWidget(left_widget)
+
+        # Right side: details panel
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        details_label = QLabel("Details")
+        details_label.setStyleSheet("font-weight: bold;")
+        right_layout.addWidget(details_label)
+
+        self._details_text = QTextEdit()
+        self._details_text.setReadOnly(True)
+        self._details_text.setFontFamily("monospace")
+        right_layout.addWidget(self._details_text)
+
+        splitter.addWidget(right_widget)
+
+        # Set splitter proportions (60% left, 40% right)
+        splitter.setSizes([540, 360])
+
+        # Status bar
         self._status_label = QLabel()
         layout.addWidget(self._status_label)
 
@@ -86,6 +118,7 @@ class CoreRegistryViewer(QDialog):
         self._refresh_meshes()
         self._refresh_scenes()
         self._update_status()
+        self._details_text.clear()
 
     def _refresh_meshes(self) -> None:
         """Refresh mesh list from tc_mesh registry."""
@@ -93,53 +126,51 @@ class CoreRegistryViewer(QDialog):
 
         infos = tc_mesh_get_all_info()
         for info in sorted(infos, key=lambda x: x["name"] or x["uuid"]):
-            uuid = info["uuid"]
             name = info["name"] or "(unnamed)"
             vertices = str(info["vertex_count"])
-            indices = str(info["index_count"])
-            refs = str(info["ref_count"])
+            triangles = str(info["index_count"] // 3)
             memory = self._format_bytes(info["memory_bytes"])
 
-            item = QTreeWidgetItem([uuid, name, vertices, indices, refs, memory])
-            item.setData(0, Qt.ItemDataRole.UserRole, info)
+            item = QTreeWidgetItem([name, vertices, triangles, memory])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("mesh", info))
             self._meshes_tree.addTopLevelItem(item)
 
-        for i in range(6):
+        for i in range(4):
             self._meshes_tree.resizeColumnToContents(i)
 
     def _on_mesh_clicked(self, item: QTreeWidgetItem, column: int) -> None:
-        """Show mesh details on click."""
-        info = item.data(0, Qt.ItemDataRole.UserRole)
-        if info is None:
+        """Show mesh details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "mesh":
             return
 
-        # Remove old children
-        while item.childCount() > 0:
-            item.takeChild(0)
+        info = data[1]
+        self._show_mesh_details(info)
 
-        # If already expanded, just collapse
-        if item.isExpanded():
-            item.setExpanded(False)
-            return
-
-        # Add detailed info
-        details = [
-            ("UUID", info["uuid"]),
-            ("Name", info["name"] or "(unnamed)"),
-            ("Vertex Count", str(info["vertex_count"])),
-            ("Index Count", str(info["index_count"])),
-            ("Triangle Count", str(info["index_count"] // 3)),
-            ("Stride", f"{info['stride']} bytes"),
-            ("Memory", self._format_bytes(info["memory_bytes"])),
-            ("Ref Count", str(info["ref_count"])),
-            ("Version", str(info["version"])),
+    def _show_mesh_details(self, info: dict) -> None:
+        """Display mesh details in the details panel."""
+        lines = [
+            "=== MESH ===",
+            "",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            f"UUID:           {info['uuid']}",
+            "",
+            "--- Geometry ---",
+            f"Vertices:       {info['vertex_count']:,}",
+            f"Indices:        {info['index_count']:,}",
+            f"Triangles:      {info['index_count'] // 3:,}",
+            f"Stride:         {info['stride']} bytes/vertex",
+            "",
+            "--- Memory ---",
+            f"Vertex data:    {self._format_bytes(info['vertex_count'] * info['stride'])}",
+            f"Index data:     {self._format_bytes(info['index_count'] * 4)}",
+            f"Total:          {self._format_bytes(info['memory_bytes'])}",
+            "",
+            "--- State ---",
+            f"Ref count:      {info['ref_count']}",
+            f"Version:        {info['version']}",
         ]
-
-        for label, value in details:
-            child = QTreeWidgetItem([label, value, "", "", "", ""])
-            item.addChild(child)
-
-        item.setExpanded(True)
+        self._details_text.setText("\n".join(lines))
 
     def _refresh_scenes(self) -> None:
         """Refresh scene list from tc_scene registry."""
@@ -147,50 +178,44 @@ class CoreRegistryViewer(QDialog):
 
         infos = tc_scene_registry_get_all_info()
         for info in sorted(infos, key=lambda x: x["id"]):
-            scene_id = str(info["id"])
-            name = info["name"] or "(unnamed)"
+            name = info["name"] or f"Scene #{info['id']}"
             entities = str(info["entity_count"])
-            pending = str(info["pending_count"])
             update = str(info["update_count"])
-            fixed_update = str(info["fixed_update_count"])
+            fixed = str(info["fixed_update_count"])
 
-            item = QTreeWidgetItem([scene_id, name, entities, pending, update, fixed_update])
-            item.setData(0, Qt.ItemDataRole.UserRole, info)
+            item = QTreeWidgetItem([name, entities, update, fixed])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("scene", info))
             self._scenes_tree.addTopLevelItem(item)
 
-        for i in range(6):
+        for i in range(4):
             self._scenes_tree.resizeColumnToContents(i)
 
     def _on_scene_clicked(self, item: QTreeWidgetItem, column: int) -> None:
-        """Show scene details on click."""
-        info = item.data(0, Qt.ItemDataRole.UserRole)
-        if info is None:
+        """Show scene details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "scene":
             return
 
-        # Remove old children
-        while item.childCount() > 0:
-            item.takeChild(0)
+        info = data[1]
+        self._show_scene_details(info)
 
-        # If already expanded, just collapse
-        if item.isExpanded():
-            item.setExpanded(False)
-            return
-
-        # Add detailed info
-        details = [
-            ("ID", str(info["id"])),
-            ("Name", info["name"] or "(unnamed)"),
-            ("Entity Count", str(info["entity_count"])),
-            ("Pending Start", str(info["pending_count"])),
-            ("Update List", str(info["update_count"])),
-            ("Fixed Update List", str(info["fixed_update_count"])),
+    def _show_scene_details(self, info: dict) -> None:
+        """Display scene details in the details panel."""
+        lines = [
+            "=== SCENE ===",
+            "",
+            f"ID:             {info['id']}",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            "",
+            "--- Entities ---",
+            f"Total:          {info['entity_count']}",
+            "",
+            "--- Component Scheduler ---",
+            f"Pending start:  {info['pending_count']}",
+            f"Update list:    {info['update_count']}",
+            f"Fixed update:   {info['fixed_update_count']}",
         ]
-
-        for label, value in details:
-            child = QTreeWidgetItem([label, value, "", "", "", ""])
-            item.addChild(child)
-
-        item.setExpanded(True)
+        self._details_text.setText("\n".join(lines))
 
     def _format_bytes(self, size: int) -> str:
         """Format size in human-readable form."""
@@ -206,7 +231,6 @@ class CoreRegistryViewer(QDialog):
         mesh_count = tc_mesh_count()
         scene_count = tc_scene_registry_count()
 
-        # Calculate total memory
         infos = tc_mesh_get_all_info()
         total_memory = sum(info["memory_bytes"] for info in infos)
 
