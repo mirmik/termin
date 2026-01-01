@@ -21,7 +21,6 @@ from .lighting import LightingManager
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from termin.visualization.core.mesh_handle import MeshHandle
     from termin.visualization.core.material import Material
 
 
@@ -126,9 +125,13 @@ class Scene:
     def skybox_bottom_color(self, value):
         self._skybox.skybox_bottom_color = np.asarray(value, dtype=np.float32)
 
-    def skybox_mesh(self) -> "MeshHandle":
-        """Get skybox cube mesh."""
+    def skybox_mesh(self):
+        """Get skybox cube mesh (TcMesh)."""
         return self._skybox.mesh
+
+    def skybox_gpu(self):
+        """Get skybox MeshGPU."""
+        return self._skybox.gpu
 
     def skybox_material(self) -> "Material | None":
         """Get skybox material based on current skybox_type."""

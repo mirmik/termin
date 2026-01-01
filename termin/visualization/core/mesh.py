@@ -5,18 +5,18 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from termin.mesh.mesh import Mesh2, Mesh3
+from termin.mesh import TcMesh
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.mesh_asset import MeshAsset
 from termin.visualization.core.mesh_gpu import MeshGPU
-from termin.visualization.core.mesh_handle import MeshHandle
-from termin.visualization.platform.backends.base import MeshHandle as GPUMeshHandle
+from termin.visualization.platform.backends.base import MeshHandle as GPUMeshHandle  # GPU backend mesh handle
 
 
 class MeshDrawable:
     """
     Рендер-ресурс для 3D-меша.
 
-    Обёртка над MeshHandle (ссылка на MeshAsset) + MeshGPU (GPU handles).
+    Обёртка над MeshAsset + MeshGPU (GPU handles).
     Сохраняет обратную совместимость с существующим API.
     """
 
@@ -50,8 +50,7 @@ class MeshDrawable:
                 source_path=source_id,
             )
 
-        # Храним через MeshHandle для единообразия
-        self._handle: MeshHandle = MeshHandle.from_asset(asset)
+        self._asset: MeshAsset = asset
         self._gpu: MeshGPU = MeshGPU()
 
     # --------- интерфейс ресурса ---------
@@ -66,57 +65,51 @@ class MeshDrawable:
         То, что кладём в сериализацию и по чему грузим обратно.
         Обычно это путь к файлу или GUID.
         """
-        asset = self._handle.get_asset()
-        if asset is not None and asset.source_path is not None:
-            return str(asset.source_path)
+        if self._asset.source_path is not None:
+            return str(self._asset.source_path)
         return None
 
     @property
     def name(self) -> Optional[str]:
         """Имя ресурса."""
-        asset = self._handle.get_asset()
-        return asset.name if asset else None
+        return self._asset.name
 
     @name.setter
     def name(self, value: Optional[str]) -> None:
         """Устанавливает имя."""
-        asset = self._handle.get_asset()
-        if asset is not None and value is not None:
-            asset.name = value
+        if value is not None:
+            self._asset.name = value
 
     def set_source_id(self, source_id: str):
-        asset = self._handle.get_asset()
-        if asset is not None:
-            asset.source_path = source_id
-            if asset.name == "mesh":
-                asset.name = source_id
+        self._asset.source_path = source_id
+        if self._asset.name == "mesh":
+            self._asset.name = source_id
 
     # --------- доступ к данным ---------
 
     @property
-    def asset(self) -> MeshAsset | None:
+    def asset(self) -> MeshAsset:
         """Получить MeshAsset."""
-        return self._handle.get_asset()
+        return self._asset
 
     @property
-    def mesh(self) -> Mesh3 | None:
-        """Геометрия (Mesh3)."""
-        return self._handle.get()
+    def mesh(self) -> TcMesh | None:
+        """Геометрия (TcMesh)."""
+        return self._asset.mesh_data
 
     @mesh.setter
     def mesh(self, value: Mesh3):
         """Устанавливает геометрию."""
-        asset = self._handle.get_asset()
-        if asset is not None:
-            asset.mesh_data = value
-            # version автоматически увеличится в asset.mesh_data setter
+        # Create TcMesh from Mesh3
+        tc_mesh = TcMesh.from_mesh3(value, self._asset.name)
+        self._asset.mesh_data = tc_mesh
 
     # --------- GPU lifecycle ---------
 
     def upload(self, context: RenderContext):
         """Загрузить в GPU (если ещё не загружено)."""
-        mesh = self._handle.get()
-        if mesh is None:
+        tc_mesh = self._asset.mesh_data
+        if tc_mesh is None or not tc_mesh.is_valid:
             return
         # MeshGPU сам проверит версию и загрузит если нужно
         # Но upload() в старом API не рисует, поэтому просто пропускаем
@@ -124,13 +117,12 @@ class MeshDrawable:
 
     def draw(self, context: RenderContext):
         """Рисует меш."""
-        tc_mesh = self._handle.get()
-        asset = self._handle.get_asset()
+        tc_mesh = self._asset.mesh_data
         if tc_mesh is None or not tc_mesh.is_valid:
             from termin._native import log
-            log.warn(f"MeshDrawable.draw: invalid mesh (asset={asset})")
+            log.warn(f"MeshDrawable.draw: invalid mesh (asset={self._asset})")
             return
-        version = asset.version if asset else 0
+        version = self._asset.version
         self._gpu.draw(context, tc_mesh.mesh, version)
 
     def delete(self):
@@ -146,21 +138,17 @@ class MeshDrawable:
         Сохраняет только ссылку на файл (source_path).
         Inline сериализация удалена.
         """
-        asset = self._handle.get_asset()
-        if asset is None:
-            return {"type": "none"}
-
-        if asset.source_path is not None:
+        if self._asset.source_path is not None:
             # Use as_posix() for cross-platform consistency (always forward slashes)
             return {
                 "type": "file",
-                "source_id": asset.source_path.as_posix(),
+                "source_id": self._asset.source_path.as_posix(),
             }
 
         # Без source_path сохраняем имя
         return {
             "type": "named",
-            "name": asset.name,
+            "name": self._asset.name,
         }
 
     @classmethod
@@ -200,17 +188,17 @@ class MeshDrawable:
 
     def interleaved_buffer(self):
         """Проброс к геометрии."""
-        mesh = self._handle.get()
-        if mesh is None:
+        tc_mesh = self._asset.mesh_data
+        if tc_mesh is None or not tc_mesh.is_valid:
             return None
-        return mesh.interleaved_buffer()
+        return tc_mesh.interleaved_buffer()
 
     def get_vertex_layout(self):
         """Проброс к геометрии."""
-        mesh = self._handle.get()
-        if mesh is None:
+        tc_mesh = self._asset.mesh_data
+        if tc_mesh is None or not tc_mesh.is_valid:
             return None
-        return mesh.get_vertex_layout()
+        return tc_mesh.get_vertex_layout()
 
 
 class Mesh2Drawable:
