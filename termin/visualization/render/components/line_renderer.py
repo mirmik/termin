@@ -17,11 +17,12 @@ from typing import Iterable, List, Optional, Set, TYPE_CHECKING
 import numpy as np
 
 from termin.mesh.mesh import Mesh2, Mesh3
+from termin.mesh import TcMesh
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import Mesh2Drawable
-from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.renderpass import RenderState
@@ -29,7 +30,7 @@ from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    pass
+    from termin._native.render import MeshGPU
 
 
 # Дефолтный шейдер для линий
@@ -229,7 +230,8 @@ class LineRenderer(PythonComponent):
             self._material_handle = MaterialHandle.from_material(material)
 
         # Drawables для двух режимов
-        self._ribbon_handle: MeshHandle | None = None  # для quad режима
+        self._ribbon_mesh: TcMesh | None = None  # для quad режима
+        self._ribbon_gpu: Optional["MeshGPU"] = None
         self._lines_drawable: Mesh2Drawable | None = None   # для raw_lines режима
 
         # Флаг необходимости перестроения
@@ -342,7 +344,8 @@ class LineRenderer(PythonComponent):
 
     def _rebuild_geometry(self):
         """Перестраивает геометрию в зависимости от режима."""
-        self._ribbon_drawable = None
+        self._ribbon_mesh = None
+        self._ribbon_gpu = None
         self._lines_drawable = None
 
         if len(self._points) < 2:
@@ -358,8 +361,11 @@ class LineRenderer(PythonComponent):
             # Ribbon режим (квады)
             vertices, triangles = _build_line_ribbon(self._points, self._width)
             if len(triangles) > 0:
-                mesh3 = Mesh3(vertices=vertices, triangles=triangles)
-                self._ribbon_handle = MeshHandle.from_mesh3(mesh3, name="line_ribbon")
+                self._ribbon_mesh = create_voxel_mesh(
+                    vertices=vertices,
+                    triangles=triangles,
+                    name="line_ribbon",
+                )
 
         self._dirty = False
 
@@ -373,10 +379,10 @@ class LineRenderer(PythonComponent):
         self._ensure_geometry()
         return self._lines_drawable
 
-    def _get_ribbon_handle(self) -> MeshHandle | None:
-        """Возвращает MeshHandle для ribbon режима."""
+    def _get_ribbon_mesh(self) -> TcMesh | None:
+        """Возвращает TcMesh для ribbon режима."""
         self._ensure_geometry()
-        return self._ribbon_handle
+        return self._ribbon_mesh
 
     # Class-level cache for default line material
     _default_material: Optional[Material] = None
@@ -419,12 +425,12 @@ class LineRenderer(PythonComponent):
             if drawable is not None:
                 drawable.draw(context)
         else:
-            handle = self._get_ribbon_handle()
-            if handle is not None:
-                tc_mesh = handle.get()
-                gpu = handle.gpu
-                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-                    gpu.draw(context, tc_mesh.mesh, handle.version)
+            mesh = self._get_ribbon_mesh()
+            if mesh is not None and mesh.is_valid:
+                if self._ribbon_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._ribbon_gpu = MeshGPU()
+                self._ribbon_gpu.draw(context, mesh.mesh, mesh.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """

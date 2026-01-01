@@ -10,8 +10,9 @@ import numpy as np
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
 from termin.mesh.mesh import Mesh3
+from termin.mesh import TcMesh
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.materials.default_material import DefaultMaterial
 
@@ -62,25 +63,34 @@ def _extract_scale(matrix: np.ndarray) -> np.ndarray:
     return np.array([scale_x, scale_y, scale_z], dtype=np.float32)
 
 
-def _fbx_mesh_to_mesh3(fbx_mesh: FBXMeshData) -> Mesh3:
-    """Convert FBXMeshData to Mesh3."""
-    vertices = fbx_mesh.vertices
+def _fbx_mesh_to_tc_mesh(fbx_mesh: FBXMeshData) -> TcMesh:
+    """Convert FBXMeshData to TcMesh."""
+    vertices = fbx_mesh.vertices.astype(np.float32)
     indices = fbx_mesh.indices.reshape(-1, 3)
 
-    mesh = Mesh3(name=fbx_mesh.name, vertices=vertices, triangles=indices, uvs=fbx_mesh.uvs)
-
     if fbx_mesh.normals is not None:
-        mesh.vertex_normals = fbx_mesh.normals
+        normals = fbx_mesh.normals.astype(np.float32)
     else:
+        # Compute normals
+        mesh = Mesh3(name=fbx_mesh.name, vertices=vertices, triangles=indices)
         mesh.compute_vertex_normals()
+        normals = mesh.vertex_normals.astype(np.float32)
 
-    return mesh
+    uvs = fbx_mesh.uvs.astype(np.float32) if fbx_mesh.uvs is not None else None
+
+    return create_voxel_mesh(
+        vertices=vertices,
+        triangles=indices,
+        vertex_normals=normals,
+        uvs=uvs,
+        name=fbx_mesh.name,
+    )
 
 
 def _create_entity_from_node(
     node: FBXNodeData,
-    meshes: List[FBXMeshData],
-    mesh_handles: Dict[int, MeshHandle],
+    fbx_meshes: List[FBXMeshData],
+    tc_meshes: Dict[int, TcMesh],
     default_material: DefaultMaterial,
 ) -> Entity:
     """Recursively create Entity hierarchy from FBXNodeData."""
@@ -94,20 +104,19 @@ def _create_entity_from_node(
 
     # Add MeshRenderer for each mesh attached to this node
     for mesh_idx in node.mesh_indices:
-        if mesh_idx < len(meshes):
-            # Get or create MeshHandle
-            if mesh_idx not in mesh_handles:
-                mesh3 = _fbx_mesh_to_mesh3(meshes[mesh_idx])
-                mesh_handles[mesh_idx] = MeshHandle.from_mesh3(mesh3, name=meshes[mesh_idx].name)
+        if mesh_idx < len(fbx_meshes):
+            # Get or create TcMesh
+            if mesh_idx not in tc_meshes:
+                tc_meshes[mesh_idx] = _fbx_mesh_to_tc_mesh(fbx_meshes[mesh_idx])
 
-            mesh_handle = mesh_handles[mesh_idx]
-            renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
+            tc_mesh = tc_meshes[mesh_idx]
+            renderer = MeshRenderer(mesh=tc_mesh, material=default_material)
             entity.add_component(renderer)
 
     # Recursively create children
     for child_node in node.children:
         child_entity = _create_entity_from_node(
-            child_node, meshes, mesh_handles, default_material
+            child_node, fbx_meshes, tc_meshes, default_material
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -143,15 +152,15 @@ def instantiate_fbx(path: Path, name: str = None) -> Entity:
     # Shared material for all meshes
     default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
 
-    # Cache for MeshHandles (shared between nodes referencing same mesh)
-    mesh_handles: Dict[int, MeshHandle] = {}
+    # Cache for TcMeshes (shared between nodes referencing same mesh)
+    tc_meshes: Dict[int, TcMesh] = {}
 
     if scene_data.root is not None:
         # Create hierarchy from FBX node tree
         root_entity = _create_entity_from_node(
             scene_data.root,
             scene_data.meshes,
-            mesh_handles,
+            tc_meshes,
             default_material,
         )
         root_entity.name = name
@@ -160,12 +169,11 @@ def instantiate_fbx(path: Path, name: str = None) -> Entity:
         root_entity = Entity(pose=Pose3.identity(), name=name)
 
         for i, fbx_mesh in enumerate(scene_data.meshes):
-            mesh3 = _fbx_mesh_to_mesh3(fbx_mesh)
-            mesh_handle = MeshHandle.from_mesh3(mesh3, name=fbx_mesh.name)
-            mesh_handles[i] = mesh_handle
+            tc_mesh = _fbx_mesh_to_tc_mesh(fbx_mesh)
+            tc_meshes[i] = tc_mesh
 
             mesh_entity = Entity(pose=Pose3.identity(), name=fbx_mesh.name)
-            renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
+            renderer = MeshRenderer(mesh=tc_mesh, material=default_material)
             mesh_entity.add_component(renderer)
 
             root_entity.transform.add_child(mesh_entity.transform)

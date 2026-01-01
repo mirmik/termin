@@ -1,9 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from termin.geombase import Pose3
-from termin.visualization.core.component import Component
 from termin.visualization.render.render_context import RenderContext
-from termin.visualization.core.material import Material
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 
 
@@ -23,11 +21,9 @@ class SkyboxRenderer(MeshRenderer):
         context.graphics.set_depth_func("lequal")
         self.material.apply(self.entity.model_matrix(), view_no_translation, context.projection, graphics=context.graphics, context_key=context.context_key)
 
-        # Draw via MeshHandle's gpu
-        tc_mesh = self._mesh_handle.get()
-        gpu = self._mesh_handle.gpu
-        if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-            gpu.draw(context, tc_mesh.mesh, self._mesh_handle.version)
+        # Draw via MeshGPU (mesh is inherited from MeshRenderer)
+        if self.mesh.is_valid:
+            self._mesh_gpu.draw(context, self.mesh.mesh, self.mesh.version)
 
         context.graphics.set_depth_func("less")
         context.graphics.set_depth_mask(True)
