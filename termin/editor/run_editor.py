@@ -43,28 +43,28 @@ def build_scene(world):
     scene = Scene()
 
 
-    entity_cyl = Entity(pose=Pose3.identity(), name="cylinder")
-    entity_cyl.add_component(MeshRenderer(cyl_handle, green_material))
-    entity_cyl.transform.relocate(Pose3(lin=np.array([-2.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
-    scene.add(entity_cyl)
+    #entity_cyl = Entity(pose=Pose3.identity(), name="cylinder")
+    #entity_cyl.add_component(MeshRenderer(cyl_handle, green_material))
+    #entity_cyl.transform.relocate(Pose3(lin=np.array([-2.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
+    #scene.add(entity_cyl)
 
-    entity = Entity(pose=Pose3.identity(), name="cube1")
-    entity.add_component(MeshRenderer(cube_handle, red_material))
-    scene.add(entity)
+    #entity = Entity(pose=Pose3.identity(), name="cube1")
+    #entity.add_component(MeshRenderer(cube_handle, red_material))
+    #scene.add(entity)
 
-    entity2 = Entity(pose=Pose3.identity(), name="cube2")
-    entity2.add_component(MeshRenderer(cube_handle, blue_material))
-    entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
-    scene.add(entity2)
+    #entity2 = Entity(pose=Pose3.identity(), name="cube2")
+    #entity2.add_component(MeshRenderer(cube_handle, blue_material))
+    #entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
+    #scene.add(entity2)
 
-    panel = Entity(pose=Pose3.identity(), name="cube2")
-    panel.add_component(MeshRenderer(cube_handle, blue_material))
-    panel.transform.relocate(GeneralPose3(
-        lin=np.array([0.0, 0.0, -3.0]),
-        ang=np.array([0.0, 0.0, 0.0, 1.0]),
-        scale=np.array([10.0, 10.0, 0.1])
-    ))
-    scene.add(panel)
+    # panel = Entity(pose=Pose3.identity(), name="cube2")
+    # panel.add_component(MeshRenderer(cube_handle, blue_material))
+    # panel.transform.relocate(GeneralPose3(
+    #     lin=np.array([0.0, 0.0, -3.0]),
+    #     ang=np.array([0.0, 0.0, 0.0, 1.0]),
+    #     scale=np.array([10.0, 10.0, 0.1])
+    # ))
+    # scene.add(panel)
 
 
     # Направленный источник света для теней (направление совпадает с ShadowPass)
