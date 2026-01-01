@@ -75,6 +75,15 @@ uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
 
 out vec4 FragColor;
 
+// GLSL 1.30+ forbids dynamic indexing of sampler arrays
+float sample_shadow_map(int idx, vec3 coords) {
+    if (idx == 0) return texture(u_shadow_map[0], coords);
+    if (idx == 1) return texture(u_shadow_map[1], coords);
+    if (idx == 2) return texture(u_shadow_map[2], coords);
+    if (idx == 3) return texture(u_shadow_map[3], coords);
+    return 1.0;
+}
+
 const float PI = 3.14159265359;
 
 // Normal Distribution Function (GGX/Trowbridge-Reitz)
@@ -134,7 +143,7 @@ float compute_shadow(int light_index) {
         }
 
         // Hardware PCF: texture() делает depth comparison автоматически
-        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
+        return sample_shadow_map(sm, vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
     }
     return 1.0;
 }
