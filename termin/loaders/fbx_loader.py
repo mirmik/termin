@@ -68,7 +68,7 @@ class FBXMeshData:
         self.material_index = material_index
 
 
-class FBXTextureData:
+class FBXTcTexture:
     """Holds texture data extracted from FBX."""
     def __init__(self, name, filename, content=None):
         self.name = name
@@ -111,7 +111,7 @@ class FBXSceneData:
     def __init__(self):
         self.meshes = []
         self.materials = []
-        self.textures = []  # FBXTextureData list (embedded textures)
+        self.textures = []  # FBXTcTexture list (embedded textures)
         self.root = None
         self.animations = []
 
@@ -581,7 +581,7 @@ def load_fbx_file(path) -> FBXSceneData:
 
     # Textures
     for tex_data in tex_data_list:
-        scene_data.textures.append(FBXTextureData(
+        scene_data.textures.append(FBXTcTexture(
             name=tex_data['name'],
             filename=tex_data['filename'],
             content=tex_data['content'],

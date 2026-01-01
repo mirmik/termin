@@ -155,10 +155,12 @@ target_compile_options(_skeleton_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Texture native module (TextureData) - using nanobind
+# Texture native module (TcTexture, TcTexture) - using nanobind
 nanobind_add_module(_texture_native
     termin/bindings/texture/texture_module.cpp
+    termin/texture/tc_texture_handle.cpp
 )
+target_link_libraries(_texture_native PRIVATE trent entity_lib)
 target_compile_options(_texture_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -311,6 +313,7 @@ nanobind_add_module(_native
     termin/render/material.cpp
     termin/render/mesh_gpu.cpp
     termin/render/texture_gpu.cpp
+    termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
     termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp

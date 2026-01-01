@@ -4,7 +4,6 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/ndarray.h>
 
-#include "texture_data.hpp"
 #include "handles.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/material.hpp"
@@ -22,7 +21,7 @@ namespace termin {
 void register_kind_handlers();
 
 void bind_assets(nb::module_& m) {
-    // Note: TextureData is now in _texture_native module
+    // Note: TcTexture is now in _texture_native module
 
     // ========== TextureHandle ==========
     nb::class_<TextureHandle>(m, "TextureHandle")
@@ -30,8 +29,7 @@ void bind_assets(nb::module_& m) {
         .def(nb::init<nb::object>(), nb::arg("asset"))
         .def_static("from_name", &TextureHandle::from_name, nb::arg("name"))
         .def_static("from_asset", &TextureHandle::from_asset, nb::arg("asset"))
-        .def_static("from_direct", &TextureHandle::from_direct, nb::arg("texture_data"),
-            nb::rv_policy::reference)
+        .def_static("from_direct", &TextureHandle::from_direct, nb::arg("texture"))
         .def_static("from_file", &TextureHandle::from_file,
             nb::arg("path"), nb::arg("name") = "")
         .def_static("from_texture_data", &TextureHandle::from_texture_data,
@@ -45,7 +43,7 @@ void bind_assets(nb::module_& m) {
         .def_prop_ro("version", &TextureHandle::version)
         .def_prop_ro("gpu", &TextureHandle::gpu, nb::rv_policy::reference)
         .def_prop_ro("source_path", &TextureHandle::source_path)
-        .def("get", &TextureHandle::get, nb::rv_policy::reference)
+        .def("get", &TextureHandle::get)
         .def("get_asset", [](const TextureHandle& self) { return self.asset; })
         .def("bind", &TextureHandle::bind,
             nb::arg("graphics"), nb::arg("unit") = 0, nb::arg("context_key") = 0)

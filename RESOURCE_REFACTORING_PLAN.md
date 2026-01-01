@@ -18,8 +18,8 @@
 - [ ] (позже) Удалить `MeshDrawable` когда не нужна обратная совместимость
 
 ## Этап 4: TextureAsset ✅
-- [x] Создать `TextureData` (numpy массив, сырые данные)
-- [x] Создать `TextureAsset` (хранит TextureData)
+- [x] Создать `TcTexture` (numpy массив, сырые данные)
+- [x] Создать `TextureAsset` (хранит TcTexture)
 - [x] Создать `TextureGPU` (временное решение)
 - [x] Обновить `TextureHandle` → ссылается на `TextureAsset`
 - [x] `Texture` = `TextureHandle` + `TextureGPU` (обёртка для обратной совместимости)

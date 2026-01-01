@@ -2087,7 +2087,7 @@ class EditorWindow(QMainWindow):
             self._spacemouse.update(orbit_controller, self._request_viewport_update)
 
         # Update active_in_editor components in editor mode
-        if not is_playing:
+        if not is_playing and self.scene is not None:
             profiler.begin_frame()
             with profiler.section("Components"):
                 self.scene.editor_update(dt)

@@ -9,7 +9,7 @@
 #include "termin/render/mesh_gpu.hpp"
 #include "termin/render/texture_gpu.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
-#include "termin/assets/texture_data.hpp"
+#include "termin/texture/tc_texture_handle.hpp"
 
 namespace nb = nanobind;
 
@@ -21,25 +21,25 @@ class Material;
 /**
  * TextureHandle - smart reference to texture asset.
  *
- * Wraps TextureAsset nb::object, provides access to TextureData and GPU handle.
+ * Wraps TextureAsset nb::object, provides access to TcTexture and GPU handle.
  */
 class TextureHandle {
 public:
-    // Direct texture data pointer (optional, for non-asset textures)
-    TextureData* _direct = nullptr;
+    // Direct texture (optional, for non-asset textures)
+    TcTexture _direct;
 
     // Python asset object (TextureAsset or None)
     nb::object asset;
 
     TextureHandle() : asset(nb::none()) {}
 
-    explicit TextureHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
+    explicit TextureHandle(nb::object asset_) : _direct(), asset(std::move(asset_)) {}
 
-    explicit TextureHandle(TextureData* direct) : _direct(direct), asset(nb::none()) {}
+    explicit TextureHandle(TcTexture direct) : _direct(std::move(direct)), asset(nb::none()) {}
 
-    // Create handle from direct TextureData pointer.
-    static TextureHandle from_direct(TextureData* texture_data) {
-        return TextureHandle(texture_data);
+    // Create handle from direct TcTexture.
+    static TextureHandle from_direct(TcTexture texture) {
+        return TextureHandle(std::move(texture));
     }
 
     /**
@@ -63,7 +63,7 @@ public:
     );
 
     /**
-     * Create handle from TextureData.
+     * Create handle from TcTexture.
      */
     static TextureHandle from_texture_data(
         nb::object texture_data,
@@ -72,16 +72,17 @@ public:
 
     // Check if handle is valid (has direct texture or asset).
     bool is_valid() const {
-        return _direct != nullptr || !asset.is_none();
+        return _direct.is_valid() || !asset.is_none();
     }
 
     // Check if this is a direct texture (not from asset).
     bool is_direct() const {
-        return _direct != nullptr;
+        return _direct.is_valid();
     }
 
     // Get asset name (empty if direct).
     std::string name() const {
+        if (_direct.is_valid()) return _direct.name();
         if (asset.is_none()) return "";
         return nb::cast<std::string>(asset.attr("name"));
     }
@@ -90,22 +91,23 @@ public:
      * Get version for change tracking.
      */
     int version() const {
+        if (_direct.is_valid()) return _direct.version();
         if (asset.is_none()) return 0;
         return nb::cast<int>(asset.attr("version"));
     }
 
     /**
-     * Get TextureData resource pointer.
-     * Returns nullptr if asset is empty or resource is None.
+     * Get TcTexture.
+     * Returns invalid TcTexture if asset is empty or resource is None.
      */
-    TextureData* get() const {
-        if (_direct != nullptr) {
+    TcTexture get() const {
+        if (_direct.is_valid()) {
             return _direct;
         }
-        if (asset.is_none()) return nullptr;
+        if (asset.is_none()) return TcTexture();
         nb::object res = asset.attr("resource");
-        if (res.is_none()) return nullptr;
-        return nb::cast<TextureData*>(res);
+        if (res.is_none()) return TcTexture();
+        return nb::cast<TcTexture>(res);
     }
 
     /**
@@ -129,6 +131,7 @@ public:
      * Get source path.
      */
     std::string source_path() const {
+        if (_direct.is_valid()) return _direct.source_path();
         if (asset.is_none()) return "";
         nb::object sp = asset.attr("source_path");
         if (sp.is_none()) return "";

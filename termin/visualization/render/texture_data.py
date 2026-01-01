@@ -1,4 +1,4 @@
 """Re-export for backwards compatibility."""
-from termin.assets.texture_data import TextureData
+from termin.assets.texture_data import TcTexture
 
-__all__ = ["TextureData"]
+__all__ = ["TcTexture"]

@@ -13,6 +13,7 @@ from PyQt6.QtCore import QThread
 from PyQt6.QtWidgets import QApplication
 
 from termin.editor.settings import EditorSettings
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.editor.world_persistence import WorldPersistence
@@ -43,7 +44,6 @@ class SceneFileController:
         self._on_after_new = on_after_new
         self._on_after_save = on_after_save
         self._on_after_load = on_after_load
-        self._log = log_message or (lambda msg: None)
 
     def new_scene(self) -> bool:
         """
@@ -123,7 +123,7 @@ class SceneFileController:
 
             wp.save(file_path)
             EditorSettings.instance().set_last_scene_path(file_path)
-            self._log(f"Scene saved: {file_path}")
+            log.info(f"Scene saved: {file_path}")
             self._on_after_save()
             return True
 
@@ -169,7 +169,7 @@ class SceneFileController:
 
             wp.load(file_path)
             EditorSettings.instance().set_last_scene_path(file_path)
-            self._log(f"Scene loaded: {file_path}")
+            log.info(f"Scene loaded: {file_path}")
             self._on_after_load()
             return True
 
@@ -207,6 +207,6 @@ class SceneFileController:
 
         except Exception as e:
             import traceback
-            self._log(f"Could not restore last scene: {e}\n{traceback.format_exc()}")
+            log.warning(f"Could not restore last scene: {e}\n{traceback.format_exc()}")
             self._on_after_load()  # Update title
             return False

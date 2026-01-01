@@ -1,5 +1,8 @@
-"""TextureData - re-export from C++."""
+"""TcTexture - alias for TcTexture for backwards compatibility."""
 
-from termin.texture._texture_native import TextureData
+from termin.texture._texture_native import TcTexture
 
-__all__ = ["TextureData"]
+# Alias for backwards compatibility
+TcTexture = TcTexture
+
+__all__ = ["TcTexture"]

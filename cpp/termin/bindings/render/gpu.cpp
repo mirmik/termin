@@ -3,7 +3,7 @@
 #include "termin/render/texture_gpu.hpp"
 #include "termin/render/render.hpp"
 #include "termin/mesh/mesh3.hpp"
-#include "termin/assets/texture_data.hpp"
+//#include "termin/assets/texture_data.hpp"
 
 extern "C" {
 #include "termin_core.h"

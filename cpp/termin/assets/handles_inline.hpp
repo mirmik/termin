@@ -111,7 +111,7 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
 }
 
 inline void TextureHandle::deserialize_from(const nos::trent& data) {
-    _direct = nullptr;
+    _direct = TcTexture();
 
     if (!data.is_dict()) {
         asset = nb::none();
@@ -154,11 +154,11 @@ inline void TextureHandle::deserialize_from(const nos::trent& data) {
 
 inline void TextureHandle::bind(GraphicsBackend* graphics, int unit, int64_t context_key) const {
     TextureGPU* gpu_ptr = gpu();
-    TextureData* data = get();
-    if (gpu_ptr == nullptr || data == nullptr) {
+    TcTexture data = get();
+    if (gpu_ptr == nullptr || !data.is_valid()) {
         return;
     }
-    gpu_ptr->bind(graphics, *data, version(), unit, context_key);
+    gpu_ptr->bind(graphics, data, version(), unit, context_key);
 }
 
 // ========== MaterialHandle inline implementations ==========

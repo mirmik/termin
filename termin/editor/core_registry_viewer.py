@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from termin.mesh._mesh_native import tc_mesh_get_all_info, tc_mesh_count
+from termin.texture._texture_native import tc_texture_get_all_info, tc_texture_count
 from termin._native.scene import (
     tc_scene_registry_get_all_info,
     tc_scene_registry_count,
@@ -73,6 +74,13 @@ class CoreRegistryViewer(QDialog):
         self._meshes_tree.setAlternatingRowColors(True)
         self._meshes_tree.itemClicked.connect(self._on_mesh_clicked)
         self._tab_widget.addTab(self._meshes_tree, "Meshes")
+
+        # Textures tab
+        self._textures_tree = QTreeWidget()
+        self._textures_tree.setHeaderLabels(["Name", "Size", "Channels", "Memory"])
+        self._textures_tree.setAlternatingRowColors(True)
+        self._textures_tree.itemClicked.connect(self._on_texture_clicked)
+        self._tab_widget.addTab(self._textures_tree, "Textures")
 
         # Scenes tab - with splitter for scenes and entities lists
         scenes_widget = QWidget()
@@ -160,6 +168,7 @@ class CoreRegistryViewer(QDialog):
     def refresh(self) -> None:
         """Refresh all tabs."""
         self._refresh_meshes()
+        self._refresh_textures()
         self._refresh_scenes()
         self._update_status()
         self._details_text.clear()
@@ -216,6 +225,61 @@ class CoreRegistryViewer(QDialog):
             f"Vertex data:    {self._format_bytes(info['vertex_count'] * info['stride'])}",
             f"Index data:     {self._format_bytes(info['index_count'] * 4)}",
             f"Total:          {self._format_bytes(info['memory_bytes'])}",
+            "",
+            "--- State ---",
+            f"Ref count:      {info['ref_count']}",
+            f"Version:        {info['version']}",
+        ]
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
+    # Textures
+    # =========================================================================
+
+    def _refresh_textures(self) -> None:
+        """Refresh texture list from tc_texture registry."""
+        self._textures_tree.clear()
+
+        infos = tc_texture_get_all_info()
+        for info in sorted(infos, key=lambda x: x["name"] or x["uuid"]):
+            name = info["name"] or "(unnamed)"
+            size = f"{info['width']}x{info['height']}"
+            channels = str(info["channels"])
+            memory = self._format_bytes(info["memory_bytes"])
+
+            item = QTreeWidgetItem([name, size, channels, memory])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("texture", info))
+            self._textures_tree.addTopLevelItem(item)
+
+        for i in range(4):
+            self._textures_tree.resizeColumnToContents(i)
+
+    def _on_texture_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show texture details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "texture":
+            return
+
+        info = data[1]
+        self._show_texture_details(info)
+
+    def _show_texture_details(self, info: dict) -> None:
+        """Display texture details in the details panel."""
+        lines = [
+            "=== TEXTURE ===",
+            "",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            f"UUID:           {info['uuid']}",
+            f"Source:         {info['source_path'] or '(none)'}",
+            "",
+            "--- Dimensions ---",
+            f"Width:          {info['width']}",
+            f"Height:         {info['height']}",
+            f"Channels:       {info['channels']}",
+            f"Format:         {info['format']}",
+            "",
+            "--- Memory ---",
+            f"Size:           {self._format_bytes(info['memory_bytes'])}",
             "",
             "--- State ---",
             f"Ref count:      {info['ref_count']}",
@@ -333,13 +397,17 @@ class CoreRegistryViewer(QDialog):
     def _update_status(self) -> None:
         """Update status bar."""
         mesh_count = tc_mesh_count()
+        texture_count = tc_texture_count()
         scene_count = tc_scene_registry_count()
 
-        infos = tc_mesh_get_all_info()
-        total_memory = sum(info["memory_bytes"] for info in infos)
+        mesh_infos = tc_mesh_get_all_info()
+        mesh_memory = sum(info["memory_bytes"] for info in mesh_infos)
+
+        texture_infos = tc_texture_get_all_info()
+        texture_memory = sum(info["memory_bytes"] for info in texture_infos)
 
         self._status_label.setText(
-            f"Meshes: {mesh_count} | "
-            f"Scenes: {scene_count} | "
-            f"Mesh Memory: {self._format_bytes(total_memory)}"
+            f"Meshes: {mesh_count} ({self._format_bytes(mesh_memory)}) | "
+            f"Textures: {texture_count} ({self._format_bytes(texture_memory)}) | "
+            f"Scenes: {scene_count}"
         )

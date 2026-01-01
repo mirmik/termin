@@ -22,6 +22,7 @@ set(TC_SOURCES
     src/tc_inspect.c
     src/tc_mesh.c
     src/tc_mesh_registry.c
+    src/tc_texture_registry.c
     src/tc_scene_registry.c
     src/tc_log.c
     src/tc_profiler.c
@@ -43,6 +44,8 @@ set(TC_HEADERS
     include/tc_inspect.h
     include/tc_mesh.h
     include/tc_mesh_registry.h
+    include/tc_texture.h
+    include/tc_texture_registry.h
     include/tc_scene_registry.h
 )
 

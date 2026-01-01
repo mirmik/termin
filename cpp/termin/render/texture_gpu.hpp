@@ -5,12 +5,12 @@
 #include <cstdint>
 
 #include "termin/render/handles.hpp"
+#include "termin/texture/tc_texture_handle.hpp"
 
 namespace termin {
 
 // Forward declarations
 class GraphicsBackend;
-class TextureData;
 
 /**
  * TextureGPU - GPU resource wrapper for texture rendering.
@@ -49,14 +49,14 @@ public:
      * Bind texture to unit, uploading/re-uploading if needed.
      *
      * @param graphics Graphics backend for GPU operations
-     * @param texture_data TextureData with pixel data
+     * @param texture TcTexture with pixel data
      * @param version Current version of texture data
      * @param unit Texture unit to bind to
      * @param context_key GL context key
      */
     void bind(
         GraphicsBackend* graphics,
-        const TextureData& texture_data,
+        const TcTexture& texture,
         int version,
         int unit = 0,
         int64_t context_key = 0

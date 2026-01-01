@@ -49,7 +49,7 @@ class GLBMaterialData:
         self.base_color_texture = base_color_texture  # texture index
 
 
-class GLBTextureData:
+class GLBTcTexture:
     """Texture data extracted from GLB."""
     def __init__(self, name: str, data: bytes, mime_type: str):
         self.name = name
@@ -124,7 +124,7 @@ class GLBSceneData:
     def __init__(self):
         self.meshes: List[GLBMeshData] = []
         self.materials: List[GLBMaterialData] = []
-        self.textures: List[GLBTextureData] = []
+        self.textures: List[GLBTcTexture] = []
         self.animations: List[GLBAnimationClip] = []
         self.nodes: List[GLBNodeData] = []
         self.skins: List[GLBSkinData] = []
@@ -320,7 +320,7 @@ def _parse_textures(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             continue
 
         if data:
-            scene_data.textures.append(GLBTextureData(
+            scene_data.textures.append(GLBTcTexture(
                 name=name,
                 data=data,
                 mime_type=mime_type,

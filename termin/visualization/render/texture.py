@@ -9,7 +9,6 @@ import numpy as np
 
 from termin.visualization.core.texture_handle import TextureHandle
 from termin.visualization.render.texture_asset import TextureAsset
-from termin.visualization.render.texture_data import TextureData
 from termin.visualization.render.texture_gpu import TextureGPU
 
 if TYPE_CHECKING:
@@ -37,8 +36,8 @@ class Texture:
         return self._handle.get_asset()
 
     @property
-    def texture_data(self) -> TextureData | None:
-        """Get underlying TextureData."""
+    def texture_data(self) -> TcTexture | None:
+        """Get underlying TcTexture."""
         return self._handle.get()
 
     @property
@@ -184,7 +183,9 @@ class Texture:
         Returns:
             Texture instance with the provided data.
         """
-        texture_data = TextureData(
+        from termin.texture import TcTexture
+
+        texture_data = TcTexture.from_data(
             data=data,
             width=width,
             height=height,
@@ -192,6 +193,8 @@ class Texture:
             flip_x=False,
             flip_y=True,
             transpose=False,
+            name=source_path or "texture",
+            source_path=source_path or "",
         )
         asset = TextureAsset(
             texture_data=texture_data,

@@ -11,7 +11,7 @@ Asset классы занимаются только **элевацией** — 
         ↓
     Asset (загрузка, кэширование, hot-reload)
         ↓
-    Data (AudioClip, Mesh3, TextureData)
+    Data (AudioClip, Mesh3, TcTexture)
         ↓
     Handle (smart reference)
         ↓

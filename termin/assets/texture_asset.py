@@ -6,21 +6,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.assets.data_asset import DataAsset
-from termin.assets.texture_data import TextureData
+from termin.texture import TcTexture
 
 if TYPE_CHECKING:
     import numpy as np
     from termin.visualization.render.texture_gpu import TextureGPU
 
 
-class TextureAsset(DataAsset[TextureData]):
+class TextureAsset(DataAsset[TcTexture]):
     """
     Asset for texture image data.
 
     IMPORTANT: Create through ResourceManager, not directly.
     This ensures proper registration and avoids duplicates.
 
-    Stores TextureData (CPU data: pixels, size, format) and TextureGPU (GPU resources).
+    Stores TcTexture (handle to tc_texture in C registry).
     GPU resources are created on demand when .gpu property is accessed.
     """
 
@@ -28,7 +28,7 @@ class TextureAsset(DataAsset[TextureData]):
 
     def __init__(
         self,
-        texture_data: TextureData | None = None,
+        texture_data: TcTexture | None = None,
         name: str = "texture",
         source_path: Path | str | None = None,
         uuid: str | None = None,
@@ -44,12 +44,12 @@ class TextureAsset(DataAsset[TextureData]):
     # --- Convenience property ---
 
     @property
-    def texture_data(self) -> TextureData | None:
+    def texture_data(self) -> TcTexture | None:
         """Texture data (lazy-loaded)."""
         return self.data
 
     @texture_data.setter
-    def texture_data(self, value: TextureData | None) -> None:
+    def texture_data(self, value: TcTexture | None) -> None:
         """Set texture data and bump version."""
         self.data = value
 
@@ -57,19 +57,19 @@ class TextureAsset(DataAsset[TextureData]):
     def width(self) -> int:
         """Texture width in pixels."""
         data = self.data
-        return data.width if data else 0
+        return data.width if data and data.is_valid else 0
 
     @property
     def height(self) -> int:
         """Texture height in pixels."""
         data = self.data
-        return data.height if data else 0
+        return data.height if data and data.is_valid else 0
 
     @property
     def channels(self) -> int:
         """Number of color channels."""
         data = self.data
-        return data.channels if data else 0
+        return data.channels if data and data.is_valid else 0
 
     # --- GPU resources ---
 
@@ -109,8 +109,8 @@ class TextureAsset(DataAsset[TextureData]):
 
     # --- Content parsing ---
 
-    def _parse_content(self, content: bytes) -> TextureData | None:
-        """Parse image bytes into TextureData."""
+    def _parse_content(self, content: bytes) -> TcTexture | None:
+        """Parse image bytes into TcTexture."""
         import io
 
         import numpy as np
@@ -120,7 +120,7 @@ class TextureAsset(DataAsset[TextureData]):
         data = np.array(image, dtype=np.uint8)
         width, height = image.size
 
-        return TextureData(
+        return TcTexture.from_data(
             data=data,
             width=width,
             height=height,
@@ -128,6 +128,7 @@ class TextureAsset(DataAsset[TextureData]):
             flip_x=self._flip_x,
             flip_y=self._flip_y,
             transpose=self._transpose,
+            name=self._name,
             source_path=str(self._source_path) if self._source_path else "",
         )
 
@@ -136,10 +137,29 @@ class TextureAsset(DataAsset[TextureData]):
     @classmethod
     def from_file(cls, path: str | Path, name: str | None = None) -> "TextureAsset":
         """Create TextureAsset from image file."""
-        texture_data = TextureData.from_file(path)
+        import numpy as np
+        from PIL import Image
+
+        path = Path(path)
+        image = Image.open(path).convert("RGBA")
+        data = np.array(image, dtype=np.uint8)
+        width, height = image.size
+
+        texture_name = name or path.stem
+        texture_data = TcTexture.from_data(
+            data=data,
+            width=width,
+            height=height,
+            channels=4,
+            flip_x=False,
+            flip_y=True,
+            transpose=False,
+            name=texture_name,
+            source_path=str(path),
+        )
         return cls(
             texture_data=texture_data,
-            name=name or Path(path).stem,
+            name=texture_name,
             source_path=path,
         )
 
@@ -153,11 +173,18 @@ class TextureAsset(DataAsset[TextureData]):
         transpose: bool = False,
     ) -> "TextureAsset":
         """Create TextureAsset from numpy array."""
-        texture_data = TextureData.from_array(
-            data,
+        height, width = data.shape[:2]
+        channels = data.shape[2] if data.ndim == 3 else 1
+
+        texture_data = TcTexture.from_data(
+            data=data,
+            width=width,
+            height=height,
+            channels=channels,
             flip_x=flip_x,
             flip_y=flip_y,
             transpose=transpose,
+            name=name,
         )
         return cls(texture_data=texture_data, name=name)
 
@@ -165,6 +192,6 @@ class TextureAsset(DataAsset[TextureData]):
     def white_1x1(cls) -> "TextureAsset":
         """Create 1x1 white pixel texture asset."""
         return cls(
-            texture_data=TextureData.white_1x1(),
+            texture_data=TcTexture.white_1x1(),
             name="__white_1x1__",
         )
