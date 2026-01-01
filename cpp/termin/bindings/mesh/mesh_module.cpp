@@ -88,9 +88,9 @@ void register_tc_mesh_kind() {
             // Try string (lookup by name)
             if (nb::isinstance<nb::str>(value)) {
                 std::string name = nb::cast<std::string>(value);
-                tc_mesh* m = tc_mesh_get_by_name(name.c_str());
-                if (m) {
-                    return nb::cast(termin::TcMesh(m));
+                tc_mesh_handle h = tc_mesh_find_by_name(name.c_str());
+                if (!tc_mesh_handle_is_invalid(h)) {
+                    return nb::cast(termin::TcMesh(h));
                 }
             }
             tc::Log::error("tc_mesh convert failed: cannot convert to TcMesh");

@@ -2,10 +2,17 @@
 #pragma once
 
 #include "tc_types.h"
+#include "tc_handle.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// ============================================================================
+// Texture handle - safe reference to texture in pool
+// ============================================================================
+
+TC_DEFINE_HANDLE(tc_texture_handle)
 
 // ============================================================================
 // Texture format

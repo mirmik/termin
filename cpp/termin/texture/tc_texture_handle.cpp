@@ -30,13 +30,14 @@ TcTexture TcTexture::from_data(
     }
 
     // Check if texture already exists
-    tc_texture* existing = tc_texture_get(final_uuid);
-    if (existing) {
-        return TcTexture(existing);
+    tc_texture_handle h = tc_texture_find(final_uuid);
+    if (!tc_texture_handle_is_invalid(h)) {
+        return TcTexture(h);
     }
 
     // Create new texture
-    tc_texture* tex = tc_texture_add(final_uuid);
+    h = tc_texture_create(final_uuid);
+    tc_texture* tex = tc_texture_get(h);
     if (!tex) {
         tc::Log::error("TcTexture::from_data: failed to add texture");
         return TcTexture();
@@ -51,23 +52,23 @@ TcTexture TcTexture::from_data(
         source_path.empty() ? nullptr : source_path.c_str()
     )) {
         tc::Log::error("TcTexture::from_data: failed to set data");
-        tc_texture_remove(final_uuid);
+        tc_texture_destroy(h);
         return TcTexture();
     }
 
     // Set transforms
     tc_texture_set_transforms(tex, flip_x, flip_y, transpose);
 
-    return TcTexture(tex);
+    return TcTexture(h);
 }
 
 TcTexture TcTexture::white_1x1() {
     static const char* WHITE_UUID = "__white_1x1__";
 
     // Check if already exists
-    tc_texture* existing = tc_texture_get(WHITE_UUID);
-    if (existing) {
-        return TcTexture(existing);
+    tc_texture_handle h = tc_texture_find(WHITE_UUID);
+    if (!tc_texture_handle_is_invalid(h)) {
+        return TcTexture(h);
     }
 
     // Create 1x1 white pixel
@@ -83,20 +84,21 @@ TcTexture TcTexture::white_1x1() {
 }
 
 std::tuple<std::vector<uint8_t>, uint32_t, uint32_t> TcTexture::get_upload_data() const {
-    if (!texture || !texture->data) {
+    tc_texture* tex = get();
+    if (!tex || !tex->data) {
         return {{}, 0, 0};
     }
 
-    uint32_t w = texture->width;
-    uint32_t h = texture->height;
-    uint8_t ch = texture->channels;
+    uint32_t w = tex->width;
+    uint32_t h = tex->height;
+    uint8_t ch = tex->channels;
     size_t size = (size_t)w * h * ch;
 
     std::vector<uint8_t> result(size);
-    std::memcpy(result.data(), texture->data, size);
+    std::memcpy(result.data(), tex->data, size);
 
     // Transpose: swap width and height, rearrange pixels
-    if (texture->transpose) {
+    if (tex->transpose) {
         std::vector<uint8_t> transposed(size);
         for (uint32_t y = 0; y < h; ++y) {
             for (uint32_t x = 0; x < w; ++x) {
@@ -112,7 +114,7 @@ std::tuple<std::vector<uint8_t>, uint32_t, uint32_t> TcTexture::get_upload_data(
     }
 
     // Flip X: mirror horizontally
-    if (texture->flip_x) {
+    if (tex->flip_x) {
         for (uint32_t y = 0; y < h; ++y) {
             for (uint32_t x = 0; x < w / 2; ++x) {
                 uint32_t x2 = w - 1 - x;
@@ -126,7 +128,7 @@ std::tuple<std::vector<uint8_t>, uint32_t, uint32_t> TcTexture::get_upload_data(
     }
 
     // Flip Y: mirror vertically
-    if (texture->flip_y) {
+    if (tex->flip_y) {
         for (uint32_t y = 0; y < h / 2; ++y) {
             uint32_t y2 = h - 1 - y;
             for (uint32_t x = 0; x < w; ++x) {

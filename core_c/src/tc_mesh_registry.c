@@ -1,4 +1,6 @@
+// tc_mesh_registry.c - Mesh registry with pool + hash table
 #include "tc_mesh_registry.h"
+#include "tc_pool.h"
 #include "tc_resource_map.h"
 #include "tc_log.h"
 #include "termin_core.h"
@@ -10,8 +12,10 @@
 // Global state
 // ============================================================================
 
-static tc_resource_map* g_meshes = NULL;
+static tc_pool g_mesh_pool;
+static tc_resource_map* g_uuid_to_index = NULL;  // UUID -> uint32_t index (packed as void*)
 static uint64_t g_next_uuid = 1;
+static bool g_initialized = false;
 
 // ============================================================================
 // Internal helpers
@@ -21,12 +25,30 @@ static void generate_uuid(char* out_uuid) {
     snprintf(out_uuid, 40, "mesh-%016llx", (unsigned long long)g_next_uuid++);
 }
 
-static void mesh_destructor(void* ptr) {
-    tc_mesh* mesh = (tc_mesh*)ptr;
+// Pack/unpack index in void* for hash table
+static inline void* pack_index(uint32_t index) {
+    return (void*)(uintptr_t)(index + 1);  // +1 so 0 means "not found"
+}
+
+static inline uint32_t unpack_index(void* ptr) {
+    return (uint32_t)((uintptr_t)ptr - 1);
+}
+
+static inline bool has_index(void* ptr) {
+    return ptr != NULL;
+}
+
+// Free mesh internal data (vertices, indices)
+static void mesh_free_data(tc_mesh* mesh) {
     if (!mesh) return;
-    if (mesh->vertices) free(mesh->vertices);
-    if (mesh->indices) free(mesh->indices);
-    free(mesh);
+    if (mesh->vertices) {
+        free(mesh->vertices);
+        mesh->vertices = NULL;
+    }
+    if (mesh->indices) {
+        free(mesh->indices);
+        mesh->indices = NULL;
+    }
 }
 
 // ============================================================================
@@ -34,31 +56,55 @@ static void mesh_destructor(void* ptr) {
 // ============================================================================
 
 void tc_mesh_init(void) {
-    if (g_meshes) {
+    if (g_initialized) {
         tc_log_warn("tc_mesh_init: already initialized");
         return;
     }
-    g_meshes = tc_resource_map_new(mesh_destructor);
+
+    if (!tc_pool_init(&g_mesh_pool, sizeof(tc_mesh), 64)) {
+        tc_log_error("tc_mesh_init: failed to init pool");
+        return;
+    }
+
+    // UUID map doesn't own resources (indices are packed as void*)
+    g_uuid_to_index = tc_resource_map_new(NULL);
+    if (!g_uuid_to_index) {
+        tc_log_error("tc_mesh_init: failed to create uuid map");
+        tc_pool_free(&g_mesh_pool);
+        return;
+    }
+
     g_next_uuid = 1;
+    g_initialized = true;
 }
 
 void tc_mesh_shutdown(void) {
-    if (!g_meshes) {
+    if (!g_initialized) {
         tc_log_warn("tc_mesh_shutdown: not initialized");
         return;
     }
-    tc_resource_map_free(g_meshes);
-    g_meshes = NULL;
+
+    // Free mesh data for all occupied slots
+    for (uint32_t i = 0; i < g_mesh_pool.capacity; i++) {
+        if (g_mesh_pool.states[i] == TC_SLOT_OCCUPIED) {
+            tc_mesh* mesh = (tc_mesh*)tc_pool_get_unchecked(&g_mesh_pool, i);
+            mesh_free_data(mesh);
+        }
+    }
+
+    tc_pool_free(&g_mesh_pool);
+    tc_resource_map_free(g_uuid_to_index);
+    g_uuid_to_index = NULL;
     g_next_uuid = 1;
+    g_initialized = false;
 }
 
 // ============================================================================
-// Mesh operations
+// Handle-based API
 // ============================================================================
 
-tc_mesh* tc_mesh_add(const char* uuid) {
-    // Auto-initialize if needed
-    if (!g_meshes) {
+tc_mesh_handle tc_mesh_create(const char* uuid) {
+    if (!g_initialized) {
         tc_mesh_init();
     }
 
@@ -67,8 +113,8 @@ tc_mesh* tc_mesh_add(const char* uuid) {
 
     if (uuid && uuid[0] != '\0') {
         if (tc_mesh_contains(uuid)) {
-            tc_log_warn("tc_mesh_add: uuid '%s' already exists", uuid);
-            return NULL;
+            tc_log_warn("tc_mesh_create: uuid '%s' already exists", uuid);
+            return tc_mesh_handle_invalid();
         }
         final_uuid = uuid;
     } else {
@@ -76,95 +122,139 @@ tc_mesh* tc_mesh_add(const char* uuid) {
         final_uuid = uuid_buf;
     }
 
-    tc_mesh* mesh = (tc_mesh*)calloc(1, sizeof(tc_mesh));
-    if (!mesh) {
-        tc_log_error("tc_mesh_add: allocation failed");
-        return NULL;
+    // Allocate slot in pool
+    tc_handle h = tc_pool_alloc(&g_mesh_pool);
+    if (tc_handle_is_invalid(h)) {
+        tc_log_error("tc_mesh_create: pool alloc failed");
+        return tc_mesh_handle_invalid();
     }
 
+    // Get mesh pointer and init
+    tc_mesh* mesh = (tc_mesh*)tc_pool_get(&g_mesh_pool, h);
+    memset(mesh, 0, sizeof(tc_mesh));
     strncpy(mesh->uuid, final_uuid, sizeof(mesh->uuid) - 1);
     mesh->uuid[sizeof(mesh->uuid) - 1] = '\0';
     mesh->version = 1;
-    mesh->ref_count = 0;  // No owners yet
-    mesh->name = NULL;
+    mesh->ref_count = 0;
 
-    if (!tc_resource_map_add(g_meshes, mesh->uuid, mesh)) {
-        tc_log_error("tc_mesh_add: failed to add to map");
-        free(mesh);
-        return NULL;
+    // Add to UUID map
+    if (!tc_resource_map_add(g_uuid_to_index, mesh->uuid, pack_index(h.index))) {
+        tc_log_error("tc_mesh_create: failed to add to uuid map");
+        tc_pool_free_slot(&g_mesh_pool, h);
+        return tc_mesh_handle_invalid();
     }
 
-    return mesh;
+    return h;
 }
 
-tc_mesh* tc_mesh_get(const char* uuid) {
-    if (!g_meshes) {
-        tc_log_warn("tc_mesh_get: registry not initialized");
-        return NULL;
+tc_mesh_handle tc_mesh_find(const char* uuid) {
+    if (!g_initialized || !uuid) {
+        return tc_mesh_handle_invalid();
     }
-    return (tc_mesh*)tc_resource_map_get(g_meshes, uuid);
+
+    void* ptr = tc_resource_map_get(g_uuid_to_index, uuid);
+    if (!has_index(ptr)) {
+        return tc_mesh_handle_invalid();
+    }
+
+    uint32_t index = unpack_index(ptr);
+    if (index >= g_mesh_pool.capacity) {
+        return tc_mesh_handle_invalid();
+    }
+
+    if (g_mesh_pool.states[index] != TC_SLOT_OCCUPIED) {
+        return tc_mesh_handle_invalid();
+    }
+
+    tc_mesh_handle h;
+    h.index = index;
+    h.generation = g_mesh_pool.generations[index];
+    return h;
 }
 
-// Helper struct for name search
-typedef struct {
-    const char* name;
-    tc_mesh* result;
-} name_search_ctx;
-
-static bool name_search_callback(const tc_mesh* mesh, void* user_data) {
-    name_search_ctx* ctx = (name_search_ctx*)user_data;
-    if (mesh->name && strcmp(mesh->name, ctx->name) == 0) {
-        ctx->result = (tc_mesh*)mesh;
-        return false;  // Stop iteration
+tc_mesh_handle tc_mesh_find_by_name(const char* name) {
+    if (!g_initialized || !name) {
+        return tc_mesh_handle_invalid();
     }
-    return true;  // Continue
+
+    for (uint32_t i = 0; i < g_mesh_pool.capacity; i++) {
+        if (g_mesh_pool.states[i] == TC_SLOT_OCCUPIED) {
+            tc_mesh* mesh = (tc_mesh*)tc_pool_get_unchecked(&g_mesh_pool, i);
+            if (mesh->name && strcmp(mesh->name, name) == 0) {
+                tc_mesh_handle h;
+                h.index = i;
+                h.generation = g_mesh_pool.generations[i];
+                return h;
+            }
+        }
+    }
+
+    return tc_mesh_handle_invalid();
 }
 
-tc_mesh* tc_mesh_get_by_name(const char* name) {
-    if (!g_meshes || !name) {
-        return NULL;
-    }
-    name_search_ctx ctx = { name, NULL };
-    tc_mesh_foreach(name_search_callback, &ctx);
-    return ctx.result;
-}
-
-tc_mesh* tc_mesh_get_or_create(const char* uuid) {
-    // Auto-initialize if needed
-    if (!g_meshes) {
-        tc_mesh_init();
-    }
+tc_mesh_handle tc_mesh_get_or_create(const char* uuid) {
     if (!uuid || uuid[0] == '\0') {
         tc_log_warn("tc_mesh_get_or_create: empty uuid");
-        return NULL;
+        return tc_mesh_handle_invalid();
     }
 
-    // Try to get existing (no ref increment - caller must take ownership)
-    tc_mesh* mesh = (tc_mesh*)tc_resource_map_get(g_meshes, uuid);
-    if (mesh) {
-        return mesh;
+    tc_mesh_handle h = tc_mesh_find(uuid);
+    if (!tc_mesh_handle_is_invalid(h)) {
+        return h;
     }
 
-    // Create new
-    return tc_mesh_add(uuid);
+    return tc_mesh_create(uuid);
 }
 
-bool tc_mesh_remove(const char* uuid) {
-    if (!g_meshes) {
-        tc_log_warn("tc_mesh_remove: registry not initialized");
-        return false;
-    }
-    return tc_resource_map_remove(g_meshes, uuid);
+tc_mesh* tc_mesh_get(tc_mesh_handle h) {
+    if (!g_initialized) return NULL;
+    return (tc_mesh*)tc_pool_get(&g_mesh_pool, h);
+}
+
+bool tc_mesh_is_valid(tc_mesh_handle h) {
+    if (!g_initialized) return false;
+    return tc_pool_is_valid(&g_mesh_pool, h);
+}
+
+bool tc_mesh_destroy(tc_mesh_handle h) {
+    if (!g_initialized) return false;
+
+    tc_mesh* mesh = tc_mesh_get(h);
+    if (!mesh) return false;
+
+    // Remove from UUID map
+    tc_resource_map_remove(g_uuid_to_index, mesh->uuid);
+
+    // Free mesh data
+    mesh_free_data(mesh);
+
+    // Free slot in pool (bumps generation)
+    return tc_pool_free_slot(&g_mesh_pool, h);
 }
 
 bool tc_mesh_contains(const char* uuid) {
-    if (!g_meshes) return false;
-    return tc_resource_map_contains(g_meshes, uuid);
+    if (!g_initialized || !uuid) return false;
+    return tc_resource_map_contains(g_uuid_to_index, uuid);
 }
 
 size_t tc_mesh_count(void) {
-    if (!g_meshes) return 0;
-    return tc_resource_map_count(g_meshes);
+    if (!g_initialized) return 0;
+    return tc_pool_count(&g_mesh_pool);
+}
+
+// ============================================================================
+// Legacy pointer-based API
+// ============================================================================
+
+tc_mesh* tc_mesh_add(const char* uuid) {
+    tc_mesh_handle h = tc_mesh_create(uuid);
+    return tc_mesh_get(h);
+}
+
+bool tc_mesh_remove(const char* uuid) {
+    tc_mesh_handle h = tc_mesh_find(uuid);
+    if (tc_mesh_handle_is_invalid(h)) return false;
+    return tc_mesh_destroy(h);
 }
 
 // ============================================================================
@@ -290,47 +380,53 @@ bool tc_mesh_set_data(
 // Iteration
 // ============================================================================
 
-// Adapter for tc_resource_map_foreach -> tc_mesh_iter_fn
 typedef struct {
     tc_mesh_iter_fn callback;
     void* user_data;
 } mesh_iter_ctx;
 
-static bool mesh_iter_adapter(const char* uuid, void* resource, void* ctx_ptr) {
-    (void)uuid;
+static bool mesh_iter_adapter(uint32_t index, void* item, void* ctx_ptr) {
     mesh_iter_ctx* ctx = (mesh_iter_ctx*)ctx_ptr;
-    return ctx->callback((const tc_mesh*)resource, ctx->user_data);
+    tc_mesh* mesh = (tc_mesh*)item;
+
+    tc_mesh_handle h;
+    h.index = index;
+    h.generation = g_mesh_pool.generations[index];
+
+    return ctx->callback(h, mesh, ctx->user_data);
 }
 
 void tc_mesh_foreach(tc_mesh_iter_fn callback, void* user_data) {
-    if (!g_meshes || !callback) return;
+    if (!g_initialized || !callback) return;
     mesh_iter_ctx ctx = { callback, user_data };
-    tc_resource_map_foreach(g_meshes, mesh_iter_adapter, &ctx);
+    tc_pool_foreach(&g_mesh_pool, mesh_iter_adapter, &ctx);
 }
 
-// Helper struct for collecting mesh info
+// ============================================================================
+// Info collection
+// ============================================================================
+
 typedef struct {
     tc_mesh_info* infos;
     size_t count;
-    size_t capacity;
 } info_collector;
 
-static bool collect_mesh_info(const tc_mesh* mesh, void* user_data) {
+static bool collect_mesh_info(tc_mesh_handle h, tc_mesh* mesh, void* user_data) {
     info_collector* collector = (info_collector*)user_data;
 
-    tc_mesh_info info;
-    strncpy(info.uuid, mesh->uuid, sizeof(info.uuid) - 1);
-    info.uuid[sizeof(info.uuid) - 1] = '\0';
-    info.name = mesh->name;
-    info.ref_count = mesh->ref_count;
-    info.version = mesh->version;
-    info.vertex_count = mesh->vertex_count;
-    info.index_count = mesh->index_count;
-    info.stride = mesh->layout.stride;
-    info.memory_bytes = mesh->vertex_count * mesh->layout.stride +
-                        mesh->index_count * sizeof(uint32_t);
+    tc_mesh_info* info = &collector->infos[collector->count++];
+    info->handle = h;
+    strncpy(info->uuid, mesh->uuid, sizeof(info->uuid) - 1);
+    info->uuid[sizeof(info->uuid) - 1] = '\0';
+    info->name = mesh->name;
+    info->ref_count = mesh->ref_count;
+    info->version = mesh->version;
+    info->vertex_count = mesh->vertex_count;
+    info->index_count = mesh->index_count;
+    info->stride = mesh->layout.stride;
+    info->memory_bytes = mesh->vertex_count * mesh->layout.stride +
+                         mesh->index_count * sizeof(uint32_t);
 
-    collector->infos[collector->count++] = info;
     return true;
 }
 
@@ -338,9 +434,9 @@ tc_mesh_info* tc_mesh_get_all_info(size_t* count) {
     if (!count) return NULL;
     *count = 0;
 
-    if (!g_meshes) return NULL;
+    if (!g_initialized) return NULL;
 
-    size_t mesh_count = tc_resource_map_count(g_meshes);
+    size_t mesh_count = tc_pool_count(&g_mesh_pool);
     if (mesh_count == 0) return NULL;
 
     tc_mesh_info* infos = (tc_mesh_info*)malloc(mesh_count * sizeof(tc_mesh_info));
@@ -349,7 +445,7 @@ tc_mesh_info* tc_mesh_get_all_info(size_t* count) {
         return NULL;
     }
 
-    info_collector collector = { infos, 0, mesh_count };
+    info_collector collector = { infos, 0 };
     tc_mesh_foreach(collect_mesh_info, &collector);
 
     *count = collector.count;

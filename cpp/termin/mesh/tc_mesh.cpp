@@ -16,9 +16,9 @@ TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
 
     // Check if already in registry
     if (!uuid_str.empty()) {
-        tc_mesh* existing = tc_mesh_get(uuid_str.c_str());
-        if (existing) {
-            return TcMesh(existing);
+        tc_mesh_handle h = tc_mesh_find(uuid_str.c_str());
+        if (!tc_mesh_handle_is_invalid(h)) {
+            return TcMesh(h);
         }
     }
 
@@ -71,7 +71,8 @@ TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
     }
 
     // Get or create mesh in registry
-    tc_mesh* m = tc_mesh_get_or_create(uuid_str.c_str());
+    tc_mesh_handle h = tc_mesh_get_or_create(uuid_str.c_str());
+    tc_mesh* m = tc_mesh_get(h);
     if (!m) {
         return TcMesh();
     }
@@ -85,7 +86,7 @@ TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
                         mesh_name.empty() ? nullptr : mesh_name.c_str());
     }
 
-    return TcMesh(m);
+    return TcMesh(h);
 }
 
 TcMesh TcMesh::from_interleaved(
@@ -104,9 +105,9 @@ TcMesh TcMesh::from_interleaved(
 
     // Check if already in registry
     if (!uuid_str.empty()) {
-        tc_mesh* existing = tc_mesh_get(uuid_str.c_str());
-        if (existing) {
-            return TcMesh(existing);
+        tc_mesh_handle h = tc_mesh_find(uuid_str.c_str());
+        if (!tc_mesh_handle_is_invalid(h)) {
+            return TcMesh(h);
         }
     }
 
@@ -119,7 +120,8 @@ TcMesh TcMesh::from_interleaved(
     }
 
     // Get or create mesh in registry
-    tc_mesh* m = tc_mesh_get_or_create(uuid_str.c_str());
+    tc_mesh_handle h = tc_mesh_get_or_create(uuid_str.c_str());
+    tc_mesh* m = tc_mesh_get(h);
     if (!m) {
         return TcMesh();
     }
@@ -132,7 +134,7 @@ TcMesh TcMesh::from_interleaved(
                         name.empty() ? nullptr : name.c_str());
     }
 
-    return TcMesh(m);
+    return TcMesh(h);
 }
 
 } // namespace termin

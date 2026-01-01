@@ -18,6 +18,7 @@ set(TC_SOURCES
     src/tc_entity_pool.c
     src/tc_hash_map.c
     src/tc_resource_map.c
+    src/tc_pool.c
     src/tc_scene.c
     src/tc_inspect.c
     src/tc_mesh.c
@@ -35,6 +36,8 @@ set(TC_HEADERS
     include/tc_vec3.h
     include/tc_quat.h
     include/tc_pose.h
+    include/tc_handle.h
+    include/tc_pool.h
     include/tc_component.h
     include/tc_component_python.h
     include/tc_entity_pool.h

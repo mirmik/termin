@@ -2,10 +2,17 @@
 #pragma once
 
 #include "tc_types.h"
+#include "tc_handle.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// ============================================================================
+// Mesh handle - safe reference to mesh in pool
+// ============================================================================
+
+TC_DEFINE_HANDLE(tc_mesh_handle)
 
 // ============================================================================
 // Vertex attribute types

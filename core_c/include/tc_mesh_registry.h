@@ -1,4 +1,4 @@
-// tc_mesh_registry.h - Global mesh storage by UUID
+// tc_mesh_registry.h - Global mesh storage with pool + hash table
 #pragma once
 
 #include "tc_mesh.h"
@@ -15,39 +15,43 @@ TC_API void tc_mesh_init(void);
 TC_API void tc_mesh_shutdown(void);
 
 // ============================================================================
-// Mesh operations
+// Mesh operations (handle-based API)
 // ============================================================================
 
-// Add a new mesh with given UUID (or auto-generate if NULL)
-// Returns pointer to mesh, or NULL on failure (including if UUID exists)
-TC_API tc_mesh* tc_mesh_add(const char* uuid);
+// Create a new mesh with given UUID (or auto-generate if NULL)
+// Returns handle to mesh, or tc_mesh_handle_invalid() on failure
+TC_API tc_mesh_handle tc_mesh_create(const char* uuid);
 
-// Get mesh by UUID, returns NULL if not found
-TC_API tc_mesh* tc_mesh_get(const char* uuid);
+// Find mesh by UUID, returns tc_mesh_handle_invalid() if not found
+TC_API tc_mesh_handle tc_mesh_find(const char* uuid);
 
-// Get mesh by name, returns NULL if not found
-TC_API tc_mesh* tc_mesh_get_by_name(const char* name);
+// Find mesh by name, returns tc_mesh_handle_invalid() if not found
+TC_API tc_mesh_handle tc_mesh_find_by_name(const char* name);
 
 // Get existing mesh or create new one if not found
-// If created, ref_count is 1. If existing, ref_count is incremented.
-// IMPORTANT: After creating a new mesh, set mesh->name for debugging!
-TC_API tc_mesh* tc_mesh_get_or_create(const char* uuid);
+TC_API tc_mesh_handle tc_mesh_get_or_create(const char* uuid);
 
-// Remove mesh by UUID, returns true if removed
-TC_API bool tc_mesh_remove(const char* uuid);
+// Get mesh data by handle (returns NULL if handle is invalid/stale)
+TC_API tc_mesh* tc_mesh_get(tc_mesh_handle h);
 
-// Check if mesh exists
+// Check if handle is valid (not stale, points to existing mesh)
+TC_API bool tc_mesh_is_valid(tc_mesh_handle h);
+
+// Destroy mesh by handle, returns true if destroyed
+TC_API bool tc_mesh_destroy(tc_mesh_handle h);
+
+// Check if mesh exists by UUID
 TC_API bool tc_mesh_contains(const char* uuid);
 
 // Get number of meshes
 TC_API size_t tc_mesh_count(void);
 
 // ============================================================================
-// Iteration
+// Mesh info for debugging/inspection
 // ============================================================================
 
-// Mesh info for debugging/inspection
 typedef struct tc_mesh_info {
+    tc_mesh_handle handle;
     char uuid[40];
     const char* name;
     uint32_t ref_count;
@@ -55,18 +59,23 @@ typedef struct tc_mesh_info {
     size_t vertex_count;
     size_t index_count;
     size_t stride;
-    size_t memory_bytes;  // vertices + indices
+    size_t memory_bytes;
 } tc_mesh_info;
-
-// Iterator callback: return true to continue, false to stop
-typedef bool (*tc_mesh_iter_fn)(const tc_mesh* mesh, void* user_data);
-
-// Iterate over all meshes
-TC_API void tc_mesh_foreach(tc_mesh_iter_fn callback, void* user_data);
 
 // Get info for all meshes (caller must free() returned array)
 // Returns NULL if no meshes, sets *count to number of entries
 TC_API tc_mesh_info* tc_mesh_get_all_info(size_t* count);
+
+// ============================================================================
+// Iteration
+// ============================================================================
+
+// Iterator callback: receives handle, mesh pointer, user_data
+// Return true to continue, false to stop
+typedef bool (*tc_mesh_iter_fn)(tc_mesh_handle h, tc_mesh* mesh, void* user_data);
+
+// Iterate over all meshes
+TC_API void tc_mesh_foreach(tc_mesh_iter_fn callback, void* user_data);
 
 // ============================================================================
 // Mesh data helpers
@@ -88,7 +97,6 @@ TC_API bool tc_mesh_set_indices(
 );
 
 // Set both vertex and index data (copies data, increments version)
-// name is optional (can be NULL)
 TC_API bool tc_mesh_set_data(
     tc_mesh* mesh,
     const void* vertices,
@@ -103,6 +111,16 @@ TC_API bool tc_mesh_set_data(
 static inline void tc_mesh_bump_version(tc_mesh* mesh) {
     if (mesh) mesh->version++;
 }
+
+// ============================================================================
+// Legacy API (deprecated - use handle-based API)
+// ============================================================================
+
+// Add mesh - returns pointer (deprecated, use tc_mesh_create)
+TC_API tc_mesh* tc_mesh_add(const char* uuid);
+
+// Remove mesh by UUID (deprecated, use tc_mesh_destroy)
+TC_API bool tc_mesh_remove(const char* uuid);
 
 #ifdef __cplusplus
 }

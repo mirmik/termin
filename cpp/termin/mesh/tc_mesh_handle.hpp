@@ -1,7 +1,7 @@
 #pragma once
 
-// TcMesh - RAII wrapper for tc_mesh* (GPU-ready mesh with layouts)
-// Registers mesh data in tc_mesh C registry.
+// TcMesh - RAII wrapper with handle-based access to tc_mesh
+// Uses tc_mesh_handle with generation checking for safety
 
 extern "C" {
 #include "termin_core.h"
@@ -17,74 +17,130 @@ namespace termin {
 class Mesh3;
 
 // TcMesh - GPU-ready mesh wrapper
-// Manages tc_mesh* with reference counting
+// Stores handle (index + generation) instead of raw pointer
 class TcMesh {
 public:
-    tc_mesh* mesh = nullptr;
+    tc_mesh_handle handle = tc_mesh_handle_invalid();
 
     TcMesh() = default;
 
-    explicit TcMesh(tc_mesh* m) : mesh(m) {
-        if (mesh) tc_mesh_add_ref(mesh);
+    explicit TcMesh(tc_mesh_handle h) : handle(h) {
+        if (tc_mesh* m = tc_mesh_get(handle)) {
+            tc_mesh_add_ref(m);
+        }
     }
 
-    TcMesh(const TcMesh& other) : mesh(other.mesh) {
-        if (mesh) tc_mesh_add_ref(mesh);
+    // Construct from raw pointer (finds handle for it)
+    explicit TcMesh(tc_mesh* m) {
+        if (m) {
+            handle = tc_mesh_find(m->uuid);
+            tc_mesh_add_ref(m);
+        }
     }
 
-    TcMesh(TcMesh&& other) noexcept : mesh(other.mesh) {
-        other.mesh = nullptr;
+    TcMesh(const TcMesh& other) : handle(other.handle) {
+        if (tc_mesh* m = tc_mesh_get(handle)) {
+            tc_mesh_add_ref(m);
+        }
+    }
+
+    TcMesh(TcMesh&& other) noexcept : handle(other.handle) {
+        other.handle = tc_mesh_handle_invalid();
     }
 
     TcMesh& operator=(const TcMesh& other) {
         if (this != &other) {
-            if (mesh) tc_mesh_release(mesh);
-            mesh = other.mesh;
-            if (mesh) tc_mesh_add_ref(mesh);
+            if (tc_mesh* m = tc_mesh_get(handle)) {
+                tc_mesh_release(m);
+            }
+            handle = other.handle;
+            if (tc_mesh* m = tc_mesh_get(handle)) {
+                tc_mesh_add_ref(m);
+            }
         }
         return *this;
     }
 
     TcMesh& operator=(TcMesh&& other) noexcept {
         if (this != &other) {
-            if (mesh) tc_mesh_release(mesh);
-            mesh = other.mesh;
-            other.mesh = nullptr;
+            if (tc_mesh* m = tc_mesh_get(handle)) {
+                tc_mesh_release(m);
+            }
+            handle = other.handle;
+            other.handle = tc_mesh_handle_invalid();
         }
         return *this;
     }
 
     ~TcMesh() {
-        if (mesh) {
-            tc_mesh_release(mesh);
-            mesh = nullptr;
+        if (tc_mesh* m = tc_mesh_get(handle)) {
+            tc_mesh_release(m);
+        }
+        handle = tc_mesh_handle_invalid();
+    }
+
+    // Get raw pointer (may return nullptr if handle is stale)
+    tc_mesh* get() const { return tc_mesh_get(handle); }
+
+    // For backwards compatibility
+    tc_mesh* mesh_ptr() const { return get(); }
+
+    // Query (safe - returns defaults if handle is stale)
+    bool is_valid() const { return tc_mesh_is_valid(handle); }
+
+    const char* uuid() const {
+        tc_mesh* m = get();
+        return m ? m->uuid : "";
+    }
+
+    const char* name() const {
+        tc_mesh* m = get();
+        return (m && m->name) ? m->name : "";
+    }
+
+    uint32_t version() const {
+        tc_mesh* m = get();
+        return m ? m->version : 0;
+    }
+
+    size_t vertex_count() const {
+        tc_mesh* m = get();
+        return m ? m->vertex_count : 0;
+    }
+
+    size_t index_count() const {
+        tc_mesh* m = get();
+        return m ? m->index_count : 0;
+    }
+
+    size_t triangle_count() const {
+        tc_mesh* m = get();
+        return m ? m->index_count / 3 : 0;
+    }
+
+    uint16_t stride() const {
+        tc_mesh* m = get();
+        return m ? m->layout.stride : 0;
+    }
+
+    const tc_vertex_layout* layout() const {
+        tc_mesh* m = get();
+        return m ? &m->layout : nullptr;
+    }
+
+    void bump_version() {
+        if (tc_mesh* m = get()) {
+            m->version++;
         }
     }
 
-    // Query
-    bool is_valid() const { return mesh != nullptr; }
-    const char* uuid() const { return mesh ? mesh->uuid : ""; }
-    const char* name() const { return mesh && mesh->name ? mesh->name : ""; }
-    uint32_t version() const { return mesh ? mesh->version : 0; }
-    size_t vertex_count() const { return mesh ? mesh->vertex_count : 0; }
-    size_t index_count() const { return mesh ? mesh->index_count : 0; }
-    size_t triangle_count() const { return mesh ? mesh->index_count / 3 : 0; }
-    uint16_t stride() const { return mesh ? mesh->layout.stride : 0; }
-    const tc_vertex_layout& layout() const { return mesh->layout; }
-
-    void bump_version() {
-        if (mesh) mesh->version++;
-    }
-
     // Create TcMesh from Mesh3 (CPU mesh)
-    // Uses override_uuid if provided, otherwise Mesh3's uuid for caching
     static TcMesh from_mesh3(const Mesh3& mesh,
                              const std::string& override_name = "",
                              const std::string& override_uuid = "",
                              const tc_vertex_layout* custom_layout = nullptr);
 
     // Create TcMesh from raw interleaved vertex data
-    // Used for GLB meshes where data is already in GPU format
     static TcMesh from_interleaved(
         const void* vertices, size_t vertex_count,
         const uint32_t* indices, size_t index_count,
@@ -94,14 +150,20 @@ public:
 
     // Get by UUID from registry
     static TcMesh from_uuid(const std::string& uuid) {
-        tc_mesh* m = tc_mesh_get(uuid.c_str());
-        return TcMesh(m);
+        tc_mesh_handle h = tc_mesh_find(uuid.c_str());
+        if (tc_mesh_handle_is_invalid(h)) {
+            return TcMesh();
+        }
+        return TcMesh(h);
     }
 
     // Get or create by UUID
     static TcMesh get_or_create(const std::string& uuid) {
-        tc_mesh* m = tc_mesh_get_or_create(uuid.c_str());
-        return TcMesh(m);
+        tc_mesh_handle h = tc_mesh_get_or_create(uuid.c_str());
+        if (tc_mesh_handle_is_invalid(h)) {
+            return TcMesh();
+        }
+        return TcMesh(h);
     }
 };
 

@@ -15,9 +15,9 @@ void MeshRenderer::set_mesh(const TcMesh& m) {
 
 void MeshRenderer::set_mesh_by_name(const std::string& name) {
     // Lookup mesh by name in tc_mesh registry
-    tc_mesh* m = tc_mesh_get_by_name(name.c_str());
-    if (m) {
-        mesh = TcMesh(m);
+    tc_mesh_handle h = tc_mesh_find_by_name(name.c_str());
+    if (!tc_mesh_handle_is_invalid(h)) {
+        mesh = TcMesh(h);
     } else {
         mesh = TcMesh();
     }
@@ -112,7 +112,7 @@ void MeshRenderer::draw_geometry(const RenderContext& context, const std::string
     if (!mesh.is_valid()) {
         return;
     }
-    _mesh_gpu.draw(context, mesh.mesh, mesh.version());
+    _mesh_gpu.draw(context, mesh.get(), mesh.version());
 }
 
 std::vector<MaterialPhase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {
