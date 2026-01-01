@@ -18,7 +18,6 @@ import numpy as np
 
 from termin.mesh.mesh import Mesh2, Mesh3
 from termin.mesh import TcMesh
-from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
@@ -361,6 +360,7 @@ class LineRenderer(PythonComponent):
             # Ribbon режим (квады)
             vertices, triangles = _build_line_ribbon(self._points, self._width)
             if len(triangles) > 0:
+                from termin.voxels.voxel_mesh import create_voxel_mesh
                 self._ribbon_mesh = create_voxel_mesh(
                     vertices=vertices,
                     triangles=triangles,
