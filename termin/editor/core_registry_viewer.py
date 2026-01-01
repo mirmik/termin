@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from termin.mesh._mesh_native import tc_mesh_get_all_info, tc_mesh_count
-from termin._native import tc_scene_registry_get_all_info, tc_scene_registry_count
+from termin._native.scene import tc_scene_registry_get_all_info, tc_scene_registry_count
 
 
 class CoreRegistryViewer(QDialog):
