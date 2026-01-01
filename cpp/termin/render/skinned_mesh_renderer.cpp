@@ -105,9 +105,7 @@ Material* SkinnedMeshRenderer::get_skinned_material() {
 }
 
 void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
-    TcMesh mesh_data = mesh.get();
-    MeshGPU* gpu = mesh.gpu();
-    if (!mesh_data.is_valid() || gpu == nullptr) {
+    if (!mesh.is_valid()) {
         return;
     }
 
@@ -119,8 +117,8 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
         }
     }
 
-    // Draw the mesh via GPU
-    gpu->draw(context, mesh_data.mesh, mesh.version());
+    // Draw the mesh via GPU (uses inherited _mesh_gpu from MeshRenderer)
+    _mesh_gpu.draw(context, mesh.mesh, mesh.version());
 }
 
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
