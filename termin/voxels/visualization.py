@@ -7,11 +7,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 
-from termin.mesh.mesh import Mesh3
-from termin.visualization.core.mesh_handle import MeshHandle
+from termin.mesh import TcMesh
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.material import Material
 from termin.visualization.render.components import MeshRenderer
-from termin.geombase import Pose3
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
@@ -100,7 +99,7 @@ class VoxelVisualizer:
     def __init__(self, grid: "VoxelGrid", parent_entity: "Entity") -> None:
         self._grid = grid
         self._parent = parent_entity
-        self._mesh_handle: Optional[MeshHandle] = None
+        self._mesh: Optional[TcMesh] = None
         self._renderer: Optional[MeshRenderer] = None
         self._material = Material(
             color=(0.2, 0.6, 1.0, 0.7),
@@ -155,14 +154,14 @@ class VoxelVisualizer:
             triangles = triangles[:idx * TRIS_PER_CUBE]
             normals = normals[:idx * VERTS_PER_CUBE]
 
-        mesh = Mesh3(
+        self._mesh = create_voxel_mesh(
             vertices=vertices,
             triangles=triangles,
+            vertex_normals=normals,
+            name="voxel_grid_vis",
         )
-        mesh.vertex_normals = normals
-        self._mesh_handle = MeshHandle.from_mesh3(mesh, name="voxel_grid_vis")
         self._renderer = MeshRenderer(
-            self._mesh_handle,
+            self._mesh,
             self._material,
             cast_shadow=False,
         )
@@ -177,9 +176,7 @@ class VoxelVisualizer:
         if self._renderer is not None:
             self._parent.remove_component(self._renderer)
             self._renderer = None
-        if self._mesh_handle is not None:
-            self._mesh_handle.delete()
-            self._mesh_handle = None
+        self._mesh = None
 
     def set_color(self, color: tuple[float, float, float, float]) -> None:
         """Установить цвет визуализации."""

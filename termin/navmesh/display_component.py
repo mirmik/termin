@@ -14,17 +14,18 @@ import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh_handle import MeshHandle
+from termin.mesh import TcMesh
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.navmesh_handle import NavMeshHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.visualization.render.components.line_renderer import _build_line_ribbon
-from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.navmesh.types import NavMesh
+    from termin._native.render import MeshGPU
 
 
 def _get_navmesh_choices() -> list[tuple[str, str]]:
@@ -90,8 +91,10 @@ class NavMeshDisplayComponent(PythonComponent):
         self._navmesh_name = navmesh_name
         self._navmesh_handle: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
-        self._mesh_handle: Optional[MeshHandle] = None
-        self._contour_handle: Optional[MeshHandle] = None
+        self._mesh: Optional[TcMesh] = None
+        self._mesh_gpu: Optional["MeshGPU"] = None
+        self._contour_mesh: Optional[TcMesh] = None
+        self._contour_gpu: Optional["MeshGPU"] = None
         self._material: Optional[Material] = None
         self._contour_material: Optional[Material] = None
         self._needs_rebuild = True
@@ -259,18 +262,18 @@ void main() {
         self._check_hot_reload()
 
         if geometry_id == "" or geometry_id == self.GEOMETRY_MESH:
-            if self._mesh_handle is not None:
-                tc_mesh = self._mesh_handle.get()
-                gpu = self._mesh_handle.gpu
-                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-                    gpu.draw(context, tc_mesh.mesh, self._mesh_handle.version)
+            if self._mesh is not None and self._mesh.is_valid:
+                if self._mesh_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._mesh_gpu = MeshGPU()
+                self._mesh_gpu.draw(context, self._mesh.mesh, self._mesh.version)
 
         if geometry_id == self.GEOMETRY_CONTOURS:
-            if self._contour_handle is not None:
-                tc_mesh = self._contour_handle.get()
-                gpu = self._contour_handle.gpu
-                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-                    gpu.draw(context, tc_mesh.mesh, self._contour_handle.version)
+            if self._contour_mesh is not None and self._contour_mesh.is_valid:
+                if self._contour_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._contour_gpu = MeshGPU()
+                self._contour_gpu.draw(context, self._contour_mesh.mesh, self._contour_mesh.version)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
@@ -301,8 +304,8 @@ void main() {
         for phase in phases:
             result.append(GeometryDrawCall(phase=phase, geometry_id=self.GEOMETRY_MESH))
 
-        # Контуры (если включены и есть контурный handle)
-        if self.show_contours and self._contour_handle is not None:
+        # Контуры (если включены и есть контурный mesh)
+        if self.show_contours and self._contour_mesh is not None and self._contour_mesh.is_valid:
             contour_material = self._get_or_create_contour_material()
             if phase_mark is None:
                 contour_phases = list(contour_material.phases)
@@ -319,14 +322,11 @@ void main() {
 
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из NavMesh."""
-        # Очищаем старый меш
-        if self._mesh_handle is not None:
-            self._mesh_handle.delete()
-            self._mesh_handle = None
-
-        if self._contour_handle is not None:
-            self._contour_handle.delete()
-            self._contour_handle = None
+        # Очищаем старые meshes
+        self._mesh = None
+        self._mesh_gpu = None
+        self._contour_mesh = None
+        self._contour_gpu = None
 
         navmesh = self._navmesh_handle.get_navmesh()
         self._last_navmesh = navmesh
@@ -367,13 +367,17 @@ void main() {
             normals = np.vstack(all_normals).astype(np.float32)
             triangles = np.vstack(all_triangles).astype(np.int32)
 
-            mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
-            self._mesh_handle = MeshHandle.from_mesh3(mesh, name="navmesh_display")
+            self._mesh = create_voxel_mesh(
+                vertices=vertices,
+                triangles=triangles,
+                vertex_normals=normals,
+                name="navmesh_display",
+            )
 
         # Строим контуры (независимо от меша)
-        self._build_contour_handle(navmesh)
+        self._build_contour_mesh(navmesh)
 
-    def _build_contour_handle(self, navmesh: "NavMesh") -> None:
+    def _build_contour_mesh(self, navmesh: "NavMesh") -> None:
         """Построить drawable для контуров как ribbon (толстые линии)."""
         all_vertices = []
         all_triangles = []
@@ -424,5 +428,8 @@ void main() {
         vertices = np.vstack(all_vertices).astype(np.float32)
         triangles = np.vstack(all_triangles).astype(np.int32)
 
-        mesh = Mesh3(vertices=vertices, triangles=triangles)
-        self._contour_handle = MeshHandle.from_mesh3(mesh, name="navmesh_contours")
+        self._contour_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            name="navmesh_contours",
+        )
