@@ -64,7 +64,9 @@ def CubeMesh(size: float = 1.0, y: float = None, z: float = None) -> Mesh3:
         [1.0, 1.0],
         [0.0, 1.0],
     ], dtype=np.float32)
-    return Mesh3(vertices=vertices, triangles=triangles, uvs=uvs, name="Cube", uuid=uuid)
+    mesh = Mesh3(vertices=vertices, triangles=triangles, uvs=uvs, name="Cube", uuid=uuid)
+    mesh.compute_normals()
+    return mesh
 
 
 def TexturedCubeMesh(size: float = 1.0, y: float = None, z: float = None) -> Mesh3:
@@ -133,7 +135,9 @@ def TexturedCubeMesh(size: float = 1.0, y: float = None, z: float = None) -> Mes
         [31, 30, 32], [34, 33, 35],
     ], dtype=np.uint32)
 
-    return Mesh3(vertices=vertices, triangles=triangles, uvs=uvs, name="TexturedCube", uuid=uuid)
+    mesh = Mesh3(vertices=vertices, triangles=triangles, uvs=uvs, name="TexturedCube", uuid=uuid)
+    mesh.compute_normals()
+    return mesh
 
 
 def UVSphereMesh(radius: float = 1.0, n_meridians: int = 16, n_parallels: int = 16) -> Mesh3:

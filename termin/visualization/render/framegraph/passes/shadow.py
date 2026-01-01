@@ -240,9 +240,6 @@ class ShadowPass(RenderFramePass):
                 if not component.enabled:
                     continue
 
-                # DEBUG
-                print(f"[shadow] {entity.name}: {type(component).__name__}", flush=True)
-
                 # Check if component is Drawable
                 if not isinstance(component, Drawable):
                     continue
