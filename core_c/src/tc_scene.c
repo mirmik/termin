@@ -1,5 +1,6 @@
 // tc_scene.c - Scene implementation using entity pool
 #include "../include/tc_scene.h"
+#include "../include/tc_scene_registry.h"
 #include "../include/tc_profiler.h"
 #include <stdlib.h>
 #include <string.h>
@@ -88,11 +89,17 @@ tc_scene* tc_scene_new(void) {
     s->fixed_timestep = 1.0 / 60.0;
     s->accumulated_time = 0.0;
 
+    // Register in global scene registry
+    tc_scene_registry_add(s, NULL);
+
     return s;
 }
 
 void tc_scene_free(tc_scene* s) {
     if (!s) return;
+
+    // Unregister from global scene registry
+    tc_scene_registry_remove(s);
 
     list_free(&s->pending_start);
     list_free(&s->update_list);

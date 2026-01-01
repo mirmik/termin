@@ -214,6 +214,7 @@ void tc_init(void) {
 
     tc_ensure_random_seeded();
     tc_mesh_init();
+    tc_scene_registry_init();
     g_initialized = true;
 }
 
@@ -221,6 +222,7 @@ void tc_shutdown(void) {
     if (!g_initialized) return;
 
     // Cleanup in reverse order of dependency
+    tc_scene_registry_shutdown();
     tc_mesh_shutdown();
     tc_component_registry_cleanup();
     tc_inspect_cleanup();

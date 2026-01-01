@@ -5,6 +5,7 @@
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
 #include "../../core_c/include/tc_scene.h"
+#include "../../core_c/include/tc_scene_registry.h"
 #include "scene_bindings.hpp"
 
 namespace nb = nanobind;
@@ -190,6 +191,16 @@ public:
         return Entity(pool, id);
     }
 
+    // Scene name (from registry)
+    std::string name() const {
+        const char* n = tc_scene_registry_get_name(_s);
+        return n ? std::string(n) : "";
+    }
+
+    void set_name(const std::string& n) {
+        tc_scene_registry_set_name(_s, n.c_str());
+    }
+
     // Migrate entity to this scene's pool
     // Returns new Entity in scene's pool, old entity becomes invalid
     Entity migrate_entity(Entity& entity) {
@@ -274,7 +285,37 @@ void bind_tc_scene(nb::module_& m) {
             if (e.valid()) return nb::cast(e);
             return nb::none();
         }, nb::arg("pick_id"), "Find entity by pick_id. Returns None if not found.")
+
+        // Scene name
+        .def_prop_rw("name", &TcScene::name, &TcScene::set_name)
         ;
+
+    // =========================================================================
+    // Scene registry module-level functions
+    // =========================================================================
+    m.def("tc_scene_registry_count", []() {
+        return tc_scene_registry_count();
+    }, "Get number of scenes in registry");
+
+    m.def("tc_scene_registry_get_all_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_scene_info* infos = tc_scene_registry_get_all_info(&count);
+        if (infos) {
+            for (size_t i = 0; i < count; ++i) {
+                nb::dict d;
+                d["id"] = infos[i].id;
+                d["name"] = infos[i].name ? std::string(infos[i].name) : "";
+                d["entity_count"] = infos[i].entity_count;
+                d["pending_count"] = infos[i].pending_count;
+                d["update_count"] = infos[i].update_count;
+                d["fixed_update_count"] = infos[i].fixed_update_count;
+                result.append(d);
+            }
+            free(infos);
+        }
+        return result;
+    }, "Get info for all scenes in registry");
 }
 
 } // namespace termin

@@ -1,7 +1,7 @@
 """
 Dialog for viewing internal state of core_c registries.
 
-Shows meshes and other resources stored in C hash tables.
+Shows meshes, scenes, and other resources stored in C hash tables.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from termin.mesh._mesh_native import tc_mesh_get_all_info, tc_mesh_count
+from termin._native import tc_scene_registry_get_all_info, tc_scene_registry_count
 
 
 class CoreRegistryViewer(QDialog):
@@ -27,7 +28,7 @@ class CoreRegistryViewer(QDialog):
 
     Shows:
     - tc_mesh registry (meshes stored in C hash table)
-    - Future: other registries as they are added
+    - tc_scene registry (scenes and their entities)
     """
 
     def __init__(self, parent=None):
@@ -54,6 +55,13 @@ class CoreRegistryViewer(QDialog):
         self._meshes_tree.itemClicked.connect(self._on_mesh_clicked)
         self._tab_widget.addTab(self._meshes_tree, "Meshes")
 
+        # Scenes tab
+        self._scenes_tree = QTreeWidget()
+        self._scenes_tree.setHeaderLabels(["ID", "Name", "Entities", "Pending", "Update", "Fixed Update"])
+        self._scenes_tree.setAlternatingRowColors(True)
+        self._scenes_tree.itemClicked.connect(self._on_scene_clicked)
+        self._tab_widget.addTab(self._scenes_tree, "Scenes")
+
         # Status
         self._status_label = QLabel()
         layout.addWidget(self._status_label)
@@ -76,6 +84,7 @@ class CoreRegistryViewer(QDialog):
     def refresh(self) -> None:
         """Refresh all tabs."""
         self._refresh_meshes()
+        self._refresh_scenes()
         self._update_status()
 
     def _refresh_meshes(self) -> None:
@@ -132,6 +141,57 @@ class CoreRegistryViewer(QDialog):
 
         item.setExpanded(True)
 
+    def _refresh_scenes(self) -> None:
+        """Refresh scene list from tc_scene registry."""
+        self._scenes_tree.clear()
+
+        infos = tc_scene_registry_get_all_info()
+        for info in sorted(infos, key=lambda x: x["id"]):
+            scene_id = str(info["id"])
+            name = info["name"] or "(unnamed)"
+            entities = str(info["entity_count"])
+            pending = str(info["pending_count"])
+            update = str(info["update_count"])
+            fixed_update = str(info["fixed_update_count"])
+
+            item = QTreeWidgetItem([scene_id, name, entities, pending, update, fixed_update])
+            item.setData(0, Qt.ItemDataRole.UserRole, info)
+            self._scenes_tree.addTopLevelItem(item)
+
+        for i in range(6):
+            self._scenes_tree.resizeColumnToContents(i)
+
+    def _on_scene_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show scene details on click."""
+        info = item.data(0, Qt.ItemDataRole.UserRole)
+        if info is None:
+            return
+
+        # Remove old children
+        while item.childCount() > 0:
+            item.takeChild(0)
+
+        # If already expanded, just collapse
+        if item.isExpanded():
+            item.setExpanded(False)
+            return
+
+        # Add detailed info
+        details = [
+            ("ID", str(info["id"])),
+            ("Name", info["name"] or "(unnamed)"),
+            ("Entity Count", str(info["entity_count"])),
+            ("Pending Start", str(info["pending_count"])),
+            ("Update List", str(info["update_count"])),
+            ("Fixed Update List", str(info["fixed_update_count"])),
+        ]
+
+        for label, value in details:
+            child = QTreeWidgetItem([label, value, "", "", "", ""])
+            item.addChild(child)
+
+        item.setExpanded(True)
+
     def _format_bytes(self, size: int) -> str:
         """Format size in human-readable form."""
         if size < 1024:
@@ -144,6 +204,7 @@ class CoreRegistryViewer(QDialog):
     def _update_status(self) -> None:
         """Update status bar."""
         mesh_count = tc_mesh_count()
+        scene_count = tc_scene_registry_count()
 
         # Calculate total memory
         infos = tc_mesh_get_all_info()
@@ -151,5 +212,6 @@ class CoreRegistryViewer(QDialog):
 
         self._status_label.setText(
             f"Meshes: {mesh_count} | "
-            f"Total Memory: {self._format_bytes(total_memory)}"
+            f"Scenes: {scene_count} | "
+            f"Mesh Memory: {self._format_bytes(total_memory)}"
         )
