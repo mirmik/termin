@@ -61,31 +61,37 @@ using namespace termin;
 // Allows Python classes to inherit from C++ CxxComponent.
 class PyCxxComponent : public CxxComponent {
 public:
-    NB_TRAMPOLINE(CxxComponent, 8);
+    NB_TRAMPOLINE(CxxComponent, 10);
 
     void start() override {
         NB_OVERRIDE(start);
     }
-    void update(double dt) override {
+    void update(float dt) override {
         NB_OVERRIDE(update, dt);
     }
-    void fixed_update(double dt) override {
+    void fixed_update(float dt) override {
         NB_OVERRIDE(fixed_update, dt);
-    }
-    void editor_update(double dt) override {
-        NB_OVERRIDE(editor_update, dt);
     }
     void on_destroy() override {
         NB_OVERRIDE(on_destroy);
     }
-    void on_enable() override {
-        NB_OVERRIDE(on_enable);
+    void on_editor_start() override {
+        NB_OVERRIDE(on_editor_start);
     }
-    void on_disable() override {
-        NB_OVERRIDE(on_disable);
+    void setup_editor_defaults() override {
+        NB_OVERRIDE(setup_editor_defaults);
     }
-    const char* type_name() const override {
-        NB_OVERRIDE_PURE(type_name);
+    void on_added_to_entity() override {
+        NB_OVERRIDE(on_added_to_entity);
+    }
+    void on_removed_from_entity() override {
+        NB_OVERRIDE(on_removed_from_entity);
+    }
+    void on_added(nb::object scene) override {
+        NB_OVERRIDE(on_added, scene);
+    }
+    void on_removed() override {
+        NB_OVERRIDE(on_removed);
     }
 };
 

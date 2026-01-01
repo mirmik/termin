@@ -65,7 +65,6 @@ class CoreRegistryViewer(QDialog):
         left_layout.setContentsMargins(0, 0, 0, 0)
 
         self._tab_widget = QTabWidget()
-        self._tab_widget.currentChanged.connect(self._on_tab_changed)
         left_layout.addWidget(self._tab_widget)
 
         # Meshes tab
@@ -150,6 +149,9 @@ class CoreRegistryViewer(QDialog):
         button_layout.addWidget(close_btn)
 
         layout.addLayout(button_layout)
+
+        # Connect tab signal after all widgets exist
+        self._tab_widget.currentChanged.connect(self._on_tab_changed)
 
     def _on_tab_changed(self, index: int) -> None:
         """Clear details when switching tabs."""
