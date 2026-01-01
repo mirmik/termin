@@ -540,14 +540,18 @@ class HandleSelectorWidget(FieldWidget):
     def get_value(self) -> Any:
         """Get currently selected handle."""
         name = self._combo.currentData()
+        print(f"[HandleSelectorWidget] get_value: name={name}, kind={self._resource_kind}")
         if not name:
             return None
 
         accessors = self._get_accessors()
         if accessors is None:
+            print(f"[HandleSelectorWidget] get_value: accessors is None!")
             return None
 
-        return accessors.get_by_name(name)
+        result = accessors.get_by_name(name)
+        print(f"[HandleSelectorWidget] get_value: result={result}, type={type(result)}")
+        return result
 
     def set_value(self, value: Any) -> None:
         """Set widget value from a handle or raw resource."""

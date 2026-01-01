@@ -56,6 +56,19 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
             # Get action for button fields (None or callable)
             action = info.action if info.action is not None else None
 
+            def make_getter(path):
+                def getter(o):
+                    val = registry.get(o, path)
+                    print(f"[InspectField C++] getter: path={path}, value={val}, type={type(val)}")
+                    return val
+                return getter
+
+            def make_setter(path):
+                def setter(o, v):
+                    print(f"[InspectField C++] setter: path={path}, value={v}, type={type(v)}")
+                    registry.set(o, path, v)
+                return setter
+
             result[info.path] = InspectField(
                 path=info.path,
                 label=info.label,
@@ -65,8 +78,8 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                 step=info.step,
                 choices=choices,
                 action=action,
-                getter=lambda o, p=info.path: registry.get(o, p),
-                setter=lambda o, v, p=info.path: registry.set(o, p, v),
+                getter=make_getter(info.path),
+                setter=make_setter(info.path),
             )
     except (ImportError, RuntimeError):
         pass  # C++ module not available
@@ -171,7 +184,11 @@ class InspectFieldPanel(QWidget):
                 return  # Target changed, ignore stale callback
             old_value = field.get_value(target)
             new_value = widget.get_value()
+            print(f"[InspectFieldPanel] on_change: key={key}, old={old_value}, new={new_value}, type(new)={type(new_value)}")
             field.set_value(target, new_value)
+            # Verify the value was actually set
+            verify_value = field.get_value(target)
+            print(f"[InspectFieldPanel] after set: verify={verify_value}, type={type(verify_value)}")
             self.field_changed.emit(key, old_value, new_value)
 
         widget.value_changed.connect(on_change)
