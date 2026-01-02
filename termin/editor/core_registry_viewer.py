@@ -53,6 +53,13 @@ class CoreRegistryViewer(QDialog):
         self.setWindowTitle("Core Registry Viewer")
         self.setMinimumSize(1000, 600)
 
+        # Enable maximize button
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+        )
+
         self._selected_scene_id: int | None = None
 
         self._init_ui()
@@ -64,7 +71,7 @@ class CoreRegistryViewer(QDialog):
 
         # Main splitter: content on left, details on right
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        layout.addWidget(main_splitter)
+        layout.addWidget(main_splitter, stretch=1)
 
         # Left side: tabs
         left_widget = QWidget()
@@ -156,11 +163,12 @@ class CoreRegistryViewer(QDialog):
 
         main_splitter.addWidget(right_widget)
 
-        # Set splitter proportions (60% left, 40% right)
-        main_splitter.setSizes([600, 400])
+        # Set splitter proportions (55% left, 45% right)
+        main_splitter.setSizes([550, 450])
 
-        # Status bar
+        # Status bar (single line, fixed height)
         self._status_label = QLabel()
+        self._status_label.setFixedHeight(20)
         layout.addWidget(self._status_label)
 
         # Buttons

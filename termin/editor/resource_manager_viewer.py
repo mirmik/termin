@@ -49,6 +49,13 @@ class ResourceManagerViewer(QDialog):
         self.setWindowTitle("Resource Manager")
         self.setMinimumSize(900, 600)
 
+        # Enable maximize button
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+        )
+
         self._init_ui()
         self.refresh()
 
@@ -58,7 +65,7 @@ class ResourceManagerViewer(QDialog):
 
         # Splitter: левая часть - дерево, правая - детали
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        layout.addWidget(splitter)
+        layout.addWidget(splitter, stretch=1)
 
         # Левая панель с табами
         left_widget = QWidget()
@@ -130,10 +137,11 @@ class ResourceManagerViewer(QDialog):
         right_layout.addWidget(self._load_btn)
 
         splitter.addWidget(right_widget)
-        splitter.setSizes([600, 300])
+        splitter.setSizes([500, 400])
 
-        # Статус
+        # Статус (single line, fixed height)
         self._status_label = QLabel()
+        self._status_label.setFixedHeight(20)
         layout.addWidget(self._status_label)
 
         # Кнопки
