@@ -3650,7 +3650,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "1fe64acd-3215-434f-849e-d5255426f3de",
+            "uuid": "21912101-6fcc-4432-8b7c-7fd84f8f92d6",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3670,8 +3670,8 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "a1109787-7643-4fce-a1ef-61006fb35458",
-            "camera_entity": "camera",
+            "uuid": "982b52d1-9259-43d3-bf01-e9ded1e89e3d",
+            "camera_entity": "GameCamera",
             "rect": [
               0.0,
               0.0,
@@ -3685,9 +3685,9 @@
       }
     ],
     "expanded_entities": [
-      "editor_ui",
+      "EditorEntities",
       "camera",
-      "EditorEntities"
+      "editor_ui"
     ]
   },
   "resources": {

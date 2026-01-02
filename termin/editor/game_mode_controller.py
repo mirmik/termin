@@ -32,14 +32,16 @@ class GameModeController:
     def __init__(
         self,
         world_persistence: "WorldPersistence",
-        on_mode_changed: Optional[Callable[[bool, "Scene"], None]] = None,
+        on_mode_changed: Optional[Callable[[bool, "Scene", dict], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
         on_tick: Optional[Callable[[float], None]] = None,
+        get_viewport_camera_names: Optional[Callable[[], dict]] = None,
     ):
         self._world_persistence = world_persistence
         self._on_mode_changed = on_mode_changed
         self._on_request_update = on_request_update
         self._on_tick = on_tick
+        self._get_viewport_camera_names = get_viewport_camera_names
 
         self._game_mode = False
 
@@ -69,6 +71,11 @@ class GameModeController:
         if self._game_mode:
             return
 
+        # Сохраняем имена камер ДО смены сцены
+        camera_names = {}
+        if self._get_viewport_camera_names is not None:
+            camera_names = self._get_viewport_camera_names()
+
         # Создаём копию сцены для game mode
         game_scene = self._world_persistence.enter_game_mode()
 
@@ -80,7 +87,7 @@ class GameModeController:
         self._game_timer.start(16)  # ~60 FPS
 
         if self._on_mode_changed:
-            self._on_mode_changed(True, game_scene)
+            self._on_mode_changed(True, game_scene, camera_names)
 
     def stop(self) -> None:
         """Выходит из игрового режима, возвращаясь к оригинальной сцене."""
@@ -90,6 +97,11 @@ class GameModeController:
         # Останавливаем игровой цикл
         self._game_timer.stop()
 
+        # Сохраняем имена камер ДО уничтожения game scene
+        camera_names = {}
+        if self._get_viewport_camera_names is not None:
+            camera_names = self._get_viewport_camera_names()
+
         # Выходим из game mode - копия уничтожается
         editor_scene = self._world_persistence.exit_game_mode()
 
@@ -97,7 +109,7 @@ class GameModeController:
         self._game_mode = False
 
         if self._on_mode_changed:
-            self._on_mode_changed(False, editor_scene)
+            self._on_mode_changed(False, editor_scene, camera_names)
 
     def _tick(self) -> None:
         """Вызывается таймером для обновления сцены."""

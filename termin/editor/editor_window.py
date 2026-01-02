@@ -376,6 +376,7 @@ class EditorWindow(QMainWindow):
             on_mode_changed=self._on_game_mode_changed,
             on_request_update=self._request_viewport_update,
             on_tick=self._on_game_tick,
+            get_viewport_camera_names=self._get_viewport_camera_names,
         )
 
         # --- PrefabEditController - режим изоляции для редактирования префабов ---
@@ -1773,8 +1774,22 @@ class EditorWindow(QMainWindow):
         if self.game_mode_controller is not None:
             self.game_mode_controller.toggle()
 
-    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
+    def _get_viewport_camera_names(self) -> dict[int, str | None]:
+        """Возвращает словарь id(viewport) -> имя камеры для всех viewport'ов."""
+        result: dict[int, str | None] = {}
+        if self._rendering_controller is not None:
+            for display in self._rendering_controller.displays:
+                for viewport in display.viewports:
+                    camera_name = None
+                    if viewport.camera is not None and viewport.camera.entity is not None:
+                        camera_name = viewport.camera.entity.name
+                    result[id(viewport)] = camera_name
+        return result
+
+    def _on_game_mode_changed(self, is_playing: bool, scene, viewport_camera_names: dict) -> None:
         """Колбэк от GameModeController при изменении режима."""
+        from termin.visualization.core.camera import CameraComponent
+
         # Сбрасываем выделение (entity из разных сцен несовместимы)
         if self.selection_manager is not None:
             self.selection_manager.clear()
@@ -1792,9 +1807,17 @@ class EditorWindow(QMainWindow):
         if camera_data is not None:
             self._camera_manager.set_camera_data(camera_data)
 
+        # Строим словарь камер в новой сцене по имени entity
+        cameras_by_name: dict[str, CameraComponent] = {}
+        for entity in scene.entities:
+            cam = entity.get_component(CameraComponent)
+            if cam is not None and entity.name:
+                cameras_by_name[entity.name] = cam
+
         # Переключаем все viewport'ы на новую сцену и камеру
         for editor_features in self._editor_features.values():
             editor_features.set_scene(scene)
+            # Для editor viewport всегда используем editor camera
             editor_features.set_camera(self._camera_manager.camera)
             editor_features.set_world_mode("game" if is_playing else "editor")
             editor_features.selected_entity_id = 0
@@ -1805,11 +1828,19 @@ class EditorWindow(QMainWindow):
             for display in self._rendering_controller.displays:
                 display_id = id(display)
                 if display_id not in self._editor_features:
-                    # Display в режиме "simple" - обновляем viewport'ы напрямую
+                    # Display в режиме "simple" - обновляем viewport'ы
                     for viewport in display.viewports:
                         viewport.scene = scene
-                        viewport.camera = self._camera_manager.camera
-                        self._camera_manager.camera.add_viewport(viewport)
+                        # Ищем камеру с тем же именем в новой сцене
+                        old_camera_name = viewport_camera_names.get(id(viewport))
+                        new_camera = None
+                        if old_camera_name is not None:
+                            new_camera = cameras_by_name.get(old_camera_name)
+                        # Fallback на editor camera если не нашли
+                        if new_camera is None:
+                            new_camera = self._camera_manager.camera
+                        viewport.camera = new_camera
+                        new_camera.add_viewport(viewport)
 
         # Clear gizmo target when switching scenes
         if self.editor_viewport is not None:

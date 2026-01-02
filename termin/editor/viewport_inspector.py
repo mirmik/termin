@@ -243,14 +243,25 @@ class ViewportInspector(QWidget):
 
     def _update_hint_state(self, viewport: "Viewport") -> None:
         """Update hint label visibility based on ViewportHintComponent."""
+        if viewport.camera is not None:
+            self._update_hint_state_for_camera(viewport.camera)
+        else:
+            self._hint_label.hide()
+            self._pipeline_combo.setEnabled(True)
+
+    def _update_hint_state_for_camera(self, camera: "CameraComponent") -> None:
+        """Update hint label visibility based on camera's ViewportHintComponent."""
         from termin.visualization.core.viewport_hint import ViewportHintComponent
 
         has_hint = False
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            hint = viewport.camera.entity.get_component(ViewportHintComponent)
+        camera_name = ""
+        if camera is not None and camera.entity is not None:
+            hint = camera.entity.get_component(ViewportHintComponent)
             has_hint = hint is not None
+            camera_name = camera.entity.name or "unnamed"
 
         if has_hint:
+            self._hint_label.setText(f"Controlled by ViewportHint on {camera_name}")
             self._hint_label.show()
             self._pipeline_combo.setEnabled(False)
         else:
@@ -347,6 +358,10 @@ class ViewportInspector(QWidget):
             new_camera, _name = self._cameras[index]
             self.camera_changed.emit(new_camera)
             self.viewport_changed.emit()
+            # Update hint state for the new camera
+            # Note: viewport.camera is updated by rendering_controller after this signal
+            # So we need to check the new camera directly
+            self._update_hint_state_for_camera(new_camera)
 
     def _on_rect_changed(self) -> None:
         """Handle rect value change."""
