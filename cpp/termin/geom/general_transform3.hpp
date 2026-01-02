@@ -167,6 +167,10 @@ struct GeneralTransform3 {
     }
 
     void set_parent(GeneralTransform3 new_parent) {
+        // Check that parent is in the same pool
+        if (new_parent.valid() && new_parent._pool != _pool) {
+            throw std::runtime_error("Cannot set parent: transforms must be in the same pool");
+        }
         tc_entity_pool_set_parent(_pool, _id, new_parent._id);
     }
 

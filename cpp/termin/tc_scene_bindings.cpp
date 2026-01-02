@@ -131,6 +131,12 @@ public:
         return tc_scene_entity_pool(_s);
     }
 
+    // Set Python wrapper for callbacks from C to Python
+    void set_py_wrapper(nb::object wrapper) {
+        // Store raw PyObject* - Python Scene must outlive TcScene
+        tc_scene_set_py_wrapper(_s, wrapper.ptr());
+    }
+
 private:
     // Update entity references in all components of an entity (and its children)
     void update_component_entity_refs(Entity& ent) {
@@ -307,6 +313,85 @@ void bind_tc_scene(nb::module_& m) {
 
         // Scene name
         .def_prop_rw("name", &TcScene::name, &TcScene::set_name)
+
+        // Python wrapper for callbacks
+        .def("set_py_wrapper", &TcScene::set_py_wrapper, nb::arg("wrapper"),
+             "Set Python Scene wrapper for component auto-registration")
+
+        // Component type queries
+        .def("get_components_of_type", [](TcScene& self, const std::string& type_name) {
+            nb::list result;
+            tc_component* c = tc_scene_first_component_of_type(self._s, type_name.c_str());
+            while (c != NULL) {
+                // Return the Python wrapper if available
+                if (c->py_wrap) {
+                    result.append(nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->py_wrap)));
+                }
+                c = c->type_next;
+            }
+            return result;
+        }, nb::arg("type_name"), "Get all components of given type")
+
+        .def("count_components_of_type", [](TcScene& self, const std::string& type_name) {
+            return tc_scene_count_components_of_type(self._s, type_name.c_str());
+        }, nb::arg("type_name"), "Count components of given type")
+
+        .def("get_component_type_counts", [](TcScene& self) {
+            // Get all component types directly from scene's type_heads
+            nb::dict result;
+
+            size_t type_count = 0;
+            tc_scene_component_type* types = tc_scene_get_all_component_types(self._s, &type_count);
+            if (types) {
+                for (size_t i = 0; i < type_count; i++) {
+                    if (types[i].type_name) {
+                        result[types[i].type_name] = types[i].count;
+                    }
+                }
+                free(types);
+            }
+            return result;
+        }, "Get dict of component type -> count for all types in scene")
+
+        .def("foreach_component_of_type", [](TcScene& self, const std::string& type_name, nb::callable callback) {
+            // Wrap Python callback
+            struct CallbackData {
+                nb::callable py_callback;
+                bool had_exception = false;
+            };
+            CallbackData data{callback};
+
+            tc_scene_foreach_component_of_type(
+                self._s,
+                type_name.c_str(),
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<CallbackData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->py_wrap) {
+                            nb::object py_comp = nb::borrow<nb::object>(
+                                reinterpret_cast<PyObject*>(c->py_wrap));
+                            nb::object result = data->py_callback(py_comp);
+                            // If callback returns False, stop iteration
+                            if (nb::isinstance<nb::bool_>(result) && !nb::cast<bool>(result)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("type_name"), nb::arg("callback"),
+           "Iterate components of type with callback(component) -> bool. Return False to stop.")
         ;
 
     // =========================================================================
@@ -354,6 +439,22 @@ void bind_tc_scene(nb::module_& m) {
         }
         return result;
     }, nb::arg("scene_id"), "Get entities for a scene by ID");
+
+    m.def("tc_scene_get_component_types", [](int scene_id) {
+        nb::list result;
+        size_t count = 0;
+        tc_scene_component_type_info* infos = tc_scene_get_component_types(scene_id, &count);
+        if (infos) {
+            for (size_t i = 0; i < count; ++i) {
+                nb::dict d;
+                d["type_name"] = infos[i].type_name ? std::string(infos[i].type_name) : "";
+                d["count"] = infos[i].count;
+                result.append(d);
+            }
+            free(infos);
+        }
+        return result;
+    }, nb::arg("scene_id"), "Get component type counts for a scene by ID");
 }
 
 } // namespace termin

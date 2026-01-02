@@ -100,6 +100,56 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData") -> "TcMesh":
     )
 
 
+def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool:
+    """Populate an existing declared TcMesh with data from GLBMeshData.
+
+    Returns True if successful, False otherwise.
+    """
+    from termin.mesh._mesh_native import TcVertexLayout, tc_mesh_set_data
+
+    vertices = glb_mesh.vertices.astype(np.float32)
+    indices = glb_mesh.indices.astype(np.uint32).ravel()
+    num_verts = len(vertices)
+
+    # Compute normals if not provided
+    if glb_mesh.normals is not None:
+        normals = glb_mesh.normals.astype(np.float32)
+    else:
+        normals = _compute_vertex_normals(vertices, indices)
+
+    # UVs (default to zeros)
+    if glb_mesh.uvs is not None:
+        uvs = glb_mesh.uvs.astype(np.float32)
+    else:
+        uvs = np.zeros((num_verts, 2), dtype=np.float32)
+
+    is_skinned = glb_mesh.is_skinned
+
+    if is_skinned:
+        layout = TcVertexLayout.skinned()
+
+        joint_indices = glb_mesh.joint_indices.astype(np.float32)
+        joint_weights = glb_mesh.joint_weights.astype(np.float32)
+
+        buffer = np.zeros((num_verts, 16), dtype=np.float32)
+        buffer[:, 0:3] = vertices
+        buffer[:, 3:6] = normals
+        buffer[:, 6:8] = uvs
+        buffer[:, 8:12] = joint_indices
+        buffer[:, 12:16] = joint_weights
+    else:
+        layout = TcVertexLayout.pos_normal_uv()
+
+        buffer = np.zeros((num_verts, 8), dtype=np.float32)
+        buffer[:, 0:3] = vertices
+        buffer[:, 3:6] = normals
+        buffer[:, 6:8] = uvs
+
+    buffer_flat = buffer.ravel().astype(np.float32)
+
+    return tc_mesh_set_data(tc_mesh, buffer_flat, num_verts, layout, indices, glb_mesh.name)
+
+
 class _PendingSkinnedMesh:
     """Placeholder for skinned mesh that needs skeleton instance set later."""
     def __init__(self, entity: Entity, mesh: TcMesh, material):

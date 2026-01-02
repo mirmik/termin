@@ -70,6 +70,12 @@ CxxComponent* Entity::get_component_by_type(const std::string& type_name) {
 
 void Entity::set_parent(const Entity& parent_entity) {
     if (!valid()) return;
+
+    // Check that parent is in the same pool
+    if (parent_entity.valid() && parent_entity._pool != _pool) {
+        throw std::runtime_error("Cannot set parent: entities must be in the same pool");
+    }
+
     tc_entity_id parent_id = parent_entity.valid() ? parent_entity._id : TC_ENTITY_ID_INVALID;
     tc_entity_pool_set_parent(_pool, _id, parent_id);
 }

@@ -15,10 +15,28 @@
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
+#include "../../../../core_c/include/tc_scene.h"
 
 namespace nb = nanobind;
 
 namespace termin {
+
+// Helper: register component with Python Scene if entity is in a scene's pool
+static void register_component_with_scene(Entity& e, nb::object component) {
+    tc_entity_pool* pool = e.pool();
+    if (!pool) return;
+
+    tc_scene* scene = tc_entity_pool_get_scene(pool);
+    if (!scene) return;
+
+    void* py_wrapper = tc_scene_get_py_wrapper(scene);
+    if (!py_wrapper) return;
+
+    nb::object py_scene = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(py_wrapper));
+    if (nb::hasattr(py_scene, "register_component")) {
+        py_scene.attr("register_component")(component);
+    }
+}
 
 void bind_entity_class(nb::module_& m) {
     nb::class_<Entity>(m, "Entity")
@@ -195,6 +213,7 @@ void bind_entity_class(nb::module_& m) {
                 Component* c = nb::cast<Component*>(component);
                 c->set_py_wrap(component);
                 e.add_component(c);
+                register_component_with_scene(e, component);
                 return component;
             }
 
@@ -207,6 +226,7 @@ void bind_entity_class(nb::module_& m) {
                 }
 
                 e.add_component_ptr(tc);
+                register_component_with_scene(e, component);
                 return component;
             }
 
@@ -348,7 +368,7 @@ void bind_entity_class(nb::module_& m) {
 
             return result;
         })
-        .def_static("deserialize", [](nb::object data, nb::object context) -> nb::object {
+        .def_static("deserialize", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
             try {
                 if (data.is_none() || !nb::isinstance<nb::dict>(data)) {
                     return nb::none();
@@ -362,9 +382,20 @@ void bind_entity_class(nb::module_& m) {
                     name = nb::cast<std::string>(name_obj);
                 }
 
-                tc_entity_pool* pool = get_standalone_pool();
+                // Get pool from scene or use standalone pool
+                tc_entity_pool* pool = nullptr;
+                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
+                    nb::object tc_scene = scene.attr("_tc_scene");
+                    if (nb::hasattr(tc_scene, "entity_pool_ptr")) {
+                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene.attr("entity_pool_ptr")());
+                        pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
+                    }
+                }
                 if (!pool) {
-                    tc::Log::error("Entity::deserialize: standalone pool is null");
+                    pool = get_standalone_pool();
+                }
+                if (!pool) {
+                    tc::Log::error("Entity::deserialize: pool is null");
                     return nb::none();
                 }
                 Entity ent = Entity::create(pool, name);
@@ -515,13 +546,13 @@ void bind_entity_class(nb::module_& m) {
                 tc::Log::error(e, "Entity::deserialize");
                 return nb::none();
             }
-        }, nb::arg("data"), nb::arg("context") = nb::none())
+        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
 
-        .def_static("deserialize_with_children", [](nb::object data, nb::object context) -> nb::object {
-            std::function<nb::object(nb::object, nb::object)> deserialize_recursive;
-            deserialize_recursive = [&deserialize_recursive](nb::object data, nb::object context) -> nb::object {
+        .def_static("deserialize_with_children", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
+            std::function<nb::object(nb::object, nb::object, nb::object)> deserialize_recursive;
+            deserialize_recursive = [&deserialize_recursive](nb::object data, nb::object context, nb::object scene) -> nb::object {
                 nb::object entity_cls = nb::module_::import_("termin.entity").attr("Entity");
-                nb::object ent = entity_cls.attr("deserialize")(data, context);
+                nb::object ent = entity_cls.attr("deserialize")(data, context, scene);
                 if (ent.is_none()) {
                     return nb::none();
                 }
@@ -534,7 +565,7 @@ void bind_entity_class(nb::module_& m) {
                             nb::list children = nb::cast<nb::list>(children_obj);
                             for (size_t i = 0; i < nb::len(children); ++i) {
                                 nb::object child_data = children[i];
-                                nb::object child = deserialize_recursive(child_data, context);
+                                nb::object child = deserialize_recursive(child_data, context, scene);
                                 if (!child.is_none()) {
                                     child.attr("set_parent")(ent);
                                 }
@@ -546,8 +577,8 @@ void bind_entity_class(nb::module_& m) {
                 return ent;
             };
 
-            return deserialize_recursive(data, context);
-        }, nb::arg("data"), nb::arg("context") = nb::none());
+            return deserialize_recursive(data, context, scene);
+        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none());
 }
 
 } // namespace termin

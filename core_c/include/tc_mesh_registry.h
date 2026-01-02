@@ -31,7 +31,26 @@ TC_API tc_mesh_handle tc_mesh_find_by_name(const char* name);
 // Get existing mesh or create new one if not found
 TC_API tc_mesh_handle tc_mesh_get_or_create(const char* uuid);
 
+// Declare a mesh that will be loaded lazily (creates entry with is_loaded=false)
+// Returns handle to mesh, or existing handle if already declared/created
+TC_API tc_mesh_handle tc_mesh_declare(const char* uuid, const char* name);
+
+// Set load callback for lazy loading
+TC_API void tc_mesh_set_load_callback(
+    tc_mesh_handle h,
+    tc_mesh_load_fn callback,
+    void* user_data
+);
+
+// Check if mesh data is loaded
+TC_API bool tc_mesh_is_loaded(tc_mesh_handle h);
+
+// Ensure mesh is loaded (triggers callback if not loaded)
+// Returns true if mesh is now loaded, false if loading failed or no callback
+TC_API bool tc_mesh_ensure_loaded(tc_mesh_handle h);
+
 // Get mesh data by handle (returns NULL if handle is invalid/stale)
+// Note: does NOT trigger lazy loading - use tc_mesh_ensure_loaded first
 TC_API tc_mesh* tc_mesh_get(tc_mesh_handle h);
 
 // Check if handle is valid (not stale, points to existing mesh)
@@ -60,6 +79,9 @@ typedef struct tc_mesh_info {
     size_t index_count;
     size_t stride;
     size_t memory_bytes;
+    uint8_t is_loaded;
+    uint8_t has_load_callback;
+    uint8_t _pad[6];
 } tc_mesh_info;
 
 // Get info for all meshes (caller must free() returned array)

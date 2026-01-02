@@ -76,8 +76,16 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         self._create_animation_assets(resources.get("animations", {}))
 
     def _create_mesh_assets(self, mesh_uuids: Dict[str, str]) -> None:
-        """Get or create child MeshAssets with UUIDs from spec via ResourceManager."""
+        """Get or create child MeshAssets with UUIDs from spec via ResourceManager.
+
+        Also declares meshes in tc_mesh registry with lazy load callback.
+        """
         from termin.assets.resources import ResourceManager
+        from termin.mesh._mesh_native import (
+            tc_mesh_declare,
+            tc_mesh_set_load_callback,
+            tc_mesh_is_loaded,
+        )
 
         rm = ResourceManager.instance()
         for mesh_name, mesh_uuid in mesh_uuids.items():
@@ -90,6 +98,15 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 parent_key=mesh_name,
             )
             self._mesh_assets[mesh_name] = asset
+
+            # Declare mesh in tc_mesh registry if not already loaded
+            tc_mesh = tc_mesh_declare(mesh_uuid, full_name)
+            if tc_mesh.is_valid and not tc_mesh_is_loaded(tc_mesh):
+                # Set load callback that will trigger GLBAsset loading
+                tc_mesh_set_load_callback(tc_mesh, self._make_mesh_load_callback(mesh_name))
+                # Store handle in MeshAsset
+                asset._data = tc_mesh
+                asset._loaded = False
 
     def _create_skeleton_assets(self, skeleton_uuids: Dict[str, str]) -> None:
         """Get or create child SkeletonAssets with UUIDs from spec via ResourceManager."""
@@ -205,22 +222,52 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         if spec_changed and self._source_path:
             self.save_spec_file()
 
+    def _make_mesh_load_callback(self, mesh_name: str):
+        """Create a load callback that triggers GLBAsset loading for a specific mesh."""
+        def load_callback(tc_mesh_data) -> bool:
+            # Load the parent GLBAsset if not loaded
+            self.ensure_loaded()
+
+            # Find the GLB mesh data and populate tc_mesh
+            if self._data is None:
+                return False
+
+            for glb_mesh in self._data.meshes:
+                if glb_mesh.name == mesh_name:
+                    from termin.loaders.glb_instantiator import _populate_tc_mesh_from_glb
+                    from termin.mesh._mesh_native import TcMesh
+
+                    tc_mesh = TcMesh.from_uuid(tc_mesh_data.uuid)
+                    if tc_mesh.is_valid:
+                        return _populate_tc_mesh_from_glb(tc_mesh, glb_mesh)
+
+            return False
+
+        return load_callback
+
     def _populate_child_assets(self) -> None:
         """Fill all child assets with extracted data from loaded GLB."""
-        from termin.loaders.glb_instantiator import _glb_mesh_to_tc_mesh
+        from termin.loaders.glb_instantiator import (
+            _glb_mesh_to_tc_mesh,
+            _populate_tc_mesh_from_glb,
+        )
+        from termin.mesh._mesh_native import tc_mesh_is_loaded
         from termin.visualization.animation.clip import clip_from_glb
         from termin.skeleton import SkeletonData
 
-        glb_mesh_names = {m.name for m in self._data.meshes}
-
         # Populate mesh assets
         for mesh_name, asset in self._mesh_assets.items():
-            if asset._data is None:
-                for glb_mesh in self._data.meshes:
-                    if glb_mesh.name == mesh_name:
+            for glb_mesh in self._data.meshes:
+                if glb_mesh.name == mesh_name:
+                    if asset._data is not None and asset._data.is_valid:
+                        # Mesh was declared, populate existing entry
+                        if not tc_mesh_is_loaded(asset._data):
+                            _populate_tc_mesh_from_glb(asset._data, glb_mesh)
+                    else:
+                        # Create new mesh entry
                         asset._data = _glb_mesh_to_tc_mesh(glb_mesh)
-                        asset._loaded = True
-                        break
+                    asset._loaded = True
+                    break
 
         # Populate skeleton assets
         for skeleton_key, asset in self._skeleton_assets.items():

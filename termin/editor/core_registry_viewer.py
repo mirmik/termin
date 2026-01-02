@@ -29,7 +29,9 @@ from termin._native.scene import (
     tc_scene_registry_get_all_info,
     tc_scene_registry_count,
     tc_scene_get_entities,
+    tc_scene_get_component_types,
 )
+from termin._native.render import shader_get_all_info, shader_count, TcShader
 
 
 class CoreRegistryViewer(QDialog):
@@ -81,6 +83,13 @@ class CoreRegistryViewer(QDialog):
         self._textures_tree.setAlternatingRowColors(True)
         self._textures_tree.itemClicked.connect(self._on_texture_clicked)
         self._tab_widget.addTab(self._textures_tree, "Textures")
+
+        # Shaders tab
+        self._shaders_tree = QTreeWidget()
+        self._shaders_tree.setHeaderLabels(["Name", "Type", "Version", "Size"])
+        self._shaders_tree.setAlternatingRowColors(True)
+        self._shaders_tree.itemClicked.connect(self._on_shader_clicked)
+        self._tab_widget.addTab(self._shaders_tree, "Shaders")
 
         # Scenes tab - with splitter for scenes and entities lists
         scenes_widget = QWidget()
@@ -169,6 +178,7 @@ class CoreRegistryViewer(QDialog):
         """Refresh all tabs."""
         self._refresh_meshes()
         self._refresh_textures()
+        self._refresh_shaders()
         self._refresh_scenes()
         self._update_status()
         self._details_text.clear()
@@ -288,6 +298,108 @@ class CoreRegistryViewer(QDialog):
         self._details_text.setText("\n".join(lines))
 
     # =========================================================================
+    # Shaders
+    # =========================================================================
+
+    def _refresh_shaders(self) -> None:
+        """Refresh shader list from tc_shader registry."""
+        self._shaders_tree.clear()
+
+        infos = shader_get_all_info()
+        for info in sorted(infos, key=lambda x: x["name"] or x["uuid"]):
+            name = info["name"] or "(unnamed)"
+
+            # Determine type
+            if info["is_variant"]:
+                variant_ops = ["none", "skinning", "instancing", "morphing"]
+                op = info["variant_op"]
+                shader_type = f"variant ({variant_ops[op] if op < len(variant_ops) else op})"
+            elif info["has_geometry"]:
+                shader_type = "geometry"
+            else:
+                shader_type = "standard"
+
+            version = str(info["version"])
+            size = self._format_bytes(info["source_size"])
+
+            item = QTreeWidgetItem([name, shader_type, version, size])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("shader", info))
+            self._shaders_tree.addTopLevelItem(item)
+
+        for i in range(4):
+            self._shaders_tree.resizeColumnToContents(i)
+
+    def _on_shader_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show shader details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "shader":
+            return
+
+        info = data[1]
+        self._show_shader_details(info)
+
+    def _show_shader_details(self, info: dict) -> None:
+        """Display shader details in the details panel."""
+        variant_ops = ["NONE", "SKINNING", "INSTANCING", "MORPHING"]
+
+        lines = [
+            "=== SHADER ===",
+            "",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            f"UUID:           {info['uuid']}",
+            f"Source path:    {info['source_path'] or '(inline)'}",
+            f"Source hash:    {info['source_hash']}",
+            "",
+            "--- Type ---",
+        ]
+
+        if info["is_variant"]:
+            op = info["variant_op"]
+            op_name = variant_ops[op] if op < len(variant_ops) else str(op)
+            lines.append(f"Is variant:     Yes ({op_name})")
+        else:
+            lines.append(f"Is variant:     No")
+
+        lines.append(f"Has geometry:   {'Yes' if info['has_geometry'] else 'No'}")
+
+        lines.extend([
+            "",
+            "--- Memory ---",
+            f"Source size:    {self._format_bytes(info['source_size'])}",
+            "",
+            "--- State ---",
+            f"Ref count:      {info['ref_count']}",
+            f"Version:        {info['version']}",
+        ])
+
+        # Get full shader sources
+        shader = TcShader.from_uuid(info["uuid"])
+        if shader.is_valid:
+            lines.extend([
+                "",
+                "=" * 60,
+                "VERTEX SHADER",
+                "=" * 60,
+                shader.vertex_source or "(empty)",
+                "",
+                "=" * 60,
+                "FRAGMENT SHADER",
+                "=" * 60,
+                shader.fragment_source or "(empty)",
+            ])
+
+            if shader.has_geometry:
+                lines.extend([
+                    "",
+                    "=" * 60,
+                    "GEOMETRY SHADER",
+                    "=" * 60,
+                    shader.geometry_source or "(empty)",
+                ])
+
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
     # Scenes
     # =========================================================================
 
@@ -330,6 +442,17 @@ class CoreRegistryViewer(QDialog):
             f"Update list:    {info['update_count']}",
             f"Fixed update:   {info['fixed_update_count']}",
         ]
+
+        # Get component type counts
+        comp_types = tc_scene_get_component_types(info["id"])
+        if comp_types:
+            lines.extend([
+                "",
+                "--- Component Types ---",
+            ])
+            for ct in sorted(comp_types, key=lambda x: x["type_name"]):
+                lines.append(f"{ct['type_name']:20} {ct['count']}")
+
         self._details_text.setText("\n".join(lines))
 
     def _load_entities(self, scene_id: int) -> None:
@@ -396,9 +519,10 @@ class CoreRegistryViewer(QDialog):
 
     def _update_status(self) -> None:
         """Update status bar."""
-        mesh_count = tc_mesh_count()
-        texture_count = tc_texture_count()
-        scene_count = tc_scene_registry_count()
+        mesh_count_val = tc_mesh_count()
+        texture_count_val = tc_texture_count()
+        shader_count_val = shader_count()
+        scene_count_val = tc_scene_registry_count()
 
         mesh_infos = tc_mesh_get_all_info()
         mesh_memory = sum(info["memory_bytes"] for info in mesh_infos)
@@ -406,8 +530,12 @@ class CoreRegistryViewer(QDialog):
         texture_infos = tc_texture_get_all_info()
         texture_memory = sum(info["memory_bytes"] for info in texture_infos)
 
+        shader_infos = shader_get_all_info()
+        shader_memory = sum(info["source_size"] for info in shader_infos)
+
         self._status_label.setText(
-            f"Meshes: {mesh_count} ({self._format_bytes(mesh_memory)}) | "
-            f"Textures: {texture_count} ({self._format_bytes(texture_memory)}) | "
-            f"Scenes: {scene_count}"
+            f"Meshes: {mesh_count_val} ({self._format_bytes(mesh_memory)}) | "
+            f"Textures: {texture_count_val} ({self._format_bytes(texture_memory)}) | "
+            f"Shaders: {shader_count_val} ({self._format_bytes(shader_memory)}) | "
+            f"Scenes: {scene_count_val}"
         )

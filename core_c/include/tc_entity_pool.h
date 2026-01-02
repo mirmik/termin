@@ -49,6 +49,7 @@ static inline bool tc_entity_id_eq(tc_entity_id a, tc_entity_id b) {
 
 typedef struct tc_entity_pool tc_entity_pool;
 typedef struct tc_component tc_component;
+typedef struct tc_scene tc_scene;
 
 // ============================================================================
 // Pool lifecycle
@@ -56,6 +57,10 @@ typedef struct tc_component tc_component;
 
 TC_POOL_API tc_entity_pool* tc_entity_pool_create(size_t initial_capacity);
 TC_POOL_API void tc_entity_pool_destroy(tc_entity_pool* pool);
+
+// Scene association (for auto-registration of components)
+TC_POOL_API void tc_entity_pool_set_scene(tc_entity_pool* pool, tc_scene* scene);
+TC_POOL_API tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool);
 
 // ============================================================================
 // Entity allocation

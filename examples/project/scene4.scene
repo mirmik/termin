@@ -6298,7 +6298,7 @@
                 "data": {
                   "enabled": true,
                   "mass": 1.0,
-                  "is_static": true,
+                  "is_static": false,
                   "restitution": 0.3,
                   "friction": 0.5
                 }
@@ -6370,7 +6370,7 @@
                 "data": {
                   "enabled": true,
                   "mass": 1.0,
-                  "is_static": true,
+                  "is_static": false,
                   "restitution": 0.3,
                   "friction": 0.5
                 }
@@ -6442,7 +6442,7 @@
                 "data": {
                   "enabled": true,
                   "mass": 1.0,
-                  "is_static": true,
+                  "is_static": false,
                   "restitution": 0.3,
                   "friction": 0.5
                 }
@@ -7538,14 +7538,15 @@
   "editor": {
     "camera": {
       "target": [
-        -0.45469751954078674,
-        10.16030216217041,
-        -3.414658784866333
+        -3.4306867382534643,
+        9.338905977534456,
+        -3.9608196235998103
       ],
-      "radius": 14.5,
-      "azimuth": 58.22767450503951,
-      "elevation": 0.5619960191421725
+      "radius": 17.5,
+      "azimuth": 63.00987665550408,
+      "elevation": 0.32463124087094364
     },
+    "selected_entity": "Physics",
     "displays": [
       {
         "name": "Editor",
@@ -7554,7 +7555,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "5313b564-b3d1-4396-897f-a9d0342d91aa",
+            "uuid": "0b26247f-37e6-45c7-9c6d-8514727a0150",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7574,7 +7575,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "d2005563-a4d0-45a0-9c0c-4ca8b60d3a3d",
+            "uuid": "0bb09d5a-9bbf-4217-a858-3586ce83aa5b",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7589,17 +7590,16 @@
       }
     ],
     "expanded_entities": [
-      "cube2",
-      "Arti",
       "Walls",
-      "[Root]",
-      "entity13",
-      "editor_ui",
-      "cube1",
-      "Glitch",
-      "entity12_copy",
       "EditorEntities",
-      "camera"
+      "Arti",
+      "cube1",
+      "editor_ui",
+      "entity13",
+      "[Root]",
+      "camera",
+      "cube2",
+      "entity12_copy"
     ]
   },
   "resources": {

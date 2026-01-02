@@ -268,3 +268,49 @@ tc_scene_entity_info* tc_scene_get_entities(int scene_id, size_t* count) {
     *count = collector.count;
     return collector.infos;
 }
+
+// ============================================================================
+// Component type enumeration
+// ============================================================================
+
+tc_scene_component_type_info* tc_scene_get_component_types(int scene_id, size_t* count) {
+    if (!count) return NULL;
+    *count = 0;
+
+    if (!g_registry) return NULL;
+
+    // Find scene by ID
+    tc_scene* scene = NULL;
+    for (size_t i = 0; i < g_registry->count; i++) {
+        if (g_registry->entries[i].id == scene_id) {
+            scene = g_registry->entries[i].scene;
+            break;
+        }
+    }
+
+    if (!scene) return NULL;
+
+    // Get component types directly from scene's type_heads
+    size_t type_count = 0;
+    tc_scene_component_type* types = tc_scene_get_all_component_types(scene, &type_count);
+
+    if (!types || type_count == 0) return NULL;
+
+    // Convert to tc_scene_component_type_info (same structure, different typedef)
+    tc_scene_component_type_info* infos = (tc_scene_component_type_info*)malloc(
+        type_count * sizeof(tc_scene_component_type_info)
+    );
+    if (!infos) {
+        free(types);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < type_count; i++) {
+        infos[i].type_name = types[i].type_name;
+        infos[i].count = types[i].count;
+    }
+
+    free(types);
+    *count = type_count;
+    return infos;
+}

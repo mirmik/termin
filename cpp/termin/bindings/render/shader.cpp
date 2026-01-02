@@ -4,6 +4,7 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/unique_ptr.h>
 #include "termin/render/shader_program.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/render.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/vec3.hpp"
@@ -11,18 +12,88 @@
 namespace termin {
 
 void bind_shader(nb::module_& m) {
+    // Shader variant operation enum
+    nb::enum_<tc_shader_variant_op>(m, "ShaderVariantOp")
+        .value("NONE", TC_SHADER_VARIANT_NONE)
+        .value("SKINNING", TC_SHADER_VARIANT_SKINNING)
+        .value("INSTANCING", TC_SHADER_VARIANT_INSTANCING)
+        .value("MORPHING", TC_SHADER_VARIANT_MORPHING);
+
+    // TcShader - RAII wrapper for shader in registry
+    nb::class_<TcShader>(m, "TcShader")
+        .def(nb::init<>())
+        .def_prop_ro("is_valid", &TcShader::is_valid)
+        .def_prop_ro("uuid", [](const TcShader& s) { return std::string(s.uuid()); })
+        .def_prop_ro("name", [](const TcShader& s) { return std::string(s.name()); })
+        .def_prop_ro("source_path", [](const TcShader& s) { return std::string(s.source_path()); })
+        .def_prop_ro("version", &TcShader::version)
+        .def_prop_ro("source_hash", [](const TcShader& s) { return std::string(s.source_hash()); })
+        .def_prop_ro("vertex_source", [](const TcShader& s) { return std::string(s.vertex_source()); })
+        .def_prop_ro("fragment_source", [](const TcShader& s) { return std::string(s.fragment_source()); })
+        .def_prop_ro("geometry_source", [](const TcShader& s) { return std::string(s.geometry_source()); })
+        .def_prop_ro("has_geometry", &TcShader::has_geometry)
+        .def_prop_ro("is_variant", &TcShader::is_variant)
+        .def_prop_ro("variant_op", &TcShader::variant_op)
+        .def("variant_is_stale", &TcShader::variant_is_stale)
+        .def("original", &TcShader::original)
+        .def("set_variant_info", &TcShader::set_variant_info)
+        .def_static("from_sources", &TcShader::from_sources,
+            nb::arg("vertex"), nb::arg("fragment"),
+            nb::arg("geometry") = "", nb::arg("name") = "", nb::arg("source_path") = "")
+        .def_static("from_uuid", &TcShader::from_uuid)
+        .def_static("from_hash", &TcShader::from_hash)
+        .def_static("from_name", &TcShader::from_name)
+        .def("__repr__", [](const TcShader& s) {
+            if (!s.is_valid()) return std::string("<TcShader invalid>");
+            std::string name = s.name();
+            if (name.empty()) name = s.uuid();
+            return "<TcShader " + name + " v" + std::to_string(s.version()) + ">";
+        });
+
+    // Shader registry info functions
+    m.def("shader_count", []() { return tc_shader_count(); });
+    m.def("shader_get_all_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_shader_info* infos = tc_shader_get_all_info(&count);
+        if (infos) {
+            for (size_t i = 0; i < count; i++) {
+                nb::dict info;
+                info["uuid"] = std::string(infos[i].uuid);
+                info["source_hash"] = std::string(infos[i].source_hash);
+                info["name"] = infos[i].name ? std::string(infos[i].name) : "";
+                info["source_path"] = infos[i].source_path ? std::string(infos[i].source_path) : "";
+                info["ref_count"] = infos[i].ref_count;
+                info["version"] = infos[i].version;
+                info["source_size"] = infos[i].source_size;
+                info["is_variant"] = (bool)infos[i].is_variant;
+                info["variant_op"] = (int)infos[i].variant_op;
+                info["has_geometry"] = (bool)infos[i].has_geometry;
+                result.append(info);
+            }
+            free(infos);
+        }
+        return result;
+    });
     nb::class_<ShaderProgram>(m, "ShaderProgram")
         .def(nb::init<>())
-        .def(nb::init<std::string, std::string, std::string, std::string>(),
+        .def(nb::init<std::string, std::string, std::string, std::string, std::string>(),
             nb::arg("vertex_source"),
             nb::arg("fragment_source"),
             nb::arg("geometry_source") = "",
-            nb::arg("source_path") = "")
+            nb::arg("source_path") = "",
+            nb::arg("name") = "")
         .def_prop_ro("vertex_source", &ShaderProgram::vertex_source)
         .def_prop_ro("fragment_source", &ShaderProgram::fragment_source)
         .def_prop_ro("geometry_source", &ShaderProgram::geometry_source)
         .def_prop_ro("source_path", &ShaderProgram::source_path)
+        .def_prop_ro("name", &ShaderProgram::name)
         .def_prop_ro("is_compiled", &ShaderProgram::is_compiled)
+        .def_prop_ro("tc_shader", &ShaderProgram::tc_shader)
+        .def_prop_ro("version", &ShaderProgram::version)
+        .def("needs_recompile", &ShaderProgram::needs_recompile)
+        .def("variant_is_stale", &ShaderProgram::variant_is_stale)
+        .def("set_variant_info", &ShaderProgram::set_variant_info)
         .def("ensure_ready", [](ShaderProgram& self, OpenGLGraphicsBackend& backend) {
             self.ensure_ready([&backend](const char* v, const char* f, const char* g) {
                 return backend.create_shader(v, f, g);

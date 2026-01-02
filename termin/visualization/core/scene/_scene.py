@@ -56,6 +56,7 @@ class Scene:
 
         # C core scene for optimized entity/component management
         self._tc_scene = TcScene()
+        self._tc_scene.set_py_wrapper(self)
 
         # Identifiable fields
         self.uuid = uuid or ""
@@ -63,8 +64,6 @@ class Scene:
 
         # Background color with alpha
         self._background_color = np.array(background_color, dtype=np.float32)
-        self._input_components: List[InputComponent] = []
-        self.colliders = []
         self._collision_world = CollisionWorld()
 
         # Skybox manager
@@ -72,6 +71,7 @@ class Scene:
 
         # Lighting manager
         self._lighting = LightingManager()
+        self._lighting.tc_scene = self._tc_scene
 
         # Layer and flag names (index -> name)
         self.layer_names: dict[int, str] = {}  # 0-63
@@ -185,7 +185,8 @@ class Scene:
 
     @property
     def light_components(self) -> List[LightComponent]:
-        return self._lighting.light_components
+        """Get all light components from tc_scene type list."""
+        return self._tc_scene.get_components_of_type("LightComponent")
 
     @property
     def shadow_settings(self):
@@ -204,6 +205,16 @@ class Scene:
         """Get the collision world for physics and raycasting."""
         return self._collision_world
 
+    @property
+    def colliders(self) -> List[Component]:
+        """Get all collider components from tc_scene type list."""
+        return self._tc_scene.get_components_of_type("ColliderComponent")
+
+    @property
+    def input_components(self) -> List[InputComponent]:
+        """Get all input components from tc_scene type list."""
+        return self._tc_scene.get_components_of_type("InputComponent")
+
     # --- Raycast ---
 
     def raycast(self, ray: Ray3):
@@ -211,54 +222,56 @@ class Scene:
         Returns first intersection with any ColliderComponent
         where distance == 0 (exact hit).
         """
-        best_hit = None
-        best_ray_dist = float("inf")
+        result = {"hit": None, "ray_dist": float("inf")}
         origin = _vec3_to_np(ray.origin)
 
-        for comp in self.colliders:
+        def check_collider(comp):
             attached = comp.attached
             if attached is None:
-                continue
+                return True
 
             hit = attached.closest_to_ray(ray)
             if hit.distance != 0.0:
-                continue
+                return True
 
             p_ray = _vec3_to_np(hit.point_on_ray)
             d_ray = np.linalg.norm(p_ray - origin)
 
-            if d_ray < best_ray_dist:
-                best_ray_dist = d_ray
-                best_hit = RaycastHit(
+            if d_ray < result["ray_dist"]:
+                result["ray_dist"] = d_ray
+                result["hit"] = RaycastHit(
                     comp.entity, comp, p_ray, _vec3_to_np(hit.point_on_collider), 0.0
                 )
+            return True
 
-        return best_hit
+        self._tc_scene.foreach_component_of_type("ColliderComponent", check_collider)
+        return result["hit"]
 
     def closest_to_ray(self, ray: Ray3):
         """
         Returns closest object to ray (minimum distance).
         Does not require intersection.
         """
-        best_hit = None
-        best_dist = float("inf")
+        result = {"hit": None, "dist": float("inf")}
 
-        for comp in self.colliders:
+        def check_collider(comp):
             attached = comp.attached
             if attached is None:
-                continue
+                return True
 
             hit = attached.closest_to_ray(ray)
-            if hit.distance < best_dist:
-                best_dist = hit.distance
-                best_hit = RaycastHit(
+            if hit.distance < result["dist"]:
+                result["dist"] = hit.distance
+                result["hit"] = RaycastHit(
                     comp.entity, comp,
                     _vec3_to_np(hit.point_on_ray),
                     _vec3_to_np(hit.point_on_collider),
                     hit.distance
                 )
+            return True
 
-        return best_hit
+        self._tc_scene.foreach_component_of_type("ColliderComponent", check_collider)
+        return result["hit"]
 
     # --- Layer and flag names ---
 
@@ -480,33 +493,15 @@ class Scene:
 
     # --- Component registration ---
 
-    def _register_component_python_specific(self, component: Component):
-        """Register Python-specific component types (Light, Collider, Input).
-
-        Called after tc_scene has already registered the component.
-        Does NOT call tc_scene.register_component.
-        """
-        from termin.colliders.collider_component import ColliderComponent
-
-        if isinstance(component, ColliderComponent):
-            self.colliders.append(component)
-
-        if isinstance(component, LightComponent):
-            self._lighting.register_light_component(component)
-
-        if isinstance(component, InputComponent):
-            self._input_components.append(component)
-
     def register_component(self, component: Component):
-        from termin.colliders.collider_component import ColliderComponent
+        """Register component with tc_scene.
+
+        Components are automatically added to type lists based on their type_name.
+        """
         from termin.visualization.core.python_component import PythonComponent
 
         is_python = isinstance(component, PythonComponent)
 
-        # Python-specific registration
-        self._register_component_python_specific(component)
-
-        # For C++ components, flags are set by REGISTER_COMPONENT macro
         # For Python components, check if method is overridden and set flags
         if is_python:
             if is_overrides_method(component, "update", PythonComponent):
@@ -514,29 +509,27 @@ class Scene:
             if is_overrides_method(component, "fixed_update", PythonComponent):
                 component.has_fixed_update = True
 
-        # Register with TcScene
+        # Register with TcScene (adds to type lists automatically)
         if is_python:
-            # Pure Python component - use pointer-based registration
             ptr = component.c_component_ptr()
             self._tc_scene.register_component_ptr(ptr)
         else:
-            # C++ Component - use object-based registration
             self._tc_scene.register_component(component)
 
+        # Notify component it was added to scene
+        component.on_added(self)
+
     def unregister_component(self, component: Component):
-        from termin.colliders.collider_component import ColliderComponent
+        """Unregister component from tc_scene.
+
+        Components are automatically removed from type lists.
+        """
         from termin.visualization.core.python_component import PythonComponent
 
-        if isinstance(component, ColliderComponent) and component in self.colliders:
-            self.colliders.remove(component)
+        # Notify component it's being removed
+        component.on_removed()
 
-        if isinstance(component, LightComponent):
-            self._lighting.unregister_light_component(component)
-
-        if isinstance(component, InputComponent) and component in self._input_components:
-            self._input_components.remove(component)
-
-        # Unregister from TcScene
+        # Unregister from TcScene (removes from type lists automatically)
         if isinstance(component, PythonComponent):
             self._tc_scene.unregister_component_ptr(component.c_component_ptr())
         else:
@@ -585,13 +578,15 @@ class Scene:
             filter_fn: Optional filter function. If provided, only components
                        for which filter_fn(component) returns True receive the event.
         """
-        listeners = list(self._input_components)
-        for component in listeners:
+        def dispatch_to_component(component):
             if filter_fn is not None and not filter_fn(component):
-                continue
+                return True
             handler = getattr(component, event_name, None)
             if handler:
                 handler(event)
+            return True
+
+        self._tc_scene.foreach_component_of_type("InputComponent", dispatch_to_component)
 
     # --- Serialization ---
 
@@ -658,15 +653,17 @@ class Scene:
 
         entities_data = data.get("entities", [])
         for ent_data in entities_data:
-            ent = self._deserialize_entity_recursive(ent_data, context)
-            if ent:
-                self.add(ent)
+            self._deserialize_entity_recursive(ent_data, context)
 
         return len(entities_data)
 
     def _deserialize_entity_recursive(self, data: dict, context=None) -> Entity | None:
-        """Deserialize entity with children recursively."""
-        ent = Entity.deserialize(data, context)
+        """Deserialize entity with children recursively.
+
+        Entity is created directly in scene's pool and components are
+        auto-registered via add_component.
+        """
+        ent = Entity.deserialize(data, context, scene=self)
         if ent is None:
             return None
 
@@ -696,10 +693,6 @@ class Scene:
             for component in entity.components:
                 if hasattr(component, 'destroy'):
                     component.destroy()
-
-        # Clear input components and colliders
-        self._input_components.clear()
-        self.colliders.clear()
 
         # Destroy managers
         if self._skybox is not None:

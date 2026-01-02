@@ -105,6 +105,11 @@ struct tc_component {
     bool _started;
     bool has_update;
     bool has_fixed_update;
+
+    // Intrusive list for scene's type-based component lists
+    // Linked when registered with scene, unlinked on unregister
+    tc_component* type_prev;
+    tc_component* type_next;
 };
 
 // ============================================================================
@@ -124,6 +129,8 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->_started = false;
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
+    c->type_prev = NULL;
+    c->type_next = NULL;
 }
 
 // ============================================================================

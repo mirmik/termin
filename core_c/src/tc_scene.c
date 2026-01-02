@@ -1,6 +1,7 @@
 // tc_scene.c - Scene implementation using entity pool
 #include "../include/tc_scene.h"
 #include "../include/tc_scene_registry.h"
+#include "../include/tc_resource_map.h"
 #include "../include/tc_profiler.h"
 #include <stdlib.h>
 #include <string.h>
@@ -72,6 +73,12 @@ struct tc_scene {
     // Fixed timestep
     double fixed_timestep;
     double accumulated_time;
+
+    // Python wrapper (PyObject* to Python Scene)
+    void* py_wrapper;
+
+    // Component type lists: type_name -> tc_component* (head of intrusive list)
+    tc_resource_map* type_heads;
 };
 
 // ============================================================================
@@ -83,11 +90,13 @@ tc_scene* tc_scene_new(void) {
     if (!s) return NULL;
 
     s->pool = tc_entity_pool_create(256);
+    tc_entity_pool_set_scene(s->pool, s);
     list_init(&s->pending_start);
     list_init(&s->update_list);
     list_init(&s->fixed_update_list);
     s->fixed_timestep = 1.0 / 60.0;
     s->accumulated_time = 0.0;
+    s->type_heads = tc_resource_map_new(NULL);  // No destructor - components are not owned
 
     // Register in global scene registry
     tc_scene_registry_add(s, NULL);
@@ -104,6 +113,7 @@ void tc_scene_free(tc_scene* s) {
     list_free(&s->pending_start);
     list_free(&s->update_list);
     list_free(&s->fixed_update_list);
+    tc_resource_map_free(s->type_heads);
     tc_entity_pool_destroy(s->pool);
     free(s);
 }
@@ -133,6 +143,22 @@ void tc_scene_register_component(tc_scene* s, tc_component* c) {
         list_push(&s->fixed_update_list, c);
     }
 
+    // Add to type list (intrusive doubly-linked list)
+    const char* type_name = tc_component_type_name(c);
+    if (type_name && c->type_prev == NULL && c->type_next == NULL) {
+        tc_component* head = (tc_component*)tc_resource_map_get(s->type_heads, type_name);
+        if (head == NULL) {
+            // First component of this type
+            tc_resource_map_add(s->type_heads, type_name, c);
+        } else if (head != c) {
+            // Insert at head
+            c->type_next = head;
+            head->type_prev = c;
+            tc_resource_map_remove(s->type_heads, type_name);
+            tc_resource_map_add(s->type_heads, type_name, c);
+        }
+    }
+
     // Call on_added callback
     tc_component_on_added(c, s);
 }
@@ -143,6 +169,26 @@ void tc_scene_unregister_component(tc_scene* s, tc_component* c) {
     list_remove(&s->pending_start, c);
     list_remove(&s->update_list, c);
     list_remove(&s->fixed_update_list, c);
+
+    // Remove from type list (O(1) unlink)
+    const char* type_name = tc_component_type_name(c);
+    if (type_name) {
+        tc_component* head = (tc_component*)tc_resource_map_get(s->type_heads, type_name);
+        if (head == c) {
+            // This is the head - update to next
+            tc_resource_map_remove(s->type_heads, type_name);
+            if (c->type_next) {
+                c->type_next->type_prev = NULL;
+                tc_resource_map_add(s->type_heads, type_name, c->type_next);
+            }
+        } else {
+            // Not the head - just unlink
+            if (c->type_prev) c->type_prev->type_next = c->type_next;
+            if (c->type_next) c->type_next->type_prev = c->type_prev;
+        }
+        c->type_prev = NULL;
+        c->type_next = NULL;
+    }
 
     // Call on_removed callback
     tc_component_on_removed(c);
@@ -277,4 +323,107 @@ size_t tc_scene_update_list_count(const tc_scene* s) {
 
 size_t tc_scene_fixed_update_list_count(const tc_scene* s) {
     return s ? s->fixed_update_list.count : 0;
+}
+
+// ============================================================================
+// Python Wrapper Access
+// ============================================================================
+
+void tc_scene_set_py_wrapper(tc_scene* s, void* py_wrapper) {
+    if (s) s->py_wrapper = py_wrapper;
+}
+
+void* tc_scene_get_py_wrapper(tc_scene* s) {
+    return s ? s->py_wrapper : NULL;
+}
+
+// ============================================================================
+// Component Type Lists
+// ============================================================================
+
+tc_component* tc_scene_first_component_of_type(tc_scene* s, const char* type_name) {
+    if (!s || !type_name) return NULL;
+    return (tc_component*)tc_resource_map_get(s->type_heads, type_name);
+}
+
+size_t tc_scene_count_components_of_type(tc_scene* s, const char* type_name) {
+    size_t count = 0;
+    for (tc_component* c = tc_scene_first_component_of_type(s, type_name);
+         c != NULL; c = c->type_next) {
+        count++;
+    }
+    return count;
+}
+
+void tc_scene_foreach_component_of_type(
+    tc_scene* s,
+    const char* type_name,
+    tc_component_iter_fn callback,
+    void* user_data
+) {
+    if (!s || !type_name || !callback) return;
+
+    for (tc_component* c = tc_scene_first_component_of_type(s, type_name);
+         c != NULL; c = c->type_next) {
+        if (!callback(c, user_data)) {
+            break;  // Early exit
+        }
+    }
+}
+
+// ============================================================================
+// Component Type Enumeration
+// ============================================================================
+
+// Helper struct for collecting type info
+typedef struct {
+    tc_scene_component_type* types;
+    size_t count;
+    size_t capacity;
+} ComponentTypeCollector;
+
+// Callback to count and collect component types
+static bool collect_component_type(const char* key, void* value, void* user_data) {
+    ComponentTypeCollector* collector = (ComponentTypeCollector*)user_data;
+    tc_component* head = (tc_component*)value;
+
+    // Count components in this list
+    size_t count = 0;
+    for (tc_component* c = head; c != NULL; c = c->type_next) {
+        count++;
+    }
+
+    if (count == 0) return true;  // Skip empty lists
+
+    // Grow if needed
+    if (collector->count >= collector->capacity) {
+        size_t new_cap = collector->capacity == 0 ? 16 : collector->capacity * 2;
+        tc_scene_component_type* new_types = (tc_scene_component_type*)realloc(
+            collector->types,
+            new_cap * sizeof(tc_scene_component_type)
+        );
+        if (!new_types) return false;  // Allocation failed
+        collector->types = new_types;
+        collector->capacity = new_cap;
+    }
+
+    // Add entry
+    collector->types[collector->count].type_name = key;
+    collector->types[collector->count].count = count;
+    collector->count++;
+
+    return true;
+}
+
+tc_scene_component_type* tc_scene_get_all_component_types(tc_scene* s, size_t* out_count) {
+    if (!out_count) return NULL;
+    *out_count = 0;
+
+    if (!s || !s->type_heads) return NULL;
+
+    ComponentTypeCollector collector = {NULL, 0, 0};
+    tc_resource_map_foreach(s->type_heads, collect_component_type, &collector);
+
+    *out_count = collector.count;
+    return collector.types;
 }

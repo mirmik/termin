@@ -34,9 +34,12 @@ class LightingManager:
     Handles:
     - Global directional light (direction + color)
     - Ambient light (color + intensity)
-    - Collection of dynamic LightComponents
+    - Dynamic LightComponents (queried from tc_scene)
     - Shadow settings
     """
+
+    tc_scene = None  # Set by Scene after creation
+    lights: List["Light"]
 
     def __init__(self):
         # Default light direction: slightly tilted forward (+Y) and down (-Z)
@@ -45,20 +48,8 @@ class LightingManager:
         self.light_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         self.ambient_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         self.ambient_intensity = 0.1
-
-        self.light_components: List["LightComponent"] = []
-        self.lights: List["Light"] = []
-
+        self.lights = []
         self.shadow_settings = ShadowSettings()
-
-    def register_light_component(self, component: "LightComponent") -> None:
-        """Register a light component."""
-        self.light_components.append(component)
-
-    def unregister_light_component(self, component: "LightComponent") -> None:
-        """Unregister a light component."""
-        if component in self.light_components:
-            self.light_components.remove(component)
 
     def build_lights(self) -> List["Light"]:
         """
@@ -70,14 +61,17 @@ class LightingManager:
         Convention: Y-forward, Z-up. Light points along local +Y.
         """
         lights: List[Light] = []
-        # Local forward direction: +Y in Y-forward Z-up convention
         forward_local = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
-        for comp in self.light_components:
+        if self.tc_scene is None:
+            self.lights = lights
+            return lights
+
+        def process_light(comp):
             if not comp.enabled:
-                continue
+                return True
             if comp.entity is None:
-                continue
+                return True
 
             ent = comp.entity
             pose = ent.transform.global_pose()
@@ -90,7 +84,9 @@ class LightingManager:
             light.position = position
             light.direction = forward_world
             lights.append(light)
+            return True
 
+        self.tc_scene.foreach_component_of_type("LightComponent", process_light)
         self.lights = lights
         return lights
 
@@ -125,5 +121,5 @@ class LightingManager:
 
     def destroy(self) -> None:
         """Release all resources."""
-        self.light_components.clear()
         self.lights.clear()
+        self.tc_scene = None

@@ -2,6 +2,7 @@
 #include "../include/tc_entity_pool.h"
 #include "../include/tc_hash_map.h"
 #include "../include/tc_component.h"
+#include "../include/tc_scene.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -105,6 +106,9 @@ struct tc_entity_pool {
     // Hash maps for O(1) lookup
     tc_str_map* by_uuid;      // uuid string -> packed entity_id
     tc_u32_map* by_pick_id;   // pick_id -> packed entity_id
+
+    // Owner scene (for component registration)
+    tc_scene* scene;
 };
 
 // ============================================================================
@@ -268,7 +272,20 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->by_uuid = tc_str_map_new(initial_capacity);
     pool->by_pick_id = tc_u32_map_new(initial_capacity);
 
+    // Scene starts as NULL (set by tc_scene when pool is created)
+    pool->scene = NULL;
+
     return pool;
+}
+
+void tc_entity_pool_set_scene(tc_entity_pool* pool, tc_scene* scene) {
+    if (pool) {
+        pool->scene = scene;
+    }
+}
+
+tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool) {
+    return pool ? pool->scene : NULL;
 }
 
 void tc_entity_pool_destroy(tc_entity_pool* pool) {

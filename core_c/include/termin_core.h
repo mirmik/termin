@@ -32,6 +32,8 @@
 #include "tc_mesh_registry.h"
 #include "tc_texture.h"
 #include "tc_texture_registry.h"
+#include "tc_shader.h"
+#include "tc_shader_registry.h"
 #include "tc_scene_registry.h"
 
 #ifdef __cplusplus

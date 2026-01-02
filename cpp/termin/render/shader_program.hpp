@@ -6,6 +6,7 @@
 
 #include "termin/render/handles.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/vec3.hpp"
 
@@ -28,20 +29,64 @@ public:
         std::string vertex_source,
         std::string fragment_source,
         std::string geometry_source = "",
-        std::string source_path = ""
+        std::string source_path = "",
+        std::string name = ""
     ) : vertex_source_(std::move(vertex_source)),
         fragment_source_(std::move(fragment_source)),
         geometry_source_(std::move(geometry_source)),
-        source_path_(std::move(source_path)) {}
+        source_path_(std::move(source_path)),
+        name_(std::move(name)) {
+        // Register in tc_shader registry
+        register_in_registry();
+    }
+
+    // Construct from existing TcShader
+    explicit ShaderProgram(const TcShader& shader)
+        : tc_shader_(shader) {
+        if (shader.is_valid()) {
+            vertex_source_ = shader.vertex_source();
+            fragment_source_ = shader.fragment_source();
+            geometry_source_ = shader.geometry_source();
+            source_path_ = shader.source_path();
+            name_ = shader.name();
+        }
+    }
 
     // Getters for sources
     const std::string& vertex_source() const { return vertex_source_; }
     const std::string& fragment_source() const { return fragment_source_; }
     const std::string& geometry_source() const { return geometry_source_; }
     const std::string& source_path() const { return source_path_; }
+    const std::string& name() const { return name_; }
 
     // Check if compiled
     bool is_compiled() const { return handle_ != nullptr; }
+
+    // Get the tc_shader handle
+    const TcShader& tc_shader() const { return tc_shader_; }
+
+    // Get shader version (from registry)
+    uint32_t version() const { return tc_shader_.version(); }
+
+    // Check if shader needs recompilation (sources changed)
+    bool needs_recompile() const {
+        if (!handle_) return true;
+        return compiled_version_ != tc_shader_.version();
+    }
+
+    // Check if this shader is a variant and is stale (original changed)
+    bool variant_is_stale() const {
+        return tc_shader_.variant_is_stale();
+    }
+
+    // Set variant info (mark this shader as variant of original)
+    // Note: this modifies the shader in the registry, not the local object
+    void set_variant_info(const ShaderProgram& original, tc_shader_variant_op op) {
+        ::tc_shader* s = tc_shader_.get();
+        if (s) {
+            tc_shader_set_variant_info(s, original.tc_shader_.handle, op);
+        }
+    }
 
     /**
      * Compile shader if not already compiled.
@@ -55,7 +100,8 @@ public:
      */
     template<typename CompileFn>
     void ensure_ready(CompileFn compile_fn, bool preprocess = true) {
-        if (handle_) return;
+        // Check if recompilation needed
+        if (handle_ && !needs_recompile()) return;
 
         std::string vs = vertex_source_;
         std::string fs = fragment_source_;
@@ -83,6 +129,9 @@ public:
         if (!handle_) {
             throw std::runtime_error("Failed to compile shader: " + source_path_);
         }
+
+        // Track compiled version
+        compiled_version_ = tc_shader_.version();
     }
 
     /**
@@ -193,11 +242,25 @@ private:
         return handle_.get();
     }
 
+    void register_in_registry() {
+        if (vertex_source_.empty() && fragment_source_.empty()) return;
+        tc_shader_ = TcShader::from_sources(
+            vertex_source_,
+            fragment_source_,
+            geometry_source_,
+            name_,
+            source_path_
+        );
+    }
+
     std::string vertex_source_;
     std::string fragment_source_;
     std::string geometry_source_;
     std::string source_path_;
+    std::string name_;
     ShaderHandlePtr handle_;
+    TcShader tc_shader_;
+    uint32_t compiled_version_ = 0;
 };
 
 } // namespace termin

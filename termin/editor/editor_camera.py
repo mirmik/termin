@@ -50,8 +50,8 @@ class EditorCameraManager:
                 self.editor_entities = ent
                 return
 
-        editor_entities = Entity(name="EditorEntities", serializable=False)
-        self._scene.add(editor_entities)
+        editor_entities = self._scene.create_entity("EditorEntities")
+        editor_entities.serializable = False
         self.editor_entities = editor_entities
 
     def _ensure_editor_camera(self) -> None:
@@ -65,8 +65,9 @@ class EditorCameraManager:
                         self.camera = camera
                         return
 
-        # Create new camera
-        camera_entity = Entity(name="camera", pose=Pose3.identity(), serializable=False)
+        # Create new camera in scene's pool
+        camera_entity = self._scene.create_entity("camera")
+        camera_entity.serializable = False
         camera = PerspectiveCameraComponent()
         camera_entity.add_component(camera)
         camera_entity.add_component(OrbitCameraController())
@@ -79,7 +80,8 @@ class EditorCameraManager:
         camera_entity.add_component(hint)
 
         # Create child entity for editor UI with layer=1
-        ui_entity = Entity(name="editor_ui", pose=Pose3.identity(), serializable=False)
+        ui_entity = self._scene.create_entity("editor_ui")
+        ui_entity.serializable = False
         ui_entity.layer = 1  # Editor UI layer
         ui_comp = UIComponent()
         ui_comp.active_in_editor = True
@@ -96,10 +98,10 @@ class EditorCameraManager:
         # Link UI entity as child of camera
         camera_entity.transform.link(ui_entity.transform)
 
+        # Link camera to EditorEntities
         if self.editor_entities is not None:
             self.editor_entities.transform.link(camera_entity.transform)
-        self._scene.add(camera_entity)
-        # self._scene.add(ui_entity) # ui entry will be added recursively
+
         self.camera = camera
 
     @property

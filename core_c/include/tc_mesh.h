@@ -54,6 +54,17 @@ typedef struct tc_vertex_layout {
 } tc_vertex_layout;
 
 // ============================================================================
+// Load callback type
+// ============================================================================
+
+struct tc_mesh;
+
+// Load callback: called when mesh data is needed but not loaded
+// Should populate mesh data using tc_mesh_set_data()
+// Returns true if loading succeeded, false otherwise
+typedef bool (*tc_mesh_load_fn)(struct tc_mesh* mesh, void* user_data);
+
+// ============================================================================
 // Mesh data
 // ============================================================================
 
@@ -67,6 +78,10 @@ typedef struct tc_mesh {
     uint32_t ref_count;          // reference count for ownership
     char uuid[40];               // unique identifier (hash of data)
     const char* name;            // human-readable name for debugging (interned string)
+    uint8_t is_loaded;           // true if data is loaded, false if declared but not loaded
+    uint8_t _pad[7];
+    tc_mesh_load_fn load_callback;  // callback to load data (NULL if no lazy loading)
+    void* load_user_data;           // user data for load callback
 } tc_mesh;
 
 // ============================================================================

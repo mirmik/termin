@@ -391,7 +391,8 @@ void bind_material(nb::module_& m) {
             const ShaderPhase& shader_phase,
             nb::object color,
             nb::object textures,
-            nb::object extra_uniforms
+            nb::object extra_uniforms,
+            const std::string& program_name
         ) -> MaterialPhase {
             // 1. Get shader sources from stages
             auto it_vert = shader_phase.stages.find("vertex");
@@ -409,7 +410,18 @@ void bind_material(nb::module_& m) {
             std::string fs = it_frag->second.source;
             std::string gs = (it_geom != shader_phase.stages.end()) ? it_geom->second.source : "";
 
-            auto shader = std::make_shared<ShaderProgram>(vs, fs, gs, "");
+            // Build shader name: program_name/phase_mark (e.g. "PBR/forward")
+            std::string shader_name;
+            if (!program_name.empty()) {
+                shader_name = program_name;
+                if (!shader_phase.phase_mark.empty()) {
+                    shader_name += "/" + shader_phase.phase_mark;
+                }
+            } else if (!shader_phase.phase_mark.empty()) {
+                shader_name = shader_phase.phase_mark;
+            }
+
+            auto shader = std::make_shared<ShaderProgram>(vs, fs, gs, "", shader_name);
 
             // 2. Build RenderState from gl-flags
             RenderState rs;
@@ -505,7 +517,8 @@ void bind_material(nb::module_& m) {
         }, nb::arg("shader_phase"),
            nb::arg("color") = nb::none(),
            nb::arg("textures") = nb::none(),
-           nb::arg("extra_uniforms") = nb::none());
+           nb::arg("extra_uniforms") = nb::none(),
+           nb::arg("program_name") = "");
 
     // Material
     nb::class_<Material>(m, "Material")
@@ -667,7 +680,7 @@ void bind_material(nb::module_& m) {
 
             for (const auto& shader_phase : program.phases) {
                 MaterialPhase phase = nb::cast<MaterialPhase>(MaterialPhase_cls.attr("from_shader_phase")(
-                    shader_phase, py_color, nb::none(), nb::none()
+                    shader_phase, py_color, nb::none(), nb::none(), program.program
                 ));
 
                 // Restore old textures and uniforms
@@ -831,7 +844,7 @@ void bind_material(nb::module_& m) {
 
             for (const auto& shader_phase : program.phases) {
                 MaterialPhase phase = nb::cast<MaterialPhase>(MaterialPhase_cls.attr("from_shader_phase")(
-                    shader_phase, color, textures, uniforms
+                    shader_phase, color, textures, uniforms, program.program
                 ));
                 mat->phases.push_back(std::move(phase));
             }

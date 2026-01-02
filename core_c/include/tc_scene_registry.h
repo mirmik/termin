@@ -82,6 +82,20 @@ typedef struct tc_scene_entity_info {
 // Sets *count to number of entities
 TC_API tc_scene_entity_info* tc_scene_get_entities(int scene_id, size_t* count);
 
+// ============================================================================
+// Component type enumeration for a scene
+// ============================================================================
+
+typedef struct tc_scene_component_type_info {
+    const char* type_name;
+    size_t count;
+} tc_scene_component_type_info;
+
+// Get component type counts for a scene by scene ID
+// Returns array of tc_scene_component_type_info (caller must free)
+// Sets *count to number of types with count > 0
+TC_API tc_scene_component_type_info* tc_scene_get_component_types(int scene_id, size_t* count);
+
 #ifdef __cplusplus
 }
 #endif
