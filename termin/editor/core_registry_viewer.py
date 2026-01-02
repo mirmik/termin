@@ -32,6 +32,10 @@ from termin._native.scene import (
     tc_scene_get_component_types,
 )
 from termin._native.render import shader_get_all_info, shader_count, TcShader
+from termin.entity._entity_native import (
+    component_registry_get_all_info,
+    component_registry_type_count,
+)
 
 
 class CoreRegistryViewer(QDialog):
@@ -90,6 +94,13 @@ class CoreRegistryViewer(QDialog):
         self._shaders_tree.setAlternatingRowColors(True)
         self._shaders_tree.itemClicked.connect(self._on_shader_clicked)
         self._tab_widget.addTab(self._shaders_tree, "Shaders")
+
+        # Components tab
+        self._components_tree = QTreeWidget()
+        self._components_tree.setHeaderLabels(["Name", "Kind", "Parent", "Descendants"])
+        self._components_tree.setAlternatingRowColors(True)
+        self._components_tree.itemClicked.connect(self._on_component_clicked)
+        self._tab_widget.addTab(self._components_tree, "Components")
 
         # Scenes tab - with splitter for scenes and entities lists
         scenes_widget = QWidget()
@@ -179,6 +190,7 @@ class CoreRegistryViewer(QDialog):
         self._refresh_meshes()
         self._refresh_textures()
         self._refresh_shaders()
+        self._refresh_components()
         self._refresh_scenes()
         self._update_status()
         self._details_text.clear()
@@ -400,6 +412,59 @@ class CoreRegistryViewer(QDialog):
         self._details_text.setText("\n".join(lines))
 
     # =========================================================================
+    # Components
+    # =========================================================================
+
+    def _refresh_components(self) -> None:
+        """Refresh component types from registry."""
+        self._components_tree.clear()
+
+        infos = component_registry_get_all_info()
+        for info in sorted(infos, key=lambda x: x["name"]):
+            name = info["name"]
+            kind = info["kind"]
+            parent = info["parent"] or "-"
+            desc_count = len(info["descendants"])
+            descendants = str(desc_count) if desc_count > 0 else "-"
+
+            item = QTreeWidgetItem([name, kind, parent, descendants])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("component", info))
+            self._components_tree.addTopLevelItem(item)
+
+        for i in range(4):
+            self._components_tree.resizeColumnToContents(i)
+
+    def _on_component_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show component details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "component":
+            return
+
+        info = data[1]
+        self._show_component_details(info)
+
+    def _show_component_details(self, info: dict) -> None:
+        """Display component type details in the details panel."""
+        lines = [
+            "=== COMPONENT TYPE ===",
+            "",
+            f"Name:           {info['name']}",
+            f"Kind:           {info['kind']}",
+            f"Parent:         {info['parent'] or '(none)'}",
+            "",
+            "--- Descendants ---",
+        ]
+
+        descendants = info["descendants"]
+        if descendants:
+            for desc in descendants:
+                lines.append(f"  - {desc}")
+        else:
+            lines.append("  (none)")
+
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
     # Scenes
     # =========================================================================
 
@@ -533,9 +598,12 @@ class CoreRegistryViewer(QDialog):
         shader_infos = shader_get_all_info()
         shader_memory = sum(info["source_size"] for info in shader_infos)
 
+        component_count_val = component_registry_type_count()
+
         self._status_label.setText(
             f"Meshes: {mesh_count_val} ({self._format_bytes(mesh_memory)}) | "
             f"Textures: {texture_count_val} ({self._format_bytes(texture_memory)}) | "
             f"Shaders: {shader_count_val} ({self._format_bytes(shader_memory)}) | "
+            f"Components: {component_count_val} | "
             f"Scenes: {scene_count_val}"
         )

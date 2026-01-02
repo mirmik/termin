@@ -241,12 +241,33 @@ TC_API void tc_component_registry_register(
     tc_component_kind kind
 );
 
+TC_API void tc_component_registry_register_with_parent(
+    const char* type_name,
+    tc_component_factory factory,
+    tc_component_kind kind,
+    const char* parent_type_name
+);
+
 TC_API void tc_component_registry_unregister(const char* type_name);
 TC_API bool tc_component_registry_has(const char* type_name);
 TC_API tc_component* tc_component_registry_create(const char* type_name);
 
 TC_API size_t tc_component_registry_type_count(void);
 TC_API const char* tc_component_registry_type_at(size_t index);
+
+// Get descendant type names for iteration (includes type itself)
+// Returns count, fills out_names array (caller provides buffer)
+TC_API size_t tc_component_registry_get_type_and_descendants(
+    const char* type_name,
+    const char** out_names,
+    size_t max_count
+);
+
+// Get parent type name (or NULL if none)
+TC_API const char* tc_component_registry_get_parent(const char* type_name);
+
+// Get component kind (TC_CXX_COMPONENT or TC_PYTHON_COMPONENT)
+TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);
 
 #ifdef __cplusplus
 }

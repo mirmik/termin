@@ -36,8 +36,8 @@ public:
     static ComponentRegistry& instance();
 
     // Registration
-    void register_native(const std::string& name, NativeFactory factory);
-    void register_python(const std::string& name, nb::object cls);
+    void register_native(const std::string& name, NativeFactory factory, const char* parent = nullptr);
+    void register_python(const std::string& name, nb::object cls, const char* parent = nullptr);
 
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
@@ -89,7 +89,8 @@ struct ComponentRegistrar {
                 comp->set_has_update(has_update);
                 comp->set_has_fixed_update(has_fixed_update);
                 return comp;
-            });
+            },
+            parent);
 
         // Register type parent for field inheritance
         if (parent) {

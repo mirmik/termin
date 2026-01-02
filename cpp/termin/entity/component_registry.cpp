@@ -1,5 +1,6 @@
 #include "component_registry.hpp"
 #include "component.hpp"
+#include "../../../core_c/include/tc_component.h"
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
@@ -11,16 +12,19 @@ ComponentRegistry& ComponentRegistry::instance() {
     return inst;
 }
 
-void ComponentRegistry::register_native(const std::string& name, NativeFactory factory) {
+void ComponentRegistry::register_native(const std::string& name, NativeFactory factory, const char* parent) {
     ComponentInfo info;
     info.name = name;
     info.kind = TC_CXX_COMPONENT;
     info.native_factory = std::move(factory);
 
     registry_[name] = std::move(info);
+
+    // Register in C registry for type hierarchy (no factory needed for hierarchy)
+    tc_component_registry_register_with_parent(name.c_str(), nullptr, TC_CXX_COMPONENT, parent);
 }
 
-void ComponentRegistry::register_python(const std::string& name, nb::object cls) {
+void ComponentRegistry::register_python(const std::string& name, nb::object cls, const char* parent) {
     auto it = registry_.find(name);
     if (it != registry_.end() && it->second.kind == TC_CXX_COMPONENT) {
         // Don't overwrite native components with Python
@@ -33,6 +37,9 @@ void ComponentRegistry::register_python(const std::string& name, nb::object cls)
     info.python_class = std::move(cls);
 
     registry_[name] = std::move(info);
+
+    // Register in C registry for type hierarchy
+    tc_component_registry_register_with_parent(name.c_str(), nullptr, TC_PYTHON_COMPONENT, parent);
 }
 
 void ComponentRegistry::unregister(const std::string& name) {

@@ -1228,7 +1228,7 @@
         ]
       },
       {
-        "uuid": "000000000000007f",
+        "uuid": "0000000000000014",
         "name": "Physics",
         "priority": 0,
         "visible": true,
@@ -1266,7 +1266,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000080",
+        "uuid": "0000000000000015",
         "name": "[Root]",
         "priority": 0,
         "visible": true,
@@ -1297,7 +1297,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000081",
+        "uuid": "0000000000000016",
         "name": "FEMPhysics",
         "priority": 0,
         "visible": true,
@@ -1344,7 +1344,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000082",
+        "uuid": "0000000000000017",
         "name": "Joint",
         "priority": 0,
         "visible": true,
@@ -1355,7 +1355,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            0,
+            5,
             0,
             2
           ],
@@ -1399,7 +1399,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000083",
+        "uuid": "0000000000000018",
         "name": "Pendulum",
         "priority": 0,
         "visible": true,
@@ -1410,7 +1410,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            0,
+            5,
             2,
             2
           ],
@@ -1460,7 +1460,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000084",
+        "uuid": "0000000000000019",
         "name": "Pendulum2",
         "priority": 0,
         "visible": true,
@@ -1471,7 +1471,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            0,
+            5,
             4,
             2
           ],
@@ -1521,7 +1521,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000085",
+        "uuid": "000000000000001a",
         "name": "JointAB",
         "priority": 0,
         "visible": true,
@@ -1567,7 +1567,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000086",
+        "uuid": "000000000000001b",
         "name": "TeleportCube",
         "priority": 0,
         "visible": true,
@@ -1578,21 +1578,21 @@
         "flags": 0,
         "pose": {
           "position": [
-            0.4881729442769158,
-            -4.006746818087095,
-            2.7755677834407964
+            1.0814398527145386,
+            -2.0230343341827393,
+            1.7509517669677734
           ],
           "rotation": [
-            0,
-            0,
-            0,
-            1
+            -0.25677070021629333,
+            -0.2500579357147217,
+            -0.06896532326936722,
+            0.9310122132301331
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          2,
+          2,
+          2
         ],
         "components": [
           {
@@ -1605,7 +1605,7 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
               },
               "cast_shadow": true
             }
@@ -1620,7 +1620,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000087",
+        "uuid": "000000000000001c",
         "name": "entity5",
         "priority": 0,
         "visible": true,
@@ -1682,7 +1682,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000088",
+        "uuid": "000000000000001d",
         "name": "С2",
         "priority": 0,
         "visible": true,
@@ -1754,7 +1754,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000089",
+        "uuid": "000000000000001e",
         "name": "entity6",
         "priority": 0,
         "visible": true,
@@ -1826,7 +1826,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000008a",
+        "uuid": "000000000000001f",
         "name": "entity7",
         "priority": 0,
         "visible": true,
@@ -1898,7 +1898,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000008b",
+        "uuid": "0000000000000020",
         "name": "entity8",
         "priority": 0,
         "visible": true,
@@ -1970,7 +1970,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000008c",
+        "uuid": "0000000000000021",
         "name": "entity9",
         "priority": 0,
         "visible": true,
@@ -2042,7 +2042,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000008d",
+        "uuid": "0000000000000022",
         "name": "entity10",
         "priority": 0,
         "visible": true,
@@ -2114,7 +2114,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000008e",
+        "uuid": "0000000000000023",
         "name": "entity11",
         "priority": 0,
         "visible": true,
@@ -2186,7 +2186,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000008f",
+        "uuid": "0000000000000024",
         "name": "entity12",
         "priority": 0,
         "visible": true,
@@ -2258,7 +2258,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000090",
+        "uuid": "0000000000000025",
         "name": "Walls",
         "priority": 0,
         "visible": true,
@@ -2288,7 +2288,7 @@
         "components": [],
         "children": [
           {
-            "uuid": "0000000000000091",
+            "uuid": "0000000000000026",
             "name": "entity14_copy_copy",
             "priority": 0,
             "visible": true,
@@ -2360,7 +2360,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000092",
+            "uuid": "0000000000000027",
             "name": "entity14_copy",
             "priority": 0,
             "visible": true,
@@ -2432,7 +2432,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000093",
+            "uuid": "0000000000000028",
             "name": "entity14_copy_copy_copy",
             "priority": 0,
             "visible": true,
@@ -2504,7 +2504,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000094",
+            "uuid": "0000000000000029",
             "name": "entity14",
             "priority": 0,
             "visible": true,
@@ -2578,7 +2578,7 @@
         ]
       },
       {
-        "uuid": "0000000000000095",
+        "uuid": "000000000000002a",
         "name": "entity12_copy",
         "priority": 0,
         "visible": true,
@@ -2650,7 +2650,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000096",
+        "uuid": "000000000000002b",
         "name": "entity13",
         "priority": 0,
         "visible": true,
@@ -2721,7 +2721,7 @@
         ],
         "children": [
           {
-            "uuid": "0000000000000097",
+            "uuid": "000000000000002c",
             "name": "entity15",
             "priority": 0,
             "visible": true,
@@ -2795,7 +2795,7 @@
         ]
       },
       {
-        "uuid": "0000000000000098",
+        "uuid": "000000000000002d",
         "name": "entity12_copy_copy",
         "priority": 0,
         "visible": true,
@@ -2867,7 +2867,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000099",
+        "uuid": "000000000000002e",
         "name": "entity12_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -2939,7 +2939,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000009a",
+        "uuid": "000000000000002f",
         "name": "entity12_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3011,7 +3011,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000009b",
+        "uuid": "0000000000000030",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3083,7 +3083,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000009c",
+        "uuid": "0000000000000031",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3155,7 +3155,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000009d",
+        "uuid": "0000000000000032",
         "name": "entity12_copy_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3227,7 +3227,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000009e",
+        "uuid": "0000000000000033",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3299,7 +3299,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000009f",
+        "uuid": "0000000000000034",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3371,7 +3371,7 @@
         "children": []
       },
       {
-        "uuid": "00000000000000a0",
+        "uuid": "0000000000000035",
         "name": "entity16",
         "priority": 0,
         "visible": true,
@@ -3424,7 +3424,7 @@
         "children": []
       },
       {
-        "uuid": "00000000000000a1",
+        "uuid": "0000000000000036",
         "name": "TweenManager",
         "priority": 0,
         "visible": true,
@@ -3462,7 +3462,7 @@
         "children": []
       },
       {
-        "uuid": "00000000000000a2",
+        "uuid": "0000000000000037",
         "name": "entity16_copy",
         "priority": 0,
         "visible": true,
@@ -3576,15 +3576,15 @@
   "editor": {
     "camera": {
       "target": [
-        -1.992782473564148,
-        -0.8005438446998596,
-        -2.7200820446014404
+        -0.6632388200651682,
+        3.9823369451543247,
+        -3.97066432438978
       ],
-      "radius": 18.5,
-      "azimuth": 64.67492076190685,
-      "elevation": 0.5026548245743654
+      "radius": 15.0,
+      "azimuth": 64.46199059316352,
+      "elevation": 0.7051130178057083
     },
-    "selected_entity": "Physics",
+    "selected_entity": "Pendulum2",
     "displays": [
       {
         "name": "Editor",
@@ -3593,7 +3593,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "cc830019-c656-461d-a78e-a165d6e15d16",
+            "uuid": "c88fc06f-dab8-4d6c-849c-e5488fee57bb",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3613,7 +3613,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "90b239c1-5629-40bb-998b-48996ba11d82",
+            "uuid": "c5400ea6-852f-4c0d-a426-e0497d7ad764",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3626,17 +3626,6 @@
           }
         ]
       }
-    ],
-    "expanded_entities": [
-      "Arti",
-      "entity13",
-      "camera",
-      "entity12_copy",
-      "cube2",
-      "EditorEntities",
-      "cube1",
-      "editor_ui",
-      "[Root]"
     ]
   },
   "resources": {

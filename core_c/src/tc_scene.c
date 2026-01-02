@@ -363,10 +363,24 @@ void tc_scene_foreach_component_of_type(
 ) {
     if (!s || !type_name || !callback) return;
 
-    for (tc_component* c = tc_scene_first_component_of_type(s, type_name);
-         c != NULL; c = c->type_next) {
-        if (!callback(c, user_data)) {
-            break;  // Early exit
+    // Get type and all descendants
+    const char* types[64];
+    size_t type_count = tc_component_registry_get_type_and_descendants(type_name, types, 64);
+
+    // If type not in registry, fall back to direct lookup
+    if (type_count == 0) {
+        for (tc_component* c = tc_scene_first_component_of_type(s, type_name);
+             c != NULL; c = c->type_next) {
+            if (!callback(c, user_data)) return;
+        }
+        return;
+    }
+
+    // Iterate over type and all descendant types
+    for (size_t i = 0; i < type_count; i++) {
+        for (tc_component* c = tc_scene_first_component_of_type(s, types[i]);
+             c != NULL; c = c->type_next) {
+            if (!callback(c, user_data)) return;
         }
     }
 }

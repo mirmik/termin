@@ -150,9 +150,15 @@ NB_MODULE(_entity_native, m) {
     nb::class_<ComponentRegistry>(m, "ComponentRegistry")
         .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
         .def("register_native", &ComponentRegistry::register_native,
-             nb::arg("name"), nb::arg("factory"))
-        .def("register_python", &ComponentRegistry::register_python,
-             nb::arg("name"), nb::arg("cls"))
+             nb::arg("name"), nb::arg("factory"), nb::arg("parent") = nullptr)
+        .def("register_python", [](ComponentRegistry& reg, const std::string& name, nb::object cls, nb::object parent) {
+            if (parent.is_none()) {
+                reg.register_python(name, cls, nullptr);
+            } else {
+                std::string parent_str = nb::cast<std::string>(parent);
+                reg.register_python(name, cls, parent_str.c_str());
+            }
+        }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("create", &ComponentRegistry::create, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
@@ -256,6 +262,39 @@ NB_MODULE(_entity_native, m) {
         return migrate_entity_to_pool(entity, dst_pool);
     }, nb::arg("entity"), nb::arg("dst_pool"),
        "Migrate entity to destination pool. Returns new Entity, old becomes invalid.");
+
+    // Component registry info for debug viewer
+    m.def("component_registry_get_all_info", []() {
+        nb::list result;
+        size_t count = tc_component_registry_type_count();
+        for (size_t i = 0; i < count; i++) {
+            const char* type_name = tc_component_registry_type_at(i);
+            if (!type_name) continue;
+
+            nb::dict info;
+            info["name"] = type_name;
+            info["kind"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "native" : "python";
+
+            const char* parent = tc_component_registry_get_parent(type_name);
+            info["parent"] = parent ? nb::str(parent) : nb::none();
+
+            // Get descendants
+            const char* descendants[64];
+            size_t desc_count = tc_component_registry_get_type_and_descendants(type_name, descendants, 64);
+            nb::list desc_list;
+            for (size_t j = 1; j < desc_count; j++) {  // Skip first (self)
+                desc_list.append(descendants[j]);
+            }
+            info["descendants"] = desc_list;
+
+            result.append(info);
+        }
+        return result;
+    });
+
+    m.def("component_registry_type_count", []() {
+        return tc_component_registry_type_count();
+    });
 
     // Register atexit handler
     nb::object atexit_mod = nb::module_::import_("atexit");

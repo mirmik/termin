@@ -71,13 +71,17 @@ class PythonComponent:
             registry.register_python_fields(cls.__name__, own_fields)
 
         # Find parent component type and register inheritance
+        parent_name = None
         for klass in cls.__mro__[1:]:
             if klass is PythonComponent:
-                registry.set_type_parent(cls.__name__, "PythonComponent")
+                parent_name = "PythonComponent"
                 break
             if hasattr(klass, 'inspect_fields'):
-                registry.set_type_parent(cls.__name__, klass.__name__)
+                parent_name = klass.__name__
                 break
+
+        if parent_name:
+            registry.set_type_parent(cls.__name__, parent_name)
 
         # Register in Python ResourceManager
         try:
@@ -89,7 +93,7 @@ class PythonComponent:
 
         # Register factory in C++ ComponentRegistry
         from termin.entity import ComponentRegistry
-        ComponentRegistry.instance().register_python(cls.__name__, cls)
+        ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
 
     # =========================================================================
     # Properties (delegate to TcComponent)
@@ -291,11 +295,6 @@ class InputComponent(PythonComponent):
 __all__ = ["PythonComponent", "InputComponent"]
 
 
-def _register_base_type():
-    """Register PythonComponent as base type with enabled field."""
-    from termin._native.inspect import InspectRegistry
-    registry = InspectRegistry.instance()
-    registry.register_python_fields("PythonComponent", PythonComponent.inspect_fields)
-
-
-_register_base_type()
+# Register PythonComponent base class (can't use __init_subclass__ for itself)
+from termin.entity import ComponentRegistry
+ComponentRegistry.instance().register_python("PythonComponent", PythonComponent)

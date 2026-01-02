@@ -1,5 +1,6 @@
 // tc_component.c - Component registry implementation
 #include "../include/tc_component.h"
+#include "../include/termin_core.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,6 +14,10 @@ typedef struct tc_component_type_entry {
     const char* type_name;  // Interned string
     tc_component_factory factory;
     tc_component_kind kind;
+    int parent_index;  // -1 if no parent
+    int* descendant_indices;
+    size_t descendant_count;
+    size_t descendant_capacity;
 } tc_component_type_entry;
 
 typedef struct tc_component_registry {
@@ -54,12 +59,35 @@ static int tc_component_registry_find_index(const char* type_name) {
     return -1;
 }
 
+static void tc_component_type_entry_add_descendant(tc_component_type_entry* entry, int descendant_idx) {
+    if (entry->descendant_count >= entry->descendant_capacity) {
+        size_t new_cap = entry->descendant_capacity == 0 ? 4 : entry->descendant_capacity * 2;
+        int* new_arr = (int*)realloc(entry->descendant_indices, new_cap * sizeof(int));
+        if (!new_arr) return;
+        entry->descendant_indices = new_arr;
+        entry->descendant_capacity = new_cap;
+    }
+    entry->descendant_indices[entry->descendant_count++] = descendant_idx;
+}
+
 void tc_component_registry_register(
     const char* type_name,
     tc_component_factory factory,
     tc_component_kind kind
 ) {
-    if (!type_name || !factory) return;
+    tc_component_registry_register_with_parent(type_name, factory, kind, NULL);
+}
+
+void tc_component_registry_register_with_parent(
+    const char* type_name,
+    tc_component_factory factory,
+    tc_component_kind kind,
+    const char* parent_type_name
+) {
+    if (!type_name) return;
+
+    // Find parent index
+    int parent_idx = parent_type_name ? tc_component_registry_find_index(parent_type_name) : -1;
 
     // Check if already registered
     int idx = tc_component_registry_find_index(type_name);
@@ -67,6 +95,7 @@ void tc_component_registry_register(
         // Update existing
         g_component_registry.entries[idx].factory = factory;
         g_component_registry.entries[idx].kind = kind;
+        g_component_registry.entries[idx].parent_index = parent_idx;
         return;
     }
 
@@ -74,11 +103,23 @@ void tc_component_registry_register(
     tc_component_registry_ensure_capacity();
     if (g_component_registry.count >= g_component_registry.capacity) return;
 
-    // Intern the string (caller must ensure it stays valid, or use tc_intern_string)
-    g_component_registry.entries[g_component_registry.count].type_name = type_name;
-    g_component_registry.entries[g_component_registry.count].factory = factory;
-    g_component_registry.entries[g_component_registry.count].kind = kind;
+    idx = (int)g_component_registry.count;
+    tc_component_type_entry* entry = &g_component_registry.entries[idx];
+    entry->type_name = tc_intern_string(type_name);
+    entry->factory = factory;
+    entry->kind = kind;
+    entry->parent_index = parent_idx;
+    entry->descendant_indices = NULL;
+    entry->descendant_count = 0;
+    entry->descendant_capacity = 0;
     g_component_registry.count++;
+
+    // Add this type to all ancestors' descendant lists
+    int ancestor_idx = parent_idx;
+    while (ancestor_idx >= 0) {
+        tc_component_type_entry_add_descendant(&g_component_registry.entries[ancestor_idx], idx);
+        ancestor_idx = g_component_registry.entries[ancestor_idx].parent_index;
+    }
 }
 
 void tc_component_registry_unregister(const char* type_name) {
@@ -121,11 +162,62 @@ const char* tc_component_registry_type_at(size_t index) {
     return g_component_registry.entries[index].type_name;
 }
 
+size_t tc_component_registry_get_type_and_descendants(
+    const char* type_name,
+    const char** out_names,
+    size_t max_count
+) {
+    if (!type_name || !out_names || max_count == 0) return 0;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return 0;
+
+    size_t count = 0;
+
+    // Add the type itself
+    out_names[count++] = g_component_registry.entries[idx].type_name;
+
+    // Add all descendants
+    tc_component_type_entry* entry = &g_component_registry.entries[idx];
+    for (size_t i = 0; i < entry->descendant_count && count < max_count; i++) {
+        int desc_idx = entry->descendant_indices[i];
+        if (desc_idx >= 0 && (size_t)desc_idx < g_component_registry.count) {
+            out_names[count++] = g_component_registry.entries[desc_idx].type_name;
+        }
+    }
+
+    return count;
+}
+
+const char* tc_component_registry_get_parent(const char* type_name) {
+    if (!type_name) return NULL;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return NULL;
+
+    int parent_idx = g_component_registry.entries[idx].parent_index;
+    if (parent_idx < 0) return NULL;
+
+    return g_component_registry.entries[parent_idx].type_name;
+}
+
+tc_component_kind tc_component_registry_get_kind(const char* type_name) {
+    if (!type_name) return TC_PYTHON_COMPONENT;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return TC_PYTHON_COMPONENT;
+
+    return g_component_registry.entries[idx].kind;
+}
+
 // ============================================================================
 // Registry cleanup (called by tc_shutdown)
 // ============================================================================
 
 void tc_component_registry_cleanup(void) {
+    for (size_t i = 0; i < g_component_registry.count; i++) {
+        free(g_component_registry.entries[i].descendant_indices);
+    }
     free(g_component_registry.entries);
     g_component_registry.entries = NULL;
     g_component_registry.count = 0;
