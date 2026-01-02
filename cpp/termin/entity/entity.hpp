@@ -142,6 +142,22 @@ public:
     nos::trent serialize_base() const;
     static Entity deserialize(tc_entity_pool* pool, const nos::trent& data);
 
+    // For register_cpp_handle_kind compatibility
+    nb::dict serialize() const {
+        nb::dict d;
+        if (valid()) {
+            d["uuid"] = std::string(uuid());
+        }
+        return d;
+    }
+
+    void deserialize_from(const nos::trent& data) {
+        // Entity cannot be deserialized without pool context
+        // This is handled by scene loader which resolves UUIDs after loading
+        _pool = nullptr;
+        _id = TC_ENTITY_ID_INVALID;
+    }
+
     // --- User data (for back-pointer if needed) ---
 
     void* data() const { return tc_entity_pool_data(_pool, _id); }

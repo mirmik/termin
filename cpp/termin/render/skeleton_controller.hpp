@@ -7,7 +7,6 @@
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/entity.hpp"
-#include "termin/entity/entity_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/skeleton/skeleton_data.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
@@ -25,8 +24,8 @@ public:
     // Skeleton handle (wraps SkeletonAsset)
     SkeletonHandle skeleton;
 
-    // Bone entity handles (same order as skeleton_data.bones)
-    std::vector<EntityHandle> bone_entities;
+    // Bone entities (same order as skeleton_data.bones)
+    std::vector<Entity> bone_entities;
 
 private:
     // Cached skeleton instance (created lazily)
@@ -47,19 +46,9 @@ public:
     void set_skeleton(const SkeletonHandle& handle);
 
     /**
-     * Set bone entities from handles. Invalidates cached instance.
+     * Set bone entities. Invalidates cached instance.
      */
-    void set_bone_entities(std::vector<EntityHandle> handles);
-
-    /**
-     * Set bone entities from Entity values. Invalidates cached instance.
-     */
-    void set_bone_entities_from_entities(std::vector<Entity> entities);
-
-    /**
-     * Get resolved bone entities (for SkeletonInstance).
-     */
-    std::vector<Entity> get_resolved_bone_entities() const;
+    void set_bone_entities(std::vector<Entity> entities);
 
     /**
      * Get or create SkeletonInstance.
@@ -78,7 +67,7 @@ public:
     void invalidate_instance();
 
     INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton_handle")
-    INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity_handle]")
+    INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity]")
 };
 
 REGISTER_COMPONENT(SkeletonController, Component);

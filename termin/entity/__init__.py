@@ -13,14 +13,12 @@ from termin.entity._entity_native import (
     Component,
     ComponentRegistry,
     EntityRegistry,
-    EntityHandle,
     CXXRotatorComponent,
 )
 
 __all__ = [
     "Component",
     "Entity",
-    "EntityHandle",
     "ComponentRegistry",
     "EntityRegistry",
     "CXXRotatorComponent",

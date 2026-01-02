@@ -1,7 +1,7 @@
 /**
  * Entity native module (_entity_native).
  *
- * Contains Component, Entity, EntityHandle, EntityRegistry, ComponentRegistry.
+ * Contains Component, Entity, EntityRegistry, ComponentRegistry.
  * Separated from _native to allow other modules (like _native with MeshRenderer)
  * to properly inherit from Component.
  */
@@ -46,7 +46,6 @@ inline bool check_heap_entity() { return true; }
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/vtable_utils.hpp"
 #include "termin/entity/entity.hpp"
-#include "termin/entity/entity_handle.hpp"
 #include "termin/entity/entity_registry.hpp"
 #include "termin/entity/components/rotator_component.hpp"
 #include "termin/geom/general_transform3.hpp"
@@ -96,7 +95,7 @@ public:
 };
 
 NB_MODULE(_entity_native, m) {
-    m.doc() = "Entity native module (Component, Entity, EntityHandle, registries)";
+    m.doc() = "Entity native module (Component, Entity, registries)";
 
     // --- CxxComponent (also exported as Component for compatibility) ---
     nb::class_<CxxComponent, PyCxxComponent>(m, "Component")
@@ -164,48 +163,6 @@ NB_MODULE(_entity_native, m) {
         .def("list_native", &ComponentRegistry::list_native)
         .def("list_python", &ComponentRegistry::list_python)
         .def("clear", &ComponentRegistry::clear);
-
-    // --- EntityHandle ---
-    nb::class_<EntityHandle>(m, "EntityHandle")
-        .def(nb::init<>())
-        .def(nb::init<const std::string&>(), nb::arg("uuid"))
-        .def_rw("uuid", &EntityHandle::uuid)
-        .def("valid", &EntityHandle::is_valid)
-        .def("is_valid", &EntityHandle::is_valid)
-        .def("get", [](EntityHandle& h) -> nb::object {
-            Entity e = h.get();
-            if (e.valid()) return nb::cast(e);
-            return nb::none();
-        })
-        .def_prop_ro("name", [](EntityHandle& h) -> std::string {
-            Entity e = h.get();
-            if (e.valid()) return e.name();
-            // Entity not resolved - log warning
-            if (!h.uuid.empty()) {
-                tc::Log::warn("EntityHandle: entity with uuid '%s' not found", h.uuid.c_str());
-                if (h.uuid.size() > 8) return h.uuid.substr(0, 8) + "...";
-                return h.uuid;
-            }
-            tc::Log::warn("EntityHandle: empty uuid");
-            return "<invalid>";
-        })
-        .def("serialize", [](EntityHandle& h) -> nb::object {
-            nb::dict d;
-            d["uuid"] = h.uuid;
-            return d;
-        })
-        .def_static("deserialize", [](nb::object data, uintptr_t pool_ptr) -> EntityHandle {
-            EntityHandle h;
-            if (nb::isinstance<nb::str>(data)) {
-                h.uuid = nb::cast<std::string>(data);
-            } else if (nb::isinstance<nb::dict>(data)) {
-                nb::dict d = nb::cast<nb::dict>(data);
-                if (d.contains("uuid")) {
-                    h.uuid = nb::cast<std::string>(d["uuid"]);
-                }
-            }
-            return h;
-        }, nb::arg("data"), nb::arg("pool_ptr") = 0);
 
     // --- Entity (in separate file for faster compilation) ---
     bind_entity_class(m);
@@ -299,40 +256,6 @@ NB_MODULE(_entity_native, m) {
         return migrate_entity_to_pool(entity, dst_pool);
     }, nb::arg("entity"), nb::arg("dst_pool"),
        "Migrate entity to destination pool. Returns new Entity, old becomes invalid.");
-
-    // ===== Register entity_handle kind handler =====
-    tc::register_cpp_handle_kind<EntityHandle>("entity_handle");
-
-    tc::KindRegistry::instance().register_python(
-        "entity_handle",
-        nb::cpp_function([](nb::object obj) -> nb::object {
-            EntityHandle handle = nb::cast<EntityHandle>(obj);
-            nb::dict d;
-            d["uuid"] = handle.uuid;
-            return d;
-        }),
-        nb::cpp_function([](nb::object data) -> nb::object {
-            if (nb::isinstance<nb::str>(data)) {
-                return nb::cast(EntityHandle(nb::cast<std::string>(data)));
-            }
-            if (nb::isinstance<nb::dict>(data)) {
-                nb::dict d = nb::cast<nb::dict>(data);
-                if (d.contains("uuid")) {
-                    return nb::cast(EntityHandle(nb::cast<std::string>(d["uuid"])));
-                }
-            }
-            return nb::cast(EntityHandle());
-        }),
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(EntityHandle());
-            }
-            if (nb::isinstance<EntityHandle>(value)) {
-                return value;
-            }
-            return value;
-        })
-    );
 
     // Register atexit handler
     nb::object atexit_mod = nb::module_::import_("atexit");

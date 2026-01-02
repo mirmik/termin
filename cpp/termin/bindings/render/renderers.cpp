@@ -78,7 +78,7 @@ void bind_renderers(nb::module_& m) {
                     entities.push_back(nb::cast<Entity>(item));
                 }
             }
-            self->set_bone_entities_from_entities(std::move(entities));
+            self->set_bone_entities(std::move(entities));
             std::cerr << "[SkeletonController] Bone entities set" << std::endl;
             if (!check_heap()) {
                 std::cerr << "[SkeletonController] HEAP CORRUPTED after bone entities!" << std::endl;
@@ -115,10 +115,8 @@ void bind_renderers(nb::module_& m) {
             nb::rv_policy::reference)
         .def_prop_rw("bone_entities",
             [](const SkeletonController& self) {
-                // Return resolved Entity list
                 nb::list result;
-                for (const auto& handle : self.bone_entities) {
-                    Entity e = handle.get();
+                for (const auto& e : self.bone_entities) {
                     if (e.valid()) {
                         result.append(nb::cast(e));
                     } else {
@@ -134,7 +132,7 @@ void bind_renderers(nb::module_& m) {
                         vec.push_back(nb::cast<Entity>(item));
                     }
                 }
-                self.set_bone_entities_from_entities(std::move(vec));
+                self.set_bone_entities(std::move(vec));
             })
         .def_prop_ro("skeleton_instance",
             &SkeletonController::skeleton_instance,
@@ -147,7 +145,7 @@ void bind_renderers(nb::module_& m) {
                     vec.push_back(nb::cast<Entity>(item));
                 }
             }
-            self.set_bone_entities_from_entities(std::move(vec));
+            self.set_bone_entities(std::move(vec));
         })
         .def("invalidate_instance", &SkeletonController::invalidate_instance);
 

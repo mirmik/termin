@@ -23,7 +23,7 @@ from PyQt6.QtCore import pyqtSignal
 
 from termin._native import log
 from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
-from termin.visualization.core.entity_handle import EntityHandle
+from termin.entity import Entity
 
 if TYPE_CHECKING:
     pass
@@ -31,17 +31,16 @@ if TYPE_CHECKING:
 
 class EntityListWidget(QWidget):
     """
-    Widget for editing a list of Entity references via EntityHandle.
+    Widget for editing a list of Entity references.
 
     Features:
-    - Displays entity names in a list (resolved from EntityHandle)
+    - Displays entity names in a list
     - Drag-drop from SceneTree to add entities
     - Reorder buttons (up/down)
     - Remove button
     - Read-only mode
 
-    The widget stores EntityHandle objects internally.
-    Serialization converts to/from UUID strings.
+    The widget stores Entity objects internally.
 
     Signals:
         value_changed: Emitted when the list changes.
@@ -56,7 +55,7 @@ class EntityListWidget(QWidget):
     ):
         super().__init__(parent)
 
-        self._handles: List[EntityHandle] = []
+        self._entities: List[Entity] = []
         self._read_only = read_only
         self._updating = False
 
@@ -116,43 +115,20 @@ class EntityListWidget(QWidget):
             self._remove_btn = None
 
     def get_value(self) -> list:
-        """
-        Return current list of Entity objects.
-
-        Unwraps EntityHandles to Entity* for C++ field compatibility.
-        """
-        result = []
-        for handle in self._handles:
-            entity = handle.entity
-            if entity is not None:
-                result.append(entity)
-        return result
+        """Return current list of Entity objects."""
+        return [e for e in self._entities if e.valid()]
 
     def set_value(self, items: Optional[list]) -> None:
-        """
-        Set list of entities.
-
-        Accepts:
-        - List[EntityHandle]
-        - List[Entity] (C++ Entity pointers)
-        - Mixed list
-        """
-        if items:
-            for i, item in enumerate(items):
-                log.debug(f"  [{i}] type={type(item)}, value={item}")
-
+        """Set list of entities."""
         self._updating = True
         try:
-            self._handles = []
+            self._entities = []
             if items:
                 for item in items:
                     if item is None:
                         continue
-                    if isinstance(item, EntityHandle):
-                        self._handles.append(item)
-                    elif hasattr(item, 'uuid') and hasattr(item, 'name'):
-                        # It's an Entity object - wrap in EntityHandle
-                        self._handles.append(EntityHandle.from_entity(item))
+                    if isinstance(item, Entity):
+                        self._entities.append(item)
                     else:
                         log.debug(f"  [EntityListWidget] Skipping invalid item: {item}")
             self._rebuild_list()
@@ -161,24 +137,23 @@ class EntityListWidget(QWidget):
             self._updating = False
 
     def _rebuild_list(self) -> None:
-        """Rebuild QListWidget from current handles."""
+        """Rebuild QListWidget from current entities."""
         current_row = self._list.currentRow()
         self._list.clear()
 
-        for i, handle in enumerate(self._handles):
-            # Display entity name (or UUID prefix if not resolved)
-            name = handle.name
+        for i, entity in enumerate(self._entities):
+            name = entity.name if entity.valid() else "<invalid>"
             item = QListWidgetItem(f"{i}: {name}")
             self._list.addItem(item)
 
         # Restore selection
-        if 0 <= current_row < len(self._handles):
+        if 0 <= current_row < len(self._entities):
             self._list.setCurrentRow(current_row)
-        elif self._handles:
-            self._list.setCurrentRow(len(self._handles) - 1)
+        elif self._entities:
+            self._list.setCurrentRow(len(self._entities) - 1)
 
         # Update count label
-        count = len(self._handles)
+        count = len(self._entities)
         self._count_label.setText(f"{count} {'entity' if count == 1 else 'entities'}")
 
     def _update_buttons(self) -> None:
@@ -190,7 +165,7 @@ class EntityListWidget(QWidget):
         self._remove_btn.setEnabled(has_selection)
         self._move_up_btn.setEnabled(has_selection and self._list.currentRow() > 0)
         self._move_down_btn.setEnabled(
-            has_selection and self._list.currentRow() < len(self._handles) - 1
+            has_selection and self._list.currentRow() < len(self._entities) - 1
         )
 
     def _on_selection_changed(self, row: int) -> None:
@@ -203,25 +178,27 @@ class EntityListWidget(QWidget):
             return
 
         # Avoid duplicates by UUID
-        for handle in self._handles:
-            if handle.uuid == entity_uuid:
+        for entity in self._entities:
+            if entity.valid() and entity.uuid == entity_uuid:
                 return
 
-        # Create new handle (resolves via scene pool)
-        handle = EntityHandle(uuid=entity_uuid)
-        self._handles.append(handle)
-        self._rebuild_list()
-        self._list.setCurrentRow(len(self._handles) - 1)
-        self._update_buttons()
-        self.value_changed.emit()
+        # Find entity by UUID in registry
+        from termin.entity import EntityRegistry
+        entity = EntityRegistry.instance().get(entity_uuid)
+        if entity is not None:
+            self._entities.append(entity)
+            self._rebuild_list()
+            self._list.setCurrentRow(len(self._entities) - 1)
+            self._update_buttons()
+            self.value_changed.emit()
 
     def _remove_selected(self) -> None:
         """Remove selected entity from list."""
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._handles):
+        if row < 0 or row >= len(self._entities):
             return
 
-        del self._handles[row]
+        del self._entities[row]
         self._rebuild_list()
         self._update_buttons()
         self.value_changed.emit()
@@ -229,12 +206,12 @@ class EntityListWidget(QWidget):
     def _move_up(self) -> None:
         """Move selected entity up in the list."""
         row = self._list.currentRow()
-        if row <= 0 or row >= len(self._handles):
+        if row <= 0 or row >= len(self._entities):
             return
 
-        self._handles[row], self._handles[row - 1] = (
-            self._handles[row - 1],
-            self._handles[row],
+        self._entities[row], self._entities[row - 1] = (
+            self._entities[row - 1],
+            self._entities[row],
         )
         self._rebuild_list()
         self._list.setCurrentRow(row - 1)
@@ -244,12 +221,12 @@ class EntityListWidget(QWidget):
     def _move_down(self) -> None:
         """Move selected entity down in the list."""
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._handles) - 1:
+        if row < 0 or row >= len(self._entities) - 1:
             return
 
-        self._handles[row], self._handles[row + 1] = (
-            self._handles[row + 1],
-            self._handles[row],
+        self._entities[row], self._entities[row + 1] = (
+            self._entities[row + 1],
+            self._entities[row],
         )
         self._rebuild_list()
         self._list.setCurrentRow(row + 1)

@@ -197,7 +197,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core_c ${CMAKE_CURRENT_BINARY_DI
 add_library(entity_lib SHARED
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
-    termin/entity/entity_handle.cpp
     termin/entity/component.cpp
     termin/entity/component_registry.cpp
     termin/entity/vtable_utils.cpp
@@ -219,7 +218,7 @@ set_target_properties(entity_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# Entity native module (Component, Entity, EntityHandle, registries) - nanobind
+# Entity native module (Component, Entity, registries) - nanobind
 nanobind_add_module(_entity_native
     termin/bindings/entity/entity_module.cpp
     termin/bindings/entity/entity_bindings.cpp
@@ -280,7 +279,7 @@ endif()
 # Unified native module (Render + SDL + Scene + Skeleton + Inspect + Assets) - nanobind
 # Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
 # Note: Graphics types (Color4, Size2i, etc), GraphicsBackend, handles are in _graphics_native
-# Note: Component, Entity, EntityHandle are in _entity_native module, imported at runtime
+# Note: Component, Entity are in _entity_native module, imported at runtime
 nanobind_add_module(_native
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
