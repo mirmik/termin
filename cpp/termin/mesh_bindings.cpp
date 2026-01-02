@@ -281,7 +281,63 @@ void bind_mesh(nb::module_& m) {
             if (!m) return nb::none();
             return nb::cast(m, nb::rv_policy::reference);
         })
+        // Extract vertices from interleaved buffer (Nx3 float array)
+        .def_prop_ro("vertices", [](const TcMesh& h) -> nb::object {
+            tc_mesh* m = h.get();
+            if (!m || !m->vertices || m->vertex_count == 0) return nb::none();
+            const tc_vertex_attrib* pos = tc_vertex_layout_find(&m->layout, "position");
+            if (!pos || pos->size != 3) return nb::none();
+            size_t n = m->vertex_count;
+            size_t stride = m->layout.stride;
+            float* buf = new float[n * 3];
+            const uint8_t* src = static_cast<const uint8_t*>(m->vertices);
+            for (size_t i = 0; i < n; ++i) {
+                const float* p = reinterpret_cast<const float*>(src + i * stride + pos->offset);
+                buf[i * 3] = p[0];
+                buf[i * 3 + 1] = p[1];
+                buf[i * 3 + 2] = p[2];
+            }
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[2] = {n, 3};
+            return nb::cast(nb::ndarray<nb::numpy, float>(buf, 2, shape, owner));
+        })
+        // Extract triangles from index buffer (Mx3 uint32 array)
+        .def_prop_ro("triangles", [](const TcMesh& h) -> nb::object {
+            tc_mesh* m = h.get();
+            if (!m || !m->indices || m->index_count == 0) return nb::none();
+            size_t n = m->index_count / 3;
+            uint32_t* buf = new uint32_t[n * 3];
+            for (size_t i = 0; i < n * 3; ++i) {
+                buf[i] = m->indices[i];
+            }
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<uint32_t*>(p); });
+            size_t shape[2] = {n, 3};
+            return nb::cast(nb::ndarray<nb::numpy, uint32_t>(buf, 2, shape, owner));
+        })
+        // Extract normals from interleaved buffer (Nx3 float array)
+        .def_prop_ro("vertex_normals", [](const TcMesh& h) -> nb::object {
+            tc_mesh* m = h.get();
+            if (!m || !m->vertices || m->vertex_count == 0) return nb::none();
+            const tc_vertex_attrib* norm = tc_vertex_layout_find(&m->layout, "normal");
+            if (!norm || norm->size != 3) return nb::none();
+            size_t n = m->vertex_count;
+            size_t stride = m->layout.stride;
+            float* buf = new float[n * 3];
+            const uint8_t* src = static_cast<const uint8_t*>(m->vertices);
+            for (size_t i = 0; i < n; ++i) {
+                const float* p = reinterpret_cast<const float*>(src + i * stride + norm->offset);
+                buf[i * 3] = p[0];
+                buf[i * 3 + 1] = p[1];
+                buf[i * 3 + 2] = p[2];
+            }
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[2] = {n, 3};
+            return nb::cast(nb::ndarray<nb::numpy, float>(buf, 2, shape, owner));
+        })
         .def("bump_version", &TcMesh::bump_version)
+        .def("set_from_mesh3", [](TcMesh& h, const Mesh3& mesh) {
+            return h.set_from_mesh3(mesh);
+        }, nb::arg("mesh"))
         .def("get_vertices_buffer", [](const TcMesh& h) -> nb::object {
             tc_mesh* m = h.get();
             if (!m || !m->vertices || m->vertex_count == 0) return nb::none();

@@ -571,8 +571,11 @@
           {
             "type": "MeshRenderer",
             "data": {
-              "enabled": true,
-              "mesh": {},
+              "enabled": false,
+              "mesh": {
+                "uuid": "150908e5-3116-488a-9a0e-77f14786003d",
+                "name": "bulbasaur"
+              },
               "material": {
                 "type": "uuid",
                 "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
@@ -624,7 +627,7 @@
                 0.2,
                 0.8
               ],
-              "fill_percent": 82.0,
+              "fill_percent": 60.0,
               "slice_axis": [
                 0.0,
                 0.0,
@@ -3496,7 +3499,7 @@
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "1062abbfaedc973d",
+                "uuid": "150908e5-3116-488a-9a0e-77f14786003d",
                 "name": "bulbasaur"
               },
               "material": {
@@ -3635,9 +3638,10 @@
         -3.841421127319336
       ],
       "radius": 27.5,
-      "azimuth": 63.11110575211996,
-      "elevation": 0.3804817769347626
+      "azimuth": 63.550928723622626,
+      "elevation": 0.40142572795869447
     },
+    "selected_entity": "Bulba",
     "displays": [
       {
         "name": "Editor",
@@ -3646,7 +3650,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "cede0e94-813f-493d-ab57-992fcc9bfeeb",
+            "uuid": "1fe64acd-3215-434f-849e-d5255426f3de",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3666,7 +3670,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "bf17a789-cf88-44ef-a85e-be0a0025a880",
+            "uuid": "a1109787-7643-4fce-a1ef-61006fb35458",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3679,6 +3683,11 @@
           }
         ]
       }
+    ],
+    "expanded_entities": [
+      "editor_ui",
+      "camera",
+      "EditorEntities"
     ]
   },
   "resources": {

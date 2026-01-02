@@ -463,7 +463,7 @@ class VoxelizerComponent(PythonComponent):
         entity,
         root_transform_inv: np.ndarray,
         recurse: bool = True,
-    ) -> List[tuple["Mesh3", np.ndarray]]:
+    ) -> List[tuple["TcMesh", np.ndarray]]:
         """
         Собрать меши из entity (и опционально его потомков).
 
@@ -477,18 +477,18 @@ class VoxelizerComponent(PythonComponent):
         """
         from termin.visualization.render.components import MeshRenderer
 
-        result: List[tuple["Mesh3", np.ndarray]] = []
+        result: List[tuple[TcMesh, np.ndarray]] = []
 
         # Проверяем MeshRenderer на текущем entity
         for comp in entity.components:
             if isinstance(comp, MeshRenderer):
-                mesh_drawable = comp.mesh
-                if mesh_drawable is not None and mesh_drawable.mesh is not None:
+                mesh = comp.mesh
+                if mesh is not None and mesh.is_valid:
                     # Получаем мировую трансформацию entity с учётом scale
                     world_matrix = entity.model_matrix()
                     # Преобразуем в локальную систему координат корневого entity
                     local_matrix = root_transform_inv @ world_matrix
-                    result.append((mesh_drawable.mesh, local_matrix))
+                    result.append((mesh, local_matrix))
                 break  # Только один MeshRenderer на entity
 
         # Рекурсивно обходим детей (если нужно)
@@ -501,7 +501,7 @@ class VoxelizerComponent(PythonComponent):
 
     def _create_combined_mesh(
         self,
-        meshes: List[tuple["Mesh3", np.ndarray]],
+        meshes: List[tuple["TcMesh", np.ndarray]],
     ) -> Optional["Mesh3"]:
         """
         Объединить несколько мешей в один с применением трансформаций.
@@ -677,16 +677,6 @@ class VoxelizerComponent(PythonComponent):
             VoxelPersistence.save(grid, output_path)
             print(f"VoxelizerComponent: saved to {output_path.absolute()}")
 
-            # Регистрируем в ResourceManager по имени файла (не внутреннему имени грида)
-            asset_name = output_path.stem
-            rm.register_voxel_grid(asset_name, grid)
-            print(f"VoxelizerComponent: registered '{asset_name}' with {grid.voxel_count} voxels")
-
-            # Mark asset as just saved to prevent hot-reload from file watcher
-            asset = rm.get_voxel_grid_asset(asset_name)
-            if asset is not None:
-                asset.mark_just_saved()
-
             return True
         except Exception as e:
             print(f"VoxelizerComponent: failed to save: {e}")
@@ -798,12 +788,6 @@ class VoxelizerComponent(PythonComponent):
 
             NavMeshPersistence.save(navmesh, output_path)
             print(f"VoxelizerComponent: saved NavMesh to {output_path.absolute()}")
-
-            # Mark asset as just saved to prevent hot-reload
-            asset_name = output_path.stem
-            asset = rm.get_navmesh_asset(asset_name)
-            if asset is not None:
-                asset.mark_just_saved()
 
             return True
         except Exception as e:

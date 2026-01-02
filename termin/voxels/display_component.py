@@ -263,6 +263,7 @@ class VoxelDisplayComponent(PythonComponent):
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
         current_version = self.voxel_grid.version
         if current_version != self._last_version:
+            print(f"[DEBUG] VoxelDisplayComponent._check_hot_reload: version changed {self._last_version} -> {current_version}")
             self._last_version = current_version
             # Defer rebuild to update() - don't rebuild during rendering
             self._needs_rebuild = True

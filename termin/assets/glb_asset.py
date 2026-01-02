@@ -264,8 +264,8 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                         if not tc_mesh_is_loaded(asset._data):
                             _populate_tc_mesh_from_glb(asset._data, glb_mesh)
                     else:
-                        # Create new mesh entry
-                        asset._data = _glb_mesh_to_tc_mesh(glb_mesh)
+                        # Create new mesh entry with asset's UUID
+                        asset._data = _glb_mesh_to_tc_mesh(glb_mesh, asset._uuid)
                     asset._loaded = True
                     break
 

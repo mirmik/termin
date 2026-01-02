@@ -3,6 +3,58 @@
 
 namespace termin {
 
+bool TcMesh::set_from_mesh3(const Mesh3& mesh, const tc_vertex_layout* custom_layout) {
+    tc_mesh* m = get();
+    if (!m) {
+        return false;
+    }
+
+    if (mesh.vertices.empty()) {
+        return false;
+    }
+
+    // Default layout: position(3) + normal(3) + uv(2) = 32 bytes
+    tc_vertex_layout layout = custom_layout ? *custom_layout : tc_vertex_layout_pos_normal_uv();
+
+    // Build interleaved vertex buffer
+    size_t num_verts = mesh.vertices.size();
+    size_t stride = layout.stride;
+    std::vector<uint8_t> buffer(num_verts * stride, 0);
+
+    const tc_vertex_attrib* pos_attr = tc_vertex_layout_find(&layout, "position");
+    const tc_vertex_attrib* norm_attr = tc_vertex_layout_find(&layout, "normal");
+    const tc_vertex_attrib* uv_attr = tc_vertex_layout_find(&layout, "uv");
+
+    for (size_t i = 0; i < num_verts; i++) {
+        uint8_t* dst = buffer.data() + i * stride;
+
+        if (pos_attr) {
+            float* p = reinterpret_cast<float*>(dst + pos_attr->offset);
+            p[0] = mesh.vertices[i].x;
+            p[1] = mesh.vertices[i].y;
+            p[2] = mesh.vertices[i].z;
+        }
+
+        if (norm_attr && i < mesh.normals.size()) {
+            float* n = reinterpret_cast<float*>(dst + norm_attr->offset);
+            n[0] = mesh.normals[i].x;
+            n[1] = mesh.normals[i].y;
+            n[2] = mesh.normals[i].z;
+        }
+
+        if (uv_attr && i < mesh.uvs.size()) {
+            float* u = reinterpret_cast<float*>(dst + uv_attr->offset);
+            u[0] = mesh.uvs[i].x;
+            u[1] = mesh.uvs[i].y;
+        }
+    }
+
+    return tc_mesh_set_data(m,
+                            buffer.data(), num_verts, &layout,
+                            mesh.triangles.data(), mesh.triangles.size(),
+                            mesh.name.empty() ? nullptr : mesh.name.c_str());
+}
+
 TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
                           const std::string& override_name,
                           const std::string& override_uuid,

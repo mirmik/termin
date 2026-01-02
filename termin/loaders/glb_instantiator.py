@@ -44,8 +44,13 @@ def _compute_vertex_normals(vertices: np.ndarray, indices: np.ndarray) -> np.nda
     return normals / lengths
 
 
-def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData") -> "TcMesh":
-    """Convert GLBMeshData to TcMesh directly (no intermediate Mesh3)."""
+def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData", uuid: str = "") -> "TcMesh":
+    """Convert GLBMeshData to TcMesh directly (no intermediate Mesh3).
+
+    Args:
+        glb_mesh: Mesh data from GLB file
+        uuid: Optional UUID to use for TcMesh (if empty, generates new)
+    """
     from termin.mesh._mesh_native import TcMesh, TcVertexLayout
 
     vertices = glb_mesh.vertices.astype(np.float32)
@@ -97,7 +102,7 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData") -> "TcMesh":
     buffer_flat = buffer.ravel().astype(np.float32)
 
     return TcMesh.from_interleaved(
-        buffer_flat, num_verts, indices, layout, glb_mesh.name
+        buffer_flat, num_verts, indices, layout, glb_mesh.name, uuid
     )
 
 

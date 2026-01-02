@@ -74,6 +74,11 @@ class MeshAsset(DataAsset[TcMesh]):
         self._axis_z = spec_data.get("axis_z", "z")
         self._flip_uv_v = spec_data.get("flip_uv_v", False)
 
+        # Pre-register TcMesh in registry with load callback for lazy loading
+        # Only for standalone meshes (not embedded in GLB)
+        if self._source_path is not None and self._parent_asset is None:
+            self._declare_tc_mesh()
+
     def _build_spec_data(self) -> dict:
         """Build spec data with mesh settings."""
         spec = super()._build_spec_data()
@@ -102,6 +107,25 @@ class MeshAsset(DataAsset[TcMesh]):
             flip_uv_v=self._flip_uv_v,
         )
 
+    # --- Lazy loading with tc_mesh registry ---
+
+    def _declare_tc_mesh(self) -> None:
+        """Declare TcMesh in registry with load callback for lazy loading."""
+        from termin.mesh._mesh_native import (
+            tc_mesh_declare,
+            tc_mesh_set_load_callback,
+            tc_mesh_is_loaded,
+        )
+
+        # Declare empty mesh entry in registry
+        tc_mesh = tc_mesh_declare(self._uuid, self._name)
+        if tc_mesh.is_valid and not tc_mesh_is_loaded(tc_mesh):
+            # Set load callback that triggers asset loading
+            tc_mesh_set_load_callback(tc_mesh, lambda m: self._load_from_file())
+            # Store handle in _data (but not loaded yet)
+            self._data = tc_mesh
+            self._loaded = False
+
     # --- Content parsing ---
 
     def _parse_content(self, content: bytes) -> TcMesh | None:
@@ -115,15 +139,34 @@ class MeshAsset(DataAsset[TcMesh]):
         spec = self._get_mesh_spec()
 
         if ext == ".stl":
-            return self._parse_stl_content(content, spec)
+            mesh3 = self._parse_stl_to_mesh3(content, spec)
         elif ext == ".obj":
-            return self._parse_obj_content(content, spec)
+            mesh3 = self._parse_obj_to_mesh3(content, spec)
         else:
             log.warn(f"[MeshAsset] Unsupported format: {ext}")
             return None
 
-    def _parse_stl_content(self, content: bytes, spec: "MeshSpec") -> TcMesh | None:
-        """Parse STL content from bytes."""
+        if mesh3 is None:
+            return None
+
+        return self._populate_or_create_tc_mesh(mesh3)
+
+    def _populate_or_create_tc_mesh(self, mesh3: Mesh3) -> TcMesh | None:
+        """Populate existing declared TcMesh or create new one."""
+        from termin.mesh._mesh_native import tc_mesh_is_loaded
+
+        # If we have a declared (but not loaded) TcMesh, populate it
+        if self._data is not None and self._data.is_valid and not tc_mesh_is_loaded(self._data):
+            if self._data.set_from_mesh3(mesh3):
+                return self._data
+            log.error(f"[MeshAsset] Failed to populate declared TcMesh: {self._name}")
+            return None
+
+        # Otherwise create new TcMesh with asset's UUID
+        return TcMesh.from_mesh3(mesh3, self._name, self._uuid)
+
+    def _parse_stl_to_mesh3(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
+        """Parse STL content to Mesh3."""
         import io
 
         from termin.loaders.stl_loader import _load_binary_stl, _load_ascii_stl
@@ -159,11 +202,10 @@ class MeshAsset(DataAsset[TcMesh]):
         )
         if not mesh3.has_normals():
             mesh3.compute_normals()
-        # Create TcMesh from Mesh3 (registers in tc_mesh registry)
-        return TcMesh.from_mesh3(mesh3, self._name)
+        return mesh3
 
-    def _parse_obj_content(self, content: bytes, spec: "MeshSpec") -> TcMesh | None:
-        """Parse OBJ content from bytes."""
+    def _parse_obj_to_mesh3(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
+        """Parse OBJ content to Mesh3."""
         from termin.loaders.obj_loader import parse_obj_text
 
         text = content.decode("utf-8", errors="ignore")
@@ -182,8 +224,7 @@ class MeshAsset(DataAsset[TcMesh]):
         )
         if not mesh3.has_normals():
             mesh3.compute_normals()
-        # Create TcMesh from Mesh3 (registers in tc_mesh registry)
-        return TcMesh.from_mesh3(mesh3, self._name)
+        return mesh3
 
     # --- Convenience methods for mesh manipulation ---
 

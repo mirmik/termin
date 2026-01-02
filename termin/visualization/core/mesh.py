@@ -100,8 +100,8 @@ class MeshDrawable:
     @mesh.setter
     def mesh(self, value: Mesh3):
         """Устанавливает геометрию."""
-        # Create TcMesh from Mesh3
-        tc_mesh = TcMesh.from_mesh3(value, self._asset.name)
+        # Create TcMesh from Mesh3 with asset's UUID
+        tc_mesh = TcMesh.from_mesh3(value, self._asset.name, self._asset._uuid)
         self._asset.mesh_data = tc_mesh
 
     # --------- GPU lifecycle ---------

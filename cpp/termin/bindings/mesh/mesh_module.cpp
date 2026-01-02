@@ -40,6 +40,9 @@ void register_tc_mesh_kind() {
                 std::string name = (name_it != dict.end() && name_it->second.is_string())
                     ? name_it->second.as_string() : "";
                 tc::Log::warn("tc_mesh deserialize: mesh not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
+            } else {
+                // Trigger lazy load if mesh is declared but not loaded
+                mesh.ensure_loaded();
             }
             return mesh;
         },
@@ -79,6 +82,9 @@ void register_tc_mesh_kind() {
             if (!mesh.is_valid()) {
                 std::string name = d.contains("name") ? nb::cast<std::string>(d["name"]) : "";
                 tc::Log::warn("tc_mesh deserialize: mesh not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
+            } else {
+                // Trigger lazy load if mesh is declared but not loaded
+                mesh.ensure_loaded();
             }
             return nb::cast(mesh);
         }),

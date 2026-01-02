@@ -134,6 +134,14 @@ public:
         }
     }
 
+    // Trigger lazy load if mesh is declared but not loaded
+    bool ensure_loaded() {
+        return tc_mesh_ensure_loaded(handle);
+    }
+
+    // Populate existing TcMesh with data from Mesh3
+    bool set_from_mesh3(const Mesh3& mesh, const tc_vertex_layout* custom_layout = nullptr);
+
     // Create TcMesh from Mesh3 (CPU mesh)
     static TcMesh from_mesh3(const Mesh3& mesh,
                              const std::string& override_name = "",

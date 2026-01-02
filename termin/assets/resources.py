@@ -798,19 +798,24 @@ class ResourceManager:
         """Reload voxel grid from PreLoadResult."""
         asset = self._voxel_grid_assets.get(name)
         if asset is None:
+            print(f"[DEBUG] _reload_voxel_grid_file: asset not found for {name}")
             return
 
         # Skip if not loaded yet (lazy loading will handle it)
         if not asset.is_loaded:
+            print(f"[DEBUG] _reload_voxel_grid_file: asset not loaded yet {name}")
             return
 
         # Skip if this was our own save
         if not asset.should_reload_from_file():
+            print(f"[DEBUG] _reload_voxel_grid_file: skipping reload (our own save) {name}")
             return
 
+        print(f"[DEBUG] _reload_voxel_grid_file: reloading {name}")
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
         asset.reload()
+        print(f"[DEBUG] _reload_voxel_grid_file: reloaded, grid={asset.grid is not None}, voxels={asset.grid.voxel_count if asset.grid else 0}")
 
         # Update legacy dict
         if asset.grid is not None:
