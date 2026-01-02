@@ -2,6 +2,9 @@
 
 import argparse
 import warnings
+import faulthandler
+
+faulthandler.enable()
 
 # Suppress SDL2 informational warning about using pysdl2-dll binaries (Windows)
 warnings.filterwarnings("ignore", message="Using SDL2 binaries from pysdl2-dll")

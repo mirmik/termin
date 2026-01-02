@@ -84,6 +84,14 @@ class SceneTreeController:
 
     # ---------- публичный API для EditorWindow ----------
 
+    def set_scene(self, scene) -> None:
+        """Set scene, clearing old model to avoid invalid entity access."""
+        if self._scene is not scene:
+            # Clear old model before switching - old entities may be invalid
+            self._tree.setModel(None)
+            self._model = None
+        self._scene = scene
+
     def rebuild(self, select_obj: object | None = None) -> None:
         """
         Перестраивает модель по текущей сцене и опционально выделяет объект.

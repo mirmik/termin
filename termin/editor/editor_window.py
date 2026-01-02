@@ -1813,7 +1813,7 @@ class EditorWindow(QMainWindow):
 
         # Обновляем scene tree
         if self.scene_tree_controller is not None:
-            self.scene_tree_controller._scene = scene
+            self.scene_tree_controller.set_scene(scene)
             self.scene_tree_controller.rebuild()
 
         # Обновляем inspector scene reference и сбрасываем target
