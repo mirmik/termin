@@ -110,7 +110,7 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
     return TextureHandle();
 }
 
-inline void TextureHandle::deserialize_from(const nos::trent& data) {
+inline void TextureHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     _direct = TcTexture();
 
     if (!data.is_dict()) {
@@ -219,7 +219,7 @@ inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
     return MaterialHandle();
 }
 
-inline void MaterialHandle::deserialize_from(const nos::trent& data) {
+inline void MaterialHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     _direct = nullptr;
 
     if (!data.is_dict()) {
@@ -327,7 +327,7 @@ inline SkeletonHandle SkeletonHandle::deserialize(const nb::dict& data) {
     return SkeletonHandle();
 }
 
-inline void SkeletonHandle::deserialize_from(const nos::trent& data) {
+inline void SkeletonHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     _direct = nullptr;
 
     if (!data.is_dict()) {
@@ -464,7 +464,7 @@ inline AnimationClipHandle AnimationClipHandle::deserialize(const nb::dict& data
     return AnimationClipHandle();
 }
 
-inline void AnimationClipHandle::deserialize_from(const nos::trent& data) {
+inline void AnimationClipHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     _direct = nullptr;
 
     if (!data.is_dict()) {

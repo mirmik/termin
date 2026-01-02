@@ -295,6 +295,11 @@ void bind_tc_scene(nb::module_& m) {
             return reinterpret_cast<uintptr_t>(self.entity_pool());
         }, "Get scene's entity pool as uintptr_t")
 
+        // Scene pointer access
+        .def("scene_ptr", [](TcScene& self) {
+            return reinterpret_cast<uintptr_t>(self._s);
+        }, "Get tc_scene* as uintptr_t")
+
         // Entity creation in pool
         .def("create_entity", &TcScene::create_entity, nb::arg("name") = "",
              "Create a new entity directly in scene's pool.")

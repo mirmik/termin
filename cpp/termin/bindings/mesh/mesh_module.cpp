@@ -25,8 +25,8 @@ void register_tc_mesh_kind() {
             }
             return result;
         },
-        // deserialize: trent → std::any(TcMesh)
-        [](const nos::trent& t) -> std::any {
+        // deserialize: trent, scene → std::any(TcMesh)
+        [](const nos::trent& t, tc_scene*) -> std::any {
             if (!t.is_dict()) return termin::TcMesh();
             auto& dict = t.as_dict();
             auto it = dict.find("uuid");

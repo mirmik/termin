@@ -10,6 +10,7 @@
 #include <nanobind/nanobind.h>
 #include "trent/trent.h"
 #include "tc_log.h"
+#include "tc_scene.h"
 
 // DLL export/import macros (same as InspectRegistry)
 #ifdef _WIN32
@@ -35,7 +36,7 @@ struct TcKind {
     // C++ vtable - works with std::any and nos::trent
     struct CppVtable {
         std::function<nos::trent(const std::any&)> serialize;
-        std::function<std::any(const nos::trent&)> deserialize;
+        std::function<std::any(const nos::trent&, tc_scene*)> deserialize;
         std::function<nb::object(const std::any&)> to_python;    // std::any → nb::object
         std::function<std::any(nb::object)> from_python;         // nb::object → std::any
     } cpp;
@@ -106,7 +107,7 @@ public:
     void register_cpp(
         const std::string& name,
         std::function<nos::trent(const std::any&)> serialize,
-        std::function<std::any(const nos::trent&)> deserialize,
+        std::function<std::any(const nos::trent&, tc_scene*)> deserialize,
         std::function<nb::object(const std::any&)> to_python = nullptr,
         std::function<std::any(nb::object)> from_python = nullptr
     ) {
@@ -147,10 +148,10 @@ public:
         return nos::trent::nil();
     }
 
-    std::any deserialize_cpp(const std::string& kind_name, const nos::trent& data) {
+    std::any deserialize_cpp(const std::string& kind_name, const nos::trent& data, tc_scene* scene = nullptr) {
         auto* kind = get(kind_name);
         if (kind && kind->cpp.deserialize) {
-            return kind->cpp.deserialize(data);
+            return kind->cpp.deserialize(data, scene);
         }
         return std::any{};
     }
@@ -216,7 +217,7 @@ public:
 // C++ registration helpers (template-based)
 // ============================================================================
 
-// Register a C++ handle type that has serialize() and deserialize_from(trent)
+// Register a C++ handle type that has serialize() and deserialize_from(trent, tc_scene*)
 // Also registers list[kind_name] for std::vector<H>
 template<typename H>
 void register_cpp_handle_kind(const std::string& kind_name) {
@@ -241,10 +242,10 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             }
             return result;
         },
-        // deserialize: trent → std::any(H)
-        [](const nos::trent& t) -> std::any {
+        // deserialize: trent, scene → std::any(H)
+        [](const nos::trent& t, tc_scene* scene) -> std::any {
             H h;
-            h.deserialize_from(t);
+            h.deserialize_from(t, scene);
             return h;
         },
         // to_python: std::any(H) → nb::object
@@ -285,13 +286,13 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             }
             return result;
         },
-        // deserialize: trent → std::any(vector<H>)
-        [](const nos::trent& t) -> std::any {
+        // deserialize: trent, scene → std::any(vector<H>)
+        [](const nos::trent& t, tc_scene* scene) -> std::any {
             std::vector<H> vec;
             if (t.is_list()) {
                 for (const auto& item : t.as_list()) {
                     H h;
-                    h.deserialize_from(item);
+                    h.deserialize_from(item, scene);
                     vec.push_back(h);
                 }
             }
@@ -324,13 +325,13 @@ inline void register_builtin_kinds() {
     // bool
     reg.register_cpp("bool",
         [](const std::any& v) { return nos::trent(std::any_cast<bool>(v)); },
-        [](const nos::trent& t) -> std::any { return t.as_bool(); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_bool(); },
         [](const std::any& v) { return nb::cast(std::any_cast<bool>(v)); },
         [](nb::object v) -> std::any { return nb::cast<bool>(v); }
     );
     reg.register_cpp("checkbox",
         [](const std::any& v) { return nos::trent(std::any_cast<bool>(v)); },
-        [](const nos::trent& t) -> std::any { return t.as_bool(); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_bool(); },
         [](const std::any& v) { return nb::cast(std::any_cast<bool>(v)); },
         [](nb::object v) -> std::any { return nb::cast<bool>(v); }
     );
@@ -338,13 +339,13 @@ inline void register_builtin_kinds() {
     // int
     reg.register_cpp("int",
         [](const std::any& v) { return nos::trent(static_cast<int64_t>(std::any_cast<int>(v))); },
-        [](const nos::trent& t) -> std::any { return static_cast<int>(t.as_numer()); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<int>(t.as_numer()); },
         [](const std::any& v) { return nb::cast(std::any_cast<int>(v)); },
         [](nb::object v) -> std::any { return nb::cast<int>(v); }
     );
     reg.register_cpp("slider_int",
         [](const std::any& v) { return nos::trent(static_cast<int64_t>(std::any_cast<int>(v))); },
-        [](const nos::trent& t) -> std::any { return static_cast<int>(t.as_numer()); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<int>(t.as_numer()); },
         [](const std::any& v) { return nb::cast(std::any_cast<int>(v)); },
         [](nb::object v) -> std::any { return nb::cast<int>(v); }
     );
@@ -352,19 +353,19 @@ inline void register_builtin_kinds() {
     // float
     reg.register_cpp("float",
         [](const std::any& v) { return nos::trent(static_cast<double>(std::any_cast<float>(v))); },
-        [](const nos::trent& t) -> std::any { return static_cast<float>(t.as_numer()); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<float>(t.as_numer()); },
         [](const std::any& v) { return nb::cast(std::any_cast<float>(v)); },
         [](nb::object v) -> std::any { return nb::cast<float>(v); }
     );
     reg.register_cpp("slider",
         [](const std::any& v) { return nos::trent(static_cast<double>(std::any_cast<float>(v))); },
-        [](const nos::trent& t) -> std::any { return static_cast<float>(t.as_numer()); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<float>(t.as_numer()); },
         [](const std::any& v) { return nb::cast(std::any_cast<float>(v)); },
         [](nb::object v) -> std::any { return nb::cast<float>(v); }
     );
     reg.register_cpp("drag_float",
         [](const std::any& v) { return nos::trent(static_cast<double>(std::any_cast<float>(v))); },
-        [](const nos::trent& t) -> std::any { return static_cast<float>(t.as_numer()); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<float>(t.as_numer()); },
         [](const std::any& v) { return nb::cast(std::any_cast<float>(v)); },
         [](nb::object v) -> std::any { return nb::cast<float>(v); }
     );
@@ -372,7 +373,7 @@ inline void register_builtin_kinds() {
     // double
     reg.register_cpp("double",
         [](const std::any& v) { return nos::trent(std::any_cast<double>(v)); },
-        [](const nos::trent& t) -> std::any { return t.as_numer(); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_numer(); },
         [](const std::any& v) { return nb::cast(std::any_cast<double>(v)); },
         [](nb::object v) -> std::any { return nb::cast<double>(v); }
     );
@@ -380,19 +381,19 @@ inline void register_builtin_kinds() {
     // string
     reg.register_cpp("string",
         [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
-        [](const nos::trent& t) -> std::any { return t.as_string(); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); },
         [](const std::any& v) { return nb::cast(std::any_cast<std::string>(v)); },
         [](nb::object v) -> std::any { return nb::cast<std::string>(v); }
     );
     reg.register_cpp("text",
         [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
-        [](const nos::trent& t) -> std::any { return t.as_string(); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); },
         [](const std::any& v) { return nb::cast(std::any_cast<std::string>(v)); },
         [](nb::object v) -> std::any { return nb::cast<std::string>(v); }
     );
     reg.register_cpp("multiline_text",
         [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
-        [](const nos::trent& t) -> std::any { return t.as_string(); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); },
         [](const std::any& v) { return nb::cast(std::any_cast<std::string>(v)); },
         [](nb::object v) -> std::any { return nb::cast<std::string>(v); }
     );

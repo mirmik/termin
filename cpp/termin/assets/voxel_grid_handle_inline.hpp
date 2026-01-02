@@ -81,7 +81,7 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const nb::dict& data) {
     return VoxelGridHandle();
 }
 
-inline void VoxelGridHandle::deserialize_from(const nos::trent& data) {
+inline void VoxelGridHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     if (!data.is_dict()) {
         asset = nb::none();
         return;

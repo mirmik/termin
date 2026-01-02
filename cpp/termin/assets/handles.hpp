@@ -5,6 +5,7 @@
 #include <nanobind/ndarray.h>
 
 #include "../../trent/trent.h"
+#include "../../core_c/include/tc_scene.h"
 #include "termin/render/handles.hpp"
 #include "termin/render/mesh_gpu.hpp"
 #include "termin/render/texture_gpu.hpp"
@@ -171,7 +172,7 @@ public:
     /**
      * Deserialize inplace from scene data.
      */
-    void deserialize_from(const nos::trent& data);
+    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 };
 
 /**
@@ -270,7 +271,7 @@ public:
     /**
      * Deserialize inplace from scene data.
      */
-    void deserialize_from(const nos::trent& data);
+    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 };
 
 
@@ -365,7 +366,7 @@ public:
     /**
      * Deserialize inplace from scene data.
      */
-    void deserialize_from(const nos::trent& data);
+    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 };
 
 // Forward declaration
@@ -473,7 +474,7 @@ public:
     /**
      * Deserialize inplace from scene data.
      */
-    void deserialize_from(const nos::trent& data);
+    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 };
 
 } // namespace termin

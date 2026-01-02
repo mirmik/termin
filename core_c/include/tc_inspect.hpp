@@ -552,7 +552,7 @@ public:
     }
 
     // Takes both raw C++ pointer (for cpp_setter) and nb::object (for py_setter)
-    void deserialize_fields_of_cxx_component_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data) {
+    void deserialize_fields_of_cxx_component_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data, tc_scene* scene = nullptr) {
         for (const auto& f : all_fields(type_name)) {
             if (f.non_serializable) continue;
 
@@ -570,7 +570,7 @@ public:
 
                 // Deserialize via trent (handles both primitives and complex types)
                 nos::trent t = nb_to_trent_compat(field_data);
-                std::any val = KindRegistry::instance().deserialize_cpp(f.kind, t);
+                std::any val = KindRegistry::instance().deserialize_cpp(f.kind, t, scene);
                 if (val.has_value()) {
                     f.cpp_setter(ptr, val);
                 } else {
@@ -631,9 +631,9 @@ public:
     // Dispatches based on type backend
     // For C++ components: ptr is the actual C++ object pointer (e.g. this)
     // For Python components: ptr is unused, obj.ptr() is used for setters
-    void deserialize_component_fields_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data) {
+    void deserialize_component_fields_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data, tc_scene* scene = nullptr) {
         if (get_type_backend(type_name) == TypeBackend::Cpp) {
-            deserialize_fields_of_cxx_component_over_python(ptr, obj, type_name, data);
+            deserialize_fields_of_cxx_component_over_python(ptr, obj, type_name, data, scene);
         } else {
             deserialize_fields_of_python_component_over_python(obj, type_name, data);
         }

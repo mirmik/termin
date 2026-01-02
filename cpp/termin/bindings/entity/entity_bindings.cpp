@@ -382,13 +382,18 @@ void bind_entity_class(nb::module_& m) {
                     name = nb::cast<std::string>(name_obj);
                 }
 
-                // Get pool from scene or use standalone pool
+                // Get pool and scene from scene object or use standalone pool
                 tc_entity_pool* pool = nullptr;
+                tc_scene* c_scene = nullptr;
                 if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene, "entity_pool_ptr")) {
-                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene.attr("entity_pool_ptr")());
+                    nb::object tc_scene_obj = scene.attr("_tc_scene");
+                    if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
+                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
                         pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
+                    }
+                    if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                        uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                        c_scene = reinterpret_cast<tc_scene*>(scene_ptr);
                     }
                 }
                 if (!pool) {
@@ -521,7 +526,7 @@ void bind_entity_class(nb::module_& m) {
                                     nb::dict data_dict = nb::cast<nb::dict>(data_field);
                                     void* raw_ptr = nb::inst_ptr<void>(comp);
                                     InspectRegistry::instance().deserialize_component_fields_over_python(
-                                        raw_ptr, comp, type_name, data_dict);
+                                        raw_ptr, comp, type_name, data_dict, c_scene);
                                 }
                             } else {
                                 if (nb::hasattr(comp, "deserialize_data")) {

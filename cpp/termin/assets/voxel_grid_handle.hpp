@@ -3,6 +3,7 @@
 #include <string>
 #include <nanobind/nanobind.h>
 #include "../../trent/trent.h"
+#include "../../core_c/include/tc_scene.h"
 
 namespace nb = nanobind;
 
@@ -81,7 +82,7 @@ public:
     static VoxelGridHandle deserialize(const nb::dict& data);
 
     // Deserialize inplace from scene data.
-    void deserialize_from(const nos::trent& data);
+    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 };
 
 } // namespace termin

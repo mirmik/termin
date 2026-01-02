@@ -151,12 +151,8 @@ public:
         return d;
     }
 
-    void deserialize_from(const nos::trent& data) {
-        // Entity cannot be deserialized without pool context
-        // This is handled by scene loader which resolves UUIDs after loading
-        _pool = nullptr;
-        _id = TC_ENTITY_ID_INVALID;
-    }
+    // Deserialize from trent with scene context for entity resolution
+    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 
     // --- User data (for back-pointer if needed) ---
 

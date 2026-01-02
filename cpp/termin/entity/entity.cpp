@@ -1,5 +1,6 @@
 #include "entity.hpp"
 #include "component.hpp"
+#include "../../../core_c/include/tc_scene.h"
 #include <algorithm>
 #include <iostream>
 
@@ -7,6 +8,39 @@ namespace termin {
 
 // Global standalone pool for entities created outside of Scene
 static tc_entity_pool* g_standalone_pool = nullptr;
+
+void Entity::deserialize_from(const nos::trent& data, tc_scene* scene) {
+    // Get UUID from trent
+    std::string uuid_str;
+    if (data.is_string()) {
+        uuid_str = data.as_string();
+    } else if (data.is_dict() && data.contains("uuid")) {
+        uuid_str = data["uuid"].as_string();
+    }
+
+    if (uuid_str.empty()) {
+        _pool = nullptr;
+        _id = TC_ENTITY_ID_INVALID;
+        return;
+    }
+
+    // Get pool from scene
+    tc_entity_pool* pool = scene ? tc_scene_entity_pool(scene) : g_standalone_pool;
+
+    if (pool) {
+        // Find entity by UUID in pool
+        tc_entity_id id = tc_entity_pool_find_by_uuid(pool, uuid_str.c_str());
+        if (tc_entity_id_valid(id)) {
+            _pool = pool;
+            _id = id;
+            return;
+        }
+    }
+
+    // Entity not found
+    _pool = nullptr;
+    _id = TC_ENTITY_ID_INVALID;
+}
 
 tc_entity_pool* Entity::standalone_pool() {
     if (!g_standalone_pool) {
