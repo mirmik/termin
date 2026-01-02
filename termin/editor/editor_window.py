@@ -817,6 +817,10 @@ class EditorWindow(QMainWindow):
             on_display_input_mode_changed=self._on_display_input_mode_changed,
         )
 
+        # Register global render update callback
+        from termin.editor.render_request import set_request_update_callback
+        set_request_update_callback(self._request_viewport_update)
+
     def _init_spacemouse(self) -> None:
         """Initialize SpaceMouse controller if device available."""
         spacemouse = SpaceMouseController()
