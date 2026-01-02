@@ -85,7 +85,7 @@ static int test_mesh_data(void) {
     tc_mesh_init();
 
     tc_mesh* mesh = tc_mesh_add("data-test");
-    TEST_ASSERT(mesh->version == 1, "initial version");
+    TEST_ASSERT(mesh->header.version == 1, "initial version");
 
     tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv();
     float verts[] = {
@@ -99,11 +99,11 @@ static int test_mesh_data(void) {
 
     TEST_ASSERT(mesh->vertex_count == 3, "vertex count");
     TEST_ASSERT(mesh->index_count == 3, "index count");
-    TEST_ASSERT(mesh->version == 2, "version bumped");
+    TEST_ASSERT(mesh->header.version == 2, "version bumped");
     TEST_ASSERT(tc_mesh_triangle_count(mesh) == 1, "triangle count");
 
     tc_mesh_bump_version(mesh);
-    TEST_ASSERT(mesh->version == 3, "manual bump");
+    TEST_ASSERT(mesh->header.version == 3, "manual bump");
 
     tc_mesh_shutdown();
 

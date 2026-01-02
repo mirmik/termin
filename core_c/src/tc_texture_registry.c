@@ -98,13 +98,13 @@ tc_texture_handle tc_texture_create(const char* uuid) {
 
     tc_texture* tex = (tc_texture*)tc_pool_get(&g_texture_pool, h);
     memset(tex, 0, sizeof(tc_texture));
-    strncpy(tex->uuid, final_uuid, sizeof(tex->uuid) - 1);
-    tex->uuid[sizeof(tex->uuid) - 1] = '\0';
-    tex->version = 1;
-    tex->ref_count = 0;
+    strncpy(tex->header.uuid, final_uuid, sizeof(tex->header.uuid) - 1);
+    tex->header.uuid[sizeof(tex->header.uuid) - 1] = '\0';
+    tex->header.version = 1;
+    tex->header.ref_count = 0;
     tex->flip_y = 1;  // Default for OpenGL
 
-    if (!tc_resource_map_add(g_uuid_to_index, tex->uuid, tc_pack_index(h.index))) {
+    if (!tc_resource_map_add(g_uuid_to_index, tex->header.uuid, tc_pack_index(h.index))) {
         tc_log_error("tc_texture_create: failed to add to uuid map");
         tc_pool_free_slot(&g_texture_pool, h);
         return tc_texture_handle_invalid();
@@ -146,7 +146,7 @@ tc_texture_handle tc_texture_find_by_name(const char* name) {
     for (uint32_t i = 0; i < g_texture_pool.capacity; i++) {
         if (g_texture_pool.states[i] == TC_SLOT_OCCUPIED) {
             tc_texture* tex = (tc_texture*)tc_pool_get_unchecked(&g_texture_pool, i);
-            if (tex->name && strcmp(tex->name, name) == 0) {
+            if (tex->header.name && strcmp(tex->header.name, name) == 0) {
                 tc_texture_handle h;
                 h.index = i;
                 h.generation = g_texture_pool.generations[i];
@@ -188,7 +188,7 @@ bool tc_texture_destroy(tc_texture_handle h) {
     tc_texture* tex = tc_texture_get(h);
     if (!tex) return false;
 
-    tc_resource_map_remove(g_uuid_to_index, tex->uuid);
+    tc_resource_map_remove(g_uuid_to_index, tex->header.uuid);
     texture_free_data(tex);
 
     return tc_pool_free_slot(&g_texture_pool, h);
@@ -252,15 +252,15 @@ uint8_t tc_texture_format_channels(tc_texture_format format) {
 // ============================================================================
 
 void tc_texture_add_ref(tc_texture* tex) {
-    if (tex) tex->ref_count++;
+    if (tex) tex->header.ref_count++;
 }
 
 bool tc_texture_release(tc_texture* tex) {
     if (!tex) return false;
-    if (tex->ref_count > 0) {
-        tex->ref_count--;
+    if (tex->header.ref_count > 0) {
+        tex->header.ref_count--;
     }
-    return tex->ref_count == 0;
+    return tex->header.ref_count == 0;
 }
 
 // ============================================================================
@@ -298,10 +298,10 @@ bool tc_texture_set_data(
     tex->height = height;
     tex->channels = channels;
     tex->format = TC_TEXTURE_RGBA8;
-    tex->version++;
+    tex->header.version++;
 
     if (name) {
-        tex->name = tc_intern_string(name);
+        tex->header.name = tc_intern_string(name);
     }
     if (source_path) {
         tex->source_path = tc_intern_string(source_path);
@@ -320,7 +320,7 @@ void tc_texture_set_transforms(
     tex->flip_x = flip_x ? 1 : 0;
     tex->flip_y = flip_y ? 1 : 0;
     tex->transpose = transpose ? 1 : 0;
-    tex->version++;
+    tex->header.version++;
 }
 
 // ============================================================================
@@ -389,12 +389,12 @@ static bool collect_texture_info(tc_texture_handle h, tc_texture* tex, void* use
 
     tc_texture_info* info = &collector->infos[collector->count++];
     info->handle = h;
-    strncpy(info->uuid, tex->uuid, sizeof(info->uuid) - 1);
+    strncpy(info->uuid, tex->header.uuid, sizeof(info->uuid) - 1);
     info->uuid[sizeof(info->uuid) - 1] = '\0';
-    info->name = tex->name;
+    info->name = tex->header.name;
     info->source_path = tex->source_path;
-    info->ref_count = tex->ref_count;
-    info->version = tex->version;
+    info->ref_count = tex->header.ref_count;
+    info->version = tex->header.version;
     info->width = tex->width;
     info->height = tex->height;
     info->channels = tex->channels;

@@ -33,7 +33,7 @@ public:
     // Construct from raw pointer (finds handle for it)
     explicit TcMesh(tc_mesh* m) {
         if (m) {
-            handle = tc_mesh_find(m->uuid);
+            handle = tc_mesh_find(m->header.uuid);
             tc_mesh_add_ref(m);
         }
     }
@@ -90,17 +90,17 @@ public:
 
     const char* uuid() const {
         tc_mesh* m = get();
-        return m ? m->uuid : "";
+        return m ? m->header.uuid : "";
     }
 
     const char* name() const {
         tc_mesh* m = get();
-        return (m && m->name) ? m->name : "";
+        return (m && m->header.name) ? m->header.name : "";
     }
 
     uint32_t version() const {
         tc_mesh* m = get();
-        return m ? m->version : 0;
+        return m ? m->header.version : 0;
     }
 
     size_t vertex_count() const {
@@ -130,7 +130,7 @@ public:
 
     void bump_version() {
         if (tc_mesh* m = get()) {
-            m->version++;
+            m->header.version++;
         }
     }
 

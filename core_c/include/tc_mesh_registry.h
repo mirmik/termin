@@ -131,7 +131,7 @@ TC_API bool tc_mesh_set_data(
 
 // Bump version manually (e.g., after modifying data in-place)
 static inline void tc_mesh_bump_version(tc_mesh* mesh) {
-    if (mesh) mesh->version++;
+    if (mesh) mesh->header.version++;
 }
 
 // ============================================================================

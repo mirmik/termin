@@ -101,7 +101,7 @@ TC_API void tc_texture_set_transforms(
 
 // Bump version manually
 static inline void tc_texture_bump_version(tc_texture* tex) {
-    if (tex) tex->version++;
+    if (tex) tex->header.version++;
 }
 
 // ============================================================================

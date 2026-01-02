@@ -28,7 +28,7 @@ static bool python_load_callback_wrapper(tc_mesh* mesh, void* user_data) {
     (void)user_data;
     if (!mesh) return false;
 
-    std::string uuid(mesh->uuid);
+    std::string uuid(mesh->header.uuid);
 
     nb::callable callback;
     {
@@ -249,10 +249,10 @@ void bind_mesh(nb::module_& m) {
     nb::class_<tc_mesh>(m, "TcMeshData")
         .def_ro("vertex_count", &tc_mesh::vertex_count)
         .def_ro("index_count", &tc_mesh::index_count)
-        .def_ro("version", &tc_mesh::version)
-        .def_ro("ref_count", &tc_mesh::ref_count)
-        .def_prop_ro("uuid", [](const tc_mesh& m) { return std::string(m.uuid); })
-        .def_prop_ro("name", [](const tc_mesh& m) { return m.name ? std::string(m.name) : ""; })
+        .def_prop_ro("version", [](const tc_mesh& m) { return m.header.version; })
+        .def_prop_ro("ref_count", [](const tc_mesh& m) { return m.header.ref_count; })
+        .def_prop_ro("uuid", [](const tc_mesh& m) { return std::string(m.header.uuid); })
+        .def_prop_ro("name", [](const tc_mesh& m) { return m.header.name ? std::string(m.header.name) : ""; })
         .def_prop_ro("stride", [](const tc_mesh& m) { return m.layout.stride; })
         .def_prop_ro("layout", [](const tc_mesh& m) { return m.layout; })
         .def("get_vertices_buffer", [](const tc_mesh& m) -> nb::object {
@@ -376,8 +376,8 @@ void bind_mesh(nb::module_& m) {
             std::vector<std::string> names;
             tc_mesh_foreach([](tc_mesh_handle, tc_mesh* mesh, void* user_data) -> bool {
                 auto* vec = static_cast<std::vector<std::string>*>(user_data);
-                if (mesh && mesh->name) {
-                    vec->push_back(mesh->name);
+                if (mesh && mesh->header.name) {
+                    vec->push_back(mesh->header.name);
                 }
                 return true;
             }, &names);
@@ -388,7 +388,7 @@ void bind_mesh(nb::module_& m) {
             if (!m) return std::string("<TcMesh invalid>");
             return "<TcMesh vertices=" + std::to_string(m->vertex_count) +
                    " triangles=" + std::to_string(m->index_count / 3) +
-                   " uuid=" + std::string(m->uuid) + ">";
+                   " uuid=" + std::string(m->header.uuid) + ">";
         });
 
     // Alias for backward compatibility
@@ -488,7 +488,7 @@ void bind_mesh(nb::module_& m) {
             throw std::runtime_error("Invalid mesh handle");
         }
 
-        std::string uuid(mesh->uuid);
+        std::string uuid(mesh->header.uuid);
 
         {
             std::lock_guard<std::mutex> lock(g_callback_mutex);
@@ -503,7 +503,7 @@ void bind_mesh(nb::module_& m) {
         tc_mesh* mesh = handle.get();
         if (!mesh) return;
 
-        std::string uuid(mesh->uuid);
+        std::string uuid(mesh->header.uuid);
 
         {
             std::lock_guard<std::mutex> lock(g_callback_mutex);

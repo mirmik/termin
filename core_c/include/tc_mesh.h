@@ -3,6 +3,7 @@
 
 #include "tc_types.h"
 #include "tc_handle.h"
+#include "tc_resource.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,14 +55,10 @@ typedef struct tc_vertex_layout {
 } tc_vertex_layout;
 
 // ============================================================================
-// Load callback type
+// Load callback type (legacy alias)
 // ============================================================================
 
 struct tc_mesh;
-
-// Load callback: called when mesh data is needed but not loaded
-// Should populate mesh data using tc_mesh_set_data()
-// Returns true if loading succeeded, false otherwise
 typedef bool (*tc_mesh_load_fn)(struct tc_mesh* mesh, void* user_data);
 
 // ============================================================================
@@ -69,20 +66,14 @@ typedef bool (*tc_mesh_load_fn)(struct tc_mesh* mesh, void* user_data);
 // ============================================================================
 
 typedef struct tc_mesh {
+    tc_resource_header header;   // common resource fields (uuid, name, version, etc.)
     void* vertices;              // raw vertex data blob
     size_t vertex_count;
     uint32_t* indices;           // triangle indices (3 per triangle)
     size_t index_count;          // total indices (not triangles)
     tc_vertex_layout layout;
-    uint32_t version;            // incremented on data change (for GPU sync)
-    uint32_t ref_count;          // reference count for ownership
-    char uuid[40];               // unique identifier (hash of data)
-    const char* name;            // human-readable name for debugging (interned string)
-    uint8_t is_loaded;           // true if data is loaded, false if declared but not loaded
-    uint8_t _pad[7];
-    tc_mesh_load_fn load_callback;  // callback to load data (NULL if no lazy loading)
-    void* load_user_data;           // user data for load callback
 } tc_mesh;
+
 
 // ============================================================================
 // Mesh helper functions

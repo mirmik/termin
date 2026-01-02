@@ -32,7 +32,7 @@ public:
     // Construct from raw pointer (finds handle for it)
     explicit TcTexture(tc_texture* t) {
         if (t) {
-            handle = tc_texture_find(t->uuid);
+            handle = tc_texture_find(t->header.uuid);
             tc_texture_add_ref(t);
         }
     }
@@ -89,17 +89,17 @@ public:
 
     const char* uuid() const {
         tc_texture* t = get();
-        return t ? t->uuid : "";
+        return t ? t->header.uuid : "";
     }
 
     const char* name() const {
         tc_texture* t = get();
-        return (t && t->name) ? t->name : "";
+        return (t && t->header.name) ? t->header.name : "";
     }
 
     uint32_t version() const {
         tc_texture* t = get();
-        return t ? t->version : 0;
+        return t ? t->header.version : 0;
     }
 
     uint32_t width() const {
@@ -150,7 +150,7 @@ public:
 
     void bump_version() {
         if (tc_texture* t = get()) {
-            t->version++;
+            t->header.version++;
         }
     }
 

@@ -106,14 +106,14 @@ tc_mesh_handle tc_mesh_create(const char* uuid) {
     // Get mesh pointer and init
     tc_mesh* mesh = (tc_mesh*)tc_pool_get(&g_mesh_pool, h);
     memset(mesh, 0, sizeof(tc_mesh));
-    strncpy(mesh->uuid, final_uuid, sizeof(mesh->uuid) - 1);
-    mesh->uuid[sizeof(mesh->uuid) - 1] = '\0';
-    mesh->version = 1;
-    mesh->ref_count = 0;
-    mesh->is_loaded = 1;  // Created meshes are considered loaded (data will be set)
+    strncpy(mesh->header.uuid, final_uuid, sizeof(mesh->header.uuid) - 1);
+    mesh->header.uuid[sizeof(mesh->header.uuid) - 1] = '\0';
+    mesh->header.version = 1;
+    mesh->header.ref_count = 0;
+    mesh->header.is_loaded = 1;  // Created meshes are considered loaded (data will be set)
 
     // Add to UUID map
-    if (!tc_resource_map_add(g_uuid_to_index, mesh->uuid, tc_pack_index(h.index))) {
+    if (!tc_resource_map_add(g_uuid_to_index, mesh->header.uuid, tc_pack_index(h.index))) {
         tc_log_error("tc_mesh_create: failed to add to uuid map");
         tc_pool_free_slot(&g_mesh_pool, h);
         return tc_mesh_handle_invalid();
@@ -155,7 +155,7 @@ tc_mesh_handle tc_mesh_find_by_name(const char* name) {
     for (uint32_t i = 0; i < g_mesh_pool.capacity; i++) {
         if (g_mesh_pool.states[i] == TC_SLOT_OCCUPIED) {
             tc_mesh* mesh = (tc_mesh*)tc_pool_get_unchecked(&g_mesh_pool, i);
-            if (mesh->name && strcmp(mesh->name, name) == 0) {
+            if (mesh->header.name && strcmp(mesh->header.name, name) == 0) {
                 tc_mesh_handle h;
                 h.index = i;
                 h.generation = g_mesh_pool.generations[i];
@@ -206,20 +206,20 @@ tc_mesh_handle tc_mesh_declare(const char* uuid, const char* name) {
     // Get mesh pointer and init (declared but not loaded)
     tc_mesh* mesh = (tc_mesh*)tc_pool_get(&g_mesh_pool, h);
     memset(mesh, 0, sizeof(tc_mesh));
-    strncpy(mesh->uuid, uuid, sizeof(mesh->uuid) - 1);
-    mesh->uuid[sizeof(mesh->uuid) - 1] = '\0';
-    mesh->version = 0;
-    mesh->ref_count = 0;
-    mesh->is_loaded = 0;  // NOT loaded yet
-    mesh->load_callback = NULL;
-    mesh->load_user_data = NULL;
+    strncpy(mesh->header.uuid, uuid, sizeof(mesh->header.uuid) - 1);
+    mesh->header.uuid[sizeof(mesh->header.uuid) - 1] = '\0';
+    mesh->header.version = 0;
+    mesh->header.ref_count = 0;
+    mesh->header.is_loaded = 0;  // NOT loaded yet
+    mesh->header.load_callback = NULL;
+    mesh->header.load_user_data = NULL;
 
     if (name && name[0] != '\0') {
-        mesh->name = tc_intern_string(name);
+        mesh->header.name = tc_intern_string(name);
     }
 
     // Add to UUID map
-    if (!tc_resource_map_add(g_uuid_to_index, mesh->uuid, tc_pack_index(h.index))) {
+    if (!tc_resource_map_add(g_uuid_to_index, mesh->header.uuid, tc_pack_index(h.index))) {
         tc_log_error("tc_mesh_declare: failed to add to uuid map");
         tc_pool_free_slot(&g_mesh_pool, h);
         return tc_mesh_handle_invalid();
@@ -236,32 +236,32 @@ void tc_mesh_set_load_callback(
     tc_mesh* mesh = tc_mesh_get(h);
     if (!mesh) return;
 
-    mesh->load_callback = callback;
-    mesh->load_user_data = user_data;
+    mesh->header.load_callback = (tc_resource_load_fn)callback;
+    mesh->header.load_user_data = user_data;
 }
 
 bool tc_mesh_is_loaded(tc_mesh_handle h) {
     tc_mesh* mesh = tc_mesh_get(h);
     if (!mesh) return false;
-    return mesh->is_loaded != 0;
+    return mesh->header.is_loaded != 0;
 }
 
 bool tc_mesh_ensure_loaded(tc_mesh_handle h) {
     tc_mesh* mesh = tc_mesh_get(h);
     if (!mesh) return false;
 
-    if (mesh->is_loaded) return true;
+    if (mesh->header.is_loaded) return true;
 
-    if (!mesh->load_callback) {
-        tc_log_warn("tc_mesh_ensure_loaded: mesh '%s' has no load callback", mesh->uuid);
+    if (!mesh->header.load_callback) {
+        tc_log_warn("tc_mesh_ensure_loaded: mesh '%s' has no load callback", mesh->header.uuid);
         return false;
     }
 
-    bool success = mesh->load_callback(mesh, mesh->load_user_data);
+    bool success = mesh->header.load_callback(mesh, mesh->header.load_user_data);
     if (success) {
-        mesh->is_loaded = 1;
+        mesh->header.is_loaded = 1;
     } else {
-        tc_log_error("tc_mesh_ensure_loaded: load callback failed for '%s'", mesh->uuid);
+        tc_log_error("tc_mesh_ensure_loaded: load callback failed for '%s'", mesh->header.uuid);
     }
 
     return success;
@@ -284,7 +284,7 @@ bool tc_mesh_destroy(tc_mesh_handle h) {
     if (!mesh) return false;
 
     // Remove from UUID map
-    tc_resource_map_remove(g_uuid_to_index, mesh->uuid);
+    tc_resource_map_remove(g_uuid_to_index, mesh->header.uuid);
 
     // Free mesh data
     mesh_free_data(mesh);
@@ -348,7 +348,7 @@ bool tc_mesh_set_vertices(
     mesh->vertices = new_vertices;
     mesh->vertex_count = vertex_count;
     mesh->layout = *layout;
-    mesh->version++;
+    mesh->header.version++;
 
     return true;
 }
@@ -377,7 +377,7 @@ bool tc_mesh_set_indices(
 
     mesh->indices = new_indices;
     mesh->index_count = index_count;
-    mesh->version++;
+    mesh->header.version++;
 
     return true;
 }
@@ -394,7 +394,7 @@ bool tc_mesh_set_data(
     if (!mesh || !layout) return false;
 
     if (name) {
-        mesh->name = tc_intern_string(name);
+        mesh->header.name = tc_intern_string(name);
     }
 
     size_t vertex_size = vertex_count * layout->stride;
@@ -432,8 +432,8 @@ bool tc_mesh_set_data(
     mesh->layout = *layout;
     mesh->indices = new_indices;
     mesh->index_count = index_count;
-    mesh->version++;
-    mesh->is_loaded = 1;  // Data is now loaded
+    mesh->header.version++;
+    mesh->header.is_loaded = 1;  // Data is now loaded
 
     return true;
 }
@@ -478,18 +478,18 @@ static bool collect_mesh_info(tc_mesh_handle h, tc_mesh* mesh, void* user_data) 
 
     tc_mesh_info* info = &collector->infos[collector->count++];
     info->handle = h;
-    strncpy(info->uuid, mesh->uuid, sizeof(info->uuid) - 1);
+    strncpy(info->uuid, mesh->header.uuid, sizeof(info->uuid) - 1);
     info->uuid[sizeof(info->uuid) - 1] = '\0';
-    info->name = mesh->name;
-    info->ref_count = mesh->ref_count;
-    info->version = mesh->version;
+    info->name = mesh->header.name;
+    info->ref_count = mesh->header.ref_count;
+    info->version = mesh->header.version;
     info->vertex_count = mesh->vertex_count;
     info->index_count = mesh->index_count;
     info->stride = mesh->layout.stride;
     info->memory_bytes = mesh->vertex_count * mesh->layout.stride +
                          mesh->index_count * sizeof(uint32_t);
-    info->is_loaded = mesh->is_loaded;
-    info->has_load_callback = mesh->load_callback != NULL;
+    info->is_loaded = mesh->header.is_loaded;
+    info->has_load_callback = mesh->header.load_callback != NULL;
 
     return true;
 }

@@ -3,6 +3,7 @@
 
 #include "tc_types.h"
 #include "tc_handle.h"
+#include "tc_resource.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,21 +33,19 @@ typedef enum tc_texture_format {
 // ============================================================================
 
 typedef struct tc_texture {
-    void* data;              // raw pixel data blob
+    tc_resource_header header;  // common resource fields (uuid, name, version, etc.)
+    void* data;                 // raw pixel data blob
     uint32_t width;
     uint32_t height;
-    uint8_t channels;        // 1, 2, 3, or 4
-    uint8_t format;          // tc_texture_format
-    uint8_t flip_x;          // transform flag
-    uint8_t flip_y;          // transform flag (default true for OpenGL)
-    uint8_t transpose;       // transform flag
+    uint8_t channels;           // 1, 2, 3, or 4
+    uint8_t format;             // tc_texture_format
+    uint8_t flip_x;             // transform flag
+    uint8_t flip_y;             // transform flag (default true for OpenGL)
+    uint8_t transpose;          // transform flag
     uint8_t _pad[3];
-    uint32_t version;        // incremented on data change (for GPU sync)
-    uint32_t ref_count;      // reference count for ownership
-    char uuid[40];           // unique identifier
-    const char* name;        // human-readable name (interned string)
-    const char* source_path; // optional source file path (interned string)
+    const char* source_path;    // optional source file path (interned string)
 } tc_texture;
+
 
 // ============================================================================
 // Helper functions
