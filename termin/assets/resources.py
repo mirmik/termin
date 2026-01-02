@@ -2180,16 +2180,17 @@ class ResourceManager:
                 return asset.name
         return None
 
-    # Handle accessors for TcMesh (direct mesh from tc_mesh registry)
+    # Handle accessors for TcMesh
     def _list_tc_mesh_names(self) -> list[str]:
-        """Get list of all mesh names from tc_mesh registry."""
-        from termin.mesh import TcMesh
-        return TcMesh.list_all_names()
+        """Get list of all mesh names from assets."""
+        return list(self._mesh_assets.keys())
 
     def _get_tc_mesh_by_name(self, name: str) -> Optional["TcMesh"]:
-        """Get TcMesh by name from registry."""
-        from termin.mesh import TcMesh
-        return TcMesh.from_name(name)
+        """Get TcMesh by name, loading asset if needed."""
+        asset = self._mesh_assets.get(name)
+        if asset is None:
+            return None
+        return asset.data
 
     def _find_tc_mesh_name(self, mesh: Any) -> Optional[str]:
         """Find name for a TcMesh."""

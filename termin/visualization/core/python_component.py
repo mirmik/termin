@@ -296,5 +296,9 @@ __all__ = ["PythonComponent", "InputComponent"]
 
 
 # Register PythonComponent base class (can't use __init_subclass__ for itself)
+from termin._native.inspect import InspectRegistry
 from termin.entity import ComponentRegistry
+
+# Register inspect_fields for PythonComponent (so subclasses inherit 'enabled')
+InspectRegistry.instance().register_python_fields("PythonComponent", PythonComponent.inspect_fields)
 ComponentRegistry.instance().register_python("PythonComponent", PythonComponent)

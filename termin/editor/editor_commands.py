@@ -312,6 +312,8 @@ __all__ = [
     "AddEntityCommand",
     "DeleteEntityCommand",
     "ReparentEntityCommand",
+    "RenameEntityCommand",
+    "DuplicateEntityCommand",
 ]
 
 
@@ -358,3 +360,59 @@ class RenameEntityCommand(UndoCommand):
         self._new_name = other._new_name
         self.text = other.text
         return True
+
+
+class DuplicateEntityCommand(UndoCommand):
+    """
+    Дублирование сущности.
+
+    В do() создаётся копия через scene, в undo() — удаляется.
+    """
+
+    def __init__(
+        self,
+        scene,
+        source_entity: Entity,
+        text: str | None = None,
+    ) -> None:
+        if text is None:
+            text = f"Duplicate '{source_entity.name}'"
+        super().__init__(text)
+        self._scene = scene
+        self._source_entity = source_entity
+        self._parent_transform = source_entity.transform.parent
+        self._copy: Entity | None = None
+
+        # Serialize source for do/redo
+        self._serialized_data = source_entity.serialize()
+        self._remove_uuids_recursive(self._serialized_data)
+
+    @property
+    def entity(self) -> Entity | None:
+        """The duplicated entity (available after do())."""
+        return self._copy
+
+    def _remove_uuids_recursive(self, data: dict) -> None:
+        """Remove uuid fields to force new UUID generation."""
+        data.pop("uuid", None)
+        data.pop("instance_uuid", None)
+        for child in data.get("children", []):
+            self._remove_uuids_recursive(child)
+        for child in data.get("added_children", []):
+            self._remove_uuids_recursive(child)
+
+    def do(self) -> None:
+        # Deserialize directly into scene's pool
+        self._copy = Entity.deserialize(
+            self._serialized_data, context=None, scene=self._scene
+        )
+        self._copy.name = f"{self._source_entity.name}_copy"
+
+        # Set parent
+        if self._parent_transform is not None:
+            self._copy.transform.set_parent(self._parent_transform)
+
+    def undo(self) -> None:
+        if self._copy is not None:
+            self._scene.remove(self._copy)
+            self._copy = None

@@ -56,6 +56,7 @@
           {
             "type": "RotatorComponent",
             "data": {
+              "enabled": true,
               "speed": 90.0,
               "axis": [
                 1.0,
@@ -67,6 +68,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -138,6 +140,7 @@
           {
             "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "Cube",
               "cell_size": 0.12,
               "voxelize_mode": 4.0,
@@ -160,6 +163,7 @@
           {
             "type": "VoxelDisplayComponent",
             "data": {
+              "enabled": true,
               "voxel_grid": {
                 "type": "none"
               },
@@ -192,6 +196,7 @@
           {
             "type": "NavMeshDisplayComponent",
             "data": {
+              "enabled": true,
               "navmesh": null,
               "color": [
                 0.2,
@@ -208,6 +213,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -279,6 +285,7 @@
           {
             "type": "AudioSource",
             "data": {
+              "enabled": true,
               "clip": null,
               "volume": 1.0,
               "pitch": 1.0,
@@ -292,6 +299,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": true,
               "restitution": 0.3,
@@ -348,6 +356,7 @@
           {
             "type": "PerspectiveCameraComponent",
             "data": {
+              "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 59.99999999999999,
               "ortho_size": 5.0,
@@ -358,6 +367,7 @@
           {
             "type": "OrbitCameraController",
             "data": {
+              "enabled": true,
               "radius": 1.5,
               "target": [
                 -1.2612084141246367,
@@ -481,6 +491,7 @@
           {
             "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "",
               "cell_size": 0.25,
               "voxelize_mode": 0.0,
@@ -503,6 +514,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -560,10 +572,7 @@
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
-              "mesh": {
-                "uuid": "1062abbfaedc973d",
-                "name": "bulbasaur"
-              },
+              "mesh": {},
               "material": {
                 "type": "uuid",
                 "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
@@ -574,6 +583,7 @@
           {
             "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "Bulba",
               "cell_size": 0.02,
               "voxelize_mode": 4.0,
@@ -596,6 +606,7 @@
           {
             "type": "VoxelDisplayComponent",
             "data": {
+              "enabled": true,
               "voxel_grid": {
                 "uuid": "d871f151-019d-448c-a9e1-80410b8b55bb",
                 "type": "path",
@@ -630,6 +641,7 @@
           {
             "type": "NavMeshDisplayComponent",
             "data": {
+              "enabled": true,
               "navmesh": null,
               "color": [
                 0.2,
@@ -678,6 +690,7 @@
           {
             "type": "VoxelDisplayComponent",
             "data": {
+              "enabled": true,
               "voxel_grid": {
                 "type": "none"
               },
@@ -742,6 +755,7 @@
           {
             "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "Platform",
               "cell_size": 0.12,
               "voxelize_mode": 4.0,
@@ -764,6 +778,7 @@
           {
             "type": "VoxelDisplayComponent",
             "data": {
+              "enabled": true,
               "voxel_grid": {
                 "uuid": "c848b7ee-2622-4587-9f61-344e7b7cccf5",
                 "type": "path",
@@ -992,6 +1007,7 @@
           {
             "type": "LightComponent",
             "data": {
+              "enabled": true,
               "light_type": 0.0,
               "color": [
                 1.0,
@@ -1242,7 +1258,9 @@
         "components": [
           {
             "type": "PhysicsWorldComponent",
-            "data": {}
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": []
@@ -1310,6 +1328,7 @@
           {
             "type": "FEMPhysicsWorldComponent",
             "data": {
+              "enabled": true,
               "gravity": [
                 0.0,
                 0.0,
@@ -1356,6 +1375,7 @@
           {
             "type": "FEMFixedJointComponent",
             "data": {
+              "enabled": true,
               "body_entity_name": "Pendulum",
               "damping": 0.0
             }
@@ -1425,6 +1445,7 @@
           {
             "type": "FEMRigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "inertia_diagonal": [
                 1.0,
@@ -1485,6 +1506,7 @@
           {
             "type": "FEMRigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "inertia_diagonal": [
                 1.0,
@@ -1530,6 +1552,7 @@
           {
             "type": "FEMRevoluteJointComponent",
             "data": {
+              "enabled": true,
               "body_a_entity_name": "Pendulum",
               "body_b_entity_name": "Pendulum2",
               "joint_offset_in_body_a": [
@@ -1589,7 +1612,9 @@
           },
           {
             "type": "TeleportComponent",
-            "data": {}
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": []
@@ -1718,6 +1743,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -1789,6 +1815,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -1860,6 +1887,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -1985,6 +2013,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 5.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2041,6 +2070,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2142,6 +2172,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2198,6 +2229,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2299,6 +2331,7 @@
               {
                 "type": "RigidBodyComponent",
                 "data": {
+                  "enabled": true,
                   "mass": 1.0,
                   "is_static": false,
                   "restitution": 0.3,
@@ -2370,6 +2403,7 @@
               {
                 "type": "RigidBodyComponent",
                 "data": {
+                  "enabled": true,
                   "mass": 1.0,
                   "is_static": false,
                   "restitution": 0.3,
@@ -2441,6 +2475,7 @@
               {
                 "type": "RigidBodyComponent",
                 "data": {
+                  "enabled": true,
                   "mass": 1.0,
                   "is_static": false,
                   "restitution": 0.3,
@@ -2512,6 +2547,7 @@
               {
                 "type": "RigidBodyComponent",
                 "data": {
+                  "enabled": true,
                   "mass": 1.0,
                   "is_static": false,
                   "restitution": 0.3,
@@ -2585,6 +2621,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2671,6 +2708,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2726,6 +2764,7 @@
               {
                 "type": "RigidBodyComponent",
                 "data": {
+                  "enabled": true,
                   "mass": 1.0,
                   "is_static": false,
                   "restitution": 0.3,
@@ -2799,6 +2838,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2870,6 +2910,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -2941,6 +2982,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -3012,6 +3054,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -3083,6 +3126,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -3154,6 +3198,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -3225,6 +3270,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -3296,6 +3342,7 @@
           {
             "type": "RigidBodyComponent",
             "data": {
+              "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
@@ -3366,7 +3413,9 @@
           },
           {
             "type": "TweenTest",
-            "data": {}
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": []
@@ -3402,7 +3451,9 @@
         "components": [
           {
             "type": "TweenManagerComponent",
-            "data": {}
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": []
@@ -3475,6 +3526,125 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "0000000000000038",
+        "name": "Bulba_copy",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -5.773789405822754,
+            -8.817680358886719,
+            -2.711003303527832
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          7,
+          7,
+          7
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {},
+              "material": {
+                "type": "uuid",
+                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "type": "VoxelizerComponent",
+            "data": {
+              "enabled": true,
+              "grid_name": "Bulba",
+              "cell_size": 0.02,
+              "voxelize_mode": 4.0,
+              "voxelize_source": 0.0,
+              "output_path": "Voxels/bulbasaur.voxels",
+              "navmesh_output_path": "Voxels/bulbasaur.navmesh",
+              "normal_angle": 9.0,
+              "expand_regions": false,
+              "navmesh_stage": 3.0,
+              "contour_epsilon": 0.006999999999999931,
+              "show_debug_voxels": false,
+              "show_debug_contours": false,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": true,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": true
+            }
+          },
+          {
+            "type": "VoxelDisplayComponent",
+            "data": {
+              "enabled": false,
+              "voxel_grid": {
+                "uuid": "d871f151-019d-448c-a9e1-80410b8b55bb",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Voxels/bulbasaur.voxels"
+              },
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 82.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            }
+          },
+          {
+            "type": "NavMeshDisplayComponent",
+            "data": {
+              "enabled": true,
+              "navmesh": null,
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.005
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -3522,15 +3692,15 @@
   "editor": {
     "camera": {
       "target": [
-        -1.062613606452942,
-        5.185769557952881,
-        -3.586087465286255
+        -2.908924102783203,
+        4.550106525421143,
+        -3.841421127319336
       ],
-      "radius": 21.5,
-      "azimuth": 64.46199059316352,
-      "elevation": 0.7051130178057083
+      "radius": 27.5,
+      "azimuth": 63.11110575211996,
+      "elevation": 0.3804817769347626
     },
-    "selected_entity": "Bulba",
+    "selected_entity": "Bulba_copy",
     "displays": [
       {
         "name": "Editor",
@@ -3539,7 +3709,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "9612ca82-fc09-46fd-b338-250a0c09b2a6",
+            "uuid": "e49c4321-f30e-45f6-accd-d361433b23c2",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3559,7 +3729,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "759a5d87-31b5-4129-aab3-a75594276e3c",
+            "uuid": "bd675414-bae2-4f8b-9e41-386ae8dba9e8",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3574,9 +3744,9 @@
       }
     ],
     "expanded_entities": [
-      "camera",
+      "EditorEntities",
       "editor_ui",
-      "EditorEntities"
+      "camera"
     ]
   },
   "resources": {

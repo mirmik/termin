@@ -378,41 +378,20 @@ class SceneTreeController:
 
     def _duplicate_entity_from_context(self, ent: Entity | None) -> None:
         """Create a copy of the entity using serialization."""
+        from termin.editor.editor_commands import DuplicateEntityCommand
+
         if not isinstance(ent, Entity):
             return
 
-        # Serialize the entity
-        data = ent.serialize()
-        if data is None:
-            return
-
-        # Remove UUIDs to generate new ones on deserialization
-        self._remove_uuids_recursive(data)
-
-        # Deserialize to create a copy
-        copy = Entity.deserialize(data, context=None)
-
-        # Rename to indicate it's a copy
-        copy.name = f"{ent.name}_copy"
-
-        # Add to scene with same parent
-        parent_transform = ent.transform.parent
-        cmd = AddEntityCommand(self._scene, copy, parent_transform=parent_transform)
+        cmd = DuplicateEntityCommand(self._scene, ent)
         self._undo_handler(cmd, merge=False)
 
-        self.add_entity_hierarchy(copy)
+        copy = cmd.entity
+        if copy is not None:
+            self.add_entity_hierarchy(copy)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
-
-    def _remove_uuids_recursive(self, data: dict) -> None:
-        """Remove uuid fields from serialized data to force new UUID generation."""
-        data.pop("uuid", None)
-        data.pop("instance_uuid", None)
-        for child in data.get("children", []):
-            self._remove_uuids_recursive(child)
-        for child in data.get("added_children", []):
-            self._remove_uuids_recursive(child)
 
     # ---------- drag-drop reparenting ----------
 
