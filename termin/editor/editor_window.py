@@ -1001,7 +1001,6 @@ class EditorWindow(QMainWindow):
 
     def _on_resource_reloaded(self, resource_type: str, resource_name: str) -> None:
         """Callback for resource reload."""
-        print(f"[DEBUG] _on_resource_reloaded: {resource_type} {resource_name}")
         self._request_viewport_update()
 
     def _scan_project_resources(self) -> None:

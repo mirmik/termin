@@ -2,6 +2,7 @@
 #include "tc_texture_registry.h"
 #include "tc_pool.h"
 #include "tc_resource_map.h"
+#include "tc_registry_utils.h"
 #include "tc_log.h"
 #include "termin_core.h"
 #include <stdlib.h>
@@ -17,26 +18,6 @@ static tc_resource_map* g_uuid_to_index = NULL;
 static uint64_t g_next_uuid = 1;
 static bool g_initialized = false;
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-static void generate_uuid(char* out_uuid) {
-    snprintf(out_uuid, 40, "tex-%016llx", (unsigned long long)g_next_uuid++);
-}
-
-static inline void* pack_index(uint32_t index) {
-    return (void*)(uintptr_t)(index + 1);
-}
-
-static inline uint32_t unpack_index(void* ptr) {
-    return (uint32_t)((uintptr_t)ptr - 1);
-}
-
-static inline bool has_index(void* ptr) {
-    return ptr != NULL;
-}
-
 static void texture_free_data(tc_texture* tex) {
     if (!tex) return;
     if (tex->data) {
@@ -50,10 +31,7 @@ static void texture_free_data(tc_texture* tex) {
 // ============================================================================
 
 void tc_texture_init(void) {
-    if (g_initialized) {
-        tc_log_warn("tc_texture_init: already initialized");
-        return;
-    }
+    TC_REGISTRY_INIT_GUARD(g_initialized, "tc_texture");
 
     if (!tc_pool_init(&g_texture_pool, sizeof(tc_texture), 64)) {
         tc_log_error("tc_texture_init: failed to init pool");
@@ -72,10 +50,7 @@ void tc_texture_init(void) {
 }
 
 void tc_texture_shutdown(void) {
-    if (!g_initialized) {
-        tc_log_warn("tc_texture_shutdown: not initialized");
-        return;
-    }
+    TC_REGISTRY_SHUTDOWN_GUARD(g_initialized, "tc_texture");
 
     // Free texture data for all occupied slots
     for (uint32_t i = 0; i < g_texture_pool.capacity; i++) {
@@ -111,7 +86,7 @@ tc_texture_handle tc_texture_create(const char* uuid) {
         }
         final_uuid = uuid;
     } else {
-        generate_uuid(uuid_buf);
+        tc_generate_prefixed_uuid(uuid_buf, sizeof(uuid_buf), "tex", &g_next_uuid);
         final_uuid = uuid_buf;
     }
 
@@ -129,7 +104,7 @@ tc_texture_handle tc_texture_create(const char* uuid) {
     tex->ref_count = 0;
     tex->flip_y = 1;  // Default for OpenGL
 
-    if (!tc_resource_map_add(g_uuid_to_index, tex->uuid, pack_index(h.index))) {
+    if (!tc_resource_map_add(g_uuid_to_index, tex->uuid, tc_pack_index(h.index))) {
         tc_log_error("tc_texture_create: failed to add to uuid map");
         tc_pool_free_slot(&g_texture_pool, h);
         return tc_texture_handle_invalid();
@@ -144,11 +119,11 @@ tc_texture_handle tc_texture_find(const char* uuid) {
     }
 
     void* ptr = tc_resource_map_get(g_uuid_to_index, uuid);
-    if (!has_index(ptr)) {
+    if (!tc_has_index(ptr)) {
         return tc_texture_handle_invalid();
     }
 
-    uint32_t index = unpack_index(ptr);
+    uint32_t index = tc_unpack_index(ptr);
     if (index >= g_texture_pool.capacity) {
         return tc_texture_handle_invalid();
     }
