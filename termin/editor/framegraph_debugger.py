@@ -1237,11 +1237,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             if p.pass_name == pass_name:
                 if symbol is None or symbol == "":
                     # Отключаем внутреннюю точку дебага
-                    p.set_debug_internal_point(None)
+                    p.set_debug_internal_point("")
                     p.set_debugger_window(None)
                 else:
                     # Устанавливаем символ и передаём SDL окно для блита
                     p.set_debug_internal_point(symbol)
+
                     sdl_window = self._gl_widget.get_sdl_window()
                     depth_callback = self._gl_widget.on_depth_captured
                     depth_error_callback = self._gl_widget.on_depth_error

@@ -2,10 +2,14 @@
 
 #include <unordered_map>
 #include <vector>
+#include <nanobind/nanobind.h>
 
 #include "termin/render/frame_pass.hpp"
+
 #include "termin/render/handles.hpp"
 #include "termin/render/resource_spec.hpp"
+
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -38,9 +42,21 @@ using FBOMap = std::unordered_map<std::string, FramebufferHandle*>;
  */
 class RenderFramePass : public FramePass {
 public:
+    nb::object debugger_window;
+    nb::object depth_capture_callback;
+
     using FramePass::FramePass;
 
     virtual ~RenderFramePass() = default;
+
+    void set_debugger_window(nb::object window, nb::object callback = nb::none()) {
+        debugger_window = window;
+        depth_capture_callback = callback;
+    }
+
+    nb::object get_debugger_window() const {
+        return debugger_window;
+    }
 
     /**
      * Execute the render pass.

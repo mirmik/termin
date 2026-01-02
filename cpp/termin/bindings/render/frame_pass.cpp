@@ -246,12 +246,12 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("wireframe", &ColorPass::wireframe)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
-        .def("set_debugger_window", &ColorPass::set_debugger_window,
-             nb::arg("window"),
-             nb::arg("depth_callback") = nb::none())
-        .def("get_debugger_window", &ColorPass::get_debugger_window)
-        .def_rw("debugger_window", &ColorPass::debugger_window)
-        .def_rw("depth_capture_callback", &ColorPass::depth_capture_callback)
+        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
+             nb::arg("window").none(),
+             nb::arg("depth_callback").none() = nb::none())
+        .def("get_debugger_window", &RenderFramePass::get_debugger_window)
+        .def_rw("debugger_window", &RenderFramePass::debugger_window)
+        .def_rw("depth_capture_callback", &RenderFramePass::depth_capture_callback)
         .def_prop_rw("_debugger_window",
             [](const ColorPass& self) { return self.debugger_window; },
             [](ColorPass& self, nb::object val) { self.debugger_window = val; })
@@ -451,6 +451,9 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("caster_offset", &ShadowPass::caster_offset)
         .def("get_resource_specs", &ShadowPass::get_resource_specs)
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
+        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
+             nb::arg("window").none(),
+             nb::arg("depth_callback").none() = nb::none())
         .def("execute_shadow_pass", [](
             ShadowPass& self,
             GraphicsBackend* graphics,

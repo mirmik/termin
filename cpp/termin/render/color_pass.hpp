@@ -41,10 +41,6 @@ public:
     bool clear_depth = false;
     bool wireframe = false;  // Render as wireframe (override polygon mode)
 
-    // Debugger support (Python objects)
-    nb::object debugger_window;         // Window for debug blit
-    nb::object depth_capture_callback;  // Callback for depth buffer capture
-
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
 
@@ -112,22 +108,6 @@ public:
      */
     std::vector<std::string> get_internal_symbols() const override {
         return entity_names;
-    }
-
-    /**
-     * Set debugger window for debug blitting.
-     * Matches Python API: set_debugger_window(window, depth_callback)
-     */
-    void set_debugger_window(nb::object window, nb::object callback = nb::none()) {
-        debugger_window = window;
-        depth_capture_callback = callback;
-    }
-
-    /**
-     * Get debugger window.
-     */
-    nb::object get_debugger_window() const {
-        return debugger_window;
     }
 
 private:
