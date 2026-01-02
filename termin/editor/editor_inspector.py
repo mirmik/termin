@@ -273,13 +273,8 @@ class ComponentInspectorPanel(QWidget):
         if field is None:
             return
 
-        print(f"[ComponentInspector] _on_field_changed: key={key}")
-        print(f"[ComponentInspector]   old_value={old_value}, new_value={new_value}")
-        print(f"[ComponentInspector]   _push_undo_command={self._push_undo_command}")
-
         if self._push_undo_command is not None:
             # Revert the change made by the panel
-            print(f"[ComponentInspector]   reverting to old_value...")
             field.set_value(self._component, old_value)
             # Create undo command
             cmd = ComponentFieldEditCommand(
@@ -288,11 +283,7 @@ class ComponentInspectorPanel(QWidget):
                 old_value=old_value,
                 new_value=new_value,
             )
-            print(f"[ComponentInspector]   pushing undo command...")
             self._push_undo_command(cmd, True)
-            # Verify after undo handler
-            verify = field.get_value(self._component)
-            print(f"[ComponentInspector]   after undo handler: verify={verify}")
 
         # If override_material changed, update the material props editor
         if key == "override_material":

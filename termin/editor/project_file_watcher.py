@@ -197,6 +197,7 @@ class FilePreLoader(ABC):
         """
         result = self.preload(path)
         if result is None:
+            log.warn(f"[FilePreLoader] preload returned None for {path}")
             return
 
         name = os.path.splitext(os.path.basename(path))[0]
@@ -471,6 +472,8 @@ class ProjectFileWatcher:
                 processor.on_file_added(path)
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error processing {path}")
+        else:
+            log.warn(f"[ProjectFileWatcher] No processor for {ext}: {path}")
 
     def _should_watch_file(self, path: str) -> bool:
         """Check if file should be watched (resource or meta file)."""

@@ -167,6 +167,11 @@ class ColliderComponent(PythonComponent):
         return self._attached
 
     @property
+    def attached_collider(self) -> AttachedCollider | None:
+        """Get the AttachedCollider."""
+        return self._attached
+
+    @property
     def collider(self) -> Collider:
         """Return the source collider (Box, Sphere, Capsule)."""
         return self._source_collider

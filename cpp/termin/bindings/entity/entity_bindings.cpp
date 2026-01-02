@@ -248,6 +248,8 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("component"))
         .def("get_component_by_type", &Entity::get_component_by_type,
              nb::arg("type_name"), nb::rv_policy::reference)
+        .def("get_python_component", &Entity::get_python_component,
+             nb::arg("type_name"))
         .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {
             if (!e.valid()) {
                 return nb::none();

@@ -151,10 +151,15 @@ class ResourceManagerViewer(QDialog):
         self._meshes_tree.clear()
 
         for name, asset in sorted(self._resource_manager._mesh_assets.items()):
+            # Don't load - just show status
+            if not asset.is_loaded:
+                item = QTreeWidgetItem([name, "(not loaded)", ""])
+                self._meshes_tree.addTopLevelItem(item)
+                continue
+
             vertices = "?"
             indices = "?"
 
-            # Пытаемся получить информацию о меше из asset
             mesh = asset.data
             if mesh is not None:
                 if hasattr(mesh, 'vertices') and mesh.vertices is not None:
@@ -173,8 +178,14 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._texture_assets.items()):
             source = str(asset.source_path) if asset.source_path else "(generated)"
-            size = f"{asset.width}x{asset.height}"
 
+            # Don't load - just show status
+            if not asset.is_loaded:
+                item = QTreeWidgetItem([name, source, "(not loaded)"])
+                self._textures_tree.addTopLevelItem(item)
+                continue
+
+            size = f"{asset.width}x{asset.height}"
             item = QTreeWidgetItem([name, source, size])
             self._textures_tree.addTopLevelItem(item)
 

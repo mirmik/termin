@@ -121,6 +121,9 @@ public:
 
     CxxComponent* get_component_by_type(const std::string& type_name);
 
+    // Get Python component by type name (returns nb::object, or nb::none() if not found)
+    nb::object get_python_component(const std::string& type_name);
+
     // Note: get_component<T>() is defined in component.hpp after CxxComponent is fully defined
     template<typename T>
     T* get_component();

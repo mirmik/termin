@@ -1417,7 +1417,7 @@ class ResourceManager:
         return self._mesh_registry.get(name)
 
     def list_mesh_names(self) -> list[str]:
-        return self._mesh_registry.list_names()
+        return list(self._mesh_assets.keys())
 
     def find_mesh_name(self, mesh: "TcMesh") -> Optional[str]:
         """Найти имя меша по TcMesh."""

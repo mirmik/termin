@@ -101,11 +101,9 @@ class ComponentFieldEditCommand(UndoCommand):
     def do(self) -> None:
         # При каждом применении берём копию, чтобы не делиться
         # внутренними массивами между командой и объектом.
-        print(f"[ComponentFieldEditCommand] do(): setting new_value={self._new_value}")
         self._field.set_value(self._component, _clone_value(self._new_value))
 
     def undo(self) -> None:
-        print(f"[ComponentFieldEditCommand] undo(): setting old_value={self._old_value}")
         self._field.set_value(self._component, _clone_value(self._old_value))
 
     def merge_with(self, other: UndoCommand) -> bool:
