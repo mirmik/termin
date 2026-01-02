@@ -177,6 +177,18 @@ NB_MODULE(_entity_native, m) {
             if (e.valid()) return nb::cast(e);
             return nb::none();
         })
+        .def_prop_ro("name", [](EntityHandle& h) -> std::string {
+            Entity e = h.get();
+            if (e.valid()) return e.name();
+            // Entity not resolved - log warning
+            if (!h.uuid.empty()) {
+                tc::Log::warn("EntityHandle: entity with uuid '%s' not found", h.uuid.c_str());
+                if (h.uuid.size() > 8) return h.uuid.substr(0, 8) + "...";
+                return h.uuid;
+            }
+            tc::Log::warn("EntityHandle: empty uuid");
+            return "<invalid>";
+        })
         .def("serialize", [](EntityHandle& h) -> nb::object {
             nb::dict d;
             d["uuid"] = h.uuid;

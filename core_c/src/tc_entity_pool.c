@@ -479,12 +479,31 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     if (!pool || !tc_entity_pool_alive(pool, id)) return;
 
     uint32_t idx = id.index;
+    tc_scene* scene = tc_entity_pool_get_scene(pool);
 
-    // Release Python references for all components with py_wrap
+    // Remove all components properly
     ComponentArray* comps = &pool->components[idx];
-    for (size_t i = 0; i < comps->count; i++) {
-        tc_component* c = comps->items[i];
-        if (c && c->py_wrap) {
+    while (comps->count > 0) {
+        tc_component* c = comps->items[0];
+        if (!c) {
+            component_array_remove(comps, c);
+            continue;
+        }
+
+        // Notify component it's being removed from scene
+        tc_component_on_removed(c);
+
+        // Unregister from scene's type lists and scheduler
+        if (scene) {
+            tc_scene_unregister_component(scene, c);
+        }
+
+        // Notify component it's being removed from entity
+        tc_component_on_removed_from_entity(c);
+
+        // Remove from array and release Python reference
+        component_array_remove(comps, c);
+        if (c->py_wrap) {
             Py_DECREF((PyObject*)c->py_wrap);
         }
     }

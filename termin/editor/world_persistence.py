@@ -485,5 +485,7 @@ class WorldPersistence:
         Returns:
             Editor scene (оригинал) для переключения viewport'ов.
         """
-        self._game_scene = None
+        if self._game_scene is not None:
+            self._game_scene.destroy()
+            self._game_scene = None
         return self._editor_scene

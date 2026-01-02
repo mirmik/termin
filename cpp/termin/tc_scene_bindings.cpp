@@ -22,6 +22,10 @@ public:
     }
 
     ~TcScene() {
+        destroy();
+    }
+
+    void destroy() {
         if (_s) {
             tc_scene_free(_s);
             _s = nullptr;
@@ -53,7 +57,11 @@ public:
     }
 
     void remove_entity(const Entity& e) {
-        (void)e;
+        if (!e.valid()) return;
+
+        // Just free entity from pool
+        // Components should be unregistered by Python Scene.remove() first
+        tc_entity_pool_free(e.pool(), e.id());
     }
 
     size_t entity_count() const {
@@ -253,6 +261,7 @@ public:
 void bind_tc_scene(nb::module_& m) {
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
+        .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
 
         // Entity management
         .def("add_entity", &TcScene::add_entity, nb::arg("entity"))

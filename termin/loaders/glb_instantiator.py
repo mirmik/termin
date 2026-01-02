@@ -19,6 +19,7 @@ from termin.visualization.animation.player import AnimationPlayer
 from termin.visualization.animation.clip import AnimationClip
 
 if TYPE_CHECKING:
+    from termin.assets.mesh_asset import MeshAsset
     from termin.visualization.core.glb_asset import GLBAsset
     from termin.visualization.core.scene import Scene
     from termin.loaders.glb_loader import GLBSceneData, GLBMeshData
@@ -162,9 +163,9 @@ def _create_entity_from_node(
     node_index: int,
     scene_data: "GLBSceneData",
     meshes: Dict[int, TcMesh],
+    mesh_assets: Dict[str, "MeshAsset"],
     default_material,
     skinned_material,
-    glb_name: str = "",
     node_to_entity: Optional[Dict[int, Entity]] = None,
     pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
     scene: Optional["Scene"] = None,
@@ -193,11 +194,14 @@ def _create_entity_from_node(
             glb_mesh = scene_data.meshes[mesh_idx]
 
             if mesh_idx not in meshes:
-                mesh_name = f"{glb_name}_{glb_mesh.name}" if glb_name else glb_mesh.name
-                tc_mesh = TcMesh.from_name(mesh_name)
+                # Get tc_mesh from MeshAsset by mesh name
+                mesh_asset = mesh_assets.get(glb_mesh.name)
+                if mesh_asset is None or mesh_asset.data is None:
+                    raise RuntimeError(f"[glb_instantiator] MeshAsset for '{glb_mesh.name}' not found or not loaded")
 
+                tc_mesh = mesh_asset.data
                 if not tc_mesh.is_valid:
-                    raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in tc_mesh registry")
+                    raise RuntimeError(f"[glb_instantiator] TcMesh for '{glb_mesh.name}' is invalid")
 
                 meshes[mesh_idx] = tc_mesh
 
@@ -212,8 +216,8 @@ def _create_entity_from_node(
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, meshes, default_material, skinned_material,
-            glb_name, node_to_entity, pending_skinned, scene
+            child_index, scene_data, meshes, mesh_assets, default_material, skinned_material,
+            node_to_entity, pending_skinned, scene
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -272,6 +276,9 @@ def instantiate_glb(
     if scene_data is None:
         raise RuntimeError(f"[glb_instantiator] Failed to load GLBAsset '{glb_asset.name}'")
 
+    # Get mesh assets from GLBAsset
+    mesh_assets = glb_asset.get_mesh_assets()
+
     if name is None:
         name = glb_asset.name
 
@@ -307,9 +314,9 @@ def instantiate_glb(
                 scene_data.root_nodes[0],
                 scene_data,
                 meshes,
+                mesh_assets,
                 default_material,
                 skinned_material,
-                glb_name=name,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
                 scene=scene,
@@ -322,21 +329,25 @@ def instantiate_glb(
                     root_index,
                     scene_data,
                     meshes,
+                    mesh_assets,
                     default_material,
                     skinned_material,
-                    glb_name=name,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
                     scene=scene,
                 )
                 root_entity.transform.add_child(child_entity.transform)
     else:
+        # Fallback: no node hierarchy, create entities for each mesh directly
         root_entity = create_entity(name)
         for i, glb_mesh in enumerate(scene_data.meshes):
-            mesh_name = f"{name}_{glb_mesh.name}"
-            tc_mesh = TcMesh.from_name(mesh_name)
+            mesh_asset = mesh_assets.get(glb_mesh.name)
+            if mesh_asset is None or mesh_asset.data is None:
+                raise RuntimeError(f"[glb_instantiator] MeshAsset for '{glb_mesh.name}' not found or not loaded")
+
+            tc_mesh = mesh_asset.data
             if not tc_mesh.is_valid:
-                raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in tc_mesh registry")
+                raise RuntimeError(f"[glb_instantiator] TcMesh for '{glb_mesh.name}' is invalid")
 
             meshes[i] = tc_mesh
             mesh_entity = create_entity(glb_mesh.name)

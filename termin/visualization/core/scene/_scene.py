@@ -381,12 +381,12 @@ class Scene:
             self._register_migrated_child(child)
 
     def remove(self, entity: Entity):
-        # Remove from C core scene (frees entity in pool)
-        self._tc_scene.remove_entity(entity)
-
-        # Python-specific: emit Event and cleanup
+        # Emit event while entity is still valid
         self._on_entity_removed.emit(entity)
         entity.on_removed()
+
+        # Remove from C core (frees entity in pool, unregisters components)
+        self._tc_scene.remove_entity(entity)
 
     @property
     def on_entity_added(self) -> Event[Entity]:
@@ -523,11 +523,9 @@ class Scene:
         """Unregister component from tc_scene.
 
         Components are automatically removed from type lists.
+        Note: on_removed is called by C code in tc_entity_pool_free.
         """
         from termin.visualization.core.python_component import PythonComponent
-
-        # Notify component it's being removed
-        component.on_removed()
 
         # Unregister from TcScene (removes from type lists automatically)
         if isinstance(component, PythonComponent):
@@ -711,4 +709,6 @@ class Scene:
         self._on_entity_removed.clear()
 
         # Release C core scene
-        self._tc_scene = None
+        if self._tc_scene is not None:
+            self._tc_scene.destroy()
+            self._tc_scene = None

@@ -429,7 +429,7 @@ class VoxelDisplayComponent(PythonComponent):
         """Release all resources."""
         self._voxel_mesh = None
         if self._gpu is not None:
-            self._gpu.delete_resources()
+            self._gpu.delete()
             self._gpu = None
         self._material = None
 

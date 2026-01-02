@@ -137,7 +137,6 @@ class EntityListWidget(QWidget):
         - List[Entity] (C++ Entity pointers)
         - Mixed list
         """
-        log.debug(f"[EntityListWidget.set_value] items={items}, type={type(items)}")
         if items:
             for i, item in enumerate(items):
                 log.debug(f"  [{i}] type={type(item)}, value={item}")
@@ -158,7 +157,6 @@ class EntityListWidget(QWidget):
                         log.debug(f"  [EntityListWidget] Skipping invalid item: {item}")
             self._rebuild_list()
             self._update_buttons()
-            log.debug(f"[EntityListWidget.set_value] result: {len(self._handles)} handles")
         finally:
             self._updating = False
 
