@@ -156,10 +156,6 @@ class ColorPass(_ColorPassNative):
         canvas=None,
     ):
         """Execute color pass using C++ implementation."""
-        from termin._native import log
-
-        log.info(f"ColorPass[{self.pass_name}]: execute start")
-
         if lights is not None:
             scene.lights = lights
 
@@ -171,15 +167,10 @@ class ColorPass(_ColorPassNative):
             if not isinstance(shadow_array, ShadowMapArrayResource):
                 shadow_array = None
 
-        log.info(f"ColorPass[{self.pass_name}]: shadow_array={shadow_array}, len={len(shadow_array) if shadow_array else 0}")
-
         # Bind shadow maps to texture units
-        log.info(f"ColorPass[{self.pass_name}]: binding shadow maps")
         self._bind_shadow_maps(graphics, shadow_array)
-        log.info(f"ColorPass[{self.pass_name}]: shadow maps bound")
 
         # Get camera matrices
-        log.info(f"ColorPass[{self.pass_name}]: getting camera matrices")
         view = camera.get_view_matrix()
         projection = camera.get_projection_matrix()
 
@@ -200,8 +191,6 @@ class ColorPass(_ColorPassNative):
             ambient_color = np.asarray(ac, dtype=np.float64)
         ambient_intensity = float(scene.ambient_intensity)
 
-        log.info(f"ColorPass[{self.pass_name}]: calling execute_with_data, entities={len(list(scene.entities))}, lights={len(scene.lights) if scene.lights else 0}")
-
         # Call C++ execute_with_data
         # Debugger window and depth callback are already set on C++ object
         self.execute_with_data(
@@ -220,5 +209,3 @@ class ColorPass(_ColorPassNative):
             shadow_array=shadow_array,
             shadow_settings=scene.shadow_settings,
         )
-
-        log.info(f"ColorPass[{self.pass_name}]: execute done")

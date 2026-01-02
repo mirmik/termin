@@ -136,12 +136,22 @@ std::vector<MaterialPhase*> MeshRenderer::get_phases_for_mark(const std::string&
 }
 
 std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string* phase_mark) {
+    std::vector<GeometryDrawCall> result;
+
+    // Shadow phase: just need geometry, no material phase required
+    if (phase_mark != nullptr && *phase_mark == "shadow") {
+        if (cast_shadow) {
+            result.emplace_back(nullptr, "");
+        }
+        return result;
+    }
+
+    // For other phases, need material
     Material* mat = get_material();
     if (mat == nullptr) {
         return {};
     }
 
-    std::vector<GeometryDrawCall> result;
     for (auto& phase : mat->phases) {
         if (phase_mark == nullptr || phase_mark->empty() || phase.phase_mark == *phase_mark) {
             result.emplace_back(&phase, "");

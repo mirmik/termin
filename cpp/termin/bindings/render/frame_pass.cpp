@@ -1,6 +1,5 @@
 #include "common.hpp"
 #include <nanobind/stl/set.h>
-#include "tc_log.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
@@ -276,10 +275,7 @@ void bind_frame_pass(nb::module_& m) {
             nb::object shadow_array_py,
             nb::object shadow_settings_py
         ) {
-            tc::Log::info("ColorPass binding: start");
-
             // Convert FBO maps (skip non-FBO resources like ShadowMapArrayResource)
-            tc::Log::info("ColorPass binding: converting FBO maps");
             FBOMap reads_fbos, writes_fbos;
             for (auto item : reads_fbos_py) {
                 std::string key = nb::cast<std::string>(nb::str(item.first));
@@ -303,7 +299,6 @@ void bind_frame_pass(nb::module_& m) {
                     }
                 }
             }
-            tc::Log::info("ColorPass binding: FBO maps done");
 
             // Convert rect
             Rect4i rect;
@@ -313,12 +308,10 @@ void bind_frame_pass(nb::module_& m) {
             rect.height = nb::cast<int>(rect_py[3]);
 
             // Convert entities
-            tc::Log::info("ColorPass binding: converting %zu entities", nb::len(entities_py));
             std::vector<Entity> entities;
             for (auto item : entities_py) {
                 entities.push_back(nb::cast<Entity>(item));
             }
-            tc::Log::info("ColorPass binding: entities done");
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
             Mat44f view;
@@ -340,28 +333,22 @@ void bind_frame_pass(nb::module_& m) {
             Vec3 camera_position{camera_position_py(0), camera_position_py(1), camera_position_py(2)};
 
             // Convert lights
-            tc::Log::info("ColorPass binding: converting %zu lights", nb::len(lights_py));
             std::vector<Light> lights;
             for (auto item : lights_py) {
                 lights.push_back(nb::cast<Light>(item));
             }
-            tc::Log::info("ColorPass binding: lights done");
 
             // Convert ambient color
             Vec3 ambient_color{ambient_color_py(0), ambient_color_py(1), ambient_color_py(2)};
 
             // Convert shadow maps
-            tc::Log::info("ColorPass binding: converting shadow maps, is_none=%d", shadow_array_py.is_none());
             std::vector<ShadowMapEntry> shadow_maps;
             if (!shadow_array_py.is_none()) {
                 size_t count = nb::len(shadow_array_py);
-                tc::Log::info("ColorPass binding: shadow_array has %zu entries", count);
                 for (size_t i = 0; i < count; ++i) {
-                    tc::Log::info("ColorPass binding: processing shadow entry %zu", i);
                     nb::object entry = shadow_array_py[nb::int_(i)];
 
-                    // Get light_space_matrix as numpy array (compute_light_space_matrix returns float64)
-                    tc::Log::info("ColorPass binding: getting light_space_matrix");
+                    // Get light_space_matrix as numpy array
                     nb::ndarray<nb::numpy, double, nb::shape<4, 4>> matrix_py = nb::cast<nb::ndarray<nb::numpy, double, nb::shape<4, 4>>>(entry.attr("light_space_matrix"));
                     Mat44f matrix;
                     for (int row = 0; row < 4; ++row) {
@@ -369,27 +356,21 @@ void bind_frame_pass(nb::module_& m) {
                             matrix(col, row) = static_cast<float>(matrix_py(row, col));
                         }
                     }
-                    tc::Log::info("ColorPass binding: matrix converted");
 
                     int light_index = nb::cast<int>(entry.attr("light_index"));
-                    tc::Log::info("ColorPass binding: light_index=%d", light_index);
                     shadow_maps.emplace_back(matrix, light_index);
                 }
             }
-            tc::Log::info("ColorPass binding: shadow maps done, count=%zu", shadow_maps.size());
 
             // Convert shadow settings
-            tc::Log::info("ColorPass binding: converting shadow settings");
             ShadowSettings shadow_settings;
             if (!shadow_settings_py.is_none()) {
                 shadow_settings.method = nb::cast<int>(shadow_settings_py.attr("method"));
                 shadow_settings.softness = nb::cast<double>(shadow_settings_py.attr("softness"));
                 shadow_settings.bias = nb::cast<double>(shadow_settings_py.attr("bias"));
             }
-            tc::Log::info("ColorPass binding: shadow settings done");
 
             // Call C++ execute_with_data
-            tc::Log::info("ColorPass binding: calling C++ execute_with_data");
             self.execute_with_data(
                 graphics,
                 reads_fbos,
@@ -406,7 +387,6 @@ void bind_frame_pass(nb::module_& m) {
                 shadow_maps,
                 shadow_settings
             );
-            tc::Log::info("ColorPass binding: done");
         },
         nb::arg("graphics"),
         nb::arg("reads_fbos"),
