@@ -6,18 +6,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
+    QSplitter,
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
-    QDialogButtonBox,
     QPushButton,
     QLabel,
+    QTextEdit,
+    QWidget,
 )
 from PyQt6.QtCore import Qt
 
@@ -41,9 +43,11 @@ class ResourceManagerViewer(QDialog):
         super().__init__(parent)
         self._resource_manager = resource_manager
         self._project_file_watcher = project_file_watcher
+        self._selected_asset: Any = None
+        self._selected_asset_type: str = ""
 
         self.setWindowTitle("Resource Manager")
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(900, 600)
 
         self._init_ui()
         self.refresh()
@@ -52,26 +56,37 @@ class ResourceManagerViewer(QDialog):
         """Создаёт UI диалога."""
         layout = QVBoxLayout(self)
 
-        # Табы для разных типов ресурсов
+        # Splitter: левая часть - дерево, правая - детали
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        layout.addWidget(splitter)
+
+        # Левая панель с табами
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
         self._tab_widget = QTabWidget()
-        layout.addWidget(self._tab_widget)
+        left_layout.addWidget(self._tab_widget)
 
         # Материалы
         self._materials_tree = QTreeWidget()
-        self._materials_tree.setHeaderLabels(["Name", "Source", "Phases", "Shader"])
+        self._materials_tree.setHeaderLabels(["Name", "Status", "UUID"])
         self._materials_tree.setAlternatingRowColors(True)
+        self._materials_tree.itemClicked.connect(lambda item: self._on_item_clicked("material", item))
         self._tab_widget.addTab(self._materials_tree, "Materials")
 
         # Меши
         self._meshes_tree = QTreeWidget()
-        self._meshes_tree.setHeaderLabels(["Name", "Vertices", "Indices"])
+        self._meshes_tree.setHeaderLabels(["Name", "Status", "UUID"])
         self._meshes_tree.setAlternatingRowColors(True)
+        self._meshes_tree.itemClicked.connect(lambda item: self._on_item_clicked("mesh", item))
         self._tab_widget.addTab(self._meshes_tree, "Meshes")
 
         # Текстуры
         self._textures_tree = QTreeWidget()
-        self._textures_tree.setHeaderLabels(["Name", "Source", "Size"])
+        self._textures_tree.setHeaderLabels(["Name", "Status", "UUID"])
         self._textures_tree.setAlternatingRowColors(True)
+        self._textures_tree.itemClicked.connect(lambda item: self._on_item_clicked("texture", item))
         self._tab_widget.addTab(self._textures_tree, "Textures")
 
         # Компоненты (Python ResourceManager)
@@ -92,6 +107,31 @@ class ResourceManagerViewer(QDialog):
         self._watched_tree.setAlternatingRowColors(True)
         self._tab_widget.addTab(self._watched_tree, "Watched Files")
 
+        splitter.addWidget(left_widget)
+
+        # Правая панель - детали
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        details_label = QLabel("Details")
+        details_label.setStyleSheet("font-weight: bold;")
+        right_layout.addWidget(details_label)
+
+        self._details_text = QTextEdit()
+        self._details_text.setReadOnly(True)
+        self._details_text.setPlaceholderText("Select an asset to view details")
+        right_layout.addWidget(self._details_text)
+
+        # Кнопка Load
+        self._load_btn = QPushButton("Load Asset")
+        self._load_btn.setEnabled(False)
+        self._load_btn.clicked.connect(self._on_load_clicked)
+        right_layout.addWidget(self._load_btn)
+
+        splitter.addWidget(right_widget)
+        splitter.setSizes([600, 300])
+
         # Статус
         self._status_label = QLabel()
         layout.addWidget(self._status_label)
@@ -111,6 +151,117 @@ class ResourceManagerViewer(QDialog):
 
         layout.addLayout(button_layout)
 
+    def _on_item_clicked(self, asset_type: str, item: QTreeWidgetItem) -> None:
+        """Обработчик клика на элемент дерева."""
+        name = item.text(0)
+        self._selected_asset_type = asset_type
+        self._selected_asset = None
+
+        if asset_type == "mesh":
+            asset = self._resource_manager._mesh_assets.get(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_mesh_details(name, asset)
+        elif asset_type == "texture":
+            asset = self._resource_manager._texture_assets.get(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_texture_details(name, asset)
+        elif asset_type == "material":
+            mat = self._resource_manager.materials.get(name)
+            if mat:
+                self._selected_asset = mat
+                self._show_material_details(name, mat)
+
+        # Enable/disable load button
+        can_load = (
+            self._selected_asset is not None
+            and hasattr(self._selected_asset, 'is_loaded')
+            and not self._selected_asset.is_loaded
+        )
+        self._load_btn.setEnabled(can_load)
+
+    def _show_mesh_details(self, name: str, asset) -> None:
+        """Показать детали меша."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(none)'}",
+            f"Loaded: {asset.is_loaded}",
+        ]
+
+        if asset.is_loaded:
+            mesh = asset.data
+            if mesh is not None and mesh.is_valid:
+                lines.append(f"")
+                lines.append(f"=== Mesh Data ===")
+                lines.append(f"Vertices: {mesh.vertex_count}")
+                lines.append(f"Triangles: {mesh.triangle_count}")
+                lines.append(f"Stride: {mesh.stride}")
+                lines.append(f"TcMesh UUID: {mesh.uuid}")
+                lines.append(f"TcMesh Name: {mesh.name}")
+
+        self._details_text.setText("\n".join(lines))
+
+    def _show_texture_details(self, name: str, asset) -> None:
+        """Показать детали текстуры."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(none)'}",
+            f"Loaded: {asset.is_loaded}",
+        ]
+
+        if asset.is_loaded:
+            lines.append(f"")
+            lines.append(f"=== Texture Data ===")
+            lines.append(f"Size: {asset.width}x{asset.height}")
+
+        self._details_text.setText("\n".join(lines))
+
+    def _show_material_details(self, name: str, mat) -> None:
+        """Показать детали материала."""
+        lines = [
+            f"Name: {name}",
+            f"Source: {mat.source_path or '(inline)'}",
+            f"Shader: {getattr(mat, 'shader_path', None) or '(none)'}",
+            f"Phases: {len(mat.phases)}",
+        ]
+
+        for i, phase in enumerate(mat.phases):
+            lines.append(f"")
+            lines.append(f"=== Phase {i}: {phase.phase_mark} ===")
+            lines.append(f"Priority: {phase.priority}")
+            lines.append(f"Uniforms: {len(phase.uniforms)}")
+            for uname, uval in phase.uniforms.items():
+                lines.append(f"  {uname}: {uval}")
+            lines.append(f"Textures: {len(phase.textures)}")
+            for tname, tval in phase.textures.items():
+                lines.append(f"  {tname}: {tval}")
+
+        self._details_text.setText("\n".join(lines))
+
+    def _on_load_clicked(self) -> None:
+        """Загрузить выбранный ассет."""
+        if self._selected_asset is None:
+            return
+
+        if hasattr(self._selected_asset, 'ensure_loaded'):
+            self._selected_asset.ensure_loaded()
+        elif hasattr(self._selected_asset, 'data'):
+            # Accessing .data triggers lazy load
+            _ = self._selected_asset.data
+
+        self.refresh()
+
+        # Re-select to update details
+        if self._selected_asset_type == "mesh":
+            for i in range(self._meshes_tree.topLevelItemCount()):
+                item = self._meshes_tree.topLevelItem(i)
+                if item and item.text(0) == self._selected_asset._name:
+                    self._on_item_clicked("mesh", item)
+                    break
+
     def refresh(self) -> None:
         """Обновляет содержимое всех вкладок."""
         self._refresh_materials()
@@ -126,22 +277,12 @@ class ResourceManagerViewer(QDialog):
         self._materials_tree.clear()
 
         for name, mat in sorted(self._resource_manager.materials.items()):
-            source = mat.source_path or "(inline)"
-            phases = len(mat.phases)
-            shader_path = getattr(mat, 'shader_path', None) or ""
+            phases = f"{len(mat.phases)} phases"
+            # Materials don't have UUID in the same way
+            uuid_str = ""
 
-            item = QTreeWidgetItem([name, source, str(phases), shader_path])
+            item = QTreeWidgetItem([name, phases, uuid_str])
             self._materials_tree.addTopLevelItem(item)
-
-            # Добавляем фазы как дочерние элементы
-            for i, phase in enumerate(mat.phases):
-                phase_item = QTreeWidgetItem([
-                    f"Phase {i}: {phase.phase_mark}",
-                    f"priority={phase.priority}",
-                    f"uniforms: {len(phase.uniforms)}",
-                    f"textures: {len(phase.textures)}",
-                ])
-                item.addChild(phase_item)
 
         self._materials_tree.resizeColumnToContents(0)
         self._materials_tree.resizeColumnToContents(1)
@@ -151,42 +292,24 @@ class ResourceManagerViewer(QDialog):
         self._meshes_tree.clear()
 
         for name, asset in sorted(self._resource_manager._mesh_assets.items()):
-            # Don't load - just show status
-            if not asset.is_loaded:
-                item = QTreeWidgetItem([name, "(not loaded)", ""])
-                self._meshes_tree.addTopLevelItem(item)
-                continue
+            status = "loaded" if asset.is_loaded else "not loaded"
+            uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            vertices = "?"
-            indices = "?"
-
-            mesh = asset.data
-            if mesh is not None:
-                if hasattr(mesh, 'vertices') and mesh.vertices is not None:
-                    vertices = str(len(mesh.vertices))
-                if hasattr(mesh, 'triangles') and mesh.triangles is not None:
-                    indices = str(len(mesh.triangles) * 3)
-
-            item = QTreeWidgetItem([name, vertices, indices])
+            item = QTreeWidgetItem([name, status, uuid_str])
             self._meshes_tree.addTopLevelItem(item)
 
         self._meshes_tree.resizeColumnToContents(0)
+        self._meshes_tree.resizeColumnToContents(1)
 
     def _refresh_textures(self) -> None:
         """Обновляет список текстур."""
         self._textures_tree.clear()
 
         for name, asset in sorted(self._resource_manager._texture_assets.items()):
-            source = str(asset.source_path) if asset.source_path else "(generated)"
+            status = "loaded" if asset.is_loaded else "not loaded"
+            uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            # Don't load - just show status
-            if not asset.is_loaded:
-                item = QTreeWidgetItem([name, source, "(not loaded)"])
-                self._textures_tree.addTopLevelItem(item)
-                continue
-
-            size = f"{asset.width}x{asset.height}"
-            item = QTreeWidgetItem([name, source, size])
+            item = QTreeWidgetItem([name, status, uuid_str])
             self._textures_tree.addTopLevelItem(item)
 
         self._textures_tree.resizeColumnToContents(0)

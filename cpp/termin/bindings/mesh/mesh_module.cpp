@@ -34,7 +34,14 @@ void register_tc_mesh_kind() {
                 return termin::TcMesh();
             }
             std::string uuid = it->second.as_string();
-            return termin::TcMesh::from_uuid(uuid);
+            termin::TcMesh mesh = termin::TcMesh::from_uuid(uuid);
+            if (!mesh.is_valid()) {
+                auto name_it = dict.find("name");
+                std::string name = (name_it != dict.end() && name_it->second.is_string())
+                    ? name_it->second.as_string() : "";
+                tc::Log::warn("tc_mesh deserialize: mesh not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
+            }
+            return mesh;
         },
         // to_python: std::any(TcMesh) → nb::object
         [](const std::any& value) -> nb::object {
@@ -68,7 +75,12 @@ void register_tc_mesh_kind() {
                 return nb::cast(termin::TcMesh());
             }
             std::string uuid = nb::cast<std::string>(d["uuid"]);
-            return nb::cast(termin::TcMesh::from_uuid(uuid));
+            termin::TcMesh mesh = termin::TcMesh::from_uuid(uuid);
+            if (!mesh.is_valid()) {
+                std::string name = d.contains("name") ? nb::cast<std::string>(d["name"]) : "";
+                tc::Log::warn("tc_mesh deserialize: mesh not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
+            }
+            return nb::cast(mesh);
         }),
         // convert
         nb::cpp_function([](nb::object value) -> nb::object {
