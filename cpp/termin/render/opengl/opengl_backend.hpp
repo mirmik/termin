@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "tc_log.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/opengl/opengl_shader.hpp"
 #include "termin/render/opengl/opengl_texture.hpp"
@@ -173,6 +174,26 @@ public:
 
         glDisable(GL_STENCIL_TEST);
         glDisable(GL_SCISSOR_TEST);
+    }
+
+    void reset_gl_state() override {
+        // Reset active texture unit to 0
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Unbind shader program
+        glUseProgram(0);
+
+        // Unbind VAO
+        glBindVertexArray(0);
+
+        // Unbind buffers
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        // Reset render state
+        reset_state();
+
     }
 
     void apply_render_state(const RenderState& state) override {

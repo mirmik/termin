@@ -222,6 +222,8 @@ static void process_pending_start(tc_scene* s, bool editor_mode) {
 void tc_scene_update(tc_scene* s, double dt) {
     if (!s) return;
 
+    bool profile = tc_profiler_enabled();
+
     // 1. Process pending start
     process_pending_start(s, false);
 
@@ -231,7 +233,9 @@ void tc_scene_update(tc_scene* s, double dt) {
         for (size_t i = 0; i < s->fixed_update_list.count; i++) {
             tc_component* c = s->fixed_update_list.items[i];
             if (c->enabled) {
+                if (profile) tc_profiler_begin_section(tc_component_type_name(c));
                 tc_component_fixed_update(c, (float)s->fixed_timestep);
+                if (profile) tc_profiler_end_section();
             }
         }
         s->accumulated_time -= s->fixed_timestep;
@@ -241,7 +245,9 @@ void tc_scene_update(tc_scene* s, double dt) {
     for (size_t i = 0; i < s->update_list.count; i++) {
         tc_component* c = s->update_list.items[i];
         if (c->enabled) {
+            if (profile) tc_profiler_begin_section(tc_component_type_name(c));
             tc_component_update(c, (float)dt);
+            if (profile) tc_profiler_end_section();
         }
     }
 

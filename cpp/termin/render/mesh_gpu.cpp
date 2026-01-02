@@ -11,11 +11,20 @@ void MeshGPU::draw(
 ) {
     if (!mesh) return;
 
+    // Get current cached mesh (may be null if handle is stale)
+    tc_mesh* cached = tc_mesh_get(_cached_handle);
+
     // Update cached mesh reference
-    if (_cached_mesh != mesh) {
-        if (_cached_mesh) tc_mesh_release(_cached_mesh);
-        _cached_mesh = const_cast<tc_mesh*>(mesh);
-        tc_mesh_add_ref(_cached_mesh);
+    if (cached != mesh) {
+        if (cached) {
+            tc_mesh_release(cached);
+        }
+        // Find handle for new mesh
+        _cached_handle = tc_mesh_find(mesh->header.uuid);
+        if (tc_mesh_handle_is_invalid(_cached_handle)) {
+            return;
+        }
+        tc_mesh_add_ref(const_cast<tc_mesh*>(mesh));
     }
 
     // Check if we need to re-upload

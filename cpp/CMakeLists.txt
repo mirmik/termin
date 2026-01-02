@@ -317,6 +317,7 @@ nanobind_add_module(_native
     termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp
     termin/render/color_pass.cpp
+    termin/render/shadow_pass.cpp
     termin/render/drawable.cpp
     termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c

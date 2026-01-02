@@ -29,25 +29,48 @@ public:
     // GPU handles per context (shared_ptr for nanobind compatibility)
     std::unordered_map<int64_t, std::shared_ptr<GPUMeshHandle>> handles;
 
-    // Cached mesh pointer (with ref count)
-    tc_mesh* _cached_mesh = nullptr;
+    // Cached mesh handle (safe - uses generation checking)
+    tc_mesh_handle _cached_handle = tc_mesh_handle_invalid();
 
     MeshGPU() = default;
 
     ~MeshGPU() {
-        if (_cached_mesh) {
-            tc_mesh_release(_cached_mesh);
-            _cached_mesh = nullptr;
+        if (tc_mesh* m = tc_mesh_get(_cached_handle)) {
+            tc_mesh_release(m);
         }
+        _cached_handle = tc_mesh_handle_invalid();
     }
 
     // Non-copyable (owns GPU resources)
     MeshGPU(const MeshGPU&) = delete;
     MeshGPU& operator=(const MeshGPU&) = delete;
 
-    // Movable
-    MeshGPU(MeshGPU&&) = default;
-    MeshGPU& operator=(MeshGPU&&) = default;
+    // Movable - transfer handle ownership
+    MeshGPU(MeshGPU&& other) noexcept
+        : uploaded_version(other.uploaded_version)
+        , handles(std::move(other.handles))
+        , _cached_handle(other._cached_handle)
+    {
+        other._cached_handle = tc_mesh_handle_invalid();
+        other.uploaded_version = -1;
+    }
+
+    MeshGPU& operator=(MeshGPU&& other) noexcept {
+        if (this != &other) {
+            // Release our current mesh
+            if (tc_mesh* m = tc_mesh_get(_cached_handle)) {
+                tc_mesh_release(m);
+            }
+            // Move from other
+            uploaded_version = other.uploaded_version;
+            handles = std::move(other.handles);
+            _cached_handle = other._cached_handle;
+            // Null out other
+            other._cached_handle = tc_mesh_handle_invalid();
+            other.uploaded_version = -1;
+        }
+        return *this;
+    }
 
     /**
      * Check if any GPU data is uploaded.
@@ -89,10 +112,10 @@ public:
     void delete_resources() {
         invalidate();
         uploaded_version = -1;
-        if (_cached_mesh) {
-            tc_mesh_release(_cached_mesh);
-            _cached_mesh = nullptr;
+        if (tc_mesh* m = tc_mesh_get(_cached_handle)) {
+            tc_mesh_release(m);
         }
+        _cached_handle = tc_mesh_handle_invalid();
     }
 };
 

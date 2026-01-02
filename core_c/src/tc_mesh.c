@@ -131,12 +131,9 @@ void tc_mesh_add_ref(tc_mesh* mesh) {
 
 bool tc_mesh_release(tc_mesh* mesh) {
     if (!mesh) {
-        tc_log_warn("tc_mesh_release: null mesh");
         return false;
     }
     if (mesh->header.ref_count == 0) {
-        tc_log_warn("tc_mesh_release: '%s' [%s] already at ref_count=0",
-            mesh->header.name ? mesh->header.name : "?", mesh->header.uuid);
         return false;
     }
 

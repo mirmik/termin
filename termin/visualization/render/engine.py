@@ -306,11 +306,39 @@ class RenderEngine:
                     canvas=view.canvas,
                 )
 
+            # Проверяем GL ошибки после пасса
+            self._check_gl_errors(render_pass.pass_name)
+
             # После выполнения пасса обновляем ресурсы в пуле
             # (пасс мог создать новые ресурсы, например ShadowMapArray)
             for name in render_pass.writes:
                 if name in pass_writes and pass_writes[name] is not None:
                     resources[name] = pass_writes[name]
+
+    def _check_gl_errors(self, pass_name: str) -> None:
+        """Проверяет и логирует GL ошибки после выполнения пасса."""
+        import OpenGL.GL as gl
+        from termin._native import log
+
+        GL_ERROR_NAMES = {
+            gl.GL_INVALID_ENUM: "GL_INVALID_ENUM",
+            gl.GL_INVALID_VALUE: "GL_INVALID_VALUE",
+            gl.GL_INVALID_OPERATION: "GL_INVALID_OPERATION",
+            gl.GL_STACK_OVERFLOW: "GL_STACK_OVERFLOW",
+            gl.GL_STACK_UNDERFLOW: "GL_STACK_UNDERFLOW",
+            gl.GL_OUT_OF_MEMORY: "GL_OUT_OF_MEMORY",
+            gl.GL_INVALID_FRAMEBUFFER_OPERATION: "GL_INVALID_FRAMEBUFFER_OPERATION",
+        }
+
+        while True:
+            err = gl.glGetError()
+            if err == gl.GL_NO_ERROR:
+                break
+            error_key = f"{pass_name}:{err}"
+            if error_key not in self._logged_errors:
+                self._logged_errors.add(error_key)
+                error_name = GL_ERROR_NAMES.get(err, f"UNKNOWN(0x{err:x})")
+                log.error(f"GL error {error_name} (0x{err:x}) after pass '{pass_name}'")
 
     def _ensure_fbo(
         self,

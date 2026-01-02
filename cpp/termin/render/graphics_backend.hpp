@@ -64,6 +64,9 @@ public:
     virtual void reset_state() = 0;
     virtual void apply_render_state(const RenderState& state) = 0;
 
+    // Reset full GL state (textures, shader, etc.) for PyOpenGL compatibility
+    virtual void reset_gl_state() = 0;
+
     // --- Resource creation ---
     virtual ShaderHandlePtr create_shader(
         const char* vertex_source,
