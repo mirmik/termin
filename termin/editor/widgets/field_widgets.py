@@ -679,7 +679,7 @@ class FieldWidgetFactory:
 
             return Vec3ListWidget()
 
-        if kind == "entity_handle_list" or kind == "list[entity_handle]":
+        if kind == "entity_list" or kind == "list[entity]":
             from termin.editor.widgets.entity_list_widget import EntityListWidget
 
             return EntityListWidget(read_only=field.read_only)
