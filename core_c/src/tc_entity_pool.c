@@ -415,7 +415,7 @@ static void pool_grow(tc_entity_pool* pool) {
     pool->capacity = new_cap;
 }
 
-tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
+tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* name, const char* uuid) {
     if (pool->free_count == 0) {
         pool_grow(pool);
     }
@@ -448,11 +448,15 @@ tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
     free(pool->names[idx]);
     pool->names[idx] = str_dup(name ? name : "entity");
 
-    // Generate UUID
+    // Set UUID - use provided or generate auto
     free(pool->uuids[idx]);
-    char uuid_buf[64];
-    snprintf(uuid_buf, sizeof(uuid_buf), "%016llx", (unsigned long long)pool->next_runtime_id);
-    pool->uuids[idx] = str_dup(uuid_buf);
+    if (uuid && uuid[0]) {
+        pool->uuids[idx] = str_dup(uuid);
+    } else {
+        char uuid_buf[64];
+        snprintf(uuid_buf, sizeof(uuid_buf), "%016llx", (unsigned long long)pool->next_runtime_id);
+        pool->uuids[idx] = str_dup(uuid_buf);
+    }
 
     pool->runtime_ids[idx] = pool->next_runtime_id++;
     pool->parent_indices[idx] = UINT32_MAX;
@@ -473,6 +477,10 @@ tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
     tc_u32_map_set(pool->by_pick_id, pool->pick_ids[idx], pack_entity_id(result));
 
     return result;
+}
+
+tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
+    return tc_entity_pool_alloc_with_uuid(pool, name, NULL);
 }
 
 void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
@@ -567,6 +575,25 @@ void tc_entity_pool_set_name(tc_entity_pool* pool, tc_entity_id id, const char* 
 const char* tc_entity_pool_uuid(const tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) return NULL;
     return pool->uuids[id.index];
+}
+
+void tc_entity_pool_set_uuid(tc_entity_pool* pool, tc_entity_id id, const char* uuid) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!uuid) return;
+
+    uint32_t idx = id.index;
+
+    // Remove old UUID from hash map
+    if (pool->uuids[idx]) {
+        tc_str_map_remove(pool->by_uuid, pool->uuids[idx]);
+        free(pool->uuids[idx]);
+    }
+
+    // Set new UUID
+    pool->uuids[idx] = str_dup(uuid);
+
+    // Register in hash map
+    tc_str_map_set(pool->by_uuid, pool->uuids[idx], pack_entity_id(id));
 }
 
 uint64_t tc_entity_pool_runtime_id(const tc_entity_pool* pool, tc_entity_id id) {

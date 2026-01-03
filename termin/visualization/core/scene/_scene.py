@@ -650,24 +650,44 @@ class Scene:
             self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
 
         entities_data = data.get("entities", [])
+
+        # Two-phase deserialization:
+        # Phase 1: Create all entities with hierarchy (no components)
+        # Phase 2: Deserialize components (now all entities exist for reference resolution)
+
+        # Collect (entity, data) pairs for phase 2
+        entity_data_pairs: list[tuple[Entity, dict]] = []
+
         for ent_data in entities_data:
-            self._deserialize_entity_recursive(ent_data, context)
+            self._deserialize_entity_hierarchy(ent_data, context, entity_data_pairs)
+
+        # Phase 2: Deserialize components for all entities
+        for ent, ent_data in entity_data_pairs:
+            Entity.deserialize_components(ent, ent_data, context, scene=self)
 
         return len(entities_data)
 
-    def _deserialize_entity_recursive(self, data: dict, context=None) -> Entity | None:
-        """Deserialize entity with children recursively.
+    def _deserialize_entity_hierarchy(
+        self,
+        data: dict,
+        context,
+        entity_data_pairs: list[tuple[Entity, dict]]
+    ) -> Entity | None:
+        """Phase 1: Create entity with children, no components.
 
-        Entity is created directly in scene's pool and components are
-        auto-registered via add_component.
+        Recursively creates entity hierarchy and collects (entity, data) pairs
+        for component deserialization in phase 2.
         """
-        ent = Entity.deserialize(data, context, scene=self)
+        ent = Entity.deserialize_base(data, context, scene=self)
         if ent is None:
             return None
 
+        # Collect for phase 2
+        entity_data_pairs.append((ent, data))
+
         # Deserialize children and set parent
         for child_data in data.get("children", []):
-            child = self._deserialize_entity_recursive(child_data, context)
+            child = self._deserialize_entity_hierarchy(child_data, context, entity_data_pairs)
             if child:
                 child.set_parent(ent)
 

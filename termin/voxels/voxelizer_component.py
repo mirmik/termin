@@ -1256,9 +1256,12 @@ void main() {
         all_colors: list[np.ndarray] = []
         vertex_offset = 0
 
+        normal_offset = 0.15  # Смещение по нормали для видимости
+
         for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
             region_color = region_colors[region_idx]
             up_hint = np.array(region_normal, dtype=np.float32)
+            offset_vec = up_hint * normal_offset
 
             # Получаем контуры на стадии "simplified"
             outer_3d, holes_3d = builder.get_region_contours(
@@ -1278,6 +1281,8 @@ void main() {
                 ribbon_verts, ribbon_tris = _build_line_ribbon(points, line_width, up_hint)
 
                 if len(ribbon_tris) > 0:
+                    # Смещаем по нормали для видимости
+                    ribbon_verts = ribbon_verts + offset_vec
                     all_vertices.append(ribbon_verts)
                     all_triangles.append(ribbon_tris + vertex_offset)
                     contour_colors = np.full((len(ribbon_verts), 3), region_color, dtype=np.float32)
@@ -1295,6 +1300,8 @@ void main() {
                 hole_ribbon_verts, hole_ribbon_tris = _build_line_ribbon(hole_points, line_width, up_hint)
 
                 if len(hole_ribbon_tris) > 0:
+                    # Смещаем по нормали для видимости
+                    hole_ribbon_verts = hole_ribbon_verts + offset_vec
                     all_vertices.append(hole_ribbon_verts)
                     all_triangles.append(hole_ribbon_tris + vertex_offset)
                     # Дырки более тёмные

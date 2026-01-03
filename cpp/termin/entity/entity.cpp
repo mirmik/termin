@@ -2,7 +2,6 @@
 #include "component.hpp"
 #include "../../../core_c/include/tc_scene.h"
 #include <algorithm>
-#include <iostream>
 
 namespace termin {
 
@@ -52,10 +51,13 @@ tc_entity_pool* Entity::standalone_pool() {
 Entity Entity::create(tc_entity_pool* pool, const std::string& name) {
     if (!pool) return Entity();
     tc_entity_id id = tc_entity_pool_alloc(pool, name.c_str());
-    Entity ent(pool, id);
-    // Set back-pointer to this entity (for component->entity lookup)
-    // Note: Entity is copyable now, so back-pointer points to storage location
-    return ent;
+    return Entity(pool, id);
+}
+
+Entity Entity::create_with_uuid(tc_entity_pool* pool, const std::string& name, const std::string& uuid) {
+    if (!pool) return Entity();
+    tc_entity_id id = tc_entity_pool_alloc_with_uuid(pool, name.c_str(), uuid.c_str());
+    return Entity(pool, id);
 }
 
 void Entity::add_component(Component* component) {

@@ -67,6 +67,7 @@ TC_POOL_API tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool);
 // ============================================================================
 
 TC_POOL_API tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name);
+TC_POOL_API tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* name, const char* uuid);
 TC_POOL_API void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API bool tc_entity_pool_alive(const tc_entity_pool* pool, tc_entity_id id);
 
@@ -82,6 +83,7 @@ TC_POOL_API const char* tc_entity_pool_name(const tc_entity_pool* pool, tc_entit
 TC_POOL_API void tc_entity_pool_set_name(tc_entity_pool* pool, tc_entity_id id, const char* name);
 
 TC_POOL_API const char* tc_entity_pool_uuid(const tc_entity_pool* pool, tc_entity_id id);
+TC_POOL_API void tc_entity_pool_set_uuid(tc_entity_pool* pool, tc_entity_id id, const char* uuid);
 TC_POOL_API uint64_t tc_entity_pool_runtime_id(const tc_entity_pool* pool, tc_entity_id id);
 
 // Flags (hot data)

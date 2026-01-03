@@ -555,6 +555,204 @@ void bind_entity_class(nb::module_& m) {
             }
         }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
 
+        // Phase 1: Create entity with properties but NO components
+        .def_static("deserialize_base", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
+            try {
+                if (data.is_none() || !nb::isinstance<nb::dict>(data)) {
+                    return nb::none();
+                }
+
+                nb::dict dict_data = nb::cast<nb::dict>(data);
+
+                std::string name = "entity";
+                if (dict_data.contains("name")) {
+                    name = nb::cast<std::string>(dict_data["name"]);
+                }
+
+                std::string uuid_str;
+                if (dict_data.contains("uuid")) {
+                    uuid_str = nb::cast<std::string>(dict_data["uuid"]);
+                }
+
+                // Get pool from scene or use standalone
+                tc_entity_pool* pool = nullptr;
+                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
+                    nb::object tc_scene_obj = scene.attr("_tc_scene");
+                    if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
+                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
+                        pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
+                    }
+                }
+                if (!pool) {
+                    pool = get_standalone_pool();
+                }
+                if (!pool) {
+                    tc::Log::error("Entity::deserialize_base: pool is null");
+                    return nb::none();
+                }
+
+                // Create entity with UUID directly to avoid hash map collisions
+                Entity ent = uuid_str.empty()
+                    ? Entity::create(pool, name)
+                    : Entity::create_with_uuid(pool, name, uuid_str);
+                if (!ent.valid()) {
+                    tc::Log::error("Entity::deserialize_base: failed to create entity '%s'", name.c_str());
+                    return nb::none();
+                }
+
+                // Restore flags
+                if (dict_data.contains("priority")) {
+                    ent.set_priority(nb::cast<int>(dict_data["priority"]));
+                }
+                if (dict_data.contains("visible")) {
+                    ent.set_visible(nb::cast<bool>(dict_data["visible"]));
+                }
+                if (dict_data.contains("active")) {
+                    ent.set_active(nb::cast<bool>(dict_data["active"]));
+                }
+                if (dict_data.contains("pickable")) {
+                    ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
+                }
+                if (dict_data.contains("selectable")) {
+                    ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
+                }
+                if (dict_data.contains("layer")) {
+                    ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
+                }
+                if (dict_data.contains("flags")) {
+                    ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
+                }
+
+                // Restore pose
+                if (dict_data.contains("pose")) {
+                    nb::object pose_obj = dict_data["pose"];
+                    if (nb::isinstance<nb::dict>(pose_obj)) {
+                        nb::dict pose = nb::cast<nb::dict>(pose_obj);
+                        if (pose.contains("position")) {
+                            nb::list pos = nb::cast<nb::list>(pose["position"]);
+                            if (nb::len(pos) >= 3) {
+                                double xyz[3] = {
+                                    nb::cast<double>(pos[0]),
+                                    nb::cast<double>(pos[1]),
+                                    nb::cast<double>(pos[2])
+                                };
+                                ent.set_local_position(xyz);
+                            }
+                        }
+                        if (pose.contains("rotation")) {
+                            nb::list rot = nb::cast<nb::list>(pose["rotation"]);
+                            if (nb::len(rot) >= 4) {
+                                double xyzw[4] = {
+                                    nb::cast<double>(rot[0]),
+                                    nb::cast<double>(rot[1]),
+                                    nb::cast<double>(rot[2]),
+                                    nb::cast<double>(rot[3])
+                                };
+                                ent.set_local_rotation(xyzw);
+                            }
+                        }
+                    }
+                }
+
+                // Restore scale
+                if (dict_data.contains("scale")) {
+                    nb::list scl = nb::cast<nb::list>(dict_data["scale"]);
+                    if (nb::len(scl) >= 3) {
+                        double xyz[3] = {
+                            nb::cast<double>(scl[0]),
+                            nb::cast<double>(scl[1]),
+                            nb::cast<double>(scl[2])
+                        };
+                        ent.set_local_scale(xyz);
+                    }
+                }
+
+                return nb::cast(ent);
+            } catch (const std::exception& e) {
+                tc::Log::error(e, "Entity::deserialize_base");
+                return nb::none();
+            }
+        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
+
+        // Phase 2: Deserialize components for existing entity
+        .def_static("deserialize_components", [](nb::object py_entity, nb::object data, nb::object context, nb::object scene) {
+            try {
+                if (py_entity.is_none() || data.is_none()) return;
+
+                Entity ent = nb::cast<Entity>(py_entity);
+                if (!ent.valid()) return;
+
+                nb::dict dict_data = nb::cast<nb::dict>(data);
+                if (!dict_data.contains("components")) return;
+
+                nb::object comp_list_obj = dict_data["components"];
+                if (!nb::isinstance<nb::list>(comp_list_obj)) return;
+                nb::list components = nb::cast<nb::list>(comp_list_obj);
+
+                // Get scene pointer for entity reference resolution
+                tc_scene* c_scene = nullptr;
+                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
+                    nb::object tc_scene_obj = scene.attr("_tc_scene");
+                    if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                        uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                        c_scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                    }
+                }
+
+                auto& registry = ComponentRegistry::instance();
+
+                for (size_t i = 0; i < nb::len(components); ++i) {
+                    nb::object comp_data_item = components[i];
+                    if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
+                    nb::dict comp_data = nb::cast<nb::dict>(comp_data_item);
+
+                    if (!comp_data.contains("type")) continue;
+                    std::string type_name = nb::cast<std::string>(comp_data["type"]);
+
+                    if (!registry.has(type_name)) {
+                        tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
+                        continue;
+                    }
+
+                    try {
+                        nb::object comp = registry.create(type_name);
+                        if (comp.is_none()) continue;
+
+                        nb::object data_field;
+                        if (comp_data.contains("data")) {
+                            data_field = comp_data["data"];
+                        } else {
+                            data_field = nb::dict();
+                        }
+
+                        const auto* info = registry.get_info(type_name);
+                        if (info && info->kind == TC_CXX_COMPONENT) {
+                            if (nb::isinstance<nb::dict>(data_field)) {
+                                nb::dict data_dict = nb::cast<nb::dict>(data_field);
+                                void* raw_ptr = nb::inst_ptr<void>(comp);
+                                InspectRegistry::instance().deserialize_component_fields_over_python(
+                                    raw_ptr, comp, type_name, data_dict, c_scene);
+                            }
+                        } else {
+                            if (nb::hasattr(comp, "deserialize_data")) {
+                                comp.attr("deserialize_data")(data_field, context);
+                            }
+                        }
+
+                        py_entity.attr("add_component")(comp);
+
+                        if (!ent.validate_components()) {
+                            tc::Log::error("Component validation failed after adding %s", type_name.c_str());
+                        }
+                    } catch (const std::exception& e) {
+                        tc::Log::warn(e, "Failed to deserialize component %s", type_name.c_str());
+                    }
+                }
+            } catch (const std::exception& e) {
+                tc::Log::error(e, "Entity::deserialize_components");
+            }
+        }, nb::arg("entity"), nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
+
         .def_static("deserialize_with_children", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
             std::function<nb::object(nb::object, nb::object, nb::object)> deserialize_recursive;
             deserialize_recursive = [&deserialize_recursive](nb::object data, nb::object context, nb::object scene) -> nb::object {

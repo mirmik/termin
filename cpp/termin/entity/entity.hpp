@@ -34,6 +34,7 @@ public:
 
     // Create new entity in pool
     static Entity create(tc_entity_pool* pool, const std::string& name = "entity");
+    static Entity create_with_uuid(tc_entity_pool* pool, const std::string& name, const std::string& uuid);
 
     // Get global standalone pool (for entities/transforms created outside of Scene)
     static tc_entity_pool* standalone_pool();
@@ -49,6 +50,7 @@ public:
     // --- Identity ---
 
     const char* uuid() const { return tc_entity_pool_uuid(_pool, _id); }
+    void set_uuid(const char* uuid) { tc_entity_pool_set_uuid(_pool, _id, uuid); }
     uint64_t runtime_id() const { return tc_entity_pool_runtime_id(_pool, _id); }
     uint32_t pick_id() const { return tc_entity_pool_pick_id(_pool, _id); }
 
