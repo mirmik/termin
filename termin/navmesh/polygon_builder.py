@@ -95,6 +95,10 @@ class PolygonBuilder:
         # Шаг 2.3: Жадное поглощение — большие регионы поглощают воксели меньших
         regions = self._greedy_absorption(regions, surface_voxels)
 
+        # Шаг 2.4: Воксели с несколькими нормалями добавляются во все совместимые регионы
+        # (отключено — плохо работает)
+        # regions = self._add_multi_normal_voxels_to_regions(regions, surface_voxels)
+
         # Шаг 2.5: Расширяем регионы (опционально)
         # После этого шага воксели могут входить в несколько регионов
         if expand_regions:
@@ -367,36 +371,61 @@ class PolygonBuilder:
 
             total_absorbed += absorbed_this_region
 
-            # Прореживание висящих вокселей после поглощения
-            # Удаляем воксели с менее чем 2 соседями из этого региона
-            pruned_this_region = 0
-            prune_changed = True
-            while prune_changed and len(region_set) > 2:
-                prune_changed = False
-                to_prune: list[tuple[int, int, int]] = []
+            # Перераспределение висячих вокселей в регион с большинством соседей
+            redistributed_this_region = 0
+            redistribute_changed = True
+            while redistribute_changed and len(region_set) > 1:
+                redistribute_changed = False
+                to_redistribute: list[tuple[tuple[int, int, int], int]] = []  # (voxel, target_region)
 
-                for voxel in region_set:
+                for voxel in list(region_set):
                     vx, vy, vz = voxel
-                    neighbor_count = 0
+                    # Считаем соседей в текущем регионе
+                    neighbors_in_current = 0
                     for dx, dy, dz in NEIGHBORS_26:
                         neighbor = (vx + dx, vy + dy, vz + dz)
                         if neighbor in region_set:
-                            neighbor_count += 1
+                            neighbors_in_current += 1
 
-                    if neighbor_count < 2:
-                        to_prune.append(voxel)
+                    # Если мало соседей — ищем лучший регион
+                    if neighbors_in_current < 2:
+                        # Считаем соседей в других регионах
+                        neighbor_counts: dict[int, int] = {}
+                        for dx, dy, dz in NEIGHBORS_26:
+                            neighbor = (vx + dx, vy + dy, vz + dz)
+                            if neighbor in voxel_to_region:
+                                other_idx = voxel_to_region[neighbor]
+                                if other_idx != region_idx:
+                                    neighbor_counts[other_idx] = neighbor_counts.get(other_idx, 0) + 1
 
-                for voxel in to_prune:
+                        # Ищем регион с максимумом соседей, допустимый по нормали
+                        best_region = None
+                        best_count = neighbors_in_current
+                        voxel_normals = surface_voxels.get(voxel, [])
+
+                        for other_idx, count in neighbor_counts.items():
+                            if count > best_count:
+                                # Проверяем допустимость по нормали
+                                other_normal = region_normals[other_idx]
+                                for vn in voxel_normals:
+                                    if np.dot(vn, other_normal) >= threshold:
+                                        best_region = other_idx
+                                        best_count = count
+                                        break
+
+                        if best_region is not None:
+                            to_redistribute.append((voxel, best_region))
+
+                for voxel, target_idx in to_redistribute:
                     region_set.discard(voxel)
-                    # Возвращаем воксель в "ничей" — удаляем из voxel_to_region
-                    if voxel in voxel_to_region:
-                        del voxel_to_region[voxel]
-                    prune_changed = True
-                    pruned_this_region += 1
+                    region_sets[target_idx].add(voxel)
+                    voxel_to_region[voxel] = target_idx
+                    redistribute_changed = True
+                    redistributed_this_region += 1
 
-            total_pruned += pruned_this_region
+            total_pruned += redistributed_this_region  # Используем total_pruned для статистики
 
-            if absorbed_this_region > 0 or pruned_this_region > 0:
+            if absorbed_this_region > 0 or redistributed_this_region > 0:
                 # Пересчитываем нормаль региона
                 normal_sum = np.zeros(3, dtype=np.float64)
                 for v in region_set:
@@ -416,8 +445,60 @@ class PolygonBuilder:
                 empty_count += 1
 
         print(f"PolygonBuilder: greedy absorption: {len(regions)} regions, "
-              f"absorbed {total_absorbed} voxels, pruned {total_pruned} hanging, "
+              f"absorbed {total_absorbed} voxels, redistributed {total_pruned} hanging, "
               f"removed {empty_count} empty regions, result: {len(result)} regions")
+
+        return result
+
+    def _add_multi_normal_voxels_to_regions(
+        self,
+        regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+        surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],
+    ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
+        """
+        Шаг 2.4: Воксели с несколькими нормалями добавляются во все совместимые регионы.
+
+        Для каждого вокселя с len(normals) > 1:
+        - Проверяем каждый регион
+        - Если нормаль региона совместима с любой из нормалей вокселя — добавляем
+        """
+        threshold = self.config.normal_threshold
+
+        # Собираем воксели с несколькими нормалями
+        multi_normal_voxels = {
+            v: normals for v, normals in surface_voxels.items()
+            if len(normals) > 1
+        }
+
+        if not multi_normal_voxels:
+            return regions
+
+        # Преобразуем регионы в sets для быстрой проверки и модификации
+        region_sets: list[set[tuple[int, int, int]]] = [set(voxels) for voxels, _ in regions]
+        region_normals: list[np.ndarray] = [normal for _, normal in regions]
+
+        added_count = 0
+
+        for voxel, voxel_normals in multi_normal_voxels.items():
+            for region_idx, region_normal in enumerate(region_normals):
+                # Пропускаем если воксель уже в этом регионе
+                if voxel in region_sets[region_idx]:
+                    continue
+
+                # Проверяем совместимость с любой из нормалей вокселя
+                for vn in voxel_normals:
+                    if np.dot(vn, region_normal) >= threshold:
+                        region_sets[region_idx].add(voxel)
+                        added_count += 1
+                        break
+
+        # Собираем результат
+        result = [
+            (list(region_sets[i]), region_normals[i])
+            for i in range(len(regions))
+        ]
+
+        print(f"PolygonBuilder: added {added_count} multi-normal voxels to additional regions")
 
         return result
 

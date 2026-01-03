@@ -157,7 +157,8 @@
               "stitch_contours": false,
               "share_boundary": false,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false
+              "show_boundary_voxels": false,
+              "show_region_voxels": false
             }
           },
           {
@@ -508,7 +509,8 @@
               "stitch_contours": false,
               "share_boundary": false,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false
+              "show_boundary_voxels": false,
+              "show_region_voxels": false
             }
           },
           {
@@ -603,7 +605,8 @@
               "stitch_contours": false,
               "share_boundary": true,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true
+              "show_boundary_voxels": true,
+              "show_region_voxels": false
             }
           },
           {
@@ -663,183 +666,6 @@
       },
       {
         "uuid": "0000000000000008",
-        "name": "Platform",
-        "priority": 0,
-        "visible": true,
-        "active": true,
-        "pickable": true,
-        "selectable": true,
-        "layer": 0,
-        "flags": 0,
-        "pose": {
-          "position": [
-            13.444427907466888,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0,
-            1
-          ]
-        },
-        "scale": [
-          1,
-          1,
-          1
-        ],
-        "components": [
-          {
-            "type": "VoxelizerComponent",
-            "data": {
-              "enabled": true,
-              "grid_name": "Platform",
-              "cell_size": 0.12,
-              "voxelize_mode": 4.0,
-              "voxelize_source": 0.0,
-              "output_path": "Voxels/Platform.voxels",
-              "navmesh_output_path": "Voxels/Platform.navmesh",
-              "normal_angle": 25.0,
-              "expand_regions": false,
-              "navmesh_stage": 0.0,
-              "contour_epsilon": 0.1,
-              "show_debug_voxels": false,
-              "show_debug_contours": false,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": true,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true
-            }
-          },
-          {
-            "type": "VoxelDisplayComponent",
-            "data": {
-              "enabled": true,
-              "voxel_grid": {
-                "uuid": "c848b7ee-2622-4587-9f61-344e7b7cccf5",
-                "type": "path",
-                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Voxels/Platform.voxels"
-              },
-              "color_below": [
-                0.2,
-                0.6,
-                1.0,
-                0.8
-              ],
-              "color_above": [
-                1.0,
-                0.3,
-                0.2,
-                0.8
-              ],
-              "fill_percent": 100.0,
-              "slice_axis": [
-                0.0,
-                0.0,
-                1.0
-              ],
-              "color_surface": [
-                0.2,
-                1.0,
-                0.3,
-                0.9
-              ]
-            }
-          }
-        ],
-        "children": [
-          {
-            "uuid": "0000000000000009",
-            "name": "A",
-            "priority": 0,
-            "visible": true,
-            "active": true,
-            "pickable": true,
-            "selectable": true,
-            "layer": 0,
-            "flags": 0,
-            "pose": {
-              "position": [
-                4.123572092533113,
-                0,
-                0
-              ],
-              "rotation": [
-                0,
-                0,
-                0,
-                1
-              ]
-            },
-            "scale": [
-              10,
-              10,
-              0.5
-            ],
-            "components": [
-              {
-                "type": "MeshRenderer",
-                "data": {
-                  "enabled": false,
-                  "mesh": {},
-                  "material": {
-                    "type": "none"
-                  },
-                  "cast_shadow": true
-                }
-              }
-            ],
-            "children": []
-          },
-          {
-            "uuid": "000000000000000a",
-            "name": "B",
-            "priority": 0,
-            "visible": true,
-            "active": true,
-            "pickable": true,
-            "selectable": true,
-            "layer": 0,
-            "flags": 0,
-            "pose": {
-              "position": [
-                11.64624610376358,
-                0,
-                3.839945251464844
-              ],
-              "rotation": [
-                0,
-                -0.4601145585047737,
-                0,
-                0.8878595570539054
-              ]
-            },
-            "scale": [
-              9.6,
-              10,
-              0.5
-            ],
-            "components": [
-              {
-                "type": "MeshRenderer",
-                "data": {
-                  "enabled": false,
-                  "mesh": {},
-                  "material": {
-                    "type": "none"
-                  },
-                  "cast_shadow": true
-                }
-              }
-            ],
-            "children": []
-          }
-        ]
-      },
-      {
-        "uuid": "000000000000000b",
         "name": "animcube",
         "priority": 0,
         "visible": true,
@@ -869,7 +695,7 @@
         "components": [],
         "children": [
           {
-            "uuid": "000000000000000c",
+            "uuid": "0000000000000009",
             "name": "Cube",
             "priority": 0,
             "visible": true,
@@ -914,7 +740,7 @@
         ]
       },
       {
-        "uuid": "000000000000000d",
+        "uuid": "000000000000000a",
         "name": "Light",
         "priority": 0,
         "visible": true,
@@ -930,10 +756,10 @@
             -0.4468865394592285
           ],
           "rotation": [
-            -0.7094985030164561,
-            -0.03247937341678645,
-            0.03530809367320712,
-            0.703072046835191
+            -0.7843558192253113,
+            -0.036258846521377563,
+            0.03141443803906441,
+            0.6184532046318054
           ]
         },
         "scale": [
@@ -961,7 +787,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000000e",
+        "uuid": "000000000000000b",
         "name": "Arti",
         "priority": 0,
         "visible": true,
@@ -991,7 +817,7 @@
         "components": [],
         "children": [
           {
-            "uuid": "000000000000000f",
+            "uuid": "000000000000000c",
             "name": "entity1",
             "priority": 0,
             "visible": true,
@@ -1034,7 +860,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000010",
+            "uuid": "000000000000000d",
             "name": "entity2",
             "priority": 0,
             "visible": true,
@@ -1078,7 +904,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000011",
+            "uuid": "000000000000000e",
             "name": "entity3",
             "priority": 0,
             "visible": true,
@@ -1121,7 +947,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000012",
+            "uuid": "000000000000000f",
             "name": "entity4",
             "priority": 0,
             "visible": true,
@@ -1166,7 +992,7 @@
         ]
       },
       {
-        "uuid": "0000000000000013",
+        "uuid": "0000000000000010",
         "name": "Physics",
         "priority": 0,
         "visible": true,
@@ -1204,7 +1030,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000014",
+        "uuid": "0000000000000011",
         "name": "[Root]",
         "priority": 0,
         "visible": true,
@@ -1235,7 +1061,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000015",
+        "uuid": "0000000000000012",
         "name": "FEMPhysics",
         "priority": 0,
         "visible": true,
@@ -1282,7 +1108,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000016",
+        "uuid": "0000000000000013",
         "name": "Joint",
         "priority": 0,
         "visible": true,
@@ -1337,7 +1163,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000017",
+        "uuid": "0000000000000014",
         "name": "Pendulum",
         "priority": 0,
         "visible": true,
@@ -1398,7 +1224,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000018",
+        "uuid": "0000000000000015",
         "name": "Pendulum2",
         "priority": 0,
         "visible": true,
@@ -1459,7 +1285,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000019",
+        "uuid": "0000000000000016",
         "name": "JointAB",
         "priority": 0,
         "visible": true,
@@ -1505,7 +1331,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000001a",
+        "uuid": "0000000000000017",
         "name": "TeleportCube",
         "priority": 0,
         "visible": true,
@@ -1558,7 +1384,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000001b",
+        "uuid": "0000000000000018",
         "name": "entity5",
         "priority": 0,
         "visible": true,
@@ -1620,7 +1446,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000001c",
+        "uuid": "0000000000000019",
         "name": "С2",
         "priority": 0,
         "visible": true,
@@ -1692,7 +1518,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000001d",
+        "uuid": "000000000000001a",
         "name": "entity6",
         "priority": 0,
         "visible": true,
@@ -1764,7 +1590,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000001e",
+        "uuid": "000000000000001b",
         "name": "entity7",
         "priority": 0,
         "visible": true,
@@ -1836,7 +1662,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000001f",
+        "uuid": "000000000000001c",
         "name": "entity8",
         "priority": 0,
         "visible": true,
@@ -1905,7 +1731,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000020",
+        "uuid": "000000000000001d",
         "name": "entity9",
         "priority": 0,
         "visible": true,
@@ -1977,7 +1803,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000021",
+        "uuid": "000000000000001e",
         "name": "entity10",
         "priority": 0,
         "visible": true,
@@ -2049,7 +1875,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000022",
+        "uuid": "000000000000001f",
         "name": "entity11",
         "priority": 0,
         "visible": true,
@@ -2121,7 +1947,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000023",
+        "uuid": "0000000000000020",
         "name": "entity12",
         "priority": 0,
         "visible": true,
@@ -2193,7 +2019,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000024",
+        "uuid": "0000000000000021",
         "name": "Walls",
         "priority": 0,
         "visible": true,
@@ -2223,7 +2049,7 @@
         "components": [],
         "children": [
           {
-            "uuid": "0000000000000025",
+            "uuid": "0000000000000022",
             "name": "entity14_copy_copy",
             "priority": 0,
             "visible": true,
@@ -2295,7 +2121,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000026",
+            "uuid": "0000000000000023",
             "name": "entity14_copy",
             "priority": 0,
             "visible": true,
@@ -2367,7 +2193,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000027",
+            "uuid": "0000000000000024",
             "name": "entity14_copy_copy_copy",
             "priority": 0,
             "visible": true,
@@ -2439,7 +2265,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000028",
+            "uuid": "0000000000000025",
             "name": "entity14",
             "priority": 0,
             "visible": true,
@@ -2513,7 +2339,7 @@
         ]
       },
       {
-        "uuid": "0000000000000029",
+        "uuid": "0000000000000026",
         "name": "entity12_copy",
         "priority": 0,
         "visible": true,
@@ -2585,7 +2411,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000002a",
+        "uuid": "0000000000000027",
         "name": "entity13",
         "priority": 0,
         "visible": true,
@@ -2656,7 +2482,7 @@
         ],
         "children": [
           {
-            "uuid": "000000000000002b",
+            "uuid": "0000000000000028",
             "name": "entity15",
             "priority": 0,
             "visible": true,
@@ -2730,7 +2556,7 @@
         ]
       },
       {
-        "uuid": "000000000000002c",
+        "uuid": "0000000000000029",
         "name": "entity12_copy_copy",
         "priority": 0,
         "visible": true,
@@ -2802,7 +2628,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000002d",
+        "uuid": "000000000000002a",
         "name": "entity12_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -2874,7 +2700,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000002e",
+        "uuid": "000000000000002b",
         "name": "entity12_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -2946,7 +2772,7 @@
         "children": []
       },
       {
-        "uuid": "000000000000002f",
+        "uuid": "000000000000002c",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3018,7 +2844,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000030",
+        "uuid": "000000000000002d",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3090,7 +2916,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000031",
+        "uuid": "000000000000002e",
         "name": "entity12_copy_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3162,7 +2988,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000032",
+        "uuid": "000000000000002f",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3234,7 +3060,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000033",
+        "uuid": "0000000000000030",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -3306,7 +3132,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000034",
+        "uuid": "0000000000000031",
         "name": "entity16",
         "priority": 0,
         "visible": true,
@@ -3359,7 +3185,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000035",
+        "uuid": "0000000000000032",
         "name": "TweenManager",
         "priority": 0,
         "visible": true,
@@ -3397,7 +3223,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000036",
+        "uuid": "0000000000000033",
         "name": "entity16_copy",
         "priority": 0,
         "visible": true,
@@ -3466,7 +3292,7 @@
         "children": []
       },
       {
-        "uuid": "0000000000000037",
+        "uuid": "0000000000000034",
         "name": "Bulba_copy",
         "priority": 0,
         "visible": true,
@@ -3529,7 +3355,8 @@
               "stitch_contours": false,
               "share_boundary": true,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true
+              "show_boundary_voxels": true,
+              "show_region_voxels": false
             }
           },
           {
@@ -3586,6 +3413,251 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "0000000000000035",
+        "name": "entity18",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            15.389677047729492,
+            7.874424934387207,
+            -0.44540977478027344
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "VoxelizerComponent",
+            "data": {
+              "enabled": true,
+              "grid_name": "Platform",
+              "cell_size": 0.12,
+              "voxelize_mode": 4.0,
+              "voxelize_source": 1.0,
+              "output_path": "Voxels/Platform.voxels",
+              "navmesh_output_path": "Voxels/Platform.navmesh",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 2.0,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": false,
+              "show_debug_contours": false,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": true,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": true,
+              "show_region_voxels": false
+            }
+          }
+        ],
+        "children": [
+          {
+            "uuid": "0000000000000036",
+            "name": "entity17",
+            "priority": 0,
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "type": "uuid",
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                  },
+                  "cast_shadow": true
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "0000000000000037",
+            "name": "entity19",
+            "priority": 0,
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                8.061885833740234,
+                0,
+                3.485212802886963
+              ],
+              "rotation": [
+                0,
+                -0.39404088258743286,
+                0,
+                0.9190928936004639
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "type": "uuid",
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                  },
+                  "cast_shadow": true
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "0000000000000038",
+            "name": "entity20",
+            "priority": 0,
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                1.7454757690429688,
+                -7.193772315979004,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0.23186688125133514,
+                0.9727475643157959
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "type": "uuid",
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                  },
+                  "cast_shadow": true
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "0000000000000039",
+            "name": "entity21",
+            "priority": 0,
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0,
+                -7.741,
+                1.389
+              ],
+              "rotation": [
+                0.7071067811865476,
+                0,
+                0,
+                0.7071067811865476
+              ]
+            },
+            "scale": [
+              4,
+              2,
+              4
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000004",
+                    "name": "Cylinder"
+                  },
+                  "material": {
+                    "type": "uuid",
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                  },
+                  "cast_shadow": true
+                }
+              }
+            ],
+            "children": []
+          }
+        ]
       }
     ],
     "layer_names": {
@@ -3633,15 +3705,15 @@
   "editor": {
     "camera": {
       "target": [
-        -2.908924102783203,
-        4.550106525421143,
-        -3.841421127319336
+        18.095930099487305,
+        2.363473653793335,
+        1.0257511138916016
       ],
-      "radius": 27.5,
-      "azimuth": 63.550928723622626,
-      "elevation": 0.40142572795869447
+      "radius": 15.0,
+      "azimuth": 56.618480934700635,
+      "elevation": 0.4433136300065583
     },
-    "selected_entity": "Bulba",
+    "selected_entity": "entity18",
     "displays": [
       {
         "name": "Editor",
@@ -3650,7 +3722,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "21912101-6fcc-4432-8b7c-7fd84f8f92d6",
+            "uuid": "9fd5e199-8d53-4bf7-a9e7-ac282e6b9fcb",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3670,7 +3742,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "982b52d1-9259-43d3-bf01-e9ded1e89e3d",
+            "uuid": "b86922e0-b5db-49d8-9b74-4ec73ad70da6",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3685,8 +3757,9 @@
       }
     ],
     "expanded_entities": [
-      "EditorEntities",
       "camera",
+      "entity18",
+      "EditorEntities",
       "editor_ui"
     ]
   },

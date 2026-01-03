@@ -10,7 +10,7 @@ VOXEL_VERTEX_SHADER = """#version 330 core
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_uv;
-layout(location = 3) in vec3 a_color;
+layout(location = 5) in vec3 a_color;
 
 uniform mat4 u_model;
 uniform mat4 u_view;
@@ -81,9 +81,13 @@ void main() {
     }
 
     // Select base color based on position
+    // UV.x >= 2.0 means use vertex color instead of uniform
     vec4 base_color;
+    bool use_vertex_color = (v_uv.x >= 1.5);
 
-    if (normalized_pos > u_fill_percent) {
+    if (use_vertex_color) {
+        base_color = vec4(v_color, 1.0);
+    } else if (normalized_pos > u_fill_percent) {
         // In blend zone
         float t = (normalized_pos - u_fill_percent) / blend_zone;
         base_color = mix(u_color_below, u_color_above, t);
