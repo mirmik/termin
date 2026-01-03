@@ -273,63 +273,71 @@ class PersistenceTest(unittest.TestCase):
 
 
 class AreConnected26Test(unittest.TestCase):
-    """Тесты для _are_connected_26."""
-
-    def setUp(self):
-        self.builder = PolygonBuilder()
+    """Тесты для are_connected_26."""
 
     def test_empty_list(self):
         """Пустой список — тривиально связан."""
-        self.assertTrue(self.builder._are_connected_26([]))
+        from termin.navmesh.region_growing import are_connected_26
+        self.assertTrue(are_connected_26([]))
 
     def test_single_voxel(self):
         """Один воксель — тривиально связан."""
-        self.assertTrue(self.builder._are_connected_26([(0, 0, 0)]))
+        from termin.navmesh.region_growing import are_connected_26
+        self.assertTrue(are_connected_26([(0, 0, 0)]))
 
     def test_two_adjacent_face(self):
         """Два соседних вокселя по грани — связаны."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 0, 0)]
-        self.assertTrue(self.builder._are_connected_26(voxels))
+        self.assertTrue(are_connected_26(voxels))
 
     def test_two_adjacent_edge(self):
         """Два соседних вокселя по ребру — связаны (26-connectivity)."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 1, 0)]
-        self.assertTrue(self.builder._are_connected_26(voxels))
+        self.assertTrue(are_connected_26(voxels))
 
     def test_two_adjacent_corner(self):
         """Два соседних вокселя по углу — связаны (26-connectivity)."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 1, 1)]
-        self.assertTrue(self.builder._are_connected_26(voxels))
+        self.assertTrue(are_connected_26(voxels))
 
     def test_two_disconnected(self):
         """Два несвязных вокселя — НЕ связаны."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (3, 0, 0)]
-        self.assertFalse(self.builder._are_connected_26(voxels))
+        self.assertFalse(are_connected_26(voxels))
 
     def test_three_in_line(self):
         """Три вокселя в линию — связаны."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 0, 0), (2, 0, 0)]
-        self.assertTrue(self.builder._are_connected_26(voxels))
+        self.assertTrue(are_connected_26(voxels))
 
     def test_three_one_disconnected(self):
         """Три вокселя, один отдельно — НЕ связаны."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 0, 0), (5, 0, 0)]
-        self.assertFalse(self.builder._are_connected_26(voxels))
+        self.assertFalse(are_connected_26(voxels))
 
     def test_l_shape(self):
         """L-образная форма — связаны."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
-        self.assertTrue(self.builder._are_connected_26(voxels))
+        self.assertTrue(are_connected_26(voxels))
 
     def test_diagonal_line(self):
         """Диагональная линия — связаны (26-connectivity)."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 1, 0), (2, 2, 0)]
-        self.assertTrue(self.builder._are_connected_26(voxels))
+        self.assertTrue(are_connected_26(voxels))
 
     def test_two_clusters_not_connected(self):
         """Два кластера — НЕ связаны."""
+        from termin.navmesh.region_growing import are_connected_26
         voxels = [(0, 0, 0), (1, 0, 0), (10, 0, 0), (11, 0, 0)]
-        self.assertFalse(self.builder._are_connected_26(voxels))
+        self.assertFalse(are_connected_26(voxels))
 
 
 if __name__ == "__main__":

@@ -59,28 +59,20 @@ class PolygonBuilder:
     def build(
         self,
         grid: VoxelGrid,
-        expand_regions: bool = True,
+        do_expand_regions: bool = True,
         share_boundary: bool = False,
         project_contours: bool = False,
         stitch_contours: bool = False,
-        stitch_polygons: bool = False,
-        extract_contours: bool = False,
-        simplify_contours: bool = False,
-        retriangulate: bool = False,
     ) -> NavMesh:
         """
         Построить NavMesh из воксельной сетки.
 
         Args:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
-            expand_regions: Расширять регионы (шаг 2.5).
-            share_boundary: Граничные воксели добавляются в соседние регионы (тонкая общая граница).
+            do_expand_regions: Расширять регионы (шаг 2.5).
+            share_boundary: Граничные воксели добавляются в соседние регионы.
             project_contours: Проецировать контуры на плоскость региона.
-            stitch_contours: Сшивать контуры на границах регионов (проекция на пересечение плоскостей).
-            stitch_polygons: Сшивать полигоны через plane intersections.
-            extract_contours: Извлекать контуры из треугольников (шаги 7-9).
-            simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
-            retriangulate: Перетриангулировать через ear clipping (шаги 11-12).
+            stitch_contours: Сшивать контуры на границах регионов.
 
         Returns:
             Навигационная сетка.
@@ -105,9 +97,9 @@ class PolygonBuilder:
         # Воксель может участвовать в нескольких регионах
         # regions = expand_all_regions(regions, surface_voxels, self.config.normal_threshold)
 
-        # Шаг 2.5: Расширяем регионы (опционально, старый алгоритм)
+        # Шаг 2.5: Расширяем регионы (опционально)
         # После этого шага воксели могут входить в несколько регионов
-        if expand_regions:
+        if do_expand_regions:
             regions = expand_regions(regions, surface_voxels, self.config.normal_threshold)
 
         # Шаг 2.6: Фильтрация "висячих" вокселей (отключено)
