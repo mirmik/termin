@@ -20,7 +20,8 @@ from termin.navmesh.pathfinding import (
     funnel_algorithm,
     navmesh_line_of_sight,
 )
-from termin.navmesh.types import NavMesh
+from termin.navmesh.types import NavMesh, Portal
+from termin.navmesh.region_growing import NEIGHBORS_26
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -64,6 +65,11 @@ class PathfindingWorldComponent(PythonComponent):
             label="Show Graph Edges",
             kind="bool",
         ),
+        "show_portals": InspectField(
+            path="show_portals",
+            label="Show Portals",
+            kind="bool",
+        ),
     }
 
     serializable_fields = [
@@ -72,6 +78,7 @@ class PathfindingWorldComponent(PythonComponent):
         "use_los_optimization",
         "use_edge_centers",
         "show_graph_edges",
+        "show_portals",
     ]
 
     def __init__(
@@ -81,6 +88,7 @@ class PathfindingWorldComponent(PythonComponent):
         use_los_optimization: bool = True,
         use_edge_centers: bool = False,
         show_graph_edges: bool = False,
+        show_portals: bool = False,
     ) -> None:
         super().__init__(enabled=True)
 
@@ -91,6 +99,7 @@ class PathfindingWorldComponent(PythonComponent):
         self.use_los_optimization = use_los_optimization
         self.use_edge_centers = use_edge_centers
         self.show_graph_edges = show_graph_edges
+        self.show_portals = show_portals
 
         self._navmesh_graph: NavMeshGraph = NavMeshGraph()
         self._voxelizer_components: List["VoxelizerComponent"] = []
@@ -99,6 +108,10 @@ class PathfindingWorldComponent(PythonComponent):
         self._navmesh_sources: List[tuple[NavMesh, "Entity"]] = []
         # Маппинг region_id -> entity (для получения актуальной трансформации)
         self._region_entities: dict[int, "Entity"] = {}
+        # Порталы между регионами
+        self._portals: List[Portal] = []
+        # Маппинг region_id -> navmesh info для вычисления порталов
+        self._region_navmesh_info: dict[int, tuple[NavMesh, int]] = {}
 
     @property
     def navmesh_graph(self) -> NavMeshGraph:
@@ -177,6 +190,8 @@ class PathfindingWorldComponent(PythonComponent):
         """Построить NavMeshGraph из собранных NavMesh."""
         self._navmesh_graph = NavMeshGraph()
         self._region_entities.clear()
+        self._region_navmesh_info.clear()
+        self._portals.clear()
 
         region_id = 0
         for navmesh, entity in self._navmesh_sources:
@@ -200,9 +215,137 @@ class PathfindingWorldComponent(PythonComponent):
 
                 # Сохраняем entity для получения актуальной трансформации
                 self._region_entities[region_id] = entity
+                # Сохраняем navmesh и poly_idx для вычисления порталов
+                self._region_navmesh_info[region_id] = (navmesh, poly_idx)
                 region_id += 1
 
         log.info(f"[PathfindingWorld] built graph with {region_id} regions")
+
+        # Вычисляем порталы между регионами
+        self._compute_portals()
+
+    def _compute_portals(self) -> None:
+        """
+        Вычислить порталы между соседними регионами.
+
+        Алгоритм:
+        1. Строим voxel_to_region map
+        2. Находим соседние воксели между разными регионами
+        3. Кластеризуем границу по связности
+        4. Каждый кластер становится порталом
+        """
+        from collections import deque
+
+        self._portals.clear()
+
+        if not self._region_navmesh_info:
+            return
+
+        # Шаг 1: Построить voxel_to_region map
+        voxel_to_region: dict[tuple[int, int, int], int] = {}
+        for region_id, (navmesh, poly_idx) in self._region_navmesh_info.items():
+            polygon = navmesh.polygons[poly_idx]
+            for voxel in polygon.voxel_coords:
+                voxel_to_region[voxel] = region_id
+
+        if not voxel_to_region:
+            log.info("[PathfindingWorld] no voxel coords in polygons, skipping portal computation")
+            return
+
+        # Шаг 2: Найти все пары соседних регионов и граничные воксели
+        # Структура: {(region_a, region_b): set of voxels from region_a on boundary}
+        boundary_pairs: dict[tuple[int, int], set[tuple[int, int, int]]] = {}
+
+        for voxel, region_id in voxel_to_region.items():
+            vx, vy, vz = voxel
+            for dx, dy, dz in NEIGHBORS_26:
+                neighbor = (vx + dx, vy + dy, vz + dz)
+                if neighbor in voxel_to_region:
+                    neighbor_region = voxel_to_region[neighbor]
+                    if neighbor_region != region_id:
+                        # Нашли границу между регионами
+                        # Используем упорядоченную пару для ключа
+                        pair_key = (min(region_id, neighbor_region), max(region_id, neighbor_region))
+                        if pair_key not in boundary_pairs:
+                            boundary_pairs[pair_key] = set()
+                        boundary_pairs[pair_key].add(voxel)
+                        boundary_pairs[pair_key].add(neighbor)
+
+        # Шаг 3: Для каждой пары регионов кластеризуем граничные воксели
+        for (region_a, region_b), boundary_voxels in boundary_pairs.items():
+            # Кластеризация по связности
+            remaining = set(boundary_voxels)
+
+            while remaining:
+                # BFS для нахождения связного кластера
+                cluster: list[tuple[int, int, int]] = []
+                seed = next(iter(remaining))
+                queue: deque[tuple[int, int, int]] = deque([seed])
+                remaining.remove(seed)
+
+                while queue:
+                    current = queue.popleft()
+                    cluster.append(current)
+
+                    vx, vy, vz = current
+                    for dx, dy, dz in NEIGHBORS_26:
+                        neighbor = (vx + dx, vy + dy, vz + dz)
+                        if neighbor in remaining:
+                            remaining.remove(neighbor)
+                            queue.append(neighbor)
+
+                # Создаём портал для этого кластера
+                if cluster:
+                    portal = self._create_portal(region_a, region_b, cluster)
+                    self._portals.append(portal)
+
+        log.info(f"[PathfindingWorld] computed {len(self._portals)} portals")
+
+        # Строим граф смежности регионов
+        self._navmesh_graph.build_region_adjacency(self._portals)
+        log.info(f"[PathfindingWorld] built region adjacency: {len(self._navmesh_graph.region_adjacency)} regions")
+
+    def _create_portal(
+        self,
+        region_a: int,
+        region_b: int,
+        voxels: list[tuple[int, int, int]],
+    ) -> Portal:
+        """Создать портал из списка граничных вокселей."""
+        # Получаем cell_size и origin из navmesh
+        navmesh, _ = self._region_navmesh_info[region_a]
+        cell_size = navmesh.cell_size
+        origin = navmesh.origin
+
+        # Конвертируем воксели в мировые координаты
+        world_coords = []
+        for vx, vy, vz in voxels:
+            world_pos = np.array([
+                origin[0] + vx * cell_size + cell_size * 0.5,
+                origin[1] + vy * cell_size + cell_size * 0.5,
+                origin[2] + vz * cell_size + cell_size * 0.5,
+            ], dtype=np.float32)
+            world_coords.append(world_pos)
+
+        # Вычисляем центр портала
+        center = np.mean(world_coords, axis=0).astype(np.float32)
+
+        # Вычисляем ширину (максимальное расстояние между вокселями)
+        width = 0.0
+        if len(world_coords) > 1:
+            for i in range(len(world_coords)):
+                for j in range(i + 1, len(world_coords)):
+                    dist = float(np.linalg.norm(world_coords[i] - world_coords[j]))
+                    if dist > width:
+                        width = dist
+
+        return Portal(
+            region_a=region_a,
+            region_b=region_b,
+            voxels=voxels,
+            center=center,
+            width=width,
+        )
 
     def _transform_vertices(self, vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
         """Трансформировать вершины с помощью матрицы 4x4."""
@@ -265,15 +408,30 @@ class PathfindingWorldComponent(PythonComponent):
         start_region, start_tri_idx = start_tri
         end_region, end_tri_idx = end_tri
 
-        # Пока поддерживаем только путь внутри одного региона
+        # Межрегиональный путь
         if start_region != end_region:
-            log.info("[PathfindingWorld] cross-region pathfinding not yet supported")
-            return None
+            return self._find_cross_region_path(
+                start, end, start_region, end_region, start_tri_idx, end_tri_idx
+            )
 
-        region = self._navmesh_graph.regions[start_region]
+        # Путь внутри одного региона
+        return self._find_single_region_path(
+            start, end, start_region, start_tri_idx, end_tri_idx
+        )
+
+    def _find_single_region_path(
+        self,
+        start: np.ndarray,
+        end: np.ndarray,
+        region_id: int,
+        start_tri_idx: int,
+        end_tri_idx: int,
+    ) -> Optional[List[np.ndarray]]:
+        """Найти путь внутри одного региона."""
+        region = self._navmesh_graph.regions[region_id]
 
         # Получаем entity для трансформации
-        entity = self._region_entities.get(start_region)
+        entity = self._region_entities.get(region_id)
         transform = entity.transform.global_pose().as_matrix() if entity else None
         inverse = np.linalg.inv(transform) if transform is not None else None
 
@@ -291,16 +449,7 @@ class PathfindingWorldComponent(PythonComponent):
             region.triangles, region.vertices, region.neighbors
         ):
             log.info("[PathfindingWorld] direct LOS, skipping A*")
-            local_path = [local_start, local_end]
-            # Трансформируем результат в мировые координаты
-            path_points: List[np.ndarray] = []
-            for local_point in local_path:
-                if transform is not None:
-                    world_point = self._transform_point(local_point, transform)
-                    path_points.append(world_point)
-                else:
-                    path_points.append(local_point.copy())
-            return path_points
+            return self._transform_path_to_world([local_start, local_end], transform)
 
         if start_tri_idx == end_tri_idx:
             path_indices = [start_tri_idx]
@@ -359,7 +508,108 @@ class PathfindingWorldComponent(PythonComponent):
             )
             log.info(f"[PathfindingWorld] LOS optimized: {len(local_path)} points")
 
-        # Трансформируем результат в мировые координаты
+        return self._transform_path_to_world(local_path, transform)
+
+    def _find_cross_region_path(
+        self,
+        start: np.ndarray,
+        end: np.ndarray,
+        start_region: int,
+        end_region: int,
+        start_tri_idx: int,
+        end_tri_idx: int,
+    ) -> Optional[List[np.ndarray]]:
+        """Найти путь между разными регионами через порталы."""
+        log.info(f"[PathfindingWorld] cross-region: {start_region} -> {end_region}")
+
+        # Высокоуровневый A* для поиска пути через регионы
+        try:
+            region_path = self._navmesh_graph.find_region_path(
+                start_region, end_region, self._portals
+            )
+        except Exception as e:
+            log.error(f"[PathfindingWorld] find_region_path failed: {e}")
+            return None
+
+        if region_path is None:
+            log.info("[PathfindingWorld] no region path found")
+            return None
+
+        log.info(f"[PathfindingWorld] region path: {region_path}")
+
+        # Собираем полный путь через все регионы
+        full_path: List[np.ndarray] = [start.copy()]
+        current_pos = start.copy()
+        current_tri_idx = start_tri_idx
+
+        for i, (region_id, portal_idx) in enumerate(region_path):
+            is_last = (i == len(region_path) - 1)
+
+            log.info(f"[PathfindingWorld] segment {i}: region={region_id}, portal_idx={portal_idx}, is_last={is_last}")
+
+            # Определяем целевую точку в этом регионе
+            if is_last:
+                target_pos = end.copy()
+                target_tri_idx = end_tri_idx
+            else:
+                # Идём к порталу
+                if portal_idx < 0 or portal_idx >= len(self._portals):
+                    log.warn(f"[PathfindingWorld] invalid portal_idx={portal_idx}")
+                    continue
+
+                portal = self._portals[portal_idx]
+                # Трансформируем центр портала в мировые координаты
+                entity = self._region_entities.get(region_id)
+                if entity is not None:
+                    transform = entity.transform.global_pose().as_matrix()
+                    target_pos = self._transform_point(portal.center, transform)
+                else:
+                    target_pos = portal.center.copy()
+
+                # Находим треугольник для портала
+                target_tri_result = self.find_containing_triangle(target_pos)
+                if target_tri_result is None:
+                    log.warn(f"[PathfindingWorld] portal center not on navmesh")
+                    full_path.append(target_pos.copy())
+                    current_pos = target_pos.copy()
+                    continue
+
+                _, target_tri_idx = target_tri_result
+
+            log.info(f"[PathfindingWorld] current_pos={current_pos}, target_pos={target_pos}")
+            log.info(f"[PathfindingWorld] current_tri={current_tri_idx}, target_tri={target_tri_idx}")
+
+            # Находим путь внутри региона
+            try:
+                segment_path = self._find_single_region_path(
+                    current_pos, target_pos, region_id, current_tri_idx, target_tri_idx
+                )
+            except Exception as e:
+                log.error(f"[PathfindingWorld] error in _find_single_region_path: {e}")
+                segment_path = None
+
+            if segment_path is not None and len(segment_path) > 1:
+                # Добавляем точки сегмента (пропуская первую — она уже есть)
+                for point in segment_path[1:]:
+                    full_path.append(point)
+                log.info(f"[PathfindingWorld] added {len(segment_path) - 1} points from segment")
+            else:
+                # Если не нашли путь внутри региона, идём напрямую
+                full_path.append(target_pos.copy())
+                log.info("[PathfindingWorld] segment failed, adding direct line")
+
+            current_pos = target_pos.copy()
+            current_tri_idx = target_tri_idx
+
+        log.info(f"[PathfindingWorld] cross-region path: {len(full_path)} points")
+        return full_path if len(full_path) > 1 else None
+
+    def _transform_path_to_world(
+        self,
+        local_path: List[np.ndarray],
+        transform: Optional[np.ndarray],
+    ) -> List[np.ndarray]:
+        """Трансформировать путь из локальных в мировые координаты."""
         path_points: List[np.ndarray] = []
         for local_point in local_path:
             if transform is not None:
@@ -367,7 +617,6 @@ class PathfindingWorldComponent(PythonComponent):
                 path_points.append(world_point)
             else:
                 path_points.append(local_point.copy())
-
         return path_points
 
     def find_path_triangles(
@@ -627,7 +876,7 @@ class PathfindingWorldComponent(PythonComponent):
 
     def draw(self) -> None:
         """Отрисовка отладочной визуализации."""
-        if not self.show_graph_edges:
+        if not self.show_graph_edges and not self.show_portals:
             return
 
         from termin.visualization.render.immediate import ImmediateRenderer
@@ -638,10 +887,88 @@ class PathfindingWorldComponent(PythonComponent):
         if renderer is None:
             return
 
-        if not self._navmesh_graph.regions:
+        renderer.begin()
+
+        # Рисуем порталы
+        if self.show_portals and self._portals:
+            magenta = Color4(1.0, 0.0, 1.0, 1.0)
+            yellow = Color4(1.0, 1.0, 0.0, 1.0)
+
+            for portal in self._portals:
+                # Получаем трансформацию entity для региона A
+                entity = self._region_entities.get(portal.region_a)
+                transform = None
+                if entity is not None:
+                    transform = entity.transform.global_pose().as_matrix()
+
+                # Рисуем центр портала как крестик
+                center = portal.center.copy()
+                if transform is not None:
+                    center = self._transform_point(center, transform)
+
+                # Размер крестика зависит от ширины портала
+                cross_size = max(0.1, portal.width * 0.3)
+
+                # Крестик в XZ плоскости
+                renderer.line(
+                    Vec3(float(center[0]) - cross_size, float(center[1]), float(center[2])),
+                    Vec3(float(center[0]) + cross_size, float(center[1]), float(center[2])),
+                    magenta,
+                    depth_test=True,
+                )
+                renderer.line(
+                    Vec3(float(center[0]), float(center[1]), float(center[2]) - cross_size),
+                    Vec3(float(center[0]), float(center[1]), float(center[2]) + cross_size),
+                    magenta,
+                    depth_test=True,
+                )
+
+                # Рисуем воксели портала
+                navmesh, _ = self._region_navmesh_info.get(portal.region_a, (None, 0))
+                if navmesh is not None:
+                    cell_size = navmesh.cell_size
+                    origin = navmesh.origin
+
+                    for vx, vy, vz in portal.voxels:
+                        world_pos = np.array([
+                            origin[0] + vx * cell_size + cell_size * 0.5,
+                            origin[1] + vy * cell_size + cell_size * 0.5,
+                            origin[2] + vz * cell_size + cell_size * 0.5,
+                        ], dtype=np.float32)
+
+                        if transform is not None:
+                            world_pos = self._transform_point(world_pos, transform)
+
+                        # Маленький квадрат для каждого вокселя
+                        half = cell_size * 0.3
+                        renderer.line(
+                            Vec3(float(world_pos[0]) - half, float(world_pos[1]), float(world_pos[2]) - half),
+                            Vec3(float(world_pos[0]) + half, float(world_pos[1]), float(world_pos[2]) - half),
+                            yellow,
+                            depth_test=True,
+                        )
+                        renderer.line(
+                            Vec3(float(world_pos[0]) + half, float(world_pos[1]), float(world_pos[2]) - half),
+                            Vec3(float(world_pos[0]) + half, float(world_pos[1]), float(world_pos[2]) + half),
+                            yellow,
+                            depth_test=True,
+                        )
+                        renderer.line(
+                            Vec3(float(world_pos[0]) + half, float(world_pos[1]), float(world_pos[2]) + half),
+                            Vec3(float(world_pos[0]) - half, float(world_pos[1]), float(world_pos[2]) + half),
+                            yellow,
+                            depth_test=True,
+                        )
+                        renderer.line(
+                            Vec3(float(world_pos[0]) - half, float(world_pos[1]), float(world_pos[2]) + half),
+                            Vec3(float(world_pos[0]) - half, float(world_pos[1]), float(world_pos[2]) - half),
+                            yellow,
+                            depth_test=True,
+                        )
+
+        if not self.show_graph_edges or not self._navmesh_graph.regions:
             return
 
-        renderer.begin()
         green = Color4(0.0, 1.0, 0.0, 1.0)
         cyan = Color4(0.0, 0.8, 0.8, 0.5)
 

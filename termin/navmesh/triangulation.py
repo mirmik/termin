@@ -1363,7 +1363,7 @@ def ear_clipping_refined(
 
         # Valence optimization (второй проход)
         if use_valence_flip:
-            refined_tris = valence_flip(refined_verts, refined_tris, boundary)
+            refined_tris = valence_flip(refined_verts, refined_tris, boundary, max_vertex_valence)
 
         # Angle optimization (второй проход)
         if use_angle_flip:

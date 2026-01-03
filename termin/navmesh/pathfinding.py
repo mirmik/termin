@@ -84,6 +84,10 @@ class NavMeshGraph:
 
     regions: list[RegionGraph] = field(default_factory=list)
     portals: list[Portal] = field(default_factory=list)
+    # Граф смежности регионов: region_id -> list of (neighbor_region_id, portal_index)
+    region_adjacency: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
+    # Центроиды регионов для эвристики A*
+    region_centroids: dict[int, np.ndarray] = field(default_factory=dict)
 
     def add_region(self, region: RegionGraph) -> None:
         """Добавить регион."""
@@ -92,6 +96,34 @@ class NavMeshGraph:
     def add_portal(self, portal: Portal) -> None:
         """Добавить портал между регионами."""
         self.portals.append(portal)
+
+    def build_region_adjacency(self, portals_data: list) -> None:
+        """
+        Построить граф смежности регионов из списка порталов.
+
+        Args:
+            portals_data: Список Portal из types.py (с region_a, region_b, center).
+        """
+        self.region_adjacency.clear()
+
+        # Инициализируем пустые списки для всех регионов
+        for i in range(len(self.regions)):
+            self.region_adjacency[i] = []
+
+        # Добавляем рёбра между регионами
+        for portal_idx, portal in enumerate(portals_data):
+            region_a = portal.region_a
+            region_b = portal.region_b
+
+            if region_a < len(self.regions) and region_b < len(self.regions):
+                self.region_adjacency[region_a].append((region_b, portal_idx))
+                self.region_adjacency[region_b].append((region_a, portal_idx))
+
+        # Вычисляем центроиды регионов
+        self.region_centroids.clear()
+        for region_id, region in enumerate(self.regions):
+            if len(region.centroids) > 0:
+                self.region_centroids[region_id] = np.mean(region.centroids, axis=0)
 
     def find_region(self, point: np.ndarray) -> int:
         """Найти регион, содержащий точку. Возвращает -1 если не найден."""
@@ -122,6 +154,81 @@ class NavMeshGraph:
             return [(start_region, tri) for tri in path]
 
         # TODO: межрегиональный поиск через порталы
+        return None
+
+    def find_region_path(
+        self,
+        start_region: int,
+        end_region: int,
+        portals_data: list,
+    ) -> list[tuple[int, int]] | None:
+        """
+        Высокоуровневый A* для поиска пути через регионы.
+
+        Args:
+            start_region: Начальный регион.
+            end_region: Целевой регион.
+            portals_data: Список Portal из types.py.
+
+        Returns:
+            Список (region_id, portal_index) — путь через регионы.
+            portal_index = -1 для начального и конечного региона.
+        """
+        if start_region == end_region:
+            return [(start_region, -1)]
+
+        if not self.region_adjacency:
+            return None
+
+        # A* на графе регионов
+        def heuristic(region_id: int) -> float:
+            if region_id in self.region_centroids and end_region in self.region_centroids:
+                return float(np.linalg.norm(
+                    self.region_centroids[region_id] - self.region_centroids[end_region]
+                ))
+            return 0.0
+
+        # (f_score, counter, region_id)
+        counter = 0
+        open_set: list[tuple[float, int, int]] = [(heuristic(start_region), counter, start_region)]
+        came_from: dict[int, tuple[int, int]] = {}  # region -> (prev_region, portal_idx)
+        g_score: dict[int, float] = {start_region: 0.0}
+
+        while open_set:
+            _, _, current = heapq.heappop(open_set)
+
+            if current == end_region:
+                # Восстанавливаем путь
+                path: list[tuple[int, int]] = [(current, -1)]
+                while current in came_from:
+                    prev_region, portal_idx = came_from[current]
+                    path.append((prev_region, portal_idx))
+                    current = prev_region
+                return path[::-1]
+
+            current_g = g_score[current]
+
+            for neighbor, portal_idx in self.region_adjacency.get(current, []):
+                # Расстояние между регионами через портал
+                portal = portals_data[portal_idx]
+                portal_center = portal.center
+
+                # Расстояние от центроида текущего региона до портала + от портала до центроида соседа
+                dist = 0.0
+                if current in self.region_centroids:
+                    dist += float(np.linalg.norm(self.region_centroids[current] - portal_center))
+                if neighbor in self.region_centroids:
+                    dist += float(np.linalg.norm(portal_center - self.region_centroids[neighbor]))
+
+                tentative_g = current_g + max(dist, 0.1)  # Минимальная стоимость
+
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = (current, portal_idx)
+                    g_score[neighbor] = tentative_g
+                    f = tentative_g + heuristic(neighbor)
+                    counter += 1
+                    heapq.heappush(open_set, (f, counter, neighbor))
+
         return None
 
 
