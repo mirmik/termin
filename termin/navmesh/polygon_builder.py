@@ -2065,6 +2065,132 @@ class PolygonBuilder:
 
     # =========== Contour Extraction ===========
 
+    def extract_ordered_contours(
+        self,
+        region_voxels: list[tuple[int, int, int]],
+        region_normal: np.ndarray,
+        cell_size: float,
+        origin: np.ndarray,
+        simplify_epsilon: float = 0.0,
+    ) -> tuple[np.ndarray, list[np.ndarray]]:
+        """
+        Извлечь упорядоченные контуры региона как 3D координаты.
+
+        Args:
+            region_voxels: Список вокселей региона.
+            region_normal: Нормаль региона.
+            cell_size: Размер вокселя.
+            origin: Начало координат сетки.
+            simplify_epsilon: Параметр Douglas-Peucker (0 = без упрощения).
+
+        Returns:
+            (outer_vertices, holes_vertices):
+                outer_vertices: np.ndarray shape (N, 3) — вершины внешнего контура
+                holes_vertices: список np.ndarray — вершины дырок
+        """
+        # Получаем упорядоченные воксельные контуры
+        outer_voxels, holes_voxels = self.extract_contours_from_region(
+            region_voxels, region_normal, cell_size, origin
+        )
+
+        if not outer_voxels:
+            return np.array([]).reshape(0, 3), []
+
+        # Строим плоскость региона
+        u_axis, v_axis = self._build_2d_basis(region_normal)
+        region_normal = region_normal / np.linalg.norm(region_normal)
+
+        # Центроид региона
+        centers_3d = np.array([
+            origin + (np.array(v) + 0.5) * cell_size
+            for v in region_voxels
+        ], dtype=np.float32)
+        centroid = centers_3d.mean(axis=0)
+
+        def project_to_plane(voxels: list[tuple[int, int, int]]) -> np.ndarray:
+            """Проецировать центры вокселей на плоскость региона."""
+            if not voxels:
+                return np.array([]).reshape(0, 3)
+
+            vertices = []
+            for vx, vy, vz in voxels:
+                # Центр вокселя в мировых координатах
+                world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
+
+                # Проецируем на плоскость региона
+                to_point = world_pos - centroid
+                distance_to_plane = np.dot(to_point, region_normal)
+                projected = world_pos - distance_to_plane * region_normal
+
+                vertices.append(projected)
+
+            return np.array(vertices, dtype=np.float32)
+
+        # Проецируем контуры на плоскость
+        outer_vertices = project_to_plane(outer_voxels)
+        holes_vertices = [project_to_plane(h) for h in holes_voxels]
+
+        # Применяем Douglas-Peucker если нужно
+        if simplify_epsilon > 0:
+            outer_vertices = self._douglas_peucker_3d(outer_vertices, simplify_epsilon)
+            holes_vertices = [
+                self._douglas_peucker_3d(h, simplify_epsilon)
+                for h in holes_vertices
+            ]
+
+        return outer_vertices, holes_vertices
+
+    def _douglas_peucker_3d(
+        self,
+        points: np.ndarray,
+        epsilon: float,
+    ) -> np.ndarray:
+        """
+        Упростить 3D полилинию алгоритмом Douglas-Peucker.
+
+        Args:
+            points: np.ndarray shape (N, 3) — вершины полилинии.
+            epsilon: Максимальное отклонение.
+
+        Returns:
+            Упрощённая полилиния.
+        """
+        if len(points) <= 2:
+            return points
+
+        # Находим точку с максимальным отклонением от линии start-end
+        start = points[0]
+        end = points[-1]
+        line_vec = end - start
+        line_len = np.linalg.norm(line_vec)
+
+        if line_len < 1e-10:
+            return points[[0]]
+
+        line_dir = line_vec / line_len
+
+        max_dist = 0.0
+        max_idx = 0
+
+        for i in range(1, len(points) - 1):
+            # Расстояние от точки до линии
+            to_point = points[i] - start
+            proj_len = np.dot(to_point, line_dir)
+            proj_point = start + proj_len * line_dir
+            dist = np.linalg.norm(points[i] - proj_point)
+
+            if dist > max_dist:
+                max_dist = dist
+                max_idx = i
+
+        if max_dist > epsilon:
+            # Рекурсивно упрощаем обе части
+            left = self._douglas_peucker_3d(points[:max_idx + 1], epsilon)
+            right = self._douglas_peucker_3d(points[max_idx:], epsilon)
+            return np.vstack([left[:-1], right])
+        else:
+            return points[[0, -1]]
+
     def extract_contours_from_region(
         self,
         region_voxels: list[tuple[int, int, int]],
@@ -2351,5 +2477,601 @@ class PolygonBuilder:
                 if component:
                     holes.append(component)
 
-        return outer_cells, holes
+        # Шаг 6: Упорядочить контуры (обход по/против часовой)
+        outer_ordered = self._order_contour(outer_cells, directions)
+        holes_ordered = [self._order_contour(h, directions) for h in holes]
+
+        return outer_ordered, holes_ordered
+
+    def _order_contour(
+        self,
+        cells: list[tuple[int, int]],
+        directions: list[tuple[int, int]],
+    ) -> list[tuple[int, int]]:
+        """
+        Упорядочить ячейки контура обходом по периметру.
+
+        Args:
+            cells: Неупорядоченный список ячеек контура.
+            directions: Направления для 8-связности.
+
+        Returns:
+            Упорядоченный список ячеек (обход по часовой стрелке).
+        """
+        if len(cells) <= 2:
+            return cells
+
+        cell_set = set(cells)
+
+        # Начинаем с самой верхней-левой ячейки
+        start = min(cells, key=lambda c: (c[1], c[0]))
+        ordered: list[tuple[int, int]] = [start]
+        visited: set[tuple[int, int]] = {start}
+
+        current = start
+        # Начинаем поиск с востока (индекс 0)
+        last_dir = 4  # Пришли с запада
+
+        while True:
+            found = False
+            # Ищем следующего соседа по часовой стрелке
+            # Начинаем с направления "назад + 2" (против часовой от направления прихода)
+            search_start = (last_dir + 5) % 8
+
+            for i in range(8):
+                dir_idx = (search_start + i) % 8
+                du, dv = directions[dir_idx]
+                neighbor = (current[0] + du, current[1] + dv)
+
+                if neighbor in cell_set and neighbor not in visited:
+                    ordered.append(neighbor)
+                    visited.add(neighbor)
+                    current = neighbor
+                    last_dir = dir_idx
+                    found = True
+                    break
+
+            if not found:
+                # Проверяем, можем ли вернуться к старту
+                for i in range(8):
+                    dir_idx = (search_start + i) % 8
+                    du, dv = directions[dir_idx]
+                    neighbor = (current[0] + du, current[1] + dv)
+                    if neighbor == start:
+                        break
+                break
+
+        return ordered
+
+    # ========================================================================
+    # Triangulation Pipeline (2D)
+    # ========================================================================
+
+    def triangulate_region(
+        self,
+        region_voxels: list[tuple[int, int, int]],
+        region_normal: np.ndarray,
+        cell_size: float,
+        origin: np.ndarray,
+        simplify_epsilon: float = 0.0,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Триангулировать регион: извлечь контуры, упростить, построить меш.
+
+        Пайплайн:
+        1. Извлечение контуров (воксели → упорядоченные списки)
+        2. Проекция на плоскость → 2D координаты + базис
+        3. Douglas-Peucker в 2D
+        4. Bridge (объединение дырок) в 2D
+        5. Ear Clipping в 2D → треугольники
+        6. Преобразование вершин обратно в 3D
+
+        Args:
+            region_voxels: Список вокселей региона.
+            region_normal: Нормаль региона.
+            cell_size: Размер вокселя.
+            origin: Начало координат сетки.
+            simplify_epsilon: Параметр Douglas-Peucker (0 = без упрощения).
+
+        Returns:
+            (vertices, triangles):
+                vertices: np.ndarray shape (N, 3) — вершины меша в 3D
+                triangles: np.ndarray shape (M, 3) — индексы треугольников
+        """
+        # Шаг 1: Извлечение контуров
+        outer_voxels, holes_voxels = self.extract_contours_from_region(
+            region_voxels, region_normal, cell_size, origin
+        )
+
+        if len(outer_voxels) < 3:
+            return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
+
+        # Шаг 2: Проекция на плоскость и переход в 2D
+        u_axis, v_axis = self._build_2d_basis(region_normal)
+        region_normal = region_normal / np.linalg.norm(region_normal)
+
+        # Центроид региона
+        centers_3d = np.array([
+            origin + (np.array(v) + 0.5) * cell_size
+            for v in region_voxels
+        ], dtype=np.float32)
+        centroid = centers_3d.mean(axis=0)
+
+        def voxels_to_2d(voxels: list[tuple[int, int, int]]) -> np.ndarray:
+            """Проецировать воксели на плоскость и вернуть 2D координаты."""
+            if not voxels:
+                return np.array([]).reshape(0, 2)
+            points_2d = []
+            for vx, vy, vz in voxels:
+                world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
+                # Проекция на плоскость
+                to_point = world_pos - centroid
+                distance = np.dot(to_point, region_normal)
+                projected = world_pos - distance * region_normal
+                # Переход в 2D
+                rel = projected - centroid
+                u = float(np.dot(rel, u_axis))
+                v = float(np.dot(rel, v_axis))
+                points_2d.append([u, v])
+            return np.array(points_2d, dtype=np.float32)
+
+        outer_2d = voxels_to_2d(outer_voxels)
+        holes_2d = [voxels_to_2d(h) for h in holes_voxels]
+
+        # Шаг 3: Douglas-Peucker в 2D
+        if simplify_epsilon > 0:
+            outer_2d = self._douglas_peucker_2d(outer_2d, simplify_epsilon)
+            holes_2d = [self._douglas_peucker_2d(h, simplify_epsilon) for h in holes_2d if len(h) >= 3]
+
+        # Удаляем слишком маленькие дырки после упрощения
+        holes_2d = [h for h in holes_2d if len(h) >= 3]
+
+        if len(outer_2d) < 3:
+            return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
+
+        # Шаг 4: Bridge (объединение дырок с внешним контуром)
+        if holes_2d:
+            merged_2d = self._merge_holes_with_bridges(outer_2d, holes_2d)
+        else:
+            merged_2d = outer_2d
+
+        if len(merged_2d) < 3:
+            return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
+
+        # Шаг 5: Ear Clipping в 2D
+        triangles = self._ear_clip(merged_2d)
+
+        if len(triangles) == 0:
+            return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
+
+        # Шаг 6: Преобразование вершин обратно в 3D
+        vertices_3d = self._transform_to_3d(merged_2d, centroid, u_axis, v_axis)
+
+        return vertices_3d, np.array(triangles, dtype=np.int32)
+
+    def _douglas_peucker_2d(
+        self,
+        points: np.ndarray,
+        epsilon: float,
+    ) -> np.ndarray:
+        """
+        Упростить 2D полилинию алгоритмом Douglas-Peucker.
+
+        Args:
+            points: np.ndarray shape (N, 2) — вершины полилинии.
+            epsilon: Максимальное отклонение.
+
+        Returns:
+            Упрощённая полилиния shape (M, 2).
+        """
+        if len(points) <= 2:
+            return points
+
+        # Для замкнутого контура: находим две самые далёкие точки
+        # и разбиваем на две части
+        n = len(points)
+
+        # Находим точку с максимальным отклонением от линии start-end
+        start = points[0]
+        end = points[-1]
+        line_vec = end - start
+        line_len = np.linalg.norm(line_vec)
+
+        if line_len < 1e-10:
+            return points[[0]]
+
+        line_dir = line_vec / line_len
+
+        max_dist = 0.0
+        max_idx = 0
+
+        for i in range(1, n - 1):
+            # Расстояние от точки до линии
+            to_point = points[i] - start
+            proj_len = np.dot(to_point, line_dir)
+            proj_point = start + proj_len * line_dir
+            dist = np.linalg.norm(points[i] - proj_point)
+
+            if dist > max_dist:
+                max_dist = dist
+                max_idx = i
+
+        if max_dist > epsilon:
+            # Рекурсивно упрощаем обе части
+            left = self._douglas_peucker_2d(points[:max_idx + 1], epsilon)
+            right = self._douglas_peucker_2d(points[max_idx:], epsilon)
+            return np.vstack([left[:-1], right])
+        else:
+            return points[[0, -1]]
+
+    def _merge_holes_with_bridges(
+        self,
+        outer: np.ndarray,
+        holes: list[np.ndarray],
+    ) -> np.ndarray:
+        """
+        Объединить дырки с внешним контуром через bridge edges.
+
+        Алгоритм:
+        1. Сортируем дырки по максимальному X (правая вершина)
+        2. Для каждой дырки:
+           a) Находим вершину с максимальным X
+           b) Ищем видимую вершину на внешнем контуре
+           c) Вставляем дырку в контур через мост
+
+        Args:
+            outer: Внешний контур shape (N, 2), CCW ориентация.
+            holes: Список дырок, каждая shape (M, 2), CW ориентация.
+
+        Returns:
+            Объединённый контур shape (K, 2).
+        """
+        if not holes:
+            return outer
+
+        # Копируем контур для модификации
+        result = list(outer)
+
+        # Сортируем дырки по максимальному X (обрабатываем справа налево)
+        sorted_holes = sorted(
+            holes,
+            key=lambda h: max(p[0] for p in h),
+            reverse=True
+        )
+
+        for hole in sorted_holes:
+            if len(hole) < 3:
+                continue
+
+            # Находим вершину дырки с максимальным X
+            hole_list = list(hole)
+            max_x_idx = max(range(len(hole_list)), key=lambda i: hole_list[i][0])
+            bridge_hole_vertex = hole_list[max_x_idx]
+
+            # Ищем видимую вершину на внешнем контуре
+            bridge_outer_idx = self._find_bridge_vertex(
+                result, bridge_hole_vertex, hole_list
+            )
+
+            if bridge_outer_idx is None:
+                continue
+
+            # Вставляем дырку в контур
+            # Outer CCW, hole нужно пройти CW (в обратном направлении)
+            new_contour = []
+
+            # Часть внешнего контура до bridge vertex (включительно)
+            for i in range(bridge_outer_idx + 1):
+                new_contour.append(result[i])
+
+            # Дырка в обратном порядке, начиная с max_x_idx
+            # Если hole дан как CCW, проходим его CW: max_x, max_x-1, ..., 0, n-1, ..., max_x+1
+            for i in range(len(hole_list)):
+                idx = (max_x_idx - i) % len(hole_list)
+                new_contour.append(hole_list[idx])
+
+            # Возврат к bridge vertex (замыкаем мост)
+            new_contour.append(hole_list[max_x_idx])
+            new_contour.append(result[bridge_outer_idx])
+
+            # Остаток внешнего контура
+            for i in range(bridge_outer_idx + 1, len(result)):
+                new_contour.append(result[i])
+
+            result = new_contour
+
+        return np.array(result, dtype=np.float32)
+
+    def _find_bridge_vertex(
+        self,
+        contour: list,
+        hole_point: np.ndarray,
+        hole: list,
+    ) -> int | None:
+        """
+        Найти вершину контура для моста с точкой дырки.
+
+        Упрощённый алгоритм:
+        1. Находим все вершины контура, видимые из hole_point
+        2. Среди видимых выбираем ближайшую
+
+        Args:
+            contour: Список вершин контура [(x, y), ...].
+            hole_point: Точка дырки (x, y).
+            hole: Список вершин дырки для проверки пересечений.
+
+        Returns:
+            Индекс вершины контура или None.
+        """
+        n = len(contour)
+        hx, hy = hole_point[0], hole_point[1]
+
+        # Находим все видимые вершины и их расстояния
+        visible_vertices = []
+
+        for i in range(n):
+            if self._is_vertex_visible(contour, i, hole_point, hole):
+                dx = contour[i][0] - hx
+                dy = contour[i][1] - hy
+                dist = dx * dx + dy * dy
+                visible_vertices.append((dist, i))
+
+        if not visible_vertices:
+            # Ни одна вершина не видима - берём ближайшую
+            min_dist = float('inf')
+            best_idx = 0
+            for i in range(n):
+                dx = contour[i][0] - hx
+                dy = contour[i][1] - hy
+                dist = dx * dx + dy * dy
+                if dist < min_dist:
+                    min_dist = dist
+                    best_idx = i
+            return best_idx
+
+        # Возвращаем ближайшую видимую вершину
+        visible_vertices.sort(key=lambda x: x[0])
+        return visible_vertices[0][1]
+
+    def _is_vertex_visible(
+        self,
+        contour: list,
+        vertex_idx: int,
+        point: np.ndarray,
+        hole: list,
+    ) -> bool:
+        """
+        Проверить, видима ли вершина контура из точки.
+
+        Args:
+            contour: Список вершин контура.
+            vertex_idx: Индекс вершины.
+            point: Точка, из которой проверяем видимость.
+            hole: Список вершин дырки (для проверки пересечений).
+
+        Returns:
+            True если вершина видима.
+        """
+        vertex = contour[vertex_idx]
+        n = len(contour)
+
+        # Проверяем пересечение отрезка (point, vertex) со всеми рёбрами контура
+        for i in range(n):
+            if i == vertex_idx or (i + 1) % n == vertex_idx:
+                continue  # Пропускаем смежные рёбра
+
+            if i == (vertex_idx - 1) % n:
+                continue
+
+            p1 = contour[i]
+            p2 = contour[(i + 1) % n]
+
+            if self._segments_intersect_strict(point, vertex, p1, p2):
+                return False
+
+        # Проверяем пересечение с рёбрами дырки
+        m = len(hole)
+        for i in range(m):
+            p1 = hole[i]
+            p2 = hole[(i + 1) % m]
+
+            if self._segments_intersect_strict(point, vertex, p1, p2):
+                return False
+
+        return True
+
+    def _segments_intersect_strict(
+        self,
+        a1: np.ndarray,
+        a2: np.ndarray,
+        b1: np.ndarray,
+        b2: np.ndarray,
+    ) -> bool:
+        """
+        Проверить строгое пересечение двух отрезков (без касания в точках).
+
+        Args:
+            a1, a2: Концы первого отрезка.
+            b1, b2: Концы второго отрезка.
+
+        Returns:
+            True если отрезки пересекаются строго (не в концах).
+        """
+        def cross(o, a, b):
+            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+        d1 = cross(b1, b2, a1)
+        d2 = cross(b1, b2, a2)
+        d3 = cross(a1, a2, b1)
+        d4 = cross(a1, a2, b2)
+
+        if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+           ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+            return True
+
+        return False
+
+    def _ear_clip(self, polygon: np.ndarray) -> list[tuple[int, int, int]]:
+        """
+        Триангулировать простой полигон методом Ear Clipping.
+
+        Args:
+            polygon: np.ndarray shape (N, 2) — вершины полигона.
+
+        Returns:
+            Список треугольников [(i, j, k), ...].
+        """
+        n = len(polygon)
+        if n < 3:
+            return []
+
+        if n == 3:
+            return [(0, 1, 2)]
+
+        # Определяем ориентацию полигона (CCW = положительная площадь)
+        area = self._signed_area_2d(polygon)
+        ccw = area > 0
+
+        # Создаём связный список индексов
+        indices = list(range(n))
+        triangles = []
+
+        # Пытаемся найти и отрезать уши
+        max_iterations = n * n  # Защита от бесконечного цикла
+        iteration = 0
+
+        while len(indices) > 3 and iteration < max_iterations:
+            iteration += 1
+            found_ear = False
+
+            for i in range(len(indices)):
+                prev_i = (i - 1) % len(indices)
+                next_i = (i + 1) % len(indices)
+
+                prev_idx = indices[prev_i]
+                curr_idx = indices[i]
+                next_idx = indices[next_i]
+
+                prev_p = polygon[prev_idx]
+                curr_p = polygon[curr_idx]
+                next_p = polygon[next_idx]
+
+                # Проверяем выпуклость вершины
+                if not self._is_convex_2d(prev_p, curr_p, next_p, ccw):
+                    continue
+
+                # Проверяем, что треугольник не содержит других вершин
+                is_ear = True
+                for j in range(len(indices)):
+                    if j == prev_i or j == i or j == next_i:
+                        continue
+
+                    test_idx = indices[j]
+                    test_p = polygon[test_idx]
+
+                    # Пропускаем вершины, совпадающие с вершинами треугольника
+                    # (могут появиться при bridge для дырок)
+                    eps = 1e-10
+                    if (abs(test_p[0] - prev_p[0]) < eps and abs(test_p[1] - prev_p[1]) < eps):
+                        continue
+                    if (abs(test_p[0] - curr_p[0]) < eps and abs(test_p[1] - curr_p[1]) < eps):
+                        continue
+                    if (abs(test_p[0] - next_p[0]) < eps and abs(test_p[1] - next_p[1]) < eps):
+                        continue
+
+                    if self._point_in_triangle_2d(test_p, prev_p, curr_p, next_p):
+                        is_ear = False
+                        break
+
+                if is_ear:
+                    # Добавляем треугольник
+                    triangles.append((prev_idx, curr_idx, next_idx))
+                    # Удаляем вершину
+                    indices.pop(i)
+                    found_ear = True
+                    break
+
+            if not found_ear:
+                # Не удалось найти ухо - полигон может быть самопересекающимся
+                break
+
+        # Добавляем последний треугольник
+        if len(indices) == 3:
+            triangles.append((indices[0], indices[1], indices[2]))
+
+        return triangles
+
+    def _signed_area_2d(self, polygon: np.ndarray) -> float:
+        """Вычислить знаковую площадь полигона (положительная для CCW)."""
+        n = len(polygon)
+        area = 0.0
+        for i in range(n):
+            j = (i + 1) % n
+            area += polygon[i][0] * polygon[j][1]
+            area -= polygon[j][0] * polygon[i][1]
+        return area / 2.0
+
+    def _is_convex_2d(
+        self,
+        prev_p: np.ndarray,
+        curr_p: np.ndarray,
+        next_p: np.ndarray,
+        ccw: bool,
+    ) -> bool:
+        """Проверить, является ли вершина выпуклой."""
+        cross = (curr_p[0] - prev_p[0]) * (next_p[1] - curr_p[1]) - \
+                (curr_p[1] - prev_p[1]) * (next_p[0] - curr_p[0])
+
+        if ccw:
+            return cross > 0
+        else:
+            return cross < 0
+
+    def _point_in_triangle_2d(
+        self,
+        p: np.ndarray,
+        a: np.ndarray,
+        b: np.ndarray,
+        c: np.ndarray,
+    ) -> bool:
+        """Проверить, находится ли точка внутри треугольника (строго)."""
+        def sign(p1, p2, p3):
+            return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+
+        d1 = sign(p, a, b)
+        d2 = sign(p, b, c)
+        d3 = sign(p, c, a)
+
+        has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+        has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+
+        return not (has_neg and has_pos)
+
+    def _transform_to_3d(
+        self,
+        points_2d: np.ndarray,
+        origin: np.ndarray,
+        u_axis: np.ndarray,
+        v_axis: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Преобразовать 2D точки обратно в 3D.
+
+        Args:
+            points_2d: np.ndarray shape (N, 2).
+            origin: Центр плоскости в 3D.
+            u_axis: U ось плоскости.
+            v_axis: V ось плоскости.
+
+        Returns:
+            np.ndarray shape (N, 3).
+        """
+        n = len(points_2d)
+        points_3d = np.zeros((n, 3), dtype=np.float32)
+
+        for i in range(n):
+            u, v = points_2d[i]
+            points_3d[i] = origin + u * u_axis + v * v_axis
+
+        return points_3d
 
