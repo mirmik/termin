@@ -151,6 +151,8 @@
               "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
+              "show_simplified_contours": false,
+              "show_bridged_contours": false,
               "show_triangulated": false
             }
           },
@@ -330,15 +332,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            -0.34264975786209106,
-            -0.055889375507831573,
-            -1.133297085762024
+            17.718338012695312,
+            -1.6138734817504883,
+            6.183218955993652
           ],
           "rotation": [
-            -0.23911762560508354,
-            -0.09904576365747,
-            0.36964381022118065,
-            0.8923990987174202
+            -0.23911761713457472,
+            -0.09904576416293832,
+            0.369643823790626,
+            0.8923990953103367
           ]
         },
         "scale": [
@@ -362,11 +364,11 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 1.5,
+              "radius": 10.0,
               "target": [
-                -1.2612084141246367,
-                0.8626692790576646,
-                -1.8832971154573008
+                11.594613242543147,
+                4.5098509261103485,
+                1.1832187612171692
               ]
             }
           }
@@ -496,6 +498,8 @@
               "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
+              "show_simplified_contours": false,
+              "show_bridged_contours": false,
               "show_triangulated": false
             }
           },
@@ -585,6 +589,8 @@
               "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
+              "show_simplified_contours": false,
+              "show_bridged_contours": false,
               "show_triangulated": false
             }
           },
@@ -1356,7 +1362,7 @@
           {
             "type": "TeleportComponent",
             "data": {
-              "enabled": true
+              "enabled": false
             }
           }
         ],
@@ -3328,6 +3334,8 @@
               "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
+              "show_simplified_contours": false,
+              "show_bridged_contours": false,
               "show_triangulated": false
             }
           },
@@ -3429,7 +3437,26 @@
               "contour_simplify": 1.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
+              "show_simplified_contours": false,
+              "show_bridged_contours": false,
               "show_triangulated": true
+            }
+          },
+          {
+            "type": "NavMeshDisplayComponent",
+            "data": {
+              "enabled": true,
+              "navmesh": null,
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.05
             }
           }
         ],
@@ -3466,7 +3493,7 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": false,
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
@@ -3513,7 +3540,7 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": false,
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
@@ -3560,7 +3587,7 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": false,
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
@@ -3607,7 +3634,7 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": false,
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000004",
                     "name": "Cylinder"
@@ -3654,7 +3681,7 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": false,
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000004",
                     "name": "Cylinder"
@@ -3670,6 +3697,101 @@
             "children": []
           }
         ]
+      },
+      {
+        "uuid": "000000000000003b",
+        "name": "Agent",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            12.46576976776123,
+            8.897623062133789,
+            0.046242713928222656
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "name": "Sphere"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "type": "NavMeshAgentComponent",
+            "data": {
+              "enabled": true,
+              "speed": 5.0,
+              "stopping_distance": 0.1,
+              "debug_draw_path": true,
+              "click_to_move": true
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "000000000000003c",
+        "name": "PathfindingComponent",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "PathfindingWorldComponent",
+            "data": {
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -3717,13 +3839,13 @@
   "editor": {
     "camera": {
       "target": [
-        21.40518439460203,
-        4.447409416566113,
-        0.997210607468093
+        14.596464157104492,
+        4.886324882507324,
+        -0.3556266725063324
       ],
-      "radius": 14.5,
-      "azimuth": 41.44109775935827,
-      "elevation": 0.48869219055841473
+      "radius": 11.5,
+      "azimuth": 42.310271726851774,
+      "elevation": 0.5201081170943144
     },
     "displays": [
       {
@@ -3733,7 +3855,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "ecae1f74-a3a7-4e4a-abd2-f87df1aba565",
+            "uuid": "43c153ad-97b1-4335-8a41-9daa9adc859b",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3753,7 +3875,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "75df1d39-039f-4be3-921e-fb0ed131d6eb",
+            "uuid": "e957837d-4760-4e79-9fb3-ab667ee551a9",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3768,7 +3890,6 @@
       }
     ],
     "expanded_entities": [
-      "entity18",
       "editor_ui",
       "EditorEntities",
       "camera"

@@ -96,6 +96,20 @@ class ResourceManagerViewer(QDialog):
         self._textures_tree.itemClicked.connect(lambda item: self._on_item_clicked("texture", item))
         self._tab_widget.addTab(self._textures_tree, "Textures")
 
+        # VoxelGrid
+        self._voxelgrids_tree = QTreeWidget()
+        self._voxelgrids_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._voxelgrids_tree.setAlternatingRowColors(True)
+        self._voxelgrids_tree.itemClicked.connect(lambda item: self._on_item_clicked("voxelgrid", item))
+        self._tab_widget.addTab(self._voxelgrids_tree, "VoxelGrids")
+
+        # NavMesh
+        self._navmeshes_tree = QTreeWidget()
+        self._navmeshes_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._navmeshes_tree.setAlternatingRowColors(True)
+        self._navmeshes_tree.itemClicked.connect(lambda item: self._on_item_clicked("navmesh", item))
+        self._tab_widget.addTab(self._navmeshes_tree, "NavMeshes")
+
         # Компоненты (Python ResourceManager)
         self._components_tree = QTreeWidget()
         self._components_tree.setHeaderLabels(["Name", "Module"])
@@ -180,6 +194,16 @@ class ResourceManagerViewer(QDialog):
             if mat:
                 self._selected_asset = mat
                 self._show_material_details(name, mat)
+        elif asset_type == "voxelgrid":
+            asset = self._resource_manager._voxelgrid_assets.get(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_voxelgrid_details(name, asset)
+        elif asset_type == "navmesh":
+            asset = self._resource_manager._navmesh_assets.get(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_navmesh_details(name, asset)
 
         # Enable/disable load button
         can_load = (
@@ -249,6 +273,50 @@ class ResourceManagerViewer(QDialog):
 
         self._details_text.setText("\n".join(lines))
 
+    def _show_voxelgrid_details(self, name: str, asset) -> None:
+        """Показать детали VoxelGrid."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(none)'}",
+            f"Loaded: {asset.is_loaded}",
+        ]
+
+        if asset.is_loaded:
+            grid = asset.data
+            if grid is not None:
+                lines.append(f"")
+                lines.append(f"=== VoxelGrid Data ===")
+                lines.append(f"Cell Size: {grid.cell_size}")
+                lines.append(f"Voxel Count: {grid.voxel_count()}")
+                origin = grid.origin
+                lines.append(f"Origin: ({origin.x:.2f}, {origin.y:.2f}, {origin.z:.2f})")
+
+        self._details_text.setText("\n".join(lines))
+
+    def _show_navmesh_details(self, name: str, asset) -> None:
+        """Показать детали NavMesh."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(none)'}",
+            f"Loaded: {asset.is_loaded}",
+        ]
+
+        if asset.is_loaded:
+            navmesh = asset.data
+            if navmesh is not None:
+                lines.append(f"")
+                lines.append(f"=== NavMesh Data ===")
+                lines.append(f"Cell Size: {navmesh.cell_size}")
+                lines.append(f"Polygons: {navmesh.polygon_count()}")
+                lines.append(f"Triangles: {navmesh.triangle_count()}")
+                lines.append(f"Vertices: {navmesh.vertex_count()}")
+                origin = navmesh.origin
+                lines.append(f"Origin: ({origin[0]:.2f}, {origin[1]:.2f}, {origin[2]:.2f})")
+
+        self._details_text.setText("\n".join(lines))
+
     def _on_load_clicked(self) -> None:
         """Загрузить выбранный ассет."""
         if self._selected_asset is None:
@@ -275,6 +343,8 @@ class ResourceManagerViewer(QDialog):
         self._refresh_materials()
         self._refresh_meshes()
         self._refresh_textures()
+        self._refresh_voxelgrids()
+        self._refresh_navmeshes()
         self._refresh_components()
         self._refresh_registry()
         self._refresh_watched()
@@ -322,6 +392,34 @@ class ResourceManagerViewer(QDialog):
 
         self._textures_tree.resizeColumnToContents(0)
         self._textures_tree.resizeColumnToContents(1)
+
+    def _refresh_voxelgrids(self) -> None:
+        """Обновляет список VoxelGrid."""
+        self._voxelgrids_tree.clear()
+
+        for name, asset in sorted(self._resource_manager._voxelgrid_assets.items()):
+            status = "loaded" if asset.is_loaded else "not loaded"
+            uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
+
+            item = QTreeWidgetItem([name, status, uuid_str])
+            self._voxelgrids_tree.addTopLevelItem(item)
+
+        self._voxelgrids_tree.resizeColumnToContents(0)
+        self._voxelgrids_tree.resizeColumnToContents(1)
+
+    def _refresh_navmeshes(self) -> None:
+        """Обновляет список NavMesh."""
+        self._navmeshes_tree.clear()
+
+        for name, asset in sorted(self._resource_manager._navmesh_assets.items()):
+            status = "loaded" if asset.is_loaded else "not loaded"
+            uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
+
+            item = QTreeWidgetItem([name, status, uuid_str])
+            self._navmeshes_tree.addTopLevelItem(item)
+
+        self._navmeshes_tree.resizeColumnToContents(0)
+        self._navmeshes_tree.resizeColumnToContents(1)
 
     def _refresh_components(self) -> None:
         """Обновляет список компонентов."""
@@ -426,6 +524,7 @@ class ResourceManagerViewer(QDialog):
             f"Materials: {len(rm.materials)} | "
             f"Meshes: {len(rm._mesh_assets)} | "
             f"Textures: {len(rm._texture_assets)} | "
-            f"Components: {len(rm.components)} | "
-            f"Watching: {watching} ({watched_dirs} dirs, {watched_files} files)"
+            f"VoxelGrids: {len(rm._voxelgrid_assets)} | "
+            f"NavMeshes: {len(rm._navmesh_assets)} | "
+            f"Components: {len(rm.components)}"
         )

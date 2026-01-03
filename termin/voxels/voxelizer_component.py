@@ -774,17 +774,13 @@ void main() {
         )
         builder = PolygonBuilder(config)
 
-        # Полный пайплайн: регионы → контуры → упрощение → триангуляция
+        # Строим NavMesh
         navmesh = builder.build(
             grid,
-            expand_regions=False,
+            do_expand_regions=False,
             share_boundary=False,
             project_contours=False,
             stitch_contours=False,
-            stitch_polygons=True,
-            extract_contours=True,
-            simplify_contours=True,
-            retriangulate=True,
         )
 
         # Сохраняем регионы и grid для отладочной визуализации
