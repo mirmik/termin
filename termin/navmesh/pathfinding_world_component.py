@@ -12,7 +12,13 @@ import numpy as np
 from termin._native import log
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
-from termin.navmesh.pathfinding import RegionGraph, NavMeshGraph
+from termin.navmesh.pathfinding import (
+    RegionGraph,
+    NavMeshGraph,
+    get_portals_from_path,
+    funnel_algorithm,
+    navmesh_line_of_sight,
+)
 from termin.navmesh.types import NavMesh
 
 if TYPE_CHECKING:
@@ -220,27 +226,45 @@ class PathfindingWorldComponent(PythonComponent):
             if path_indices is None:
                 return None
 
-        # Конвертируем индексы треугольников в мировые координаты
-        # Первая точка = start, промежуточные = центроиды, последняя = end
-        path_points: List[np.ndarray] = []
+        log.info(f"[PathfindingWorld] A* path: {len(path_indices)} triangles")
+
+        # Получаем entity для трансформации
         entity = self._region_entities.get(start_region)
         transform = entity.transform.global_pose().as_matrix() if entity else None
+        inverse = np.linalg.inv(transform) if transform is not None else None
 
-        # Начинаем с позиции агента
-        path_points.append(start.copy())
+        # Трансформируем start/end в локальные координаты для funnel algorithm
+        if inverse is not None:
+            local_start = self._transform_point(start, inverse)
+            local_end = self._transform_point(end, inverse)
+        else:
+            local_start = start.copy()
+            local_end = end.copy()
 
-        # Промежуточные точки — центроиды (пропускаем первый и последний треугольник)
-        for tri_idx in path_indices[1:-1]:
-            if tri_idx < len(region.centroids):
-                local_centroid = region.centroids[tri_idx]
-                if transform is not None:
-                    world_centroid = self._transform_point(local_centroid, transform)
-                    path_points.append(world_centroid)
-                else:
-                    path_points.append(local_centroid.copy())
+        # Извлекаем порталы из пути
+        portals = get_portals_from_path(
+            path_indices, region.triangles, region.vertices, region.neighbors
+        )
+        log.info(f"[PathfindingWorld] portals: {len(portals)}")
 
-        # Заканчиваем точкой назначения
-        path_points.append(end.copy())
+        # Применяем Funnel Algorithm
+        local_path = funnel_algorithm(local_start, local_end, portals)
+        log.info(f"[PathfindingWorld] funnel path: {len(local_path)} points")
+
+        # Оптимизация: пробуем срезать путь через line of sight
+        optimized_path = self._optimize_path_los(
+            local_path, start_tri_idx, region.triangles, region.vertices, region.neighbors
+        )
+        log.info(f"[PathfindingWorld] optimized path: {len(optimized_path)} points")
+
+        # Трансформируем результат в мировые координаты
+        path_points: List[np.ndarray] = []
+        for local_point in optimized_path:
+            if transform is not None:
+                world_point = self._transform_point(local_point, transform)
+                path_points.append(world_point)
+            else:
+                path_points.append(local_point.copy())
 
         return path_points
 
@@ -406,6 +430,56 @@ class PathfindingWorldComponent(PythonComponent):
         d_h = np.array([direction[0], direction[1], direction[2], 0.0], dtype=np.float64)
         result = matrix @ d_h
         return result[:3].astype(np.float32)
+
+    def _optimize_path_los(
+        self,
+        path: List[np.ndarray],
+        start_tri: int,
+        triangles: np.ndarray,
+        vertices: np.ndarray,
+        neighbors: np.ndarray,
+    ) -> List[np.ndarray]:
+        """
+        Оптимизировать путь через проверку прямой видимости.
+
+        Пробует срезать промежуточные точки, если есть прямая видимость.
+        """
+        if len(path) <= 2:
+            return path
+
+        from termin.navmesh.pathfinding import find_triangle_containing_point
+
+        optimized: List[np.ndarray] = [path[0]]
+        current_idx = 0
+
+        while current_idx < len(path) - 1:
+            # Пробуем найти самую дальнюю точку с прямой видимостью
+            best_skip = current_idx + 1
+
+            for test_idx in range(len(path) - 1, current_idx + 1, -1):
+                # Находим треугольник текущей точки
+                current_tri = find_triangle_containing_point(
+                    optimized[-1], vertices, triangles
+                )
+                if current_tri < 0:
+                    current_tri = start_tri
+
+                # Проверяем прямую видимость
+                if navmesh_line_of_sight(
+                    optimized[-1],
+                    path[test_idx],
+                    current_tri,
+                    triangles,
+                    vertices,
+                    neighbors,
+                ):
+                    best_skip = test_idx
+                    break
+
+            optimized.append(path[best_skip])
+            current_idx = best_skip
+
+        return optimized
 
     def raycast_from_screen(
         self,
