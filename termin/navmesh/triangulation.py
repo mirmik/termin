@@ -25,15 +25,21 @@ def is_convex_2d(
     curr_p: np.ndarray,
     next_p: np.ndarray,
     ccw: bool,
+    epsilon: float = 1e-10,
 ) -> bool:
-    """Проверить, является ли вершина выпуклой."""
+    """
+    Проверить, является ли вершина выпуклой.
+
+    Почти коллинеарные вершины (cross ≈ 0) считаются выпуклыми,
+    чтобы ear clipping работал на узких полигонах.
+    """
     cross = (curr_p[0] - prev_p[0]) * (next_p[1] - curr_p[1]) - \
             (curr_p[1] - prev_p[1]) * (next_p[0] - curr_p[0])
 
     if ccw:
-        return cross > 0
+        return cross > -epsilon  # >= 0 с погрешностью
     else:
-        return cross < 0
+        return cross < epsilon   # <= 0 с погрешностью
 
 
 def point_in_triangle_2d(
@@ -109,9 +115,14 @@ def ear_clip(polygon: np.ndarray) -> list[tuple[int, int, int]]:
     max_iterations = n * n
     iteration = 0
 
+    convex_count = 0
+    reflex_count = 0
+
     while len(indices) > 3 and iteration < max_iterations:
         iteration += 1
         found_ear = False
+        convex_count = 0
+        reflex_count = 0
 
         for i in range(len(indices)):
             prev_i = (i - 1) % len(indices)
@@ -127,7 +138,9 @@ def ear_clip(polygon: np.ndarray) -> list[tuple[int, int, int]]:
 
             # Проверяем выпуклость вершины
             if not is_convex_2d(prev_p, curr_p, next_p, ccw):
+                reflex_count += 1
                 continue
+            convex_count += 1
 
             # Проверяем, что треугольник не содержит других вершин
             is_ear = True
@@ -158,6 +171,7 @@ def ear_clip(polygon: np.ndarray) -> list[tuple[int, int, int]]:
                 break
 
         if not found_ear:
+            print(f"[ear_clip] no ear found! remaining={len(indices)}, convex={convex_count}, reflex={reflex_count}, triangles={len(triangles)}")
             break
 
     # Добавляем последний треугольник
@@ -394,9 +408,9 @@ def merge_holes_with_bridges(
         for i in range(bridge_outer_idx + 1):
             new_contour.append(result[i])
 
-        # Дырка в обратном порядке, начиная с bridge_hole_idx
+        # Дырка в прямом порядке (CW), начиная с bridge_hole_idx
         for i in range(len(hole_list)):
-            idx = (bridge_hole_idx - i) % len(hole_list)
+            idx = (bridge_hole_idx + i) % len(hole_list)
             new_contour.append(hole_list[idx])
 
         # Возврат к bridge vertex (замыкаем мост)
@@ -960,6 +974,7 @@ def edge_collapse(
     min_edge_length: float,
     min_contour_edge_length: float = 0.0,
     boundary_edges: set[tuple[int, int]] | None = None,
+    boundary_vertices: set[int] | None = None,
     max_iterations: int = 1000,
 ) -> tuple[np.ndarray, list[tuple[int, int, int]]]:
     """
@@ -971,6 +986,7 @@ def edge_collapse(
         min_edge_length: Мин. длина внутреннего ребра.
         min_contour_edge_length: Мин. длина ребра на контуре.
         boundary_edges: Множество граничных рёбер (нормализованные: min, max).
+        boundary_vertices: Множество индексов граничных вершин (не сдвигать).
         max_iterations: Максимум итераций.
 
     Returns:
@@ -984,6 +1000,9 @@ def edge_collapse(
 
     if boundary_edges is None:
         boundary_edges = set()
+
+    if boundary_vertices is None:
+        boundary_vertices = set()
 
     # Debug info
     edge_map = build_edge_map(triangles)
@@ -1058,12 +1077,36 @@ def edge_collapse(
             break
 
         e0, e1 = shortest_edge
+        is_boundary_edge = shortest_edge in boundary_edges
 
-        # Схлопываем ребро: объединяем вершины в середину
-        keep_idx, remove_idx = e0, e1
-        mid_x = (vertices[e0][0] + vertices[e1][0]) / 2
-        mid_y = (vertices[e0][1] + vertices[e1][1]) / 2
-        vertices[keep_idx] = (mid_x, mid_y)
+        # Схлопываем ребро: определяем какую вершину оставить
+        e0_is_boundary = e0 in boundary_vertices
+        e1_is_boundary = e1 in boundary_vertices
+
+        if e0_is_boundary and e1_is_boundary and not is_boundary_edge:
+            # Обе вершины граничные, но ребро внутреннее — не схлопываем
+            continue
+
+        if is_boundary_edge:
+            # Граничное ребро — сдвигаем обе вершины в середину (меняем форму контура)
+            keep_idx, remove_idx = e0, e1
+            mid_x = (vertices[e0][0] + vertices[e1][0]) / 2
+            mid_y = (vertices[e0][1] + vertices[e1][1]) / 2
+            vertices[keep_idx] = (mid_x, mid_y)
+        elif e0_is_boundary:
+            # e0 граничная — оставляем e0, удаляем e1
+            keep_idx, remove_idx = e0, e1
+            # Не двигаем граничную вершину
+        elif e1_is_boundary:
+            # e1 граничная — оставляем e1, удаляем e0
+            keep_idx, remove_idx = e1, e0
+            # Не двигаем граничную вершину
+        else:
+            # Обе внутренние — сдвигаем в середину
+            keep_idx, remove_idx = e0, e1
+            mid_x = (vertices[e0][0] + vertices[e1][0]) / 2
+            mid_y = (vertices[e0][1] + vertices[e1][1]) / 2
+            vertices[keep_idx] = (mid_x, mid_y)
 
         # Заменяем remove_idx на keep_idx во всех треугольниках
         new_triangles = []
@@ -1093,6 +1136,11 @@ def edge_collapse(
             if be0 != be1:
                 new_boundary_edges.add((min(be0, be1), max(be0, be1)))
         boundary_edges = new_boundary_edges
+
+        # Обновляем boundary_vertices: заменяем remove_idx на keep_idx
+        if remove_idx in boundary_vertices:
+            boundary_vertices.discard(remove_idx)
+            boundary_vertices.add(keep_idx)
 
     if collapse_count > 0:
         # Удаляем неиспользуемые вершины и перенумеровываем
@@ -1336,9 +1384,14 @@ def ear_clipping_refined(
         actual_boundary_edges = {
             edge for edge, tris in edge_map.items() if len(tris) == 1
         }
+        # Граничные вершины — вершины на граничных рёбрах
+        actual_boundary_vertices = set()
+        for e0, e1 in actual_boundary_edges:
+            actual_boundary_vertices.add(e0)
+            actual_boundary_vertices.add(e1)
         refined_verts, refined_tris = edge_collapse(
             refined_verts, refined_tris, min_edge_length, min_contour_edge_length,
-            actual_boundary_edges
+            actual_boundary_edges, actual_boundary_vertices
         )
 
     # Второй проход (после edge collapse)

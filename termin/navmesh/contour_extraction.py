@@ -115,11 +115,14 @@ def extract_contours_from_mask(
     """
     height, width = mask.shape
 
-    # 8-связность
+    # 8-связность для обхода контура
     directions = [
         (1, 0), (1, 1), (0, 1), (-1, 1),
         (-1, 0), (-1, -1), (0, -1), (1, -1)
     ]
+
+    # 4-связность для flood fill (чтобы диагональные проходы не "заливали" дырки)
+    cardinal_directions_ff = [(1, 0), (0, 1), (-1, 0), (0, -1)]
 
     # Шаг 1: Flood fill от края — помечаем внешнюю пустоту
     external = np.zeros_like(mask, dtype=np.uint8)
@@ -141,10 +144,10 @@ def extract_contours_from_mask(
             queue.append((width - 1, v))
             external[v, width - 1] = 1
 
-    # Flood fill
+    # Flood fill с 4-связностью
     while queue:
         u, v = queue.popleft()
-        for du, dv in directions:
+        for du, dv in cardinal_directions_ff:
             nu, nv = u + du, v + dv
             if 0 <= nu < width and 0 <= nv < height:
                 if mask[nv, nu] == 0 and external[nv, nu] == 0:
@@ -152,6 +155,9 @@ def extract_contours_from_mask(
                     queue.append((nu, nv))
 
     # Шаг 2-4: Классифицируем граничные ячейки
+    # Используем 4-связность для определения границы (только кардинальные направления)
+    cardinal_directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+
     outer_cells: list[tuple[int, int]] = []
     inner_cells: list[tuple[int, int]] = []
 
@@ -163,7 +169,7 @@ def extract_contours_from_mask(
             has_external_neighbor = False
             has_internal_neighbor = False
 
-            for du, dv in directions:
+            for du, dv in cardinal_directions:
                 nu, nv = u + du, v + dv
                 if nu < 0 or nu >= width or nv < 0 or nv >= height:
                     has_external_neighbor = True

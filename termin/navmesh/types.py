@@ -46,6 +46,9 @@ class NavMeshConfig:
     use_cvt_smoothing: bool = False
     """Применять CVT (Centroidal Voronoi Tessellation) для оптимизации позиций вершин."""
 
+    use_edge_collapse: bool = False
+    """Применять edge collapse для схлопывания коротких рёбер."""
+
     use_second_pass: bool = False
     """Повторный проход flips + smoothing после edge collapse."""
 

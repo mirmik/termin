@@ -35,6 +35,7 @@ from termin.navmesh.triangulation import (
     merge_holes_with_bridges,
     transform_to_3d,
     build_2d_basis,
+    signed_area_2d,
 )
 
 from termin.navmesh.contour_extraction import (
@@ -221,8 +222,8 @@ class PolygonBuilder:
                     np.array(grid.origin, dtype=np.float32),
                     simplify_epsilon=self.config.contour_epsilon,
                     max_edge_length=self.config.max_edge_length,
-                    min_edge_length=self.config.min_edge_length,
-                    min_contour_edge_length=self.config.min_contour_edge_length,
+                    min_edge_length=self.config.min_edge_length if self.config.use_edge_collapse else 0.0,
+                    min_contour_edge_length=self.config.min_contour_edge_length if self.config.use_edge_collapse else 0.0,
                     max_vertex_valence=self.config.max_vertex_valence,
                     use_delaunay_flip=self.config.use_delaunay_flip,
                     use_valence_flip=self.config.use_valence_flip,
@@ -790,6 +791,16 @@ class PolygonBuilder:
 
         outer_2d = voxels_to_2d(outer_voxels)
         holes_2d = [voxels_to_2d(h) for h in holes_voxels]
+
+        # Гарантируем CCW ориентацию внешнего контура
+        # (ориентация может измениться в зависимости от направления нормали региона)
+        if len(outer_2d) >= 3 and signed_area_2d(outer_2d) < 0:
+            outer_2d = outer_2d[::-1].copy()
+
+        # Дырки должны быть CW (отрицательная площадь)
+        for i, hole in enumerate(holes_2d):
+            if len(hole) >= 3 and signed_area_2d(hole) > 0:
+                holes_2d[i] = hole[::-1].copy()
 
         # Шаг 3: Douglas-Peucker в 2D
         if simplify_epsilon > 0:

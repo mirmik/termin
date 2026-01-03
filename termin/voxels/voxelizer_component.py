@@ -182,6 +182,11 @@ class VoxelizerComponent(PythonComponent):
             label="CVT Smoothing",
             kind="bool",
         ),
+        "use_edge_collapse": InspectField(
+            path="use_edge_collapse",
+            label="Edge Collapse",
+            kind="bool",
+        ),
         "use_second_pass": InspectField(
             path="use_second_pass",
             label="Second Pass",
@@ -226,7 +231,7 @@ class VoxelizerComponent(PythonComponent):
         "navmesh_output_path", "normal_angle", "contour_simplify", "max_edge_length",
         "min_edge_length", "min_contour_edge_length", "max_vertex_valence",
         "use_delaunay_flip", "use_valence_flip", "use_angle_flip", "use_cvt_smoothing",
-        "use_second_pass", "show_region_voxels", "show_sparse_boundary",
+        "use_edge_collapse", "use_second_pass", "show_region_voxels", "show_sparse_boundary",
         "show_simplified_contours", "show_bridged_contours", "show_triangulated",
     ]
 
@@ -248,6 +253,7 @@ class VoxelizerComponent(PythonComponent):
         use_valence_flip: bool = False,
         use_angle_flip: bool = False,
         use_cvt_smoothing: bool = False,
+        use_edge_collapse: bool = False,
         use_second_pass: bool = False,
         show_region_voxels: bool = False,
         show_sparse_boundary: bool = False,
@@ -272,6 +278,7 @@ class VoxelizerComponent(PythonComponent):
         self.use_valence_flip = use_valence_flip
         self.use_angle_flip = use_angle_flip
         self.use_cvt_smoothing = use_cvt_smoothing
+        self.use_edge_collapse = use_edge_collapse
         self.use_second_pass = use_second_pass
         self._last_voxel_count: int = 0
 
@@ -856,6 +863,7 @@ void main() {
             use_valence_flip=self.use_valence_flip,
             use_angle_flip=self.use_angle_flip,
             use_cvt_smoothing=self.use_cvt_smoothing,
+            use_edge_collapse=self.use_edge_collapse,
             use_second_pass=self.use_second_pass,
         )
         builder = PolygonBuilder(config)
@@ -1392,6 +1400,8 @@ void main() {
         all_colors: list[np.ndarray] = []
         vertex_offset = 0
 
+        normal_offset = 0.15  # Смещение по нормали для видимости
+
         for poly_idx, polygon in enumerate(navmesh.polygons):
             if len(polygon.vertices) == 0 or len(polygon.triangles) == 0:
                 continue
@@ -1400,7 +1410,10 @@ void main() {
             hue = (poly_idx * 0.618033988749895) % 1.0
             region_color = colorsys.hsv_to_rgb(hue, 0.7, 0.9)
 
-            all_vertices.append(polygon.vertices)
+            # Смещаем вершины по нормали для видимости
+            offset_vertices = polygon.vertices + polygon.normal * normal_offset
+
+            all_vertices.append(offset_vertices)
             all_triangles.append(polygon.triangles + vertex_offset)
 
             vertex_colors = np.full((len(polygon.vertices), 3), region_color, dtype=np.float32)

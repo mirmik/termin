@@ -1026,9 +1026,6 @@ class PathfindingWorldComponent(PythonComponent):
 
     def draw(self) -> None:
         """Отрисовка отладочной визуализации."""
-        if not self.show_graph_edges and not self.show_portals:
-            return
-
         from termin.visualization.render.immediate import ImmediateRenderer
         from termin.geombase import Vec3
         from termin.graphics import Color4
@@ -1037,7 +1034,11 @@ class PathfindingWorldComponent(PythonComponent):
         if renderer is None:
             return
 
+        # Всегда вызываем begin() чтобы очистить предыдущий кадр
         renderer.begin()
+
+        if not self.show_graph_edges and not self.show_portals:
+            return
 
         # Рисуем порталы
         if self.show_portals and self._portals:
@@ -1116,23 +1117,38 @@ class PathfindingWorldComponent(PythonComponent):
                             depth_test=True,
                         )
 
-        if not self.show_graph_edges or not self._navmesh_graph.regions:
+        if not self.show_graph_edges:
+            return
+
+        if not self._navmesh_graph.regions:
             return
 
         green = Color4(0.0, 1.0, 0.0, 1.0)
         cyan = Color4(0.0, 0.8, 0.8, 0.5)
 
+        normal_offset = 0.15  # Смещение по нормали для видимости
+
         # Рисуем рёбра графа для каждого региона
         for region_id, region in enumerate(self._navmesh_graph.regions):
+            if region_id not in self._region_navmesh_info:
+                continue
             entity = self._region_entities.get(region_id)
             transform = None
             if entity is not None:
                 transform = entity.transform.global_pose().as_matrix()
 
+            # Получаем нормаль региона для смещения
+            region_normal = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            navmesh_info = self._region_navmesh_info.get(region_id)
+            if navmesh_info is not None:
+                navmesh, poly_idx = navmesh_info
+                if poly_idx < len(navmesh.polygons):
+                    region_normal = navmesh.polygons[poly_idx].normal
+
             triangles = region.triangles
-            vertices = region.vertices
+            vertices = region.vertices + region_normal * normal_offset
             neighbors = region.neighbors
-            centroids = region.centroids
+            centroids = region.centroids + region_normal * normal_offset
 
             # Для каждого треугольника рисуем линии к соседям
             drawn_edges: set[tuple[int, int]] = set()
