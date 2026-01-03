@@ -268,6 +268,7 @@ class VoxelizerComponent(PythonComponent):
         self._debug_boundary_mesh: Optional[TcMesh] = None
         self._debug_region_voxels_mesh: Optional[TcMesh] = None
         self._debug_sparse_boundary_mesh: Optional[TcMesh] = None
+        self._debug_inner_contour_mesh: Optional[TcMesh] = None
         # GPU caches for debug meshes
         from termin._native.render import MeshGPU
         self._debug_mesh_gpu: Optional[MeshGPU] = None
@@ -276,8 +277,10 @@ class VoxelizerComponent(PythonComponent):
         self._debug_region_voxels_gpu: Optional[MeshGPU] = None
         self._debug_boundary_gpu: Optional[MeshGPU] = None
         self._debug_sparse_boundary_gpu: Optional[MeshGPU] = None
+        self._debug_inner_contour_gpu: Optional[MeshGPU] = None
         self._debug_material: Optional[Material] = None
         self._debug_contour_material: Optional[Material] = None
+        self._debug_transparent_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
 
@@ -290,6 +293,7 @@ class VoxelizerComponent(PythonComponent):
     GEOMETRY_BOUNDARY = "boundary"
     GEOMETRY_REGIONS = "regions"
     GEOMETRY_SPARSE_BOUNDARY = "sparse_boundary"
+    GEOMETRY_INNER_CONTOUR = "inner_contour"
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -313,6 +317,9 @@ class VoxelizerComponent(PythonComponent):
         if self.show_sparse_boundary:
             mat = self._get_or_create_debug_material()
             marks.update(p.phase_mark for p in mat.phases)
+            # Inner contours render in transparent phase
+            mat_trans = self._get_or_create_transparent_material()
+            marks.update(p.phase_mark for p in mat_trans.phases)
         return marks
 
     def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
@@ -353,6 +360,12 @@ class VoxelizerComponent(PythonComponent):
                     from termin._native.render import MeshGPU
                     self._debug_sparse_boundary_gpu = MeshGPU()
                 self._debug_sparse_boundary_gpu.draw(context, self._debug_sparse_boundary_mesh.mesh, self._debug_sparse_boundary_mesh.version)
+        if geometry_id == "" or geometry_id == self.GEOMETRY_INNER_CONTOUR:
+            if self.show_sparse_boundary and self._debug_inner_contour_mesh is not None and self._debug_inner_contour_mesh.is_valid:
+                if self._debug_inner_contour_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._debug_inner_contour_gpu = MeshGPU()
+                self._debug_inner_contour_gpu.draw(context, self._debug_inner_contour_mesh.mesh, self._debug_inner_contour_mesh.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -502,6 +515,25 @@ class VoxelizerComponent(PythonComponent):
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_SPARSE_BOUNDARY) for p in phases)
 
+        # Inner contours (дырки) - рендерим в transparent фазе
+        if self.show_sparse_boundary and self._debug_inner_contour_mesh is not None and self._debug_inner_contour_mesh.is_valid:
+            mat = self._get_or_create_transparent_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+            for phase in phases:
+                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
+                phase.set_param("u_fill_percent", 1.0)
+                phase.set_param("u_bounds_min", self._debug_bounds_min)
+                phase.set_param("u_bounds_max", self._debug_bounds_max)
+                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
+                phase.set_param("u_ambient_intensity", 0.5)
+
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_INNER_CONTOUR) for p in phases)
+
         return result
 
     def _get_or_create_debug_material(self) -> Material:
@@ -543,6 +575,26 @@ class VoxelizerComponent(PythonComponent):
                 ),
             )
         return self._debug_contour_material
+
+    def _get_or_create_transparent_material(self) -> Material:
+        """Создаёт материал для transparent рендеринга (внутренние контуры)."""
+        if self._debug_transparent_material is None:
+            from termin.voxels.voxel_shader import voxel_display_shader
+            from termin.visualization.render.renderpass import RenderState
+
+            shader = voxel_display_shader()
+            self._debug_transparent_material = Material(
+                shader=shader,
+                color=(1.0, 0.5, 0.0, 0.5),  # Полупрозрачный
+                phase_mark="transparent",
+                render_state=RenderState(
+                    depth_test=True,
+                    depth_write=False,  # Не пишем в depth для transparent
+                    blend=True,
+                    cull=True,
+                ),
+            )
+        return self._debug_transparent_material
 
     def _collect_meshes_from_entity(
         self,
@@ -983,6 +1035,8 @@ class VoxelizerComponent(PythonComponent):
         self._debug_region_voxels_gpu = None
         self._debug_sparse_boundary_mesh = None
         self._debug_sparse_boundary_gpu = None
+        self._debug_inner_contour_mesh = None
+        self._debug_inner_contour_gpu = None
 
         if not self._debug_regions or self._debug_grid is None:
             return
@@ -1285,80 +1339,113 @@ class VoxelizerComponent(PythonComponent):
         verts_per_cube: int,
         tris_per_cube: int,
     ) -> None:
-        """Построить меш для граничных вокселей (< 8 соседей в регионе по 26-связности)."""
+        """Построить меши для внешних и внутренних контуров регионов."""
         if not self._debug_regions:
             return
 
-        # 26-связность
-        neighbors_26 = [
-            (dx, dy, dz)
-            for dx in (-1, 0, 1)
-            for dy in (-1, 0, 1)
-            for dz in (-1, 0, 1)
-            if not (dx == 0 and dy == 0 and dz == 0)
-        ]
-
-        # Собираем граничные воксели из всех регионов
-        sparse_boundary_voxels: list[tuple[tuple[int, int, int], tuple[float, float, float]]] = []
-
+        from termin.navmesh.polygon_builder import PolygonBuilder
         import colorsys
         import random
         random.seed(42)
 
-        for region_idx, (region_voxels, _) in enumerate(self._debug_regions):
-            region_set = set(region_voxels)
+        builder = PolygonBuilder()
 
+        # Собираем воксели outer контуров и inner контуров отдельно
+        outer_voxels: list[tuple[tuple[int, int, int], tuple[float, float, float]]] = []
+        inner_voxels: list[tuple[tuple[int, int, int], tuple[float, float, float]]] = []
+
+        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
             # Генерируем цвет для региона
             h = random.random()
             s = random.random() * 0.3 + 0.7
             v = random.random() * 0.2 + 0.8
             region_color = colorsys.hsv_to_rgb(h, s, v)
 
-            for voxel in region_voxels:
+            # Извлекаем контуры
+            outer_contour, holes = builder.extract_contours_from_region(
+                region_voxels,
+                region_normal,
+                grid.cell_size,
+                grid.origin,
+            )
+
+            # Добавляем воксели outer контура
+            for voxel in outer_contour:
+                outer_voxels.append((voxel, region_color))
+
+            # Добавляем воксели inner контуров (дырок)
+            for hole in holes:
+                for voxel in hole:
+                    inner_voxels.append((voxel, region_color))
+
+        # Строим меш для outer контуров
+        if outer_voxels:
+            count = len(outer_voxels)
+            vertices = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+            triangles = np.zeros((count * tris_per_cube, 3), dtype=np.int32)
+            normals_arr = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+            uvs = np.zeros((count * verts_per_cube, 2), dtype=np.float32)
+            colors = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+
+            for i, (voxel, color) in enumerate(outer_voxels):
                 vx, vy, vz = voxel
-                neighbor_count = 0
-                for dx, dy, dz in neighbors_26:
-                    neighbor = (vx + dx, vy + dy, vz + dz)
-                    if neighbor in region_set:
-                        neighbor_count += 1
+                center = grid.voxel_to_world(vx, vy, vz)
 
-                # Граничный если < 8 соседей
-                if neighbor_count < 8:
-                    sparse_boundary_voxels.append((voxel, region_color))
+                v_offset = i * verts_per_cube
+                t_offset = i * tris_per_cube
 
-        if not sparse_boundary_voxels:
-            return
+                vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
+                triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
+                normals_arr[v_offset:v_offset + verts_per_cube] = cube_normals
+                uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
+                colors[v_offset:v_offset + verts_per_cube] = color
 
-        count = len(sparse_boundary_voxels)
-        vertices = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
-        triangles = np.zeros((count * tris_per_cube, 3), dtype=np.int32)
-        normals = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
-        uvs = np.zeros((count * verts_per_cube, 2), dtype=np.float32)
-        colors = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+            self._debug_sparse_boundary_mesh = create_voxel_mesh(
+                vertices=vertices,
+                triangles=triangles,
+                uvs=uvs,
+                vertex_colors=colors,
+                vertex_normals=normals_arr,
+                name="voxelizer_debug_outer_contour",
+            )
+            print(f"VoxelizerComponent: {count} outer contour voxels")
+        else:
+            self._debug_sparse_boundary_mesh = None
 
-        for i, (voxel, color) in enumerate(sparse_boundary_voxels):
-            vx, vy, vz = voxel
-            center = grid.voxel_to_world(vx, vy, vz)
+        # Строим меш для inner контуров (дырок) - полупрозрачный
+        if inner_voxels:
+            count = len(inner_voxels)
+            vertices = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+            triangles = np.zeros((count * tris_per_cube, 3), dtype=np.int32)
+            normals_arr = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+            uvs = np.zeros((count * verts_per_cube, 2), dtype=np.float32)
+            colors = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
 
-            v_offset = i * verts_per_cube
-            t_offset = i * tris_per_cube
+            for i, (voxel, color) in enumerate(inner_voxels):
+                vx, vy, vz = voxel
+                center = grid.voxel_to_world(vx, vy, vz)
 
-            vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
-            triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
-            normals[v_offset:v_offset + verts_per_cube] = cube_normals
-            uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
-            colors[v_offset:v_offset + verts_per_cube] = color
+                v_offset = i * verts_per_cube
+                t_offset = i * tris_per_cube
 
-        self._debug_sparse_boundary_mesh = create_voxel_mesh(
-            vertices=vertices,
-            triangles=triangles,
-            uvs=uvs,
-            vertex_colors=colors,
-            vertex_normals=normals,
-            name="voxelizer_debug_sparse_boundary",
-        )
+                vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
+                triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
+                normals_arr[v_offset:v_offset + verts_per_cube] = cube_normals
+                uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
+                # Делаем цвет немного темнее для inner контуров
+                colors[v_offset:v_offset + verts_per_cube] = [c * 0.6 for c in color]
 
-        print(f"VoxelizerComponent: {count} sparse boundary voxels")
+            self._debug_inner_contour_mesh = create_voxel_mesh(
+                vertices=vertices,
+                triangles=triangles,
+                uvs=uvs,
+                vertex_colors=colors,
+                vertex_normals=normals_arr,
+                name="voxelizer_debug_inner_contour",
+            )
+            print(f"VoxelizerComponent: {count} inner contour voxels (holes)")
+        else:
+            self._debug_inner_contour_mesh = None
 
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":

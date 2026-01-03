@@ -158,7 +158,8 @@
               "share_boundary": false,
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": false,
-              "show_region_voxels": false
+              "show_region_voxels": false,
+              "show_sparse_boundary": false
             }
           },
           {
@@ -510,7 +511,8 @@
               "share_boundary": false,
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": false,
-              "show_region_voxels": false
+              "show_region_voxels": false,
+              "show_sparse_boundary": false
             }
           },
           {
@@ -606,7 +608,8 @@
               "share_boundary": true,
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": true,
-              "show_region_voxels": false
+              "show_region_voxels": false,
+              "show_sparse_boundary": false
             }
           },
           {
@@ -3356,7 +3359,8 @@
               "share_boundary": true,
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": true,
-              "show_region_voxels": false
+              "show_region_voxels": false,
+              "show_sparse_boundary": false
             }
           },
           {
@@ -3433,8 +3437,8 @@
           "rotation": [
             0,
             0,
-            0,
-            1
+            -0.009005002677440643,
+            0.9999594688415527
           ]
         },
         "scale": [
@@ -3461,10 +3465,11 @@
               "show_debug_contours": false,
               "project_contours": false,
               "stitch_contours": false,
-              "share_boundary": true,
+              "share_boundary": false,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true,
-              "show_region_voxels": false
+              "show_boundary_voxels": false,
+              "show_region_voxels": false,
+              "show_sparse_boundary": true
             }
           }
         ],
@@ -3528,15 +3533,15 @@
             "flags": 0,
             "pose": {
               "position": [
-                8.061885833740234,
-                0,
-                3.485212802886963
+                8.166180342273316,
+                3.9754906645233837e-07,
+                3.380819320678711
               ],
               "rotation": [
-                0,
-                -0.39404088258743286,
-                0,
-                0.9190928936004639
+                -1.734723475976807e-18,
+                -0.38268360112335753,
+                1.734723475976807e-18,
+                0.9238799399297857
               ]
             },
             "scale": [
@@ -3656,6 +3661,53 @@
               }
             ],
             "children": []
+          },
+          {
+            "uuid": "000000000000003a",
+            "name": "entity21_copy",
+            "priority": 0,
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                8.192557021986687,
+                -0.29800001226504136,
+                3.459444999694824
+              ],
+              "rotation": [
+                0.6532825579688013,
+                -0.27059849557246507,
+                0.2705984955724652,
+                0.6532825579688016
+              ]
+            },
+            "scale": [
+              4,
+              5,
+              4
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000004",
+                    "name": "Cylinder"
+                  },
+                  "material": {
+                    "type": "uuid",
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                  },
+                  "cast_shadow": true
+                }
+              }
+            ],
+            "children": []
           }
         ]
       }
@@ -3705,13 +3757,13 @@
   "editor": {
     "camera": {
       "target": [
-        18.095930099487305,
-        2.363473653793335,
-        1.0257511138916016
+        21.645456314086914,
+        5.2886576652526855,
+        3.1808741092681885
       ],
-      "radius": 15.0,
-      "azimuth": 56.618480934700635,
-      "elevation": 0.4433136300065583
+      "radius": 14.0,
+      "azimuth": 56.55215842312482,
+      "elevation": 0.6527531402458783
     },
     "selected_entity": "entity18",
     "displays": [
@@ -3722,7 +3774,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "9fd5e199-8d53-4bf7-a9e7-ac282e6b9fcb",
+            "uuid": "b297a64a-5529-49c0-b491-d500a348ed91",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3742,7 +3794,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "b86922e0-b5db-49d8-9b74-4ec73ad70da6",
+            "uuid": "0436ef8c-abbd-421e-836a-c7b868b2a2a6",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3757,10 +3809,10 @@
       }
     ],
     "expanded_entities": [
-      "camera",
-      "entity18",
       "EditorEntities",
-      "editor_ui"
+      "camera",
+      "editor_ui",
+      "entity18"
     ]
   },
   "resources": {

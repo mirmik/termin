@@ -95,11 +95,12 @@ class PolygonBuilder:
         # Шаг 2.3: Жадное поглощение — большие регионы поглощают воксели меньших
         regions = self._greedy_absorption(regions, surface_voxels)
 
-        # Шаг 2.4: Воксели с несколькими нормалями добавляются во все совместимые регионы
-        # (отключено — плохо работает)
-        # regions = self._add_multi_normal_voxels_to_regions(regions, surface_voxels)
+        # Шаг 2.4: Расширение регионов на соседние воксели (отключено)
+        # Каждый регион принимает соседей с подходящими нормалями
+        # Воксель может участвовать в нескольких регионах
+        # regions = self._expand_all_regions(regions, surface_voxels)
 
-        # Шаг 2.5: Расширяем регионы (опционально)
+        # Шаг 2.5: Расширяем регионы (опционально, старый алгоритм)
         # После этого шага воксели могут входить в несколько регионов
         if expand_regions:
             regions = self._expand_regions(regions, surface_voxels)
@@ -499,6 +500,66 @@ class PolygonBuilder:
         ]
 
         print(f"PolygonBuilder: added {added_count} multi-normal voxels to additional regions")
+
+        return result
+
+    def _expand_all_regions(
+        self,
+        regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+        surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],
+    ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
+        """
+        Шаг 2.4: Расширение всех регионов на соседние воксели.
+
+        Каждый регион принимает соседние воксели с подходящими нормалями.
+        Воксель может участвовать в нескольких регионах одновременно.
+        """
+        threshold = self.config.normal_threshold
+
+        # Преобразуем регионы в sets
+        region_sets: list[set[tuple[int, int, int]]] = [set(voxels) for voxels, _ in regions]
+        region_normals: list[np.ndarray] = [normal for _, normal in regions]
+
+        total_added = 0
+        iteration = 0
+
+        # Итеративно расширяем пока есть изменения
+        changed = True
+        while changed:
+            changed = False
+            iteration += 1
+
+            for region_idx in range(len(region_sets)):
+                region_set = region_sets[region_idx]
+                region_normal = region_normals[region_idx]
+
+                # Собираем соседей всех вокселей региона
+                candidates: set[tuple[int, int, int]] = set()
+                for vx, vy, vz in region_set:
+                    for dx, dy, dz in NEIGHBORS_26:
+                        neighbor = (vx + dx, vy + dy, vz + dz)
+                        # Сосед должен быть surface voxel и не в этом регионе
+                        if neighbor in surface_voxels and neighbor not in region_set:
+                            candidates.add(neighbor)
+
+                # Проверяем каждого кандидата
+                for candidate in candidates:
+                    candidate_normals = surface_voxels[candidate]
+                    # Проверяем совместимость с любой нормалью кандидата
+                    for cn in candidate_normals:
+                        if np.dot(cn, region_normal) >= threshold:
+                            region_set.add(candidate)
+                            total_added += 1
+                            changed = True
+                            break
+
+        # Собираем результат
+        result = [
+            (list(region_sets[i]), region_normals[i])
+            for i in range(len(regions))
+        ]
+
+        print(f"PolygonBuilder: expand_all_regions: {iteration} iterations, added {total_added} voxels")
 
         return result
 
@@ -2001,4 +2062,294 @@ class PolygonBuilder:
             return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
 
         return (ccw(a1, b1, b2) != ccw(a2, b1, b2)) and (ccw(a1, a2, b1) != ccw(a1, a2, b2))
+
+    # =========== Contour Extraction ===========
+
+    def extract_contours_from_region(
+        self,
+        region_voxels: list[tuple[int, int, int]],
+        region_normal: np.ndarray,
+        cell_size: float,
+        origin: np.ndarray,
+    ) -> tuple[list[tuple[int, int, int]], list[list[tuple[int, int, int]]]]:
+        """
+        Извлечь внешний и внутренние контуры из региона.
+
+        Использует проекцию на 2D с алгоритмом Брезенхема для связности.
+
+        Args:
+            region_voxels: Список вокселей региона (vx, vy, vz).
+            region_normal: Нормаль региона.
+            cell_size: Размер вокселя.
+            origin: Начало координат сетки.
+
+        Returns:
+            (outer_contour, holes) - внешний контур и список дырок.
+            Каждый контур - список вокселей в порядке обхода.
+        """
+        if len(region_voxels) < 3:
+            return list(region_voxels), []
+
+        # Строим локальную 2D систему координат
+        u_axis, v_axis = self._build_2d_basis(region_normal)
+
+        # Центроид региона
+        centers_3d = np.array([
+            origin + (np.array(v) + 0.5) * cell_size
+            for v in region_voxels
+        ], dtype=np.float32)
+        centroid = centers_3d.mean(axis=0)
+
+        # Проецируем воксели на 2D (непрерывные координаты)
+        voxel_to_2d_float: dict[tuple[int, int, int], tuple[float, float]] = {}
+        for voxel in region_voxels:
+            vx, vy, vz = voxel
+            world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
+            rel_pos = world_pos - centroid
+            u = float(np.dot(rel_pos, u_axis))
+            v = float(np.dot(rel_pos, v_axis))
+            voxel_to_2d_float[voxel] = (u, v)
+
+        # Квантизируем и строим маппинг
+        voxel_to_2d: dict[tuple[int, int, int], tuple[int, int]] = {}
+        grid_2d_to_voxels: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
+
+        for voxel, (u, v) in voxel_to_2d_float.items():
+            grid_u = int(round(u / cell_size))
+            grid_v = int(round(v / cell_size))
+            voxel_to_2d[voxel] = (grid_u, grid_v)
+            if (grid_u, grid_v) not in grid_2d_to_voxels:
+                grid_2d_to_voxels[(grid_u, grid_v)] = []
+            grid_2d_to_voxels[(grid_u, grid_v)].append(voxel)
+
+        # Находим соседей в 3D (26-связность) и рисуем линии Брезенхема в 2D
+        region_set = set(region_voxels)
+
+        for voxel in region_voxels:
+            vx, vy, vz = voxel
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for dz in (-1, 0, 1):
+                        if dx == 0 and dy == 0 and dz == 0:
+                            continue
+                        neighbor = (vx + dx, vy + dy, vz + dz)
+                        if neighbor in region_set and neighbor > voxel:  # Избегаем дублирования
+                            # Рисуем линию между 2D проекциями
+                            u1, v1 = voxel_to_2d[voxel]
+                            u2, v2 = voxel_to_2d[neighbor]
+                            line_cells = self._bresenham_line(u1, v1, u2, v2)
+
+                            # Каждая ячейка на линии получает ближайший воксель
+                            for cell in line_cells:
+                                if cell not in grid_2d_to_voxels:
+                                    grid_2d_to_voxels[cell] = [voxel]
+
+        # Создаём бинарную маску
+        all_2d = list(grid_2d_to_voxels.keys())
+        min_u = min(p[0] for p in all_2d)
+        max_u = max(p[0] for p in all_2d)
+        min_v = min(p[1] for p in all_2d)
+        max_v = max(p[1] for p in all_2d)
+
+        # Добавляем padding для корректного flood fill
+        width = max_u - min_u + 3
+        height = max_v - min_v + 3
+        offset_u = -min_u + 1
+        offset_v = -min_v + 1
+
+        mask = np.zeros((height, width), dtype=np.uint8)
+        for (gu, gv) in all_2d:
+            mask[gv + offset_v, gu + offset_u] = 1
+
+        # Извлекаем контуры из маски
+        outer_2d, holes_2d = self._extract_contours_from_mask(mask)
+
+        # Конвертируем 2D контуры обратно в воксели
+        outer_contour: list[tuple[int, int, int]] = []
+        for (cu, cv) in outer_2d:
+            grid_u = cu - offset_u
+            grid_v = cv - offset_v
+            if (grid_u, grid_v) in grid_2d_to_voxels:
+                # Берём первый воксель из списка
+                outer_contour.append(grid_2d_to_voxels[(grid_u, grid_v)][0])
+
+        holes: list[list[tuple[int, int, int]]] = []
+        for hole_2d in holes_2d:
+            hole_voxels: list[tuple[int, int, int]] = []
+            for (cu, cv) in hole_2d:
+                grid_u = cu - offset_u
+                grid_v = cv - offset_v
+                if (grid_u, grid_v) in grid_2d_to_voxels:
+                    hole_voxels.append(grid_2d_to_voxels[(grid_u, grid_v)][0])
+            if hole_voxels:
+                holes.append(hole_voxels)
+
+        return outer_contour, holes
+
+    def _bresenham_line(
+        self, x0: int, y0: int, x1: int, y1: int
+    ) -> list[tuple[int, int]]:
+        """Алгоритм Брезенхема для рисования линии между двумя точками."""
+        cells: list[tuple[int, int]] = []
+
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+
+        x, y = x0, y0
+        while True:
+            cells.append((x, y))
+            if x == x1 and y == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
+
+        return cells
+
+    def _build_2d_basis(self, normal: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Построить ортонормированный базис для плоскости с заданной нормалью.
+
+        Returns:
+            (u_axis, v_axis) - два ортогональных вектора в плоскости.
+        """
+        normal = normal / np.linalg.norm(normal)
+
+        # Выбираем ось, наименее параллельную нормали
+        abs_n = np.abs(normal)
+        if abs_n[0] <= abs_n[1] and abs_n[0] <= abs_n[2]:
+            arbitrary = np.array([1.0, 0.0, 0.0])
+        elif abs_n[1] <= abs_n[2]:
+            arbitrary = np.array([0.0, 1.0, 0.0])
+        else:
+            arbitrary = np.array([0.0, 0.0, 1.0])
+
+        u_axis = np.cross(normal, arbitrary)
+        u_axis = u_axis / np.linalg.norm(u_axis)
+
+        v_axis = np.cross(normal, u_axis)
+        v_axis = v_axis / np.linalg.norm(v_axis)
+
+        return u_axis, v_axis
+
+    def _extract_contours_from_mask(
+        self, mask: np.ndarray
+    ) -> tuple[list[tuple[int, int]], list[list[tuple[int, int]]]]:
+        """
+        Извлечь внешний и внутренние контуры из бинарной маски.
+
+        Алгоритм:
+        1. Flood fill от края — помечаем "внешнюю пустоту"
+        2. Граничные ячейки = заполненные с пустым соседом
+        3. Outer = граничные, соседствующие с внешней пустотой
+        4. Inner = граничные, соседствующие с внутренней пустотой
+        5. Разделить inner на связные компоненты
+
+        Args:
+            mask: 2D массив (height, width), 1 = занято, 0 = пусто.
+
+        Returns:
+            (outer_contour, holes) - внешний контур и список дырок.
+        """
+        height, width = mask.shape
+
+        # 8-связность
+        directions = [
+            (1, 0), (1, 1), (0, 1), (-1, 1),
+            (-1, 0), (-1, -1), (0, -1), (1, -1)
+        ]
+
+        # Шаг 1: Flood fill от края — помечаем внешнюю пустоту
+        external = np.zeros_like(mask, dtype=np.uint8)
+        queue = deque()
+
+        # Добавляем все пустые ячейки на краях
+        for u in range(width):
+            if mask[0, u] == 0:
+                queue.append((u, 0))
+                external[0, u] = 1
+            if mask[height - 1, u] == 0:
+                queue.append((u, height - 1))
+                external[height - 1, u] = 1
+        for v in range(height):
+            if mask[v, 0] == 0:
+                queue.append((0, v))
+                external[v, 0] = 1
+            if mask[v, width - 1] == 0:
+                queue.append((width - 1, v))
+                external[v, width - 1] = 1
+
+        # Flood fill
+        while queue:
+            u, v = queue.popleft()
+            for du, dv in directions:
+                nu, nv = u + du, v + dv
+                if 0 <= nu < width and 0 <= nv < height:
+                    if mask[nv, nu] == 0 and external[nv, nu] == 0:
+                        external[nv, nu] = 1
+                        queue.append((nu, nv))
+
+        # Шаг 2-4: Классифицируем граничные ячейки
+        outer_cells: list[tuple[int, int]] = []
+        inner_cells: list[tuple[int, int]] = []
+
+        for v in range(height):
+            for u in range(width):
+                if mask[v, u] == 0:
+                    continue
+
+                has_external_neighbor = False
+                has_internal_neighbor = False
+
+                for du, dv in directions:
+                    nu, nv = u + du, v + dv
+                    if nu < 0 or nu >= width or nv < 0 or nv >= height:
+                        has_external_neighbor = True
+                    elif mask[nv, nu] == 0:
+                        if external[nv, nu] == 1:
+                            has_external_neighbor = True
+                        else:
+                            has_internal_neighbor = True
+
+                if has_external_neighbor:
+                    outer_cells.append((u, v))
+                elif has_internal_neighbor:
+                    inner_cells.append((u, v))
+
+        # Шаг 5: Разделить inner на связные компоненты
+        holes: list[list[tuple[int, int]]] = []
+        if inner_cells:
+            inner_set = set(inner_cells)
+            visited: set[tuple[int, int]] = set()
+
+            for start in inner_cells:
+                if start in visited:
+                    continue
+
+                # BFS для связной компоненты
+                component: list[tuple[int, int]] = []
+                q = deque([start])
+                visited.add(start)
+
+                while q:
+                    u, v = q.popleft()
+                    component.append((u, v))
+
+                    for du, dv in directions:
+                        neighbor = (u + du, v + dv)
+                        if neighbor in inner_set and neighbor not in visited:
+                            visited.add(neighbor)
+                            q.append(neighbor)
+
+                if component:
+                    holes.append(component)
+
+        return outer_cells, holes
 
