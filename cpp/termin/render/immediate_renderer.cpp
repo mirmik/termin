@@ -148,6 +148,8 @@ ImmediateRenderer& ImmediateRenderer::operator=(ImmediateRenderer&& other) noexc
 void ImmediateRenderer::begin() {
     line_vertices.clear();
     tri_vertices.clear();
+    line_vertices_depth.clear();
+    tri_vertices_depth.clear();
 }
 
 void ImmediateRenderer::_add_vertex(std::vector<float>& buffer, const Vec3& pos, const Color4& color) {
@@ -174,33 +176,35 @@ std::pair<Vec3, Vec3> ImmediateRenderer::_build_basis(const Vec3& axis) {
 // Basic primitives
 // ============================================================
 
-void ImmediateRenderer::line(const Vec3& start, const Vec3& end, const Color4& color) {
-    _add_vertex(line_vertices, start, color);
-    _add_vertex(line_vertices, end, color);
+void ImmediateRenderer::line(const Vec3& start, const Vec3& end, const Color4& color, bool depth_test) {
+    auto& buf = depth_test ? line_vertices_depth : line_vertices;
+    _add_vertex(buf, start, color);
+    _add_vertex(buf, end, color);
 }
 
-void ImmediateRenderer::triangle(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Color4& color) {
-    _add_vertex(tri_vertices, p0, color);
-    _add_vertex(tri_vertices, p1, color);
-    _add_vertex(tri_vertices, p2, color);
+void ImmediateRenderer::triangle(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Color4& color, bool depth_test) {
+    auto& buf = depth_test ? tri_vertices_depth : tri_vertices;
+    _add_vertex(buf, p0, color);
+    _add_vertex(buf, p1, color);
+    _add_vertex(buf, p2, color);
 }
 
-void ImmediateRenderer::quad(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, const Color4& color) {
-    triangle(p0, p1, p2, color);
-    triangle(p0, p2, p3, color);
+void ImmediateRenderer::quad(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, const Color4& color, bool depth_test) {
+    triangle(p0, p1, p2, color, depth_test);
+    triangle(p0, p2, p3, color, depth_test);
 }
 
 // ============================================================
 // Wireframe primitives
 // ============================================================
 
-void ImmediateRenderer::polyline(const std::vector<Vec3>& points, const Color4& color, bool closed) {
+void ImmediateRenderer::polyline(const std::vector<Vec3>& points, const Color4& color, bool closed, bool depth_test) {
     if (points.size() < 2) return;
     for (size_t i = 0; i < points.size() - 1; ++i) {
-        line(points[i], points[i + 1], color);
+        line(points[i], points[i + 1], color, depth_test);
     }
     if (closed && points.size() > 2) {
-        line(points.back(), points.front(), color);
+        line(points.back(), points.front(), color, depth_test);
     }
 }
 
@@ -209,7 +213,8 @@ void ImmediateRenderer::circle(
     const Vec3& normal,
     double radius,
     const Color4& color,
-    int segments
+    int segments,
+    bool depth_test
 ) {
     Vec3 norm = normal.normalized();
     auto [tangent, bitangent] = _build_basis(norm);
@@ -223,7 +228,7 @@ void ImmediateRenderer::circle(
         points.push_back(point);
     }
 
-    polyline(points, color, true);
+    polyline(points, color, true, depth_test);
 }
 
 void ImmediateRenderer::arrow(
@@ -232,14 +237,15 @@ void ImmediateRenderer::arrow(
     double length,
     const Color4& color,
     double head_length,
-    double head_width
+    double head_width,
+    bool depth_test
 ) {
     Vec3 dir = direction.normalized();
     Vec3 tip = origin + dir * length;
     Vec3 head_base = tip - dir * (length * head_length);
 
     // Shaft
-    line(origin, head_base, color);
+    line(origin, head_base, color, depth_test);
 
     // Head (4 lines)
     auto [right, up] = _build_basis(dir);
@@ -250,13 +256,13 @@ void ImmediateRenderer::arrow(
     Vec3 p3 = head_base + up * hw;
     Vec3 p4 = head_base - up * hw;
 
-    line(tip, p1, color);
-    line(tip, p2, color);
-    line(tip, p3, color);
-    line(tip, p4, color);
+    line(tip, p1, color, depth_test);
+    line(tip, p2, color, depth_test);
+    line(tip, p3, color, depth_test);
+    line(tip, p4, color, depth_test);
 }
 
-void ImmediateRenderer::box(const Vec3& min_pt, const Vec3& max_pt, const Color4& color) {
+void ImmediateRenderer::box(const Vec3& min_pt, const Vec3& max_pt, const Color4& color, bool depth_test) {
     // 8 corners
     Vec3 corners[8] = {
         {min_pt.x, min_pt.y, min_pt.z},
@@ -277,7 +283,7 @@ void ImmediateRenderer::box(const Vec3& min_pt, const Vec3& max_pt, const Color4
     };
 
     for (auto& e : edges) {
-        line(corners[e[0]], corners[e[1]], color);
+        line(corners[e[0]], corners[e[1]], color, depth_test);
     }
 }
 
@@ -286,7 +292,8 @@ void ImmediateRenderer::cylinder_wireframe(
     const Vec3& end,
     double radius,
     const Color4& color,
-    int segments
+    int segments,
+    bool depth_test
 ) {
     Vec3 axis = end - start;
     double length = axis.norm();
@@ -294,8 +301,8 @@ void ImmediateRenderer::cylinder_wireframe(
     axis = axis / length;
 
     // Circles at ends
-    circle(start, axis, radius, color, segments);
-    circle(end, axis, radius, color, segments);
+    circle(start, axis, radius, color, segments, depth_test);
+    circle(end, axis, radius, color, segments, depth_test);
 
     // Connecting lines
     auto [tangent, bitangent] = _build_basis(axis);
@@ -303,7 +310,7 @@ void ImmediateRenderer::cylinder_wireframe(
     for (int i = 0; i < 4; ++i) {
         double angle = 2.0 * M_PI * i / 4;
         Vec3 offset = (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
-        line(start + offset, end + offset, color);
+        line(start + offset, end + offset, color, depth_test);
     }
 }
 
@@ -311,12 +318,13 @@ void ImmediateRenderer::sphere_wireframe(
     const Vec3& center,
     double radius,
     const Color4& color,
-    int segments
+    int segments,
+    bool depth_test
 ) {
     // 3 orthogonal circles
-    circle(center, Vec3{0, 0, 1}, radius, color, segments);
-    circle(center, Vec3{0, 1, 0}, radius, color, segments);
-    circle(center, Vec3{1, 0, 0}, radius, color, segments);
+    circle(center, Vec3{0, 0, 1}, radius, color, segments, depth_test);
+    circle(center, Vec3{0, 1, 0}, radius, color, segments, depth_test);
+    circle(center, Vec3{1, 0, 0}, radius, color, segments, depth_test);
 }
 
 void ImmediateRenderer::capsule_wireframe(
@@ -324,12 +332,13 @@ void ImmediateRenderer::capsule_wireframe(
     const Vec3& end,
     double radius,
     const Color4& color,
-    int segments
+    int segments,
+    bool depth_test
 ) {
     Vec3 axis = end - start;
     double length = axis.norm();
     if (length < 1e-6) {
-        sphere_wireframe(start, radius, color, segments);
+        sphere_wireframe(start, radius, color, segments, depth_test);
         return;
     }
     axis = axis / length;
@@ -337,14 +346,14 @@ void ImmediateRenderer::capsule_wireframe(
     auto [tangent, bitangent] = _build_basis(axis);
 
     // Circles at ends
-    circle(start, axis, radius, color, segments);
-    circle(end, axis, radius, color, segments);
+    circle(start, axis, radius, color, segments, depth_test);
+    circle(end, axis, radius, color, segments, depth_test);
 
     // Connecting lines
     for (int i = 0; i < 4; ++i) {
         double angle = 2.0 * M_PI * i / 4;
         Vec3 offset = (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
-        line(start + offset, end + offset, color);
+        line(start + offset, end + offset, color, depth_test);
     }
 
     // Hemisphere arcs
@@ -359,7 +368,7 @@ void ImmediateRenderer::capsule_wireframe(
             Vec3 pt = start + (*basis_vec * std::cos(angle) - axis * std::sin(angle)) * radius;
             points_start.push_back(pt);
         }
-        polyline(points_start, color);
+        polyline(points_start, color, false, depth_test);
 
         // Arc at end
         std::vector<Vec3> points_end;
@@ -369,7 +378,7 @@ void ImmediateRenderer::capsule_wireframe(
             Vec3 pt = end + (*basis_vec * std::cos(angle) + axis * std::sin(angle)) * radius;
             points_end.push_back(pt);
         }
-        polyline(points_end, color);
+        polyline(points_end, color, false, depth_test);
     }
 }
 
@@ -383,7 +392,8 @@ void ImmediateRenderer::cylinder_solid(
     double radius,
     const Color4& color,
     int segments,
-    bool caps
+    bool caps,
+    bool depth_test
 ) {
     Vec3 axis = end - start;
     double length = axis.norm();
@@ -407,16 +417,16 @@ void ImmediateRenderer::cylinder_solid(
     // Side triangles
     for (int i = 0; i < segments; ++i) {
         int j = (i + 1) % segments;
-        triangle(ring_start[i], ring_end[i], ring_end[j], color);
-        triangle(ring_start[i], ring_end[j], ring_start[j], color);
+        triangle(ring_start[i], ring_end[i], ring_end[j], color, depth_test);
+        triangle(ring_start[i], ring_end[j], ring_start[j], color, depth_test);
     }
 
     // Caps
     if (caps) {
         for (int i = 0; i < segments; ++i) {
             int j = (i + 1) % segments;
-            triangle(start, ring_start[j], ring_start[i], color);
-            triangle(end, ring_end[i], ring_end[j], color);
+            triangle(start, ring_start[j], ring_start[i], color, depth_test);
+            triangle(end, ring_end[i], ring_end[j], color, depth_test);
         }
     }
 }
@@ -427,7 +437,8 @@ void ImmediateRenderer::cone_solid(
     double radius,
     const Color4& color,
     int segments,
-    bool cap
+    bool cap,
+    bool depth_test
 ) {
     Vec3 axis = tip - base;
     double length = axis.norm();
@@ -448,14 +459,14 @@ void ImmediateRenderer::cone_solid(
     // Side triangles
     for (int i = 0; i < segments; ++i) {
         int j = (i + 1) % segments;
-        triangle(ring[i], tip, ring[j], color);
+        triangle(ring[i], tip, ring[j], color, depth_test);
     }
 
     // Base cap
     if (cap) {
         for (int i = 0; i < segments; ++i) {
             int j = (i + 1) % segments;
-            triangle(base, ring[j], ring[i], color);
+            triangle(base, ring[j], ring[i], color, depth_test);
         }
     }
 }
@@ -467,7 +478,8 @@ void ImmediateRenderer::torus_solid(
     double minor_radius,
     const Color4& color,
     int major_segments,
-    int minor_segments
+    int minor_segments,
+    bool depth_test
 ) {
     Vec3 ax = axis.normalized();
     auto [tangent, bitangent] = _build_basis(ax);
@@ -497,8 +509,8 @@ void ImmediateRenderer::torus_solid(
             const Vec3& p10 = vertices[i_next][j];
             const Vec3& p01 = vertices[i][j_next];
             const Vec3& p11 = vertices[i_next][j_next];
-            triangle(p00, p10, p11, color);
-            triangle(p00, p11, p01, color);
+            triangle(p00, p10, p11, color, depth_test);
+            triangle(p00, p11, p01, color, depth_test);
         }
     }
 }
@@ -511,7 +523,8 @@ void ImmediateRenderer::arrow_solid(
     double shaft_radius,
     double head_radius,
     double head_length_ratio,
-    int segments
+    int segments,
+    bool depth_test
 ) {
     double dir_len = direction.norm();
     if (dir_len < 1e-6) return;
@@ -524,9 +537,9 @@ void ImmediateRenderer::arrow_solid(
     Vec3 tip = origin + dir * length;
 
     // Shaft cylinder
-    cylinder_solid(origin, shaft_end, shaft_radius, color, segments, true);
+    cylinder_solid(origin, shaft_end, shaft_radius, color, segments, true, depth_test);
     // Head cone
-    cone_solid(shaft_end, tip, head_radius, color, segments, true);
+    cone_solid(shaft_end, tip, head_radius, color, segments, true, depth_test);
 }
 
 // ============================================================
@@ -582,13 +595,15 @@ void ImmediateRenderer::_ensure_initialized() {
     _initialized = true;
 }
 
-void ImmediateRenderer::flush(
+void ImmediateRenderer::_flush_buffers(
+    const std::vector<float>& lines,
+    const std::vector<float>& tris,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool depth_test,
     bool blend
 ) {
-    if (line_vertices.empty() && tri_vertices.empty()) return;
+    if (lines.empty() && tris.empty()) return;
 
     _ensure_initialized();
     if (!_initialized) return;
@@ -621,30 +636,30 @@ void ImmediateRenderer::flush(
     glUniformMatrix4fv(_u_proj_loc, 1, GL_FALSE, proj_f);
 
     // Draw lines
-    if (!line_vertices.empty()) {
+    if (!lines.empty()) {
         glBindVertexArray(_line_vao);
         glBindBuffer(GL_ARRAY_BUFFER, _line_vbo);
         glBufferData(GL_ARRAY_BUFFER,
-                     line_vertices.size() * sizeof(float),
-                     line_vertices.data(),
+                     lines.size() * sizeof(float),
+                     lines.data(),
                      GL_DYNAMIC_DRAW);
 
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(line_vertices.size() / 7));
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lines.size() / 7));
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
 
     // Draw triangles
-    if (!tri_vertices.empty()) {
+    if (!tris.empty()) {
         glBindVertexArray(_tri_vao);
         glBindBuffer(GL_ARRAY_BUFFER, _tri_vbo);
         glBufferData(GL_ARRAY_BUFFER,
-                     tri_vertices.size() * sizeof(float),
-                     tri_vertices.data(),
+                     tris.size() * sizeof(float),
+                     tris.data(),
                      GL_DYNAMIC_DRAW);
 
-        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(tri_vertices.size() / 7));
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(tris.size() / 7));
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -657,6 +672,23 @@ void ImmediateRenderer::flush(
     }
 
     glUseProgram(0);
+}
+
+void ImmediateRenderer::flush(
+    const Mat44& view_matrix,
+    const Mat44& proj_matrix,
+    bool depth_test,
+    bool blend
+) {
+    _flush_buffers(line_vertices, tri_vertices, view_matrix, proj_matrix, depth_test, blend);
+}
+
+void ImmediateRenderer::flush_depth(
+    const Mat44& view_matrix,
+    const Mat44& proj_matrix,
+    bool blend
+) {
+    _flush_buffers(line_vertices_depth, tri_vertices_depth, view_matrix, proj_matrix, true, blend);
 }
 
 } // namespace termin

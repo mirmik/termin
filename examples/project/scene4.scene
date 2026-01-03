@@ -150,6 +150,7 @@
               "normal_angle": 25.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "max_vertex_valence": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -498,6 +499,7 @@
               "normal_angle": 25.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "max_vertex_valence": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -590,6 +592,7 @@
               "normal_angle": 9.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "max_vertex_valence": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -759,7 +762,7 @@
           {
             "type": "LightComponent",
             "data": {
-              "enabled": true,
+              "enabled": false,
               "light_type": 0.0,
               "color": [
                 1.0,
@@ -3336,6 +3339,7 @@
               "normal_angle": 9.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "max_vertex_valence": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3400,7 +3404,7 @@
       },
       {
         "uuid": "0000000000000035",
-        "name": "entity18",
+        "name": "VoxelPlatform",
         "priority": 0,
         "visible": true,
         "active": true,
@@ -3439,7 +3443,8 @@
               "navmesh_output_path": "Voxels/Platform.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
-              "max_edge_length": 6.0,
+              "max_edge_length": 8.0,
+              "max_vertex_valence": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3505,7 +3510,7 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c"
                   },
                   "cast_shadow": true
                 }
@@ -3552,7 +3557,7 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c"
                   },
                   "cast_shadow": true
                 }
@@ -3599,7 +3604,7 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c"
                   },
                   "cast_shadow": true
                 }
@@ -3715,9 +3720,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            12.46576976776123,
-            8.897623062133789,
-            0.046242713928222656
+            14.135930061340332,
+            6.525207996368408,
+            0.0946207046508789
           ],
           "rotation": [
             0,
@@ -3793,8 +3798,10 @@
             "type": "PathfindingWorldComponent",
             "data": {
               "enabled": true,
+              "skip_astar_if_los": true,
               "use_funnel": true,
               "use_los_optimization": true,
+              "use_edge_centers": false,
               "show_graph_edges": true
             }
           }
@@ -3847,13 +3854,13 @@
   "editor": {
     "camera": {
       "target": [
-        15.519375465518463,
-        4.190819592698384,
-        -1.6193711149768728
+        16.152040481567383,
+        1.9388285875320435,
+        0.0022991320583969355
       ],
-      "radius": 11.5,
-      "azimuth": 42.8443424779625,
-      "elevation": 0.8412486994612658
+      "radius": 15.0,
+      "azimuth": 42.56508979764361,
+      "elevation": 1.1274826967883351
     },
     "displays": [
       {
@@ -3863,7 +3870,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "53704b2d-e28d-4b0c-bcb1-89ffacaf3243",
+            "uuid": "5190ddf0-ee94-4d04-bb6b-13a8d92d0fdd",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3883,7 +3890,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "f23df786-b28f-4673-9baf-f8f62bf2c40e",
+            "uuid": "6f9df42b-3ae0-40a5-9a87-f476a3e0e152",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3896,6 +3903,11 @@
           }
         ]
       }
+    ],
+    "expanded_entities": [
+      "camera",
+      "editor_ui",
+      "EditorEntities"
     ]
   },
   "resources": {

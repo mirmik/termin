@@ -435,6 +435,7 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.resource_spec import ResourceSpec
         from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
         from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
+        from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
         from termin.visualization.render.framegraph.passes.depth import DepthPass
@@ -493,10 +494,17 @@ class EditorViewportFeatures:
             pass_name="ColliderGizmo",
         )
 
+        # Immediate depth pass (renders depth-tested debug lines)
+        immediate_depth_pass = ImmediateDepthPass(
+            input_res="color_colliders",
+            output_res="color_immediate_depth",
+            pass_name="ImmediateDepth",
+        )
+
         # Unified gizmo pass (renders all gizmos via GizmoManager)
         gizmo_pass = UnifiedGizmoPass(
             gizmo_manager=get_gizmo_manager,
-            input_res="color_colliders",
+            input_res="color_immediate_depth",
             output_res="color",
             pass_name="Gizmo",
         )
@@ -518,6 +526,7 @@ class EditorViewportFeatures:
             color_pass,
             transparent_pass,
             editor_color_pass,
+            immediate_depth_pass,
             collider_gizmo_pass,
             gizmo_pass,
             depth_pass,

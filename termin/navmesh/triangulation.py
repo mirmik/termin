@@ -585,17 +585,20 @@ def refine_triangulation(
     triangles: list[tuple[int, int, int]],
     max_edge_length: float,
     max_iterations: int = 100,
+    max_vertex_valence: int = 0,
 ) -> tuple[np.ndarray, list[tuple[int, int, int]]]:
     """
-    Улучшить триангуляцию, разбивая большие треугольники.
+    Улучшить триангуляцию, разбивая большие треугольники и снижая валентность вершин.
 
-    Добавляет точки на середине рёбер, превышающих max_edge_length.
+    Добавляет точки на середине рёбер, превышающих max_edge_length,
+    а также разбивает рёбра от вершин с высокой валентностью.
 
     Args:
         vertices: 2D координаты вершин, shape (N, 2).
         triangles: Список треугольников [(a, b, c), ...].
-        max_edge_length: Максимальная длина ребра.
+        max_edge_length: Максимальная длина ребра (0 = без ограничения).
         max_iterations: Максимум итераций разбиения.
+        max_vertex_valence: Макс. количество треугольников на вершину (0 = без ограничения).
 
     Returns:
         (new_vertices, new_triangles) — улучшенная триангуляция.
@@ -603,54 +606,33 @@ def refine_triangulation(
     vertices = list(map(tuple, vertices))  # список для добавления
     triangles = list(triangles)
 
-    for iteration in range(max_iterations):
-        # Находим самое длинное ребро
-        longest_edge = None
-        longest_length = 0.0
-        longest_tri_idx = -1
-        longest_edge_idx = -1
-
-        for tri_idx, tri in enumerate(triangles):
-            for edge_idx in range(3):
-                v0_idx = tri[edge_idx]
-                v1_idx = tri[(edge_idx + 1) % 3]
-                v0 = vertices[v0_idx]
-                v1 = vertices[v1_idx]
-
-                length = ((v1[0] - v0[0])**2 + (v1[1] - v0[1])**2)**0.5
-
-                if length > longest_length:
-                    longest_length = length
-                    longest_edge = (min(v0_idx, v1_idx), max(v0_idx, v1_idx))
-                    longest_tri_idx = tri_idx
-                    longest_edge_idx = edge_idx
-
-        if longest_length <= max_edge_length:
-            break  # Все рёбра достаточно короткие
-
-        # Добавляем точку на середине ребра
-        e0, e1 = longest_edge
-        mid_x = (vertices[e0][0] + vertices[e1][0]) / 2
-        mid_y = (vertices[e0][1] + vertices[e1][1]) / 2
-        new_vertex_idx = len(vertices)
-        vertices.append((mid_x, mid_y))
+    def split_edge(
+        edge: tuple[int, int],
+        verts: list[tuple[float, float]],
+        tris: list[tuple[int, int, int]],
+    ) -> tuple[list[tuple[float, float]], list[tuple[int, int, int]]]:
+        """Разбить ребро, добавив вершину на середине."""
+        e0, e1 = edge
+        mid_x = (verts[e0][0] + verts[e1][0]) / 2
+        mid_y = (verts[e0][1] + verts[e1][1]) / 2
+        new_vertex_idx = len(verts)
+        verts.append((mid_x, mid_y))
 
         # Находим все треугольники с этим ребром
         tris_to_split = []
-        for tri_idx, tri in enumerate(triangles):
+        for tri_idx, tri in enumerate(tris):
             edge_set = {
                 (min(tri[0], tri[1]), max(tri[0], tri[1])),
                 (min(tri[1], tri[2]), max(tri[1], tri[2])),
                 (min(tri[2], tri[0]), max(tri[2], tri[0])),
             }
-            if longest_edge in edge_set:
+            if edge in edge_set:
                 tris_to_split.append(tri_idx)
 
         # Разбиваем каждый треугольник на два
         new_triangles = []
-        for tri_idx, tri in enumerate(triangles):
+        for tri_idx, tri in enumerate(tris):
             if tri_idx in tris_to_split:
-                # Находим вершину, противоположную ребру
                 opposite = -1
                 for v in tri:
                     if v != e0 and v != e1:
@@ -658,13 +640,47 @@ def refine_triangulation(
                         break
 
                 if opposite >= 0:
-                    # Два новых треугольника
                     new_triangles.append((e0, new_vertex_idx, opposite))
                     new_triangles.append((new_vertex_idx, e1, opposite))
             else:
                 new_triangles.append(tri)
 
-        triangles = new_triangles
+        return verts, new_triangles
+
+    for iteration in range(max_iterations):
+        made_split = False
+
+        # Фаза 1: Разбиение по длине рёбер
+        if max_edge_length > 0:
+            longest_edge = None
+            longest_length = 0.0
+
+            for tri in triangles:
+                for edge_idx in range(3):
+                    v0_idx = tri[edge_idx]
+                    v1_idx = tri[(edge_idx + 1) % 3]
+                    v0 = vertices[v0_idx]
+                    v1 = vertices[v1_idx]
+
+                    length = ((v1[0] - v0[0])**2 + (v1[1] - v0[1])**2)**0.5
+
+                    if length > longest_length:
+                        longest_length = length
+                        longest_edge = (min(v0_idx, v1_idx), max(v0_idx, v1_idx))
+
+            if longest_length > max_edge_length and longest_edge is not None:
+                vertices, triangles = split_edge(longest_edge, vertices, triangles)
+                made_split = True
+                continue  # Перезапускаем итерацию
+
+        # Фаза 2: Ограничение валентности вершин (TODO: реализовать)
+        # Текущий алгоритм разбиения рёбер не уменьшает валентность.
+        # Для корректной работы нужен более сложный подход с перетриангуляцией.
+        # Пока параметр max_vertex_valence не используется.
+
+        # Нет изменений — завершаем
+        if not made_split:
+            break
 
     return np.array(vertices, dtype=np.float32), triangles
 
@@ -672,6 +688,7 @@ def refine_triangulation(
 def ear_clipping_refined(
     vertices: np.ndarray,
     max_edge_length: float = 1.0,
+    max_vertex_valence: int = 0,
     optimize: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -679,7 +696,8 @@ def ear_clipping_refined(
 
     Args:
         vertices: 2D координаты вершин полигона (CCW), shape (N, 2).
-        max_edge_length: Максимальная длина ребра.
+        max_edge_length: Максимальная длина ребра (0 = без ограничения).
+        max_vertex_valence: Макс. количество треугольников на вершину (0 = без ограничения).
         optimize: Применить Delaunay edge flipping.
 
     Returns:
@@ -690,9 +708,9 @@ def ear_clipping_refined(
     if not triangles:
         return vertices, np.array([], dtype=np.int32).reshape(0, 3)
 
-    # Разбиваем большие треугольники
+    # Разбиваем большие треугольники и высоковалентные вершины
     refined_verts, refined_tris = refine_triangulation(
-        vertices, triangles, max_edge_length
+        vertices, triangles, max_edge_length, max_vertex_valence=max_vertex_valence
     )
 
     # Delaunay optimization

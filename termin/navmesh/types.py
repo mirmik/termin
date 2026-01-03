@@ -25,6 +25,9 @@ class NavMeshConfig:
     max_edge_length: float = 0.0
     """Макс. длина ребра треугольника. 0 = без ограничения."""
 
+    max_vertex_valence: int = 0
+    """Макс. количество треугольников на вершину. 0 = без ограничения."""
+
 
 @dataclass
 class NavPolygon:

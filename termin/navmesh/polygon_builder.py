@@ -221,6 +221,7 @@ class PolygonBuilder:
                     np.array(grid.origin, dtype=np.float32),
                     simplify_epsilon=self.config.contour_epsilon,
                     max_edge_length=self.config.max_edge_length,
+                    max_vertex_valence=self.config.max_vertex_valence,
                 )
                 if len(vertices) > 0 and len(triangles) > 0:
                     polygon.vertices = vertices
@@ -702,6 +703,7 @@ class PolygonBuilder:
         origin: np.ndarray,
         simplify_epsilon: float = 0.0,
         max_edge_length: float = 0.0,
+        max_vertex_valence: int = 0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Триангулировать регион: извлечь контуры, упростить, построить меш.
@@ -721,6 +723,7 @@ class PolygonBuilder:
             origin: Начало координат сетки.
             simplify_epsilon: Параметр Douglas-Peucker (0 = без упрощения).
             max_edge_length: Макс. длина ребра треугольника (0 = без ограничения).
+            max_vertex_valence: Макс. количество треугольников на вершину (0 = без ограничения).
 
         Returns:
             (vertices, triangles):
@@ -788,10 +791,12 @@ class PolygonBuilder:
             return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
 
         # Шаг 5: Ear Clipping в 2D (с опциональным refinement)
-        if max_edge_length > 0:
+        if max_edge_length > 0 or max_vertex_valence > 0:
             # Refinement добавляет новые вершины
             merged_2d, triangles = ear_clipping_refined(
-                merged_2d, max_edge_length=max_edge_length
+                merged_2d,
+                max_edge_length=max_edge_length,
+                max_vertex_valence=max_vertex_valence,
             )
         else:
             triangles = ear_clip(merged_2d)

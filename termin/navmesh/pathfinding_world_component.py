@@ -39,6 +39,11 @@ class PathfindingWorldComponent(PythonComponent):
     """
 
     inspect_fields = {
+        "skip_astar_if_los": InspectField(
+            path="skip_astar_if_los",
+            label="Skip A* if direct LOS",
+            kind="bool",
+        ),
         "use_funnel": InspectField(
             path="use_funnel",
             label="Use Funnel Algorithm",
@@ -49,6 +54,11 @@ class PathfindingWorldComponent(PythonComponent):
             label="Optimize with LOS",
             kind="bool",
         ),
+        "use_edge_centers": InspectField(
+            path="use_edge_centers",
+            label="Use Edge Centers",
+            kind="bool",
+        ),
         "show_graph_edges": InspectField(
             path="show_graph_edges",
             label="Show Graph Edges",
@@ -57,21 +67,29 @@ class PathfindingWorldComponent(PythonComponent):
     }
 
     serializable_fields = [
+        "skip_astar_if_los",
         "use_funnel",
         "use_los_optimization",
+        "use_edge_centers",
         "show_graph_edges",
     ]
 
     def __init__(
         self,
+        skip_astar_if_los: bool = True,
         use_funnel: bool = True,
         use_los_optimization: bool = True,
+        use_edge_centers: bool = False,
         show_graph_edges: bool = False,
     ) -> None:
         super().__init__(enabled=True)
 
+        self.active_in_editor = True
+
+        self.skip_astar_if_los = skip_astar_if_los
         self.use_funnel = use_funnel
         self.use_los_optimization = use_los_optimization
+        self.use_edge_centers = use_edge_centers
         self.show_graph_edges = show_graph_edges
 
         self._navmesh_graph: NavMeshGraph = NavMeshGraph()
@@ -268,7 +286,7 @@ class PathfindingWorldComponent(PythonComponent):
             local_end = end.copy()
 
         # Быстрая проверка: прямая видимость?
-        if navmesh_line_of_sight(
+        if self.skip_astar_if_los and navmesh_line_of_sight(
             local_start, local_end, start_tri_idx,
             region.triangles, region.vertices, region.neighbors
         ):
@@ -288,11 +306,17 @@ class PathfindingWorldComponent(PythonComponent):
             path_indices = [start_tri_idx]
         else:
             from termin.navmesh.pathfinding import astar_triangles
-            path_indices = astar_triangles(
-                start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
-                region.triangles, region.vertices,
-                start_pos=local_start, end_pos=local_end
-            )
+            if self.use_edge_centers:
+                path_indices = astar_triangles(
+                    start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
+                    region.triangles, region.vertices,
+                    start_pos=local_start, end_pos=local_end
+                )
+            else:
+                path_indices = astar_triangles(
+                    start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
+                    start_pos=local_start, end_pos=local_end
+                )
             if path_indices is None:
                 return None
 
@@ -321,9 +345,12 @@ class PathfindingWorldComponent(PythonComponent):
             local_path = funnel_algorithm(local_start, local_end, portals, region_normal)
             log.info(f"[PathfindingWorld] funnel path: {len(local_path)} points")
         else:
-            # Прямой путь start -> end
-            local_path = [local_start, local_end]
-            log.info("[PathfindingWorld] direct path: 2 points")
+            # Путь через центроиды треугольников
+            local_path = [local_start]
+            for tri_idx in path_indices:
+                local_path.append(region.centroids[tri_idx].copy())
+            local_path.append(local_end)
+            log.info(f"[PathfindingWorld] centroid path: {len(local_path)} points")
 
         # Оптимизация через line of sight
         if self.use_los_optimization and len(local_path) > 2:
@@ -381,10 +408,15 @@ class PathfindingWorldComponent(PythonComponent):
             return [(start_region, start_tri_idx)]
 
         from termin.navmesh.pathfinding import astar_triangles
-        path_indices = astar_triangles(
-            start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
-            region.triangles, region.vertices
-        )
+        if self.use_edge_centers:
+            path_indices = astar_triangles(
+                start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
+                region.triangles, region.vertices
+            )
+        else:
+            path_indices = astar_triangles(
+                start_tri_idx, end_tri_idx, region.neighbors, region.centroids
+            )
         if path_indices is None:
             return None
 
@@ -527,19 +559,13 @@ class PathfindingWorldComponent(PythonComponent):
 
         optimized: List[np.ndarray] = [path[0]]
         current_idx = 0
+        current_tri = start_tri
 
         while current_idx < len(path) - 1:
             # Пробуем найти самую дальнюю точку с прямой видимостью
             best_skip = current_idx + 1
 
             for test_idx in range(len(path) - 1, current_idx + 1, -1):
-                # Находим треугольник текущей точки
-                current_tri = find_triangle_containing_point(
-                    optimized[-1], vertices, triangles
-                )
-                if current_tri < 0:
-                    current_tri = start_tri
-
                 # Проверяем прямую видимость
                 if navmesh_line_of_sight(
                     optimized[-1],
@@ -552,7 +578,16 @@ class PathfindingWorldComponent(PythonComponent):
                     best_skip = test_idx
                     break
 
-            optimized.append(path[best_skip])
+            # Добавляем следующую точку и обновляем current_tri
+            next_point = path[best_skip]
+            optimized.append(next_point)
+
+            # Находим треугольник для новой текущей точки
+            next_tri = find_triangle_containing_point(next_point, vertices, triangles)
+            if next_tri >= 0:
+                current_tri = next_tri
+            # Если не нашли — оставляем предыдущий (не идеально, но лучше чем start_tri)
+
             current_idx = best_skip
 
         return optimized
@@ -622,7 +657,7 @@ class PathfindingWorldComponent(PythonComponent):
             neighbors = region.neighbors
             centroids = region.centroids
 
-            # Для каждого треугольника рисуем линии к соседям через центры рёбер
+            # Для каждого треугольника рисуем линии к соседям
             drawn_edges: set[tuple[int, int]] = set()
             for tri_idx in range(len(triangles)):
                 tri_centroid = centroids[tri_idx]
@@ -638,39 +673,50 @@ class PathfindingWorldComponent(PythonComponent):
                         continue
                     drawn_edges.add(edge_key)
 
-                    # Центр общего ребра
-                    v0_idx = triangles[tri_idx, edge_idx]
-                    v1_idx = triangles[tri_idx, (edge_idx + 1) % 3]
-                    edge_center = (vertices[v0_idx] + vertices[v1_idx]) * 0.5
-
-                    # Линия от центроида текущего треугольника к центру ребра
-                    start = tri_centroid.copy()
-                    end = edge_center.copy()
-
-                    if transform is not None:
-                        start = self._transform_point(start, transform)
-                        end = self._transform_point(end, transform)
-
-                    renderer.line(
-                        Vec3(float(start[0]), float(start[1]), float(start[2])),
-                        Vec3(float(end[0]), float(end[1]), float(end[2])),
-                        green,
-                    )
-
-                    # Линия от центра ребра к центроиду соседнего треугольника
                     neighbor_centroid = centroids[neighbor_idx]
-                    start = edge_center.copy()
-                    end = neighbor_centroid.copy()
 
-                    if transform is not None:
-                        start = self._transform_point(start, transform)
-                        end = self._transform_point(end, transform)
+                    if self.use_edge_centers:
+                        # Через центры рёбер: centroid -> edge_center -> centroid
+                        v0_idx = triangles[tri_idx, edge_idx]
+                        v1_idx = triangles[tri_idx, (edge_idx + 1) % 3]
+                        edge_center = (vertices[v0_idx] + vertices[v1_idx]) * 0.5
 
-                    renderer.line(
-                        Vec3(float(start[0]), float(start[1]), float(start[2])),
-                        Vec3(float(end[0]), float(end[1]), float(end[2])),
-                        green,
-                    )
+                        start = tri_centroid.copy()
+                        end = edge_center.copy()
+                        if transform is not None:
+                            start = self._transform_point(start, transform)
+                            end = self._transform_point(end, transform)
+                        renderer.line(
+                            Vec3(float(start[0]), float(start[1]), float(start[2])),
+                            Vec3(float(end[0]), float(end[1]), float(end[2])),
+                            green,
+                            depth_test=True,
+                        )
+
+                        start = edge_center.copy()
+                        end = neighbor_centroid.copy()
+                        if transform is not None:
+                            start = self._transform_point(start, transform)
+                            end = self._transform_point(end, transform)
+                        renderer.line(
+                            Vec3(float(start[0]), float(start[1]), float(start[2])),
+                            Vec3(float(end[0]), float(end[1]), float(end[2])),
+                            green,
+                            depth_test=True,
+                        )
+                    else:
+                        # Напрямую: centroid -> centroid
+                        start = tri_centroid.copy()
+                        end = neighbor_centroid.copy()
+                        if transform is not None:
+                            start = self._transform_point(start, transform)
+                            end = self._transform_point(end, transform)
+                        renderer.line(
+                            Vec3(float(start[0]), float(start[1]), float(start[2])),
+                            Vec3(float(end[0]), float(end[1]), float(end[2])),
+                            green,
+                            depth_test=True,
+                        )
 
             # Рисуем рёбра треугольников
             for tri_idx in range(len(triangles)):
@@ -687,6 +733,7 @@ class PathfindingWorldComponent(PythonComponent):
                         Vec3(float(v0[0]), float(v0[1]), float(v0[2])),
                         Vec3(float(v1[0]), float(v1[1]), float(v1[2])),
                         cyan,
+                        depth_test=True,
                     )
 
 

@@ -292,8 +292,8 @@ def get_portals_from_path(
     """
     Извлечь порталы (рёбра между смежными треугольниками) из пути.
 
-    Left/right ориентированы относительно направления движения
-    в плоскости треугольника (не предполагает XZ ориентацию).
+    Left/right ориентированы консистентно: общие вершины соседних порталов
+    остаются на той же стороне (left или right).
 
     Args:
         path: Список индексов треугольников.
@@ -308,30 +308,15 @@ def get_portals_from_path(
 
     from termin._native import log as _log
 
+    # Храним индексы вершин для обеспечения консистентности
+    prev_left_idx: int | None = None
+    prev_right_idx: int | None = None
+
     for i in range(len(path) - 1):
         tri_a = path[i]
         tri_b = path[i + 1]
 
-        # Центроиды для определения направления движения
         tri_a_verts = triangles[tri_a]
-        tri_b_verts = triangles[tri_b]
-        centroid_a = (vertices[tri_a_verts[0]] + vertices[tri_a_verts[1]] + vertices[tri_a_verts[2]]) / 3.0
-        centroid_b = (vertices[tri_b_verts[0]] + vertices[tri_b_verts[1]] + vertices[tri_b_verts[2]]) / 3.0
-
-        _log.info(f"[Portal {i}] tri_a={tri_a} verts={tri_a_verts}, tri_b={tri_b} verts={tri_b_verts}")
-        _log.info(f"[Portal {i}] centroid_a={centroid_a}, centroid_b={centroid_b}")
-
-        # Направление движения
-        move_dir = centroid_b - centroid_a
-
-        # Нормаль треугольника A
-        v0 = vertices[tri_a_verts[0]]
-        v1 = vertices[tri_a_verts[1]]
-        v2 = vertices[tri_a_verts[2]]
-        normal = np.cross(v1 - v0, v2 - v0)
-        normal_len = np.linalg.norm(normal)
-        if normal_len > 1e-10:
-            normal = normal / normal_len
 
         # Найти общее ребро между tri_a и tri_b
         found_edge = False
@@ -342,25 +327,71 @@ def get_portals_from_path(
                 p0 = vertices[v0_idx].copy()
                 p1 = vertices[v1_idx].copy()
 
-                _log.info(f"[Portal {i}] edge_idx={edge_idx}, v0_idx={v0_idx}, v1_idx={v1_idx}")
-                _log.info(f"[Portal {i}] p0={p0}, p1={p1}")
+                # Определяем left/right
+                if i == 0:
+                    # Первый портал: определяем ориентацию по направлению движения
+                    tri_b_verts = triangles[tri_b]
+                    centroid_a = (vertices[tri_a_verts[0]] + vertices[tri_a_verts[1]] + vertices[tri_a_verts[2]]) / 3.0
+                    centroid_b = (vertices[tri_b_verts[0]] + vertices[tri_b_verts[1]] + vertices[tri_b_verts[2]]) / 3.0
+                    move_dir = centroid_b - centroid_a
 
-                # Вектор ребра
-                edge_vec = p1 - p0
+                    # Нормаль треугольника A
+                    va0 = vertices[tri_a_verts[0]]
+                    va1 = vertices[tri_a_verts[1]]
+                    va2 = vertices[tri_a_verts[2]]
+                    normal = np.cross(va1 - va0, va2 - va0)
+                    normal_len = np.linalg.norm(normal)
+                    if normal_len > 1e-10:
+                        normal = normal / normal_len
 
-                # Cross product move_dir × edge_vec даёт вектор вдоль нормали
-                # Знак определяет, с какой стороны p0 относительно направления
-                cross = np.cross(move_dir, edge_vec)
-                # Проецируем на нормаль для получения знака
-                sign = np.dot(cross, normal)
+                    edge_vec = p1 - p0
+                    cross = np.cross(move_dir, edge_vec)
+                    sign = np.dot(cross, normal)
 
-                if sign >= 0:
-                    left, right = p0, p1
+                    if sign >= 0:
+                        left_idx, right_idx = v0_idx, v1_idx
+                    else:
+                        left_idx, right_idx = v1_idx, v0_idx
                 else:
-                    left, right = p1, p0
+                    # Последующие порталы: сохраняем консистентность с предыдущим
+                    # Если одна из вершин совпадает с предыдущей, она остаётся на той же стороне
+                    if v0_idx == prev_left_idx or v1_idx == prev_right_idx:
+                        left_idx, right_idx = v0_idx, v1_idx
+                    elif v1_idx == prev_left_idx or v0_idx == prev_right_idx:
+                        left_idx, right_idx = v1_idx, v0_idx
+                    else:
+                        # Нет общих вершин с предыдущим порталом — используем move_dir
+                        tri_b_verts = triangles[tri_b]
+                        centroid_a = (vertices[tri_a_verts[0]] + vertices[tri_a_verts[1]] + vertices[tri_a_verts[2]]) / 3.0
+                        centroid_b = (vertices[tri_b_verts[0]] + vertices[tri_b_verts[1]] + vertices[tri_b_verts[2]]) / 3.0
+                        move_dir = centroid_b - centroid_a
 
+                        va0 = vertices[tri_a_verts[0]]
+                        va1 = vertices[tri_a_verts[1]]
+                        va2 = vertices[tri_a_verts[2]]
+                        normal = np.cross(va1 - va0, va2 - va0)
+                        normal_len = np.linalg.norm(normal)
+                        if normal_len > 1e-10:
+                            normal = normal / normal_len
+
+                        edge_vec = p1 - p0
+                        cross = np.cross(move_dir, edge_vec)
+                        sign = np.dot(cross, normal)
+
+                        if sign >= 0:
+                            left_idx, right_idx = v0_idx, v1_idx
+                        else:
+                            left_idx, right_idx = v1_idx, v0_idx
+
+                left = vertices[left_idx].copy()
+                right = vertices[right_idx].copy()
+
+                _log.info(f"[Portal {i}] tri {tri_a}->{tri_b}, left_idx={left_idx}, right_idx={right_idx}")
                 _log.info(f"[Portal {i}] left={left}, right={right}")
+
                 portals.append((left, right))
+                prev_left_idx = left_idx
+                prev_right_idx = right_idx
                 found_edge = True
                 break
 
@@ -460,7 +491,11 @@ def funnel_algorithm(
         if np.allclose(right, portal_right):
             pass  # Правая граница не изменилась
         elif triarea2(apex, right, portal_right) <= 0.0:
-            if np.allclose(apex, right) or triarea2(apex, left, portal_right) > 0.0:
+            # Проверяем пересечение с левой границей
+            # Если apex == left или apex == right — воронка схлопнулась в точку,
+            # нет границы для пересечения, просто сужаем
+            apex_collapsed = np.allclose(apex, left) or np.allclose(apex, right)
+            if apex_collapsed or triarea2(apex, left, portal_right) > 0.0:
                 # Сужаем воронку справа
                 right = portal_right.copy()
                 right_index = i
@@ -486,7 +521,11 @@ def funnel_algorithm(
         if np.allclose(left, portal_left):
             pass  # Левая граница не изменилась
         elif triarea2(apex, left, portal_left) >= 0.0:
-            if np.allclose(apex, left) or triarea2(apex, right, portal_left) < 0.0:
+            # Проверяем пересечение с правой границей
+            # Если apex == left или apex == right — воронка схлопнулась в точку,
+            # нет границы для пересечения, просто сужаем
+            apex_collapsed = np.allclose(apex, left) or np.allclose(apex, right)
+            if apex_collapsed or triarea2(apex, right, portal_left) < 0.0:
                 # Сужаем воронку слева
                 left = portal_left.copy()
                 left_index = i
@@ -541,20 +580,18 @@ def navmesh_line_of_sight(
     Returns:
         True если прямой путь возможен.
     """
+    from termin._native import log as _log
+
     direction = end - start
     dir_len = float(np.linalg.norm(direction))
     if dir_len < 1e-8:
         return True
 
     current_tri = start_tri
-    visited: set[int] = set()
+    prev_tri = -1  # Предыдущий треугольник (чтобы не возвращаться)
     max_iterations = len(triangles) * 2  # защита от бесконечного цикла
 
-    for _ in range(max_iterations):
-        if current_tri in visited:
-            return False
-        visited.add(current_tri)
-
+    for iteration in range(max_iterations):
         # Проверяем, находится ли end в текущем треугольнике
         tri = triangles[current_tri]
         v0 = vertices[tri[0]]
@@ -562,6 +599,7 @@ def navmesh_line_of_sight(
         v2 = vertices[tri[2]]
 
         if _point_in_triangle_3d(end, v0, v1, v2):
+            _log.info(f"[LOS] end found in tri {current_tri} after {iteration} iterations")
             return True
 
         # Вычисляем базис плоскости треугольника
@@ -570,6 +608,7 @@ def navmesh_line_of_sight(
         normal = np.cross(edge1, edge2)
         normal_len = np.linalg.norm(normal)
         if normal_len < 1e-10:
+            _log.warn(f"[LOS] degenerate triangle {current_tri}")
             return False
         normal = normal / normal_len
 
@@ -577,10 +616,17 @@ def navmesh_line_of_sight(
         v_axis = np.cross(normal, u_axis)
 
         # Ищем ребро, которое пересекает луч start->end
+        # Исключаем ребро, через которое мы пришли (prev_tri)
         best_edge = -1
         best_t = float('inf')
 
         for edge_idx in range(3):
+            neighbor = neighbors[current_tri, edge_idx]
+
+            # Не возвращаемся назад
+            if neighbor == prev_tri:
+                continue
+
             e0 = vertices[tri[edge_idx]]
             e1 = vertices[tri[(edge_idx + 1) % 3]]
 
@@ -591,14 +637,18 @@ def navmesh_line_of_sight(
                     best_edge = edge_idx
 
         if best_edge < 0:
-            return False  # Нет пересечения — что-то не так
+            _log.info(f"[LOS] no exit edge found in tri {current_tri}")
+            return False  # Нет пересечения — луч не выходит через это ребро
 
         neighbor = neighbors[current_tri, best_edge]
         if neighbor < 0:
+            _log.info(f"[LOS] hit boundary edge {best_edge} in tri {current_tri}")
             return False  # Граничное ребро — нет прямой видимости
 
+        prev_tri = current_tri
         current_tri = neighbor
 
+    _log.warn(f"[LOS] max iterations reached")
     return False
 
 

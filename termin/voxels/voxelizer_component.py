@@ -138,6 +138,14 @@ class VoxelizerComponent(PythonComponent):
             max=10.0,
             step=0.1,
         ),
+        "max_vertex_valence": InspectField(
+            path="max_vertex_valence",
+            label="Max Vertex Valence",
+            kind="int",
+            min=0,
+            max=20,
+            step=1,
+        ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
             kind="button",
@@ -175,8 +183,8 @@ class VoxelizerComponent(PythonComponent):
     serializable_fields = [
         "grid_name", "cell_size", "output_path", "voxelize_mode", "voxelize_source",
         "navmesh_output_path", "normal_angle", "contour_simplify", "max_edge_length",
-        "show_region_voxels", "show_sparse_boundary", "show_simplified_contours",
-        "show_bridged_contours", "show_triangulated",
+        "max_vertex_valence", "show_region_voxels", "show_sparse_boundary",
+        "show_simplified_contours", "show_bridged_contours", "show_triangulated",
     ]
 
     def __init__(
@@ -190,6 +198,7 @@ class VoxelizerComponent(PythonComponent):
         normal_angle: float = 25.0,
         contour_simplify: float = 0.0,
         max_edge_length: float = 0.0,
+        max_vertex_valence: int = 0,
         show_region_voxels: bool = False,
         show_sparse_boundary: bool = False,
         show_simplified_contours: bool = False,
@@ -206,6 +215,7 @@ class VoxelizerComponent(PythonComponent):
         self.normal_angle = normal_angle
         self.contour_simplify = contour_simplify
         self.max_edge_length = max_edge_length
+        self.max_vertex_valence = max_vertex_valence
         self._last_voxel_count: int = 0
 
         # Debug visualization
@@ -782,6 +792,7 @@ void main() {
             normal_threshold=normal_threshold,
             contour_epsilon=contour_epsilon,
             max_edge_length=self.max_edge_length,
+            max_vertex_valence=self.max_vertex_valence,
         )
         builder = PolygonBuilder(config)
 

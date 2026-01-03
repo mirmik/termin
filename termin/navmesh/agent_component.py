@@ -71,6 +71,8 @@ class NavMeshAgentComponent(InputComponent):
     ) -> None:
         super().__init__(enabled=True)
 
+        self.active_in_editor = True
+
         self.speed: float = speed
         self.stopping_distance: float = stopping_distance
         self.debug_draw_path: bool = debug_draw_path
