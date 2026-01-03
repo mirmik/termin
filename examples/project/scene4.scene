@@ -3895,13 +3895,13 @@
   "editor": {
     "camera": {
       "target": [
-        1.023118925010874,
-        2.1836137959087023,
-        -3.4366991053571234
+        1.0231189727783203,
+        2.1836137771606445,
+        -3.436699151992798
       ],
       "radius": 10.5,
       "azimuth": 42.9246276235542,
-      "elevation": 0.4747295565424561
+      "elevation": 0.48520153205442207
     },
     "selected_entity": "EditorEntities",
     "displays": [
@@ -3912,7 +3912,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "eaf54618-90bf-42e7-9a7a-ae4fa3a7f74d",
+            "uuid": "9957d169-fbe9-4102-ac12-d409d2faf0af",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3932,7 +3932,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "cfe547c7-6045-4716-824b-17b0c94124ed",
+            "uuid": "422ec082-23be-4632-bc2f-b2f75c9d24a6",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3947,10 +3947,10 @@
       }
     ],
     "expanded_entities": [
-      "EditorEntities",
+      "VoxelPlatform",
       "camera",
-      "editor_ui",
-      "VoxelPlatform"
+      "EditorEntities",
+      "editor_ui"
     ]
   },
   "resources": {

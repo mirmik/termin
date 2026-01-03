@@ -1,5 +1,6 @@
 #include "skinned_mesh_renderer.hpp"
 #include "skeleton_controller.hpp"
+#include "graphics_backend.hpp"
 #include "termin/entity/entity.hpp"
 #include "tc_log.hpp"
 #include <iostream>
@@ -109,11 +110,41 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
         return;
     }
 
-    // Upload bone matrices to current shader (already skinned by ColorPass via get_skinned_material)
+    ShaderProgram* shader_to_use = context.current_shader;
+
+    // Check if current shader needs skinning injection
     if (_skeleton_controller != nullptr && context.current_shader != nullptr) {
         update_bone_matrices();
+
         if (_bone_count > 0) {
-            upload_bone_matrices(*context.current_shader);
+            // Check if shader already has skinning
+            const std::string& vert_source = context.current_shader->vertex_source();
+            if (vert_source.find("u_bone_matrices") == std::string::npos) {
+                // Need to inject skinning into this shader
+                try {
+                    nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
+                    nb::object skinned_shader_obj = skinning_module.attr("get_skinned_shader")(context.current_shader);
+                    if (!skinned_shader_obj.is_none()) {
+                        shader_to_use = nb::cast<ShaderProgram*>(skinned_shader_obj);
+                        // Ensure shader is compiled
+                        GraphicsBackend* graphics = context.graphics;
+                        shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+                            return graphics->create_shader(v, f, g);
+                        });
+                        // Use the skinned shader
+                        shader_to_use->use();
+                        // Re-apply uniforms from original shader context
+                        shader_to_use->set_uniform_matrix4("u_view", context.view);
+                        shader_to_use->set_uniform_matrix4("u_projection", context.projection);
+                        shader_to_use->set_uniform_matrix4("u_model", context.model);
+                    }
+                } catch (const nb::python_error& e) {
+                    tc::Log::warn(e, "SkinnedMeshRenderer::draw_geometry skinning injection");
+                    PyErr_Clear();
+                }
+            }
+
+            upload_bone_matrices(*shader_to_use);
         }
     }
 
@@ -144,16 +175,23 @@ std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std:
 void SkinnedMeshRenderer::start() {
     Component::start();
 
+    tc::Log::info("[SkinnedMeshRenderer::start] entity='%s' _skeleton_controller=%p",
+                  entity.valid() ? entity.name() : "invalid", (void*)_skeleton_controller);
+
     // After deserialization, skeleton_controller may be null - try to find it
     if (_skeleton_controller == nullptr && entity.valid()) {
         // Look for SkeletonController by type name
         // Check parent entity first (typical for GLB structure)
         Entity parent_entity = entity.parent();
 
+        tc::Log::info("[SkinnedMeshRenderer::start] looking for SkeletonController, parent='%s'",
+                      parent_entity.valid() ? parent_entity.name() : "invalid");
+
         if (parent_entity.valid()) {
             Component* controller = parent_entity.get_component_by_type("SkeletonController");
             if (controller != nullptr) {
                 _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
+                tc::Log::info("[SkinnedMeshRenderer::start] found in parent: %p", (void*)_skeleton_controller);
             }
         }
 
@@ -162,7 +200,12 @@ void SkinnedMeshRenderer::start() {
             Component* controller = entity.get_component_by_type("SkeletonController");
             if (controller != nullptr) {
                 _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
+                tc::Log::info("[SkinnedMeshRenderer::start] found in self: %p", (void*)_skeleton_controller);
             }
+        }
+
+        if (_skeleton_controller == nullptr) {
+            tc::Log::warn("[SkinnedMeshRenderer::start] SkeletonController NOT FOUND");
         }
     }
 }

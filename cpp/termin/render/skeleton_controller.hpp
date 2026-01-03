@@ -66,6 +66,11 @@ public:
      */
     void invalidate_instance();
 
+    /**
+     * Component lifecycle: check skeleton state after deserialization.
+     */
+    void start() override;
+
     INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton_handle")
     INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity]")
 };

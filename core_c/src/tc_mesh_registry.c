@@ -283,6 +283,10 @@ bool tc_mesh_destroy(tc_mesh_handle h) {
     tc_mesh* mesh = tc_mesh_get(h);
     if (!mesh) return false;
 
+    tc_log(TC_LOG_INFO, "[tc_mesh_destroy] DESTROYING mesh uuid=%s name=%s refcount=%d",
+           mesh->header.uuid, mesh->header.name ? mesh->header.name : "(null)",
+           mesh->header.ref_count);
+
     // Remove from UUID map
     tc_resource_map_remove(g_uuid_to_index, mesh->header.uuid);
 
@@ -498,9 +502,13 @@ tc_mesh_info* tc_mesh_get_all_info(size_t* count) {
     if (!count) return NULL;
     *count = 0;
 
-    if (!g_initialized) return NULL;
+    if (!g_initialized) {
+        tc_log(TC_LOG_INFO, "[tc_mesh_get_all_info] NOT INITIALIZED!");
+        return NULL;
+    }
 
     size_t mesh_count = tc_pool_count(&g_mesh_pool);
+    tc_log(TC_LOG_INFO, "[tc_mesh_get_all_info] pool_count=%zu", mesh_count);
     if (mesh_count == 0) return NULL;
 
     tc_mesh_info* infos = (tc_mesh_info*)malloc(mesh_count * sizeof(tc_mesh_info));

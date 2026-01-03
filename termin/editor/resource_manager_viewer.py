@@ -110,6 +110,13 @@ class ResourceManagerViewer(QDialog):
         self._navmeshes_tree.itemClicked.connect(lambda item: self._on_item_clicked("navmesh", item))
         self._tab_widget.addTab(self._navmeshes_tree, "NavMeshes")
 
+        # Skeletons
+        self._skeletons_tree = QTreeWidget()
+        self._skeletons_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._skeletons_tree.setAlternatingRowColors(True)
+        self._skeletons_tree.itemClicked.connect(lambda item: self._on_item_clicked("skeleton", item))
+        self._tab_widget.addTab(self._skeletons_tree, "Skeletons")
+
         # Компоненты (Python ResourceManager)
         self._components_tree = QTreeWidget()
         self._components_tree.setHeaderLabels(["Name", "Module"])
@@ -204,6 +211,11 @@ class ResourceManagerViewer(QDialog):
             if asset:
                 self._selected_asset = asset
                 self._show_navmesh_details(name, asset)
+        elif asset_type == "skeleton":
+            asset = self._resource_manager._skeleton_assets.get(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_skeleton_details(name, asset)
 
         # Enable/disable load button
         can_load = (
@@ -317,6 +329,34 @@ class ResourceManagerViewer(QDialog):
 
         self._details_text.setText("\n".join(lines))
 
+    def _show_skeleton_details(self, name: str, asset) -> None:
+        """Показать детали Skeleton."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(none)'}",
+            f"Loaded: {asset.is_loaded}",
+        ]
+
+        if asset.is_loaded:
+            skeleton = asset.data
+            if skeleton is not None:
+                lines.append(f"")
+                lines.append(f"=== Skeleton Data ===")
+                bone_count = skeleton.get_bone_count() if hasattr(skeleton, 'get_bone_count') else len(skeleton.bones)
+                lines.append(f"Bone Count: {bone_count}")
+
+                # List bones
+                if hasattr(skeleton, 'bones') and skeleton.bones:
+                    lines.append(f"")
+                    lines.append(f"=== Bones ===")
+                    for i, bone in enumerate(skeleton.bones):
+                        bone_name = bone.name if hasattr(bone, 'name') else str(bone)
+                        parent_idx = bone.parent_index if hasattr(bone, 'parent_index') else -1
+                        lines.append(f"  [{i}] {bone_name} (parent: {parent_idx})")
+
+        self._details_text.setText("\n".join(lines))
+
     def _on_load_clicked(self) -> None:
         """Загрузить выбранный ассет."""
         if self._selected_asset is None:
@@ -345,6 +385,7 @@ class ResourceManagerViewer(QDialog):
         self._refresh_textures()
         self._refresh_voxelgrids()
         self._refresh_navmeshes()
+        self._refresh_skeletons()
         self._refresh_components()
         self._refresh_registry()
         self._refresh_watched()
@@ -420,6 +461,20 @@ class ResourceManagerViewer(QDialog):
 
         self._navmeshes_tree.resizeColumnToContents(0)
         self._navmeshes_tree.resizeColumnToContents(1)
+
+    def _refresh_skeletons(self) -> None:
+        """Обновляет список Skeleton."""
+        self._skeletons_tree.clear()
+
+        for name, asset in sorted(self._resource_manager._skeleton_assets.items()):
+            status = "loaded" if asset.is_loaded else "not loaded"
+            uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
+
+            item = QTreeWidgetItem([name, status, uuid_str])
+            self._skeletons_tree.addTopLevelItem(item)
+
+        self._skeletons_tree.resizeColumnToContents(0)
+        self._skeletons_tree.resizeColumnToContents(1)
 
     def _refresh_components(self) -> None:
         """Обновляет список компонентов."""
@@ -526,5 +581,6 @@ class ResourceManagerViewer(QDialog):
             f"Textures: {len(rm._texture_assets)} | "
             f"VoxelGrids: {len(rm._voxel_grid_assets)} | "
             f"NavMeshes: {len(rm._navmesh_assets)} | "
+            f"Skeletons: {len(rm._skeleton_assets)} | "
             f"Components: {len(rm.components)}"
         )
