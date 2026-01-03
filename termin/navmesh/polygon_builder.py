@@ -220,6 +220,7 @@ class PolygonBuilder:
                     grid.cell_size,
                     np.array(grid.origin, dtype=np.float32),
                     simplify_epsilon=self.config.contour_epsilon,
+                    max_edge_length=self.config.max_edge_length,
                 )
                 if len(vertices) > 0 and len(triangles) > 0:
                     polygon.vertices = vertices

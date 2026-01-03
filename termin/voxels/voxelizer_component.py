@@ -781,6 +781,7 @@ void main() {
         config = NavMeshConfig(
             normal_threshold=normal_threshold,
             contour_epsilon=contour_epsilon,
+            max_edge_length=self.max_edge_length,
         )
         builder = PolygonBuilder(config)
 
@@ -800,6 +801,9 @@ void main() {
 
         # Перестраиваем отладочный меш
         self._rebuild_debug_mesh()
+
+        # Строим отладочный меш из NavMesh
+        self._build_debug_mesh_from_navmesh(navmesh)
 
         print(f"VoxelizerComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
 
@@ -971,9 +975,6 @@ void main() {
 
         # Строим контуры после bridge (один полигон)
         self._build_debug_bridged_contours(grid, region_colors)
-
-        # Строим триангулированный меш
-        self._build_debug_triangulated_mesh(grid, region_colors)
 
         total_voxels = sum(len(voxels) for voxels, _ in self._debug_regions)
         print(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
@@ -1307,69 +1308,43 @@ void main() {
 
         print(f"VoxelizerComponent: bridged contours built ({len(self._debug_regions)} regions, {len(vertices)} vertices)")
 
-    def _build_debug_triangulated_mesh(
-        self,
-        grid: "VoxelGrid",
-        region_colors: list[tuple[float, float, float]],
-    ) -> None:
-        """Построить триангулированный меш для всех регионов."""
-        from termin.navmesh.polygon_builder import PolygonBuilder
-
-        builder = PolygonBuilder()
-
-        # Используем contour_simplify как epsilon для Douglas-Peucker
-        simplify_epsilon = self.contour_simplify * grid.cell_size
+    def _build_debug_mesh_from_navmesh(self, navmesh: "NavMesh") -> None:
+        """Построить отладочный меш из готового NavMesh."""
+        import colorsys
 
         all_vertices: list[np.ndarray] = []
         all_triangles: list[np.ndarray] = []
         all_colors: list[np.ndarray] = []
         vertex_offset = 0
-        total_triangles = 0
 
-        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
-            # Триангулируем регион
-            vertices, triangles = builder.triangulate_region(
-                region_voxels,
-                region_normal,
-                grid.cell_size,
-                np.array(grid.origin, dtype=np.float32),
-                simplify_epsilon=simplify_epsilon,
-                max_edge_length=self.max_edge_length,
-            )
-
-            if len(vertices) == 0 or len(triangles) == 0:
+        for poly_idx, polygon in enumerate(navmesh.polygons):
+            if len(polygon.vertices) == 0 or len(polygon.triangles) == 0:
                 continue
 
-            region_color = region_colors[region_idx]
+            # Цвет региона
+            hue = (poly_idx * 0.618033988749895) % 1.0
+            region_color = colorsys.hsv_to_rgb(hue, 0.7, 0.9)
 
-            # Добавляем вершины
-            all_vertices.append(vertices)
+            all_vertices.append(polygon.vertices)
+            all_triangles.append(polygon.triangles + vertex_offset)
 
-            # Смещаем индексы треугольников
-            all_triangles.append(triangles + vertex_offset)
-
-            # Цвета для вершин
-            vertex_colors = np.full((len(vertices), 3), region_color, dtype=np.float32)
+            vertex_colors = np.full((len(polygon.vertices), 3), region_color, dtype=np.float32)
             all_colors.append(vertex_colors)
 
-            vertex_offset += len(vertices)
-            total_triangles += len(triangles)
+            vertex_offset += len(polygon.vertices)
 
         if not all_vertices:
             return
 
-        # Объединяем в один меш
         vertices = np.vstack(all_vertices).astype(np.float32)
         triangles = np.vstack(all_triangles).astype(np.int32)
         colors = np.vstack(all_colors).astype(np.float32)
 
-        # Вычисляем нормали для треугольников
+        # Вычисляем нормали
         normals = np.zeros_like(vertices)
         for tri in triangles:
             v0, v1, v2 = vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
-            edge1 = v1 - v0
-            edge2 = v2 - v0
-            face_normal = np.cross(edge1, edge2)
+            face_normal = np.cross(v1 - v0, v2 - v0)
             norm = np.linalg.norm(face_normal)
             if norm > 1e-10:
                 face_normal = face_normal / norm
@@ -1377,7 +1352,6 @@ void main() {
             normals[tri[1]] += face_normal
             normals[tri[2]] += face_normal
 
-        # Нормализуем
         for i in range(len(normals)):
             norm = np.linalg.norm(normals[i])
             if norm > 1e-10:
@@ -1386,10 +1360,11 @@ void main() {
         self._debug_triangulated_mesh = create_voxel_mesh(
             vertices=vertices,
             triangles=triangles,
-            uvs=np.full((len(vertices), 2), [2.0, 0.0], dtype=np.float32),  # vertex color mode
+            uvs=np.full((len(vertices), 2), [2.0, 0.0], dtype=np.float32),
             vertex_colors=colors,
             vertex_normals=normals.astype(np.float32),
             name="voxelizer_debug_triangulated",
         )
 
-        print(f"VoxelizerComponent: triangulated mesh built ({len(self._debug_regions)} regions, {len(vertices)} vertices, {total_triangles} triangles)")
+        print(f"VoxelizerComponent: triangulated mesh from NavMesh ({len(navmesh.polygons)} polygons, {len(vertices)} vertices, {len(triangles)} triangles)")
+

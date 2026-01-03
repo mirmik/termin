@@ -98,3 +98,13 @@ class UnifiedGizmoPass(RenderFramePass):
 
         # Render all gizmos
         manager.render(self._renderer, graphics, view, proj)
+
+        # Flush debug lines added by components via ImmediateRenderer.instance()
+        # Components add lines during update(), we flush them here
+        self._renderer.flush(
+            graphics=graphics,
+            view_matrix=view,
+            proj_matrix=proj,
+            depth_test=False,
+            blend=False,
+        )

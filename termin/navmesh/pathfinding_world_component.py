@@ -39,11 +39,6 @@ class PathfindingWorldComponent(PythonComponent):
     """
 
     inspect_fields = {
-        "use_centroids": InspectField(
-            path="use_centroids",
-            label="Use Centroids",
-            kind="bool",
-        ),
         "use_funnel": InspectField(
             path="use_funnel",
             label="Use Funnel Algorithm",
@@ -54,25 +49,30 @@ class PathfindingWorldComponent(PythonComponent):
             label="Optimize with LOS",
             kind="bool",
         ),
+        "show_graph_edges": InspectField(
+            path="show_graph_edges",
+            label="Show Graph Edges",
+            kind="bool",
+        ),
     }
 
     serializable_fields = [
-        "use_centroids",
         "use_funnel",
         "use_los_optimization",
+        "show_graph_edges",
     ]
 
     def __init__(
         self,
-        use_centroids: bool = True,
         use_funnel: bool = True,
         use_los_optimization: bool = True,
+        show_graph_edges: bool = False,
     ) -> None:
         super().__init__(enabled=True)
 
-        self.use_centroids = use_centroids
         self.use_funnel = use_funnel
         self.use_los_optimization = use_los_optimization
+        self.show_graph_edges = show_graph_edges
 
         self._navmesh_graph: NavMeshGraph = NavMeshGraph()
         self._voxelizer_components: List["VoxelizerComponent"] = []
@@ -102,6 +102,10 @@ class PathfindingWorldComponent(PythonComponent):
         self._collect_navmeshes(scene)
         self._build_graph()
         self._initialized = True
+
+    def update(self, dt: float) -> None:
+        """Обновление каждый кадр."""
+        self.draw()
 
     def _collect_navmeshes(self, scene: "Scene") -> None:
         """Найти все VoxelizerComponent и собрать их NavMesh."""
@@ -295,14 +299,7 @@ class PathfindingWorldComponent(PythonComponent):
         log.info(f"[PathfindingWorld] A* path: {len(path_indices)} triangles")
 
         # Строим путь в зависимости от настроек
-        if self.use_centroids and not self.use_funnel:
-            # Только центроиды треугольников
-            local_path = [local_start]
-            for tri_idx in path_indices:
-                local_path.append(region.centroids[tri_idx].copy())
-            local_path.append(local_end)
-            log.info(f"[PathfindingWorld] centroid path: {len(local_path)} points")
-        elif self.use_funnel:
+        if self.use_funnel:
             # Funnel Algorithm
             portals = get_portals_from_path(
                 path_indices, region.triangles, region.vertices, region.neighbors
@@ -592,6 +589,105 @@ class PathfindingWorldComponent(PythonComponent):
             direction = direction / length
 
         return self.raycast(origin, direction, max_distance)
+
+    def draw(self) -> None:
+        """Отрисовка отладочной визуализации."""
+        if not self.show_graph_edges:
+            return
+
+        from termin.visualization.render.immediate import ImmediateRenderer
+        from termin.geombase import Vec3
+        from termin.graphics import Color4
+
+        renderer = ImmediateRenderer.instance()
+        if renderer is None:
+            return
+
+        if not self._navmesh_graph.regions:
+            return
+
+        renderer.begin()
+        green = Color4(0.0, 1.0, 0.0, 1.0)
+        cyan = Color4(0.0, 0.8, 0.8, 0.5)
+
+        # Рисуем рёбра графа для каждого региона
+        for region_id, region in enumerate(self._navmesh_graph.regions):
+            entity = self._region_entities.get(region_id)
+            transform = None
+            if entity is not None:
+                transform = entity.transform.global_pose().as_matrix()
+
+            triangles = region.triangles
+            vertices = region.vertices
+            neighbors = region.neighbors
+            centroids = region.centroids
+
+            # Для каждого треугольника рисуем линии к соседям через центры рёбер
+            drawn_edges: set[tuple[int, int]] = set()
+            for tri_idx in range(len(triangles)):
+                tri_centroid = centroids[tri_idx]
+
+                for edge_idx in range(3):
+                    neighbor_idx = neighbors[tri_idx, edge_idx]
+                    if neighbor_idx < 0:
+                        continue
+
+                    # Избегаем дублирования рёбер
+                    edge_key = (min(tri_idx, neighbor_idx), max(tri_idx, neighbor_idx))
+                    if edge_key in drawn_edges:
+                        continue
+                    drawn_edges.add(edge_key)
+
+                    # Центр общего ребра
+                    v0_idx = triangles[tri_idx, edge_idx]
+                    v1_idx = triangles[tri_idx, (edge_idx + 1) % 3]
+                    edge_center = (vertices[v0_idx] + vertices[v1_idx]) * 0.5
+
+                    # Линия от центроида текущего треугольника к центру ребра
+                    start = tri_centroid.copy()
+                    end = edge_center.copy()
+
+                    if transform is not None:
+                        start = self._transform_point(start, transform)
+                        end = self._transform_point(end, transform)
+
+                    renderer.line(
+                        Vec3(float(start[0]), float(start[1]), float(start[2])),
+                        Vec3(float(end[0]), float(end[1]), float(end[2])),
+                        green,
+                    )
+
+                    # Линия от центра ребра к центроиду соседнего треугольника
+                    neighbor_centroid = centroids[neighbor_idx]
+                    start = edge_center.copy()
+                    end = neighbor_centroid.copy()
+
+                    if transform is not None:
+                        start = self._transform_point(start, transform)
+                        end = self._transform_point(end, transform)
+
+                    renderer.line(
+                        Vec3(float(start[0]), float(start[1]), float(start[2])),
+                        Vec3(float(end[0]), float(end[1]), float(end[2])),
+                        green,
+                    )
+
+            # Рисуем рёбра треугольников
+            for tri_idx in range(len(triangles)):
+                tri = triangles[tri_idx]
+                for edge_idx in range(3):
+                    v0 = vertices[tri[edge_idx]].copy()
+                    v1 = vertices[tri[(edge_idx + 1) % 3]].copy()
+
+                    if transform is not None:
+                        v0 = self._transform_point(v0, transform)
+                        v1 = self._transform_point(v1, transform)
+
+                    renderer.line(
+                        Vec3(float(v0[0]), float(v0[1]), float(v0[2])),
+                        Vec3(float(v1[0]), float(v1[1]), float(v1[2])),
+                        cyan,
+                    )
 
 
 def _ray_triangle_intersect(

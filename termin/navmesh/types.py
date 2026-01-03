@@ -22,6 +22,9 @@ class NavMeshConfig:
     contour_epsilon: float = 0.1
     """Порог для Douglas-Peucker упрощения контуров (в мировых координатах)."""
 
+    max_edge_length: float = 0.0
+    """Макс. длина ребра треугольника. 0 = без ограничения."""
+
 
 @dataclass
 class NavPolygon:
