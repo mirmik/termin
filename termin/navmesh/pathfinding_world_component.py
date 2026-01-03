@@ -330,14 +330,21 @@ class PathfindingWorldComponent(PythonComponent):
         # Вычисляем центр портала
         center = np.mean(world_coords, axis=0).astype(np.float32)
 
-        # Вычисляем ширину (максимальное расстояние между вокселями)
+        # Вычисляем ширину и находим крайние точки (left/right)
         width = 0.0
+        left_idx = 0
+        right_idx = 0
         if len(world_coords) > 1:
             for i in range(len(world_coords)):
                 for j in range(i + 1, len(world_coords)):
                     dist = float(np.linalg.norm(world_coords[i] - world_coords[j]))
                     if dist > width:
                         width = dist
+                        left_idx = i
+                        right_idx = j
+
+        left = world_coords[left_idx].copy()
+        right = world_coords[right_idx].copy() if right_idx != left_idx else left.copy()
 
         return Portal(
             region_a=region_a,
@@ -345,6 +352,8 @@ class PathfindingWorldComponent(PythonComponent):
             voxels=voxels,
             center=center,
             width=width,
+            left=left,
+            right=right,
         )
 
     def _transform_vertices(self, vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
@@ -544,8 +553,23 @@ class PathfindingWorldComponent(PythonComponent):
 
         for i, (region_id, portal_idx) in enumerate(region_path):
             is_last = (i == len(region_path) - 1)
+            is_first = (i == 0)
 
             log.info(f"[PathfindingWorld] segment {i}: region={region_id}, portal_idx={portal_idx}, is_last={is_last}")
+
+            # Для первого сегмента используем start_tri_idx, для остальных ищем в текущем регионе
+            if is_first:
+                current_tri_idx = start_tri_idx
+            else:
+                current_tri_idx = self._find_triangle_in_region(current_pos, region_id)
+                if current_tri_idx < 0:
+                    log.warn(f"[PathfindingWorld] current_pos not in region {region_id}, using nearest")
+                    # Портал на границе — попробуем найти ближайший треугольник
+                    current_tri_idx = self._find_nearest_triangle_in_region(current_pos, region_id)
+                    if current_tri_idx < 0:
+                        log.warn(f"[PathfindingWorld] no triangle found, skipping to target")
+                        # Всё равно идём к target напрямую
+                        pass
 
             # Определяем целевую точку в этом регионе
             if is_last:
@@ -558,35 +582,44 @@ class PathfindingWorldComponent(PythonComponent):
                     continue
 
                 portal = self._portals[portal_idx]
-                # Трансформируем центр портала в мировые координаты
                 entity = self._region_entities.get(region_id)
-                if entity is not None:
-                    transform = entity.transform.global_pose().as_matrix()
-                    target_pos = self._transform_point(portal.center, transform)
-                else:
-                    target_pos = portal.center.copy()
+                transform = entity.transform.global_pose().as_matrix() if entity else None
 
-                # Находим треугольник для портала
-                target_tri_result = self.find_containing_triangle(target_pos)
-                if target_tri_result is None:
-                    log.warn(f"[PathfindingWorld] portal center not on navmesh")
+                # Трансформируем концы портала в мировые координаты
+                if transform is not None:
+                    portal_left = self._transform_point(portal.left, transform)
+                    portal_right = self._transform_point(portal.right, transform)
+                else:
+                    portal_left = portal.left.copy()
+                    portal_right = portal.right.copy()
+
+                # Находим оптимальную точку на ребре портала
+                # (ближайшую к прямой current_pos -> end)
+                target_pos = self._closest_point_on_segment_to_line(
+                    portal_left, portal_right, current_pos, end
+                )
+
+                # Находим треугольник для портала в текущем регионе
+                target_tri_idx = self._find_triangle_in_region(target_pos, region_id)
+                if target_tri_idx < 0:
+                    log.warn(f"[PathfindingWorld] portal point not in region {region_id}")
                     full_path.append(target_pos.copy())
                     current_pos = target_pos.copy()
                     continue
-
-                _, target_tri_idx = target_tri_result
 
             log.info(f"[PathfindingWorld] current_pos={current_pos}, target_pos={target_pos}")
             log.info(f"[PathfindingWorld] current_tri={current_tri_idx}, target_tri={target_tri_idx}")
 
             # Находим путь внутри региона
-            try:
-                segment_path = self._find_single_region_path(
-                    current_pos, target_pos, region_id, current_tri_idx, target_tri_idx
-                )
-            except Exception as e:
-                log.error(f"[PathfindingWorld] error in _find_single_region_path: {e}")
-                segment_path = None
+            segment_path = None
+            if current_tri_idx >= 0 and target_tri_idx >= 0:
+                try:
+                    segment_path = self._find_single_region_path(
+                        current_pos, target_pos, region_id, current_tri_idx, target_tri_idx
+                    )
+                except Exception as e:
+                    log.error(f"[PathfindingWorld] error in _find_single_region_path: {e}")
+                    segment_path = None
 
             if segment_path is not None and len(segment_path) > 1:
                 # Добавляем точки сегмента (пропуская первую — она уже есть)
@@ -599,7 +632,6 @@ class PathfindingWorldComponent(PythonComponent):
                 log.info("[PathfindingWorld] segment failed, adding direct line")
 
             current_pos = target_pos.copy()
-            current_tri_idx = target_tri_idx
 
         log.info(f"[PathfindingWorld] cross-region path: {len(full_path)} points")
         return full_path if len(full_path) > 1 else None
@@ -618,6 +650,124 @@ class PathfindingWorldComponent(PythonComponent):
             else:
                 path_points.append(local_point.copy())
         return path_points
+
+    def _find_triangle_in_region(self, point: np.ndarray, region_id: int) -> int:
+        """
+        Найти треугольник, содержащий точку, в конкретном регионе.
+
+        Args:
+            point: Точка в мировых координатах.
+            region_id: ID региона для поиска.
+
+        Returns:
+            Индекс треугольника в регионе, или -1 если не найден.
+        """
+        if region_id >= len(self._navmesh_graph.regions):
+            return -1
+
+        region = self._navmesh_graph.regions[region_id]
+
+        # Трансформируем точку в локальные координаты региона
+        entity = self._region_entities.get(region_id)
+        if entity is not None:
+            inverse = np.linalg.inv(entity.transform.global_pose().as_matrix())
+            local_point = self._transform_point(point, inverse)
+        else:
+            local_point = point
+
+        return region.find_triangle(local_point)
+
+    def _find_nearest_triangle_in_region(self, point: np.ndarray, region_id: int) -> int:
+        """
+        Найти ближайший треугольник к точке в конкретном регионе.
+
+        Используется когда точка на границе и find_triangle не находит её.
+
+        Args:
+            point: Точка в мировых координатах.
+            region_id: ID региона для поиска.
+
+        Returns:
+            Индекс ближайшего треугольника, или -1 если регион пустой.
+        """
+        if region_id >= len(self._navmesh_graph.regions):
+            return -1
+
+        region = self._navmesh_graph.regions[region_id]
+        if len(region.centroids) == 0:
+            return -1
+
+        # Трансформируем точку в локальные координаты региона
+        entity = self._region_entities.get(region_id)
+        if entity is not None:
+            inverse = np.linalg.inv(entity.transform.global_pose().as_matrix())
+            local_point = self._transform_point(point, inverse)
+        else:
+            local_point = point
+
+        # Находим ближайший центроид
+        best_idx = 0
+        best_dist = float('inf')
+        for i, centroid in enumerate(region.centroids):
+            dist = float(np.linalg.norm(local_point - centroid))
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = i
+
+        return best_idx
+
+    def _closest_point_on_segment_to_line(
+        self,
+        seg_a: np.ndarray,
+        seg_b: np.ndarray,
+        line_p: np.ndarray,
+        line_q: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Найти точку на отрезке [seg_a, seg_b], ближайшую к прямой line_p -> line_q.
+
+        Используется для выбора оптимальной точки прохода через портал.
+        """
+        # Направление отрезка
+        seg_dir = seg_b - seg_a
+        seg_len_sq = float(np.dot(seg_dir, seg_dir))
+
+        if seg_len_sq < 1e-10:
+            # Вырожденный отрезок
+            return seg_a.copy()
+
+        # Направление линии
+        line_dir = line_q - line_p
+        line_len_sq = float(np.dot(line_dir, line_dir))
+
+        if line_len_sq < 1e-10:
+            # Вырожденная линия — возвращаем ближайшую точку к line_p
+            t = np.dot(line_p - seg_a, seg_dir) / seg_len_sq
+            t = max(0.0, min(1.0, t))
+            return (seg_a + t * seg_dir).astype(np.float32)
+
+        # Находим точку пересечения двух прямых (или ближайшие точки)
+        # Используем метод для 3D: находим параметры s и t такие что
+        # seg_a + s * seg_dir и line_p + t * line_dir минимизируют расстояние
+
+        w0 = seg_a - line_p
+        a = float(np.dot(seg_dir, seg_dir))
+        b = float(np.dot(seg_dir, line_dir))
+        c = float(np.dot(line_dir, line_dir))
+        d = float(np.dot(seg_dir, w0))
+        e = float(np.dot(line_dir, w0))
+
+        denom = a * c - b * b
+        if abs(denom) < 1e-10:
+            # Параллельные линии — проецируем line_p на отрезок
+            s = np.dot(line_p - seg_a, seg_dir) / seg_len_sq
+        else:
+            s = (b * e - c * d) / denom
+
+        # Ограничиваем s в пределах [0, 1]
+        s = max(0.0, min(1.0, s))
+
+        return (seg_a + s * seg_dir).astype(np.float32)
 
     def find_path_triangles(
         self,

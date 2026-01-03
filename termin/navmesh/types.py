@@ -73,6 +73,12 @@ class Portal:
     width: float
     """Ширина портала (расстояние между крайними вокселями)."""
 
+    left: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=np.float32))
+    """Левый конец портала в мировых координатах."""
+
+    right: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=np.float32))
+    """Правый конец портала в мировых координатах."""
+
 
 @dataclass
 class NavPolygon:
