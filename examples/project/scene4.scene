@@ -3445,7 +3445,7 @@
           {
             "type": "NavMeshDisplayComponent",
             "data": {
-              "enabled": true,
+              "enabled": false,
               "navmesh": null,
               "color": [
                 0.2,
@@ -3844,9 +3844,10 @@
         -0.3556266725063324
       ],
       "radius": 11.5,
-      "azimuth": 42.310271726851774,
-      "elevation": 0.5201081170943144
+      "azimuth": 42.020547071020644,
+      "elevation": 0.4886921905584162
     },
+    "selected_entity": "entity18",
     "displays": [
       {
         "name": "Editor",
@@ -3855,7 +3856,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "43c153ad-97b1-4335-8a41-9daa9adc859b",
+            "uuid": "7c4fedb4-e163-4477-ba6f-817ee8cb7b8b",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3875,7 +3876,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "e957837d-4760-4e79-9fb3-ab667ee551a9",
+            "uuid": "aa084761-d8ff-4a41-bc13-0b3cc32170e4",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3892,7 +3893,8 @@
     "expanded_entities": [
       "editor_ui",
       "EditorEntities",
-      "camera"
+      "camera",
+      "entity18"
     ]
   },
   "resources": {

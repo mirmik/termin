@@ -17,6 +17,7 @@ from termin.navmesh.types import NavMesh
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
+    from termin.visualization.core.entity import Entity
     from termin.voxels.voxelizer_component import VoxelizerComponent
 
 
@@ -36,7 +37,10 @@ class PathfindingWorldComponent(PythonComponent):
         self._navmesh_graph: NavMeshGraph = NavMeshGraph()
         self._voxelizer_components: List["VoxelizerComponent"] = []
         self._initialized: bool = False
-        self._navmesh_sources: List[NavMesh] = []
+        # (navmesh, entity)
+        self._navmesh_sources: List[tuple[NavMesh, "Entity"]] = []
+        # Маппинг region_id -> entity (для получения актуальной трансформации)
+        self._region_entities: dict[int, "Entity"] = {}
 
     @property
     def navmesh_graph(self) -> NavMeshGraph:
@@ -96,8 +100,9 @@ class PathfindingWorldComponent(PythonComponent):
             log.info(f"[PathfindingWorld] found VoxelizerComponent '{entity.name}', grid_name='{name}'")
             navmesh = rm.get_navmesh(name)
             if navmesh is not None:
-                self._navmesh_sources.append(navmesh)
-                log.info(f"[PathfindingWorld] found NavMesh '{name}' ({navmesh.polygon_count()} polygons)")
+                self._navmesh_sources.append((navmesh, entity))
+                pos = entity.transform.global_pose().lin
+                log.info(f"[PathfindingWorld] found NavMesh '{name}' ({navmesh.polygon_count()} polygons) at ({pos.x:.2f}, {pos.y:.2f}, {pos.z:.2f})")
             else:
                 log.warn(f"[PathfindingWorld] NavMesh '{name}' not found in ResourceManager")
 
@@ -109,23 +114,49 @@ class PathfindingWorldComponent(PythonComponent):
     def _build_graph(self) -> None:
         """Построить NavMeshGraph из собранных NavMesh."""
         self._navmesh_graph = NavMeshGraph()
+        self._region_entities.clear()
 
         region_id = 0
-        for navmesh in self._navmesh_sources:
-            for polygon in navmesh.polygons:
-                if len(polygon.vertices) == 0 or len(polygon.triangles) == 0:
+        for navmesh, entity in self._navmesh_sources:
+            for poly_idx, polygon in enumerate(navmesh.polygons):
+                verts_count = len(polygon.vertices) if polygon.vertices is not None else 0
+                tris_count = len(polygon.triangles) if polygon.triangles is not None else 0
+                log.info(f"[PathfindingWorld] polygon {poly_idx}: {verts_count} verts, {tris_count} tris")
+                if verts_count == 0 or tris_count == 0:
                     continue
+
+                # Храним вершины в ЛОКАЛЬНЫХ координатах
+                local_verts = polygon.vertices
 
                 # Создаём RegionGraph для каждого полигона
                 region = RegionGraph.from_mesh(
-                    vertices=polygon.vertices,
+                    vertices=local_verts,
                     triangles=polygon.triangles,
                     region_id=region_id,
                 )
                 self._navmesh_graph.add_region(region)
+
+                # Сохраняем entity для получения актуальной трансформации
+                self._region_entities[region_id] = entity
                 region_id += 1
 
         log.info(f"[PathfindingWorld] built graph with {region_id} regions")
+
+    def _transform_vertices(self, vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+        """Трансформировать вершины с помощью матрицы 4x4."""
+        n = len(vertices)
+        if n == 0:
+            return vertices
+
+        # Добавляем w=1 для гомогенных координат
+        ones = np.ones((n, 1), dtype=np.float32)
+        verts_h = np.hstack([vertices, ones])  # (N, 4)
+
+        # Применяем трансформ
+        transformed = (matrix @ verts_h.T).T  # (N, 4)
+
+        # Возвращаем xyz
+        return transformed[:, :3].astype(np.float32)
 
     def rebuild(self) -> None:
         """Перестроить граф (вызывать после изменения NavMesh)."""
@@ -143,29 +174,65 @@ class PathfindingWorldComponent(PythonComponent):
         Найти путь между двумя точками.
 
         Args:
-            start: Начальная точка (3D).
-            end: Конечная точка (3D).
+            start: Начальная точка (3D) в мировых координатах.
+            end: Конечная точка (3D) в мировых координатах.
 
         Returns:
-            Список точек пути (центры треугольников), или None если путь не найден.
+            Список точек пути (центры треугольников) в мировых координатах,
+            или None если путь не найден.
         """
         if not self._initialized:
             log.warn("[PathfindingWorld] not initialized")
             return None
 
-        # Сначала ищем путь по графу регионов
-        path_indices = self._navmesh_graph.find_path(start, end)
-        if path_indices is None:
+        log.info(f"[PathfindingWorld] find_path: start={start}, end={end}")
+
+        # Ищем треугольники с учётом трансформаций
+        start_tri = self.find_containing_triangle(start)
+        log.info(f"[PathfindingWorld] start_tri={start_tri}")
+        end_tri = self.find_containing_triangle(end)
+        log.info(f"[PathfindingWorld] end_tri={end_tri}")
+
+        if start_tri is None:
+            log.info("[PathfindingWorld] start point not on navmesh")
             return None
+        if end_tri is None:
+            log.info("[PathfindingWorld] end point not on navmesh")
+            return None
+
+        start_region, start_tri_idx = start_tri
+        end_region, end_tri_idx = end_tri
+
+        # Пока поддерживаем только путь внутри одного региона
+        if start_region != end_region:
+            log.info("[PathfindingWorld] cross-region pathfinding not yet supported")
+            return None
+
+        region = self._navmesh_graph.regions[start_region]
+
+        if start_tri_idx == end_tri_idx:
+            path_indices = [start_tri_idx]
+        else:
+            from termin.navmesh.pathfinding import astar_triangles
+            path_indices = astar_triangles(
+                start_tri_idx, end_tri_idx, region.neighbors, region.centroids
+            )
+            if path_indices is None:
+                return None
 
         # Конвертируем индексы треугольников в мировые координаты (центры)
         path_points: List[np.ndarray] = []
+        entity = self._region_entities.get(start_region)
+        transform = entity.transform.global_pose().as_matrix() if entity else None
 
-        for region_idx, tri_idx in path_indices:
-            if region_idx < len(self._navmesh_graph.regions):
-                region = self._navmesh_graph.regions[region_idx]
-                if tri_idx < len(region.centroids):
-                    path_points.append(region.centroids[tri_idx].copy())
+        for tri_idx in path_indices:
+            if tri_idx < len(region.centroids):
+                local_centroid = region.centroids[tri_idx]
+                if transform is not None:
+                    world_centroid = self._transform_point(local_centroid, transform)
+                    path_points.append(world_centroid)
+                else:
+                    path_points.append(local_centroid.copy())
 
         return path_points if path_points else None
 
@@ -178,8 +245,8 @@ class PathfindingWorldComponent(PythonComponent):
         Найти путь между двумя точками (возвращает индексы треугольников).
 
         Args:
-            start: Начальная точка (3D).
-            end: Конечная точка (3D).
+            start: Начальная точка (3D) в мировых координатах.
+            end: Конечная точка (3D) в мировых координатах.
 
         Returns:
             Список (region_id, triangle_id), или None если путь не найден.
@@ -187,10 +254,36 @@ class PathfindingWorldComponent(PythonComponent):
         if not self._initialized:
             return None
 
-        return self._navmesh_graph.find_path(start, end)
+        # Ищем треугольники с учётом трансформаций
+        start_tri = self.find_containing_triangle(start)
+        end_tri = self.find_containing_triangle(end)
+
+        if start_tri is None or end_tri is None:
+            return None
+
+        start_region, start_tri_idx = start_tri
+        end_region, end_tri_idx = end_tri
+
+        # Пока поддерживаем только путь внутри одного региона
+        if start_region != end_region:
+            return None
+
+        region = self._navmesh_graph.regions[start_region]
+
+        if start_tri_idx == end_tri_idx:
+            return [(start_region, start_tri_idx)]
+
+        from termin.navmesh.pathfinding import astar_triangles
+        path_indices = astar_triangles(
+            start_tri_idx, end_tri_idx, region.neighbors, region.centroids
+        )
+        if path_indices is None:
+            return None
+
+        return [(start_region, tri_idx) for tri_idx in path_indices]
 
     def get_triangle_center(self, region_id: int, triangle_id: int) -> Optional[np.ndarray]:
-        """Получить центр треугольника по его индексам."""
+        """Получить центр треугольника по его индексам (в мировых координатах)."""
         if region_id >= len(self._navmesh_graph.regions):
             return None
 
@@ -198,22 +291,38 @@ class PathfindingWorldComponent(PythonComponent):
         if triangle_id >= len(region.centroids):
             return None
 
-        return region.centroids[triangle_id].copy()
+        local_centroid = region.centroids[triangle_id]
+        entity = self._region_entities.get(region_id)
+        if entity is not None:
+            transform = entity.transform.global_pose().as_matrix()
+            return self._transform_point(local_centroid, transform)
+        return local_centroid.copy()
 
     def find_containing_triangle(self, point: np.ndarray) -> Optional[tuple[int, int]]:
         """
         Найти треугольник, содержащий точку.
 
         Args:
-            point: Точка в 3D пространстве.
+            point: Точка в 3D пространстве (мировые координаты).
 
         Returns:
             (region_id, triangle_id) или None если точка вне NavMesh.
         """
+        log.info(f"[PathfindingWorld] find_containing_triangle: point={point}")
         for region_id, region in enumerate(self._navmesh_graph.regions):
-            tri_idx = region.find_triangle(point)
+            # Трансформируем точку в локальные координаты региона
+            entity = self._region_entities.get(region_id)
+            if entity is not None:
+                inverse = np.linalg.inv(entity.transform.global_pose().as_matrix())
+                local_point = self._transform_point(point, inverse)
+            else:
+                local_point = point
+
+            tri_idx = region.find_triangle(local_point)
             if tri_idx >= 0:
+                log.info(f"[PathfindingWorld] found in region {region_id}, tri {tri_idx}")
                 return (region_id, tri_idx)
+        log.info("[PathfindingWorld] not found in any region")
         return None
 
     def raycast(
@@ -226,32 +335,69 @@ class PathfindingWorldComponent(PythonComponent):
         Raycast по всем треугольникам NavMesh.
 
         Args:
-            origin: Начало луча (3D).
-            direction: Направление луча (нормализованное).
+            origin: Начало луча (3D) в мировых координатах.
+            direction: Направление луча (нормализованное) в мировых координатах.
             max_distance: Максимальная дистанция.
 
         Returns:
             (hit_point, distance, region_id, triangle_id) или None если нет пересечения.
+            hit_point в мировых координатах.
         """
         closest_hit: Optional[tuple[np.ndarray, float, int, int]] = None
         closest_dist = max_distance
 
         for region_id, region in enumerate(self._navmesh_graph.regions):
+            # Получаем актуальную трансформацию entity
+            entity = self._region_entities.get(region_id)
+            if entity is None:
+                continue
+
+            # Трансформируем луч в локальное пространство entity
+            transform_matrix = entity.transform.global_pose().as_matrix()
+            inverse_matrix = np.linalg.inv(transform_matrix)
+
+            local_origin = self._transform_point(origin, inverse_matrix)
+            local_direction = self._transform_direction(direction, inverse_matrix)
+
+            # Нормализуем направление после трансформации
+            dir_len = float(np.linalg.norm(local_direction))
+            if dir_len < 1e-8:
+                continue
+            local_direction = local_direction / dir_len
+
             for tri_idx in range(len(region.triangles)):
                 tri = region.triangles[tri_idx]
                 v0 = region.vertices[tri[0]]
                 v1 = region.vertices[tri[1]]
                 v2 = region.vertices[tri[2]]
 
-                hit = _ray_triangle_intersect(origin, direction, v0, v1, v2)
+                hit = _ray_triangle_intersect(local_origin, local_direction, v0, v1, v2)
                 if hit is not None:
-                    t = hit
-                    if 0 < t < closest_dist:
-                        closest_dist = t
-                        hit_point = origin + direction * t
-                        closest_hit = (hit_point, t, region_id, tri_idx)
+                    t_local = hit
+                    # Точка попадания в локальных координатах
+                    local_hit = local_origin + local_direction * t_local
+                    # Трансформируем обратно в мировые координаты
+                    world_hit = self._transform_point(local_hit, transform_matrix)
+                    # Расстояние в мировых координатах
+                    world_dist = float(np.linalg.norm(world_hit - origin))
+
+                    if 0 < world_dist < closest_dist:
+                        closest_dist = world_dist
+                        closest_hit = (world_hit, world_dist, region_id, tri_idx)
 
         return closest_hit
+
+    def _transform_point(self, point: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+        """Трансформировать точку с помощью матрицы 4x4."""
+        p_h = np.array([point[0], point[1], point[2], 1.0], dtype=np.float64)
+        result = matrix @ p_h
+        return result[:3].astype(np.float32)
+
+    def _transform_direction(self, direction: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+        """Трансформировать направление с помощью матрицы 4x4 (без translation)."""
+        d_h = np.array([direction[0], direction[1], direction[2], 0.0], dtype=np.float64)
+        result = matrix @ d_h
+        return result[:3].astype(np.float32)
 
     def raycast_from_screen(
         self,

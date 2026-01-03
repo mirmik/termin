@@ -43,6 +43,60 @@ from termin.navmesh.contour_extraction import (
 )
 
 
+def merge_duplicate_vertices(
+    vertices: np.ndarray,
+    triangles: np.ndarray,
+    tolerance: float = 1e-5,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Объединить дублирующиеся вершины.
+
+    Bridge создаёт дубликаты вершин (одна точка — два индекса),
+    из-за чего треугольники не считаются соседями в графе смежности.
+
+    Args:
+        vertices: (N, 3) — вершины.
+        triangles: (M, 3) — треугольники.
+        tolerance: порог для сравнения координат.
+
+    Returns:
+        (unique_vertices, remapped_triangles)
+    """
+    if len(vertices) == 0:
+        return vertices, triangles
+
+    n = len(vertices)
+
+    # Для каждой вершины найдём её "каноничный" индекс
+    canonical = list(range(n))
+
+    for i in range(n):
+        if canonical[i] != i:
+            continue
+        for j in range(i + 1, n):
+            if canonical[j] != j:
+                continue
+            # Проверяем расстояние
+            dist = np.linalg.norm(vertices[i] - vertices[j])
+            if dist < tolerance:
+                canonical[j] = i
+
+    # Строим маппинг старый индекс -> новый индекс
+    unique_indices = sorted(set(canonical))
+    old_to_new = {old: new for new, old in enumerate(unique_indices)}
+
+    # Новые вершины
+    unique_vertices = vertices[unique_indices]
+
+    # Переиндексируем треугольники
+    remapped_triangles = np.array([
+        [old_to_new[canonical[t[0]]], old_to_new[canonical[t[1]]], old_to_new[canonical[t[2]]]]
+        for t in triangles
+    ], dtype=np.int32)
+
+    return unique_vertices, remapped_triangles
+
+
 class PolygonBuilder:
     """
     Строит NavMesh из VoxelGrid.
@@ -146,7 +200,7 @@ class PolygonBuilder:
                 stats["skipped_small"] += 1
                 continue
 
-            # Извлекаем контур напрямую из вокселей (без построения меша)
+            # Извлекаем контур напрямую из вокселей
             polygon = self._extract_contour_from_voxels(
                 region_voxels,
                 region_normal,
@@ -158,6 +212,21 @@ class PolygonBuilder:
                 region_planes=region_planes,
             )
             if polygon is not None:
+                # Триангулируем полигон
+                vertices, triangles = self.triangulate_region(
+                    region_voxels,
+                    region_normal,
+                    grid.cell_size,
+                    np.array(grid.origin, dtype=np.float32),
+                    simplify_epsilon=self.config.contour_epsilon,
+                )
+                if len(vertices) > 0 and len(triangles) > 0:
+                    polygon.vertices = vertices
+                    polygon.triangles = triangles
+                    # Обновляем outer_contour для соответствия новым вершинам
+                    polygon.outer_contour = list(range(len(vertices)))
+                    polygon.holes = []
+
                 polygons.append(polygon)
                 stats["built"] += 1
             else:
@@ -723,7 +792,12 @@ class PolygonBuilder:
         # Шаг 6: Преобразование вершин обратно в 3D
         vertices_3d = transform_to_3d(merged_2d, centroid, u_axis, v_axis)
 
-        return vertices_3d, np.array(triangles, dtype=np.int32)
+        # Шаг 7: Merge дублирующихся вершин (bridge создаёт дубликаты)
+        vertices_3d, triangles = merge_duplicate_vertices(
+            vertices_3d, np.array(triangles, dtype=np.int32)
+        )
+
+        return vertices_3d, triangles
 
     def get_region_contours(
         self,

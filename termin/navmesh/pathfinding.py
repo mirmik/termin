@@ -171,19 +171,26 @@ def find_triangle_containing_point(
     point: np.ndarray,
     vertices: np.ndarray,
     triangles: np.ndarray,
+    tolerance: float = 0.5,
 ) -> int:
     """
-    Найти треугольник, содержащий точку (2D проекция на XZ).
+    Найти треугольник, содержащий точку.
+
+    Проецирует точку на плоскость каждого треугольника и проверяет:
+    1. Расстояние до плоскости < tolerance
+    2. Проекция внутри треугольника
 
     Args:
         point: (3,) — точка в 3D.
         vertices: (N, 3) — вершины.
         triangles: (M, 3) — треугольники.
+        tolerance: максимальное расстояние до плоскости треугольника.
 
     Returns:
         Индекс треугольника или -1.
     """
-    px, pz = point[0], point[2]
+    best_tri = -1
+    best_dist = tolerance
 
     for tri_idx in range(len(triangles)):
         t = triangles[tri_idx]
@@ -191,11 +198,48 @@ def find_triangle_containing_point(
         v1 = vertices[t[1]]
         v2 = vertices[t[2]]
 
-        # Проверка point-in-triangle в XZ плоскости
-        if point_in_triangle_2d(px, pz, v0[0], v0[2], v1[0], v1[2], v2[0], v2[2]):
-            return tri_idx
+        # Рёбра треугольника
+        edge1 = v1 - v0
+        edge2 = v2 - v0
 
-    return -1
+        # Нормаль треугольника
+        normal = np.cross(edge1, edge2)
+        normal_len = np.linalg.norm(normal)
+        if normal_len < 1e-10:
+            continue
+        normal = normal / normal_len
+
+        # Расстояние от точки до плоскости
+        d = np.dot(point - v0, normal)
+        abs_d = abs(d)
+        if abs_d > tolerance:
+            continue
+
+        # Проекция точки на плоскость
+        p_proj = point - d * normal
+
+        # Локальная 2D система координат на плоскости
+        u_axis = edge1 / np.linalg.norm(edge1)
+        v_axis = np.cross(normal, u_axis)
+
+        # Перевод в 2D
+        rel = p_proj - v0
+        p2d_u = np.dot(rel, u_axis)
+        p2d_v = np.dot(rel, v_axis)
+
+        b2d_u = np.dot(edge1, u_axis)
+        b2d_v = np.dot(edge1, v_axis)
+
+        c2d_u = np.dot(edge2, u_axis)
+        c2d_v = np.dot(edge2, v_axis)
+
+        # Проверка point_in_triangle_2d
+        if point_in_triangle_2d(p2d_u, p2d_v, 0.0, 0.0, b2d_u, b2d_v, c2d_u, c2d_v):
+            if abs_d < best_dist:
+                best_dist = abs_d
+                best_tri = tri_idx
+
+    return best_tri
 
 
 def point_in_triangle_2d(

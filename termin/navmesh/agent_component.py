@@ -156,6 +156,7 @@ class NavMeshAgentComponent(InputComponent):
         Returns:
             True если путь найден, False если нет.
         """
+        log.info("[NavMeshAgent] set_destination called")
         if self._pathfinding_world is None:
             self._find_pathfinding_world()
             if self._pathfinding_world is None:
@@ -163,14 +164,18 @@ class NavMeshAgentComponent(InputComponent):
                 return False
 
         if self.entity is None:
+            log.warn("[NavMeshAgent] entity is None")
             return False
 
-        # Получаем текущую позицию агента
-        position = self.entity.transform.position
+        # Получаем текущую позицию агента (мировые координаты)
+        position = self.entity.transform.global_pose().lin
         start = np.array([position.x, position.y, position.z], dtype=np.float32)
+        log.info(f"[NavMeshAgent] agent position: ({position.x:.2f}, {position.y:.2f}, {position.z:.2f})")
 
         # Ищем путь
+        log.info("[NavMeshAgent] calling find_path")
         path = self._pathfinding_world.find_path(start, target)
+        log.info(f"[NavMeshAgent] find_path returned: {path}")
         if path is None or len(path) == 0:
             log.info(f"[NavMeshAgent] no path found to ({target[0]:.2f}, {target[1]:.2f}, {target[2]:.2f})")
             self._current_path = []
@@ -200,8 +205,8 @@ class NavMeshAgentComponent(InputComponent):
         if self.entity is None:
             return
 
-        # Текущая позиция
-        position = self.entity.transform.position
+        # Текущая позиция (мировые координаты)
+        position = self.entity.transform.global_pose().lin
         current_pos = np.array([position.x, position.y, position.z], dtype=np.float32)
 
         # Целевая точка пути
@@ -230,9 +235,9 @@ class NavMeshAgentComponent(InputComponent):
         move_distance = min(self.speed * dt, distance)
         new_pos = current_pos + direction * move_distance
 
-        # Обновляем позицию entity
+        # Обновляем позицию entity (локальные координаты)
         from termin.geombase._geom_native import Vec3
-        self.entity.transform.position = Vec3(new_pos[0], new_pos[1], new_pos[2])
+        self.entity.transform.set_local_position(Vec3(new_pos[0], new_pos[1], new_pos[2]))
 
     def get_path_points(self) -> List[np.ndarray]:
         """Получить все точки текущего пути для отладочной визуализации."""
