@@ -127,8 +127,8 @@ class VoxelizerComponent(PythonComponent):
             label="Contour Simplify",
             kind="float",
             min=0.0,
-            max=1.0,
-            step=0.01,
+            max=10.0,
+            step=0.1,
         ),
         "max_edge_length": InspectField(
             path="max_edge_length",
@@ -138,6 +138,22 @@ class VoxelizerComponent(PythonComponent):
             max=10.0,
             step=0.1,
         ),
+        "min_edge_length": InspectField(
+            path="min_edge_length",
+            label="Min Edge Length",
+            kind="float",
+            min=0.0,
+            max=5.0,
+            step=0.05,
+        ),
+        "min_contour_edge_length": InspectField(
+            path="min_contour_edge_length",
+            label="Min Contour Edge",
+            kind="float",
+            min=0.0,
+            max=5.0,
+            step=0.05,
+        ),
         "max_vertex_valence": InspectField(
             path="max_vertex_valence",
             label="Max Vertex Valence",
@@ -145,6 +161,31 @@ class VoxelizerComponent(PythonComponent):
             min=0,
             max=20,
             step=1,
+        ),
+        "use_delaunay_flip": InspectField(
+            path="use_delaunay_flip",
+            label="Delaunay Flip",
+            kind="bool",
+        ),
+        "use_valence_flip": InspectField(
+            path="use_valence_flip",
+            label="Valence Flip",
+            kind="bool",
+        ),
+        "use_angle_flip": InspectField(
+            path="use_angle_flip",
+            label="Angle Flip",
+            kind="bool",
+        ),
+        "use_cvt_smoothing": InspectField(
+            path="use_cvt_smoothing",
+            label="CVT Smoothing",
+            kind="bool",
+        ),
+        "use_second_pass": InspectField(
+            path="use_second_pass",
+            label="Second Pass",
+            kind="bool",
         ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
@@ -183,7 +224,9 @@ class VoxelizerComponent(PythonComponent):
     serializable_fields = [
         "grid_name", "cell_size", "output_path", "voxelize_mode", "voxelize_source",
         "navmesh_output_path", "normal_angle", "contour_simplify", "max_edge_length",
-        "max_vertex_valence", "show_region_voxels", "show_sparse_boundary",
+        "min_edge_length", "min_contour_edge_length", "max_vertex_valence",
+        "use_delaunay_flip", "use_valence_flip", "use_angle_flip", "use_cvt_smoothing",
+        "use_second_pass", "show_region_voxels", "show_sparse_boundary",
         "show_simplified_contours", "show_bridged_contours", "show_triangulated",
     ]
 
@@ -198,7 +241,14 @@ class VoxelizerComponent(PythonComponent):
         normal_angle: float = 25.0,
         contour_simplify: float = 0.0,
         max_edge_length: float = 0.0,
+        min_edge_length: float = 0.0,
+        min_contour_edge_length: float = 0.0,
         max_vertex_valence: int = 0,
+        use_delaunay_flip: bool = True,
+        use_valence_flip: bool = False,
+        use_angle_flip: bool = False,
+        use_cvt_smoothing: bool = False,
+        use_second_pass: bool = False,
         show_region_voxels: bool = False,
         show_sparse_boundary: bool = False,
         show_simplified_contours: bool = False,
@@ -215,7 +265,14 @@ class VoxelizerComponent(PythonComponent):
         self.normal_angle = normal_angle
         self.contour_simplify = contour_simplify
         self.max_edge_length = max_edge_length
+        self.min_edge_length = min_edge_length
+        self.min_contour_edge_length = min_contour_edge_length
         self.max_vertex_valence = max_vertex_valence
+        self.use_delaunay_flip = use_delaunay_flip
+        self.use_valence_flip = use_valence_flip
+        self.use_angle_flip = use_angle_flip
+        self.use_cvt_smoothing = use_cvt_smoothing
+        self.use_second_pass = use_second_pass
         self._last_voxel_count: int = 0
 
         # Debug visualization
@@ -792,7 +849,14 @@ void main() {
             normal_threshold=normal_threshold,
             contour_epsilon=contour_epsilon,
             max_edge_length=self.max_edge_length,
+            min_edge_length=self.min_edge_length,
+            min_contour_edge_length=self.min_contour_edge_length,
             max_vertex_valence=self.max_vertex_valence,
+            use_delaunay_flip=self.use_delaunay_flip,
+            use_valence_flip=self.use_valence_flip,
+            use_angle_flip=self.use_angle_flip,
+            use_cvt_smoothing=self.use_cvt_smoothing,
+            use_second_pass=self.use_second_pass,
         )
         builder = PolygonBuilder(config)
 

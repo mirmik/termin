@@ -25,8 +25,29 @@ class NavMeshConfig:
     max_edge_length: float = 0.0
     """Макс. длина ребра треугольника. 0 = без ограничения."""
 
+    min_edge_length: float = 0.0
+    """Мин. длина внутреннего ребра (edge collapse). 0 = без схлопывания."""
+
+    min_contour_edge_length: float = 0.0
+    """Мин. длина ребра на контуре (edge collapse). 0 = без схлопывания."""
+
     max_vertex_valence: int = 0
     """Макс. количество треугольников на вершину. 0 = без ограничения."""
+
+    use_delaunay_flip: bool = True
+    """Применять Delaunay edge flipping для улучшения качества треугольников."""
+
+    use_valence_flip: bool = False
+    """Применять edge flipping для уменьшения валентности вершин."""
+
+    use_angle_flip: bool = False
+    """Применять edge flipping для максимизации минимального угла."""
+
+    use_cvt_smoothing: bool = False
+    """Применять CVT (Centroidal Voronoi Tessellation) для оптимизации позиций вершин."""
+
+    use_second_pass: bool = False
+    """Повторный проход flips + smoothing после edge collapse."""
 
 
 @dataclass

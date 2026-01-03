@@ -221,7 +221,14 @@ class PolygonBuilder:
                     np.array(grid.origin, dtype=np.float32),
                     simplify_epsilon=self.config.contour_epsilon,
                     max_edge_length=self.config.max_edge_length,
+                    min_edge_length=self.config.min_edge_length,
+                    min_contour_edge_length=self.config.min_contour_edge_length,
                     max_vertex_valence=self.config.max_vertex_valence,
+                    use_delaunay_flip=self.config.use_delaunay_flip,
+                    use_valence_flip=self.config.use_valence_flip,
+                    use_angle_flip=self.config.use_angle_flip,
+                    use_cvt_smoothing=self.config.use_cvt_smoothing,
+                    use_second_pass=self.config.use_second_pass,
                 )
                 if len(vertices) > 0 and len(triangles) > 0:
                     polygon.vertices = vertices
@@ -703,7 +710,14 @@ class PolygonBuilder:
         origin: np.ndarray,
         simplify_epsilon: float = 0.0,
         max_edge_length: float = 0.0,
+        min_edge_length: float = 0.0,
+        min_contour_edge_length: float = 0.0,
         max_vertex_valence: int = 0,
+        use_delaunay_flip: bool = True,
+        use_valence_flip: bool = False,
+        use_angle_flip: bool = False,
+        use_cvt_smoothing: bool = False,
+        use_second_pass: bool = False,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Триангулировать регион: извлечь контуры, упростить, построить меш.
@@ -723,7 +737,14 @@ class PolygonBuilder:
             origin: Начало координат сетки.
             simplify_epsilon: Параметр Douglas-Peucker (0 = без упрощения).
             max_edge_length: Макс. длина ребра треугольника (0 = без ограничения).
+            min_edge_length: Мин. длина внутреннего ребра для edge collapse (0 = без схлопывания).
+            min_contour_edge_length: Мин. длина ребра на контуре (0 = без схлопывания).
             max_vertex_valence: Макс. количество треугольников на вершину (0 = без ограничения).
+            use_delaunay_flip: Применить Delaunay edge flipping.
+            use_valence_flip: Применить edge flipping для уменьшения валентности.
+            use_angle_flip: Применить edge flipping для максимизации минимального угла.
+            use_cvt_smoothing: Применить CVT (Centroidal Voronoi Tessellation) smoothing.
+            use_second_pass: Повторный проход flips + smoothing после edge collapse.
 
         Returns:
             (vertices, triangles):
@@ -790,13 +811,30 @@ class PolygonBuilder:
         if len(merged_2d) < 3:
             return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
 
-        # Шаг 5: Ear Clipping в 2D (с опциональным refinement)
-        if max_edge_length > 0 or max_vertex_valence > 0:
-            # Refinement добавляет новые вершины
+        # Шаг 5: Ear Clipping в 2D (с опциональным refinement и edge flipping)
+        need_refinement = (
+            max_edge_length > 0 or
+            min_edge_length > 0 or
+            min_contour_edge_length > 0 or
+            max_vertex_valence > 0 or
+            use_delaunay_flip or
+            use_valence_flip or
+            use_angle_flip or
+            use_cvt_smoothing or
+            use_second_pass
+        )
+        if need_refinement:
             merged_2d, triangles = ear_clipping_refined(
                 merged_2d,
                 max_edge_length=max_edge_length,
+                min_edge_length=min_edge_length,
+                min_contour_edge_length=min_contour_edge_length,
                 max_vertex_valence=max_vertex_valence,
+                use_delaunay_flip=use_delaunay_flip,
+                use_valence_flip=use_valence_flip,
+                use_angle_flip=use_angle_flip,
+                use_cvt_smoothing=use_cvt_smoothing,
+                use_second_pass=use_second_pass,
             )
         else:
             triangles = ear_clip(merged_2d)

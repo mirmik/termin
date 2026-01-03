@@ -505,6 +505,8 @@ def delaunay_flip(
     if boundary_edges is None:
         boundary_edges = set()
 
+    flip_count = 0
+
     for iteration in range(max_iterations):
         flipped = False
         edge_map = build_edge_map(triangles)
@@ -563,12 +565,561 @@ def delaunay_flip(
                     triangles[tri1_idx] = new_tri1
                     triangles[tri2_idx] = new_tri2
                     flipped = True
+                    flip_count += 1
                     break  # Перестраиваем edge_map
 
         if not flipped:
             break
 
+    if flip_count > 0:
+        print(f"[delaunay_flip] {flip_count} flips")
+
     return triangles
+
+
+def valence_flip(
+    vertices: np.ndarray,
+    triangles: list[tuple[int, int, int]],
+    boundary_edges: set[tuple[int, int]] | None = None,
+    max_vertex_valence: int = 0,
+    max_iterations: int = 1000,
+) -> list[tuple[int, int, int]]:
+    """
+    Улучшить триангуляцию методом edge flipping для уменьшения валентности.
+
+    Переворачивает рёбра, если это уменьшает максимальную валентность вершин.
+
+    Args:
+        vertices: 2D координаты вершин, shape (N, 2).
+        triangles: Список треугольников [(a, b, c), ...].
+        boundary_edges: Множество граничных рёбер (не переворачивать).
+        max_vertex_valence: Целевая макс. валентность (0 = минимизировать).
+        max_iterations: Максимум итераций.
+
+    Returns:
+        Улучшенный список треугольников.
+    """
+    if len(triangles) < 2:
+        return triangles
+
+    triangles = list(triangles)
+
+    if boundary_edges is None:
+        boundary_edges = set()
+
+    def compute_valence() -> dict[int, int]:
+        """Подсчитать валентность каждой вершины."""
+        val: dict[int, int] = {}
+        for tri in triangles:
+            for v in tri:
+                val[v] = val.get(v, 0) + 1
+        return val
+
+    flip_count = 0
+    initial_max_valence = max(compute_valence().values()) if triangles else 0
+
+    for iteration in range(max_iterations):
+        flipped = False
+        valence = compute_valence()
+        edge_map = build_edge_map(triangles)
+
+        # Если задан max_vertex_valence и все вершины в пределах — выходим
+        if max_vertex_valence > 0:
+            current_max = max(valence.values()) if valence else 0
+            if current_max <= max_vertex_valence:
+                break
+
+        for edge, tri_indices in edge_map.items():
+            if len(tri_indices) != 2:
+                continue
+
+            if edge in boundary_edges:
+                continue
+
+            tri1_idx, tri2_idx = tri_indices
+            tri1 = triangles[tri1_idx]
+            tri2 = triangles[tri2_idx]
+
+            e0, e1 = edge
+            v1 = get_opposite_vertex(tri1, edge)
+            v2 = get_opposite_vertex(tri2, edge)
+
+            if v1 < 0 or v2 < 0:
+                continue
+
+            # Текущие валентности
+            val_e0 = valence.get(e0, 0)
+            val_e1 = valence.get(e1, 0)
+            val_v1 = valence.get(v1, 0)
+            val_v2 = valence.get(v2, 0)
+
+            current_max = max(val_e0, val_e1, val_v1, val_v2)
+
+            # После flip: e0, e1 теряют по 1; v1, v2 получают по 1
+            new_max = max(val_e0 - 1, val_e1 - 1, val_v1 + 1, val_v2 + 1)
+
+            # Flip только если уменьшает max валентность
+            if new_max >= current_max:
+                continue
+
+            # Если задан порог и новый max всё ещё выше порога у v1/v2 — не flip
+            # (иначе мы просто переносим проблему на другие вершины)
+            if max_vertex_valence > 0:
+                if val_v1 + 1 > max_vertex_valence or val_v2 + 1 > max_vertex_valence:
+                    # Проверяем что flip хотя бы уменьшает проблему
+                    if val_e0 <= max_vertex_valence and val_e1 <= max_vertex_valence:
+                        continue
+
+            # Выполняем flip
+            new_tri1 = (e0, v2, v1)
+            new_tri2 = (e1, v1, v2)
+
+            # Проверяем что новые треугольники не вырождены
+            def tri_area(t):
+                a, b, c = t
+                return abs(
+                    (vertices[b][0] - vertices[a][0]) * (vertices[c][1] - vertices[a][1]) -
+                    (vertices[c][0] - vertices[a][0]) * (vertices[b][1] - vertices[a][1])
+                )
+
+            if tri_area(new_tri1) > 1e-10 and tri_area(new_tri2) > 1e-10:
+                triangles[tri1_idx] = new_tri1
+                triangles[tri2_idx] = new_tri2
+                flipped = True
+                flip_count += 1
+                break
+
+        if not flipped:
+            break
+
+    if flip_count > 0:
+        final_max_valence = max(compute_valence().values()) if triangles else 0
+        print(f"[valence_flip] {flip_count} flips, max valence: {initial_max_valence} -> {final_max_valence}")
+
+    return triangles
+
+
+def angle_flip(
+    vertices: np.ndarray,
+    triangles: list[tuple[int, int, int]],
+    boundary_edges: set[tuple[int, int]] | None = None,
+    max_iterations: int = 1000,
+) -> list[tuple[int, int, int]]:
+    """
+    Улучшить триангуляцию методом edge flipping для максимизации минимального угла.
+
+    Переворачивает рёбра, если это увеличивает минимальный угол в паре треугольников.
+
+    Args:
+        vertices: 2D координаты вершин, shape (N, 2).
+        triangles: Список треугольников [(a, b, c), ...].
+        boundary_edges: Множество граничных рёбер (не переворачивать).
+        max_iterations: Максимум итераций.
+
+    Returns:
+        Улучшенный список треугольников.
+    """
+    import math
+
+    if len(triangles) < 2:
+        return triangles
+
+    triangles = list(triangles)
+
+    if boundary_edges is None:
+        boundary_edges = set()
+
+    def compute_min_angle(tri: tuple[int, int, int]) -> float:
+        """Вычислить минимальный угол треугольника в радианах."""
+        a, b, c = tri
+        p0 = vertices[a]
+        p1 = vertices[b]
+        p2 = vertices[c]
+
+        def angle_at(p, q, r):
+            """Угол при вершине q в треугольнике p-q-r."""
+            v1 = (p[0] - q[0], p[1] - q[1])
+            v2 = (r[0] - q[0], r[1] - q[1])
+            dot = v1[0] * v2[0] + v1[1] * v2[1]
+            len1 = math.sqrt(v1[0]**2 + v1[1]**2)
+            len2 = math.sqrt(v2[0]**2 + v2[1]**2)
+            if len1 < 1e-10 or len2 < 1e-10:
+                return 0.0
+            cos_angle = max(-1.0, min(1.0, dot / (len1 * len2)))
+            return math.acos(cos_angle)
+
+        return min(angle_at(p1, p0, p2), angle_at(p0, p1, p2), angle_at(p0, p2, p1))
+
+    flip_count = 0
+
+    for iteration in range(max_iterations):
+        flipped = False
+        edge_map = build_edge_map(triangles)
+
+        for edge, tri_indices in edge_map.items():
+            if len(tri_indices) != 2:
+                continue
+
+            if edge in boundary_edges:
+                continue
+
+            tri1_idx, tri2_idx = tri_indices
+            tri1 = triangles[tri1_idx]
+            tri2 = triangles[tri2_idx]
+
+            e0, e1 = edge
+            v1 = get_opposite_vertex(tri1, edge)
+            v2 = get_opposite_vertex(tri2, edge)
+
+            if v1 < 0 or v2 < 0:
+                continue
+
+            # Текущий минимальный угол
+            current_min = min(compute_min_angle(tri1), compute_min_angle(tri2))
+
+            # Новые треугольники после flip
+            new_tri1 = (e0, v2, v1)
+            new_tri2 = (e1, v1, v2)
+
+            # Проверяем что новые треугольники не вырождены
+            def tri_area(t):
+                a, b, c = t
+                return (
+                    (vertices[b][0] - vertices[a][0]) * (vertices[c][1] - vertices[a][1]) -
+                    (vertices[c][0] - vertices[a][0]) * (vertices[b][1] - vertices[a][1])
+                )
+
+            area1 = tri_area(new_tri1)
+            area2 = tri_area(new_tri2)
+
+            # Оба треугольника должны иметь одинаковую ориентацию и не быть вырожденными
+            if abs(area1) < 1e-10 or abs(area2) < 1e-10:
+                continue
+            if (area1 > 0) != (area2 > 0):
+                continue
+
+            # Минимальный угол после flip
+            new_min = min(compute_min_angle(new_tri1), compute_min_angle(new_tri2))
+
+            # Flip только если увеличивает минимальный угол
+            if new_min > current_min + 1e-6:
+                triangles[tri1_idx] = new_tri1
+                triangles[tri2_idx] = new_tri2
+                flipped = True
+                flip_count += 1
+                break
+
+        if not flipped:
+            break
+
+    if flip_count > 0:
+        print(f"[angle_flip] {flip_count} flips")
+
+    return triangles
+
+
+def cvt_smoothing(
+    vertices: np.ndarray,
+    triangles: list[tuple[int, int, int]],
+    boundary_vertices: set[int] | None = None,
+    iterations: int = 3,
+) -> np.ndarray:
+    """
+    Оптимизировать позиции вершин для улучшения качества треугольников.
+
+    Каждая внутренняя вершина двигается к позиции, которая делает окружающие
+    треугольники более равносторонними. Движение ограничено чтобы сохранить площадь.
+
+    Args:
+        vertices: 2D координаты вершин, shape (N, 2).
+        triangles: Список треугольников [(a, b, c), ...].
+        boundary_vertices: Множество индексов граничных вершин (не сдвигать).
+        iterations: Количество итераций оптимизации.
+
+    Returns:
+        Новый массив вершин.
+    """
+    import math
+
+    if len(vertices) == 0 or len(triangles) == 0:
+        return vertices
+
+    vertices = np.array(vertices, dtype=np.float64)
+
+    if boundary_vertices is None:
+        boundary_vertices = set()
+
+    # Строим карту: вершина → список треугольников
+    vertex_triangles: dict[int, list[int]] = {i: [] for i in range(len(vertices))}
+    for tri_idx, tri in enumerate(triangles):
+        for v in tri:
+            vertex_triangles[v].append(tri_idx)
+
+    # Строим граф соседей
+    neighbors: dict[int, set[int]] = {i: set() for i in range(len(vertices))}
+    for tri in triangles:
+        a, b, c = tri
+        neighbors[a].add(b)
+        neighbors[a].add(c)
+        neighbors[b].add(a)
+        neighbors[b].add(c)
+        neighbors[c].add(a)
+        neighbors[c].add(b)
+
+    def compute_total_area() -> float:
+        """Вычислить общую площадь."""
+        total = 0.0
+        for tri in triangles:
+            a, b, c = tri
+            v0 = vertices[a]
+            v1 = vertices[b]
+            v2 = vertices[c]
+            total += abs((v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1])) / 2
+        return total
+
+    def compute_ideal_position(v_idx: int) -> tuple[float, float]:
+        """
+        Вычислить идеальную позицию для вершины.
+
+        Для каждого соседа вычисляем точку, которая образовала бы
+        равносторонний треугольник. Усредняем эти точки.
+        """
+        nbrs = list(neighbors[v_idx])
+        if len(nbrs) < 2:
+            return vertices[v_idx][0], vertices[v_idx][1]
+
+        # Центроид соседей (как базовая точка)
+        cx = sum(vertices[n][0] for n in nbrs) / len(nbrs)
+        cy = sum(vertices[n][1] for n in nbrs) / len(nbrs)
+
+        return cx, cy
+
+    area_before = compute_total_area()
+    interior_count = len(vertices) - len(boundary_vertices)
+    interior_indices = [i for i in range(len(vertices)) if i not in boundary_vertices]
+
+    # Сохраняем исходные позиции граничных вершин для проверки
+    boundary_positions_before = {i: (vertices[i][0], vertices[i][1]) for i in boundary_vertices}
+
+    # Коэффициент сдвига (консервативный)
+    alpha = 0.3
+
+    for iteration in range(iterations):
+        new_vertices = vertices.copy()
+
+        for v_idx in interior_indices:
+            # Целевая позиция
+            target_x, target_y = compute_ideal_position(v_idx)
+
+            # Сдвигаем на долю alpha к целевой позиции
+            new_vertices[v_idx][0] = vertices[v_idx][0] + alpha * (target_x - vertices[v_idx][0])
+            new_vertices[v_idx][1] = vertices[v_idx][1] + alpha * (target_y - vertices[v_idx][1])
+
+        # Проверяем изменение площади и корректируем
+        old_verts = vertices
+        vertices = new_vertices
+        area_after = compute_total_area()
+
+        # Если площадь изменилась значительно, масштабируем обратно
+        if abs(area_after - area_before) > area_before * 0.01:  # > 1% изменение
+            # Вычисляем центроид границы
+            boundary_list = list(boundary_vertices)
+            if boundary_list:
+                bcx = sum(vertices[i][0] for i in boundary_list) / len(boundary_list)
+                bcy = sum(vertices[i][1] for i in boundary_list) / len(boundary_list)
+            else:
+                bcx = sum(v[0] for v in vertices) / len(vertices)
+                bcy = sum(v[1] for v in vertices) / len(vertices)
+
+            # Масштабируем внутренние вершины
+            scale = math.sqrt(area_before / area_after) if area_after > 1e-10 else 1.0
+            for i in interior_indices:
+                vertices[i][0] = bcx + (vertices[i][0] - bcx) * scale
+                vertices[i][1] = bcy + (vertices[i][1] - bcy) * scale
+
+    # Проверяем что граничные вершины не сдвинулись
+    boundary_moved = 0
+    for i in boundary_vertices:
+        bx, by = boundary_positions_before[i]
+        if abs(vertices[i][0] - bx) > 1e-6 or abs(vertices[i][1] - by) > 1e-6:
+            boundary_moved += 1
+
+    if interior_count > 0:
+        final_area = compute_total_area()
+        area_change = (final_area - area_before) / area_before * 100
+        print(f"[cvt_smoothing] {iterations} iterations, {interior_count} interior vertices, "
+              f"boundary: {len(boundary_vertices)}, area change: {area_change:.2f}%"
+              f"{f', BOUNDARY MOVED: {boundary_moved}!' if boundary_moved else ''}")
+
+    return vertices.astype(np.float32)
+
+
+def edge_collapse(
+    vertices: np.ndarray,
+    triangles: list[tuple[int, int, int]],
+    min_edge_length: float,
+    min_contour_edge_length: float = 0.0,
+    boundary_edges: set[tuple[int, int]] | None = None,
+    max_iterations: int = 1000,
+) -> tuple[np.ndarray, list[tuple[int, int, int]]]:
+    """
+    Схлопнуть короткие рёбра для упрощения меша.
+
+    Args:
+        vertices: 2D координаты вершин, shape (N, 2).
+        triangles: Список треугольников [(a, b, c), ...].
+        min_edge_length: Мин. длина внутреннего ребра.
+        min_contour_edge_length: Мин. длина ребра на контуре.
+        boundary_edges: Множество граничных рёбер (нормализованные: min, max).
+        max_iterations: Максимум итераций.
+
+    Returns:
+        (new_vertices, new_triangles) — упрощённая триангуляция.
+    """
+    if (min_edge_length <= 0 and min_contour_edge_length <= 0) or len(triangles) == 0:
+        return vertices, triangles
+
+    vertices = list(map(tuple, vertices))
+    triangles = list(triangles)
+
+    if boundary_edges is None:
+        boundary_edges = set()
+
+    # Debug info
+    edge_map = build_edge_map(triangles)
+    all_edges = list(edge_map.keys())
+    edge_lengths = []
+    for e0, e1 in all_edges:
+        v0 = vertices[e0]
+        v1 = vertices[e1]
+        length = ((v1[0] - v0[0])**2 + (v1[1] - v0[1])**2)**0.5
+        edge_lengths.append(length)
+
+    if edge_lengths:
+        min_len = min(edge_lengths)
+        max_len = max(edge_lengths)
+        avg_len = sum(edge_lengths) / len(edge_lengths)
+
+        # Count collapsible edges
+        interior_collapsible = 0
+        contour_collapsible = 0
+        for edge in all_edges:
+            e0, e1 = edge
+            v0 = vertices[e0]
+            v1 = vertices[e1]
+            length = ((v1[0] - v0[0])**2 + (v1[1] - v0[1])**2)**0.5
+            if edge in boundary_edges:
+                if min_contour_edge_length > 0 and length < min_contour_edge_length:
+                    contour_collapsible += 1
+            else:
+                if min_edge_length > 0 and length < min_edge_length:
+                    interior_collapsible += 1
+
+        print(f"[edge_collapse] interior_threshold={min_edge_length:.3f}, contour_threshold={min_contour_edge_length:.3f}")
+        print(f"[edge_collapse] edges={len(all_edges)}, lengths: min={min_len:.3f}, max={max_len:.3f}, avg={avg_len:.3f}")
+        print(f"[edge_collapse] interior_collapsible={interior_collapsible}, contour_collapsible={contour_collapsible}")
+
+    collapse_count = 0
+    min_len_sq = min_edge_length * min_edge_length
+    min_contour_len_sq = min_contour_edge_length * min_contour_edge_length
+
+    for iteration in range(max_iterations):
+        # Находим самое короткое СХЛОПЫВАЕМОЕ ребро
+        # (учитываем разные пороги для внутренних и контурных рёбер)
+        shortest_edge = None
+        shortest_len_sq = float('inf')
+        shortest_is_boundary = False
+
+        edge_map = build_edge_map(triangles)
+
+        for edge in edge_map.keys():
+            e0, e1 = edge
+            v0 = vertices[e0]
+            v1 = vertices[e1]
+            len_sq = (v1[0] - v0[0])**2 + (v1[1] - v0[1])**2
+
+            is_boundary = edge in boundary_edges
+            threshold_sq = min_contour_len_sq if is_boundary else min_len_sq
+
+            # Пропускаем если порог нулевой
+            if threshold_sq <= 0:
+                continue
+
+            # Проверяем, короче ли ребро порога
+            if len_sq >= threshold_sq:
+                continue
+
+            if len_sq < shortest_len_sq:
+                shortest_len_sq = len_sq
+                shortest_edge = edge
+                shortest_is_boundary = is_boundary
+
+        if shortest_edge is None:
+            break
+
+        e0, e1 = shortest_edge
+
+        # Схлопываем ребро: объединяем вершины в середину
+        keep_idx, remove_idx = e0, e1
+        mid_x = (vertices[e0][0] + vertices[e1][0]) / 2
+        mid_y = (vertices[e0][1] + vertices[e1][1]) / 2
+        vertices[keep_idx] = (mid_x, mid_y)
+
+        # Заменяем remove_idx на keep_idx во всех треугольниках
+        new_triangles = []
+        for tri in triangles:
+            a, b, c = tri
+            if a == remove_idx:
+                a = keep_idx
+            if b == remove_idx:
+                b = keep_idx
+            if c == remove_idx:
+                c = keep_idx
+
+            # Проверяем что треугольник не вырожден (все вершины разные)
+            if a != b and b != c and c != a:
+                new_triangles.append((a, b, c))
+
+        triangles = new_triangles
+        collapse_count += 1
+
+        # Обновляем boundary_edges: заменяем remove_idx на keep_idx
+        new_boundary_edges = set()
+        for be0, be1 in boundary_edges:
+            if be0 == remove_idx:
+                be0 = keep_idx
+            if be1 == remove_idx:
+                be1 = keep_idx
+            if be0 != be1:
+                new_boundary_edges.add((min(be0, be1), max(be0, be1)))
+        boundary_edges = new_boundary_edges
+
+    if collapse_count > 0:
+        # Удаляем неиспользуемые вершины и перенумеровываем
+        used_vertices = set()
+        for tri in triangles:
+            used_vertices.update(tri)
+
+        if len(used_vertices) < len(vertices):
+            # Создаём маппинг старых индексов в новые
+            old_to_new = {}
+            new_vertices = []
+            for old_idx in sorted(used_vertices):
+                old_to_new[old_idx] = len(new_vertices)
+                new_vertices.append(vertices[old_idx])
+
+            # Перенумеровываем треугольники
+            triangles = [
+                (old_to_new[a], old_to_new[b], old_to_new[c])
+                for a, b, c in triangles
+            ]
+            vertices = new_vertices
+
+        print(f"[edge_collapse] {collapse_count} collapses, {len(vertices)} vertices, {len(triangles)} triangles")
+    else:
+        print(f"[edge_collapse] no collapses performed")
+
+    return np.array(vertices, dtype=np.float32), triangles
 
 
 def extract_boundary_edges(polygon_size: int) -> set[tuple[int, int]]:
@@ -688,8 +1239,14 @@ def refine_triangulation(
 def ear_clipping_refined(
     vertices: np.ndarray,
     max_edge_length: float = 1.0,
+    min_edge_length: float = 0.0,
+    min_contour_edge_length: float = 0.0,
     max_vertex_valence: int = 0,
-    optimize: bool = True,
+    use_delaunay_flip: bool = True,
+    use_valence_flip: bool = False,
+    use_angle_flip: bool = False,
+    use_cvt_smoothing: bool = False,
+    use_second_pass: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Триангулировать полигон с ограничением размера треугольников.
@@ -697,8 +1254,14 @@ def ear_clipping_refined(
     Args:
         vertices: 2D координаты вершин полигона (CCW), shape (N, 2).
         max_edge_length: Максимальная длина ребра (0 = без ограничения).
+        min_edge_length: Мин. длина внутреннего ребра для edge collapse (0 = без collapse).
+        min_contour_edge_length: Мин. длина ребра на контуре (0 = без collapse).
         max_vertex_valence: Макс. количество треугольников на вершину (0 = без ограничения).
-        optimize: Применить Delaunay edge flipping.
+        use_delaunay_flip: Применить Delaunay edge flipping.
+        use_valence_flip: Применить edge flipping для уменьшения валентности.
+        use_angle_flip: Применить edge flipping для максимизации минимального угла.
+        use_cvt_smoothing: Применить CVT (Centroidal Voronoi Tessellation) smoothing.
+        use_second_pass: Повторный проход flips + smoothing после edge collapse.
 
     Returns:
         (vertices, triangles) — вершины могут содержать добавленные точки.
@@ -708,16 +1271,111 @@ def ear_clipping_refined(
     if not triangles:
         return vertices, np.array([], dtype=np.int32).reshape(0, 3)
 
-    # Разбиваем большие треугольники и высоковалентные вершины
+    # Разбиваем большие треугольники
     refined_verts, refined_tris = refine_triangulation(
         vertices, triangles, max_edge_length, max_vertex_valence=max_vertex_valence
     )
 
+    # Граничные рёбра исходного полигона (не переворачиваем)
+    boundary = extract_boundary_edges(len(vertices))
+
+    # Граничные вершины — исходные вершины полигона
+    boundary_vertices = set(range(len(vertices)))
+
+    # Также помечаем вершины, добавленные на граничных рёбрах
+    # (после refinement новые вершины на границе тоже должны быть зафиксированы)
+    for v_idx in range(len(vertices), len(refined_verts)):
+        # Проверяем, лежит ли вершина на каком-либо граничном ребре
+        vx, vy = refined_verts[v_idx]
+        for e0, e1 in boundary:
+            # Точки ребра
+            x0, y0 = refined_verts[e0]
+            x1, y1 = refined_verts[e1]
+            # Проверяем, лежит ли точка на отрезке
+            # Вектор ребра
+            dx, dy = x1 - x0, y1 - y0
+            edge_len_sq = dx * dx + dy * dy
+            if edge_len_sq < 1e-10:
+                continue
+            # Проекция точки на прямую
+            t = ((vx - x0) * dx + (vy - y0) * dy) / edge_len_sq
+            if t < -0.01 or t > 1.01:
+                continue
+            # Расстояние до прямой
+            proj_x = x0 + t * dx
+            proj_y = y0 + t * dy
+            dist_sq = (vx - proj_x) ** 2 + (vy - proj_y) ** 2
+            if dist_sq < 1e-6:  # На ребре
+                boundary_vertices.add(v_idx)
+                break
+
     # Delaunay optimization
-    if optimize and len(refined_tris) >= 2:
-        # Граничные рёбра исходного полигона
-        boundary = extract_boundary_edges(len(vertices))
+    if use_delaunay_flip and len(refined_tris) >= 2:
         refined_tris = delaunay_flip(refined_verts, refined_tris, boundary)
+
+    # Valence optimization
+    if use_valence_flip and len(refined_tris) >= 2:
+        refined_tris = valence_flip(
+            refined_verts, refined_tris, boundary, max_vertex_valence
+        )
+
+    # Angle optimization
+    if use_angle_flip and len(refined_tris) >= 2:
+        refined_tris = angle_flip(refined_verts, refined_tris, boundary)
+
+    # CVT smoothing (только внутренние вершины)
+    if use_cvt_smoothing and len(refined_verts) > len(vertices):
+        refined_verts = cvt_smoothing(
+            refined_verts, refined_tris, boundary_vertices
+        )
+
+    # Edge collapse (схлопывание коротких рёбер)
+    # Вычисляем граничные рёбра как рёбра с одним соседним треугольником
+    if min_edge_length > 0 or min_contour_edge_length > 0:
+        edge_map = build_edge_map(refined_tris)
+        actual_boundary_edges = {
+            edge for edge, tris in edge_map.items() if len(tris) == 1
+        }
+        refined_verts, refined_tris = edge_collapse(
+            refined_verts, refined_tris, min_edge_length, min_contour_edge_length,
+            actual_boundary_edges
+        )
+
+    # Второй проход (после edge collapse)
+    if use_second_pass and len(refined_tris) >= 2:
+        print("[second_pass] Starting...")
+
+        # Пересчитываем граничные рёбра после collapse
+        edge_map = build_edge_map(refined_tris)
+        boundary = {
+            edge for edge, tris in edge_map.items() if len(tris) == 1
+        }
+
+        # Пересчитываем граничные вершины
+        boundary_vertices = set()
+        for e0, e1 in boundary:
+            boundary_vertices.add(e0)
+            boundary_vertices.add(e1)
+
+        # Delaunay flip (второй проход)
+        if use_delaunay_flip:
+            refined_tris = delaunay_flip(refined_verts, refined_tris, boundary)
+
+        # Valence optimization (второй проход)
+        if use_valence_flip:
+            refined_tris = valence_flip(refined_verts, refined_tris, boundary)
+
+        # Angle optimization (второй проход)
+        if use_angle_flip:
+            refined_tris = angle_flip(refined_verts, refined_tris, boundary)
+
+        # CVT smoothing (второй проход)
+        if use_cvt_smoothing and len(boundary_vertices) < len(refined_verts):
+            refined_verts = cvt_smoothing(
+                refined_verts, refined_tris, boundary_vertices
+            )
+
+        print("[second_pass] Done")
 
     return refined_verts, np.array(refined_tris, dtype=np.int32)
 

@@ -150,7 +150,14 @@
               "normal_angle": 25.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "min_edge_length": 0.0,
+              "min_contour_edge_length": 0.0,
               "max_vertex_valence": 0.0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": false,
+              "use_angle_flip": false,
+              "use_cvt_smoothing": false,
+              "use_second_pass": false,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -499,7 +506,14 @@
               "normal_angle": 25.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "min_edge_length": 0.0,
+              "min_contour_edge_length": 0.0,
               "max_vertex_valence": 0.0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": false,
+              "use_angle_flip": false,
+              "use_cvt_smoothing": false,
+              "use_second_pass": false,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -592,7 +606,14 @@
               "normal_angle": 9.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "min_edge_length": 0.0,
+              "min_contour_edge_length": 0.0,
               "max_vertex_valence": 0.0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": false,
+              "use_angle_flip": false,
+              "use_cvt_smoothing": false,
+              "use_second_pass": false,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3339,7 +3360,14 @@
               "normal_angle": 9.0,
               "contour_simplify": 0.0,
               "max_edge_length": 0.0,
+              "min_edge_length": 0.0,
+              "min_contour_edge_length": 0.0,
               "max_vertex_valence": 0.0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": false,
+              "use_angle_flip": false,
+              "use_cvt_smoothing": false,
+              "use_second_pass": false,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3443,8 +3471,15 @@
               "navmesh_output_path": "Voxels/Platform.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
-              "max_edge_length": 8.0,
+              "max_edge_length": 6.0,
+              "min_edge_length": 1.0,
+              "min_contour_edge_length": 0.5,
               "max_vertex_valence": 0.0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": true,
+              "use_angle_flip": true,
+              "use_cvt_smoothing": true,
+              "use_second_pass": true,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3720,8 +3755,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            14.135930061340332,
-            6.525207996368408,
+            13.784186363220215,
+            5.071447372436523,
             0.0946207046508789
           ],
           "rotation": [
@@ -3801,7 +3836,7 @@
               "skip_astar_if_los": true,
               "use_funnel": true,
               "use_los_optimization": true,
-              "use_edge_centers": false,
+              "use_edge_centers": true,
               "show_graph_edges": true
             }
           }
@@ -3854,14 +3889,15 @@
   "editor": {
     "camera": {
       "target": [
-        16.152040481567383,
-        1.9388285875320435,
-        0.0022991320583969355
+        17.3745174407959,
+        3.9305009841918945,
+        -1.5512304306030273
       ],
-      "radius": 15.0,
-      "azimuth": 42.56508979764361,
-      "elevation": 1.1274826967883351
+      "radius": 15.5,
+      "azimuth": 42.921136965050714,
+      "elevation": 1.0297442586766534
     },
+    "selected_entity": "PathfindingComponent",
     "displays": [
       {
         "name": "Editor",
@@ -3870,7 +3906,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "5190ddf0-ee94-4d04-bb6b-13a8d92d0fdd",
+            "uuid": "efeffdb6-3a7d-4ceb-bbb6-d19cb48e9020",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3890,7 +3926,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "6f9df42b-3ae0-40a5-9a87-f476a3e0e152",
+            "uuid": "c617a704-148b-467a-b9a8-e08cc56cd289",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3905,9 +3941,7 @@
       }
     ],
     "expanded_entities": [
-      "camera",
-      "editor_ui",
-      "EditorEntities"
+      "VoxelPlatform"
     ]
   },
   "resources": {
