@@ -12,6 +12,7 @@ import numpy as np
 from termin._native import log
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
+from termin.editor.inspect_field import InspectField
 from termin.navmesh.pathfinding import (
     RegionGraph,
     NavMeshGraph,
@@ -37,8 +38,41 @@ class PathfindingWorldComponent(PythonComponent):
     3. Вызывать find_path(start, end) для поиска пути
     """
 
-    def __init__(self) -> None:
+    inspect_fields = {
+        "use_centroids": InspectField(
+            path="use_centroids",
+            label="Use Centroids",
+            kind="bool",
+        ),
+        "use_funnel": InspectField(
+            path="use_funnel",
+            label="Use Funnel Algorithm",
+            kind="bool",
+        ),
+        "use_los_optimization": InspectField(
+            path="use_los_optimization",
+            label="Optimize with LOS",
+            kind="bool",
+        ),
+    }
+
+    serializable_fields = [
+        "use_centroids",
+        "use_funnel",
+        "use_los_optimization",
+    ]
+
+    def __init__(
+        self,
+        use_centroids: bool = True,
+        use_funnel: bool = True,
+        use_los_optimization: bool = True,
+    ) -> None:
         super().__init__(enabled=True)
+
+        self.use_centroids = use_centroids
+        self.use_funnel = use_funnel
+        self.use_los_optimization = use_los_optimization
 
         self._navmesh_graph: NavMeshGraph = NavMeshGraph()
         self._voxelizer_components: List["VoxelizerComponent"] = []
@@ -216,24 +250,12 @@ class PathfindingWorldComponent(PythonComponent):
 
         region = self._navmesh_graph.regions[start_region]
 
-        if start_tri_idx == end_tri_idx:
-            path_indices = [start_tri_idx]
-        else:
-            from termin.navmesh.pathfinding import astar_triangles
-            path_indices = astar_triangles(
-                start_tri_idx, end_tri_idx, region.neighbors, region.centroids
-            )
-            if path_indices is None:
-                return None
-
-        log.info(f"[PathfindingWorld] A* path: {len(path_indices)} triangles")
-
         # Получаем entity для трансформации
         entity = self._region_entities.get(start_region)
         transform = entity.transform.global_pose().as_matrix() if entity else None
         inverse = np.linalg.inv(transform) if transform is not None else None
 
-        # Трансформируем start/end в локальные координаты для funnel algorithm
+        # Трансформируем start/end в локальные координаты
         if inverse is not None:
             local_start = self._transform_point(start, inverse)
             local_end = self._transform_point(end, inverse)
@@ -241,25 +263,81 @@ class PathfindingWorldComponent(PythonComponent):
             local_start = start.copy()
             local_end = end.copy()
 
-        # Извлекаем порталы из пути
-        portals = get_portals_from_path(
-            path_indices, region.triangles, region.vertices, region.neighbors
-        )
-        log.info(f"[PathfindingWorld] portals: {len(portals)}")
+        # Быстрая проверка: прямая видимость?
+        if navmesh_line_of_sight(
+            local_start, local_end, start_tri_idx,
+            region.triangles, region.vertices, region.neighbors
+        ):
+            log.info("[PathfindingWorld] direct LOS, skipping A*")
+            local_path = [local_start, local_end]
+            # Трансформируем результат в мировые координаты
+            path_points: List[np.ndarray] = []
+            for local_point in local_path:
+                if transform is not None:
+                    world_point = self._transform_point(local_point, transform)
+                    path_points.append(world_point)
+                else:
+                    path_points.append(local_point.copy())
+            return path_points
 
-        # Применяем Funnel Algorithm
-        local_path = funnel_algorithm(local_start, local_end, portals)
-        log.info(f"[PathfindingWorld] funnel path: {len(local_path)} points")
+        if start_tri_idx == end_tri_idx:
+            path_indices = [start_tri_idx]
+        else:
+            from termin.navmesh.pathfinding import astar_triangles
+            path_indices = astar_triangles(
+                start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
+                region.triangles, region.vertices,
+                start_pos=local_start, end_pos=local_end
+            )
+            if path_indices is None:
+                return None
 
-        # Оптимизация: пробуем срезать путь через line of sight
-        optimized_path = self._optimize_path_los(
-            local_path, start_tri_idx, region.triangles, region.vertices, region.neighbors
-        )
-        log.info(f"[PathfindingWorld] optimized path: {len(optimized_path)} points")
+        log.info(f"[PathfindingWorld] A* path: {len(path_indices)} triangles")
+
+        # Строим путь в зависимости от настроек
+        if self.use_centroids and not self.use_funnel:
+            # Только центроиды треугольников
+            local_path = [local_start]
+            for tri_idx in path_indices:
+                local_path.append(region.centroids[tri_idx].copy())
+            local_path.append(local_end)
+            log.info(f"[PathfindingWorld] centroid path: {len(local_path)} points")
+        elif self.use_funnel:
+            # Funnel Algorithm
+            portals = get_portals_from_path(
+                path_indices, region.triangles, region.vertices, region.neighbors
+            )
+            log.info(f"[PathfindingWorld] portals: {len(portals)}")
+
+            # Вычисляем нормаль региона из первого треугольника
+            first_tri = region.triangles[path_indices[0]]
+            v0 = region.vertices[first_tri[0]]
+            v1 = region.vertices[first_tri[1]]
+            v2 = region.vertices[first_tri[2]]
+            region_normal = np.cross(v1 - v0, v2 - v0)
+            n_len = float(np.linalg.norm(region_normal))
+            if n_len > 1e-10:
+                region_normal = region_normal / n_len
+            else:
+                region_normal = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+
+            local_path = funnel_algorithm(local_start, local_end, portals, region_normal)
+            log.info(f"[PathfindingWorld] funnel path: {len(local_path)} points")
+        else:
+            # Прямой путь start -> end
+            local_path = [local_start, local_end]
+            log.info("[PathfindingWorld] direct path: 2 points")
+
+        # Оптимизация через line of sight
+        if self.use_los_optimization and len(local_path) > 2:
+            local_path = self._optimize_path_los(
+                local_path, start_tri_idx, region.triangles, region.vertices, region.neighbors
+            )
+            log.info(f"[PathfindingWorld] LOS optimized: {len(local_path)} points")
 
         # Трансформируем результат в мировые координаты
         path_points: List[np.ndarray] = []
-        for local_point in optimized_path:
+        for local_point in local_path:
             if transform is not None:
                 world_point = self._transform_point(local_point, transform)
                 path_points.append(world_point)
@@ -307,7 +385,8 @@ class PathfindingWorldComponent(PythonComponent):
 
         from termin.navmesh.pathfinding import astar_triangles
         path_indices = astar_triangles(
-            start_tri_idx, end_tri_idx, region.neighbors, region.centroids
+            start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
+            region.triangles, region.vertices
         )
         if path_indices is None:
             return None

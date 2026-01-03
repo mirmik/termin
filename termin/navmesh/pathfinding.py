@@ -61,7 +61,10 @@ class RegionGraph:
         if start_tri == end_tri:
             return [start_tri]
 
-        return astar_triangles(start_tri, end_tri, self.neighbors, self.centroids)
+        return astar_triangles(
+            start_tri, end_tri, self.neighbors, self.centroids,
+            self.triangles, self.vertices
+        )
 
 
 @dataclass
@@ -247,19 +250,37 @@ def point_in_triangle_2d(
     x0: float, y0: float,
     x1: float, y1: float,
     x2: float, y2: float,
+    epsilon: float = 0.05,
 ) -> bool:
-    """Проверить, находится ли точка внутри треугольника (2D)."""
-    def sign(px, py, x1, y1, x2, y2):
-        return (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2)
+    """
+    Проверить, находится ли точка внутри треугольника (2D).
 
-    d1 = sign(px, py, x0, y0, x1, y1)
-    d2 = sign(px, py, x1, y1, x2, y2)
-    d3 = sign(px, py, x2, y2, x0, y0)
+    Args:
+        epsilon: Допуск для точек на границе или чуть за ней.
+                 Нормализуется относительно площади треугольника.
+    """
+    def signed_area(ax, ay, bx, by, cx, cy):
+        return (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
 
-    has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
-    has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+    # Площадь треугольника
+    area = signed_area(x0, y0, x1, y1, x2, y2)
+    if abs(area) < 1e-10:
+        return False
 
-    return not (has_neg and has_pos)
+    # Барицентрические координаты (не нормализованные)
+    s = signed_area(px, py, x0, y0, x1, y1)
+    t = signed_area(px, py, x1, y1, x2, y2)
+    u = signed_area(px, py, x2, y2, x0, y0)
+
+    # Порог пропорционален площади
+    threshold = epsilon * abs(area)
+
+    if area > 0:
+        # CCW winding
+        return s >= -threshold and t >= -threshold and u >= -threshold
+    else:
+        # CW winding
+        return s <= threshold and t <= threshold and u <= threshold
 
 
 def get_portals_from_path(
@@ -270,6 +291,9 @@ def get_portals_from_path(
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
     Извлечь порталы (рёбра между смежными треугольниками) из пути.
+
+    Left/right ориентированы относительно направления движения
+    в плоскости треугольника (не предполагает XZ ориентацию).
 
     Args:
         path: Список индексов треугольников.
@@ -282,20 +306,67 @@ def get_portals_from_path(
     """
     portals: list[tuple[np.ndarray, np.ndarray]] = []
 
+    from termin._native import log as _log
+
     for i in range(len(path) - 1):
         tri_a = path[i]
         tri_b = path[i + 1]
 
+        # Центроиды для определения направления движения
+        tri_a_verts = triangles[tri_a]
+        tri_b_verts = triangles[tri_b]
+        centroid_a = (vertices[tri_a_verts[0]] + vertices[tri_a_verts[1]] + vertices[tri_a_verts[2]]) / 3.0
+        centroid_b = (vertices[tri_b_verts[0]] + vertices[tri_b_verts[1]] + vertices[tri_b_verts[2]]) / 3.0
+
+        _log.info(f"[Portal {i}] tri_a={tri_a} verts={tri_a_verts}, tri_b={tri_b} verts={tri_b_verts}")
+        _log.info(f"[Portal {i}] centroid_a={centroid_a}, centroid_b={centroid_b}")
+
+        # Направление движения
+        move_dir = centroid_b - centroid_a
+
+        # Нормаль треугольника A
+        v0 = vertices[tri_a_verts[0]]
+        v1 = vertices[tri_a_verts[1]]
+        v2 = vertices[tri_a_verts[2]]
+        normal = np.cross(v1 - v0, v2 - v0)
+        normal_len = np.linalg.norm(normal)
+        if normal_len > 1e-10:
+            normal = normal / normal_len
+
         # Найти общее ребро между tri_a и tri_b
+        found_edge = False
         for edge_idx in range(3):
             if neighbors[tri_a, edge_idx] == tri_b:
-                # Ребро edge_idx: вершины (edge_idx, edge_idx+1)
                 v0_idx = triangles[tri_a, edge_idx]
                 v1_idx = triangles[tri_a, (edge_idx + 1) % 3]
-                left = vertices[v0_idx].copy()
-                right = vertices[v1_idx].copy()
+                p0 = vertices[v0_idx].copy()
+                p1 = vertices[v1_idx].copy()
+
+                _log.info(f"[Portal {i}] edge_idx={edge_idx}, v0_idx={v0_idx}, v1_idx={v1_idx}")
+                _log.info(f"[Portal {i}] p0={p0}, p1={p1}")
+
+                # Вектор ребра
+                edge_vec = p1 - p0
+
+                # Cross product move_dir × edge_vec даёт вектор вдоль нормали
+                # Знак определяет, с какой стороны p0 относительно направления
+                cross = np.cross(move_dir, edge_vec)
+                # Проецируем на нормаль для получения знака
+                sign = np.dot(cross, normal)
+
+                if sign >= 0:
+                    left, right = p0, p1
+                else:
+                    left, right = p1, p0
+
+                _log.info(f"[Portal {i}] left={left}, right={right}")
                 portals.append((left, right))
+                found_edge = True
                 break
+
+        if not found_edge:
+            _log.warn(f"[Portal {i}] NO SHARED EDGE between tri {tri_a} and {tri_b}!")
+            _log.warn(f"[Portal {i}] neighbors[{tri_a}] = {neighbors[tri_a]}")
 
     return portals
 
@@ -304,6 +375,7 @@ def funnel_algorithm(
     start: np.ndarray,
     end: np.ndarray,
     portals: list[tuple[np.ndarray, np.ndarray]],
+    normal: np.ndarray | None = None,
 ) -> list[np.ndarray]:
     """
     Funnel Algorithm (Simple Stupid Funnel Algorithm).
@@ -314,12 +386,33 @@ def funnel_algorithm(
         start: Начальная точка.
         end: Конечная точка.
         portals: Список порталов (left, right).
+        normal: Нормаль плоскости региона. Если None, вычисляется из первого портала.
 
     Returns:
         Оптимизированный список точек пути.
     """
+    from termin._native import log as _log
+
     if len(portals) == 0:
         return [start.copy(), end.copy()]
+
+    _log.info(f"[Funnel] start={start}, end={end}, {len(portals)} portals")
+    for pi, (pl, pr) in enumerate(portals):
+        _log.info(f"[Funnel] portal {pi}: left={pl}, right={pr}")
+
+    # Вычисляем нормаль из первого портала если не задана
+    if normal is None:
+        # Используем start, portal_left, portal_right для определения плоскости
+        p_left, p_right = portals[0]
+        v1 = p_left - start
+        v2 = p_right - start
+        normal = np.cross(v1, v2)
+        n_len = np.linalg.norm(normal)
+        if n_len > 1e-10:
+            normal = normal / n_len
+        else:
+            # Fallback на Y-up
+            normal = np.array([0.0, 1.0, 0.0], dtype=np.float64)
 
     # Добавляем конечную точку как "портал" с left=right=end
     portals = portals + [(end.copy(), end.copy())]
@@ -336,28 +429,44 @@ def funnel_algorithm(
     left_index = 0
     right_index = 0
 
+    _log.info(f"[Funnel] initial: apex={apex}, left={left}, right={right}")
+
     def triarea2(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
-        """Удвоенная площадь треугольника (знаковая, 2D на плоскости XY или XZ)."""
-        # Используем X и Z (горизонтальная плоскость)
-        ax = b[0] - a[0]
-        az = b[2] - a[2]
-        bx = c[0] - a[0]
-        bz = c[2] - a[2]
-        return ax * bz - az * bx
+        """
+        Знаковая площадь треугольника в плоскости с заданной нормалью.
+
+        Положительная = c слева от вектора a→b.
+        Отрицательная = c справа.
+        """
+        ab = b - a
+        ac = c - a
+        cross = np.cross(ab, ac)
+        return float(np.dot(cross, normal))
 
     i = 1
+    max_iterations = len(portals) * 3  # Защита от бесконечного цикла
+    iteration = 0
     while i < len(portals):
+        iteration += 1
+        if iteration > max_iterations:
+            _log.warn(f"[Funnel] max iterations exceeded, breaking")
+            break
+
         portal_left = portals[i][0]
         portal_right = portals[i][1]
 
         # Обновляем правую границу
-        if triarea2(apex, right, portal_right) <= 0.0:
+        # Пропускаем если portal_right == right (граница не изменилась)
+        if np.allclose(right, portal_right):
+            pass  # Правая граница не изменилась
+        elif triarea2(apex, right, portal_right) <= 0.0:
             if np.allclose(apex, right) or triarea2(apex, left, portal_right) > 0.0:
                 # Сужаем воронку справа
                 right = portal_right.copy()
                 right_index = i
             else:
                 # Правая граница пересекла левую — добавляем left в путь
+                _log.info(f"[Funnel] i={i}: right crossed left, adding waypoint left={left}")
                 path.append(left.copy())
                 apex = left.copy()
                 apex_index = left_index
@@ -373,13 +482,17 @@ def funnel_algorithm(
                 continue
 
         # Обновляем левую границу
-        if triarea2(apex, left, portal_left) >= 0.0:
+        # Пропускаем если portal_left == left (граница не изменилась)
+        if np.allclose(left, portal_left):
+            pass  # Левая граница не изменилась
+        elif triarea2(apex, left, portal_left) >= 0.0:
             if np.allclose(apex, left) or triarea2(apex, right, portal_left) < 0.0:
                 # Сужаем воронку слева
                 left = portal_left.copy()
                 left_index = i
             else:
                 # Левая граница пересекла правую — добавляем right в путь
+                _log.info(f"[Funnel] i={i}: left crossed right, adding waypoint right={right}")
                 path.append(right.copy())
                 apex = right.copy()
                 apex_index = right_index
@@ -451,6 +564,18 @@ def navmesh_line_of_sight(
         if _point_in_triangle_3d(end, v0, v1, v2):
             return True
 
+        # Вычисляем базис плоскости треугольника
+        edge1 = v1 - v0
+        edge2 = v2 - v0
+        normal = np.cross(edge1, edge2)
+        normal_len = np.linalg.norm(normal)
+        if normal_len < 1e-10:
+            return False
+        normal = normal / normal_len
+
+        u_axis = edge1 / np.linalg.norm(edge1)
+        v_axis = np.cross(normal, u_axis)
+
         # Ищем ребро, которое пересекает луч start->end
         best_edge = -1
         best_t = float('inf')
@@ -459,7 +584,7 @@ def navmesh_line_of_sight(
             e0 = vertices[tri[edge_idx]]
             e1 = vertices[tri[(edge_idx + 1) % 3]]
 
-            t = _ray_edge_intersection_2d(start, direction, e0, e1)
+            t = _ray_edge_intersection_3d(start, direction, e0, e1, u_axis, v_axis)
             if t is not None and 0.0 < t <= 1.0:
                 if t < best_t:
                     best_t = t
@@ -516,37 +641,49 @@ def _point_in_triangle_3d(
     return point_in_triangle_2d(p2d_u, p2d_v, 0.0, 0.0, b2d_u, b2d_v, c2d_u, c2d_v)
 
 
-def _ray_edge_intersection_2d(
+def _ray_edge_intersection_3d(
     origin: np.ndarray,
     direction: np.ndarray,
     e0: np.ndarray,
     e1: np.ndarray,
+    u_axis: np.ndarray,
+    v_axis: np.ndarray,
 ) -> float | None:
     """
-    Пересечение луча с ребром в 2D (XZ плоскость).
+    Пересечение луча с ребром в плоскости треугольника.
+
+    Args:
+        origin: Начало луча (3D).
+        direction: Направление луча (3D).
+        e0, e1: Концы ребра (3D).
+        u_axis, v_axis: Базис плоскости треугольника.
 
     Returns:
         Параметр t вдоль direction, или None.
     """
-    # Проецируем на XZ
-    ox, oz = origin[0], origin[2]
-    dx, dz = direction[0], direction[2]
+    # Проецируем на плоскость треугольника
+    ou = float(np.dot(origin, u_axis))
+    ov = float(np.dot(origin, v_axis))
+    du = float(np.dot(direction, u_axis))
+    dv = float(np.dot(direction, v_axis))
 
-    e0x, e0z = e0[0], e0[2]
-    e1x, e1z = e1[0], e1[2]
+    e0u = float(np.dot(e0, u_axis))
+    e0v = float(np.dot(e0, v_axis))
+    e1u = float(np.dot(e1, u_axis))
+    e1v = float(np.dot(e1, v_axis))
 
-    ex = e1x - e0x
-    ez = e1z - e0z
+    eu = e1u - e0u
+    ev = e1v - e0v
 
-    denom = dx * ez - dz * ex
+    denom = du * ev - dv * eu
     if abs(denom) < 1e-10:
         return None  # Параллельны
 
-    diff_x = e0x - ox
-    diff_z = e0z - oz
+    diff_u = e0u - ou
+    diff_v = e0v - ov
 
-    t = (diff_x * ez - diff_z * ex) / denom
-    s = (diff_x * dz - diff_z * dx) / denom
+    t = (diff_u * ev - diff_v * eu) / denom
+    s = (diff_u * dv - diff_v * du) / denom
 
     if 0.0 <= s <= 1.0 and t > 1e-8:
         return t
@@ -559,6 +696,10 @@ def astar_triangles(
     end_tri: int,
     neighbors: np.ndarray,
     centroids: np.ndarray,
+    triangles: np.ndarray | None = None,
+    vertices: np.ndarray | None = None,
+    start_pos: np.ndarray | None = None,
+    end_pos: np.ndarray | None = None,
 ) -> list[int] | None:
     """
     A* поиск пути по графу треугольников.
@@ -568,23 +709,48 @@ def astar_triangles(
         end_tri: индекс целевого треугольника.
         neighbors: (M, 3) — массив соседей.
         centroids: (M, 3) — центры треугольников.
+        triangles: (M, 3) — индексы вершин (опционально, для расчёта по рёбрам).
+        vertices: (N, 3) — вершины (опционально, для расчёта по рёбрам).
+        start_pos: Реальная начальная точка (опционально).
+        end_pos: Реальная конечная точка (опционально).
 
     Returns:
         Список индексов треугольников от старта до финиша, или None.
     """
-    goal = centroids[end_tri]
+    use_edge_centers = triangles is not None and vertices is not None
 
-    def heuristic(tri: int) -> float:
-        return float(np.linalg.norm(centroids[tri] - goal))
+    # Используем реальные позиции если заданы, иначе центроиды
+    actual_start = start_pos if start_pos is not None else centroids[start_tri]
+    actual_goal = end_pos if end_pos is not None else centroids[end_tri]
+
+    def get_edge_center(tri_idx: int, edge_idx: int) -> np.ndarray:
+        """Получить центр ребра треугольника."""
+        v0_idx = triangles[tri_idx, edge_idx]
+        v1_idx = triangles[tri_idx, (edge_idx + 1) % 3]
+        return (vertices[v0_idx] + vertices[v1_idx]) * 0.5
+
+    def heuristic_from_pos(pos: np.ndarray) -> float:
+        """Эвристика: расстояние от текущей позиции до цели."""
+        return float(np.linalg.norm(pos - actual_goal))
+
+    # Начальная позиция
+    initial_pos = actual_start.copy()
 
     # (f_score, counter, triangle_idx)
     counter = 0
-    open_set: list[tuple[float, int, int]] = [(heuristic(start_tri), counter, start_tri)]
+    open_set: list[tuple[float, int, int]] = [(heuristic_from_pos(initial_pos), counter, start_tri)]
     came_from: dict[int, int] = {}
-    g_score: dict[int, float] = {start_tri: 0.0}
+    # g_score хранит (расстояние, последняя точка на пути)
+    g_score: dict[int, tuple[float, np.ndarray]] = {
+        start_tri: (0.0, initial_pos)
+    }
+
+    from termin._native import log as _astar_log
 
     while open_set:
-        _, _, current = heapq.heappop(open_set)
+        f_val, _, current = heapq.heappop(open_set)
+        current_g, current_pos = g_score[current]
+        _astar_log.info(f"[A*] pop tri={current}, g={current_g:.2f}, f={f_val:.2f}, pos={current_pos}")
 
         if current == end_tri:
             # Восстанавливаем путь
@@ -594,19 +760,31 @@ def astar_triangles(
                 path.append(current)
             return path[::-1]
 
+        current_g, current_pos = g_score[current]
+
         for edge_idx in range(3):
             neighbor = neighbors[current, edge_idx]
             if neighbor < 0:
                 continue
 
-            # Расстояние между центроидами
-            dist = float(np.linalg.norm(centroids[current] - centroids[neighbor]))
-            tentative_g = g_score[current] + dist
+            if use_edge_centers:
+                # Расстояние через центр общего ребра
+                edge_center = get_edge_center(current, edge_idx)
+                dist = float(np.linalg.norm(current_pos - edge_center))
+                next_pos = edge_center
+            else:
+                # Fallback: расстояние между центроидами
+                dist = float(np.linalg.norm(centroids[current] - centroids[neighbor]))
+                next_pos = centroids[neighbor].copy()
 
-            if neighbor not in g_score or tentative_g < g_score[neighbor]:
+            tentative_g = current_g + dist
+
+            if neighbor not in g_score or tentative_g < g_score[neighbor][0]:
                 came_from[neighbor] = current
-                g_score[neighbor] = tentative_g
-                f = tentative_g + heuristic(neighbor)
+                g_score[neighbor] = (tentative_g, next_pos)
+                h = heuristic_from_pos(next_pos)
+                f = tentative_g + h
+                _astar_log.info(f"[A*]   -> tri={neighbor}, dist={dist:.2f}, g={tentative_g:.2f}, h={h:.2f}, f={f:.2f}")
                 counter += 1
                 heapq.heappush(open_set, (f, counter, neighbor))
 

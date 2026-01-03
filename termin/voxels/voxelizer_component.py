@@ -130,6 +130,14 @@ class VoxelizerComponent(PythonComponent):
             max=1.0,
             step=0.01,
         ),
+        "max_edge_length": InspectField(
+            path="max_edge_length",
+            label="Max Edge Length",
+            kind="float",
+            min=0.0,
+            max=10.0,
+            step=0.1,
+        ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
             kind="button",
@@ -166,7 +174,7 @@ class VoxelizerComponent(PythonComponent):
 
     serializable_fields = [
         "grid_name", "cell_size", "output_path", "voxelize_mode", "voxelize_source",
-        "navmesh_output_path", "normal_angle", "contour_simplify",
+        "navmesh_output_path", "normal_angle", "contour_simplify", "max_edge_length",
         "show_region_voxels", "show_sparse_boundary", "show_simplified_contours",
         "show_bridged_contours", "show_triangulated",
     ]
@@ -181,6 +189,7 @@ class VoxelizerComponent(PythonComponent):
         navmesh_output_path: str = "",
         normal_angle: float = 25.0,
         contour_simplify: float = 0.0,
+        max_edge_length: float = 0.0,
         show_region_voxels: bool = False,
         show_sparse_boundary: bool = False,
         show_simplified_contours: bool = False,
@@ -196,6 +205,7 @@ class VoxelizerComponent(PythonComponent):
         self.navmesh_output_path = navmesh_output_path
         self.normal_angle = normal_angle
         self.contour_simplify = contour_simplify
+        self.max_edge_length = max_edge_length
         self._last_voxel_count: int = 0
 
         # Debug visualization
@@ -1324,6 +1334,7 @@ void main() {
                 grid.cell_size,
                 np.array(grid.origin, dtype=np.float32),
                 simplify_epsilon=simplify_epsilon,
+                max_edge_length=self.max_edge_length,
             )
 
             if len(vertices) == 0 or len(triangles) == 0:
@@ -1382,22 +1393,3 @@ void main() {
         )
 
         print(f"VoxelizerComponent: triangulated mesh built ({len(self._debug_regions)} regions, {len(vertices)} vertices, {total_triangles} triangles)")
-
-    @classmethod
-    def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
-        """Десериализовать компонент."""
-        return cls(
-            grid_name=data.get("grid_name", ""),
-            cell_size=data.get("cell_size", 0.25),
-            output_path=data.get("output_path", ""),
-            voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
-            voxelize_source=VoxelizeSource(data.get("voxelize_source", VoxelizeSource.CURRENT_MESH)),
-            navmesh_output_path=data.get("navmesh_output_path", ""),
-            normal_angle=data.get("normal_angle", 25.0),
-            contour_simplify=data.get("contour_simplify", 0.0),
-            show_region_voxels=data.get("show_region_voxels", False),
-            show_sparse_boundary=data.get("show_sparse_boundary", False),
-            show_simplified_contours=data.get("show_simplified_contours", False),
-            show_bridged_contours=data.get("show_bridged_contours", False),
-            show_triangulated=data.get("show_triangulated", False),
-        )

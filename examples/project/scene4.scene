@@ -149,6 +149,7 @@
               "navmesh_output_path": "Voxels/cube.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 0.0,
+              "max_edge_length": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -332,15 +333,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            17.718338012695312,
-            -1.6138734817504883,
-            6.183218955993652
+            17.434017181396484,
+            -3.0245327949523926,
+            14.67916488647461
           ],
           "rotation": [
-            -0.23911761713457472,
-            -0.09904576416293832,
-            0.369643823790626,
-            0.8923990953103367
+            -0.5346081594354356,
+            -0.19141744383727222,
+            0.27747537915704557,
+            0.7749586389101771
           ]
         },
         "scale": [
@@ -364,11 +365,11 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 10.0,
+              "radius": 16.0,
               "target": [
-                11.594613242543147,
-                4.5098509261103485,
-                1.1832187612171692
+                13.827661403157176,
+                1.365916285764492,
+                -0.27804640422661636
               ]
             }
           }
@@ -496,6 +497,7 @@
               "navmesh_output_path": "",
               "normal_angle": 25.0,
               "contour_simplify": 0.0,
+              "max_edge_length": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -587,6 +589,7 @@
               "navmesh_output_path": "Voxels/bulbasaur.navmesh",
               "normal_angle": 9.0,
               "contour_simplify": 0.0,
+              "max_edge_length": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3332,6 +3335,7 @@
               "navmesh_output_path": "Voxels/bulbasaur.navmesh",
               "normal_angle": 9.0,
               "contour_simplify": 0.0,
+              "max_edge_length": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3435,6 +3439,7 @@
               "navmesh_output_path": "Voxels/Platform.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
+              "max_edge_length": 6.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
@@ -3787,7 +3792,10 @@
           {
             "type": "PathfindingWorldComponent",
             "data": {
-              "enabled": true
+              "enabled": true,
+              "use_centroids": true,
+              "use_funnel": true,
+              "use_los_optimization": true
             }
           }
         ],
@@ -3839,15 +3847,14 @@
   "editor": {
     "camera": {
       "target": [
-        14.596464157104492,
-        4.886324882507324,
-        -0.3556266725063324
+        16.5537178035132,
+        0.7200558898410252,
+        -1.0895277889709012
       ],
       "radius": 11.5,
-      "azimuth": 42.020547071020644,
-      "elevation": 0.4886921905584162
+      "azimuth": 42.980478159617725,
+      "elevation": 1.1903145498601322
     },
-    "selected_entity": "entity18",
     "displays": [
       {
         "name": "Editor",
@@ -3856,7 +3863,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "7c4fedb4-e163-4477-ba6f-817ee8cb7b8b",
+            "uuid": "4356ee06-2746-49d9-9f30-5ff27fee7602",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3876,7 +3883,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "aa084761-d8ff-4a41-bc13-0b3cc32170e4",
+            "uuid": "1063f43a-7736-46e4-9b6b-c62b5849a30a",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3889,12 +3896,6 @@
           }
         ]
       }
-    ],
-    "expanded_entities": [
-      "editor_ui",
-      "EditorEntities",
-      "camera",
-      "entity18"
     ]
   },
   "resources": {

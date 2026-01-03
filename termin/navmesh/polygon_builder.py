@@ -30,6 +30,7 @@ from termin.navmesh.region_growing import (
 
 from termin.navmesh.triangulation import (
     ear_clip,
+    ear_clipping_refined,
     douglas_peucker_2d,
     merge_holes_with_bridges,
     transform_to_3d,
@@ -699,6 +700,7 @@ class PolygonBuilder:
         cell_size: float,
         origin: np.ndarray,
         simplify_epsilon: float = 0.0,
+        max_edge_length: float = 0.0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Триангулировать регион: извлечь контуры, упростить, построить меш.
@@ -717,6 +719,7 @@ class PolygonBuilder:
             cell_size: Размер вокселя.
             origin: Начало координат сетки.
             simplify_epsilon: Параметр Douglas-Peucker (0 = без упрощения).
+            max_edge_length: Макс. длина ребра треугольника (0 = без ограничения).
 
         Returns:
             (vertices, triangles):
@@ -783,8 +786,14 @@ class PolygonBuilder:
         if len(merged_2d) < 3:
             return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
 
-        # Шаг 5: Ear Clipping в 2D
-        triangles = ear_clip(merged_2d)
+        # Шаг 5: Ear Clipping в 2D (с опциональным refinement)
+        if max_edge_length > 0:
+            # Refinement добавляет новые вершины
+            merged_2d, triangles = ear_clipping_refined(
+                merged_2d, max_edge_length=max_edge_length
+            )
+        else:
+            triangles = ear_clip(merged_2d)
 
         if len(triangles) == 0:
             return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
