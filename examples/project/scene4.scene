@@ -148,20 +148,9 @@
               "output_path": "Voxels/cube.voxels",
               "navmesh_output_path": "Voxels/cube.navmesh",
               "normal_angle": 25.0,
-              "expand_regions": false,
-              "navmesh_stage": 3.0,
-              "contour_epsilon": 0.1,
-              "show_debug_voxels": false,
-              "show_debug_contours": true,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": false,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false,
+              "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
-              "show_contour_lines": false,
-              "contour_simplify": 0.0,
               "show_triangulated": false
             }
           },
@@ -504,20 +493,9 @@
               "output_path": "Voxels/cube.voxels",
               "navmesh_output_path": "",
               "normal_angle": 25.0,
-              "expand_regions": false,
-              "navmesh_stage": 0.0,
-              "contour_epsilon": 0.1,
-              "show_debug_voxels": true,
-              "show_debug_contours": true,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": false,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false,
+              "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
-              "show_contour_lines": false,
-              "contour_simplify": 0.0,
               "show_triangulated": false
             }
           },
@@ -604,20 +582,9 @@
               "output_path": "Voxels/bulbasaur.voxels",
               "navmesh_output_path": "Voxels/bulbasaur.navmesh",
               "normal_angle": 9.0,
-              "expand_regions": false,
-              "navmesh_stage": 3.0,
-              "contour_epsilon": 0.006999999999999931,
-              "show_debug_voxels": false,
-              "show_debug_contours": false,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": true,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true,
+              "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
-              "show_contour_lines": false,
-              "contour_simplify": 0.0,
               "show_triangulated": false
             }
           },
@@ -3358,20 +3325,9 @@
               "output_path": "Voxels/bulbasaur.voxels",
               "navmesh_output_path": "Voxels/bulbasaur.navmesh",
               "normal_angle": 9.0,
-              "expand_regions": false,
-              "navmesh_stage": 3.0,
-              "contour_epsilon": 0.006999999999999931,
-              "show_debug_voxels": false,
-              "show_debug_contours": false,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": true,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true,
+              "contour_simplify": 0.0,
               "show_region_voxels": false,
               "show_sparse_boundary": false,
-              "show_contour_lines": false,
-              "contour_simplify": 0.0,
               "show_triangulated": false
             }
           },
@@ -3470,20 +3426,9 @@
               "output_path": "Voxels/Platform.voxels",
               "navmesh_output_path": "Voxels/Platform.navmesh",
               "normal_angle": 25.0,
-              "expand_regions": false,
-              "navmesh_stage": 2.0,
-              "contour_epsilon": 0.1,
-              "show_debug_voxels": false,
-              "show_debug_contours": false,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": false,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false,
+              "contour_simplify": 1.0,
               "show_region_voxels": false,
-              "show_sparse_boundary": true,
-              "show_contour_lines": false,
-              "contour_simplify": 0.3,
+              "show_sparse_boundary": false,
               "show_triangulated": true
             }
           }
@@ -3772,15 +3717,14 @@
   "editor": {
     "camera": {
       "target": [
-        18.758512978303283,
-        7.009517079314616,
-        2.5276887967262764
+        21.40518439460203,
+        4.447409416566113,
+        0.997210607468093
       ],
-      "radius": 14.0,
-      "azimuth": 54.195963932932536,
-      "elevation": 0.6213372137099807
+      "radius": 14.5,
+      "azimuth": 41.44109775935827,
+      "elevation": 0.48869219055841473
     },
-    "selected_entity": "entity18",
     "displays": [
       {
         "name": "Editor",
@@ -3789,7 +3733,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "316a4248-b892-41cd-99c1-dd960610369a",
+            "uuid": "ecae1f74-a3a7-4e4a-abd2-f87df1aba565",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3809,7 +3753,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "5482f396-56f2-4f99-86b3-8a1e2c65e284",
+            "uuid": "75df1d39-039f-4be3-921e-fb0ed131d6eb",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3824,10 +3768,10 @@
       }
     ],
     "expanded_entities": [
-      "editor_ui",
-      "camera",
       "entity18",
-      "EditorEntities"
+      "editor_ui",
+      "EditorEntities",
+      "camera"
     ]
   },
   "resources": {
