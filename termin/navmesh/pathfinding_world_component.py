@@ -220,12 +220,17 @@ class PathfindingWorldComponent(PythonComponent):
             if path_indices is None:
                 return None
 
-        # Конвертируем индексы треугольников в мировые координаты (центры)
+        # Конвертируем индексы треугольников в мировые координаты
+        # Первая точка = start, промежуточные = центроиды, последняя = end
         path_points: List[np.ndarray] = []
         entity = self._region_entities.get(start_region)
         transform = entity.transform.global_pose().as_matrix() if entity else None
 
-        for tri_idx in path_indices:
+        # Начинаем с позиции агента
+        path_points.append(start.copy())
+
+        # Промежуточные точки — центроиды (пропускаем первый и последний треугольник)
+        for tri_idx in path_indices[1:-1]:
             if tri_idx < len(region.centroids):
                 local_centroid = region.centroids[tri_idx]
                 if transform is not None:
@@ -234,7 +239,10 @@ class PathfindingWorldComponent(PythonComponent):
                 else:
                     path_points.append(local_centroid.copy())
 
-        return path_points if path_points else None
+        # Заканчиваем точкой назначения
+        path_points.append(end.copy())
+
+        return path_points
 
     def find_path_triangles(
         self,
