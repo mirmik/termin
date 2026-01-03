@@ -48,8 +48,7 @@ class NavMeshDisplayComponent(PythonComponent):
         "navmesh": InspectField(
             path="navmesh",
             label="NavMesh",
-            kind="navmesh",
-            setter=lambda obj, val: obj._set_navmesh(val),
+            kind="navmesh_handle",
         ),
         "color": InspectField(
             path="color",
@@ -88,7 +87,7 @@ class NavMeshDisplayComponent(PythonComponent):
     def __init__(self, navmesh_name: str = "") -> None:
         super().__init__()
         self._navmesh_name = navmesh_name
-        self._navmesh_handle: NavMeshHandle = NavMeshHandle()
+        self.navmesh: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh: Optional[TcMesh] = None
         self._mesh_gpu: Optional["MeshGPU"] = None
@@ -109,7 +108,7 @@ class NavMeshDisplayComponent(PythonComponent):
 
         # Инициализируем handle если имя задано
         if navmesh_name:
-            self._navmesh_handle = NavMeshHandle.from_name(navmesh_name)
+            self.navmesh = NavMeshHandle.from_name(navmesh_name)
 
     @property
     def navmesh_name(self) -> str:
@@ -122,19 +121,10 @@ class NavMeshDisplayComponent(PythonComponent):
         if value != self._navmesh_name:
             self._navmesh_name = value
             if value:
-                self._navmesh_handle = NavMeshHandle.from_name(value)
+                self.navmesh = NavMeshHandle.from_name(value)
             else:
-                self._navmesh_handle = NavMeshHandle()
+                self.navmesh = NavMeshHandle()
             self._needs_rebuild = True
-
-    def _set_navmesh(self, value: "NavMesh") -> None:
-        """Установить NavMesh (объект или None)."""
-        if value is None:
-            self.navmesh_name = ""
-        elif hasattr(value, "name"):
-            self.navmesh_name = value.name
-        else:
-            self.navmesh_name = ""
 
     def _set_color(self, value: Tuple[float, float, float, float]) -> None:
         """Установить цвет."""
@@ -232,11 +222,6 @@ void main() {
             )
         return self._contour_material
 
-    @property
-    def navmesh(self) -> Optional["NavMesh"]:
-        """Текущий NavMesh (через handle)."""
-        return self._navmesh_handle.get_navmesh()
-
     # --- Drawable protocol ---
 
     @property
@@ -276,7 +261,7 @@ void main() {
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
-        current = self._navmesh_handle.get_navmesh()
+        current = self.navmesh.get_navmesh()
         if self._needs_rebuild or current is not self._last_navmesh:
             self._needs_rebuild = False
             self._rebuild_mesh()
@@ -327,7 +312,7 @@ void main() {
         self._contour_mesh = None
         self._contour_gpu = None
 
-        navmesh = self._navmesh_handle.get_navmesh()
+        navmesh = self.navmesh.get_navmesh()
         self._last_navmesh = navmesh
 
         if navmesh is None or navmesh.polygon_count() == 0:

@@ -195,7 +195,7 @@ class ResourceManagerViewer(QDialog):
                 self._selected_asset = mat
                 self._show_material_details(name, mat)
         elif asset_type == "voxelgrid":
-            asset = self._resource_manager._voxelgrid_assets.get(name)
+            asset = self._resource_manager._voxel_grid_assets.get(name)
             if asset:
                 self._selected_asset = asset
                 self._show_voxelgrid_details(name, asset)
@@ -397,7 +397,7 @@ class ResourceManagerViewer(QDialog):
         """Обновляет список VoxelGrid."""
         self._voxelgrids_tree.clear()
 
-        for name, asset in sorted(self._resource_manager._voxelgrid_assets.items()):
+        for name, asset in sorted(self._resource_manager._voxel_grid_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
@@ -524,7 +524,7 @@ class ResourceManagerViewer(QDialog):
             f"Materials: {len(rm.materials)} | "
             f"Meshes: {len(rm._mesh_assets)} | "
             f"Textures: {len(rm._texture_assets)} | "
-            f"VoxelGrids: {len(rm._voxelgrid_assets)} | "
+            f"VoxelGrids: {len(rm._voxel_grid_assets)} | "
             f"NavMeshes: {len(rm._navmesh_assets)} | "
             f"Components: {len(rm.components)}"
         )
