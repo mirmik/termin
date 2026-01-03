@@ -159,7 +159,10 @@
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": false,
               "show_region_voxels": false,
-              "show_sparse_boundary": false
+              "show_sparse_boundary": false,
+              "show_contour_lines": false,
+              "contour_simplify": 0.0,
+              "show_triangulated": false
             }
           },
           {
@@ -512,7 +515,10 @@
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": false,
               "show_region_voxels": false,
-              "show_sparse_boundary": false
+              "show_sparse_boundary": false,
+              "show_contour_lines": false,
+              "contour_simplify": 0.0,
+              "show_triangulated": false
             }
           },
           {
@@ -609,7 +615,10 @@
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": true,
               "show_region_voxels": false,
-              "show_sparse_boundary": false
+              "show_sparse_boundary": false,
+              "show_contour_lines": false,
+              "contour_simplify": 0.0,
+              "show_triangulated": false
             }
           },
           {
@@ -3360,7 +3369,10 @@
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": true,
               "show_region_voxels": false,
-              "show_sparse_boundary": false
+              "show_sparse_boundary": false,
+              "show_contour_lines": false,
+              "contour_simplify": 0.0,
+              "show_triangulated": false
             }
           },
           {
@@ -3469,7 +3481,10 @@
               "show_multi_normal_voxels": false,
               "show_boundary_voxels": false,
               "show_region_voxels": false,
-              "show_sparse_boundary": true
+              "show_sparse_boundary": true,
+              "show_contour_lines": false,
+              "contour_simplify": 0.3,
+              "show_triangulated": true
             }
           }
         ],
@@ -3757,13 +3772,13 @@
   "editor": {
     "camera": {
       "target": [
-        21.645456314086914,
-        5.2886576652526855,
-        3.1808741092681885
+        18.758512978303283,
+        7.009517079314616,
+        2.5276887967262764
       ],
       "radius": 14.0,
-      "azimuth": 56.55215842312482,
-      "elevation": 0.6527531402458783
+      "azimuth": 54.195963932932536,
+      "elevation": 0.6213372137099807
     },
     "selected_entity": "entity18",
     "displays": [
@@ -3774,7 +3789,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "b297a64a-5529-49c0-b491-d500a348ed91",
+            "uuid": "316a4248-b892-41cd-99c1-dd960610369a",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3794,7 +3809,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "0436ef8c-abbd-421e-836a-c7b868b2a2a6",
+            "uuid": "5482f396-56f2-4f99-86b3-8a1e2c65e284",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3809,10 +3824,10 @@
       }
     ],
     "expanded_entities": [
-      "EditorEntities",
-      "camera",
       "editor_ui",
-      "entity18"
+      "camera",
+      "entity18",
+      "EditorEntities"
     ]
   },
   "resources": {

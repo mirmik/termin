@@ -223,9 +223,14 @@ class VoxelizerComponent(PythonComponent):
             max=1.0,
             step=0.01,
         ),
+        "show_triangulated": InspectField(
+            path="show_triangulated",
+            label="Show Triangulated",
+            kind="bool",
+        ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "voxelize_source", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours", "share_boundary", "show_multi_normal_voxels", "show_boundary_voxels", "show_region_voxels", "show_sparse_boundary", "show_contour_lines", "contour_simplify"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "voxelize_source", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours", "share_boundary", "show_multi_normal_voxels", "show_boundary_voxels", "show_region_voxels", "show_sparse_boundary", "show_contour_lines", "contour_simplify", "show_triangulated"]
 
     def __init__(
         self,
@@ -250,6 +255,7 @@ class VoxelizerComponent(PythonComponent):
         show_sparse_boundary: bool = False,
         show_contour_lines: bool = False,
         contour_simplify: float = 0.0,
+        show_triangulated: bool = False,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -276,6 +282,7 @@ class VoxelizerComponent(PythonComponent):
         self.show_sparse_boundary: bool = show_sparse_boundary
         self.show_contour_lines: bool = show_contour_lines
         self.contour_simplify: float = contour_simplify
+        self.show_triangulated: bool = show_triangulated
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._debug_boundary_voxels: set[tuple[int, int, int]] = set()
         self._debug_grid: Optional["VoxelGrid"] = None
@@ -287,6 +294,7 @@ class VoxelizerComponent(PythonComponent):
         self._debug_sparse_boundary_mesh: Optional[TcMesh] = None
         self._debug_inner_contour_mesh: Optional[TcMesh] = None
         self._debug_contour_lines_mesh: Optional[TcMesh] = None
+        self._debug_triangulated_mesh: Optional[TcMesh] = None
         # GPU caches for debug meshes
         from termin._native.render import MeshGPU
         self._debug_mesh_gpu: Optional[MeshGPU] = None
@@ -297,6 +305,7 @@ class VoxelizerComponent(PythonComponent):
         self._debug_sparse_boundary_gpu: Optional[MeshGPU] = None
         self._debug_inner_contour_gpu: Optional[MeshGPU] = None
         self._debug_contour_lines_gpu: Optional[MeshGPU] = None
+        self._debug_triangulated_gpu: Optional[MeshGPU] = None
         self._debug_material: Optional[Material] = None
         self._debug_contour_material: Optional[Material] = None
         self._debug_transparent_material: Optional[Material] = None
@@ -314,6 +323,7 @@ class VoxelizerComponent(PythonComponent):
     GEOMETRY_SPARSE_BOUNDARY = "sparse_boundary"
     GEOMETRY_INNER_CONTOUR = "inner_contour"
     GEOMETRY_CONTOUR_LINES = "contour_lines"
+    GEOMETRY_TRIANGULATED = "triangulated"
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -341,6 +351,9 @@ class VoxelizerComponent(PythonComponent):
             mat_trans = self._get_or_create_transparent_material()
             marks.update(p.phase_mark for p in mat_trans.phases)
         if self.show_contour_lines:
+            mat = self._get_or_create_line_material()
+            marks.update(p.phase_mark for p in mat.phases)
+        if self.show_triangulated:
             mat = self._get_or_create_line_material()
             marks.update(p.phase_mark for p in mat.phases)
         return marks
@@ -395,6 +408,12 @@ class VoxelizerComponent(PythonComponent):
                     from termin._native.render import MeshGPU
                     self._debug_contour_lines_gpu = MeshGPU()
                 self._debug_contour_lines_gpu.draw(context, self._debug_contour_lines_mesh.mesh, self._debug_contour_lines_mesh.version)
+        if geometry_id == "" or geometry_id == self.GEOMETRY_TRIANGULATED:
+            if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
+                if self._debug_triangulated_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._debug_triangulated_gpu = MeshGPU()
+                self._debug_triangulated_gpu.draw(context, self._debug_triangulated_mesh.mesh, self._debug_triangulated_mesh.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -573,6 +592,17 @@ class VoxelizerComponent(PythonComponent):
 
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_CONTOUR_LINES) for p in phases)
+
+        # Triangulated mesh (триангулированные полигоны)
+        if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
+            mat = self._get_or_create_line_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_TRIANGULATED) for p in phases)
 
         return result
 
@@ -1134,6 +1164,8 @@ void main() {
         self._debug_inner_contour_gpu = None
         self._debug_contour_lines_mesh = None
         self._debug_contour_lines_gpu = None
+        self._debug_triangulated_mesh = None
+        self._debug_triangulated_gpu = None
 
         if not self._debug_regions or self._debug_grid is None:
             return
@@ -1169,6 +1201,9 @@ void main() {
 
         # Строим линии контуров (упрощённые)
         self._build_debug_contour_lines(grid, region_colors)
+
+        # Строим триангулированный меш
+        self._build_debug_triangulated_mesh(grid, region_colors)
 
         total_voxels = sum(len(voxels) for voxels, _ in self._debug_regions)
         print(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
@@ -1638,6 +1673,92 @@ void main() {
 
         print(f"VoxelizerComponent: contour lines built ({len(self._debug_regions)} regions, {len(vertices)} vertices)")
 
+    def _build_debug_triangulated_mesh(
+        self,
+        grid: "VoxelGrid",
+        region_colors: list[tuple[float, float, float]],
+    ) -> None:
+        """Построить триангулированный меш для всех регионов."""
+        from termin.navmesh.polygon_builder import PolygonBuilder
+
+        builder = PolygonBuilder()
+
+        # Используем contour_simplify как epsilon для Douglas-Peucker
+        simplify_epsilon = self.contour_simplify * grid.cell_size
+
+        all_vertices: list[np.ndarray] = []
+        all_triangles: list[np.ndarray] = []
+        all_colors: list[np.ndarray] = []
+        vertex_offset = 0
+        total_triangles = 0
+
+        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
+            # Триангулируем регион
+            vertices, triangles = builder.triangulate_region(
+                region_voxels,
+                region_normal,
+                grid.cell_size,
+                np.array(grid.origin, dtype=np.float32),
+                simplify_epsilon=simplify_epsilon,
+            )
+
+            if len(vertices) == 0 or len(triangles) == 0:
+                continue
+
+            region_color = region_colors[region_idx]
+
+            # Добавляем вершины
+            all_vertices.append(vertices)
+
+            # Смещаем индексы треугольников
+            all_triangles.append(triangles + vertex_offset)
+
+            # Цвета для вершин
+            vertex_colors = np.full((len(vertices), 3), region_color, dtype=np.float32)
+            all_colors.append(vertex_colors)
+
+            vertex_offset += len(vertices)
+            total_triangles += len(triangles)
+
+        if not all_vertices:
+            return
+
+        # Объединяем в один меш
+        vertices = np.vstack(all_vertices).astype(np.float32)
+        triangles = np.vstack(all_triangles).astype(np.int32)
+        colors = np.vstack(all_colors).astype(np.float32)
+
+        # Вычисляем нормали для треугольников
+        normals = np.zeros_like(vertices)
+        for tri in triangles:
+            v0, v1, v2 = vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            face_normal = np.cross(edge1, edge2)
+            norm = np.linalg.norm(face_normal)
+            if norm > 1e-10:
+                face_normal = face_normal / norm
+            normals[tri[0]] += face_normal
+            normals[tri[1]] += face_normal
+            normals[tri[2]] += face_normal
+
+        # Нормализуем
+        for i in range(len(normals)):
+            norm = np.linalg.norm(normals[i])
+            if norm > 1e-10:
+                normals[i] = normals[i] / norm
+
+        self._debug_triangulated_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=np.full((len(vertices), 2), [2.0, 0.0], dtype=np.float32),  # vertex color mode
+            vertex_colors=colors,
+            vertex_normals=normals.astype(np.float32),
+            name="voxelizer_debug_triangulated",
+        )
+
+        print(f"VoxelizerComponent: triangulated mesh built ({len(self._debug_regions)} regions, {len(vertices)} vertices, {total_triangles} triangles)")
+
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
         """Десериализовать компонент."""
@@ -1663,4 +1784,5 @@ void main() {
             show_sparse_boundary=data.get("show_sparse_boundary", False),
             show_contour_lines=data.get("show_contour_lines", False),
             contour_simplify=data.get("contour_simplify", 0.0),
+            show_triangulated=data.get("show_triangulated", False),
         )
