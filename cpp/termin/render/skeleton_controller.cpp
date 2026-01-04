@@ -67,4 +67,10 @@ void SkeletonController::before_render() {
     }
 }
 
+void SkeletonController::on_removed_from_entity() {
+    std::cout << "[SkeletonController::on_removed_from_entity] called" << std::endl;
+    CxxComponent::on_removed_from_entity();
+    _skeleton_instance.reset();
+}
+
 } // namespace termin

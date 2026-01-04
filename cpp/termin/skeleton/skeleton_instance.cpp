@@ -119,11 +119,25 @@ void SkeletonInstance::update() {
     // Get inverse of skeleton root world matrix
     Mat44 skeleton_world_inv = Mat44::identity();
     Entity root = find_skeleton_root();
+
+    static int debug_counter = 0;
+    bool do_debug = (debug_counter++ % 300 == 0);  // Log every 300 frames (~5 sec at 60fps)
+
     if (root.valid()) {
         double m[16];
         root.transform().world_matrix(m);  // row-major
         Mat44 skeleton_world = row_major_to_mat44(m);
         skeleton_world_inv = skeleton_world.inverse();
+
+        if (do_debug) {
+            tc::Log::info("[SkeletonInstance::update] root='%s' idx=%u gen=%u pos=(%.2f,%.2f,%.2f)",
+                root.name(), root.id().index, root.id().generation,
+                m[3], m[7], m[11]);  // translation from row-major matrix
+        }
+    } else {
+        if (do_debug) {
+            tc::Log::warn("[SkeletonInstance::update] root is INVALID!");
+        }
     }
 
     // Compute bone matrices

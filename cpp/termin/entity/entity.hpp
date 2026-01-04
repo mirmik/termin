@@ -159,11 +159,6 @@ public:
     // Deserialize from trent with scene context for entity resolution
     void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
 
-    // --- User data (for back-pointer if needed) ---
-
-    void* data() const { return tc_entity_pool_data(_pool, _id); }
-    void set_data(void* d) { tc_entity_pool_set_data(_pool, _id, d); }
-
     // --- Pool/ID access ---
 
     tc_entity_pool* pool() const { return _pool; }

@@ -180,13 +180,6 @@ TC_POOL_API size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc
 TC_POOL_API tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_id id, size_t index);
 
 // ============================================================================
-// User data (for C++ wrapper back-pointer)
-// ============================================================================
-
-TC_POOL_API void* tc_entity_pool_data(const tc_entity_pool* pool, tc_entity_id id);
-TC_POOL_API void tc_entity_pool_set_data(tc_entity_pool* pool, tc_entity_id id, void* data);
-
-// ============================================================================
 // Migration between pools
 // ============================================================================
 

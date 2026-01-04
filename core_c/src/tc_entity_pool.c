@@ -105,9 +105,6 @@ struct tc_entity_pool {
     // Components
     ComponentArray* components;
 
-    // User data
-    void** user_data;
-
     // Hash maps for O(1) lookup
     tc_str_map* by_uuid;      // uuid string -> packed entity_id
     tc_u32_map* by_pick_id;   // pick_id -> packed entity_id
@@ -269,7 +266,6 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
 
     pool->children = calloc(initial_capacity, sizeof(EntityIdArray));
     pool->components = calloc(initial_capacity, sizeof(ComponentArray));
-    pool->user_data = calloc(initial_capacity, sizeof(void*));
 
     // Create hash maps for O(1) lookup
     pool->by_uuid = tc_str_map_new(initial_capacity);
@@ -340,7 +336,6 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->parent_indices);
     free(pool->children);
     free(pool->components);
-    free(pool->user_data);
 
     // Free hash maps
     tc_str_map_free(pool->by_uuid);
@@ -424,10 +419,8 @@ static void pool_grow(tc_entity_pool* pool) {
 
     pool->children = realloc(pool->children, new_cap * sizeof(EntityIdArray));
     pool->components = realloc(pool->components, new_cap * sizeof(ComponentArray));
-    pool->user_data = realloc(pool->user_data, new_cap * sizeof(void*));
     memset(pool->children + old_cap, 0, (new_cap - old_cap) * sizeof(EntityIdArray));
     memset(pool->components + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentArray));
-    memset(pool->user_data + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
 
     pool->capacity = new_cap;
 }
@@ -439,6 +432,10 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
 
     uint32_t idx = pool->free_stack[--pool->free_count];
     uint32_t gen = pool->generations[idx];
+
+    if (gen > 0) {
+        tc_log_debug("[tc_entity_pool] Reusing slot idx=%u gen=%u for '%s'", idx, gen, name ? name : "entity");
+    }
 
     pool->alive[idx] = true;
     pool->visible[idx] = true;
@@ -484,7 +481,6 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     component_array_free(&pool->components[idx]);
     component_array_init(&pool->components[idx]);
 
-    pool->user_data[idx] = NULL;
     pool->count++;
 
     tc_entity_id result = (tc_entity_id){idx, gen};
@@ -511,6 +507,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     while (comps->count > 0) {
         tc_component* c = comps->items[0];
         if (!c) {
+            tc_log(TC_LOG_ERROR, "[tc_entity_pool_free] NULL component in entity idx=%u", idx);
             component_array_remove(comps, c);
             continue;
         }
@@ -532,6 +529,10 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
             Py_DECREF((PyObject*)c->py_wrap);
         }
     }
+    // Free components array itself
+    free(comps->items);
+    comps->items = NULL;
+    comps->capacity = 0;
 
     // Remove from parent's children
     if (pool->parent_indices[idx] != UINT32_MAX) {
@@ -548,12 +549,21 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
             pool->parent_indices[child.index] = UINT32_MAX;
         }
     }
+    // Clear children array so reused slot doesn't inherit stale children
+    entity_id_array_free(&pool->children[idx]);
+    entity_id_array_init(&pool->children[idx]);
 
     // Remove from hash maps before marking as dead
     if (pool->uuids[idx]) {
         tc_str_map_remove(pool->by_uuid, pool->uuids[idx]);
+        free(pool->uuids[idx]);
+        pool->uuids[idx] = NULL;
     }
     tc_u32_map_remove(pool->by_pick_id, pool->pick_ids[idx]);
+
+    // Free name string
+    free(pool->names[idx]);
+    pool->names[idx] = NULL;
 
     pool->alive[idx] = false;
     pool->generations[idx]++;
@@ -849,7 +859,7 @@ static void spread_changes_to_distal(tc_entity_pool* pool, uint32_t idx) {
     EntityIdArray* ch = &pool->children[idx];
     for (size_t i = 0; i < ch->count; i++) {
         tc_entity_id child = ch->items[i];
-        if (pool->alive[child.index]) {
+        if (tc_entity_pool_alive(pool, child)) {
             spread_changes_to_distal(pool, child.index);
         }
     }
@@ -1166,20 +1176,6 @@ tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_
 }
 
 // ============================================================================
-// User data
-// ============================================================================
-
-void* tc_entity_pool_data(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("data", id); return NULL; }
-    return pool->user_data[id.index];
-}
-
-void tc_entity_pool_set_data(tc_entity_pool* pool, tc_entity_id id, void* data) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_data", id); return; }
-    pool->user_data[id.index] = data;
-}
-
-// ============================================================================
 // Migration between pools
 // ============================================================================
 
@@ -1219,9 +1215,6 @@ tc_entity_id tc_entity_pool_migrate(
     dst_pool->local_rotations[dst_idx] = src_pool->local_rotations[src_idx];
     dst_pool->local_scales[dst_idx] = src_pool->local_scales[src_idx];
     dst_pool->transform_dirty[dst_idx] = true;
-
-    // Copy user data pointer
-    dst_pool->user_data[dst_idx] = src_pool->user_data[src_idx];
 
     // Move components (transfer ownership, don't copy)
     // Components keep their py_wrap references
