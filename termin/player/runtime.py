@@ -17,6 +17,7 @@ class PlayerRuntime:
     Standalone game runtime.
 
     Manages window, scene, and game loop without editor overhead.
+    Uses RenderingManager for display/viewport management.
     """
 
     def __init__(
@@ -37,18 +38,15 @@ class PlayerRuntime:
         self.scene: Scene | None = None
         self.window = None
         self.graphics = None
-        self.render_engine = None
         self.surface = None
         self.camera = None
-        self._pipeline = None
-        self._viewport_state = None
 
         # Timing
         self.target_fps = 60
         self.delta_time = 1.0 / self.target_fps
         self.last_time = 0.0
 
-        # Display/Viewport/Input
+        # Display/Input (managed via RenderingManager)
         self._display = None
         self._viewport = None
         self._input_manager = None
@@ -68,14 +66,20 @@ class PlayerRuntime:
         # Ensure GLSL fallback loader is set up (import triggers setup)
         import termin.visualization.render.glsl_preprocessor  # noqa: F401
 
-        # Create default pipeline
+        # Create default pipeline and configure RenderingManager
         from termin.visualization.core.viewport import make_default_pipeline
-        self._pipeline = make_default_pipeline()
-        log.info(f"[PlayerRuntime] Created pipeline: {self._pipeline.name} with {len(self._pipeline.passes)} passes")
+        from termin.visualization.render import RenderingManager
+
+        pipeline = make_default_pipeline()
+        log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
+
+        manager = RenderingManager.instance()
+        manager.set_default_pipeline(pipeline)
 
         # Create graphics backend
         from termin.graphics import OpenGLGraphicsBackend
         self.graphics = OpenGLGraphicsBackend()
+        manager.set_graphics(self.graphics)
 
         # Create window
         from termin.visualization.platform.backends.glfw import GLFWWindowHandle
@@ -84,13 +88,13 @@ class PlayerRuntime:
             graphics=self.graphics,
         )
 
-        # Create render surface
+        # Create render surface and display
         from termin.visualization.render.surface import WindowRenderSurface
-        self.surface = WindowRenderSurface(self.window)
+        from termin.visualization.core.display import Display
 
-        # Create render engine
-        from termin.visualization.render.engine import RenderEngine
-        self.render_engine = RenderEngine(self.graphics)
+        self.surface = WindowRenderSurface(self.window)
+        self._display = Display(self.surface)
+        manager.add_display(self._display, "Main")
 
         # Load scene
         scene_path = self.project_path / self.scene_name
@@ -114,6 +118,13 @@ class PlayerRuntime:
 
         # Find or create camera
         self._setup_camera()
+
+        # Mount scene to display
+        self._viewport = manager.mount_scene(
+            scene=self.scene,
+            display=self._display,
+            camera=self.camera,
+        )
 
         # Set up input handling
         self._setup_input()
@@ -227,26 +238,9 @@ class PlayerRuntime:
         log.info("[PlayerRuntime] Created default camera at (0, 2, 5)")
 
     def _setup_input(self):
-        """Set up Display, Viewport and input handling."""
-        from termin.visualization.core.display import Display
-        from termin.visualization.core.viewport import Viewport
+        """Set up input handling."""
         from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
-        # Create display
-        self._display = Display(self.surface)
-
-        # Create viewport (fullscreen)
-        self._viewport = Viewport(
-            scene=self.scene,
-            camera=self.camera,
-            rect=(0.0, 0.0, 1.0, 1.0),
-            display=self._display,
-            pipeline=self._pipeline,
-        )
-        self._display.add_viewport(self._viewport)
-        self.camera.add_viewport(self._viewport)
-
-        # Create input manager
         self._input_manager = SimpleDisplayInputManager(
             backend_window=self.window,
             display=self._display,
@@ -289,7 +283,7 @@ class PlayerRuntime:
             self.scene.update(self.delta_time)
             self.scene.before_render()
 
-        # Render (includes present/swap_buffers)
+        # Render
         self._render()
 
         # Frame rate limiting
@@ -298,55 +292,25 @@ class PlayerRuntime:
         if frame_time < target_time:
             time.sleep(target_time - frame_time)
 
-    _render_frame_count = 0
-
     def _render(self):
-        """Render the scene."""
-        if self.scene is None or self.camera is None:
-            if PlayerRuntime._render_frame_count == 0:
-                from termin._native import log
-                log.warn(f"[PlayerRuntime] Cannot render: scene={self.scene is not None}, camera={self.camera is not None}")
-            return
+        """Render using RenderingManager."""
+        from termin.visualization.render import RenderingManager
 
-        from termin.visualization.render.view import RenderView
-        from termin.visualization.render.state import ViewportRenderState
-
-        view = RenderView(
-            scene=self.scene,
-            camera=self.camera,
-            pipeline=self._pipeline,
-        )
-
-        if self._viewport_state is None:
-            self._viewport_state = ViewportRenderState()
-
-        if PlayerRuntime._render_frame_count == 0:
-            from termin._native import log
-            log.info(f"[PlayerRuntime] First render frame, camera entity: {self.camera.entity.name if self.camera.entity else 'None'}")
-            log.info(f"[PlayerRuntime] Surface size: {self.surface.get_size()}")
-            log.info(f"[PlayerRuntime] View pipeline: {view.pipeline}")
-
-        try:
-            self.render_engine.render_views(
-                self.surface,
-                [(view, self._viewport_state)],
-                present=True,
-            )
-        except Exception as e:
-            if PlayerRuntime._render_frame_count < 3:
-                from termin._native import log
-                log.error(f"[PlayerRuntime] Render error: {e}")
-                import traceback
-                traceback.print_exc()
-
-        PlayerRuntime._render_frame_count += 1
+        manager = RenderingManager.instance()
+        manager.render_display(self._display, present=True)
 
     def shutdown(self):
         """Clean up resources."""
         import glfw
         from termin._native import log
+        from termin.visualization.render import RenderingManager
 
         log.info("[PlayerRuntime] Shutting down")
+
+        # Remove display from manager
+        manager = RenderingManager.instance()
+        if self._display is not None:
+            manager.remove_display(self._display)
 
         self.scene = None
 

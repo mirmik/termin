@@ -58,7 +58,6 @@ class GlslAsset(DataAsset[str]):
     @source.setter
     def source(self, value: str | None) -> None:
         """Set source, bump version, and register in C++ preprocessor."""
-        print(f"[GlslAsset] Setting source for GLSL asset '{self._name}'")
         self.data = value
         if value is not None:
             self._register_in_preprocessor()
@@ -69,15 +68,10 @@ class GlslAsset(DataAsset[str]):
 
     def _on_loaded(self) -> None:
         """Register include with C++ preprocessor after loading."""
-        print(f"[GlslAsset] GLSL asset '{self._name}' loaded, registering in preprocessor")
-        import traceback
-        traceback.print_stack()
         self._register_in_preprocessor()
 
     def _register_in_preprocessor(self) -> None:
         """Register this GLSL source with the C++ preprocessor."""
-        print(f"[GlslAsset] Registering GLSL include '{self._name}' in preprocessor")
-        
         if self._data is None:
             return
 

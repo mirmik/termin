@@ -39,6 +39,8 @@ class RenderingController:
     - Viewport configuration
     - Integration with ViewportListWidget and InspectorController
     - Central tab widget management for display switching
+
+    Delegates core rendering to RenderingManager singleton.
     """
 
     def __init__(
@@ -71,6 +73,10 @@ class RenderingController:
             on_viewport_selected: Callback when viewport is selected.
             on_request_update: Callback to request viewport redraw.
         """
+        # Core rendering manager (singleton)
+        from termin.visualization.render.manager import RenderingManager
+        self._manager = RenderingManager.instance()
+
         self._viewport_list = viewport_list_widget
         self._inspector = inspector_controller
         self._center_tabs = center_tab_widget
@@ -84,17 +90,12 @@ class RenderingController:
         self._get_editor_pipeline = get_editor_pipeline
         self._on_display_input_mode_changed_callback = on_display_input_mode_changed
 
-        self._displays: List["Display"] = []
-        self._display_names: dict[int, str] = {}
         self._selected_display: Optional["Display"] = None
         self._selected_viewport: Optional["Viewport"] = None
 
         # Map display id -> (tab container widget, BackendWindow, QWindow)
         # QWindow is stored to prevent garbage collection
         self._display_tabs: dict[int, Tuple[QWidget, "BackendWindow", QWindow]] = {}
-
-        # Map display id -> dict of viewport id -> ViewportRenderState
-        self._display_render_states: dict[int, dict[int, "ViewportRenderState"]] = {}
 
         # Map display id -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
@@ -150,7 +151,7 @@ class RenderingController:
     @property
     def displays(self) -> List["Display"]:
         """List of managed displays."""
-        return list(self._displays)
+        return self._manager.displays
 
     @property
     def selected_display(self) -> Optional["Display"]:
@@ -170,17 +171,11 @@ class RenderingController:
             display: Display to add.
             name: Optional display name.
         """
-        if display in self._displays:
+        if display in self._manager.displays:
             return
 
-        self._displays.append(display)
-        if name is not None:
-            self._display_names[id(display)] = name
-        else:
-            idx = len(self._displays) - 1
-            self._display_names[id(display)] = f"Display {idx}"
-
-        self._viewport_list.add_display(display, self._display_names[id(display)])
+        self._manager.add_display(display, name)
+        self._viewport_list.add_display(display, self._manager.get_display_name(display))
         self._update_center_tabs()
 
     def remove_display(self, display: "Display") -> None:
@@ -190,13 +185,12 @@ class RenderingController:
         Args:
             display: Display to remove.
         """
-        if display not in self._displays:
+        if display not in self._manager.displays:
             return
 
         display_id = id(display)
 
-        self._displays.remove(display)
-        self._display_names.pop(display_id, None)
+        self._manager.remove_display(display)
         self._viewport_list.remove_display(display)
 
         # Clean up tab resources
@@ -206,9 +200,6 @@ class RenderingController:
             if backend_window is not None:
                 backend_window.close()
 
-        # Clean up render states
-        self._display_render_states.pop(display_id, None)
-
         if self._selected_display is display:
             self._selected_display = None
             self._selected_viewport = None
@@ -217,19 +208,19 @@ class RenderingController:
 
     def get_display_name(self, display: "Display") -> str:
         """Get display name."""
-        return self._display_names.get(id(display), "Display")
+        return self._manager.get_display_name(display)
 
     def set_display_name(self, display: "Display", name: str) -> None:
         """Set display name."""
-        self._display_names[id(display)] = name
+        self._manager.set_display_name(display, name)
         self._viewport_list.set_display_name(display, name)
         self._update_center_tabs()
 
     def refresh(self) -> None:
         """Refresh all UI components."""
-        self._viewport_list.set_displays(self._displays)
-        for display in self._displays:
-            name = self._display_names.get(id(display), "")
+        self._viewport_list.set_displays(self._manager.displays)
+        for display in self._manager.displays:
+            name = self._manager.get_display_name(display)
             self._viewport_list.set_display_name(display, name)
         self._update_center_tabs()
 
@@ -289,7 +280,6 @@ class RenderingController:
         # Store mapping
         display_id = id(display)
         self._display_tabs[display_id] = (container, backend_window, qwindow)
-        self._display_render_states[display_id] = {}
         self._editor_display_id = display_id
 
         # Editor display uses EditorDisplayInputManager (managed by EditorViewportFeatures)
@@ -309,7 +299,7 @@ class RenderingController:
         """Get the editor display."""
         if self._editor_display_id is None:
             return None
-        for display in self._displays:
+        for display in self._manager.displays:
             if id(display) == self._editor_display_id:
                 return display
         return None
@@ -369,7 +359,7 @@ class RenderingController:
         self._selected_viewport = None
 
         if display is not None:
-            name = self._display_names.get(id(display), "")
+            name = self._manager.get_display_name(display)
             self._inspector.show_display_inspector(display, name)
 
             # Set current input mode and block state in inspector
@@ -391,10 +381,12 @@ class RenderingController:
             self._selected_display = viewport.display
 
             scene = self._get_scene() if self._get_scene is not None else None
+            # Build display_names dict for inspector
+            display_names = {id(d): self._manager.get_display_name(d) for d in self._manager.displays}
             self._inspector.show_viewport_inspector(
                 viewport=viewport,
-                displays=self._displays,
-                display_names=self._display_names,
+                displays=self._manager.displays,
+                display_names=display_names,
                 scene=scene,
             )
 
@@ -416,7 +408,7 @@ class RenderingController:
             return
 
         # Generate unique name
-        existing_names = set(self._display_names.values())
+        existing_names = {self._manager.get_display_name(d) for d in self._manager.displays}
         idx = 0
         while True:
             name = f"Display {idx}"
@@ -455,9 +447,6 @@ class RenderingController:
         # Store mapping (include qwindow to prevent GC)
         display_id = id(display)
         self._display_tabs[display_id] = (tab_container, backend_window, qwindow)
-
-        # Initialize render states dict for this display
-        self._display_render_states[display_id] = {}
 
         # Create input manager for this display (default: simple mode)
         from termin.visualization.platform.input_manager import SimpleDisplayInputManager
@@ -680,14 +669,9 @@ class RenderingController:
 
         # Clear FBO pool when pipeline changes
         if old_pipeline is not pipeline:
-            display = viewport.display
-            if display is not None:
-                display_id = id(display)
-                viewport_id = id(viewport)
-                viewport_states = self._display_render_states.get(display_id, {})
-                state = viewport_states.get(viewport_id)
-                if state is not None:
-                    state.fbos.clear()
+            state = self._manager.get_viewport_state(viewport)
+            if state is not None:
+                state.fbos.clear()
 
         self._request_update()
 
@@ -700,30 +684,11 @@ class RenderingController:
 
     def _get_or_create_viewport_state(self, display_id: int, viewport: "Viewport"):
         """Get or create ViewportRenderState for a viewport."""
-        from termin.visualization.render import ViewportRenderState
-
-        viewport_states = self._display_render_states.get(display_id)
-        if viewport_states is None:
-            return None
-
-        viewport_id = id(viewport)
-        if viewport_id not in viewport_states:
-            viewport_states[viewport_id] = ViewportRenderState()
-
-        return viewport_states[viewport_id]
+        return self._manager.get_or_create_viewport_state(viewport)
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get ViewportRenderState for a viewport."""
-        display = viewport.display
-        if display is None:
-            return None
-
-        display_id = id(display)
-        if display_id not in self._display_render_states:
-            return None
-
-        viewport_id = id(viewport)
-        return self._display_render_states[display_id].get(viewport_id)
+        return self._manager.get_viewport_state(viewport)
 
     def get_all_viewports_info(self) -> list[tuple["Viewport", str]]:
         """
@@ -733,8 +698,8 @@ class RenderingController:
             List of (viewport, label) tuples where label is "display_name / Viewport N".
         """
         result: list[tuple["Viewport", str]] = []
-        for display in self._displays:
-            display_name = self.get_display_name(display)
+        for display in self._manager.displays:
+            display_name = self._manager.get_display_name(display)
             for i, viewport in enumerate(display.viewports):
                 label = f"{display_name} / Viewport {i}"
                 result.append((viewport, label))
@@ -750,7 +715,7 @@ class RenderingController:
             self._center_tabs.removeTab(1)
 
         # Add tabs for additional displays (not Editor)
-        for display in self._displays:
+        for display in self._manager.displays:
             display_id = id(display)
 
             # Skip Editor display (it's already the first tab, managed externally)
@@ -761,7 +726,7 @@ class RenderingController:
             if display_id not in self._display_tabs:
                 continue
 
-            name = self._display_names.get(display_id, "Display")
+            name = self._manager.get_display_name(display)
             tab_container, _backend_window, _qwindow = self._display_tabs[display_id]
             self._center_tabs.addTab(tab_container, name)
 
@@ -803,9 +768,9 @@ class RenderingController:
         Возвращает список дисплеев с их viewport'ами.
         """
         result = []
-        for display in self._displays:
+        for display in self._manager.displays:
             display_id = id(display)
-            name = self._display_names.get(display_id, "Display")
+            name = self._manager.get_display_name(display)
 
             # Сериализуем все viewport'ы дисплея
             viewports_data = []
@@ -834,7 +799,7 @@ class RenderingController:
 
         # Удаляем все дополнительные дисплеи (кроме Editor)
         additional_displays = [
-            d for d in self._displays
+            d for d in self._manager.displays
             if id(d) != self._editor_display_id
         ]
         for display in additional_displays:
@@ -876,17 +841,17 @@ class RenderingController:
                     # Камеру Editor viewport'а не меняем - она управляется EditorCameraManager
             else:
                 # Запоминаем количество дисплеев до создания
-                count_before = len(self._displays)
+                count_before = len(self._manager.displays)
 
                 # Создаём дополнительный дисплей
                 self._on_add_display_requested()
 
                 # Проверяем, что дисплей был создан
-                if len(self._displays) <= count_before:
+                if len(self._manager.displays) <= count_before:
                     continue
 
                 # Берём последний добавленный дисплей
-                new_display = self._displays[-1]
+                new_display = self._manager.displays[-1]
                 self.set_display_name(new_display, name)
                 new_display.editor_only = editor_only
 
@@ -957,7 +922,7 @@ class RenderingController:
 
         from termin.visualization.render import RenderView
 
-        for display in self._displays:
+        for display in self._manager.displays:
             display_id = id(display)
 
             # All displays must be in _display_tabs now
@@ -983,9 +948,6 @@ class RenderingController:
                 continue
 
             # Collect views and states
-            if display_id not in self._display_render_states:
-                continue
-
             views_and_states = []
             sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 

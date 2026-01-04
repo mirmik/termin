@@ -8008,7 +8008,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "31dd9549-88da-490f-aa85-3c29253dbcf1",
+            "uuid": "5a30ce92-e747-41fa-8606-79bf0bbe4fa5",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -8028,7 +8028,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "2e62b711-6a90-46cf-a48b-f55342ad87df",
+            "uuid": "15f37462-d791-431d-96ea-643995f786ff",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
