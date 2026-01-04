@@ -317,59 +317,127 @@ class CameraController(InputComponent):
 
 
 class OrbitCameraController(CameraController):
-    """Orbit controller similar to common DCC tools."""
+    """
+    Orbit controller similar to common DCC tools.
 
-    # Эти поля можно редактировать прямо в инспекторе
+    Transform is the single source of truth. Internal state (azimuth, elevation, target)
+    is derived from transform and updated when external changes are detected.
+    """
+
+    active_in_editor = True
+
     radius = inspect(
         5.0, label="Radius", kind="float",
         min=0.1, max=100.0, step=0.1,
     )
-    # target – vec3, редактируем как три спинбокса
-    target = inspect(
-        np.array([0.0, 0.0, 0.0], dtype=np.float32),
-        label="Target", kind="vec3",
-        setter=lambda obj, value: obj.inspect_target_update(value)
+    min_radius = inspect(
+        1.0, label="Min Radius", kind="float",
+        min=0.1, max=100.0, step=0.1,
+    )
+    max_radius = inspect(
+        100.0, label="Max Radius", kind="float",
+        min=1.0, max=1000.0, step=1.0,
     )
 
     def __init__(
         self,
-        target: Optional[np.ndarray] = None,
         radius: float = 5.0,
-        azimuth: float = 45.0,
-        elevation: float = 30.0,
         min_radius: float = 1.0,
         max_radius: float = 100.0,
         prevent_moving: bool = False,
     ):
         super().__init__(enabled=True)
-        self.target = np.array(target if target is not None else [0.0, 0.0, 0.0], dtype=np.float32)
         self.radius = radius
-        self.azimuth = math.radians(azimuth)
-        self.elevation = math.radians(elevation)
-        self._min_radius = min_radius
-        self._max_radius = max_radius
+        self.min_radius = min_radius
+        self.max_radius = max_radius
+
+        # Internal state - derived from transform, not serialized
+        self._azimuth: float = 0.0
+        self._elevation: float = 0.0
+        self._target: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+
+        # For detecting external transform changes
+        self._last_position = None  # Vec3 or None
+        self._last_rotation = None  # Quat or None
+
         self._orbit_speed = 0.2
         self._pan_speed = 0.005
         self._zoom_speed = 0.5
         self._states: Dict[int, dict] = {}
         self._prevent_moving = prevent_moving
 
-    def inspect_target_update(self, val):
-        self.target = val
-        self._update_pose()
-
     def on_added(self, scene):
         if self.entity is None:
             raise RuntimeError("OrbitCameraController must be attached to an entity.")
         super().on_added(scene)
-        self._update_pose()
+        self._sync_from_transform()
 
     def prevent_moving(self):
         self._prevent_moving = True
 
+    def update(self, dt: float):
+        """Check for external transform changes and sync internal state."""
+        if self.entity is None:
+            return
+
+        pos = self.entity.transform.global_position
+        rot = self.entity.transform.global_rotation
+
+        # Check if transform changed externally
+        if self._last_position is not None:
+            pos_changed = not pos.approx_eq(self._last_position, 1e-6)
+            # For rotation, compare components
+            rot_changed = (
+                abs(rot.x - self._last_rotation.x) > 1e-6 or
+                abs(rot.y - self._last_rotation.y) > 1e-6 or
+                abs(rot.z - self._last_rotation.z) > 1e-6 or
+                abs(rot.w - self._last_rotation.w) > 1e-6
+            )
+            if pos_changed or rot_changed:
+                self._sync_from_transform()
+
+        self._last_position = pos
+        self._last_rotation = rot
+
+    def _sync_from_transform(self):
+        """Compute internal state (azimuth, elevation, target) from current transform."""
+        if self.entity is None:
+            return
+
+        pos = self.entity.transform.global_position
+        rot = self.entity.transform.global_rotation
+
+        # Forward direction (Y-forward convention)
+        rot_matrix = self.entity.transform.global_pose().rotation_matrix()
+        forward = rot_matrix[:, 1]  # local Y is forward
+
+        # Target is position + forward * radius
+        self._target = pos + forward * self.radius
+
+        # Compute direction from target to camera
+        to_camera = pos - self._target
+        dist = np.linalg.norm(to_camera)
+        if dist < 1e-6:
+            return
+
+        # Normalize
+        to_camera_norm = to_camera / dist
+
+        # Elevation: angle from XY plane (asin of Z component)
+        self._elevation = math.asin(np.clip(to_camera_norm[2], -1.0, 1.0))
+
+        # Azimuth: angle in XY plane
+        # At azimuth=0, camera is behind target (-Y direction)
+        # atan2(x, -y) gives us the angle from -Y axis
+        self._azimuth = math.atan2(to_camera_norm[0], -to_camera_norm[1])
+
+        # Update last known position/rotation
+        self._last_position = pos.copy()
+        self._last_rotation = rot.copy()
+
     def _update_pose(self):
         """
-        Update camera pose for Y-forward convention.
+        Update camera pose from internal state.
 
         At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y.
         Azimuth rotates around Z axis (up).
@@ -378,34 +446,38 @@ class OrbitCameraController(CameraController):
         entity = self.entity
         if entity is None:
             return
-        if self.target is None:
-            self.target = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        r = float(np.clip(self.radius, self._min_radius, self._max_radius))
-        cos_elev = math.cos(self.elevation)
+
+        r = float(np.clip(self.radius, self.min_radius, self.max_radius))
+        cos_elev = math.cos(self._elevation)
         eye = np.array(
             [
-                self.target[0] + r * math.sin(self.azimuth) * cos_elev,  # X - side
-                self.target[1] - r * math.cos(self.azimuth) * cos_elev,  # Y - behind target
-                self.target[2] + r * math.sin(self.elevation),           # Z - height
+                self._target[0] + r * math.sin(self._azimuth) * cos_elev,  # X - side
+                self._target[1] - r * math.cos(self._azimuth) * cos_elev,  # Y - behind target
+                self._target[2] + r * math.sin(self._elevation),           # Z - height
             ],
             dtype=np.float32,
         )
-        entity.transform.relocate(Pose3.looking_at(eye=eye, target=self.target))
+        entity.transform.relocate(Pose3.looking_at(eye=eye, target=self._target))
+
+        # Update last known position to avoid re-sync
+        self._last_position = eye.copy()
+        self._last_rotation = entity.transform.global_rotation.copy()
 
     def orbit(self, delta_azimuth: float, delta_elevation: float):
-        self.azimuth += math.radians(delta_azimuth)
-        self.elevation = np.clip(self.elevation + math.radians(delta_elevation), math.radians(-89.0), math.radians(89.0))
+        self._azimuth += math.radians(delta_azimuth)
+        self._elevation = np.clip(
+            self._elevation + math.radians(delta_elevation),
+            math.radians(-89.0),
+            math.radians(89.0)
+        )
         self._update_pose()
 
     def zoom(self, delta: float):
-        # For orthographic camera, change ortho_size instead of radius
         if self.camera_component is not None and self.camera_component.projection_type == "orthographic":
-            # Scale ortho_size proportionally
             scale_factor = 1.0 + delta * 0.1
             self.camera_component.ortho_size = max(0.1, self.camera_component.ortho_size * scale_factor)
         else:
-            # Perspective: change radius (distance to target)
-            self.radius += delta
+            self.radius = np.clip(self.radius + delta, self.min_radius, self.max_radius)
             self._update_pose()
 
     def pan(self, dx: float, dy: float):
@@ -415,7 +487,7 @@ class OrbitCameraController(CameraController):
         rot = entity.transform.global_pose().rotation_matrix()
         right = rot[:, 0]  # local X
         up = rot[:, 2]     # local Z (up in Y-forward convention)
-        self.target = self.target + right * dx + up * dy
+        self._target = self._target + right * dx + up * dy
         self._update_pose()
 
     def _state(self, viewport) -> dict:
@@ -463,5 +535,5 @@ class OrbitCameraController(CameraController):
 
     def center_on(self, position: np.ndarray) -> None:
         """Центрирует камеру на заданной позиции."""
-        self.target = np.array(position, dtype=np.float32)
+        self._target = np.array(position, dtype=np.float32)
         self._update_pose()

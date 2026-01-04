@@ -115,41 +115,52 @@ class EditorCameraManager:
         """
         Get camera state for serialization.
 
-        Returns:
-            Dict with target, radius, azimuth, elevation or None if camera not available.
+        Saves transform (position, rotation) and radius.
         """
-        orbit_ctrl = self.orbit_controller
-        if orbit_ctrl is None:
+        if self.camera is None or self.camera.entity is None:
             return None
 
+        entity = self.camera.entity
+        pose = entity.transform.global_pose()
+        orbit_ctrl = self.orbit_controller
+
         return {
-            "target": list(orbit_ctrl.target),
-            "radius": float(orbit_ctrl.radius),
-            "azimuth": float(orbit_ctrl.azimuth),
-            "elevation": float(orbit_ctrl.elevation),
+            "position": [pose.lin.x, pose.lin.y, pose.lin.z],
+            "rotation": [pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w],
+            "radius": float(orbit_ctrl.radius) if orbit_ctrl else 5.0,
         }
 
     def set_camera_data(self, data: dict) -> None:
         """
         Apply saved camera state.
 
-        Args:
-            data: Dict with target, radius, azimuth, elevation.
+        Restores transform and radius, then lets OrbitCameraController sync.
         """
-        orbit_ctrl = self.orbit_controller
-        if orbit_ctrl is None:
+        if self.camera is None or self.camera.entity is None:
             return
 
-        if "target" in data:
-            orbit_ctrl.target = np.array(data["target"], dtype=np.float32)
-        if "radius" in data:
-            orbit_ctrl.radius = float(data["radius"])
-        if "azimuth" in data:
-            orbit_ctrl.azimuth = float(data["azimuth"])
-        if "elevation" in data:
-            orbit_ctrl.elevation = float(data["elevation"])
+        entity = self.camera.entity
+        orbit_ctrl = self.orbit_controller
 
-        orbit_ctrl._update_pose()
+        # Restore radius first (needed for _sync_from_transform)
+        if orbit_ctrl and "radius" in data:
+            orbit_ctrl.radius = float(data["radius"])
+
+        # Restore transform
+        if "position" in data and "rotation" in data:
+            from termin.geombase import GeneralPose3, Vec3, Quat
+            pos = data["position"]
+            rot = data["rotation"]
+            pose = GeneralPose3(
+                Quat(rot[0], rot[1], rot[2], rot[3]),
+                Vec3(pos[0], pos[1], pos[2]),
+                Vec3(1.0, 1.0, 1.0),
+            )
+            entity.transform.set_global_pose(pose)
+
+        # Sync orbit controller from new transform
+        if orbit_ctrl:
+            orbit_ctrl._sync_from_transform()
 
     def recreate_in_scene(self, new_scene: "Scene") -> None:
         """

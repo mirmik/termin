@@ -88,6 +88,25 @@ struct GeneralTransform3 {
         tc_entity_pool_set_local_scale(_pool, _id, scale);
     }
 
+    // Global (world) component accessors
+    Vec3 global_position() const {
+        double pos[3];
+        tc_entity_pool_get_global_position(_pool, _id, pos);
+        return Vec3{pos[0], pos[1], pos[2]};
+    }
+
+    Quat global_rotation() const {
+        double rot[4];
+        tc_entity_pool_get_global_rotation(_pool, _id, rot);
+        return Quat{rot[0], rot[1], rot[2], rot[3]};
+    }
+
+    Vec3 global_scale() const {
+        double scale[3];
+        tc_entity_pool_get_global_scale(_pool, _id, scale);
+        return Vec3{scale[0], scale[1], scale[2]};
+    }
+
     void relocate(const GeneralPose3& pose) {
         set_local_pose(pose);
     }

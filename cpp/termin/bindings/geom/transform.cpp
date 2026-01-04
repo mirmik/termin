@@ -131,6 +131,11 @@ void bind_transform(nb::module_& m) {
             self.set_local_scale(scale);
         }, nb::arg("scale"))
 
+        // Global (world) position/rotation/scale - read-only properties
+        .def_prop_ro("global_position", &GeneralTransform3::global_position)
+        .def_prop_ro("global_rotation", &GeneralTransform3::global_rotation)
+        .def_prop_ro("global_scale", &GeneralTransform3::global_scale)
+
         // Relocate (accepts Python GeneralPose3, C++ GeneralPose3, Python Pose3, or C++ Pose3)
         .def("relocate", [](GeneralTransform3& self, nb::object pose) {
             // Check if it's a C++ Pose3
