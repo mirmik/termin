@@ -478,6 +478,8 @@ class HandleSelectorWidget(FieldWidget):
 
     Works with any resource type that has HandleAccessors registered
     in ResourceManager (material, mesh, audio_clip, voxel_grid, navmesh, skeleton, texture).
+
+    Values are dict format: {"uuid": "...", "name": "..."}
     """
 
     def __init__(
@@ -491,6 +493,7 @@ class HandleSelectorWidget(FieldWidget):
         self._resource_kind = resource_kind
         self._resources = resources
         self._allow_none = allow_none
+        self._name_to_uuid: dict[str, Optional[str]] = {}
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -519,14 +522,17 @@ class HandleSelectorWidget(FieldWidget):
         self._combo.blockSignals(True)
         current_text = self._combo.currentText()
         self._combo.clear()
+        self._name_to_uuid.clear()
 
         # Add (None) option if allowed
         if self._allow_none:
             self._combo.addItem("(None)", userData=None)
 
-        names = accessors.list_names()
-        for name in names:
+        # Get items with UUIDs
+        items = accessors.list_items()
+        for name, uuid in items:
             self._combo.addItem(name, userData=name)
+            self._name_to_uuid[name] = uuid
 
         # Restore selection
         idx = self._combo.findText(current_text)
@@ -537,20 +543,17 @@ class HandleSelectorWidget(FieldWidget):
 
         self._combo.blockSignals(False)
 
-    def get_value(self) -> Any:
-        """Get currently selected handle."""
+    def get_value(self) -> Optional[dict]:
+        """Get currently selected value as dict {"uuid": ..., "name": ...}."""
         name = self._combo.currentData()
         if not name:
             return None
 
-        accessors = self._get_accessors()
-        if accessors is None:
-            return None
-
-        return accessors.get_by_name(name)
+        uuid = self._name_to_uuid.get(name)
+        return {"uuid": uuid, "name": name}
 
     def set_value(self, value: Any) -> None:
-        """Set widget value from a handle or raw resource."""
+        """Set widget value from dict {"uuid": ..., "name": ...}."""
         self._combo.blockSignals(True)
 
         # Refresh items in case the list changed
@@ -564,13 +567,16 @@ class HandleSelectorWidget(FieldWidget):
             self._combo.blockSignals(False)
             return
 
-        accessors = self._get_accessors()
-        if accessors is None:
-            self._combo.setCurrentIndex(-1)
-            self._combo.blockSignals(False)
-            return
+        # Extract name from dict
+        name = None
+        if isinstance(value, dict):
+            name = value.get("name")
+        else:
+            # Legacy: try to get name from object via accessors
+            accessors = self._get_accessors()
+            if accessors is not None:
+                name = accessors.find_name(value)
 
-        name = accessors.find_name(value)
         if name is None:
             if self._allow_none:
                 self._combo.setCurrentIndex(0)  # (None)

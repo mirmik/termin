@@ -45,17 +45,6 @@ void register_tc_mesh_kind() {
                 mesh.ensure_loaded();
             }
             return mesh;
-        },
-        // to_python: std::any(TcMesh) → nb::object
-        [](const std::any& value) -> nb::object {
-            return nb::cast(std::any_cast<const termin::TcMesh&>(value));
-        },
-        // from_python: nb::object → std::any(TcMesh)
-        [](nb::object value) -> std::any {
-            termin::TcMesh mesh = nb::cast<termin::TcMesh>(value);
-            tc::Log::info("[tc_mesh from_python] is_valid=%d uuid=%s name=%s",
-                mesh.is_valid(), mesh.uuid(), mesh.name());
-            return mesh;
         }
     );
 

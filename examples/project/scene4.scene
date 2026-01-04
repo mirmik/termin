@@ -48,7 +48,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -132,7 +133,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000004"
+                "uuid": "00000000-0000-0000-0002-000000000004",
+                "name": "GridMaterial"
               },
               "cast_shadow": true
             }
@@ -283,7 +285,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                "name": "Kairon"
               },
               "cast_shadow": true
             }
@@ -489,7 +492,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                "name": "Kairon"
               },
               "cast_shadow": true
             }
@@ -590,7 +594,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
+                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc",
+                "name": "TransparentMaterial"
               },
               "cast_shadow": true
             }
@@ -910,7 +915,8 @@
                   "mesh": {},
                   "material": {
                     "type": "uuid",
-                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                    "name": "Kairon"
                   },
                   "cast_shadow": true
                 }
@@ -1169,7 +1175,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000004"
+                "uuid": "00000000-0000-0000-0002-000000000004",
+                "name": "GridMaterial"
               },
               "cast_shadow": true
             }
@@ -1216,7 +1223,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1277,7 +1285,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                "name": "Kairon"
               },
               "cast_shadow": true
             }
@@ -1384,7 +1393,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
+                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc",
+                "name": "TransparentMaterial"
               },
               "cast_shadow": true
             }
@@ -1437,7 +1447,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                "name": "Kairon"
               },
               "cast_shadow": true
             }
@@ -1499,7 +1510,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1571,7 +1583,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1643,7 +1656,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1715,7 +1729,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1784,7 +1799,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1866,7 +1882,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -1928,7 +1945,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2000,7 +2018,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2102,7 +2121,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "00000000-0000-0000-0002-000000000001"
+                    "uuid": "00000000-0000-0000-0002-000000000001",
+                    "name": "DefaultMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -2174,7 +2194,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "00000000-0000-0000-0002-000000000001"
+                    "uuid": "00000000-0000-0000-0002-000000000001",
+                    "name": "DefaultMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -2246,7 +2267,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "00000000-0000-0000-0002-000000000001"
+                    "uuid": "00000000-0000-0000-0002-000000000001",
+                    "name": "DefaultMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -2318,7 +2340,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "00000000-0000-0000-0002-000000000001"
+                    "uuid": "00000000-0000-0000-0002-000000000001",
+                    "name": "DefaultMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -2392,7 +2415,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2464,7 +2488,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2535,7 +2560,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "00000000-0000-0000-0002-000000000001"
+                    "uuid": "00000000-0000-0000-0002-000000000001",
+                    "name": "DefaultMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -2609,7 +2635,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2681,7 +2708,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2753,7 +2781,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2825,7 +2854,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2897,7 +2927,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -2969,7 +3000,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -3041,7 +3073,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -3113,7 +3146,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -3185,7 +3219,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -3276,7 +3311,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               },
               "cast_shadow": true
             }
@@ -3345,7 +3381,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
+                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc",
+                "name": "TransparentMaterial"
               },
               "cast_shadow": true
             }
@@ -3550,7 +3587,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c"
+                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c",
+                    "name": "Brown"
                   },
                   "cast_shadow": true
                 }
@@ -3597,7 +3635,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c"
+                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c",
+                    "name": "Brown"
                   },
                   "cast_shadow": true
                 }
@@ -3644,7 +3683,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c"
+                    "uuid": "26a30fc4-4abb-438c-aa43-90c4ee42ca7c",
+                    "name": "Brown"
                   },
                   "cast_shadow": true
                 }
@@ -3691,7 +3731,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
+                    "name": "StandartMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -3738,7 +3779,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
+                    "name": "StandartMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -3760,9 +3802,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            15.063708305358887,
-            4.696624755859375,
-            0.09461881965398788
+            10.375394821166992,
+            5.402858257293701,
+            -0.41755127906799316
           ],
           "rotation": [
             0,
@@ -3787,7 +3829,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
+                "name": "StandartMaterial"
               },
               "cast_shadow": true
             }
@@ -3837,7 +3880,7 @@
           {
             "type": "PathfindingWorldComponent",
             "data": {
-              "enabled": true,
+              "enabled": false,
               "skip_astar_if_los": true,
               "use_funnel": true,
               "use_los_optimization": true,
@@ -3899,11 +3942,10 @@
         2.1836137771606445,
         -3.436699151992798
       ],
-      "radius": 10.5,
-      "azimuth": 42.9246276235542,
-      "elevation": 0.48520153205442207
+      "radius": 12.0,
+      "azimuth": 42.88623038001031,
+      "elevation": 0.6283185307179571
     },
-    "selected_entity": "EditorEntities",
     "displays": [
       {
         "name": "Editor",
@@ -3912,7 +3954,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "9957d169-fbe9-4102-ac12-d409d2faf0af",
+            "uuid": "fe3d0720-79df-4743-bf43-a9aa390c7171",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3932,7 +3974,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "422ec082-23be-4632-bc2f-b2f75c9d24a6",
+            "uuid": "30b17394-e609-43f6-b0fa-679d5adc509b",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -3945,12 +3987,6 @@
           }
         ]
       }
-    ],
-    "expanded_entities": [
-      "VoxelPlatform",
-      "camera",
-      "EditorEntities",
-      "editor_ui"
     ]
   },
   "resources": {

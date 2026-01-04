@@ -481,19 +481,24 @@ public:
     // Field access (Python interop)
     // ========================================================================
 
+    // Get field value as serialized dict (for inspector widgets)
     nb::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 if (f.py_getter) {
-                    return f.py_getter(obj);
+                    nb::object val = f.py_getter(obj);
+                    // Serialize Python value to dict format
+                    auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
+                    if (handler && handler->has_python()) {
+                        return handler->python.serialize(val);
+                    }
+                    return val;
                 }
                 if (f.cpp_getter) {
                     std::any val = f.cpp_getter(obj);
-                    nb::object result = KindRegistry::instance().to_python(f.kind, val);
-                    if (!result.is_none()) {
-                        return result;
-                    }
-                    throw nb::type_error(("No to_python handler for kind: " + f.kind).c_str());
+                    // Serialize C++ value to trent, then convert to Python dict
+                    nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
+                    return trent_to_nb_compat(t);
                 }
                 throw nb::type_error(("No getter for field: " + field_path).c_str());
             }
@@ -501,20 +506,30 @@ public:
         throw nb::attribute_error(("Field not found: " + field_path).c_str());
     }
 
-    void set(void* obj, const std::string& type_name, const std::string& field_path, nb::object value) {
+    // Set field value from serialized dict (from inspector widgets)
+    void set(void* obj, const std::string& type_name, const std::string& field_path, nb::object value, tc_scene* scene = nullptr) {
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 if (f.py_setter) {
-                    f.py_setter(obj, value);
+                    // Deserialize dict to Python value
+                    auto* handler = get_kind_handler(f.kind);
+                    if (handler && handler->has_python()) {
+                        nb::object deserialized = handler->python.deserialize(value);
+                        f.py_setter(obj, deserialized);
+                    } else {
+                        f.py_setter(obj, value);
+                    }
                     return;
                 }
                 if (f.cpp_setter) {
-                    std::any val = KindRegistry::instance().from_python(f.kind, value);
+                    // Convert Python dict to trent, then deserialize to C++ value
+                    nos::trent t = nb_to_trent_compat(value);
+                    std::any val = KindRegistry::instance().deserialize_cpp(f.kind, t, scene);
                     if (val.has_value()) {
                         f.cpp_setter(obj, val);
                         return;
                     }
-                    throw nb::type_error(("No from_python handler for kind: " + f.kind).c_str());
+                    throw nb::type_error(("deserialize_cpp failed for kind: " + f.kind).c_str());
                 }
                 throw nb::type_error(("No setter for field: " + field_path).c_str());
             }

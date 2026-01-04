@@ -183,15 +183,17 @@ class ResourceHandle(Generic[T, AssetT]):
             # Raw object - subclass должен реализовать _serialize_direct
             return self._serialize_direct()
         elif self._asset is not None:
-            if self._asset.source_path:
-                return {
-                    "type": "path",
-                    "path": str(self._asset.source_path),
-                }
-            return {
-                "type": "named",
+            # Always include uuid and name for inspector display
+            result = {
+                "uuid": self._asset.uuid,
                 "name": self._asset.name,
             }
+            if self._asset.source_path:
+                result["type"] = "path"
+                result["path"] = str(self._asset.source_path)
+            else:
+                result["type"] = "named"
+            return result
         else:
             return {"type": "none"}
 

@@ -48,6 +48,7 @@ nb::dict MaterialHandle::serialize() const {
     }
     d["type"] = "uuid";
     d["uuid"] = asset.attr("uuid");
+    d["name"] = asset.attr("name");
     return d;
 }
 

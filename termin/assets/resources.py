@@ -120,12 +120,22 @@ class HandleAccessors:
         list_names: Callable[[], list[str]],
         get_by_name: Callable[[str], Any],
         find_name: Callable[[Any], Optional[str]],
+        find_uuid: Callable[[str], Optional[str]],
         allow_none: bool = True,
     ):
         self.list_names = list_names
         self.get_by_name = get_by_name
         self.find_name = find_name
+        self.find_uuid = find_uuid
         self.allow_none = allow_none
+
+    def list_items(self) -> List[Tuple[str, Optional[str]]]:
+        """Return list of (name, uuid) tuples for all items."""
+        result = []
+        for name in self.list_names():
+            uuid = self.find_uuid(name)
+            result.append((name, uuid))
+        return result
 
 
 class ResourceManager:
@@ -2027,54 +2037,63 @@ class ResourceManager:
                 list_names=self.list_material_names,
                 get_by_name=self._get_material_handle,
                 find_name=self._find_material_handle_name,
+                find_uuid=self._find_material_uuid_by_name,
             )
         if kind == "mesh_handle":
             return HandleAccessors(
                 list_names=self.list_mesh_names,
                 get_by_name=self.get_mesh,
                 find_name=self.find_mesh_name,
+                find_uuid=self._find_mesh_uuid_by_name,
             )
         if kind == "audio_clip_handle":
             return HandleAccessors(
                 list_names=self.list_audio_clip_names,
                 get_by_name=self.get_audio_clip,
                 find_name=self.find_audio_clip_name,
+                find_uuid=self._find_audio_clip_uuid_by_name,
             )
         if kind == "voxel_grid_handle":
             return HandleAccessors(
                 list_names=self.list_voxel_grid_names,
                 get_by_name=self._get_voxel_grid_handle,
                 find_name=self._find_voxel_grid_handle_name,
+                find_uuid=self._find_voxel_grid_uuid_by_name,
             )
         if kind == "navmesh_handle":
             return HandleAccessors(
                 list_names=self.list_navmesh_names,
                 get_by_name=self._get_navmesh_handle,
                 find_name=self._find_navmesh_handle_name,
+                find_uuid=self._find_navmesh_uuid_by_name,
             )
         if kind == "skeleton_handle":
             return HandleAccessors(
                 list_names=self.list_skeleton_names,
                 get_by_name=self._get_skeleton_handle,
                 find_name=self._find_skeleton_handle_name,
+                find_uuid=self._find_skeleton_uuid_by_name,
             )
         if kind == "texture_handle":
             return HandleAccessors(
                 list_names=self.list_texture_names,
                 get_by_name=self.get_texture_handle,
                 find_name=self._find_texture_handle_name,
+                find_uuid=self._find_texture_uuid_by_name,
             )
         if kind == "ui_handle":
             return HandleAccessors(
                 list_names=self.list_ui_names,
                 get_by_name=self._get_ui_handle,
                 find_name=self._find_ui_handle_name,
+                find_uuid=self._find_ui_uuid_by_name,
             )
         if kind == "tc_mesh":
             return HandleAccessors(
                 list_names=self._list_tc_mesh_names,
                 get_by_name=self._get_tc_mesh_by_name,
                 find_name=self._find_tc_mesh_name,
+                find_uuid=self._find_tc_mesh_uuid_by_name,
             )
         return None
 
@@ -2200,6 +2219,53 @@ class ResourceManager:
         if isinstance(mesh, TcMesh) and mesh.is_valid:
             return mesh.name
         return None
+
+    # UUID lookup by name helpers
+    def _find_material_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for material by name."""
+        asset = self._material_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_mesh_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for mesh by name."""
+        asset = self._mesh_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_audio_clip_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for audio clip by name."""
+        asset = self._audio_clip_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_voxel_grid_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for voxel grid by name."""
+        asset = self._voxel_grid_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_navmesh_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for navmesh by name."""
+        asset = self._navmesh_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_skeleton_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for skeleton by name."""
+        asset = self._skeleton_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_texture_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for texture by name."""
+        asset = self._texture_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_ui_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for UI by name."""
+        asset = self._ui_assets.get(name)
+        return asset.uuid if asset else None
+
+    def _find_tc_mesh_uuid_by_name(self, name: str) -> Optional[str]:
+        """Find UUID for TcMesh by name."""
+        asset = self._mesh_assets.get(name)
+        # Use asset.uuid, not asset.data.uuid to avoid triggering lazy loading
+        return asset.uuid if asset else None
 
     def get_handle_by_uuid(self, kind: str, uuid: str) -> Any:
         """

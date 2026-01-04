@@ -67,13 +67,13 @@ public:
         }
         nb::dict d;
         d["uuid"] = asset.attr("uuid");
+        d["name"] = asset.attr("name");
         nb::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
             d["type"] = "path";
             d["path"] = nb::str(source_path.attr("as_posix")());
         } else {
             d["type"] = "named";
-            d["name"] = asset.attr("name");
         }
         return d;
     }
