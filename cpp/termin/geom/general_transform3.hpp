@@ -47,11 +47,7 @@ struct GeneralTransform3 {
         double pos[3] = {pose.lin.x, pose.lin.y, pose.lin.z};
         double rot[4] = {pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w};
         double scale[3] = {pose.scale.x, pose.scale.y, pose.scale.z};
-        tc::Log::debug("[GeneralTransform3::set_local_pose] entity_id=%u pos=(%.3f,%.3f,%.3f) rot=(%.3f,%.3f,%.3f,%.3f) scale=(%.3f,%.3f,%.3f)",
-                      _id.index,
-                      pos[0], pos[1], pos[2],
-                      rot[0], rot[1], rot[2], rot[3],
-                      scale[0], scale[1], scale[2]);
+        
         // tc_entity_pool_set_local_position(_pool, _id, pos);
         // tc_entity_pool_set_local_rotation(_pool, _id, rot);
         // tc_entity_pool_set_local_scale(_pool, _id, scale);

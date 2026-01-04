@@ -3,6 +3,7 @@
 #include "../include/tc_hash_map.h"
 #include "../include/tc_component.h"
 #include "../include/tc_scene.h"
+#include "../include/tc_log.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -10,6 +11,10 @@
 // For Py_INCREF/Py_DECREF on Python components
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+
+// Macro for warning on access to dead entity
+#define WARN_DEAD_ENTITY(func_name, id) \
+    tc_log_warn("[tc_entity_pool] %s: entity (idx=%u, gen=%u) is dead", func_name, id.index, id.generation)
 
 // ============================================================================
 // Internal structures
@@ -232,12 +237,12 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->generations = calloc(initial_capacity, sizeof(uint32_t));
     pool->alive = calloc(initial_capacity, sizeof(bool));
 
-    pool->visible = malloc(initial_capacity * sizeof(bool));
-    pool->active = malloc(initial_capacity * sizeof(bool));
-    pool->pickable = malloc(initial_capacity * sizeof(bool));
-    pool->selectable = malloc(initial_capacity * sizeof(bool));
-    pool->serializable = malloc(initial_capacity * sizeof(bool));
-    pool->transform_dirty = malloc(initial_capacity * sizeof(bool));
+    pool->visible = calloc(initial_capacity, sizeof(bool));
+    pool->active = calloc(initial_capacity, sizeof(bool));
+    pool->pickable = calloc(initial_capacity, sizeof(bool));
+    pool->selectable = calloc(initial_capacity, sizeof(bool));
+    pool->serializable = calloc(initial_capacity, sizeof(bool));
+    pool->transform_dirty = calloc(initial_capacity, sizeof(bool));
     pool->version_for_walking_to_proximal = calloc(initial_capacity, sizeof(uint32_t));
     pool->version_for_walking_to_distal = calloc(initial_capacity, sizeof(uint32_t));
     pool->version_only_my = calloc(initial_capacity, sizeof(uint32_t));
@@ -247,22 +252,20 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->pick_ids = calloc(initial_capacity, sizeof(uint32_t));
     pool->next_pick_id = 1;
 
-    pool->local_positions = malloc(initial_capacity * sizeof(Vec3));
-    pool->local_rotations = malloc(initial_capacity * sizeof(Quat));
-    pool->local_scales = malloc(initial_capacity * sizeof(Vec3));
-    pool->world_positions = malloc(initial_capacity * sizeof(Vec3));
-    pool->world_rotations = malloc(initial_capacity * sizeof(Quat));
-    pool->world_scales = malloc(initial_capacity * sizeof(Vec3));
-    pool->world_matrices = malloc(initial_capacity * 16 * sizeof(double));
+    pool->local_positions = calloc(initial_capacity, sizeof(Vec3));
+    pool->local_rotations = calloc(initial_capacity, sizeof(Quat));
+    pool->local_scales = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_positions = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_rotations = calloc(initial_capacity, sizeof(Quat));
+    pool->world_scales = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_matrices = calloc(initial_capacity * 16, sizeof(double));
 
     pool->names = calloc(initial_capacity, sizeof(char*));
     pool->uuids = calloc(initial_capacity, sizeof(char*));
     pool->runtime_ids = calloc(initial_capacity, sizeof(uint64_t));
 
-    pool->parent_indices = malloc(initial_capacity * sizeof(uint32_t));
-    for (size_t i = 0; i < initial_capacity; i++) {
-        pool->parent_indices[i] = UINT32_MAX;
-    }
+    pool->parent_indices = calloc(initial_capacity, sizeof(uint32_t));
+    memset(pool->parent_indices, 0xFF, initial_capacity * sizeof(uint32_t));
 
     pool->children = calloc(initial_capacity, sizeof(EntityIdArray));
     pool->components = calloc(initial_capacity, sizeof(ComponentArray));
@@ -354,6 +357,8 @@ static void pool_grow(tc_entity_pool* pool) {
     size_t old_cap = pool->capacity;
     size_t new_cap = old_cap * 2;
 
+    tc_log_debug("[tc_entity_pool] Growing pool from %zu to %zu", old_cap, new_cap);
+
     pool->free_stack = realloc(pool->free_stack, new_cap * sizeof(uint32_t));
     for (size_t i = old_cap; i < new_cap; i++) {
         pool->free_stack[pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
@@ -370,6 +375,13 @@ static void pool_grow(tc_entity_pool* pool) {
     pool->selectable = realloc(pool->selectable, new_cap * sizeof(bool));
     pool->serializable = realloc(pool->serializable, new_cap * sizeof(bool));
     pool->transform_dirty = realloc(pool->transform_dirty, new_cap * sizeof(bool));
+    memset(pool->visible + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->active + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->pickable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->selectable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->serializable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->transform_dirty + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+
     pool->version_for_walking_to_proximal = realloc(pool->version_for_walking_to_proximal, new_cap * sizeof(uint32_t));
     pool->version_for_walking_to_distal = realloc(pool->version_for_walking_to_distal, new_cap * sizeof(uint32_t));
     pool->version_only_my = realloc(pool->version_only_my, new_cap * sizeof(uint32_t));
@@ -392,6 +404,13 @@ static void pool_grow(tc_entity_pool* pool) {
     pool->world_rotations = realloc(pool->world_rotations, new_cap * sizeof(Quat));
     pool->world_scales = realloc(pool->world_scales, new_cap * sizeof(Vec3));
     pool->world_matrices = realloc(pool->world_matrices, new_cap * 16 * sizeof(double));
+    memset(pool->local_positions + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->local_rotations + old_cap, 0, (new_cap - old_cap) * sizeof(Quat));
+    memset(pool->local_scales + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_positions + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_rotations + old_cap, 0, (new_cap - old_cap) * sizeof(Quat));
+    memset(pool->world_scales + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_matrices + old_cap * 16, 0, (new_cap - old_cap) * 16 * sizeof(double));
 
     pool->names = realloc(pool->names, new_cap * sizeof(char*));
     pool->uuids = realloc(pool->uuids, new_cap * sizeof(char*));
@@ -401,9 +420,7 @@ static void pool_grow(tc_entity_pool* pool) {
     memset(pool->runtime_ids + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
 
     pool->parent_indices = realloc(pool->parent_indices, new_cap * sizeof(uint32_t));
-    for (size_t i = old_cap; i < new_cap; i++) {
-        pool->parent_indices[i] = UINT32_MAX;
-    }
+    memset(pool->parent_indices + old_cap, 0xFF, (new_cap - old_cap) * sizeof(uint32_t));
 
     pool->children = realloc(pool->children, new_cap * sizeof(EntityIdArray));
     pool->components = realloc(pool->components, new_cap * sizeof(ComponentArray));
@@ -562,23 +579,23 @@ size_t tc_entity_pool_capacity(const tc_entity_pool* pool) {
 // ============================================================================
 
 const char* tc_entity_pool_name(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return NULL;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("name", id); return NULL; }
     return pool->names[id.index];
 }
 
 void tc_entity_pool_set_name(tc_entity_pool* pool, tc_entity_id id, const char* name) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_name", id); return; }
     free(pool->names[id.index]);
     pool->names[id.index] = str_dup(name);
 }
 
 const char* tc_entity_pool_uuid(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return NULL;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("uuid", id); return NULL; }
     return pool->uuids[id.index];
 }
 
 void tc_entity_pool_set_uuid(tc_entity_pool* pool, tc_entity_id id, const char* uuid) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_uuid", id); return; }
     if (!uuid) return;
 
     uint32_t idx = id.index;
@@ -719,37 +736,37 @@ tc_entity_id tc_entity_pool_find_by_uuid(const tc_entity_pool* pool, const char*
 // ============================================================================
 
 void tc_entity_pool_get_local_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_position", id); return; }
     Vec3 p = pool->local_positions[id.index];
     xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
 }
 
 void tc_entity_pool_set_local_position(tc_entity_pool* pool, tc_entity_id id, const double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_position", id); return; }
     pool->local_positions[id.index] = (Vec3){xyz[0], xyz[1], xyz[2]};
     tc_entity_pool_mark_dirty(pool, id);
 }
 
 void tc_entity_pool_get_local_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_rotation", id); return; }
     Quat r = pool->local_rotations[id.index];
     xyzw[0] = r.x; xyzw[1] = r.y; xyzw[2] = r.z; xyzw[3] = r.w;
 }
 
 void tc_entity_pool_set_local_rotation(tc_entity_pool* pool, tc_entity_id id, const double* xyzw) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_rotation", id); return; }
     pool->local_rotations[id.index] = (Quat){xyzw[0], xyzw[1], xyzw[2], xyzw[3]};
     tc_entity_pool_mark_dirty(pool, id);
 }
 
 void tc_entity_pool_get_local_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_scale", id); return; }
     Vec3 s = pool->local_scales[id.index];
     xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
 }
 
 void tc_entity_pool_set_local_scale(tc_entity_pool* pool, tc_entity_id id, const double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_scale", id); return; }
     pool->local_scales[id.index] = (Vec3){xyz[0], xyz[1], xyz[2]};
     tc_entity_pool_mark_dirty(pool, id);
 }
@@ -758,7 +775,7 @@ void tc_entity_pool_get_local_pose(
     const tc_entity_pool* pool, tc_entity_id id,
     double* position, double* rotation, double* scale
 ) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_pose", id); return; }
     uint32_t idx = id.index;
     if (position) {
         Vec3 p = pool->local_positions[idx];
@@ -779,7 +796,7 @@ void tc_entity_pool_set_local_pose(
     tc_entity_pool* pool, tc_entity_id id,
     const double* position, const double* rotation, const double* scale
 ) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_pose", id); return; }
     uint32_t idx = id.index;
     if (position) {
         pool->local_positions[idx] = (Vec3){position[0], position[1], position[2]};
@@ -800,7 +817,7 @@ void tc_entity_pool_get_global_pose(
     const tc_entity_pool* pool, tc_entity_id id,
     double* position, double* rotation, double* scale
 ) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_pose", id); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -864,7 +881,7 @@ void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
 }
 
 void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_position", id); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -874,7 +891,7 @@ void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id
 }
 
 void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_rotation", id); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -884,7 +901,7 @@ void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id
 }
 
 void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_scale", id); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -894,7 +911,7 @@ void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id
 }
 
 void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_world_matrix", id); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -1067,7 +1084,7 @@ void tc_entity_pool_update_transforms(tc_entity_pool* pool) {
 // ============================================================================
 
 tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return TC_ENTITY_ID_INVALID;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("parent", id); return TC_ENTITY_ID_INVALID; }
 
     uint32_t parent_idx = pool->parent_indices[id.index];
     if (parent_idx == UINT32_MAX) return TC_ENTITY_ID_INVALID;
@@ -1077,7 +1094,7 @@ tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id) 
 }
 
 void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_parent", id); return; }
 
     uint32_t idx = id.index;
     uint32_t old_parent_idx = pool->parent_indices[idx];
@@ -1099,12 +1116,12 @@ void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_
 }
 
 size_t tc_entity_pool_children_count(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return 0;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("children_count", id); return 0; }
     return pool->children[id.index].count;
 }
 
 tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id, size_t index) {
-    if (!tc_entity_pool_alive(pool, id)) return TC_ENTITY_ID_INVALID;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("child_at", id); return TC_ENTITY_ID_INVALID; }
     if (index >= pool->children[id.index].count) return TC_ENTITY_ID_INVALID;
     return pool->children[id.index].items[index];
 }
@@ -1114,7 +1131,7 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 // ============================================================================
 
 void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
-    if (!tc_entity_pool_alive(pool, id) || !c) return;
+    if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
 
     // Keep Python object alive while attached to entity
     if (c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
@@ -1138,12 +1155,12 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
 }
 
 size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return 0;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("component_count", id); return 0; }
     return pool->components[id.index].count;
 }
 
 tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_id id, size_t index) {
-    if (!tc_entity_pool_alive(pool, id)) return NULL;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("component_at", id); return NULL; }
     if (index >= pool->components[id.index].count) return NULL;
     return pool->components[id.index].items[index];
 }
@@ -1153,12 +1170,12 @@ tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_
 // ============================================================================
 
 void* tc_entity_pool_data(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return NULL;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("data", id); return NULL; }
     return pool->user_data[id.index];
 }
 
 void tc_entity_pool_set_data(tc_entity_pool* pool, tc_entity_id id, void* data) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_data", id); return; }
     pool->user_data[id.index] = data;
 }
 
