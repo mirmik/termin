@@ -2134,6 +2134,10 @@ class EditorWindow(QMainWindow):
 
         # Render all displays through RenderingController (unified render path)
         if needs_render and self._rendering_controller is not None:
+            # Call before_render on all components (e.g. SkeletonController updates bone matrices)
+            if self.scene is not None:
+                self.scene.before_render()
+
             self._rendering_controller.render_all_displays()
 
             # Editor-specific post-render (picking, hover, etc.) for ALL displays

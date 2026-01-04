@@ -175,6 +175,9 @@ class WebStreamServer:
         # Обновляем сцену
         self.scene.update(1.0 / self.target_fps)
 
+        # Вызываем before_render (например, SkeletonController обновляет матрицы костей)
+        self.scene.before_render()
+
         # Создаём RenderView
         view = RenderView(
             scene=self.scene,

@@ -29,6 +29,12 @@ static void py_vtable_fixed_update(tc_component* c, float dt) {
     }
 }
 
+static void py_vtable_before_render(tc_component* c) {
+    if (g_py_callbacks.before_render && c->py_wrap) {
+        g_py_callbacks.before_render(c->py_wrap);
+    }
+}
+
 static void py_vtable_on_destroy(tc_component* c) {
     if (g_py_callbacks.on_destroy && c->py_wrap) {
         g_py_callbacks.on_destroy(c->py_wrap);
@@ -74,6 +80,7 @@ static const tc_component_vtable g_python_vtable = {
     .start = py_vtable_start,
     .update = py_vtable_update,
     .fixed_update = py_vtable_fixed_update,
+    .before_render = py_vtable_before_render,
     .on_destroy = py_vtable_on_destroy,
     .on_added_to_entity = py_vtable_on_added_to_entity,
     .on_removed_from_entity = py_vtable_on_removed_from_entity,

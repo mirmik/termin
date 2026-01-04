@@ -559,6 +559,15 @@ class Scene:
         finally:
             _current_scene = None
 
+    def before_render(self):
+        """
+        Call before_render() on all components that implement it.
+
+        Should be called once per frame, before rendering begins.
+        Used by SkeletonController to update bone matrices.
+        """
+        self._tc_scene.before_render()
+
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""
         for entity in self.entities:

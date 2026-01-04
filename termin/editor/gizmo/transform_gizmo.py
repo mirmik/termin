@@ -485,6 +485,7 @@ class TransformGizmo(Gizmo):
 
         old_pose = self._target.transform.global_pose()
         new_pose = Pose3(lin=new_position, ang=old_pose.ang)
+
         self._target.transform.relocate_global(new_pose)
 
     def _apply_rotation(self, element: TransformElement, plane_hit: np.ndarray) -> None:

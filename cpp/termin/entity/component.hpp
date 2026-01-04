@@ -80,10 +80,14 @@ public:
     bool has_fixed_update() const { return _c.has_fixed_update; }
     void set_has_fixed_update(bool v) { _c.has_fixed_update = v; }
 
+    bool has_before_render() const { return _c.has_before_render; }
+    void set_has_before_render(bool v) { _c.has_before_render = v; }
+
     // Lifecycle hooks (virtual - subclasses override these)
     virtual void start() {}
     virtual void update(float dt) { (void)dt; }
     virtual void fixed_update(float dt) { (void)dt; }
+    virtual void before_render() {}
     virtual void on_destroy() {}
     virtual void on_editor_start() {}
 
@@ -174,6 +178,7 @@ private:
     static void _cb_start(tc_component* c);
     static void _cb_update(tc_component* c, float dt);
     static void _cb_fixed_update(tc_component* c, float dt);
+    static void _cb_before_render(tc_component* c);
     static void _cb_on_destroy(tc_component* c);
     static void _cb_on_added_to_entity(tc_component* c);
     static void _cb_on_removed_from_entity(tc_component* c);

@@ -45,6 +45,10 @@ TC_API void tc_scene_update(tc_scene* s, double dt);
 // Editor update - only updates components with active_in_editor=true
 TC_API void tc_scene_editor_update(tc_scene* s, double dt);
 
+// Before render - call before_render() on all components that implement it
+// Should be called once per frame, before rendering begins
+TC_API void tc_scene_before_render(tc_scene* s);
+
 // ============================================================================
 // Fixed Timestep Configuration
 // ============================================================================

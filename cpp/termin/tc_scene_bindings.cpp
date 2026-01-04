@@ -104,6 +104,10 @@ public:
         tc_scene_editor_update(_s, dt);
     }
 
+    void before_render() {
+        tc_scene_before_render(_s);
+    }
+
     // Fixed timestep
     double fixed_timestep() const {
         return tc_scene_fixed_timestep(_s);
@@ -279,6 +283,7 @@ void bind_tc_scene(nb::module_& m) {
         // Update loop
         .def("update", &TcScene::update, nb::arg("dt"))
         .def("editor_update", &TcScene::editor_update, nb::arg("dt"))
+        .def("before_render", &TcScene::before_render)
 
         // Fixed timestep
         .def_prop_rw("fixed_timestep", &TcScene::fixed_timestep, &TcScene::set_fixed_timestep)

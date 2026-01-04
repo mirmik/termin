@@ -26,7 +26,7 @@ from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
 from termin.entity import Entity
 
 if TYPE_CHECKING:
-    pass
+    from termin.visualization.core.scene import Scene
 
 
 class EntityListWidget(QWidget):
@@ -51,6 +51,7 @@ class EntityListWidget(QWidget):
     def __init__(
         self,
         read_only: bool = False,
+        scene_getter: Optional[Callable[[], Optional["Scene"]]] = None,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
@@ -58,6 +59,7 @@ class EntityListWidget(QWidget):
         self._entities: List[Entity] = []
         self._read_only = read_only
         self._updating = False
+        self._scene_getter = scene_getter
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -115,20 +117,37 @@ class EntityListWidget(QWidget):
             self._remove_btn = None
 
     def get_value(self) -> list:
-        """Return current list of Entity objects."""
-        return [e for e in self._entities if e.valid()]
+        """Return current list as serialized dicts."""
+        result = []
+        for e in self._entities:
+            if e.valid():
+                result.append({"uuid": e.uuid, "name": e.name})
+        return result
 
-    def set_value(self, items: Optional[list]) -> None:
-        """Set list of entities."""
+    def set_value(self, items: Optional[list], scene=None) -> None:
+        """Set list of entities (accepts Entity objects or dicts with uuid)."""
         self._updating = True
         try:
             self._entities = []
             if items:
+                # Get scene for entity lookup
+                if scene is None and self._scene_getter is not None:
+                    scene = self._scene_getter()
+
                 for item in items:
                     if item is None:
                         continue
                     if isinstance(item, Entity):
                         self._entities.append(item)
+                    elif isinstance(item, dict):
+                        # Serialized format: {"uuid": "...", "name": "..."}
+                        uuid = item.get("uuid")
+                        if uuid and scene is not None:
+                            entity = scene.get_entity(uuid)
+                            if entity is not None and entity.valid():
+                                self._entities.append(entity)
+                            else:
+                                log.debug(f"  [EntityListWidget] Entity not found: {uuid}")
                     else:
                         log.debug(f"  [EntityListWidget] Skipping invalid item: {item}")
             self._rebuild_list()
@@ -182,9 +201,13 @@ class EntityListWidget(QWidget):
             if entity.valid() and entity.uuid == entity_uuid:
                 return
 
-        # Find entity by UUID in registry
-        from termin.entity import EntityRegistry
-        entity = EntityRegistry.instance().get(entity_uuid)
+        # Find entity by UUID in scene
+        scene = self._scene_getter() if self._scene_getter else None
+        if scene is None:
+            log.debug(f"  [EntityListWidget] No scene for entity lookup: {entity_uuid}")
+            return
+
+        entity = scene.get_entity(entity_uuid)
         if entity is not None:
             self._entities.append(entity)
             self._rebuild_list()

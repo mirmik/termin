@@ -33,10 +33,7 @@ void SkinnedMeshRenderer::update_bone_matrices() {
         return;
     }
 
-    // Update skeleton (computes matrices from entity transforms)
-    si->update();
-
-    // Get bone count
+    // Get bone count (skeleton was already updated in SkeletonController::before_render)
     _bone_count = si->bone_count();
     if (_bone_count == 0) {
         _bone_matrices_flat.clear();

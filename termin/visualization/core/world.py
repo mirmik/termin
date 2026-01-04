@@ -312,6 +312,10 @@ class Visualization:
             # Обновляем все сцены
             self.world.update(dt)
 
+            # Вызываем before_render для всех сцен (например, SkeletonController обновляет матрицы костей)
+            for scene in self.scenes:
+                scene.before_render()
+
             alive = []
             for window in list(self.windows):
                 if window.should_close:

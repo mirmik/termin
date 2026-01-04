@@ -103,14 +103,6 @@ Entity SkeletonInstance::find_skeleton_root() {
 void SkeletonInstance::update() {
     if (_bone_entities.empty() || !_data) return;
 
-    static int debug_update = 0;
-    bool debug_this = (debug_update < 3);
-    if (debug_this) {
-        debug_update++;
-        printf("[update] this=%p bones=%zu entities=%zu\n",
-               (void*)this, _data->get_bone_count(), _bone_entities.size());
-    }
-
     // Helper to convert row-major array to column-major Mat44
     auto row_major_to_mat44 = [](const double* src) -> Mat44 {
         Mat44 m;
@@ -150,16 +142,18 @@ void SkeletonInstance::update() {
         // bone_matrix = skeleton_world_inv * bone_world * inv_bind
         _bone_matrices[bone.index] = skeleton_world_inv * bone_world * inv_bind;
 
-        if (debug_this && bone.index == 0) {
+        // Debug: check if bone_matrix[0] is reasonable (should be ~identity in T-pose)
+        if (bone.index == 0) {
             const Mat44& m = _bone_matrices[0];
-            printf("  bone[0] result translation: %f %f %f\n",
-                   m(3,0), m(3,1), m(3,2));
-            printf("  bone_world translation: %f %f %f\n",
-                   bone_world(3,0), bone_world(3,1), bone_world(3,2));
-            printf("  inv_bind translation: %f %f %f\n",
-                   inv_bind(3,0), inv_bind(3,1), inv_bind(3,2));
-            printf("  skeleton_world_inv translation: %f %f %f\n",
-                   skeleton_world_inv(3,0), skeleton_world_inv(3,1), skeleton_world_inv(3,2));
+            static bool printed = false;
+            if (!printed) {
+                printed = true;
+                printf("[SkeletonInstance] bone_matrix[0] (should be ~identity in bind pose):\n");
+                printf("  [%.3f %.3f %.3f %.3f]\n", m(0,0), m(0,1), m(0,2), m(0,3));
+                printf("  [%.3f %.3f %.3f %.3f]\n", m(1,0), m(1,1), m(1,2), m(1,3));
+                printf("  [%.3f %.3f %.3f %.3f]\n", m(2,0), m(2,1), m(2,2), m(2,3));
+                printf("  [%.3f %.3f %.3f %.3f]\n", m(3,0), m(3,1), m(3,2), m(3,3));
+            }
         }
     }
 }

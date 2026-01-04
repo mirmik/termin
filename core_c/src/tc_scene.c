@@ -69,6 +69,7 @@ struct tc_scene {
     ComponentList pending_start;
     ComponentList update_list;
     ComponentList fixed_update_list;
+    ComponentList before_render_list;
 
     // Fixed timestep
     double fixed_timestep;
@@ -94,6 +95,7 @@ tc_scene* tc_scene_new(void) {
     list_init(&s->pending_start);
     list_init(&s->update_list);
     list_init(&s->fixed_update_list);
+    list_init(&s->before_render_list);
     s->fixed_timestep = 1.0 / 60.0;
     s->accumulated_time = 0.0;
     s->type_heads = tc_resource_map_new(NULL);  // No destructor - components are not owned
@@ -113,6 +115,7 @@ void tc_scene_free(tc_scene* s) {
     list_free(&s->pending_start);
     list_free(&s->update_list);
     list_free(&s->fixed_update_list);
+    list_free(&s->before_render_list);
     tc_resource_map_free(s->type_heads);
     tc_entity_pool_destroy(s->pool);
     free(s);
@@ -142,6 +145,9 @@ void tc_scene_register_component(tc_scene* s, tc_component* c) {
     if (c->has_fixed_update && !list_contains(&s->fixed_update_list, c)) {
         list_push(&s->fixed_update_list, c);
     }
+    if (c->has_before_render && !list_contains(&s->before_render_list, c)) {
+        list_push(&s->before_render_list, c);
+    }
 
     // Add to type list (intrusive doubly-linked list)
     const char* type_name = tc_component_type_name(c);
@@ -169,6 +175,7 @@ void tc_scene_unregister_component(tc_scene* s, tc_component* c) {
     list_remove(&s->pending_start, c);
     list_remove(&s->update_list, c);
     list_remove(&s->fixed_update_list, c);
+    list_remove(&s->before_render_list, c);
 
     // Remove from type list (O(1) unlink)
     const char* type_name = tc_component_type_name(c);
@@ -289,6 +296,21 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
 
     // Update entity transforms
     tc_entity_pool_update_transforms(s->pool);
+}
+
+void tc_scene_before_render(tc_scene* s) {
+    if (!s) return;
+
+    bool profile = tc_profiler_enabled();
+
+    for (size_t i = 0; i < s->before_render_list.count; i++) {
+        tc_component* c = s->before_render_list.items[i];
+        if (c->enabled) {
+            if (profile) tc_profiler_begin_section(tc_component_type_name(c));
+            tc_component_before_render(c);
+            if (profile) tc_profiler_end_section();
+        }
+    }
 }
 
 // ============================================================================

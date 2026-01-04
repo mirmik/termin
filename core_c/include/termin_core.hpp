@@ -242,6 +242,7 @@ public:
     virtual void start() {}
     virtual void update(float dt) { (void)dt; }
     virtual void fixed_update(float dt) { (void)dt; }
+    virtual void before_render() {}
     virtual void on_destroy() {}
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
@@ -456,6 +457,10 @@ inline void component_fixed_update(tc_component* c, float dt) {
     if (c && c->data) static_cast<Component*>(c->data)->fixed_update(dt);
 }
 
+inline void component_before_render(tc_component* c) {
+    if (c && c->data) static_cast<Component*>(c->data)->before_render();
+}
+
 inline void component_on_destroy(tc_component* c) {
     if (c && c->data) static_cast<Component*>(c->data)->on_destroy();
 }
@@ -480,6 +485,7 @@ inline const tc_component_vtable cpp_component_vtable = {
     component_start,
     component_update,
     component_fixed_update,
+    component_before_render,
     component_on_destroy,
     component_on_added_to_entity,
     component_on_removed_from_entity,

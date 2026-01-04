@@ -8,6 +8,7 @@ SkeletonController::SkeletonController()
     : CxxComponent()
 {
     _type_name = "SkeletonController";
+    _c.has_before_render = true;
 }
 
 void SkeletonController::start() {
@@ -57,6 +58,12 @@ SkeletonInstance* SkeletonController::skeleton_instance() {
 
 void SkeletonController::invalidate_instance() {
     _skeleton_instance.reset();
+}
+
+void SkeletonController::before_render() {
+    if (_skeleton_instance != nullptr) {
+        _skeleton_instance->update();
+    }
 }
 
 } // namespace termin

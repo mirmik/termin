@@ -71,6 +71,11 @@ public:
      */
     void start() override;
 
+    /**
+     * Called before render to update bone matrices once per frame.
+     */
+    void before_render() override;
+
     INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton_handle")
     INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity]")
 };

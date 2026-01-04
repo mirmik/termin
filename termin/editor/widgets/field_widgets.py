@@ -684,7 +684,10 @@ class FieldWidgetFactory:
         if kind == "entity_list" or kind == "list[entity]":
             from termin.editor.widgets.entity_list_widget import EntityListWidget
 
-            return EntityListWidget(read_only=field.read_only)
+            return EntityListWidget(
+                read_only=field.read_only,
+                scene_getter=self._scene_getter,
+            )
 
         if kind == "animation_clip_handle_list" or kind == "list[animation_clip_handle]":
             from termin.editor.widgets.generic_list_widget import GenericListWidget

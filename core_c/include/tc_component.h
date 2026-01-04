@@ -47,6 +47,7 @@ struct tc_component_vtable {
     void (*start)(tc_component* self);
     void (*update)(tc_component* self, float dt);
     void (*fixed_update)(tc_component* self, float dt);
+    void (*before_render)(tc_component* self);
     void (*on_destroy)(tc_component* self);
 
     // Entity relationship
@@ -105,6 +106,7 @@ struct tc_component {
     bool _started;
     bool has_update;
     bool has_fixed_update;
+    bool has_before_render;
 
     // Intrusive list for scene's type-based component lists
     // Linked when registered with scene, unlinked on unregister
@@ -129,6 +131,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->_started = false;
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
+    c->has_before_render = (vtable && vtable->before_render != NULL);
     c->type_prev = NULL;
     c->type_next = NULL;
 }
@@ -153,6 +156,12 @@ static inline void tc_component_update(tc_component* c, float dt) {
 static inline void tc_component_fixed_update(tc_component* c, float dt) {
     if (c && c->enabled && c->vtable && c->vtable->fixed_update) {
         c->vtable->fixed_update(c, dt);
+    }
+}
+
+static inline void tc_component_before_render(tc_component* c) {
+    if (c && c->enabled && c->vtable && c->vtable->before_render) {
+        c->vtable->before_render(c);
     }
 }
 
