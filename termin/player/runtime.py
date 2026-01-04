@@ -48,6 +48,11 @@ class PlayerRuntime:
         self.delta_time = 1.0 / self.target_fps
         self.last_time = 0.0
 
+        # Display/Viewport/Input
+        self._display = None
+        self._viewport = None
+        self._input_manager = None
+
     def initialize(self) -> bool:
         """Initialize player systems."""
         from termin._native import log
@@ -56,6 +61,12 @@ class PlayerRuntime:
 
         # Register components
         self._register_components()
+
+        # Scan project assets
+        self._scan_project_assets()
+
+        # Ensure GLSL fallback loader is set up (import triggers setup)
+        import termin.visualization.render.glsl_preprocessor  # noqa: F401
 
         # Create default pipeline
         from termin.visualization.core.viewport import make_default_pipeline
@@ -104,6 +115,9 @@ class PlayerRuntime:
         # Find or create camera
         self._setup_camera()
 
+        # Set up input handling
+        self._setup_input()
+
         log.info("[PlayerRuntime] Initialization complete")
         return True
 
@@ -116,6 +130,75 @@ class PlayerRuntime:
         rm.register_builtin_meshes()
         rm.register_builtin_frame_passes()
         rm.register_builtin_post_effects()
+
+    def _scan_project_assets(self):
+        """Scan project directory for assets and register them."""
+        import os
+        from termin._native import log
+        from termin.assets.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+
+        # Create pre-loaders
+        from termin.editor.file_processors import (
+            MaterialPreLoader,
+            ShaderFileProcessor,
+            TextureFileProcessor,
+            ComponentFileProcessor,
+            MeshFileProcessor,
+            GLBPreLoader,
+            PrefabPreLoader,
+            AudioPreLoader,
+            GlslPreLoader,
+        )
+
+        preloaders = [
+            GlslPreLoader(rm),
+            ShaderFileProcessor(rm),
+            TextureFileProcessor(rm),
+            MaterialPreLoader(rm),
+            ComponentFileProcessor(rm),
+            MeshFileProcessor(rm),
+            GLBPreLoader(rm),
+            PrefabPreLoader(rm),
+            AudioPreLoader(rm),
+        ]
+
+        # Build extension -> preloader map
+        ext_map = {}
+        for pl in preloaders:
+            for ext in pl.extensions:
+                ext_map[ext] = pl
+
+        # Collect files sorted by priority
+        pending = []  # (priority, path, preloader)
+        for root, dirs, files in os.walk(self.project_path):
+            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+            for filename in files:
+                if filename.startswith("."):
+                    continue
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in ext_map:
+                    pl = ext_map[ext]
+                    path = os.path.join(root, filename)
+                    pending.append((pl.priority, path, pl))
+
+        # Sort by priority
+        pending.sort(key=lambda x: (x[0], x[1]))
+
+        # Process files
+        loaded_count = 0
+        for _priority, path, pl in pending:
+            try:
+                result = pl.preload(path)
+                if result is not None:
+                    log.info(f"[PlayerRuntime] Loading {result.resource_type}: {os.path.basename(path)}")
+                    rm.register_file(result)
+                    loaded_count += 1
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to load {path}: {e}")
+
+        log.info(f"[PlayerRuntime] Loaded {loaded_count} project assets")
 
     def _setup_camera(self):
         """Find existing camera or create default one."""
@@ -142,6 +225,32 @@ class PlayerRuntime:
         # Position camera
         camera_entity.transform.set_local_position(0, 2, 5)
         log.info("[PlayerRuntime] Created default camera at (0, 2, 5)")
+
+    def _setup_input(self):
+        """Set up Display, Viewport and input handling."""
+        from termin.visualization.core.display import Display
+        from termin.visualization.core.viewport import Viewport
+        from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+
+        # Create display
+        self._display = Display(self.surface)
+
+        # Create viewport (fullscreen)
+        self._viewport = Viewport(
+            scene=self.scene,
+            camera=self.camera,
+            rect=(0.0, 0.0, 1.0, 1.0),
+            display=self._display,
+            pipeline=self._pipeline,
+        )
+        self._display.add_viewport(self._viewport)
+        self.camera.add_viewport(self._viewport)
+
+        # Create input manager
+        self._input_manager = SimpleDisplayInputManager(
+            backend_window=self.window,
+            display=self._display,
+        )
 
     def run(self):
         """Run the game loop."""

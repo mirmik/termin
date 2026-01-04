@@ -499,7 +499,11 @@ class ResourceManager:
         from termin.editor.project_file_watcher import PreLoadResult
         import os
 
-        name = os.path.splitext(os.path.basename(result.path))[0]
+        # For glsl files, keep the extension (used in #include "lighting.glsl")
+        if result.resource_type == "glsl":
+            name = os.path.basename(result.path)
+        else:
+            name = os.path.splitext(os.path.basename(result.path))[0]
 
         # Dispatch by resource type
         if result.resource_type == "material":
@@ -535,7 +539,11 @@ class ResourceManager:
         """
         import os
 
-        name = os.path.splitext(os.path.basename(result.path))[0]
+        # For glsl files, keep the extension (used in #include "lighting.glsl")
+        if result.resource_type == "glsl":
+            name = os.path.basename(result.path)
+        else:
+            name = os.path.splitext(os.path.basename(result.path))[0]
 
         if result.resource_type == "material":
             self._reload_material_file(name, result)

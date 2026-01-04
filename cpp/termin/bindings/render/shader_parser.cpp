@@ -23,7 +23,22 @@ void bind_shader_parser(nb::module_& m) {
         .def_static("has_includes", &GlslPreprocessor::has_includes)
         .def("preprocess", &GlslPreprocessor::preprocess,
             nb::arg("source"), nb::arg("source_name") = "<unknown>",
-            "Preprocess GLSL source, resolving #include directives");
+            "Preprocess GLSL source, resolving #include directives")
+        .def("set_fallback_loader", [](GlslPreprocessor& pp, nb::object callback) {
+            if (callback.is_none()) {
+                pp.set_fallback_loader(nullptr);
+            } else {
+                pp.set_fallback_loader([callback](const std::string& name) -> bool {
+                    nb::gil_scoped_acquire guard;
+                    try {
+                        return nb::cast<bool>(callback(name));
+                    } catch (const std::exception& e) {
+                        return false;
+                    }
+                });
+            }
+        }, nb::arg("callback"),
+            "Set fallback loader callback for lazy-loading includes");
 
     m.def("glsl_preprocessor", &glsl_preprocessor, nb::rv_policy::reference,
         "Get the global GLSL preprocessor instance");

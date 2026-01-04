@@ -109,7 +109,7 @@ public:
 
         // Preprocess if needed
         if (preprocess) {
-            const auto& pp = glsl_preprocessor();
+            auto& pp = glsl_preprocessor();
             std::string name = source_path_.empty() ? "<inline>" : source_path_;
 
             if (GlslPreprocessor::has_includes(vs)) {

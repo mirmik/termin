@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
+#include <functional>
 
 namespace termin {
 
@@ -15,9 +16,22 @@ namespace termin {
  *
  * Include files must be registered before preprocessing.
  * Supports recursive includes with cycle detection.
+ * Has a fallback loader callback for lazy-loading from Python.
  */
 class GlslPreprocessor {
 public:
+    // Callback type for fallback loading: takes include name, returns true if loaded
+    using FallbackLoader = std::function<bool(const std::string&)>;
+
+    /**
+     * Set fallback loader callback.
+     * Called when an include is not found in the registry.
+     * The callback should load the include and register it, then return true.
+     */
+    void set_fallback_loader(FallbackLoader loader) {
+        fallback_loader_ = std::move(loader);
+    }
+
     /**
      * Register an include file.
      *
@@ -74,7 +88,7 @@ public:
      * @return Processed source with includes resolved
      * @throws std::runtime_error if include not found or circular include
      */
-    std::string preprocess(const std::string& source, const std::string& source_name = "<unknown>") const {
+    std::string preprocess(const std::string& source, const std::string& source_name = "<unknown>") {
         std::unordered_set<std::string> included;
         return preprocess_impl(source, source_name, included);
     }
@@ -84,7 +98,7 @@ private:
         const std::string& source,
         const std::string& source_name,
         std::unordered_set<std::string>& included
-    ) const {
+    ) {
         static const std::regex include_pattern(R"(^\s*#\s*include\s+[<"]([^>"]+)[>"])");
 
         std::string result;
@@ -98,12 +112,6 @@ private:
             if (std::regex_search(line, match, include_pattern)) {
                 std::string include_name = match[1].str();
 
-                // Strip .glsl suffix
-                if (include_name.size() > 5 &&
-                    include_name.substr(include_name.size() - 5) == ".glsl") {
-                    include_name = include_name.substr(0, include_name.size() - 5);
-                }
-
                 // Check for circular include
                 if (included.find(include_name) != included.end()) {
                     throw std::runtime_error(
@@ -115,10 +123,16 @@ private:
                 // Get include source
                 auto it = includes_.find(include_name);
                 if (it == includes_.end()) {
-                    throw std::runtime_error(
-                        "GLSL include not found: '" + include_name +
-                        "' (included from '" + source_name + "')"
-                    );
+                    // Try fallback loader
+                    if (fallback_loader_ && fallback_loader_(include_name)) {
+                        it = includes_.find(include_name);
+                    }
+                    if (it == includes_.end()) {
+                        throw std::runtime_error(
+                            "GLSL include not found: '" + include_name +
+                            "' (included from '" + source_name + "')"
+                        );
+                    }
                 }
 
                 // Recursively preprocess
@@ -141,6 +155,7 @@ private:
     }
 
     std::unordered_map<std::string, std::string> includes_;
+    FallbackLoader fallback_loader_;
 };
 
 /**

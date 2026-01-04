@@ -10,6 +10,29 @@ class GlslPreprocessorError(Exception):
     """Error during GLSL preprocessing."""
 
 
+def _glsl_fallback_loader(name: str) -> bool:
+    """Load GLSL include from ResourceManager if not already registered."""
+    from termin._native import log
+    from termin.assets.resources import ResourceManager
+
+    try:
+        rm = ResourceManager.instance()
+        asset = rm.glsl.get_asset(name)
+        if asset is None:
+            log.error(f"[GlslPreprocessor] Fallback: glsl '{name}' not found in ResourceManager")
+            return False
+
+        asset.ensure_loaded()
+        return glsl_preprocessor().has_include(name)
+    except Exception as e:
+        log.error(f"[GlslPreprocessor] Fallback loader error for GLSL include '{name}': {e}")
+        return False
+
+
+# Set up fallback loader on module import
+glsl_preprocessor().set_fallback_loader(_glsl_fallback_loader)
+
+
 def preprocess_glsl(source: str, source_name: str = "<unknown>") -> str:
     """
     Preprocess GLSL source, resolving #include directives.
