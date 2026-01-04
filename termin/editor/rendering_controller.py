@@ -100,17 +100,14 @@ class RenderingController:
         # Map display id -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
 
-        # Map display id -> input mode string ("none", "simple", "editor")
-        self._display_input_modes: dict[int, str] = {}
-
-        # Map display id -> block input when running in editor
-        self._display_block_input_in_editor: dict[int, bool] = {}
-
         # Editor display ID (not serialized, created before scene)
         self._editor_display_id: Optional[int] = None
 
         # RenderEngine (created lazily when graphics is available)
         self._render_engine: Optional["RenderEngine"] = None
+
+        # Register display factory with RenderingManager
+        self._manager.set_display_factory(self._create_display_for_name)
 
         self._connect_signals()
 
@@ -147,6 +144,223 @@ class RenderingController:
         self._get_editor_pipeline = getter
         # Also update ViewportInspector
         self._inspector.viewport_inspector.set_editor_pipeline_getter(getter)
+
+    # --- Display Factory ---
+
+    def _create_display_for_name(self, name: str) -> Optional["Display"]:
+        """
+        Factory callback for RenderingManager.
+
+        Creates a new display with SDL window embedded in Qt tab.
+
+        Args:
+            name: Display name.
+
+        Returns:
+            Created Display or None if creation failed.
+        """
+        if self._get_sdl_backend is None or self._center_tabs is None:
+            return None
+
+        sdl_backend = self._get_sdl_backend()
+        if sdl_backend is None:
+            return None
+
+        # Create tab container widget
+        tab_container = QWidget()
+        tab_layout = QVBoxLayout(tab_container)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.setSpacing(0)
+
+        # Create SDL window with OpenGL context
+        backend_window = sdl_backend.create_embedded_window(
+            width=800,
+            height=600,
+            title=name,
+        )
+
+        # Embed SDL window into Qt via QWindow.fromWinId
+        native_handle = backend_window.native_handle
+        qwindow = QWindow.fromWinId(native_handle)
+        gl_widget = QWidget.createWindowContainer(qwindow, tab_container)
+        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        gl_widget.setMinimumSize(50, 50)
+        tab_layout.addWidget(gl_widget)
+
+        # Create WindowRenderSurface and Display
+        from termin.visualization.render.surface import WindowRenderSurface
+        from termin.visualization.core.display import Display
+
+        surface = WindowRenderSurface(backend_window)
+        display = Display(surface, name=name)
+
+        # Store mapping (include qwindow to prevent GC)
+        display_id = id(display)
+        self._display_tabs[display_id] = (tab_container, backend_window, qwindow)
+
+        # Add tab to center widget
+        self._center_tabs.addTab(tab_container, name)
+
+        # Update viewport list
+        self._viewport_list.add_display(display, name)
+
+        return display
+
+    def attach_scene(self, scene: "Scene") -> List["Viewport"]:
+        """
+        Attach scene using its viewport configuration.
+
+        Creates displays via factory, mounts viewports, sets up input managers.
+
+        Args:
+            scene: Scene with viewport_configs to attach.
+
+        Returns:
+            List of created viewports.
+        """
+        from termin.visualization.core.viewport_config import ViewportConfig
+
+        # Use RenderingManager to create viewports
+        viewports = self._manager.attach_scene(scene)
+
+        # Set up input managers for each display based on viewport configs
+        # Group viewports by display
+        display_viewports: dict[int, list[tuple["Viewport", ViewportConfig]]] = {}
+
+        for viewport in viewports:
+            if viewport.display is None:
+                continue
+            display_id = id(viewport.display)
+
+            # Find matching ViewportConfig
+            config = self._find_viewport_config(scene, viewport)
+            if config is None:
+                continue
+
+            if display_id not in display_viewports:
+                display_viewports[display_id] = []
+            display_viewports[display_id].append((viewport, config))
+
+        # Set up input for each display
+        for display_id, vp_configs in display_viewports.items():
+            if not vp_configs:
+                continue
+
+            # Use first viewport's input mode for the display
+            viewport, config = vp_configs[0]
+            display = viewport.display
+            if display is None:
+                continue
+
+            # Skip editor display - it has its own input handling
+            if display_id == self._editor_display_id:
+                continue
+
+            self._setup_display_input(display, config.input_mode)
+
+        # Refresh UI
+        self._viewport_list.refresh()
+        self._request_update()
+
+        return viewports
+
+    def _find_viewport_config(self, scene: "Scene", viewport: "Viewport"):
+        """Find ViewportConfig that matches a viewport."""
+        from termin.visualization.core.viewport_config import ViewportConfig
+
+        if viewport.display is None or viewport.camera is None:
+            return None
+
+        display_name = viewport.display.name
+        camera_uuid = ""
+        if viewport.camera.entity is not None:
+            camera_uuid = viewport.camera.entity.uuid
+
+        for config in scene.viewport_configs:
+            if config.display_name == display_name and config.camera_uuid == camera_uuid:
+                return config
+
+        return None
+
+    def _setup_display_input(self, display: "Display", input_mode: str) -> None:
+        """
+        Set up input manager for a display.
+
+        Args:
+            display: Display to set up input for.
+            input_mode: Input mode ("none", "simple", "editor").
+        """
+        display_id = id(display)
+
+        # Get backend window
+        tab_info = self._display_tabs.get(display_id)
+        if tab_info is None:
+            return
+
+        _tab_container, backend_window, _qwindow = tab_info
+
+        # Remove old input manager
+        if display_id in self._display_input_managers:
+            del self._display_input_managers[display_id]
+
+        # Clear callbacks first
+        backend_window.set_cursor_pos_callback(None)
+        backend_window.set_scroll_callback(None)
+        backend_window.set_mouse_button_callback(None)
+        backend_window.set_key_callback(None)
+
+        if input_mode == "none":
+            pass
+        elif input_mode == "simple":
+            from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+
+            input_manager = SimpleDisplayInputManager(
+                backend_window=backend_window,
+                display=display,
+                on_request_update=self._request_update,
+            )
+            self._display_input_managers[display_id] = input_manager
+        elif input_mode == "editor":
+            # Editor mode is handled by EditorWindow via callback
+            if self._on_display_input_mode_changed_callback is not None:
+                self._on_display_input_mode_changed_callback(display, input_mode)
+
+    def detach_scene(self, scene: "Scene") -> None:
+        """
+        Detach scene from all displays.
+
+        Removes viewports and cleans up input managers for non-editor displays.
+
+        Args:
+            scene: Scene to detach.
+        """
+        # Get displays that will lose all viewports
+        displays_to_check = set()
+        for display in self._manager.displays:
+            for viewport in display.viewports:
+                if viewport.scene is scene:
+                    displays_to_check.add(id(display))
+
+        # Detach scene
+        self._manager.detach_scene(scene)
+
+        # Clean up input managers for displays that now have no viewports
+        for display_id in displays_to_check:
+            # Find display
+            display = None
+            for d in self._manager.displays:
+                if id(d) == display_id:
+                    display = d
+                    break
+
+            if display is not None and not display.viewports:
+                # Remove input manager
+                if display_id in self._display_input_managers:
+                    del self._display_input_managers[display_id]
+
+        # Refresh UI
+        self._viewport_list.refresh()
+        self._request_update()
 
     @property
     def displays(self) -> List["Display"]:
@@ -275,17 +489,14 @@ class RenderingController:
 
         # Create surface and display (editor_only=True by default)
         surface = WindowRenderSurface(backend_window)
-        display = Display(surface, editor_only=True)
+        display = Display(surface, name="Editor", editor_only=True)
 
         # Store mapping
         display_id = id(display)
         self._display_tabs[display_id] = (container, backend_window, qwindow)
         self._editor_display_id = display_id
 
-        # Editor display uses EditorDisplayInputManager (managed by EditorViewportFeatures)
-        self._display_input_modes[display_id] = "editor"
-
-        # Add to displays list
+        # Add to displays list (editor display input is managed by EditorViewportFeatures)
         self.add_display(display, "Editor")
 
         return display, backend_window
@@ -362,11 +573,15 @@ class RenderingController:
             name = self._manager.get_display_name(display)
             self._inspector.show_display_inspector(display, name)
 
-            # Set current input mode and block state in inspector
-            display_id = id(display)
-            input_mode = self._display_input_modes.get(display_id, "none")
+            # Get input mode from first viewport (if any)
+            input_mode = "none"
+            block_in_editor = False
+            if display.viewports:
+                first_vp = display.viewports[0]
+                input_mode = first_vp.input_mode
+                block_in_editor = first_vp.block_input_in_editor
+
             self._inspector.display_inspector.set_input_mode(input_mode)
-            block_in_editor = self._display_block_input_in_editor.get(display_id, False)
             self._inspector.display_inspector.set_block_input_in_editor(block_in_editor)
 
             if self._on_display_selected is not None:
@@ -459,9 +674,6 @@ class RenderingController:
         # Store input manager to prevent GC
         self._display_input_managers[display_id] = input_manager
 
-        # Store input mode
-        self._display_input_modes[display_id] = "simple"
-
         # Add display (this will call _update_center_tabs)
         self.add_display(display, name)
         self._request_update()
@@ -544,7 +756,11 @@ class RenderingController:
     def _apply_display_input_mode(self, display: "Display", backend_window, mode: str) -> None:
         """Apply input mode to a display."""
         display_id = id(display)
-        is_blocked = self._display_block_input_in_editor.get(display_id, False)
+
+        # Check if blocked from first viewport
+        is_blocked = False
+        if display.viewports:
+            is_blocked = display.viewports[0].block_input_in_editor
 
         # Remove old input manager (if managed here, not by EditorViewportFeatures)
         if display_id in self._display_input_managers:
@@ -574,8 +790,9 @@ class RenderingController:
             # It will create EditorViewportFeatures which owns EditorDisplayInputManager
             pass
 
-        # Store mode
-        self._display_input_modes[display_id] = mode
+        # Update viewport input_mode
+        for viewport in display.viewports:
+            viewport.input_mode = mode
 
     def _on_display_block_input_in_editor_changed(self, blocked: bool) -> None:
         """Handle 'block input in editor' checkbox change from inspector."""
@@ -583,13 +800,15 @@ class RenderingController:
             return
 
         display = self._selected_display
-        display_id = id(display)
 
-        # Store blocked state
-        self._display_block_input_in_editor[display_id] = blocked
+        # Update blocked state on all viewports
+        for viewport in display.viewports:
+            viewport.block_input_in_editor = blocked
 
         # Reapply current mode (which will check blocked flag)
-        mode = self._display_input_modes.get(display_id, "simple")
+        mode = "simple"
+        if display.viewports:
+            mode = display.viewports[0].input_mode
         self._on_display_input_mode_changed(mode)
 
     def _on_viewport_display_changed(self, new_display: "Display") -> None:
@@ -759,18 +978,25 @@ class RenderingController:
                 return True
         return False
 
-    # --- Serialization ---
+    # --- Serialization (DEPRECATED - use Scene.viewport_configs instead) ---
 
     def serialize_displays(self) -> list:
         """
-        Сериализует конфигурацию всех дисплеев.
+        DEPRECATED: Use Scene.viewport_configs for serialization.
 
+        Сериализует конфигурацию всех дисплеев.
         Возвращает список дисплеев с их viewport'ами.
         """
         result = []
         for display in self._manager.displays:
-            display_id = id(display)
             name = self._manager.get_display_name(display)
+
+            # Get input mode from first viewport
+            input_mode = "simple"
+            block_input = False
+            if display.viewports:
+                input_mode = display.viewports[0].input_mode
+                block_input = display.viewports[0].block_input_in_editor
 
             # Сериализуем все viewport'ы дисплея
             viewports_data = []
@@ -780,8 +1006,8 @@ class RenderingController:
             result.append({
                 "name": name,
                 "editor_only": display.editor_only,
-                "input_mode": self._display_input_modes.get(display_id, "simple"),
-                "block_input_in_editor": self._display_block_input_in_editor.get(display_id, False),
+                "input_mode": input_mode,
+                "block_input_in_editor": block_input,
                 "viewports": viewports_data,
             })
 
@@ -789,6 +1015,8 @@ class RenderingController:
 
     def restore_displays(self, data: list, scene: "Scene") -> None:
         """
+        DEPRECATED: Use attach_scene() with Scene.viewport_configs instead.
+
         Восстанавливает конфигурацию дисплеев из сериализованных данных.
 
         Args:
@@ -838,6 +1066,8 @@ class RenderingController:
                     main_vp = editor_display.viewports[0]
                     main_vp.rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
                     main_vp.depth = vp_data.get("depth", 0)
+                    main_vp.input_mode = vp_data.get("input_mode", input_mode)
+                    main_vp.block_input_in_editor = vp_data.get("block_input_in_editor", block_input)
                     # Камеру Editor viewport'а не меняем - она управляется EditorCameraManager
             else:
                 # Запоминаем количество дисплеев до создания
@@ -855,21 +1085,13 @@ class RenderingController:
                 self.set_display_name(new_display, name)
                 new_display.editor_only = editor_only
 
-                # Восстанавливаем input mode и block_input
-                display_id = id(new_display)
-                self._display_input_modes[display_id] = input_mode
-                self._display_block_input_in_editor[display_id] = block_input
-
-                # Применяем input mode (пересоздаём input manager если нужно)
-                backend_window = self.get_display_backend_window(new_display)
-                if backend_window is not None:
-                    self._apply_display_input_mode(new_display, backend_window, input_mode)
-
                 # Создаём viewport'ы
                 for vp_data in viewports_data:
                     camera_entity_name = vp_data.get("camera_entity")
                     rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
                     depth = vp_data.get("depth", 0)
+                    vp_input_mode = vp_data.get("input_mode", input_mode)
+                    vp_block_input = vp_data.get("block_input_in_editor", block_input)
 
                     # Ищем камеру по имени сущности
                     camera = None
@@ -887,6 +1109,14 @@ class RenderingController:
                             rect=rect,
                         )
                         viewport.depth = depth
+                        viewport.input_mode = vp_input_mode
+                        viewport.block_input_in_editor = vp_block_input
+
+                # Apply input mode for first viewport
+                if new_display.viewports:
+                    backend_window = self.get_display_backend_window(new_display)
+                    if backend_window is not None:
+                        self._setup_display_input(new_display, new_display.viewports[0].input_mode)
 
         # Обновляем UI
         self._viewport_list.refresh()

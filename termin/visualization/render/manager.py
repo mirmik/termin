@@ -12,7 +12,11 @@ No Qt dependencies - can be used in standalone player or editor.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple  # Dict still needed for viewport_states
+
+# Type alias for display factory callback
+# Takes display name, returns Display or None
+DisplayFactory = Callable[[str], Optional["Display"]]
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
@@ -51,7 +55,6 @@ class RenderingManager:
             raise RuntimeError("Use RenderingManager.instance() instead of constructor")
 
         self._displays: List["Display"] = []
-        self._display_names: Dict[int, str] = {}
 
         # Map display id -> dict of viewport id -> ViewportRenderState
         self._viewport_states: Dict[int, Dict[int, "ViewportRenderState"]] = {}
@@ -65,6 +68,9 @@ class RenderingManager:
         # Default pipeline (optional)
         self._default_pipeline: Optional["RenderPipeline"] = None
 
+        # Display factory callback (creates displays on demand)
+        self._display_factory: Optional[DisplayFactory] = None
+
     # --- Configuration ---
 
     def set_graphics(self, graphics: "GraphicsBackend") -> None:
@@ -74,6 +80,19 @@ class RenderingManager:
     def set_default_pipeline(self, pipeline: "RenderPipeline") -> None:
         """Set default pipeline for new viewports."""
         self._default_pipeline = pipeline
+
+    def set_display_factory(self, factory: DisplayFactory) -> None:
+        """
+        Set callback for creating displays on demand.
+
+        The factory is called when attach_scene() needs a display that
+        doesn't exist yet. It receives the display name and should return
+        a Display or None if creation fails.
+
+        Args:
+            factory: Callable[[str], Display | None]
+        """
+        self._display_factory = factory
 
     @property
     def graphics(self) -> Optional["GraphicsBackend"]:
@@ -98,7 +117,7 @@ class RenderingManager:
 
         Args:
             display: Display to add.
-            name: Optional display name.
+            name: Optional display name (sets display.name if provided).
         """
         if display in self._displays:
             return
@@ -107,9 +126,7 @@ class RenderingManager:
         display_id = id(display)
 
         if name is not None:
-            self._display_names[display_id] = name
-        else:
-            self._display_names[display_id] = f"Display {len(self._displays) - 1}"
+            display.name = name
 
         # Initialize viewport states for this display
         self._viewport_states[display_id] = {}
@@ -121,16 +138,57 @@ class RenderingManager:
 
         display_id = id(display)
         self._displays.remove(display)
-        self._display_names.pop(display_id, None)
         self._viewport_states.pop(display_id, None)
 
     def get_display_name(self, display: "Display") -> str:
         """Get display name."""
-        return self._display_names.get(id(display), "Display")
+        return display.name
 
     def set_display_name(self, display: "Display", name: str) -> None:
         """Set display name."""
-        self._display_names[id(display)] = name
+        display.name = name
+
+    def get_display_by_name(self, name: str) -> Optional["Display"]:
+        """
+        Find display by name.
+
+        Args:
+            name: Display name to find.
+
+        Returns:
+            Display with matching name or None.
+        """
+        for display in self._displays:
+            if display.name == name:
+                return display
+        return None
+
+    def get_or_create_display(self, name: str) -> Optional["Display"]:
+        """
+        Get existing display or create via factory.
+
+        First looks for display by name. If not found and factory is set,
+        calls factory to create a new display.
+
+        Args:
+            name: Display name.
+
+        Returns:
+            Display or None if not found and factory unavailable/failed.
+        """
+        # Check existing displays by name
+        display = self.get_display_by_name(name)
+        if display is not None:
+            return display
+
+        # Try factory
+        if self._display_factory is not None:
+            display = self._display_factory(name)
+            if display is not None:
+                self.add_display(display, name)
+                return display
+
+        return None
 
     # --- Scene mounting ---
 
@@ -208,6 +266,92 @@ class RenderingManager:
             if viewport.camera is not None:
                 viewport.camera.remove_viewport(viewport)
             display.remove_viewport(viewport)
+
+    def attach_scene(self, scene: "Scene") -> List["Viewport"]:
+        """
+        Attach scene using its viewport configuration.
+
+        Reads scene.viewport_configs and creates viewports on appropriate
+        displays. Displays are created via factory if not already present.
+
+        Args:
+            scene: Scene with viewport_configs to attach.
+
+        Returns:
+            List of created viewports.
+        """
+        from termin._native import log
+        from termin.visualization.core.camera import CameraComponent
+
+        viewports = []
+
+        for config in scene.viewport_configs:
+            # Get or create display
+            display = self.get_or_create_display(config.display_name)
+            if display is None:
+                log.warn(
+                    f"[RenderingManager] Cannot create display '{config.display_name}' "
+                    f"for scene viewport"
+                )
+                continue
+
+            # Find camera by UUID
+            camera: Optional[CameraComponent] = None
+            if config.camera_uuid:
+                entity = scene.get_entity(config.camera_uuid)
+                if entity is not None:
+                    camera = entity.get_component(CameraComponent)
+
+            if camera is None:
+                # Fallback: find first camera in scene
+                for entity in scene.entities:
+                    cam = entity.get_component(CameraComponent)
+                    if cam is not None:
+                        camera = cam
+                        break
+
+            if camera is None:
+                log.warn(
+                    f"[RenderingManager] No camera found for viewport on "
+                    f"display '{config.display_name}'"
+                )
+                continue
+
+            # Get pipeline by name
+            pipeline = self._default_pipeline
+            if config.pipeline_name is not None:
+                from termin.assets.resources import ResourceManager
+                rm = ResourceManager.instance()
+                pipeline = rm.pipelines.get_asset(config.pipeline_name)
+                if pipeline is None:
+                    pipeline = self._default_pipeline
+
+            # Create viewport
+            viewport = self.mount_scene(
+                scene=scene,
+                display=display,
+                camera=camera,
+                region=config.region,
+                pipeline=pipeline,
+            )
+            viewport.depth = config.depth
+            viewport.input_mode = config.input_mode
+            viewport.block_input_in_editor = config.block_input_in_editor
+            viewports.append(viewport)
+
+        return viewports
+
+    def detach_scene(self, scene: "Scene") -> None:
+        """
+        Detach scene from all displays.
+
+        Removes all viewports showing this scene.
+
+        Args:
+            scene: Scene to detach.
+        """
+        for display in list(self._displays):
+            self.unmount_scene(scene, display)
 
     # --- Viewport state management ---
 

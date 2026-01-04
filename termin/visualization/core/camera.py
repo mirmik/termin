@@ -460,7 +460,7 @@ class OrbitCameraController(CameraController):
         entity.transform.relocate(Pose3.looking_at(eye=eye, target=self._target))
 
         # Update last known position to avoid re-sync
-        self._last_position = eye.copy()
+        self._last_position = entity.transform.global_position
         self._last_rotation = entity.transform.global_rotation.copy()
 
     def orbit(self, delta_azimuth: float, delta_elevation: float):

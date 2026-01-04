@@ -40,6 +40,7 @@ class Display(Identifiable):
     def __init__(
         self,
         surface: "RenderSurface",
+        name: str = "Display",
         editor_only: bool = False,
         uuid: str | None = None,
     ):
@@ -48,13 +49,24 @@ class Display(Identifiable):
 
         Параметры:
             surface: Поверхность рендеринга (WindowRenderSurface или OffscreenRenderSurface).
+            name: Имя дисплея.
             editor_only: Если True, дисплей создаётся и рендерится только в редакторе.
             uuid: UUID дисплея (генерируется если не указан).
         """
         super().__init__(uuid=uuid)
         self._surface = surface
+        self._name = name
         self._viewports: List["Viewport"] = []
         self._editor_only = editor_only
+
+    @property
+    def name(self) -> str:
+        """Имя дисплея."""
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        self._name = value
 
     @property
     def editor_only(self) -> bool:

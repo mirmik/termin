@@ -18,6 +18,7 @@ from termin.core import Event
 
 from .skybox import SkyboxManager
 from .lighting import LightingManager
+from termin.visualization.core.viewport_config import ViewportConfig
 
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -76,6 +77,9 @@ class Scene:
         # Layer and flag names (index -> name)
         self.layer_names: dict[int, str] = {}  # 0-63
         self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
+
+        # Viewport configuration (display_name -> camera/region mapping)
+        self._viewport_configs: List[ViewportConfig] = []
 
         # Entity lifecycle events
         self._on_entity_added: Event[Entity] = Event()
@@ -296,6 +300,26 @@ class Scene:
             self.flag_names[index] = name
         else:
             self.flag_names.pop(index, None)
+
+    # --- Viewport configuration ---
+
+    @property
+    def viewport_configs(self) -> List[ViewportConfig]:
+        """Get viewport configurations for this scene."""
+        return self._viewport_configs
+
+    def add_viewport_config(self, config: ViewportConfig) -> None:
+        """Add a viewport configuration."""
+        self._viewport_configs.append(config)
+
+    def remove_viewport_config(self, config: ViewportConfig) -> None:
+        """Remove a viewport configuration."""
+        if config in self._viewport_configs:
+            self._viewport_configs.remove(config)
+
+    def clear_viewport_configs(self) -> None:
+        """Clear all viewport configurations."""
+        self._viewport_configs.clear()
 
     # --- Entity management ---
 
@@ -620,6 +644,7 @@ class Scene:
             "entities": serialized_entities,
             "layer_names": {str(k): v for k, v in self.layer_names.items()},
             "flag_names": {str(k): v for k, v in self.flag_names.items()},
+            "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
         }
         result.update(self._lighting.serialize())
         result.update(self._skybox.serialize())
@@ -657,6 +682,11 @@ class Scene:
             # Load layer and flag names
             self.layer_names = {int(k): v for k, v in data.get("layer_names", {}).items()}
             self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
+            # Load viewport configurations
+            self._viewport_configs = [
+                ViewportConfig.deserialize(vc_data)
+                for vc_data in data.get("viewport_configs", [])
+            ]
 
         entities_data = data.get("entities", [])
 
