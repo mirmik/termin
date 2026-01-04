@@ -30,12 +30,12 @@ from termin.editor.external_editor import open_in_text_editor
 from termin.editor.scene_file_controller import SceneFileController
 from termin.editor.project_file_watcher import ProjectFileWatcher
 from termin.editor.file_processors import (
-    MaterialFileProcessor,
+    MaterialPreLoader,
     MeshFileProcessor,
     ShaderFileProcessor,
     TextureFileProcessor,
     ComponentFileProcessor,
-    PipelineFileProcessor,
+    PipelinePreLoader,
     VoxelGridProcessor,
     NavMeshProcessor,
     GLBPreLoader,
@@ -140,7 +140,7 @@ class EditorWindow(QMainWindow):
             on_resource_reloaded=self._on_resource_reloaded,
         )
         self._project_file_watcher.register_processor(
-            MaterialFileProcessor(
+            MaterialPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -170,7 +170,7 @@ class EditorWindow(QMainWindow):
             )
         )
         self._project_file_watcher.register_processor(
-            PipelineFileProcessor(
+            PipelinePreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -633,16 +633,38 @@ class EditorWindow(QMainWindow):
             self.inspector.set_target(entity)
 
     def _get_displays_data(self) -> list | None:
-        """Get displays/viewports data for serialization."""
+        """Get displays/viewports data for serialization.
+
+        Syncs viewport_configs to scene before saving.
+        Returns None for new format (viewport_configs in scene).
+        Returns legacy data for old format (backward compatibility).
+        """
         if self._rendering_controller is None:
             return None
-        return self._rendering_controller.serialize_displays()
 
-    def _set_displays_data(self, data: list) -> None:
-        """Restore displays/viewports from serialized data."""
+        # Always sync current state to scene.viewport_configs
+        if self.scene is not None:
+            self._rendering_controller.sync_viewport_configs_to_scene(self.scene)
+
+        # New format: viewport_configs is serialized with scene, return None
+        # (This triggers new format on next load)
+        return None
+
+    def _set_displays_data(self, data: list | None) -> None:
+        """Restore displays/viewports after scene load.
+
+        Attaches scene viewports from scene.viewport_configs.
+        Always refreshes viewport list at the end.
+        """
         if self._rendering_controller is None:
             return
-        self._rendering_controller.restore_displays(data, self.scene)
+
+        # Attach scene viewports from viewport_configs
+        if self.scene is not None and self.scene.viewport_configs:
+            self._rendering_controller.attach_scene(self.scene)
+
+        # Always refresh viewport list to show editor display
+        self._rendering_controller._viewport_list.refresh()
 
     def _get_expanded_entities(self) -> list[str] | None:
         """Get expanded entity names for serialization."""
@@ -752,17 +774,24 @@ class EditorWindow(QMainWindow):
 
     def _create_pipeline_by_name(self, pipeline_name: str):
         """Create pipeline by name."""
-        from termin.visualization.core.viewport import make_default_pipeline
+        from termin.assets.resources import ResourceManager
 
-        if pipeline_name == "(Default)" or not pipeline_name:
-            return make_default_pipeline()
-        elif pipeline_name == "(Editor)":
+        if pipeline_name == "(Editor)":
             if self.editor_viewport is not None:
                 return self.editor_viewport.make_editor_pipeline()
-            return make_default_pipeline()
-        else:
-            # TODO: Lookup named pipeline from ResourceManager
-            return make_default_pipeline()
+            pipeline_name = "Default"
+
+        if not pipeline_name:
+            pipeline_name = "Default"
+
+        # Lookup pipeline from ResourceManager
+        rm = ResourceManager.instance()
+        pipeline = rm.get_pipeline(pipeline_name)
+        if pipeline is not None:
+            return pipeline
+
+        # Fallback to Default
+        return rm.get_pipeline("Default")
 
     def show_entity_inspector(self, entity: Entity | None = None):
         """Show EntityInspector and set target."""

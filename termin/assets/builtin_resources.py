@@ -1,8 +1,7 @@
 """
 Builtin resources registration.
 
-Contains functions to register built-in shaders, materials, and meshes.
-Extracted from ResourceManager to reduce file size.
+Contains functions to register built-in shaders, materials, meshes, and pipelines.
 """
 
 from __future__ import annotations
@@ -10,10 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
-
-# Re-export for backwards compatibility
 from termin.assets.builtin_uuids import BUILTIN_UUIDS
 
 
@@ -287,8 +284,20 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
     return registered
 
 
+def register_default_pipeline(rm: "ResourceManager") -> None:
+    """Register built-in default render pipeline."""
+    if rm.get_pipeline("Default") is not None:
+        return
+
+    from termin.visualization.core.viewport import make_default_pipeline
+
+    pipeline = make_default_pipeline()
+    rm.register_pipeline("Default", pipeline, uuid=BUILTIN_UUIDS.get("DefaultPipeline"))
+
+
 def register_all_builtins(rm: "ResourceManager") -> None:
-    """Register all built-in resources (shaders, materials, meshes)."""
+    """Register all built-in resources (shaders, materials, meshes, pipelines)."""
     register_builtin_shaders(rm)
     register_builtin_materials(rm)
     register_builtin_meshes(rm)
+    register_default_pipeline(rm)

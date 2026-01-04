@@ -18,9 +18,8 @@ class PipelineSelectorWidget(FieldWidget):
     Widget for selecting a render pipeline by name.
 
     Shows options:
-    - "(Default)" - use default pipeline
     - "(Editor)" - use editor pipeline (if available)
-    - Named pipelines from ResourceManager
+    - Named pipelines from ResourceManager (including builtin "Default")
 
     Returns pipeline name as string.
     """
@@ -57,12 +56,11 @@ class PipelineSelectorWidget(FieldWidget):
         current_text = self._combo.currentText()
         self._combo.clear()
 
-        # Add special options
-        self._combo.addItem("(Default)", userData="(Default)")
+        # Add "(Editor)" option if enabled
         if self._include_editor:
             self._combo.addItem("(Editor)", userData="(Editor)")
 
-        # Add named pipelines from ResourceManager
+        # Add named pipelines from ResourceManager (including builtin "Default")
         if self._resources is not None:
             pipeline_names = self._resources.list_pipeline_names()
             for name in pipeline_names:
@@ -73,13 +71,13 @@ class PipelineSelectorWidget(FieldWidget):
         if idx >= 0:
             self._combo.setCurrentIndex(idx)
         else:
-            self._combo.setCurrentIndex(0)  # Default
+            self._combo.setCurrentIndex(0)
 
         self._combo.blockSignals(False)
 
     def get_value(self) -> str:
         """Get currently selected pipeline name."""
-        return self._combo.currentData() or "(Default)"
+        return self._combo.currentData() or "Default"
 
     def set_value(self, value: str) -> None:
         """Set pipeline name."""
@@ -89,7 +87,7 @@ class PipelineSelectorWidget(FieldWidget):
         self._refresh_items()
 
         if value is None:
-            value = "(Default)"
+            value = "Default"
 
         idx = self._combo.findData(value)
         if idx >= 0:
@@ -100,6 +98,6 @@ class PipelineSelectorWidget(FieldWidget):
             if idx >= 0:
                 self._combo.setCurrentIndex(idx)
             else:
-                self._combo.setCurrentIndex(0)  # Default
+                self._combo.setCurrentIndex(0)
 
         self._combo.blockSignals(False)

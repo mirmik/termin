@@ -78,3 +78,7 @@ class RenderPipeline:
             passes=passes,
             pipeline_specs=specs,
         )
+
+    def copy(self) -> "RenderPipeline":
+        """Create a deep copy of this pipeline via serialize/deserialize."""
+        return RenderPipeline.deserialize(self.serialize())

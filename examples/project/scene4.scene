@@ -345,15 +345,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            7.445843696594238,
-            1.9333688020706177,
-            7.372177600860596
+            9.761899948120117,
+            14.463075637817383,
+            5.765913963317871
           ],
           "rotation": [
-            -0.3783752031776546,
-            -0.2020335439132853,
-            0.4254816572735399,
-            0.7968563308889935
+            -0.20052072461326825,
+            -0.32594177053779505,
+            0.7868930764222957,
+            0.4840998734743817
           ]
         },
         "scale": [
@@ -377,7 +377,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 16.0,
+              "radius": 13.5,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -7947,7 +7947,22 @@
       "0": "Default"
     },
     "flag_names": {},
-    "viewport_configs": [],
+    "viewport_configs": [
+      {
+        "display_name": "Display 0",
+        "camera_uuid": "0000000000000004",
+        "region": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "depth": 0,
+        "input_mode": "simple",
+        "block_input_in_editor": false,
+        "pipeline_name": "Default"
+      }
+    ],
     "light_direction": [
       -0.5,
       -1.0,
@@ -7989,69 +8004,18 @@
   "editor": {
     "camera": {
       "position": [
-        -7.982522010803223,
-        -2.475928544998169,
-        5.0226311683654785
+        -6.805116176605225,
+        -3.9612927436828613,
+        4.178220272064209
       ],
       "rotation": [
-        -0.30146859486360733,
-        0.10913010409866267,
-        -0.3224109978206,
-        0.8906505797307395
+        -0.26593671238771593,
+        0.06581268063099513,
+        -0.2310372263580832,
+        0.9335781467608055
       ],
       "radius": 10.5
-    },
-    "displays": [
-      {
-        "name": "Editor",
-        "editor_only": true,
-        "input_mode": "editor",
-        "block_input_in_editor": false,
-        "viewports": [
-          {
-            "uuid": "1317489b-e8b9-4826-bd8d-6667c472cd59",
-            "camera_entity": "camera",
-            "rect": [
-              0.0,
-              0.0,
-              1.0,
-              1.0
-            ],
-            "depth": 0,
-            "pipeline": "editor",
-            "input_mode": "editor",
-            "block_input_in_editor": false
-          }
-        ]
-      },
-      {
-        "name": "Display 0",
-        "editor_only": false,
-        "input_mode": "simple",
-        "block_input_in_editor": true,
-        "viewports": [
-          {
-            "uuid": "96744371-c08d-40eb-b9d4-73f3b3617dbd",
-            "camera_entity": "GameCamera",
-            "rect": [
-              0.0,
-              0.0,
-              1.0,
-              1.0
-            ],
-            "depth": 0,
-            "pipeline": "default",
-            "input_mode": "simple",
-            "block_input_in_editor": true
-          }
-        ]
-      }
-    ],
-    "expanded_entities": [
-      "editor_ui",
-      "EditorEntities",
-      "camera"
-    ]
+    }
   },
   "resources": {
     "textures": {

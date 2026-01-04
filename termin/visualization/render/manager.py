@@ -322,7 +322,7 @@ class RenderingManager:
             if config.pipeline_name is not None:
                 from termin.assets.resources import ResourceManager
                 rm = ResourceManager.instance()
-                pipeline = rm.pipelines.get_asset(config.pipeline_name)
+                pipeline = rm.get_pipeline(config.pipeline_name)
                 if pipeline is None:
                     pipeline = self._default_pipeline
 

@@ -161,8 +161,6 @@ class ResourceManager:
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}  # FramePass classes by name
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
-        self.pipelines: Dict[str, "RenderPipeline"] = {}  # RenderPipeline instances by name
-
         # Asset'ы по UUID (для поиска существующих при загрузке)
         from termin.assets.asset import Asset
         self._assets_by_uuid: Dict[str, Asset] = {}
@@ -177,6 +175,7 @@ class ResourceManager:
         self._glsl_registry = self._create_glsl_registry()
         self._audio_clip_registry = self._create_audio_clip_registry()
         self._ui_registry = self._create_ui_registry()
+        self._pipeline_registry = self._create_pipeline_registry()
 
         # Legacy dicts (для обратной совместимости и типов без registry)
         self._material_assets: Dict[str, "MaterialAsset"] = {}
@@ -423,6 +422,35 @@ class ResourceManager:
             data_to_asset=data_to_asset,
         )
 
+    def _create_pipeline_registry(self):
+        """Create AssetRegistry for render pipelines."""
+        from termin.assets.asset_registry import AssetRegistry
+
+        def data_from_asset(asset):
+            # Lazy load if not loaded
+            if asset.pipeline is None:
+                asset.ensure_loaded()
+            return asset.pipeline
+
+        def data_to_asset(data):
+            # Search through assets
+            for asset in self._pipeline_registry.assets.values():
+                if asset.pipeline is data:
+                    return asset
+            return None
+
+        # Import asset class lazily to avoid circular imports
+        def get_asset_class():
+            from termin.assets.pipeline_asset import PipelineAsset
+            return PipelineAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
     @property
     def _mesh_assets(self) -> Dict[str, "MeshAsset"]:
         """Legacy access to mesh assets dict."""
@@ -475,7 +503,7 @@ class ResourceManager:
             try:
                 cls._instance = cls()
                 # Register built-in resources on first creation
-                from termin.visualization.core.builtin_resources import register_all_builtins
+                from termin.assets.builtin_resources import register_all_builtins
                 register_all_builtins(cls._instance)
             finally:
                 cls._creating_singleton = False
@@ -528,6 +556,8 @@ class ResourceManager:
             self._register_audio_clip_file(name, result)
         elif result.resource_type == "ui":
             self._register_ui_file(name, result)
+        elif result.resource_type == "pipeline":
+            self._register_pipeline_file(name, result)
         else:
             log.warn(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -567,6 +597,8 @@ class ResourceManager:
             self._reload_audio_clip_file(name, result)
         elif result.resource_type == "ui":
             self._reload_ui_file(name, result)
+        elif result.resource_type == "pipeline":
+            self._reload_pipeline_file(name, result)
         else:
             log.warn(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -1148,6 +1180,46 @@ class ResourceManager:
         # Reload UI
         asset.reload()
 
+    def _register_pipeline_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register pipeline from PreLoadResult."""
+        from termin.assets.pipeline_asset import PipelineAsset
+
+        # Check if UUID already registered
+        uuid = result.spec_data.get("uuid") if result.spec_data else None
+        if uuid and uuid in self._assets_by_uuid:
+            asset = self._assets_by_uuid[uuid]
+            if isinstance(asset, PipelineAsset):
+                # Update name registration
+                self._pipeline_registry.assets[name] = asset
+                asset.parse_spec(result.spec_data)
+                return
+
+        # Create new asset
+        asset = self._pipeline_registry.get_or_create_asset(
+            name=name,
+            source_path=result.path,
+            uuid=uuid,
+        )
+        asset.parse_spec(result.spec_data)
+
+    def _reload_pipeline_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload pipeline from PreLoadResult."""
+        asset = self._pipeline_registry.get_asset(name)
+        if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload pipeline
+        asset.parse_spec(result.spec_data)
+        asset.reload()
+
     # --------- Prefabs ---------
 
     def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
@@ -1393,32 +1465,32 @@ class ResourceManager:
 
     def register_default_shader(self) -> None:
         """Регистрирует встроенный DefaultShader."""
-        from termin.visualization.core.builtin_resources import register_default_shader
+        from termin.assets.builtin_resources import register_default_shader
         register_default_shader(self)
 
     def register_pbr_shader(self) -> None:
         """Регистрирует встроенный PBR шейдер."""
-        from termin.visualization.core.builtin_resources import register_pbr_shader
+        from termin.assets.builtin_resources import register_pbr_shader
         register_pbr_shader(self)
 
     def register_advanced_pbr_shader(self) -> None:
         """Регистрирует встроенный Advanced PBR шейдер с SSS и ACES."""
-        from termin.visualization.core.builtin_resources import register_advanced_pbr_shader
+        from termin.assets.builtin_resources import register_advanced_pbr_shader
         register_advanced_pbr_shader(self)
 
     def register_skinned_shader(self) -> None:
         """Регистрирует встроенный SkinnedShader для скелетной анимации."""
-        from termin.visualization.core.builtin_resources import register_skinned_shader
+        from termin.assets.builtin_resources import register_skinned_shader
         register_skinned_shader(self)
 
     def register_builtin_materials(self) -> None:
         """Регистрирует встроенные материалы."""
-        from termin.visualization.core.builtin_resources import register_builtin_materials
+        from termin.assets.builtin_resources import register_builtin_materials
         register_builtin_materials(self)
 
     def register_builtin_meshes(self) -> List[str]:
         """Регистрирует встроенные примитивные меши."""
-        from termin.visualization.core.builtin_resources import register_builtin_meshes
+        from termin.assets.builtin_resources import register_builtin_meshes
         return register_builtin_meshes(self)
 
     # --------- Меши (Asset-based via registry) ---------
@@ -2016,17 +2088,36 @@ class ResourceManager:
         return registered
 
     # --------- Pipelines ---------
-    def register_pipeline(self, name: str, pipeline: "RenderPipeline"):
-        """Регистрирует RenderPipeline по имени."""
-        self.pipelines[name] = pipeline
+    def register_pipeline(self, name: str, pipeline: "RenderPipeline", uuid: str | None = None):
+        """Register a RenderPipeline by name."""
+        from termin.assets.pipeline_asset import PipelineAsset
+
+        # Check if already exists
+        asset = self._pipeline_registry.get_asset(name)
+        if asset is not None:
+            # Update existing asset
+            asset._data = pipeline
+            return
+
+        # Create new asset
+        asset = PipelineAsset.from_pipeline(pipeline, name=name, uuid=uuid)
+        self._pipeline_registry.register(name, asset, uuid=uuid)
 
     def get_pipeline(self, name: str) -> Optional["RenderPipeline"]:
-        """Получить RenderPipeline по имени."""
-        return self.pipelines.get(name)
+        """Get a copy of RenderPipeline by name (pipelines are mutable)."""
+        pipeline = self._pipeline_registry.get(name)
+        if pipeline is not None:
+            return pipeline.copy()
+        return None
+
+    def get_pipeline_asset(self, name: str) -> Optional["PipelineAsset"]:
+        """Get PipelineAsset by name."""
+        from termin.assets.pipeline_asset import PipelineAsset
+        return self._pipeline_registry.get_asset(name)
 
     def list_pipeline_names(self) -> list[str]:
-        """Список имён всех зарегистрированных пайплайнов."""
-        return sorted(self.pipelines.keys())
+        """List all registered pipeline names."""
+        return sorted(self._pipeline_registry.list_names())
 
     # --------- Handle Accessors ---------
 

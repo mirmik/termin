@@ -439,8 +439,9 @@ class WorldPersistence:
             self._select_entity_by_name(selected_name)
 
         # Дисплеи и вьюпорты
+        # Always call _set_displays_data - it handles both old (displays_data) and new (viewport_configs) formats
         displays_data = editor_data.get("displays")
-        if displays_data is not None and self._set_displays_data is not None:
+        if self._set_displays_data is not None:
             self._set_displays_data(displays_data)
 
         # Развёрнутые entity в дереве

@@ -38,6 +38,6 @@ class ViewportHintComponent(PythonComponent):
 
     def __init__(self):
         super().__init__()
-        self.pipeline_name: str = "(Default)"
+        self.pipeline_name: str = "Default"
         # All layers enabled by default
         self.layer_mask: int = 0xFFFFFFFFFFFFFFFF

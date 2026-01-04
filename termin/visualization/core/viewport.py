@@ -2,10 +2,10 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from termin.visualization.core.identifiable import Identifiable
-from termin.visualization.core.scene import Scene
-from termin.visualization.core.camera import CameraComponent
 
 if TYPE_CHECKING:
+    from termin.visualization.core.scene import Scene
+    from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.display import Display
     from termin.visualization.ui.canvas import Canvas
     from termin.visualization.render.framegraph import RenderPipeline
@@ -29,8 +29,8 @@ class Viewport(Identifiable):
 
     Для рендеринга используйте RenderEngine с RenderView и ViewportRenderState.
     """
-    scene: Scene
-    camera: CameraComponent
+    scene: "Scene"
+    camera: "CameraComponent"
     rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
     display: Optional["Display"] = None
     canvas: Optional["Canvas"] = None
@@ -174,4 +174,4 @@ def make_default_pipeline() -> "RenderPipeline":
         )
     ]
 
-    return RenderPipeline(name="default", passes=passes)
+    return RenderPipeline(name="Default", passes=passes)

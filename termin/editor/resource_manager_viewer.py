@@ -117,6 +117,13 @@ class ResourceManagerViewer(QDialog):
         self._skeletons_tree.itemClicked.connect(lambda item: self._on_item_clicked("skeleton", item))
         self._tab_widget.addTab(self._skeletons_tree, "Skeletons")
 
+        # Pipelines
+        self._pipelines_tree = QTreeWidget()
+        self._pipelines_tree.setHeaderLabels(["Name", "Passes", "UUID"])
+        self._pipelines_tree.setAlternatingRowColors(True)
+        self._pipelines_tree.itemClicked.connect(lambda item: self._on_item_clicked("pipeline", item))
+        self._tab_widget.addTab(self._pipelines_tree, "Pipelines")
+
         # Компоненты (Python ResourceManager)
         self._components_tree = QTreeWidget()
         self._components_tree.setHeaderLabels(["Name", "Module"])
@@ -216,6 +223,11 @@ class ResourceManagerViewer(QDialog):
             if asset:
                 self._selected_asset = asset
                 self._show_skeleton_details(name, asset)
+        elif asset_type == "pipeline":
+            asset = self._resource_manager.get_pipeline_asset(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_pipeline_details(name, asset)
 
         # Enable/disable load button
         can_load = (
@@ -357,6 +369,31 @@ class ResourceManagerViewer(QDialog):
 
         self._details_text.setText("\n".join(lines))
 
+    def _show_pipeline_details(self, name: str, asset) -> None:
+        """Показать детали Pipeline."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(builtin)'}",
+            f"Loaded: {asset.is_loaded}",
+        ]
+
+        if asset.is_loaded:
+            pipeline = asset.data
+            if pipeline is not None:
+                lines.append(f"")
+                lines.append(f"=== Pipeline Data ===")
+                lines.append(f"Pipeline Name: {pipeline.name}")
+                lines.append(f"Passes: {len(pipeline.passes)}")
+                lines.append(f"")
+                lines.append(f"=== Passes ===")
+                for i, pass_obj in enumerate(pipeline.passes):
+                    pass_name = pass_obj.pass_name if hasattr(pass_obj, 'pass_name') else type(pass_obj).__name__
+                    pass_type = type(pass_obj).__name__
+                    lines.append(f"  [{i}] {pass_name} ({pass_type})")
+
+        self._details_text.setText("\n".join(lines))
+
     def _on_load_clicked(self) -> None:
         """Загрузить выбранный ассет."""
         if self._selected_asset is None:
@@ -386,6 +423,7 @@ class ResourceManagerViewer(QDialog):
         self._refresh_voxelgrids()
         self._refresh_navmeshes()
         self._refresh_skeletons()
+        self._refresh_pipelines()
         self._refresh_components()
         self._refresh_registry()
         self._refresh_watched()
@@ -475,6 +513,24 @@ class ResourceManagerViewer(QDialog):
 
         self._skeletons_tree.resizeColumnToContents(0)
         self._skeletons_tree.resizeColumnToContents(1)
+
+    def _refresh_pipelines(self) -> None:
+        """Обновляет список Pipelines."""
+        self._pipelines_tree.clear()
+
+        for name in self._resource_manager.list_pipeline_names():
+            asset = self._resource_manager.get_pipeline_asset(name)
+            if asset:
+                pipeline = asset.data if asset.is_loaded else None
+                passes_count = len(pipeline.passes) if pipeline else "?"
+                status = f"{passes_count} passes"
+                uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
+
+                item = QTreeWidgetItem([name, status, uuid_str])
+                self._pipelines_tree.addTopLevelItem(item)
+
+        self._pipelines_tree.resizeColumnToContents(0)
+        self._pipelines_tree.resizeColumnToContents(1)
 
     def _refresh_components(self) -> None:
         """Обновляет список компонентов."""
@@ -582,5 +638,6 @@ class ResourceManagerViewer(QDialog):
             f"VoxelGrids: {len(rm._voxel_grid_assets)} | "
             f"NavMeshes: {len(rm._navmesh_assets)} | "
             f"Skeletons: {len(rm._skeleton_assets)} | "
+            f"Pipelines: {len(rm.list_pipeline_names())} | "
             f"Components: {len(rm.components)}"
         )

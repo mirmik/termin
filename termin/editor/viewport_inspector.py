@@ -417,15 +417,12 @@ class ViewportInspector(QWidget):
             self._pipelines.clear()
             self._pipeline_combo.clear()
 
-            # Add "Default" option
-            self._pipeline_combo.addItem("(Default)")
-            self._pipelines.append(("(Default)", None))
-
             # Add "Editor" option if getter is available
             if self._get_editor_pipeline is not None:
                 self._pipeline_combo.addItem("(Editor)")
                 self._pipelines.append(("(Editor)", None))  # Pipeline created on demand
 
+            # Add registered pipelines (including builtin "Default")
             for name in pipeline_names:
                 pipeline = rm.get_pipeline(name)
                 if pipeline is not None:

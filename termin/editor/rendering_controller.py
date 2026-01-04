@@ -325,6 +325,50 @@ class RenderingController:
             if self._on_display_input_mode_changed_callback is not None:
                 self._on_display_input_mode_changed_callback(display, input_mode)
 
+    def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
+        """
+        Sync current viewport state to scene.viewport_configs.
+
+        Call this before saving to ensure viewport_configs reflects current state.
+        Excludes editor display viewports (they are managed separately).
+
+        Args:
+            scene: Scene to update viewport_configs for.
+        """
+        from termin.visualization.core.viewport_config import ViewportConfig
+
+        scene.clear_viewport_configs()
+
+        for display in self._manager.displays:
+            # Skip editor display - it's managed separately
+            if id(display) == self._editor_display_id:
+                continue
+
+            for viewport in display.viewports:
+                if viewport.scene is not scene:
+                    continue
+
+                # Get camera UUID
+                camera_uuid = ""
+                if viewport.camera is not None and viewport.camera.entity is not None:
+                    camera_uuid = viewport.camera.entity.uuid
+
+                # Get pipeline name
+                pipeline_name = None
+                if viewport.pipeline is not None:
+                    pipeline_name = viewport.pipeline.name
+
+                config = ViewportConfig(
+                    display_name=display.name,
+                    camera_uuid=camera_uuid,
+                    region=viewport.rect,
+                    depth=viewport.depth,
+                    input_mode=viewport.input_mode,
+                    block_input_in_editor=viewport.block_input_in_editor,
+                    pipeline_name=pipeline_name,
+                )
+                scene.add_viewport_config(config)
+
     def detach_scene(self, scene: "Scene") -> None:
         """
         Detach scene from all displays.
@@ -977,151 +1021,6 @@ class RenderingController:
             if backend_window is not None and backend_window.needs_render():
                 return True
         return False
-
-    # --- Serialization (DEPRECATED - use Scene.viewport_configs instead) ---
-
-    def serialize_displays(self) -> list:
-        """
-        DEPRECATED: Use Scene.viewport_configs for serialization.
-
-        Сериализует конфигурацию всех дисплеев.
-        Возвращает список дисплеев с их viewport'ами.
-        """
-        result = []
-        for display in self._manager.displays:
-            name = self._manager.get_display_name(display)
-
-            # Get input mode from first viewport
-            input_mode = "simple"
-            block_input = False
-            if display.viewports:
-                input_mode = display.viewports[0].input_mode
-                block_input = display.viewports[0].block_input_in_editor
-
-            # Сериализуем все viewport'ы дисплея
-            viewports_data = []
-            for viewport in display.viewports:
-                viewports_data.append(viewport.serialize())
-
-            result.append({
-                "name": name,
-                "editor_only": display.editor_only,
-                "input_mode": input_mode,
-                "block_input_in_editor": block_input,
-                "viewports": viewports_data,
-            })
-
-        return result
-
-    def restore_displays(self, data: list, scene: "Scene") -> None:
-        """
-        DEPRECATED: Use attach_scene() with Scene.viewport_configs instead.
-
-        Восстанавливает конфигурацию дисплеев из сериализованных данных.
-
-        Args:
-            data: Сериализованные данные дисплеев
-            scene: Текущая сцена для поиска камер
-        """
-        from termin.visualization.core.camera import CameraComponent
-
-        # Удаляем все дополнительные дисплеи (кроме Editor)
-        additional_displays = [
-            d for d in self._manager.displays
-            if id(d) != self._editor_display_id
-        ]
-        for display in additional_displays:
-            self.remove_display(display)
-
-        # Находим Editor display по _editor_display_id
-        editor_display = self.editor_display
-
-        # Индекс для сопоставления данных с первым дисплеем
-        first_display_restored = False
-
-        for display_data in data:
-            # Обратная совместимость: is_editor → editor_only
-            editor_only = display_data.get("editor_only", display_data.get("is_editor", False))
-            name = display_data.get("name", "Display")
-            viewports_data = display_data.get("viewports", [])
-            input_mode = display_data.get("input_mode", "simple")
-            block_input = display_data.get("block_input_in_editor", False)
-
-            # Первый дисплей из данных восстанавливаем в editor_display
-            if not first_display_restored and editor_display is not None:
-                first_display_restored = True
-
-                # Обновляем имя и editor_only флаг
-                self.set_display_name(editor_display, name)
-                editor_display.editor_only = editor_only
-
-                # Очищаем существующие viewport'ы (кроме первого, он управляется EditorViewportFeatures)
-                while len(editor_display.viewports) > 1:
-                    vp = editor_display.viewports[-1]
-                    editor_display.remove_viewport(vp)
-
-                # Восстанавливаем свойства первого viewport'а если есть данные
-                if viewports_data and editor_display.viewports:
-                    vp_data = viewports_data[0]
-                    main_vp = editor_display.viewports[0]
-                    main_vp.rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
-                    main_vp.depth = vp_data.get("depth", 0)
-                    main_vp.input_mode = vp_data.get("input_mode", input_mode)
-                    main_vp.block_input_in_editor = vp_data.get("block_input_in_editor", block_input)
-                    # Камеру Editor viewport'а не меняем - она управляется EditorCameraManager
-            else:
-                # Запоминаем количество дисплеев до создания
-                count_before = len(self._manager.displays)
-
-                # Создаём дополнительный дисплей
-                self._on_add_display_requested()
-
-                # Проверяем, что дисплей был создан
-                if len(self._manager.displays) <= count_before:
-                    continue
-
-                # Берём последний добавленный дисплей
-                new_display = self._manager.displays[-1]
-                self.set_display_name(new_display, name)
-                new_display.editor_only = editor_only
-
-                # Создаём viewport'ы
-                for vp_data in viewports_data:
-                    camera_entity_name = vp_data.get("camera_entity")
-                    rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
-                    depth = vp_data.get("depth", 0)
-                    vp_input_mode = vp_data.get("input_mode", input_mode)
-                    vp_block_input = vp_data.get("block_input_in_editor", block_input)
-
-                    # Ищем камеру по имени сущности
-                    camera = None
-                    for entity in scene.entities:
-                        if entity.name == camera_entity_name:
-                            cam = entity.get_component(CameraComponent)
-                            if cam is not None:
-                                camera = cam
-                                break
-
-                    if camera is not None:
-                        viewport = new_display.create_viewport(
-                            scene=scene,
-                            camera=camera,
-                            rect=rect,
-                        )
-                        viewport.depth = depth
-                        viewport.input_mode = vp_input_mode
-                        viewport.block_input_in_editor = vp_block_input
-
-                # Apply input mode for first viewport
-                if new_display.viewports:
-                    backend_window = self.get_display_backend_window(new_display)
-                    if backend_window is not None:
-                        self._setup_display_input(new_display, new_display.viewports[0].input_mode)
-
-        # Обновляем UI
-        self._viewport_list.refresh()
-        self._update_center_tabs()
-        self._request_update()
 
     def render_all_displays(self) -> None:
         """Render all displays (unified render loop)."""

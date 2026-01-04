@@ -92,9 +92,12 @@ class ShadowPass(_ShadowPassNative):
         # Текущий ShadowMapArrayResource (обновляется в execute)
         self._shadow_map_array: ShadowMapArrayResource | None = None
 
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры ShadowPass."""
+    def serialize(self) -> dict:
+        """Сериализует ShadowPass в словарь."""
         return {
+            "type": self.__class__.__name__,
+            "pass_name": self.pass_name,
+            "enabled": self.enabled,
             "output_res": self.output_res,
             "default_resolution": self.default_resolution,
             "max_shadow_distance": self.max_shadow_distance,
