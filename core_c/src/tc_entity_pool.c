@@ -99,7 +99,7 @@ struct tc_entity_pool {
     uint64_t* runtime_ids;
 
     // Hierarchy
-    uint32_t* parent_indices;  // UINT32_MAX = no parent
+    tc_entity_id* parent_ids;  // TC_ENTITY_ID_INVALID = no parent
     EntityIdArray* children;
 
     // Components
@@ -261,8 +261,10 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->uuids = calloc(initial_capacity, sizeof(char*));
     pool->runtime_ids = calloc(initial_capacity, sizeof(uint64_t));
 
-    pool->parent_indices = calloc(initial_capacity, sizeof(uint32_t));
-    memset(pool->parent_indices, 0xFF, initial_capacity * sizeof(uint32_t));
+    pool->parent_ids = calloc(initial_capacity, sizeof(tc_entity_id));
+    for (size_t i = 0; i < initial_capacity; i++) {
+        pool->parent_ids[i] = TC_ENTITY_ID_INVALID;
+    }
 
     pool->children = calloc(initial_capacity, sizeof(EntityIdArray));
     pool->components = calloc(initial_capacity, sizeof(ComponentArray));
@@ -333,7 +335,7 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->names);
     free(pool->uuids);
     free(pool->runtime_ids);
-    free(pool->parent_indices);
+    free(pool->parent_ids);
     free(pool->children);
     free(pool->components);
 
@@ -414,8 +416,10 @@ static void pool_grow(tc_entity_pool* pool) {
     memset(pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
     memset(pool->runtime_ids + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
 
-    pool->parent_indices = realloc(pool->parent_indices, new_cap * sizeof(uint32_t));
-    memset(pool->parent_indices + old_cap, 0xFF, (new_cap - old_cap) * sizeof(uint32_t));
+    pool->parent_ids = realloc(pool->parent_ids, new_cap * sizeof(tc_entity_id));
+    for (size_t i = old_cap; i < new_cap; i++) {
+        pool->parent_ids[i] = TC_ENTITY_ID_INVALID;
+    }
 
     pool->children = realloc(pool->children, new_cap * sizeof(EntityIdArray));
     pool->components = realloc(pool->components, new_cap * sizeof(ComponentArray));
@@ -459,6 +463,11 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     pool->world_rotations[idx] = quat_identity();
     pool->world_scales[idx] = vec3_one();
 
+    // Clear world matrix to identity
+    double* wm = &pool->world_matrices[idx * 16];
+    memset(wm, 0, 16 * sizeof(double));
+    wm[0] = wm[5] = wm[10] = wm[15] = 1.0;
+
     free(pool->names[idx]);
     pool->names[idx] = str_dup(name ? name : "entity");
 
@@ -473,7 +482,7 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     }
 
     pool->runtime_ids[idx] = pool->next_runtime_id++;
-    pool->parent_indices[idx] = UINT32_MAX;
+    pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;
 
     entity_id_array_free(&pool->children[idx]);
     entity_id_array_init(&pool->children[idx]);
@@ -535,18 +544,16 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     comps->capacity = 0;
 
     // Remove from parent's children
-    if (pool->parent_indices[idx] != UINT32_MAX) {
-        uint32_t parent_idx = pool->parent_indices[idx];
-        if (pool->alive[parent_idx]) {
-            entity_id_array_remove(&pool->children[parent_idx], id);
-        }
+    tc_entity_id parent_id = pool->parent_ids[idx];
+    if (tc_entity_id_valid(parent_id) && tc_entity_pool_alive(pool, parent_id)) {
+        entity_id_array_remove(&pool->children[parent_id.index], id);
     }
 
     // Orphan children (or could recursively delete)
     for (size_t i = 0; i < pool->children[idx].count; i++) {
         tc_entity_id child = pool->children[idx].items[i];
         if (tc_entity_pool_alive(pool, child)) {
-            pool->parent_indices[child.index] = UINT32_MAX;
+            pool->parent_ids[child.index] = TC_ENTITY_ID_INVALID;
         }
     }
     // Clear children array so reused slot doesn't inherit stale children
@@ -858,6 +865,7 @@ static void spread_changes_to_distal(tc_entity_pool* pool, uint32_t idx) {
 
     EntityIdArray* ch = &pool->children[idx];
     for (size_t i = 0; i < ch->count; i++) {
+        tc_log_debug("[tc_entity_pool] Spreading changes distal from idx=%u to child idx=%u", idx, ch->items[i].index);
         tc_entity_id child = ch->items[i];
         if (tc_entity_pool_alive(pool, child)) {
             spread_changes_to_distal(pool, child.index);
@@ -869,14 +877,16 @@ static void spread_changes_to_distal(tc_entity_pool* pool, uint32_t idx) {
 static void spread_changes_to_proximal(tc_entity_pool* pool, uint32_t idx) {
     pool->version_for_walking_to_distal[idx] = increment_version(pool->version_for_walking_to_distal[idx]);
 
-    uint32_t parent_idx = pool->parent_indices[idx];
-    if (parent_idx != UINT32_MAX && pool->alive[parent_idx]) {
-        spread_changes_to_proximal(pool, parent_idx);
+    tc_entity_id parent_id = pool->parent_ids[idx];
+    if (tc_entity_id_valid(parent_id) && tc_entity_pool_alive(pool, parent_id)) {
+        spread_changes_to_proximal(pool, parent_id.index);
     }
 }
 
 void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) return;
+
+    tc_log_debug("[tc_entity_pool] Marking entity idx=%u as dirty", id.index);
 
     uint32_t idx = id.index;
 
@@ -996,16 +1006,25 @@ static void compute_world_matrix(double* m, Vec3 pos, Quat rot, Vec3 scale) {
 static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
     if (!pool->transform_dirty[idx]) return;
 
-    uint32_t parent_idx = pool->parent_indices[idx];
+    tc_entity_id parent_id = pool->parent_ids[idx];
 
-    if (parent_idx == UINT32_MAX) {
+    if (!tc_entity_id_valid(parent_id)) {
         // Root entity - world = local
         pool->world_positions[idx] = pool->local_positions[idx];
         pool->world_rotations[idx] = pool->local_rotations[idx];
         pool->world_scales[idx] = pool->local_scales[idx];
+    } else if (!tc_entity_pool_alive(pool, parent_id)) {
+        // Parent was deleted (generation mismatch) - treat as root
+        tc_log(TC_LOG_WARN, "[update_entity_transform] idx=%u has stale parent (idx=%u gen=%u, current gen=%u) - treating as root",
+            idx, parent_id.index, parent_id.generation, pool->generations[parent_id.index]);
+        pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;  // Fix the stale reference
+        pool->world_positions[idx] = pool->local_positions[idx];
+        pool->world_rotations[idx] = pool->local_rotations[idx];
+        pool->world_scales[idx] = pool->local_scales[idx];
     } else {
-        // Has parent - update parent first if dirty, then combine
-        if (pool->alive[parent_idx] && pool->transform_dirty[parent_idx]) {
+        // Has valid parent - update parent first if dirty, then combine
+        uint32_t parent_idx = parent_id.index;
+        if (pool->transform_dirty[parent_idx]) {
             update_entity_transform(pool, parent_idx);
         }
 
@@ -1043,49 +1062,10 @@ static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
 void tc_entity_pool_update_transforms(tc_entity_pool* pool) {
     if (!pool) return;
 
-    // TODO: proper hierarchical update order
-    // For now: simple iteration, parents should be processed before children
+    // Use lazy update for each dirty entity
     for (size_t i = 0; i < pool->capacity; i++) {
         if (!pool->alive[i] || !pool->transform_dirty[i]) continue;
-
-        uint32_t parent_idx = pool->parent_indices[i];
-
-        if (parent_idx == UINT32_MAX) {
-            // Root entity - world = local
-            pool->world_positions[i] = pool->local_positions[i];
-            pool->world_rotations[i] = pool->local_rotations[i];
-            pool->world_scales[i] = pool->local_scales[i];
-        } else {
-            // Has parent - combine transforms
-            Vec3 pw = pool->world_positions[parent_idx];
-            Quat rw = pool->world_rotations[parent_idx];
-            Vec3 sw = pool->world_scales[parent_idx];
-
-            Vec3 lp = pool->local_positions[i];
-            Quat lr = pool->local_rotations[i];
-            Vec3 ls = pool->local_scales[i];
-
-            // Scale local position by parent scale, rotate, add parent position
-            Vec3 scaled_pos = {lp.x * sw.x, lp.y * sw.y, lp.z * sw.z};
-            Vec3 rotated_pos = quat_rotate(rw, scaled_pos);
-
-            pool->world_positions[i] = (Vec3){
-                pw.x + rotated_pos.x,
-                pw.y + rotated_pos.y,
-                pw.z + rotated_pos.z
-            };
-            pool->world_rotations[i] = quat_mul(rw, lr);
-            pool->world_scales[i] = (Vec3){sw.x * ls.x, sw.y * ls.y, sw.z * ls.z};
-        }
-
-        compute_world_matrix(
-            &pool->world_matrices[i * 16],
-            pool->world_positions[i],
-            pool->world_rotations[i],
-            pool->world_scales[i]
-        );
-
-        pool->transform_dirty[i] = false;
+        update_entity_transform(pool, i);
     }
 }
 
@@ -1096,30 +1076,36 @@ void tc_entity_pool_update_transforms(tc_entity_pool* pool) {
 tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("parent", id); return TC_ENTITY_ID_INVALID; }
 
-    uint32_t parent_idx = pool->parent_indices[id.index];
-    if (parent_idx == UINT32_MAX) return TC_ENTITY_ID_INVALID;
+    tc_entity_id parent_id = pool->parent_ids[id.index];
+    if (!tc_entity_id_valid(parent_id)) return TC_ENTITY_ID_INVALID;
 
-    // Return parent with current generation
-    return (tc_entity_id){parent_idx, pool->generations[parent_idx]};
+    // Verify parent is still alive (generation check)
+    if (!tc_entity_pool_alive(pool, parent_id)) {
+        // Parent was deleted - orphan this entity
+        ((tc_entity_pool*)pool)->parent_ids[id.index] = TC_ENTITY_ID_INVALID;
+        return TC_ENTITY_ID_INVALID;
+    }
+
+    return parent_id;
 }
 
 void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent) {
     if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_parent", id); return; }
 
     uint32_t idx = id.index;
-    uint32_t old_parent_idx = pool->parent_indices[idx];
+    tc_entity_id old_parent_id = pool->parent_ids[idx];
 
-    // Remove from old parent
-    if (old_parent_idx != UINT32_MAX && pool->alive[old_parent_idx]) {
-        entity_id_array_remove(&pool->children[old_parent_idx], id);
+    // Remove from old parent's children
+    if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
+        entity_id_array_remove(&pool->children[old_parent_id.index], id);
     }
 
-    // Set new parent
+    // Set new parent (store full entity_id including generation)
     if (tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)) {
-        pool->parent_indices[idx] = parent.index;
+        pool->parent_ids[idx] = parent;
         entity_id_array_push(&pool->children[parent.index], id);
     } else {
-        pool->parent_indices[idx] = UINT32_MAX;
+        pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;
     }
 
     tc_entity_pool_mark_dirty(pool, id);
