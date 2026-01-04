@@ -52,16 +52,14 @@ Entity SkeletonInstance::get_bone_entity_by_name(const std::string& bone_name) c
     return get_bone_entity(idx);
 }
 
-void SkeletonInstance::set_bone_transform_by_name(
-    const std::string& bone_name,
+void SkeletonInstance::set_bone_transform(
+    int bone_index,
     const double* translation,
     const double* rotation,
     const double* scale
 ) {
-    Entity ent = get_bone_entity_by_name(bone_name);
+    Entity ent = get_bone_entity(bone_index);
     if (!ent.valid()) {
-        tc::Log::warn("[SkeletonInstance::set_bone_transform_by_name] bone '%s' entity invalid",
-                     bone_name.c_str());
         return;
     }
 
@@ -73,6 +71,22 @@ void SkeletonInstance::set_bone_transform_by_name(
 
     GeneralPose3 new_pose(new_ang, new_lin, new_scale);
     ent.transform().relocate(new_pose);
+}
+
+void SkeletonInstance::set_bone_transform_by_name(
+    const std::string& bone_name,
+    const double* translation,
+    const double* rotation,
+    const double* scale
+) {
+    if (!_data) {
+        return;
+    }
+    int idx = _data->get_bone_index(bone_name);
+    if (idx < 0) {
+        return;
+    }
+    set_bone_transform(idx, translation, rotation, scale);
 }
 
 Entity SkeletonInstance::find_skeleton_root() {
@@ -120,24 +134,11 @@ void SkeletonInstance::update() {
     Mat44 skeleton_world_inv = Mat44::identity();
     Entity root = find_skeleton_root();
 
-    static int debug_counter = 0;
-    bool do_debug = (debug_counter++ % 300 == 0);  // Log every 300 frames (~5 sec at 60fps)
-
     if (root.valid()) {
         double m[16];
         root.transform().world_matrix(m);  // row-major
         Mat44 skeleton_world = row_major_to_mat44(m);
         skeleton_world_inv = skeleton_world.inverse();
-
-        if (do_debug) {
-            tc::Log::info("[SkeletonInstance::update] root='%s' idx=%u gen=%u pos=(%.2f,%.2f,%.2f)",
-                root.name(), root.id().index, root.id().generation,
-                m[3], m[7], m[11]);  // translation from row-major matrix
-        }
-    } else {
-        if (do_debug) {
-            tc::Log::warn("[SkeletonInstance::update] root is INVALID!");
-        }
     }
 
     // Compute bone matrices

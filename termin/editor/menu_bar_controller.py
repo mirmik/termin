@@ -47,6 +47,7 @@ class MenuBarController:
         on_layers_settings: Callable,
         on_shadow_settings: Callable,
         on_toggle_game_mode: Callable,
+        on_run_standalone: Callable,
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
@@ -92,6 +93,7 @@ class MenuBarController:
             on_layers_settings=on_layers_settings,
             on_shadow_settings=on_shadow_settings,
             on_toggle_game_mode=on_toggle_game_mode,
+            on_run_standalone=on_run_standalone,
             on_show_undo_stack_viewer=on_show_undo_stack_viewer,
             on_show_framegraph_debugger=on_show_framegraph_debugger,
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
@@ -123,6 +125,7 @@ class MenuBarController:
         on_layers_settings: Callable,
         on_shadow_settings: Callable,
         on_toggle_game_mode: Callable,
+        on_run_standalone: Callable,
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
@@ -226,6 +229,10 @@ class MenuBarController:
         self._action_play = game_menu.addAction("Play")
         self._action_play.setShortcut("F5")
         self._action_play.triggered.connect(on_toggle_game_mode)
+
+        run_standalone_action = game_menu.addAction("Run Standalone...")
+        run_standalone_action.setShortcut("F6")
+        run_standalone_action.triggered.connect(on_run_standalone)
 
         # Debug menu
         self._action_profiler = debug_menu.addAction("Profiler")

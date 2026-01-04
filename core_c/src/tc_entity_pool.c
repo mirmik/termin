@@ -437,10 +437,6 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     uint32_t idx = pool->free_stack[--pool->free_count];
     uint32_t gen = pool->generations[idx];
 
-    if (gen > 0) {
-        tc_log_debug("[tc_entity_pool] Reusing slot idx=%u gen=%u for '%s'", idx, gen, name ? name : "entity");
-    }
-
     pool->alive[idx] = true;
     pool->visible[idx] = true;
     pool->active[idx] = true;
@@ -865,7 +861,6 @@ static void spread_changes_to_distal(tc_entity_pool* pool, uint32_t idx) {
 
     EntityIdArray* ch = &pool->children[idx];
     for (size_t i = 0; i < ch->count; i++) {
-        tc_log_debug("[tc_entity_pool] Spreading changes distal from idx=%u to child idx=%u", idx, ch->items[i].index);
         tc_entity_id child = ch->items[i];
         if (tc_entity_pool_alive(pool, child)) {
             spread_changes_to_distal(pool, child.index);
@@ -885,8 +880,6 @@ static void spread_changes_to_proximal(tc_entity_pool* pool, uint32_t idx) {
 
 void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) return;
-
-    tc_log_debug("[tc_entity_pool] Marking entity idx=%u as dirty", id.index);
 
     uint32_t idx = id.index;
 

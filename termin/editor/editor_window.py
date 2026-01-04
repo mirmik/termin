@@ -443,6 +443,7 @@ class EditorWindow(QMainWindow):
             on_layers_settings=self._show_layers_dialog,
             on_shadow_settings=self._show_shadow_settings_dialog,
             on_toggle_game_mode=self._toggle_game_mode,
+            on_run_standalone=self._run_standalone,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
@@ -1773,6 +1774,39 @@ class EditorWindow(QMainWindow):
         """Переключает режим игры."""
         if self.game_mode_controller is not None:
             self.game_mode_controller.toggle()
+
+    def _run_standalone(self) -> None:
+        """Run project in standalone player window."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        project_path = self._get_project_path()
+        if project_path is None:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Project", "Please open a project first.")
+            return
+
+        scene_path = self.world_persistence.current_scene_path
+        if scene_path is None:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Scene", "Please save the scene first.")
+            return
+
+        # Save scene before running
+        self._save_scene()
+
+        # Run player in separate process
+        scene_name = Path(scene_path).name
+        project_root = Path(project_path)
+        cmd = [
+            sys.executable,
+            "-m", "termin.player",
+            str(project_root),
+            "--scene", scene_name,
+        ]
+
+        subprocess.Popen(cmd, cwd=str(project_root))
 
     def _get_viewport_camera_names(self) -> dict[int, str | None]:
         """Возвращает словарь id(viewport) -> имя камеры для всех viewport'ов."""

@@ -54,7 +54,18 @@ public:
     Entity get_bone_entity_by_name(const std::string& bone_name) const;
 
     /**
+     * Set local transform for a bone by index.
+     */
+    void set_bone_transform(
+        int bone_index,
+        const double* translation,  // 3 doubles or nullptr
+        const double* rotation,     // 4 doubles (xyzw) or nullptr
+        const double* scale         // 3 doubles or nullptr
+    );
+
+    /**
      * Set local transform for a bone by name.
+     * Prefer set_bone_transform() with index for better performance.
      */
     void set_bone_transform_by_name(
         const std::string& bone_name,

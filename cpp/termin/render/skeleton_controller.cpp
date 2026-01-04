@@ -13,23 +13,6 @@ SkeletonController::SkeletonController()
 
 void SkeletonController::start() {
     CxxComponent::start();
-
-    // Debug: check skeleton state after deserialization
-    tc::Log::info("[SkeletonController::start] skeleton.is_valid=%d skeleton.get()=%p bone_entities.size=%zu",
-                  skeleton.is_valid(), (void*)skeleton.get(), bone_entities.size());
-
-    if (skeleton.is_valid() && skeleton.get() != nullptr) {
-        tc::Log::info("[SkeletonController::start] skeleton bones=%zu", skeleton.get()->bones().size());
-    }
-
-    // Check bone entities validity
-    int valid_count = 0;
-    for (size_t i = 0; i < bone_entities.size(); ++i) {
-        if (bone_entities[i].valid()) {
-            valid_count++;
-        }
-    }
-    tc::Log::info("[SkeletonController::start] valid bone entities: %d/%zu", valid_count, bone_entities.size());
 }
 
 void SkeletonController::set_skeleton(const SkeletonHandle& handle) {
@@ -62,13 +45,16 @@ void SkeletonController::invalidate_instance() {
 }
 
 void SkeletonController::before_render() {
+    if (_skeleton_instance == nullptr) {
+        skeleton_instance(); // Try to create instance  
+    }
+
     if (_skeleton_instance != nullptr) {
         _skeleton_instance->update();
     }
 }
 
 void SkeletonController::on_removed_from_entity() {
-    std::cout << "[SkeletonController::on_removed_from_entity] called" << std::endl;
     CxxComponent::on_removed_from_entity();
     _skeleton_instance.reset();
 }

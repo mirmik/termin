@@ -291,14 +291,15 @@ def instantiate_glb(
 
     rm = ResourceManager.instance()
 
-    # Get materials
-    default_material = rm.get_material("DefaultMaterial")
-    skinned_material = rm.get_material("SkinnedMaterial")
+    # Get materials (as assets for proper serialization)
+    default_material_asset = rm.get_material_asset("DefaultMaterial")
+    # Use StandartMaterial for skinned meshes - SkinnedMeshRenderer will inject skinning
+    skinned_material_asset = rm.get_material_asset("StandartMaterial")
 
-    if default_material is None or skinned_material is None:
+    if default_material_asset is None or skinned_material_asset is None:
         raise RuntimeError(
             f"[glb_instantiator] Builtin materials not registered: "
-            f"DefaultMaterial={default_material is not None}, SkinnedMaterial={skinned_material is not None}"
+            f"DefaultMaterial={default_material_asset is not None}, StandartMaterial={skinned_material_asset is not None}"
         )
 
     meshes: Dict[int, TcMesh] = {}
@@ -322,8 +323,8 @@ def instantiate_glb(
                 scene_data,
                 meshes,
                 mesh_assets,
-                default_material,
-                skinned_material,
+                default_material_asset,
+                skinned_material_asset,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
                 scene=scene,
@@ -337,8 +338,8 @@ def instantiate_glb(
                     scene_data,
                     meshes,
                     mesh_assets,
-                    default_material,
-                    skinned_material,
+                    default_material_asset,
+                    skinned_material_asset,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
                     scene=scene,
@@ -358,7 +359,7 @@ def instantiate_glb(
 
             meshes[i] = tc_mesh
             mesh_entity = create_entity(glb_mesh.name)
-            renderer = MeshRenderer(mesh=tc_mesh, material=default_material)
+            renderer = MeshRenderer(mesh=tc_mesh, material=default_material_asset)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
 

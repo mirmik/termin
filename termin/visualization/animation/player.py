@@ -188,32 +188,22 @@ class AnimationPlayer(PythonComponent):
 
     def _update_skeleton(self, sample: Dict):
         """Update skeleton bone transforms from animation sample."""
-        found_count = 0
+        skeleton_data = self._target_skeleton.skeleton_data
         for channel_name, channel_data in sample.items():
+            bone_idx = skeleton_data.get_bone_index(channel_name)
+            if bone_idx < 0:
+                continue
+
             tr = channel_data[0]  # translation
             rot = channel_data[1]  # rotation (quaternion xyzw)
             sc = channel_data[2]  # scale (float or None)
 
-            # Check if bone exists before setting
-            bone_idx = self._target_skeleton.skeleton_data.get_bone_index(channel_name)
-            if bone_idx >= 0:
-                found_count += 1
-
-            # Set bone transform
-            self._target_skeleton.set_bone_transform_by_name(
-                channel_name,
+            self._target_skeleton.set_bone_transform(
+                bone_idx,
                 translation=tr,
                 rotation=rot,
-                scale=sc,  # Already a float from AnimationChannel.sample()
+                scale=sc,
             )
-
-        if self._DEBUG_UPDATE and AnimationPlayer._debug_skeleton_frame < 3:
-            AnimationPlayer._debug_skeleton_frame += 1
-            skeleton_bones = [b.name for b in self._target_skeleton.skeleton_data.bones[:5]]
-            sample_channels = list(sample.keys())[:5]
-            log.debug(f"[_update_skeleton] found {found_count}/{len(sample)} channels matching bones")
-            log.debug(f"  skeleton bones[:5]: {skeleton_bones}")
-            log.debug(f"  sample channels[:5]: {sample_channels}")
 
     def _update_entity(self, sample: Dict):
         """Update entity transform from animation sample (legacy mode)."""

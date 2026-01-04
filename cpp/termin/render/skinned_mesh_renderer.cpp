@@ -99,6 +99,8 @@ Material* SkinnedMeshRenderer::get_skinned_material() {
         PyErr_Clear();
     }
 
+    tc::Log::warn("[SkinnedMeshRenderer::get_skinned_material] failed to inject skinning into '%s'",
+        base_mat->name.c_str());
     return base_mat;
 }
 
@@ -116,7 +118,9 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
         if (_bone_count > 0) {
             // Check if shader already has skinning
             const std::string& vert_source = context.current_shader->vertex_source();
-            if (vert_source.find("u_bone_matrices") == std::string::npos) {
+            bool has_skinning = vert_source.find("u_bone_matrices") != std::string::npos;
+
+            if (!has_skinning) {
                 // Need to inject skinning into this shader
                 try {
                     nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
@@ -131,9 +135,36 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
                         // Use the skinned shader
                         shader_to_use->use();
                         // Re-apply uniforms from original shader context
-                        shader_to_use->set_uniform_matrix4("u_view", context.view);
-                        shader_to_use->set_uniform_matrix4("u_projection", context.projection);
-                        shader_to_use->set_uniform_matrix4("u_model", context.model);
+                        shader_to_use->set_uniform_matrix4("u_view", context.view, false);
+                        shader_to_use->set_uniform_matrix4("u_projection", context.projection, false);
+                        shader_to_use->set_uniform_matrix4("u_model", context.model, false);
+
+                        // Apply extra_uniforms (e.g., u_pickColor for IdPass)
+                        if (context.extra_uniforms.ptr() != nullptr &&
+                            !context.extra_uniforms.is_none() &&
+                            nb::isinstance<nb::dict>(context.extra_uniforms)) {
+                            nb::dict extra = nb::cast<nb::dict>(context.extra_uniforms);
+                            for (auto item : extra) {
+                                std::string name = nb::cast<std::string>(nb::str(item.first));
+                                nb::tuple val_tuple = nb::cast<nb::tuple>(item.second);
+                                if (nb::len(val_tuple) >= 2) {
+                                    std::string type_name = nb::cast<std::string>(val_tuple[0]);
+                                    if (type_name == "vec3") {
+                                        nb::tuple val = nb::cast<nb::tuple>(val_tuple[1]);
+                                        float x = nb::cast<float>(val[0]);
+                                        float y = nb::cast<float>(val[1]);
+                                        float z = nb::cast<float>(val[2]);
+                                        shader_to_use->set_uniform_vec3(name.c_str(), x, y, z);
+                                    } else if (type_name == "float") {
+                                        float val = nb::cast<float>(val_tuple[1]);
+                                        shader_to_use->set_uniform_float(name.c_str(), val);
+                                    } else if (type_name == "int") {
+                                        int val = nb::cast<int>(val_tuple[1]);
+                                        shader_to_use->set_uniform_int(name.c_str(), val);
+                                    }
+                                }
+                            }
+                        }
                     }
                 } catch (const nb::python_error& e) {
                     tc::Log::warn(e, "SkinnedMeshRenderer::draw_geometry skinning injection");
@@ -172,23 +203,16 @@ std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std:
 void SkinnedMeshRenderer::start() {
     Component::start();
 
-    tc::Log::info("[SkinnedMeshRenderer::start] entity='%s' _skeleton_controller=%p",
-                  entity.valid() ? entity.name() : "invalid", (void*)_skeleton_controller);
-
     // After deserialization, skeleton_controller may be null - try to find it
     if (_skeleton_controller == nullptr && entity.valid()) {
         // Look for SkeletonController by type name
         // Check parent entity first (typical for GLB structure)
         Entity parent_entity = entity.parent();
 
-        tc::Log::info("[SkinnedMeshRenderer::start] looking for SkeletonController, parent='%s'",
-                      parent_entity.valid() ? parent_entity.name() : "invalid");
-
         if (parent_entity.valid()) {
             Component* controller = parent_entity.get_component_by_type("SkeletonController");
             if (controller != nullptr) {
                 _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
-                tc::Log::info("[SkinnedMeshRenderer::start] found in parent: %p", (void*)_skeleton_controller);
             }
         }
 
@@ -197,12 +221,7 @@ void SkinnedMeshRenderer::start() {
             Component* controller = entity.get_component_by_type("SkeletonController");
             if (controller != nullptr) {
                 _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
-                tc::Log::info("[SkinnedMeshRenderer::start] found in self: %p", (void*)_skeleton_controller);
             }
-        }
-
-        if (_skeleton_controller == nullptr) {
-            tc::Log::warn("[SkinnedMeshRenderer::start] SkeletonController NOT FOUND");
         }
     }
 }

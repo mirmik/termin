@@ -449,6 +449,9 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("near", &ShadowPass::near)
         .def_rw("far", &ShadowPass::far)
         .def_rw("caster_offset", &ShadowPass::caster_offset)
+        .def_prop_rw("shadow_shader_program",
+            [](ShadowPass& self) -> ShaderProgram* { return self.shadow_shader_program; },
+            [](ShadowPass& self, ShaderProgram* s) { self.shadow_shader_program = s; })
         .def("get_resource_specs", &ShadowPass::get_resource_specs)
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
         .def("set_debugger_window", &RenderFramePass::set_debugger_window,

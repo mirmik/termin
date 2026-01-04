@@ -89,6 +89,11 @@ public:
      * Component lifecycle: find skeleton controller on start.
      */
     void start() override;
+
+    void on_editor_start() override 
+    {
+        start();
+    }
 };
 
 REGISTER_COMPONENT(SkinnedMeshRenderer, MeshRenderer);

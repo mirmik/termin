@@ -235,7 +235,8 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
             # Replace a_normal with _skinned_normal
             new_lines[i] = re.sub(r'\ba_normal\b', '_skinned_normal', new_lines[i])
 
-    return '\n'.join(new_lines)
+    result = '\n'.join(new_lines)
+    return result
 
 
 # Fast cache by shader object id (avoids expensive hash computation)
@@ -303,9 +304,10 @@ def get_skinned_material(material: Material) -> Material:
     skinned_mat.source_path = material.source_path
     skinned_mat.shader_name = material.shader_name
 
+    # Build phases list first (nanobind doesn't support append on vector members)
+    new_phases = []
     for phase in material.phases:
         skinned_shader = get_skinned_shader(phase.shader_programm)
-
         skinned_phase = MaterialPhase(
             shader_programm=skinned_shader,
             render_state=phase.render_state,
@@ -315,8 +317,10 @@ def get_skinned_material(material: Material) -> Material:
             textures=dict(phase.textures),
             uniforms=dict(phase.uniforms),
         )
-        skinned_mat.phases.append(skinned_phase)
+        new_phases.append(skinned_phase)
 
+    # Assign all phases at once
+    skinned_mat.phases = new_phases
     _skinned_material_cache[mat_id] = skinned_mat
     return skinned_mat
 

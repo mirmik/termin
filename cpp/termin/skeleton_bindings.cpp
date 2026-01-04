@@ -103,6 +103,40 @@ void bind_skeleton(nb::module_& m) {
             if (e.valid()) return nb::cast(e);
             return nb::none();
         }, nb::arg("bone_name"))
+        .def("set_bone_transform", [](SkeletonInstance& si,
+                int bone_index,
+                nb::object translation,
+                nb::object rotation,
+                nb::object scale) {
+            std::array<double, 3> t_arr;
+            std::array<double, 4> r_arr;
+            std::array<double, 3> s_arr;
+            const double* t_ptr = nullptr;
+            const double* r_ptr = nullptr;
+            const double* s_ptr = nullptr;
+
+            if (!translation.is_none()) {
+                t_arr = numpy_to_vec3(translation);
+                t_ptr = t_arr.data();
+            }
+            if (!rotation.is_none()) {
+                r_arr = numpy_to_vec4(rotation);
+                r_ptr = r_arr.data();
+            }
+            if (!scale.is_none()) {
+                if (nb::isinstance<nb::float_>(scale) || nb::isinstance<nb::int_>(scale)) {
+                    double s = nb::cast<double>(scale);
+                    s_arr = {s, s, s};
+                } else {
+                    s_arr = numpy_to_vec3(scale);
+                }
+                s_ptr = s_arr.data();
+            }
+            si.set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr);
+        }, nb::arg("bone_index"),
+           nb::arg("translation") = nb::none(),
+           nb::arg("rotation") = nb::none(),
+           nb::arg("scale") = nb::none())
         .def("set_bone_transform_by_name", [](SkeletonInstance& si,
                 const std::string& bone_name,
                 nb::object translation,
@@ -124,7 +158,6 @@ void bind_skeleton(nb::module_& m) {
                 r_ptr = r_arr.data();
             }
             if (!scale.is_none()) {
-                // Handle both scalar and vec3 scale
                 if (nb::isinstance<nb::float_>(scale) || nb::isinstance<nb::int_>(scale)) {
                     double s = nb::cast<double>(scale);
                     s_arr = {s, s, s};

@@ -1,4 +1,5 @@
 #include "shadow_pass.hpp"
+#include "shader_program.hpp"
 #include "tc_log.hpp"
 
 #include <cmath>
@@ -8,31 +9,6 @@
 namespace termin {
 
 namespace {
-
-// Shadow shader sources (depth-only pass)
-const char* SHADOW_VERT = R"(
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main()
-{
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-)";
-
-const char* SHADOW_FRAG = R"(
-#version 330 core
-
-void main()
-{
-    // Depth-only pass - no color output needed
-}
-)";
 
 // Get model matrix from Entity as Mat44f
 Mat44f get_model_matrix(const Entity& entity) {
@@ -83,18 +59,6 @@ std::vector<ResourceSpec> ShadowPass::get_resource_specs() const {
             std::nullopt
         }
     };
-}
-
-
-void ShadowPass::ensure_shader(GraphicsBackend* graphics) {
-    if (shadow_shader_) {
-        return;
-    }
-
-    shadow_shader_ = graphics->create_shader(SHADOW_VERT, SHADOW_FRAG, nullptr);
-    if (!shadow_shader_) {
-        tc::Log::error("ShadowPass: failed to create shadow shader");
-    }
 }
 
 
@@ -210,10 +174,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
         return results;
     }
 
-    // Ensure shader is ready
-    ensure_shader(graphics);
-    if (!shadow_shader_) {
-        tc::Log::error("ShadowPass: shadow shader creation failed");
+    // Check shader is set from Python
+    if (!shadow_shader_program) {
+        tc::Log::error("ShadowPass: shadow_shader_program not set");
         return results;
     }
 
@@ -308,17 +271,21 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
         graphics->apply_render_state(render_state);
 
         // Setup shader
-        shadow_shader_->use();
-        shadow_shader_->set_uniform_matrix4("u_view", view_matrix.data, false);
-        shadow_shader_->set_uniform_matrix4("u_projection", proj_matrix.data, false);
+        shadow_shader_program->use();
+        shadow_shader_program->set_uniform_matrix4("u_view", view_matrix, false);
+        shadow_shader_program->set_uniform_matrix4("u_projection", proj_matrix, false);
 
         context.view = view_matrix;
         context.projection = proj_matrix;
+        context.current_shader = shadow_shader_program;
 
         // Render all shadow casters
         for (const auto& dc : draw_calls) {
+            // Re-bind shader (draw_geometry may have switched to skinned variant)
+            shadow_shader_program->use();
+
             Mat44f model = get_model_matrix(*dc.entity);
-            shadow_shader_->set_uniform_matrix4("u_model", model.data, false);
+            shadow_shader_program->set_uniform_matrix4("u_model", model, false);
             context.model = model;
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
@@ -329,9 +296,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     }
 
     // Reset state: stop shader, unbind framebuffer, reset GL state
-    if (shadow_shader_) {
-        shadow_shader_->stop();
-    }
+    shadow_shader_program->stop();
     graphics->bind_framebuffer(nullptr);
     graphics->reset_gl_state();
 

@@ -339,29 +339,24 @@ inline void SkeletonHandle::deserialize_from(const nos::trent& data, tc_scene*) 
     if (data.contains("uuid")) {
         try {
             std::string uuid = data["uuid"].as_string();
-            tc::Log::info("[SkeletonHandle::deserialize_from] uuid=%s", uuid.c_str());
             nb::object rm_module = nb::module_::import_("termin.assets.resources");
             nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
             nb::object found = rm.attr("get_skeleton_asset_by_uuid")(uuid);
             if (!found.is_none()) {
                 asset = found;
-                tc::Log::info("[SkeletonHandle::deserialize_from] found by uuid, asset.is_none=%d", asset.is_none());
                 return;
             }
-            tc::Log::warn("[SkeletonHandle::deserialize_from] uuid not found in ResourceManager");
+            tc::Log::warn("[SkeletonHandle::deserialize_from] uuid '%s' not found", uuid.c_str());
         } catch (const std::exception& e) {
             tc::Log::warn(e, "SkeletonHandle::deserialize_from uuid lookup");
         }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";
-    tc::Log::info("[SkeletonHandle::deserialize_from] type=%s", type.c_str());
 
     if (type == "named") {
         std::string name = data["name"].as_string();
-        tc::Log::info("[SkeletonHandle::deserialize_from] looking up by name='%s'", name.c_str());
         asset = from_name(name).asset;
-        tc::Log::info("[SkeletonHandle::deserialize_from] result: asset.is_none=%d", asset.is_none());
     } else if (type == "path") {
         std::string path = data["path"].as_string();
         size_t last_slash = path.find_last_of("/\\");
@@ -370,11 +365,9 @@ inline void SkeletonHandle::deserialize_from(const nos::trent& data, tc_scene*) 
         size_t last_dot = filename.find_last_of('.');
         std::string name = (last_dot != std::string::npos)
             ? filename.substr(0, last_dot) : filename;
-        tc::Log::info("[SkeletonHandle::deserialize_from] path='%s' -> name='%s'", path.c_str(), name.c_str());
         asset = from_name(name).asset;
-        tc::Log::info("[SkeletonHandle::deserialize_from] result: asset.is_none=%d", asset.is_none());
     } else {
-        tc::Log::warn("[SkeletonHandle::deserialize_from] unknown type, setting asset to none");
+        tc::Log::warn("[SkeletonHandle::deserialize_from] unknown type '%s'", type.c_str());
         asset = nb::none();
     }
 }

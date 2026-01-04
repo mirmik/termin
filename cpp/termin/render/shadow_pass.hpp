@@ -21,6 +21,9 @@ namespace nb = nanobind;
 
 namespace termin {
 
+// Forward declarations
+class ShaderProgram;
+
 // Draw call for shadow pass (defined before ShadowPass class)
 struct ShadowDrawCall {
     const Entity* entity = nullptr;
@@ -76,6 +79,12 @@ public:
 
     virtual ~ShadowPass() = default;
 
+    // Non-copyable (contains unique_ptr in fbo_pool_)
+    ShadowPass(const ShadowPass&) = delete;
+    ShadowPass& operator=(const ShadowPass&) = delete;
+    ShadowPass(ShadowPass&&) = default;
+    ShadowPass& operator=(ShadowPass&&) = default;
+
     /**
      * Execute shadow pass, rendering shadow maps for all lights.
      *
@@ -114,15 +123,12 @@ public:
         return entity_names;
     }
 
+    // Shadow shader program - set from Python before execute
+    ShaderProgram* shadow_shader_program = nullptr;
+
 private:
     // FBO pool: index -> FBO
     std::unordered_map<int, FramebufferHandlePtr> fbo_pool_;
-
-    // Shadow shader (created lazily)
-    ShaderHandlePtr shadow_shader_;
-
-    // Ensure shadow shader is ready
-    void ensure_shader(GraphicsBackend* graphics);
 
     // Get or create FBO for shadow map
     FramebufferHandle* get_or_create_fbo(GraphicsBackend* graphics, int resolution, int index);

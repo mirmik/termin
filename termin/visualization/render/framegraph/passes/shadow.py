@@ -17,6 +17,7 @@ import numpy as np
 from termin._native.render import ShadowPass as _ShadowPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+from termin.visualization.render.system_shaders import get_system_shader
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -161,6 +162,9 @@ class ShadowPass(_ShadowPassNative):
         if not lights:
             writes_fbos[self.output_res] = shadow_array
             return
+
+        # Set shadow shader for C++ (enables skinning injection)
+        self.shadow_shader_program = get_system_shader("shadow", graphics)
 
         # Get camera matrices
         camera_view = camera.get_view_matrix().astype(np.float32)

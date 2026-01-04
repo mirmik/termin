@@ -494,6 +494,7 @@ class HandleSelectorWidget(FieldWidget):
         self._resources = resources
         self._allow_none = allow_none
         self._name_to_uuid: dict[str, Optional[str]] = {}
+        self._uuid_to_name: dict[str, str] = {}
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -523,6 +524,7 @@ class HandleSelectorWidget(FieldWidget):
         current_text = self._combo.currentText()
         self._combo.clear()
         self._name_to_uuid.clear()
+        self._uuid_to_name.clear()
 
         # Add (None) option if allowed
         if self._allow_none:
@@ -533,6 +535,8 @@ class HandleSelectorWidget(FieldWidget):
         for name, uuid in items:
             self._combo.addItem(name, userData=name)
             self._name_to_uuid[name] = uuid
+            if uuid:
+                self._uuid_to_name[uuid] = name
 
         # Restore selection
         idx = self._combo.findText(current_text)
@@ -567,9 +571,11 @@ class HandleSelectorWidget(FieldWidget):
             self._combo.blockSignals(False)
             return
 
-        # Extract name from dict
+        # Extract uuid and name from dict
+        uuid = None
         name = None
         if isinstance(value, dict):
+            uuid = value.get("uuid")
             name = value.get("name")
         else:
             # Legacy: try to get name from object via accessors
@@ -577,14 +583,30 @@ class HandleSelectorWidget(FieldWidget):
             if accessors is not None:
                 name = accessors.find_name(value)
 
-        if name is None:
-            if self._allow_none:
-                self._combo.setCurrentIndex(0)  # (None)
-            else:
-                self._combo.setCurrentIndex(-1)
-        else:
+        # First try to find by UUID (more reliable than name)
+        if uuid and uuid in self._uuid_to_name:
+            list_name = self._uuid_to_name[uuid]
+            idx = self._combo.findText(list_name)
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
+                self._combo.blockSignals(False)
+                return
+
+        # Fallback to name
+        if name is not None:
             idx = self._combo.findText(name)
-            self._combo.setCurrentIndex(idx if idx >= 0 else (0 if self._allow_none else -1))
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
+                self._combo.blockSignals(False)
+                return
+            # Name not found - log warning
+            log.warn(f"[HandleSelectorWidget] {self._resource_kind}: resource not found - name='{name}' uuid='{uuid}'")
+
+        # Not found - set to (None) or -1
+        if self._allow_none:
+            self._combo.setCurrentIndex(0)  # (None)
+        else:
+            self._combo.setCurrentIndex(-1)
 
         self._combo.blockSignals(False)
 
