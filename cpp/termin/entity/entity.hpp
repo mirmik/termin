@@ -71,7 +71,7 @@ public:
     void get_local_scale(double* xyz) const { tc_entity_pool_get_local_scale(_pool, _id, xyz); }
     void set_local_scale(const double* xyz) { tc_entity_pool_set_local_scale(_pool, _id, xyz); }
 
-    void get_world_position(double* xyz) const { tc_entity_pool_get_world_position(_pool, _id, xyz); }
+    void get_global_position(double* xyz) const { tc_entity_pool_get_global_position(_pool, _id, xyz); }
     void get_world_matrix(double* m16) const { tc_entity_pool_get_world_matrix(_pool, _id, m16); }
 
     void mark_transform_dirty() { tc_entity_pool_mark_dirty(_pool, _id); }

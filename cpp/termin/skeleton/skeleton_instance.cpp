@@ -2,7 +2,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
-
+#include "tc_log.hpp"
 #include <cstring>
 
 namespace termin {
@@ -44,7 +44,10 @@ Entity SkeletonInstance::get_bone_entity(int bone_index) const {
 }
 
 Entity SkeletonInstance::get_bone_entity_by_name(const std::string& bone_name) const {
-    if (!_data) return Entity();
+    if (!_data) {
+        tc::Log::warn("[SkeletonInstance::get_bone_entity_by_name] skeleton data is null");
+        return Entity();
+    }
     int idx = _data->get_bone_index(bone_name);
     return get_bone_entity(idx);
 }
@@ -55,14 +58,12 @@ void SkeletonInstance::set_bone_transform_by_name(
     const double* rotation,
     const double* scale
 ) {
-    static int debug_set_bone = 0;
-    if (debug_set_bone < 5) {
-        debug_set_bone++;
-        printf("[set_bone] this=%p '%s'\n", (void*)this, bone_name.c_str());
-    }
-
     Entity ent = get_bone_entity_by_name(bone_name);
-    if (!ent.valid()) return;
+    if (!ent.valid()) {
+        tc::Log::warn("[SkeletonInstance::set_bone_transform_by_name] bone '%s' entity invalid",
+                     bone_name.c_str());
+        return;
+    }
 
     const GeneralPose3& pose = ent.transform().local_pose();
 
@@ -97,6 +98,7 @@ Entity SkeletonInstance::find_skeleton_root() {
         }
     }
 
+    tc::Log::warn("[SkeletonInstance::find_skeleton_root] could not find skeleton root");
     return Entity();
 }
 
@@ -141,20 +143,6 @@ void SkeletonInstance::update() {
 
         // bone_matrix = skeleton_world_inv * bone_world * inv_bind
         _bone_matrices[bone.index] = skeleton_world_inv * bone_world * inv_bind;
-
-        // Debug: check if bone_matrix[0] is reasonable (should be ~identity in T-pose)
-        if (bone.index == 0) {
-            const Mat44& m = _bone_matrices[0];
-            static bool printed = false;
-            if (!printed) {
-                printed = true;
-                printf("[SkeletonInstance] bone_matrix[0] (should be ~identity in bind pose):\n");
-                printf("  [%.3f %.3f %.3f %.3f]\n", m(0,0), m(0,1), m(0,2), m(0,3));
-                printf("  [%.3f %.3f %.3f %.3f]\n", m(1,0), m(1,1), m(1,2), m(1,3));
-                printf("  [%.3f %.3f %.3f %.3f]\n", m(2,0), m(2,1), m(2,2), m(2,3));
-                printf("  [%.3f %.3f %.3f %.3f]\n", m(3,0), m(3,1), m(3,2), m(3,3));
-            }
-        }
     }
 }
 
@@ -184,6 +172,7 @@ Mat44 SkeletonInstance::get_bone_world_matrix(int bone_index) const {
             return result;
         }
     }
+    tc::Log::warn("[SkeletonInstance::get_bone_world_matrix] invalid bone_index=%d", bone_index);
     return Mat44::identity();
 }
 
@@ -192,6 +181,7 @@ const Mat44& SkeletonInstance::get_bone_matrix(int bone_index) const {
     if (bone_index >= 0 && bone_index < static_cast<int>(_bone_matrices.size())) {
         return _bone_matrices[bone_index];
     }
+    tc::Log::warn("[SkeletonInstance::get_bone_matrix] invalid bone_index=%d", bone_index);
     return identity;
 }
 

@@ -754,6 +754,72 @@ void tc_entity_pool_set_local_scale(tc_entity_pool* pool, tc_entity_id id, const
     tc_entity_pool_mark_dirty(pool, id);
 }
 
+void tc_entity_pool_get_local_pose(
+    const tc_entity_pool* pool, tc_entity_id id,
+    double* position, double* rotation, double* scale
+) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    uint32_t idx = id.index;
+    if (position) {
+        Vec3 p = pool->local_positions[idx];
+        position[0] = p.x; position[1] = p.y; position[2] = p.z;
+    }
+    if (rotation) {
+        Quat q = pool->local_rotations[idx];
+        rotation[0] = q.x; rotation[1] = q.y; rotation[2] = q.z; rotation[3] = q.w;
+    }
+    if (scale) {
+        Vec3 s = pool->local_scales[idx];
+        scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
+    }
+}
+
+
+void tc_entity_pool_set_local_pose(
+    tc_entity_pool* pool, tc_entity_id id,
+    const double* position, const double* rotation, const double* scale
+) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    uint32_t idx = id.index;
+    if (position) {
+        pool->local_positions[idx] = (Vec3){position[0], position[1], position[2]};
+    }
+    if (rotation) {
+        pool->local_rotations[idx] = (Quat){rotation[0], rotation[1], rotation[2], rotation[3]};
+    }
+    if (scale) {
+        pool->local_scales[idx] = (Vec3){scale[0], scale[1], scale[2]};
+    }
+    tc_entity_pool_mark_dirty(pool, id);
+}
+
+// Forward declaration for lazy update
+static void update_entity_transform(tc_entity_pool* pool, uint32_t idx);
+
+void tc_entity_pool_get_global_pose(
+    const tc_entity_pool* pool, tc_entity_id id,
+    double* position, double* rotation, double* scale
+) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    uint32_t idx = id.index;
+    if (position) {
+        Vec3 p = pool->world_positions[idx];
+        position[0] = p.x; position[1] = p.y; position[2] = p.z;
+    }
+    if (rotation) {
+        Quat q = pool->world_rotations[idx];
+        rotation[0] = q.x; rotation[1] = q.y; rotation[2] = q.z; rotation[3] = q.w;
+    }
+    if (scale) {
+        Vec3 s = pool->world_scales[idx];
+        scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
+    }
+}
+
 static uint32_t increment_version(uint32_t v) {
     return (v + 1) % 0x7FFFFFFF;
 }
@@ -797,10 +863,7 @@ void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
     spread_changes_to_distal(pool, idx);
 }
 
-// Forward declarations for lazy update
-static void update_entity_transform(tc_entity_pool* pool, uint32_t idx);
-
-void tc_entity_pool_get_world_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
     if (!tc_entity_pool_alive(pool, id)) return;
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
@@ -810,7 +873,7 @@ void tc_entity_pool_get_world_position(const tc_entity_pool* pool, tc_entity_id 
     xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
 }
 
-void tc_entity_pool_get_world_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
+void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
     if (!tc_entity_pool_alive(pool, id)) return;
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
@@ -820,7 +883,7 @@ void tc_entity_pool_get_world_rotation(const tc_entity_pool* pool, tc_entity_id 
     xyzw[0] = q.x; xyzw[1] = q.y; xyzw[2] = q.z; xyzw[3] = q.w;
 }
 
-void tc_entity_pool_get_world_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
     if (!tc_entity_pool_alive(pool, id)) return;
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {

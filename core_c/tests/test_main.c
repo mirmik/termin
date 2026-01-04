@@ -180,7 +180,7 @@ static int test_entity_hierarchy(void) {
 
     // Check world position
     double world_pos[3];
-    tc_entity_pool_get_world_position(pool, child, world_pos);
+    tc_entity_pool_get_global_position(pool, child, world_pos);
     TEST_ASSERT(fabs(world_pos[0] - 15.0) < EPSILON, "child world pos x");
 
     tc_entity_pool_destroy(pool);

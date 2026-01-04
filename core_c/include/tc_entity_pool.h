@@ -131,10 +131,27 @@ TC_POOL_API void tc_entity_pool_set_local_rotation(tc_entity_pool* pool, tc_enti
 TC_POOL_API void tc_entity_pool_get_local_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 TC_POOL_API void tc_entity_pool_set_local_scale(tc_entity_pool* pool, tc_entity_id id, const double* xyz);
 
-// World pose (cached, auto-updated)
-TC_POOL_API void tc_entity_pool_get_world_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
-TC_POOL_API void tc_entity_pool_get_world_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw);
-TC_POOL_API void tc_entity_pool_get_world_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
+TC_POOL_API void tc_entity_pool_get_local_pose(
+    const tc_entity_pool* pool, tc_entity_id id,
+    double* position, double* rotation, double* scale
+);
+
+TC_POOL_API void tc_entity_pool_set_local_pose(
+    tc_entity_pool* pool, tc_entity_id id,
+    const double* position, const double* rotation, const double* scale
+);
+
+// Global(World) pose (cached, auto-updated)
+TC_POOL_API void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
+TC_POOL_API void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw);
+TC_POOL_API void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
+
+TC_POOL_API void tc_entity_pool_get_global_pose(
+    const tc_entity_pool* pool, tc_entity_id id,
+    double* position, double* rotation, double* scale
+);
+
+// World matrix (col-major 4x4)
 TC_POOL_API void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16);
 
 // Mark transform dirty (will be recalculated)

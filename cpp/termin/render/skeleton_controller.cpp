@@ -49,8 +49,9 @@ SkeletonInstance* SkeletonController::skeleton_instance() {
             _skeleton_instance = std::make_unique<SkeletonInstance>(
                 skel_data,
                 bone_entities,
-                entity  // Use controller's entity as skeleton root
+                entity
             );
+            _skeleton_instance->update();
         }
     }
     return _skeleton_instance.get();
