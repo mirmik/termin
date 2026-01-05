@@ -358,10 +358,10 @@ class RenderingController:
                 if viewport.camera is not None and viewport.camera.entity is not None:
                     camera_uuid = viewport.camera.entity.uuid
 
-                # Get pipeline name
-                pipeline_name = None
+                # Get pipeline UUID
+                pipeline_uuid = None
                 if viewport.pipeline is not None:
-                    pipeline_name = viewport.pipeline.name
+                    pipeline_uuid = self._get_pipeline_uuid(viewport.pipeline)
 
                 config = ViewportConfig(
                     display_name=display.name,
@@ -370,7 +370,7 @@ class RenderingController:
                     depth=viewport.depth,
                     input_mode=viewport.input_mode,
                     block_input_in_editor=viewport.block_input_in_editor,
-                    pipeline_name=pipeline_name,
+                    pipeline_uuid=pipeline_uuid,
                 )
                 scene.add_viewport_config(config)
 
@@ -952,6 +952,23 @@ class RenderingController:
                 state.fbos.clear()
 
         self._request_update()
+
+    def _get_pipeline_uuid(self, pipeline: "RenderPipeline") -> str | None:
+        """Get UUID for a pipeline by looking up its asset."""
+        from termin.assets.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        asset = rm.get_pipeline_asset(pipeline.name)
+        if asset is not None:
+            return asset.uuid
+        return None
+
+    def _get_pipeline_by_uuid(self, uuid: str) -> "RenderPipeline | None":
+        """Get pipeline by UUID."""
+        from termin.assets.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        return rm.get_pipeline_by_uuid(uuid)
 
     # --- Center tabs management ---
 

@@ -4357,7 +4357,7 @@
       },
       {
         "uuid": "0000000000000076",
-        "name": "ClickController",
+        "name": "GameController",
         "priority": 0,
         "visible": true,
         "active": true,
@@ -4392,6 +4392,12 @@
           },
           {
             "type": "GameController",
+            "data": {
+              "enabled": true
+            }
+          },
+          {
+            "type": "TimeModifierController",
             "data": {
               "enabled": true
             }
@@ -4464,7 +4470,7 @@
         "depth": 0,
         "input_mode": "simple",
         "block_input_in_editor": false,
-        "pipeline_name": "default"
+        "pipeline_uuid": "5baa602e-b819-4020-a428-c5a1f06a69a4"
       }
     ],
     "light_direction": [
@@ -4520,11 +4526,12 @@
       ],
       "radius": 6.5
     },
-    "selected_entity": "MainCamera",
+    "selected_entity": "Platform",
     "expanded_entities": [
-      "camera",
+      "PlatformBase",
       "EditorEntities",
-      "editor_ui"
+      "editor_ui",
+      "camera"
     ]
   },
   "resources": {

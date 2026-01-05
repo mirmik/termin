@@ -50,7 +50,13 @@ class InspectField:
             return
         if self.path is None:
             raise ValueError("InspectField: path or setter must be set")
-        _resolve_path_set(obj, self.path, value)
+        # Use InspectRegistry.set() for proper kind handling (e.g. dict -> MaterialHandle)
+        try:
+            from termin._native.inspect import InspectRegistry
+            InspectRegistry.instance().set(obj, self.path, value)
+        except Exception as e:
+            log.debug(f"[InspectField] InspectRegistry.set failed for '{self.path}': {e}, falling back to setattr")
+            _resolve_path_set(obj, self.path, value)
 
 
 def _resolve_path_get(obj, path: str):

@@ -65,31 +65,39 @@ class PostEffect:
 
     # ---- Сериализация ---------------------------------------------
 
+    def serialize_data(self) -> dict:
+        """
+        Сериализует данные эффекта через InspectRegistry.
+
+        Использует тот же механизм, что и PythonComponent - kind handlers
+        применяются для enum, handles и т.д.
+        """
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().serialize_all(self)
+
+    def deserialize_data(self, data: dict) -> None:
+        """
+        Десериализует данные эффекта через InspectRegistry.
+
+        Использует тот же механизм, что и PythonComponent - kind handlers
+        применяются для enum, handles и т.д.
+        """
+        if not data:
+            return
+        from termin._native.inspect import InspectRegistry
+        InspectRegistry.instance().deserialize_all(self, data)
+
     def serialize(self) -> dict:
         """
         Сериализует PostEffect в словарь.
 
-        Базовая реализация сохраняет:
-        - type: имя класса для десериализации
-        - name: имя эффекта
-
-        Подклассы должны переопределить _serialize_params() для
-        добавления своих параметров.
+        Использует InspectRegistry для сериализации полей.
         """
-        data = {
+        return {
             "type": self.__class__.__name__,
             "name": self.name,
+            "data": self.serialize_data(),
         }
-        data.update(self._serialize_params())
-        return data
-
-    def _serialize_params(self) -> dict:
-        """
-        Возвращает словарь с параметрами для сериализации.
-
-        Подклассы должны переопределить этот метод.
-        """
-        return {}
 
     @classmethod
     def deserialize(cls, data: dict, resource_manager=None) -> "PostEffect":
@@ -119,18 +127,11 @@ class PostEffect:
         if effect_cls is None:
             raise ValueError(f"Unknown PostEffect type: {effect_type}")
 
-        return effect_cls._deserialize_instance(data, resource_manager)
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "PostEffect":
-        """
-        Создаёт экземпляр из сериализованных данных.
-
-        Подклассы должны переопределить этот метод.
-        """
-        instance = cls()
+        # Создаём экземпляр и десериализуем данные
+        instance = effect_cls()
         if "name" in data:
             instance.name = data["name"]
+        instance.deserialize_data(data.get("data", {}))
         return instance
 
     # ---- API эффекта ---------------------------------------------

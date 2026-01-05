@@ -317,12 +317,12 @@ class RenderingManager:
                 )
                 continue
 
-            # Get pipeline by name
+            # Get pipeline by UUID
             pipeline = self._default_pipeline
-            if config.pipeline_name is not None:
+            if config.pipeline_uuid is not None:
                 from termin.assets.resources import ResourceManager
                 rm = ResourceManager.instance()
-                pipeline = rm.get_pipeline(config.pipeline_name)
+                pipeline = rm.get_pipeline_by_uuid(config.pipeline_uuid)
                 if pipeline is None:
                     pipeline = self._default_pipeline
 

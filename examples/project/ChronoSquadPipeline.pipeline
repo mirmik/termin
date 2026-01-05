@@ -1,5 +1,5 @@
 {
-  "name": "default",
+  "name": "ChronoSquadPipeline",
   "passes": [
     {
       "type": "SkyBoxPass",
@@ -30,7 +30,20 @@
       "effects": [
         {
           "type": "GrayscaleEffect",
-          "name": "grayscale"
+          "name": "grayscale",
+          "data": {}
+        },
+        {
+          "type": "MaterialPostEffect",
+          "name": "TimeSpection",
+          "data": {
+            "_material_handle": {
+              "type": "uuid",
+              "uuid": "16cc8c42-4d8b-4cea-8b8a-173ecc39217e",
+              "name": "TimeSpection"
+            },
+            "_required_depth": false
+          }
         }
       ]
     },

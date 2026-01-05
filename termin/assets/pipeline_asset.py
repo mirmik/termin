@@ -56,7 +56,11 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
 
         data = json.loads(content)
         rm = ResourceManager.instance()
-        return RenderPipeline.deserialize(data, rm)
+        pipeline = RenderPipeline.deserialize(data, rm)
+        # Sync pipeline name with asset name (file name takes priority)
+        if pipeline is not None:
+            pipeline.name = self._name
+        return pipeline
 
     @classmethod
     def from_pipeline(

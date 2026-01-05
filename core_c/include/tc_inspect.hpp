@@ -552,6 +552,14 @@ public:
                 nb::object val = f.py_getter(obj);
                 auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
                 if (handler && handler->has_python()) {
+                    // Warn if py_getter returned a dict - likely means inspector
+                    // set a dict instead of the proper type
+                    if (nb::isinstance<nb::dict>(val)) {
+                        tc_log(TC_LOG_WARN,
+                            "[InspectRegistry] serialize_all: py_getter for '%s.%s' (kind=%s) "
+                            "returned dict - inspector may have set wrong type",
+                            type_name.c_str(), f.path.c_str(), f.kind.c_str());
+                    }
                     nb::object serialized = handler->python.serialize(val);
                     result[f.path] = nb_to_trent_compat(serialized);
                 } else {

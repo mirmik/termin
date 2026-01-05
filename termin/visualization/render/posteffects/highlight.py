@@ -101,21 +101,6 @@ class HighlightEffect(PostEffect):
         self._color = color
         self._shader: ShaderProgram | None = None
 
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры HighlightEffect."""
-        return {
-            "color": list(self._color),
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "HighlightEffect":
-        """Создаёт HighlightEffect из сериализованных данных."""
-        color = tuple(data.get("color", (0.0, 0.0, 0.0, 1.0)))
-        return cls(
-            selected_id_getter=None,  # Runtime callback, не сериализуется
-            color=color,
-        )
-
     def required_resources(self) -> set[str]:
         # Нужна id-карта с именем "id" (её пишет IdPass)
         return {"id"}

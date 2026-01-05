@@ -38,6 +38,15 @@ class PipelinesMixin:
         """Get PipelineAsset by name."""
         return self._pipeline_registry.get_asset(name)
 
+    def get_pipeline_by_uuid(self, uuid: str) -> Optional["RenderPipeline"]:
+        """Get a copy of RenderPipeline by UUID."""
+        asset = self._pipeline_registry.get_asset_by_uuid(uuid)
+        if asset is not None:
+            pipeline = asset.data
+            if pipeline is not None:
+                return pipeline.copy()
+        return None
+
     def list_pipeline_names(self) -> list[str]:
         """List all registered pipeline names."""
         return sorted(self._pipeline_registry.list_names())

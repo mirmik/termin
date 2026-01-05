@@ -68,18 +68,6 @@ class GaussianBlurPass(PostEffect):
         self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)
         self.direction = np.array(direction, dtype=np.float32)
 
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры GaussianBlurPass."""
-        return {
-            "direction": self.direction.tolist(),
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "GaussianBlurPass":
-        """Создаёт GaussianBlurPass из сериализованных данных."""
-        direction = tuple(data.get("direction", (1.0, 0.0)))
-        return cls(direction=direction)
-
     def draw(self, gfx, key, color_tex, extra_textures, size):
         w, h = size
         texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)

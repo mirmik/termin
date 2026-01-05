@@ -233,13 +233,34 @@ class ViewportInspector(QWidget):
             # Update depth
             self._depth_spin.setValue(viewport.depth)
 
-            # Update pipeline list
+            # Update pipeline list and select current pipeline
             self.update_pipeline_list()
+            self._select_viewport_pipeline(viewport)
 
             # Check if camera has ViewportHintComponent
             self._update_hint_state(viewport)
         finally:
             self._updating = False
+
+    def _select_viewport_pipeline(self, viewport: "Viewport") -> None:
+        """Select pipeline in combo based on viewport's current pipeline."""
+        if viewport.pipeline is None:
+            self._pipeline_combo.setCurrentIndex(0)
+            self._current_pipeline_name = None
+            return
+
+        pipeline_name = viewport.pipeline.name
+
+        # Find matching pipeline in list
+        for i, (name, _) in enumerate(self._pipelines):
+            if name == pipeline_name:
+                self._pipeline_combo.setCurrentIndex(i)
+                self._current_pipeline_name = name
+                return
+
+        # Not found - select first (Editor or Default)
+        self._pipeline_combo.setCurrentIndex(0)
+        self._current_pipeline_name = None
 
     def _update_hint_state(self, viewport: "Viewport") -> None:
         """Update hint label visibility based on ViewportHintComponent."""

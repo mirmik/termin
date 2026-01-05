@@ -315,10 +315,11 @@ class PipelineInspector(QWidget):
             return True
 
         except Exception as e:
+            import traceback
             QMessageBox.critical(
                 self,
                 "Error Saving Pipeline",
-                f"Failed to save pipeline:\n{path}\n\nError: {e}",
+                f"Failed to save pipeline:\n{path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
             return False
 

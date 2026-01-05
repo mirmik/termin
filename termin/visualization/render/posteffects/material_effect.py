@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Set
+from typing import TYPE_CHECKING, Callable, Optional, Set
 
 from termin.visualization.render.postprocess import PostEffect
 from termin.visualization.core.material_handle import MaterialHandle
@@ -11,6 +11,10 @@ from termin.editor.inspect_field import InspectField
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
     from termin.visualization.core.material import Material
+    from termin.visualization.core.shader import ShaderProgram
+
+# Callback type: (shader) -> None
+BeforeDrawCallback = Callable[["ShaderProgram"], None]
 
 
 class MaterialPostEffect(PostEffect):
@@ -57,27 +61,19 @@ class MaterialPostEffect(PostEffect):
         if material_path:
             self._material_handle = MaterialHandle.from_name(material_path)
         self._required_depth = required_depth
+        self._before_draw: Optional[BeforeDrawCallback] = None
 
-    def _serialize_params(self) -> dict:
-        """Serialize parameters."""
-        material_name = ""
-        if self._material_handle and self._material_handle.is_valid:
-            material_name = self._material_handle.name or ""
-        return {
-            "material_path": material_name,
-            "required_depth": self._required_depth,
-        }
+    def set_before_draw(self, callback: Optional[BeforeDrawCallback]) -> None:
+        """
+        Set callback to be called before drawing.
 
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "MaterialPostEffect":
-        """Create from serialized data."""
-        instance = cls(
-            material_path=data.get("material_path", ""),
-            required_depth=data.get("required_depth", False),
-        )
-        if "name" in data:
-            instance.name = data["name"]
-        return instance
+        The callback receives the shader program and can set additional uniforms.
+        Called after the shader is bound but before drawing the quad.
+
+        Args:
+            callback: Callable[[ShaderProgram], None] or None to clear.
+        """
+        self._before_draw = callback
 
     def required_resources(self) -> Set[str]:
         """Return required FrameGraph resources."""
@@ -149,6 +145,10 @@ class MaterialPostEffect(PostEffect):
         # Set material uniforms
         for uniform_name, uniform_value in phase.uniforms.items():
             self._set_uniform(shader, uniform_name, uniform_value)
+
+        # Call before_draw callback for custom uniforms
+        if self._before_draw is not None:
+            self._before_draw(shader)
 
         # Draw fullscreen quad
         gfx.draw_ui_textured_quad(context_key)

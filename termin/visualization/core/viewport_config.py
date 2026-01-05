@@ -24,8 +24,8 @@ class ViewportConfig:
     # Normalized region on display (x, y, width, height)
     region: Tuple[float, float, float, float] = field(default=(0.0, 0.0, 1.0, 1.0))
 
-    # Pipeline name (None = use default)
-    pipeline_name: str | None = None
+    # Pipeline UUID (None = use default)
+    pipeline_uuid: str | None = None
 
     # Viewport depth (for ordering when multiple viewports on same display)
     depth: int = 0
@@ -46,20 +46,42 @@ class ViewportConfig:
             "input_mode": self.input_mode,
             "block_input_in_editor": self.block_input_in_editor,
         }
-        if self.pipeline_name is not None:
-            result["pipeline_name"] = self.pipeline_name
+        if self.pipeline_uuid is not None:
+            result["pipeline_uuid"] = self.pipeline_uuid
         return result
 
     @classmethod
     def deserialize(cls, data: dict) -> "ViewportConfig":
         """Deserialize from dict."""
         region = data.get("region", [0.0, 0.0, 1.0, 1.0])
+
+        # Get pipeline_uuid, with backwards compatibility for pipeline_name
+        pipeline_uuid = data.get("pipeline_uuid")
+        if pipeline_uuid is None:
+            # Backwards compatibility: convert pipeline_name to uuid
+            pipeline_name = data.get("pipeline_name")
+            if pipeline_name:
+                pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name)
+
         return cls(
             display_name=data.get("display_name", "Main"),
             camera_uuid=data.get("camera_uuid", ""),
             region=tuple(region),
-            pipeline_name=data.get("pipeline_name"),
+            pipeline_uuid=pipeline_uuid,
             depth=data.get("depth", 0),
             input_mode=data.get("input_mode", "simple"),
             block_input_in_editor=data.get("block_input_in_editor", False),
         )
+
+
+def _get_pipeline_uuid_by_name(name: str) -> str | None:
+    """Helper for backwards compatibility: get pipeline UUID by name."""
+    try:
+        from termin.assets.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_pipeline_asset(name)
+        if asset is not None:
+            return asset.uuid
+    except Exception:
+        pass
+    return None
