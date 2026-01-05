@@ -4525,14 +4525,7 @@
         0.8744742100030436
       ],
       "radius": 6.5
-    },
-    "selected_entity": "Platform",
-    "expanded_entities": [
-      "PlatformBase",
-      "EditorEntities",
-      "editor_ui",
-      "camera"
-    ]
+    }
   },
   "resources": {
     "textures": {

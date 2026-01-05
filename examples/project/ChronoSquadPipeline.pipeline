@@ -29,11 +29,6 @@
       "output_res": "color_pp",
       "effects": [
         {
-          "type": "GrayscaleEffect",
-          "name": "grayscale",
-          "data": {}
-        },
-        {
           "type": "MaterialPostEffect",
           "name": "TimeSpection",
           "data": {
