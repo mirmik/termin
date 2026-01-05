@@ -7,7 +7,6 @@ import numpy as np
 
 from termin._native.render import ColorPass as _ColorPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
@@ -30,17 +29,9 @@ class ColorPass(_ColorPassNative):
 
     Uses C++ implementation for core rendering, with Python wrapper for
     shadow mapping and debug features.
+
+    Fields are registered via INSPECT_FIELD macros in C++ (color_pass.hpp).
     """
-
-
-    inspect_fields = {
-        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
-        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
-        "shadow_res": InspectField(path="shadow_res", label="Shadow Resource", kind="string"),
-        "phase_mark": InspectField(path="phase_mark", label="Phase Mark", kind="string"),
-        "sort_by_distance": InspectField(path="sort_by_distance", label="Sort by Distance", kind="bool"),
-        "clear_depth": InspectField(path="clear_depth", label="Clear Depth", kind="bool"),
-    }
 
     def __init__(
         self,
@@ -69,37 +60,31 @@ class ColorPass(_ColorPassNative):
         # Cache of entity names with MeshRenderer
         self._entity_names: List[str] = []
 
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
+        """Create ColorPass with pass_name; other fields set via InspectRegistry."""
+        return cls(pass_name=data.get("pass_name", "Color"))
+
+    def serialize_data(self) -> dict:
+        """Serialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().serialize_all(self)
+
+    def deserialize_data(self, data: dict) -> None:
+        """Deserialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        if not data:
+            return
+        from termin._native.inspect import InspectRegistry
+        InspectRegistry.instance().deserialize_all(self, data)
+
     def serialize(self) -> dict:
         """Serialize ColorPass to dict."""
-        data = {
+        return {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
-            "input_res": self.input_res,
-            "output_res": self.output_res,
-            "shadow_res": self.shadow_res,
-            "phase_mark": self.phase_mark,
-            "sort_by_distance": self.sort_by_distance,
-            "clear_depth": self.clear_depth,
+            "data": self.serialize_data(),
         }
-        return data
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
-        """Create ColorPass from serialized data."""
-        shadow_res = data.get("shadow_res", "shadow_maps")
-        # Handle legacy None value
-        if shadow_res is None:
-            shadow_res = ""
-        return cls(
-            input_res=data.get("input_res", "empty"),
-            output_res=data.get("output_res", "color"),
-            shadow_res=shadow_res,
-            pass_name=data.get("pass_name", "Color"),
-            phase_mark=data.get("phase_mark"),
-            sort_by_distance=data.get("sort_by_distance", False),
-            clear_depth=data.get("clear_depth", False),
-        )
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """ColorPass reads input_res and writes output_res inplace."""

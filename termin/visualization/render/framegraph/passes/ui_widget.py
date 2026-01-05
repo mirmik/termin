@@ -42,22 +42,6 @@ class UIWidgetPass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
 
-    def _serialize_params(self) -> dict:
-        """Serialize UIWidgetPass parameters."""
-        return {
-            "input_res": self.input_res,
-            "output_res": self.output_res,
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "UIWidgetPass":
-        """Create UIWidgetPass from serialized data."""
-        return cls(
-            input_res=data.get("input_res", "color+ui"),
-            output_res=data.get("output_res", "color+widgets"),
-            pass_name=data.get("pass_name", "UIWidgets"),
-        )
-
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """UIWidgetPass reads input_res and writes output_res inplace."""
         return [(self.input_res, self.output_res)]

@@ -118,21 +118,6 @@ class BlitPass(RenderFramePass):
         self.output_res = output_res
         self._current_src_name: str | None = None
 
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры BlitPass."""
-        return {
-            "output_res": self.output_res,
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "BlitPass":
-        """Создаёт BlitPass из сериализованных данных."""
-        return cls(
-            get_source_res=None,  # Runtime callback, не сериализуется
-            output_res=data.get("output_res", "debug"),
-            pass_name=data.get("pass_name", "Blit"),
-        )
-
     def required_resources(self) -> set[str]:
         resources = set(self.writes)
         if self._get_source_res is None:
@@ -232,20 +217,6 @@ class ResolvePass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
 
-    def _serialize_params(self) -> dict:
-        return {
-            "input_res": self.input_res,
-            "output_res": self.output_res,
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ResolvePass":
-        return cls(
-            input_res=data.get("input_res", "color"),
-            output_res=data.get("output_res", "color_resolved"),
-            pass_name=data.get("pass_name", "Resolve"),
-        )
-
     def execute(
         self,
         graphics: "GraphicsBackend",
@@ -300,22 +271,6 @@ class PresentToScreenPass(RenderFramePass):
         )
         self.input_res = input_res
         self.output_res = output_res
-
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры PresentToScreenPass."""
-        return {
-            "input_res": self.input_res,
-            "output_res": self.output_res,
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "PresentToScreenPass":
-        """Создаёт PresentToScreenPass из сериализованных данных."""
-        return cls(
-            input_res=data.get("input_res", "color"),
-            output_res=data.get("output_res", "DISPLAY"),
-            pass_name=data.get("pass_name", "PresentToScreen"),
-        )
 
     @classmethod
     def _get_shader(cls) -> ShaderProgram:

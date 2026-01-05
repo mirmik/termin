@@ -19,6 +19,7 @@
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
+#include "tc_inspect.hpp"
 
 namespace nb = nanobind;
 
@@ -43,6 +44,14 @@ public:
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
+
+    // INSPECT_FIELD registrations
+    INSPECT_FIELD(ColorPass, input_res, "Input Resource", "string")
+    INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(ColorPass, shadow_res, "Shadow Resource", "string")
+    INSPECT_FIELD(ColorPass, phase_mark, "Phase Mark", "string")
+    INSPECT_FIELD(ColorPass, sort_by_distance, "Sort by Distance", "bool")
+    INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
 
     ColorPass(
         const std::string& input_res = "empty",

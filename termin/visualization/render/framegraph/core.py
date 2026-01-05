@@ -45,6 +45,41 @@ class FramePass:
     # Callback для сообщения об ошибке чтения depth: (str) -> None
     _depth_error_callback: "Callable[[str], None] | None" = field(default=None, repr=False)
 
+    # Поля для редактирования в инспекторе (подклассы переопределяют)
+    inspect_fields: dict = field(default_factory=dict, repr=False)
+
+    def __init_subclass__(cls, **kwargs):
+        """Register subclass in InspectRegistry for inspector support."""
+        super().__init_subclass__(**kwargs)
+
+        # Don't register base classes
+        if cls.__name__ in ("FramePass", "RenderFramePass"):
+            return
+
+        try:
+            from termin._native.inspect import InspectRegistry
+            registry = InspectRegistry.instance()
+
+            # Register only own fields (not inherited)
+            own_fields = cls.__dict__.get('inspect_fields', {})
+            if own_fields:
+                registry.register_python_fields(cls.__name__, own_fields)
+
+            # Find parent type and register inheritance
+            parent_name = None
+            for klass in cls.__mro__[1:]:
+                if klass.__name__ in ("FramePass", "RenderFramePass"):
+                    parent_name = klass.__name__
+                    break
+                if 'inspect_fields' in klass.__dict__:
+                    parent_name = klass.__name__
+                    break
+
+            if parent_name:
+                registry.set_type_parent(cls.__name__, parent_name)
+        except ImportError:
+            pass
+
     def __repr__(self) -> str:
         return f"FramePass({self.pass_name!r})"
 
@@ -128,35 +163,41 @@ class FramePass:
 
     # ---- Сериализация ---------------------------------------------
 
+    def serialize_data(self) -> dict:
+        """
+        Сериализует данные пасса через InspectRegistry.
+
+        Использует тот же механизм, что и PythonComponent - kind handlers
+        применяются для enum, handles и т.д.
+        """
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().serialize_all(self)
+
+    def deserialize_data(self, data: dict) -> None:
+        """
+        Десериализует данные пасса через InspectRegistry.
+
+        Использует тот же механизм, что и PythonComponent - kind handlers
+        применяются для enum, handles и т.д.
+        """
+        if not data:
+            return
+        from termin._native.inspect import InspectRegistry
+        InspectRegistry.instance().deserialize_all(self, data)
+
     def serialize(self) -> dict:
         """
         Сериализует FramePass в словарь.
 
-        Базовая реализация сохраняет:
-        - type: имя класса для десериализации
-        - pass_name: имя прохода
-        - enabled: включён ли проход
-
-        Подклассы должны переопределить _serialize_params() для
-        добавления своих параметров.
+        Использует InspectRegistry для сериализации полей.
         """
-        data = {
+        return {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
             "passthrough": self.passthrough,
+            "data": self.serialize_data(),
         }
-        data.update(self._serialize_params())
-        return data
-
-    def _serialize_params(self) -> dict:
-        """
-        Возвращает словарь с параметрами для сериализации.
-
-        Подклассы должны переопределить этот метод для добавления
-        своих специфических параметров.
-        """
-        return {}
 
     @classmethod
     def deserialize(cls, data: dict, resource_manager=None) -> "FramePass":
@@ -189,12 +230,15 @@ class FramePass:
         if pass_cls is None:
             raise ValueError(f"Unknown FramePass type: {pass_type}")
 
-        # Создаём экземпляр через _deserialize_instance
+        # Создаём экземпляр и десериализуем данные
         instance = pass_cls._deserialize_instance(data, resource_manager)
 
         # Восстанавливаем базовые поля
         instance.enabled = data.get("enabled", True)
         instance.passthrough = data.get("passthrough", False)
+
+        # Десериализуем данные через InspectRegistry
+        instance.deserialize_data(data.get("data", {}))
 
         return instance
 

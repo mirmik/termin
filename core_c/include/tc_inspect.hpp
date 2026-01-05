@@ -830,8 +830,8 @@ inline nb::object trent_to_nb_compat(const nos::trent& t) {
 
 #define INSPECT_FIELD(cls, field, label, kind, ...) \
     inline static ::tc::InspectFieldRegistrar<cls, decltype(cls::field)> \
-        _inspect_reg_##field{&cls::field, #cls, #field, label, kind, ##__VA_ARGS__};
+        _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, ##__VA_ARGS__};
 
 #define INSPECT_FIELD_CALLBACK(cls, type, name, label, kind, getter_fn, setter_fn) \
     inline static ::tc::InspectFieldCallbackRegistrar<cls, type> \
-        _inspect_reg_##name{#cls, #name, label, kind, getter_fn, setter_fn};
+        _inspect_reg_##cls##_##name{#cls, #name, label, kind, getter_fn, setter_fn};

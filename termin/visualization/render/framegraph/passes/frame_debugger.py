@@ -85,16 +85,6 @@ class FrameDebuggerPass(RenderFramePass):
             self._current_src_name = None
             return set()
 
-    def _serialize_params(self) -> dict:
-        return {}
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FrameDebuggerPass":
-        return cls(
-            get_source_res=None,
-            pass_name=data.get("pass_name", "FrameDebugger"),
-        )
-
     def _report_depth_error(self, message: str) -> None:
         """Сообщает об ошибке чтения depth buffer."""
         if self._depth_error_callback is not None:

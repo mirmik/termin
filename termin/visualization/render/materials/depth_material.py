@@ -26,7 +26,7 @@ void main()
     float z = -view_pos.z;
     float depth = (z - u_near) / (u_far - u_near);
     
-    v_linear_depth = depth;  // ❗ БЕЗ clamp
+    v_linear_depth = depth;
     gl_Position = u_projection * view_pos;
 }
 """
@@ -38,16 +38,8 @@ in float v_linear_depth;
 out vec4 FragColor;
 
 void main() {
-    float d = v_linear_depth;
-    
-    // Отладка
-    if (d < 0.0) {
-        FragColor = vec4(1.0, 0.0, 0.0, 1.0);  // RED = behind camera
-    } else if (d > 1.0) {
-        FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // BLUE = too far
-    } else {
-        FragColor = vec4(d, d, d, 1.0);  // GRAY = ok
-    }
+    float d = clamp(v_linear_depth, 0.0, 1.0);
+    FragColor = vec4(d, d, d, 1.0);
 }
 """
 

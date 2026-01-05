@@ -40,20 +40,6 @@ class ImmediateDepthPass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
 
-    def _serialize_params(self) -> dict:
-        return {
-            "input_res": self.input_res,
-            "output_res": self.output_res,
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ImmediateDepthPass":
-        return cls(
-            input_res=data.get("input_res", "color"),
-            output_res=data.get("output_res", "color"),
-            pass_name=data.get("pass_name", "ImmediateDepthPass"),
-        )
-
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]
 

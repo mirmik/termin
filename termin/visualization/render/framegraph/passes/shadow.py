@@ -18,7 +18,6 @@ from termin._native.render import ShadowPass as _ShadowPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 from termin.visualization.render.system_shaders import get_system_shader
-from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
@@ -32,6 +31,8 @@ class ShadowPass(_ShadowPassNative):
     Uses C++ implementation for core rendering, with Python wrapper for
     integration with framegraph.
 
+    Fields are registered via INSPECT_FIELD macros in C++ (shadow_pass.hpp).
+
     Атрибуты:
         output_res: имя выходного ресурса (ShadowMapArray)
         default_resolution: разрешение shadow map по умолчанию
@@ -44,28 +45,6 @@ class ShadowPass(_ShadowPassNative):
     Выходные данные:
         ShadowMapArray с текстурами и матрицами для всех источников.
     """
-
-    inspect_fields = {
-        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
-        "default_resolution": InspectField(
-            path="default_resolution", label="Resolution", kind="int",
-            min=128, max=4096, step=128,
-        ),
-        "max_shadow_distance": InspectField(
-            path="max_shadow_distance", label="Max Shadow Distance", kind="float",
-            min=1.0, max=500.0, step=5.0,
-        ),
-        "ortho_size": InspectField(
-            path="ortho_size", label="Ortho Size (fallback)", kind="float",
-            min=1.0, max=200.0, step=1.0,
-        ),
-        "near": InspectField(path="near", label="Near (fallback)", kind="float", min=0.01, step=0.1),
-        "far": InspectField(path="far", label="Far (fallback)", kind="float", min=1.0, step=1.0),
-        "caster_offset": InspectField(
-            path="caster_offset", label="Caster Offset", kind="float",
-            min=0.0, max=200.0, step=5.0,
-        ),
-    }
 
     def __init__(
         self,
@@ -92,34 +71,31 @@ class ShadowPass(_ShadowPassNative):
         # Текущий ShadowMapArrayResource (обновляется в execute)
         self._shadow_map_array: ShadowMapArrayResource | None = None
 
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":
+        """Create ShadowPass with pass_name; other fields set via InspectRegistry."""
+        return cls(pass_name=data.get("pass_name", "Shadow"))
+
+    def serialize_data(self) -> dict:
+        """Serialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().serialize_all(self)
+
+    def deserialize_data(self, data: dict) -> None:
+        """Deserialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        if not data:
+            return
+        from termin._native.inspect import InspectRegistry
+        InspectRegistry.instance().deserialize_all(self, data)
+
     def serialize(self) -> dict:
-        """Сериализует ShadowPass в словарь."""
+        """Serialize ShadowPass to dict."""
         return {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
-            "output_res": self.output_res,
-            "default_resolution": self.default_resolution,
-            "max_shadow_distance": self.max_shadow_distance,
-            "ortho_size": self.ortho_size,
-            "near": self.near,
-            "far": self.far,
-            "caster_offset": self.caster_offset,
+            "data": self.serialize_data(),
         }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":
-        """Создаёт ShadowPass из сериализованных данных."""
-        return cls(
-            output_res=data.get("output_res", "shadow_maps"),
-            pass_name=data.get("pass_name", "Shadow"),
-            default_resolution=data.get("default_resolution", 1024),
-            max_shadow_distance=data.get("max_shadow_distance", 50.0),
-            ortho_size=data.get("ortho_size", 20.0),
-            near=data.get("near", 0.1),
-            far=data.get("far", 100.0),
-            caster_offset=data.get("caster_offset", 50.0),
-        )
 
     def get_resource_specs(self) -> list[ResourceSpec]:
         """

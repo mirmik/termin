@@ -16,6 +16,7 @@
 #include "termin/render/shadow_camera.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
+#include "tc_inspect.hpp"
 
 namespace nb = nanobind;
 
@@ -65,6 +66,15 @@ public:
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
+
+    // INSPECT_FIELD registrations
+    INSPECT_FIELD(ShadowPass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(ShadowPass, default_resolution, "Resolution", "int", 128, 4096, 128)
+    INSPECT_FIELD(ShadowPass, max_shadow_distance, "Max Shadow Distance", "float", 1.0, 500.0, 5.0)
+    INSPECT_FIELD(ShadowPass, ortho_size, "Ortho Size (fallback)", "float", 1.0, 200.0, 1.0)
+    INSPECT_FIELD(ShadowPass, near, "Near (fallback)", "float", 0.01, 1000.0, 0.1)
+    INSPECT_FIELD(ShadowPass, far, "Far (fallback)", "float", 1.0, 1000.0, 1.0)
+    INSPECT_FIELD(ShadowPass, caster_offset, "Caster Offset", "float", 0.0, 200.0, 5.0)
 
     ShadowPass(
         const std::string& output_res = "shadow_maps",

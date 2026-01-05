@@ -43,21 +43,6 @@ class UnifiedGizmoPass(RenderFramePass):
         self.output_res = output_res
         self._renderer = ImmediateRenderer()
 
-    def _serialize_params(self) -> dict:
-        return {
-            "input_res": self.input_res,
-            "output_res": self.output_res,
-        }
-
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "UnifiedGizmoPass":
-        return cls(
-            input_res=data.get("input_res", "color"),
-            output_res=data.get("output_res", "color"),
-            pass_name=data.get("pass_name", "UnifiedGizmoPass"),
-            gizmo_manager=None,
-        )
-
     def _get_gizmo_manager(self) -> "GizmoManager | None":
         if self._gizmo_manager_source is None:
             return None
