@@ -4464,7 +4464,7 @@
         "depth": 0,
         "input_mode": "simple",
         "block_input_in_editor": false,
-        "pipeline_name": "Default"
+        "pipeline_name": "default"
       }
     ],
     "light_direction": [
@@ -4522,8 +4522,8 @@
     },
     "selected_entity": "MainCamera",
     "expanded_entities": [
-      "EditorEntities",
       "camera",
+      "EditorEntities",
       "editor_ui"
     ]
   },

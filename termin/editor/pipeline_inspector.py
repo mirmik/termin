@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QInputDialog,
     QGroupBox,
+    QLineEdit,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -152,6 +153,15 @@ class PipelineInspector(QWidget):
         self._details_info.setStyleSheet("color: #888;")
         self._details_layout.addWidget(self._details_info)
 
+        # Pass name field
+        pass_name_layout = QHBoxLayout()
+        pass_name_layout.addWidget(QLabel("Name:"))
+        self._pass_name_edit = QLineEdit()
+        self._pass_name_edit.setPlaceholderText("Pass name")
+        self._pass_name_edit.editingFinished.connect(self._on_pass_name_changed)
+        pass_name_layout.addWidget(self._pass_name_edit)
+        self._details_layout.addLayout(pass_name_layout)
+
         # Editable fields panel
         self._pass_inspector = InspectFieldPanel(parent=self._details_widget)
         self._pass_inspector.field_changed.connect(self._on_pass_field_changed)
@@ -188,10 +198,33 @@ class PipelineInspector(QWidget):
         self._remove_effect_btn.clicked.connect(self._on_remove_effect)
         effects_btn_layout.addWidget(self._remove_effect_btn)
 
+        effects_btn_layout.addSpacing(4)
+
+        self._effect_up_btn = QPushButton("▲")
+        self._effect_up_btn.setFixedSize(24, 24)
+        self._effect_up_btn.setToolTip("Move effect up")
+        self._effect_up_btn.clicked.connect(self._on_effect_move_up)
+        effects_btn_layout.addWidget(self._effect_up_btn)
+
+        self._effect_down_btn = QPushButton("▼")
+        self._effect_down_btn.setFixedSize(24, 24)
+        self._effect_down_btn.setToolTip("Move effect down")
+        self._effect_down_btn.clicked.connect(self._on_effect_move_down)
+        effects_btn_layout.addWidget(self._effect_down_btn)
+
         effects_btn_layout.addStretch()
         effects_list_layout.addLayout(effects_btn_layout)
 
         effects_layout.addLayout(effects_list_layout)
+
+        # Effect name field
+        effect_name_layout = QHBoxLayout()
+        effect_name_layout.addWidget(QLabel("Name:"))
+        self._effect_name_edit = QLineEdit()
+        self._effect_name_edit.setPlaceholderText("Effect name")
+        self._effect_name_edit.editingFinished.connect(self._on_effect_name_changed)
+        effect_name_layout.addWidget(self._effect_name_edit)
+        effects_layout.addLayout(effect_name_layout)
 
         # Effect inspector
         self._effect_inspector = InspectFieldPanel(parent=self._effects_group)
@@ -287,9 +320,13 @@ class PipelineInspector(QWidget):
         """Rebuild UI for current pipeline."""
         self._pass_list.clear()
         self._pass_inspector.set_target(None)
+        self._pass_name_edit.clear()
+        self._pass_name_edit.setEnabled(False)
         self._selected_postprocess = None
         self._effects_list.clear()
         self._effect_inspector.set_target(None)
+        self._effect_name_edit.clear()
+        self._effect_name_edit.setEnabled(False)
         self._effects_group.setVisible(False)
 
         if self._pipeline is None:
@@ -333,6 +370,8 @@ class PipelineInspector(QWidget):
         if self._pipeline is None or row < 0 or row >= len(self._pipeline.passes):
             self._details_info.setText("Select a pass to view details")
             self._pass_inspector.set_target(None)
+            self._pass_name_edit.clear()
+            self._pass_name_edit.setEnabled(False)
             self._effects_group.setVisible(False)
             return
 
@@ -341,11 +380,16 @@ class PipelineInspector(QWidget):
         # Show basic pass info
         info_lines = [
             f"Type: {p.__class__.__name__}",
-            f"Name: {p.pass_name}",
             f"Reads: {', '.join(p.reads) or 'none'}",
             f"Writes: {', '.join(p.writes) or 'none'}",
         ]
         self._details_info.setText("\n".join(info_lines))
+
+        # Update name field
+        self._pass_name_edit.setEnabled(True)
+        self._pass_name_edit.blockSignals(True)
+        self._pass_name_edit.setText(p.pass_name)
+        self._pass_name_edit.blockSignals(False)
 
         # Set target for editable fields
         self._pass_inspector.set_target(p)
@@ -363,6 +407,26 @@ class PipelineInspector(QWidget):
     def _on_pass_field_changed(self, key: str, old_value, new_value) -> None:
         """Handle pass field change from inspector."""
         self.pipeline_changed.emit(self._pipeline)
+
+    def _on_pass_name_changed(self) -> None:
+        """Handle pass name change."""
+        if self._pipeline is None:
+            return
+
+        row = self._pass_list.currentRow()
+        if row < 0 or row >= len(self._pipeline.passes):
+            return
+
+        p = self._pipeline.passes[row]
+        new_name = self._pass_name_edit.text().strip()
+
+        if new_name and new_name != p.pass_name:
+            p.pass_name = new_name
+            # Update list item text
+            item = self._pass_list.item(row)
+            if item:
+                item.setText(f"{new_name} ({p.__class__.__name__})")
+            self.pipeline_changed.emit(self._pipeline)
 
     # ---------- PostEffect handling ----------
 
@@ -386,14 +450,24 @@ class PipelineInspector(QWidget):
 
         if self._selected_postprocess is None:
             self._effect_inspector.set_target(None)
+            self._effect_name_edit.clear()
+            self._effect_name_edit.setEnabled(False)
             return
 
         if row < 0 or row >= len(self._selected_postprocess.effects):
             self._effect_inspector.set_target(None)
+            self._effect_name_edit.clear()
+            self._effect_name_edit.setEnabled(False)
             return
 
         eff = self._selected_postprocess.effects[row]
         self._effect_inspector.set_target(eff)
+
+        # Update name field
+        self._effect_name_edit.setEnabled(True)
+        self._effect_name_edit.blockSignals(True)
+        self._effect_name_edit.setText(eff.name if hasattr(eff, "name") else "")
+        self._effect_name_edit.blockSignals(False)
 
     def _on_add_effect(self) -> None:
         """Add a new effect to the PostProcessPass."""
@@ -477,6 +551,58 @@ class PipelineInspector(QWidget):
         """Handle effect field change from inspector."""
         self.pipeline_changed.emit(self._pipeline)
 
+    def _on_effect_name_changed(self) -> None:
+        """Handle effect name change."""
+        if self._selected_postprocess is None:
+            return
+
+        row = self._effects_list.currentRow()
+        if row < 0 or row >= len(self._selected_postprocess.effects):
+            return
+
+        eff = self._selected_postprocess.effects[row]
+        new_name = self._effect_name_edit.text().strip()
+
+        if new_name and new_name != eff.name:
+            eff.name = new_name
+            self._rebuild_effects_list()
+            self._effects_list.setCurrentRow(row)
+            self.pipeline_changed.emit(self._pipeline)
+
+    def _on_effect_move_up(self) -> None:
+        """Move the selected effect up in the list."""
+        if self._selected_postprocess is None:
+            return
+
+        row = self._effects_list.currentRow()
+        if row <= 0 or row >= len(self._selected_postprocess.effects):
+            return
+
+        # Swap effects
+        effects = self._selected_postprocess.effects
+        effects[row], effects[row - 1] = effects[row - 1], effects[row]
+
+        self._rebuild_effects_list()
+        self._effects_list.setCurrentRow(row - 1)
+        self.pipeline_changed.emit(self._pipeline)
+
+    def _on_effect_move_down(self) -> None:
+        """Move the selected effect down in the list."""
+        if self._selected_postprocess is None:
+            return
+
+        row = self._effects_list.currentRow()
+        if row < 0 or row >= len(self._selected_postprocess.effects) - 1:
+            return
+
+        # Swap effects
+        effects = self._selected_postprocess.effects
+        effects[row], effects[row + 1] = effects[row + 1], effects[row]
+
+        self._rebuild_effects_list()
+        self._effects_list.setCurrentRow(row + 1)
+        self.pipeline_changed.emit(self._pipeline)
+
     def _update_effect_buttons_state(self) -> None:
         """Update enabled state of effect buttons."""
         has_postprocess = self._selected_postprocess is not None
@@ -485,6 +611,15 @@ class PipelineInspector(QWidget):
 
         self._add_effect_btn.setEnabled(has_postprocess)
         self._remove_effect_btn.setEnabled(has_postprocess and has_selection)
+
+        # Up/down buttons
+        if has_postprocess and has_selection:
+            num_effects = len(self._selected_postprocess.effects)
+            self._effect_up_btn.setEnabled(row > 0)
+            self._effect_down_btn.setEnabled(row < num_effects - 1)
+        else:
+            self._effect_up_btn.setEnabled(False)
+            self._effect_down_btn.setEnabled(False)
 
     def _on_save_clicked(self) -> None:
         """Handle save button click."""

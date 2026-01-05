@@ -187,6 +187,11 @@ class RenderingController:
         gl_widget.setMinimumSize(50, 50)
         tab_layout.addWidget(gl_widget)
 
+        # Set up focus callback: when SDL gets mouse click, request Qt focus
+        backend_window.set_focus_callback(lambda w=gl_widget: w.setFocus())
+        # Install Qt keyboard event filter to forward key events to SDL
+        backend_window.install_qt_key_filter(gl_widget)
+
         # Create WindowRenderSurface and Display
         from termin.visualization.render.surface import WindowRenderSurface
         from termin.visualization.core.display import Display
@@ -523,6 +528,11 @@ class RenderingController:
         gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
 
+        # Set up focus callback: when SDL gets mouse click, request Qt focus
+        backend_window.set_focus_callback(lambda w=gl_widget: w.setFocus())
+        # Install Qt keyboard event filter to forward key events to SDL
+        backend_window.install_qt_key_filter(gl_widget)
+
         # Add to container layout
         layout = container.layout()
         if layout is None:
@@ -695,6 +705,11 @@ class RenderingController:
         gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
         tab_layout.addWidget(gl_widget)
+
+        # Set up focus callback: when SDL gets mouse click, request Qt focus
+        backend_window.set_focus_callback(lambda w=gl_widget: w.setFocus())
+        # Install Qt keyboard event filter to forward key events to SDL
+        backend_window.install_qt_key_filter(gl_widget)
 
         # Create WindowRenderSurface and Display
         from termin.visualization.render.surface import WindowRenderSurface

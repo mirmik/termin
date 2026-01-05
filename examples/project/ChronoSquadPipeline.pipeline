@@ -1,0 +1,67 @@
+{
+  "name": "default",
+  "passes": [
+    {
+      "type": "SkyBoxPass",
+      "pass_name": "Skybox",
+      "enabled": true,
+      "passthrough": false,
+      "input_res": "empty",
+      "output_res": "skybox"
+    },
+    {
+      "type": "ColorPass",
+      "pass_name": "Color",
+      "enabled": true,
+      "input_res": "skybox",
+      "output_res": "color",
+      "shadow_res": "",
+      "phase_mark": "opaque",
+      "sort_by_distance": false,
+      "clear_depth": false
+    },
+    {
+      "type": "PostProcessPass",
+      "pass_name": "PostFX",
+      "enabled": true,
+      "passthrough": false,
+      "input_res": "color",
+      "output_res": "color_pp",
+      "effects": [
+        {
+          "type": "GrayscaleEffect",
+          "name": "grayscale"
+        }
+      ]
+    },
+    {
+      "type": "CanvasPass",
+      "pass_name": "Canvas",
+      "enabled": true,
+      "passthrough": false,
+      "src": "color_pp",
+      "dst": "color_ui"
+    },
+    {
+      "type": "PresentToScreenPass",
+      "pass_name": "Present",
+      "enabled": true,
+      "passthrough": false,
+      "input_res": "color_ui",
+      "output_res": "DISPLAY"
+    }
+  ],
+  "pipeline_specs": [
+    {
+      "resource": "empty",
+      "resource_type": "fbo",
+      "clear_color": [
+        0.1,
+        0.1,
+        0.1,
+        1.0
+      ],
+      "clear_depth": 1.0
+    }
+  ]
+}

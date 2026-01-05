@@ -57,6 +57,7 @@ class DialogManager:
         self._resource_manager_viewer: "ResourceManagerViewer | None" = None
         self._audio_debugger: "AudioDebugDialog | None" = None
         self._core_registry_viewer: "CoreRegistryViewer | None" = None
+        self._inspect_registry_viewer = None
 
     @property
     def framegraph_debugger(self) -> "FramegraphDebugDialog | None":
@@ -190,6 +191,18 @@ class DialogManager:
         self._core_registry_viewer.show()
         self._core_registry_viewer.raise_()
         self._core_registry_viewer.activateWindow()
+
+    def show_inspect_registry_viewer(self) -> None:
+        """Opens inspect registry viewer dialog."""
+        if self._inspect_registry_viewer is None:
+            from termin.editor.inspect_registry_viewer import InspectRegistryViewer
+
+            self._inspect_registry_viewer = InspectRegistryViewer(parent=self._parent)
+
+        self._inspect_registry_viewer.refresh()
+        self._inspect_registry_viewer.show()
+        self._inspect_registry_viewer.raise_()
+        self._inspect_registry_viewer.activateWindow()
 
     def show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""

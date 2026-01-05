@@ -53,6 +53,7 @@ class MenuBarController:
         on_show_resource_manager_viewer: Callable,
         on_show_audio_debugger: Callable,
         on_show_core_registry_viewer: Callable,
+        on_show_inspect_registry_viewer: Callable,
         on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
         # State getters
@@ -99,6 +100,7 @@ class MenuBarController:
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
             on_show_audio_debugger=on_show_audio_debugger,
             on_show_core_registry_viewer=on_show_core_registry_viewer,
+            on_show_inspect_registry_viewer=on_show_inspect_registry_viewer,
             on_toggle_profiler=on_toggle_profiler,
             on_toggle_fullscreen=on_toggle_fullscreen,
         )
@@ -131,6 +133,7 @@ class MenuBarController:
         on_show_resource_manager_viewer: Callable,
         on_show_audio_debugger: Callable,
         on_show_core_registry_viewer: Callable,
+        on_show_inspect_registry_viewer: Callable,
         on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
     ) -> None:
@@ -256,6 +259,9 @@ class MenuBarController:
 
         core_registry_action = debug_menu.addAction("Core Registry...")
         core_registry_action.triggered.connect(on_show_core_registry_viewer)
+
+        inspect_registry_action = debug_menu.addAction("Inspect Registry...")
+        inspect_registry_action.triggered.connect(on_show_inspect_registry_viewer)
 
         self.update_undo_redo_actions()
 

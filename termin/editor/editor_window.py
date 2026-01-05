@@ -457,6 +457,7 @@ class EditorWindow(QMainWindow):
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
             on_show_audio_debugger=self._show_audio_debugger,
             on_show_core_registry_viewer=self._show_core_registry_viewer,
+            on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_fullscreen=self._toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
@@ -568,6 +569,10 @@ class EditorWindow(QMainWindow):
     def _show_core_registry_viewer(self) -> None:
         """Opens core registry viewer dialog."""
         self._dialog_manager.show_core_registry_viewer()
+
+    def _show_inspect_registry_viewer(self) -> None:
+        """Opens inspect registry viewer dialog."""
+        self._dialog_manager.show_inspect_registry_viewer()
 
     def _toggle_profiler(self, checked: bool) -> None:
         """Toggle profiler panel visibility."""

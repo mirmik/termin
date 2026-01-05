@@ -70,4 +70,5 @@ BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
     ("termin.visualization.render.posteffects.highlight", "HighlightEffect"),
     ("termin.visualization.render.posteffects.fog", "FogEffect"),
     ("termin.visualization.render.posteffects.gray", "GrayscaleEffect"),
+    ("termin.visualization.render.posteffects.material_effect", "MaterialPostEffect"),
 ]

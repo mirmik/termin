@@ -21,7 +21,15 @@ class MouseButton(IntEnum):
 
 class Key(IntEnum):
     UNKNOWN = -1
+    TAB = 9
+    ENTER = 13
     SPACE = 32
+    BACKSPACE = 259
+    DELETE = 261
+    RIGHT = 262
+    LEFT = 263
+    DOWN = 264
+    UP = 265
     ESCAPE = 256
 
 
