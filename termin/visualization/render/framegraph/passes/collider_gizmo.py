@@ -7,11 +7,12 @@ Uses WireframeRenderer with pre-built unit meshes for efficiency.
 
 from __future__ import annotations
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.editor.inspect_field import InspectField
 from termin.visualization.render.wireframe import (
     WireframeRenderer,
     mat4_translate,
@@ -40,6 +41,11 @@ class ColliderGizmoPass(RenderFramePass):
     for each collider type (Box, Sphere, Capsule).
     """
 
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
         input_res: str = "color",
@@ -47,15 +53,17 @@ class ColliderGizmoPass(RenderFramePass):
         pass_name: str = "ColliderGizmo",
         passthrough: bool = False,
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
         self.passthrough = passthrough
         self._renderer = WireframeRenderer()
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]

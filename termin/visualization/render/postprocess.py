@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple, List
+from typing import Dict, Set, Tuple, List
 
 import numpy as np
 
@@ -183,6 +183,8 @@ class PostProcessPass(RenderFramePass):
         output_res: str,
         pass_name: str = "PostProcess",
     ):
+        super().__init__(pass_name=pass_name)
+
         # нормализуем список эффектов
         if not isinstance(effects, (list, tuple)):
             effects = [effects]
@@ -191,19 +193,17 @@ class PostProcessPass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
 
-        # --- динамически собираем reads на основе эффектов ---
-        reads: set[str] = {input_res}
-        for eff in self.effects:
-            # даём шанс и "старым" объектам, если вдруг не наследуются от PostEffect
-            reads |= set(eff.required_resources())
-
-        super().__init__(
-            pass_name=pass_name,
-            reads=reads,
-            writes={output_res},
-        )
-
         self._temp_fbos: list["FramebufferHandle"] = []
+
+    def compute_reads(self) -> Set[str]:
+        """Динамически собираем reads на основе эффектов."""
+        reads: Set[str] = {self.input_res}
+        for eff in self.effects:
+            reads |= set(eff.required_resources())
+        return reads
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def _serialize_params(self) -> dict:
         """Сериализует параметры PostProcessPass."""
@@ -263,24 +263,12 @@ class PostProcessPass(RenderFramePass):
         fb.resize(size)
         return fb
 
-    def rebuild_reads(self):
-        """
-        Вызывать, если ты поменял self.effects после создания пасса.
-        Обновляет список ресурсов, которые пасс читает,
-        чтобы FrameGraph учёл новые зависимости.
-        """
-        reads: set[str] = {self.input_res}
-        for eff in self.effects:
-            reads |= set(eff.required_resources())
-        self.reads = reads
-
     def add_effect(self, effect: PostEffect):
         """
         Добавляет эффект в конец цепочки.
-        После вызова нужно вызвать rebuild_reads().
+        reads пересчитывается автоматически через compute_reads().
         """
         self.effects.append(effect)
-        self.rebuild_reads()
 
     def execute(
         self,

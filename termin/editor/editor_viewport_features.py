@@ -428,7 +428,6 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph import (
             ColorPass,
             IdPass,
-            CanvasPass,
             PresentToScreenPass,
         )
         from termin.visualization.render.framegraph.passes.present import ResolvePass
@@ -533,17 +532,12 @@ class EditorViewportFeatures:
             IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
             resolve_pass,  # MSAA → обычный FBO
             postprocess,
-            CanvasPass(
-                src="color_pp",
-                dst="color+ui",
-                pass_name="Canvas",
-            ),
             UIWidgetPass(
-                input_res="color+ui",
-                output_res="color+ui+ui_widgets",
+                input_res="color_pp",
+                output_res="color+widgets",
             ),
             PresentToScreenPass(
-                input_res="color+ui+ui_widgets",
+                input_res="color+widgets",
                 pass_name="Present",
             ),
         ]

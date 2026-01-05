@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, TYPE_CHECKING
 from collections import deque
 
@@ -8,13 +7,12 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import FramebufferHandle
 
 
-@dataclass
 class FramePass:
     """
     Логический проход кадра.
 
-    reads  – какие ресурсы этот проход читает (по именам).
-    writes – какие ресурсы он пишет.
+    reads  – какие ресурсы этот проход читает (по именам). Вычисляется динамически.
+    writes – какие ресурсы он пишет. Вычисляется динамически.
     enabled – включён ли проход; отключённые пассы полностью игнорируются
               при построении графа (не участвуют в зависимостях, не вызывают конфликтов).
     passthrough – если True, пасс остаётся в графе, но просто копирует input → output
@@ -30,23 +28,43 @@ class FramePass:
         связанные с их внутренними сущностями (например, отдельные меши,
         стадии рендера и т.п.). По умолчанию проход не имеет таких точек.
     """
-    pass_name: str
-    reads: Set[str] = field(default_factory=set)
-    writes: Set[str] = field(default_factory=set)
-    enabled: bool = True
-    passthrough: bool = False
-
-    # Конфигурация внутренней точки дебага.
-    debug_internal_symbol: str | None = None
-    # SDL окно дебаггера для блита промежуточного состояния.
-    _debugger_window: Any = field(default=None, repr=False)
-    # Callback для передачи depth buffer дебаггеру: (numpy_array) -> None
-    _depth_capture_callback: "Callable[[Any], None] | None" = field(default=None, repr=False)
-    # Callback для сообщения об ошибке чтения depth: (str) -> None
-    _depth_error_callback: "Callable[[str], None] | None" = field(default=None, repr=False)
 
     # Поля для редактирования в инспекторе (подклассы переопределяют)
-    inspect_fields: dict = field(default_factory=dict, repr=False)
+    inspect_fields: dict = {}
+
+    def __init__(self, pass_name: str = "FramePass"):
+        self.pass_name = pass_name
+        self.enabled = True
+        self.passthrough = False
+
+        # Конфигурация внутренней точки дебага.
+        self.debug_internal_symbol: str | None = None
+        # SDL окно дебаггера для блита промежуточного состояния.
+        self._debugger_window: Any = None
+        # Callback для передачи depth buffer дебаггеру: (numpy_array) -> None
+        self._depth_capture_callback: "Callable[[Any], None] | None" = None
+        # Callback для сообщения об ошибке чтения depth: (str) -> None
+        self._depth_error_callback: "Callable[[str], None] | None" = None
+
+    # ---- reads/writes как вычисляемые свойства --------------------------------
+
+    @property
+    def reads(self) -> Set[str]:
+        """Ресурсы которые пасс читает. Вычисляется динамически."""
+        return self.compute_reads()
+
+    @property
+    def writes(self) -> Set[str]:
+        """Ресурсы которые пасс пишет. Вычисляется динамически."""
+        return self.compute_writes()
+
+    def compute_reads(self) -> Set[str]:
+        """Вычисляет множество читаемых ресурсов. Подклассы переопределяют."""
+        return set()
+
+    def compute_writes(self) -> Set[str]:
+        """Вычисляет множество записываемых ресурсов. Подклассы переопределяют."""
+        return set()
 
     def __init_subclass__(cls, **kwargs):
         """Register subclass in InspectRegistry for inspector support."""

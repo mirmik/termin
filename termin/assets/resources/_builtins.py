@@ -50,7 +50,6 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     ("termin.visualization.render.framegraph.passes.skybox", "SkyBoxPass"),
     ("termin.visualization.render.framegraph.passes.depth", "DepthPass"),
     ("termin.visualization.render.framegraph.passes.shadow", "ShadowPass"),
-    ("termin.visualization.render.framegraph.passes.canvas", "CanvasPass"),
     ("termin.visualization.render.framegraph.passes.ui_widget", "UIWidgetPass"),
     ("termin.visualization.render.framegraph.passes.present", "PresentToScreenPass"),
     ("termin.visualization.render.framegraph.passes.present", "BlitPass"),

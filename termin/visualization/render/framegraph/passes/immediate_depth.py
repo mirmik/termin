@@ -8,10 +8,11 @@ clears the depth buffer.
 
 from __future__ import annotations
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Set, Tuple, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.immediate import ImmediateRenderer
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
@@ -26,19 +27,26 @@ class ImmediateDepthPass(RenderFramePass):
     depth-tested buffers with depth test enabled.
     """
 
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
         input_res: str = "color",
         output_res: str = "color",
         pass_name: str = "ImmediateDepthPass",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]

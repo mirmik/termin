@@ -32,7 +32,7 @@ class RenderFramePass(FramePass):
         - scene, camera, renderer: объекты текущего вьюпорта;
         - context_key: ключ для кэшей VAO/шейдеров;
         - lights: предвычисленные источники света (может быть None);
-        - canvas: 2D-канва вьюпорта (для CanvasPass).
+        - canvas: 2D-канва вьюпорта (legacy, не используется).
         """
         raise NotImplementedError
 

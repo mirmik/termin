@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Set
+
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
@@ -109,32 +111,26 @@ class BlitPass(RenderFramePass):
         output_res: str = "debug",
         pass_name: str = "Blit",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads=set(),  # фактическое имя ресурса задаётся динамически
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self._get_source_res = get_source_res
         self.output_res = output_res
         self._current_src_name: str | None = None
 
-    def required_resources(self) -> set[str]:
-        resources = set(self.writes)
+    def compute_reads(self) -> Set[str]:
         if self._get_source_res is None:
-            self._current_src_name = None
-            self.reads = set()
-            return resources
-
+            return set()
         src_name = self._get_source_res()
         if src_name:
             self._current_src_name = src_name
-            self.reads = {src_name}
-            resources.add(src_name)
-        else:
-            self.reads = set()
-            self._current_src_name = None
+            return {src_name}
+        self._current_src_name = None
+        return set()
 
-        return resources
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
+
+    def required_resources(self) -> set[str]:
+        return set(self.reads) | set(self.writes)
 
     def execute(
         self,
@@ -203,19 +199,26 @@ class ResolvePass(RenderFramePass):
     если источник — MSAA FBO.
     """
 
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
-        input_res: str,
-        output_res: str,
+        input_res: str = "color",
+        output_res: str = "resolved",
         pass_name: str = "Resolve",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def execute(
         self,
@@ -263,14 +266,16 @@ class PresentToScreenPass(RenderFramePass):
 
     _shader: ShaderProgram | None = None
 
-    def __init__(self, input_res: str, output_res: str = "DISPLAY", pass_name: str = "PresentToScreen"):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+    def __init__(self, input_res: str = "color", output_res: str = "DISPLAY", pass_name: str = "PresentToScreen"):
+        super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     @classmethod
     def _get_shader(cls) -> ShaderProgram:

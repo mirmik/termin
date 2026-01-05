@@ -7,9 +7,10 @@ ImmediateGizmoRenderer, with mathematical raycast picking instead of ID buffer.
 
 from __future__ import annotations
 
-from typing import Callable, List, Tuple, TYPE_CHECKING
+from typing import Callable, List, Set, Tuple, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.editor.gizmo_immediate import ImmediateGizmoRenderer
@@ -25,6 +26,11 @@ class ImmediateGizmoPass(RenderFramePass):
     Picking is handled separately via mathematical raycast.
     """
 
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
         gizmo_renderer: "ImmediateGizmoRenderer | Callable[[], ImmediateGizmoRenderer | None] | None" = None,
@@ -32,14 +38,16 @@ class ImmediateGizmoPass(RenderFramePass):
         output_res: str = "color",
         pass_name: str = "ImmediateGizmoPass",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self._gizmo_renderer_source = gizmo_renderer
         self.input_res = input_res
         self.output_res = output_res
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def _get_gizmo_renderer(self) -> "ImmediateGizmoRenderer | None":
         if self._gizmo_renderer_source is None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Set, Tuple, TYPE_CHECKING
 
 from termin._native import log
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
@@ -44,16 +44,18 @@ class IdPass(RenderFramePass):
         output_res: str = "id",
         pass_name: str = "IdPass",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
 
         # Кэш имён отрисовываемых pickable-энтити.
         self._entity_names: List[str] = []
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """IdPass читает input_res и пишет output_res inplace."""

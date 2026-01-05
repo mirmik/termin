@@ -14,7 +14,6 @@ from termin.visualization.render.framegraph.resource import (
     ShadowMapArrayEntry,
 )
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.framegraph.passes.canvas import CanvasPass
 from termin.visualization.render.framegraph.passes.color import ColorPass
 from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
 from termin.visualization.render.framegraph.passes.id_pass import IdPass
@@ -36,7 +35,6 @@ __all__ = [
     "ShadowMapArrayResource",
     "ShadowMapArrayEntry",
     "BlitPass",
-    "CanvasPass",
     "ColorPass",
     "ColliderGizmoPass",
     "GizmoPass",

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Set, Tuple, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
@@ -17,16 +18,18 @@ class UIWidgetPass(RenderFramePass):
     Finds all UIComponent instances in the scene and renders them
     sorted by priority (lower priority renders first, appears behind).
 
-    This pass is typically placed after CanvasPass in the pipeline
-    to render widgets on top of the old Canvas system.
-
     Usage in pipeline:
         UIWidgetPass(
-            src="color+ui",      # Input from CanvasPass
-            dst="color+widgets", # Output with widgets
+            input_res="color_pp",
+            output_res="color+widgets",
             pass_name="UIWidgets",
         )
     """
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
 
     def __init__(
         self,
@@ -34,13 +37,15 @@ class UIWidgetPass(RenderFramePass):
         output_res: str = "color+widgets",
         pass_name: str = "UIWidgets",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """UIWidgetPass reads input_res and writes output_res inplace."""

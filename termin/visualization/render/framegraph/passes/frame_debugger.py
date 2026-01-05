@@ -5,7 +5,7 @@ FrameDebuggerPass — пасс для захвата промежуточног�
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Set, TYPE_CHECKING, Any, Callable
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 
@@ -26,11 +26,7 @@ class FrameDebuggerPass(RenderFramePass):
         get_source_res: Callable[[], str | None] | None = None,
         pass_name: str = "FrameDebugger",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads=set(),
-            writes=set(),
-        )
+        super().__init__(pass_name=pass_name)
         self._get_source_res = get_source_res
         self._current_src_name: str | None = None
 
@@ -45,6 +41,19 @@ class FrameDebuggerPass(RenderFramePass):
         # Временный FBO для resolve MSAA (создаётся при необходимости)
         self._resolve_fbo: "FramebufferHandle | None" = None
         self._resolve_fbo_size: tuple[int, int] = (0, 0)
+
+    def compute_reads(self) -> Set[str]:
+        if self._get_source_res is None:
+            return set()
+        src_name = self._get_source_res()
+        if src_name:
+            self._current_src_name = src_name
+            return {src_name}
+        self._current_src_name = None
+        return set()
+
+    def compute_writes(self) -> Set[str]:
+        return set()
 
     def request_depth_update(self) -> None:
         """Запросить обновление depth buffer на следующем кадре."""
@@ -70,20 +79,7 @@ class FrameDebuggerPass(RenderFramePass):
 
     def required_resources(self) -> set[str]:
         """Динамически определяет читаемые ресурсы."""
-        if self._get_source_res is None:
-            self._current_src_name = None
-            self.reads = set()
-            return set()
-
-        src_name = self._get_source_res()
-        if src_name:
-            self._current_src_name = src_name
-            self.reads = {src_name}
-            return {src_name}
-        else:
-            self.reads = set()
-            self._current_src_name = None
-            return set()
+        return set(self.reads)
 
     def _report_depth_error(self, message: str) -> None:
         """Сообщает об ошибке чтения depth buffer."""

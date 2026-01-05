@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
+from termin.editor.inspect_field import InspectField
 
 GIZMO_MASK_VERT = """
 #version 330 core
@@ -33,18 +34,25 @@ void main() {
 from typing import Callable
 
 class GizmoPass(RenderFramePass):
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(self, input_res: str = "id", output_res: str = "id", pass_name: str = "GizmoPass",
                  gizmo_entities: Optional[List["Entity"] | Callable[[], List["Entity"]]] = None):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         # gizmo_entities может быть списком или callable, возвращающим список
         self._gizmo_entities_source = gizmo_entities
         self.input_res = input_res
         self.output_res = output_res
         self._shader: ShaderProgram | None = None
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def _get_gizmo_entities(self) -> List["Entity"]:
         """Возвращает актуальный список gizmo entities."""

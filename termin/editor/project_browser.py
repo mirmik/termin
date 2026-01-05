@@ -1371,61 +1371,53 @@ class MyComponent(PythonComponent):
             )
             return
 
-        # Болванка пайплайна — базовый набор пассов
-        template = {
-            "passes": [
-                {
-                    "type": "SkyBoxPass",
-                    "pass_name": "Skybox",
-                    "enabled": True,
-                    "input_res": "empty",
-                    "output_res": "skybox",
-                },
-                {
-                    "type": "ColorPass",
-                    "pass_name": "Color",
-                    "enabled": True,
-                    "input_res": "skybox",
-                    "output_res": "color",
-                    "shadow_res": None,
-                    "phase_mark": "opaque",
-                },
-                {
-                    "type": "PostProcessPass",
-                    "pass_name": "PostFX",
-                    "enabled": True,
-                    "input_res": "color",
-                    "output_res": "color_pp",
-                    "effects": [],
-                },
-                {
-                    "type": "CanvasPass",
-                    "pass_name": "Canvas",
-                    "enabled": True,
-                    "src": "color_pp",
-                    "dst": "color_ui",
-                },
-                {
-                    "type": "PresentToScreenPass",
-                    "pass_name": "Present",
-                    "enabled": True,
-                    "input_res": "color_ui",
-                    "output_res": "DISPLAY",
-                },
+        # Собираем пайплайн из реальных пассов и сериализуем
+        from termin.visualization.render.framegraph.pipeline import RenderPipeline
+        from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+        from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
+        from termin.visualization.render.framegraph.passes.color import ColorPass
+        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
+        from termin.visualization.render.postprocess import PostProcessPass
+
+        pipeline = RenderPipeline(
+            name=name,
+            passes=[
+                SkyBoxPass(
+                    input_res="empty",
+                    output_res="skybox",
+                    pass_name="Skybox",
+                ),
+                ColorPass(
+                    input_res="skybox",
+                    output_res="color",
+                    shadow_res="",
+                    phase_mark="opaque",
+                    pass_name="Color",
+                ),
+                PostProcessPass(
+                    effects=[],
+                    input_res="color",
+                    output_res="color_pp",
+                    pass_name="PostFX",
+                ),
+                PresentToScreenPass(
+                    input_res="color_pp",
+                    output_res="DISPLAY",
+                    pass_name="Present",
+                ),
             ],
-            "pipeline_specs": [
-                {
-                    "resource": "empty",
-                    "resource_type": "fbo",
-                    "clear_color": [0.1, 0.1, 0.1, 1.0],
-                    "clear_depth": 1.0,
-                }
+            pipeline_specs=[
+                ResourceSpec(
+                    resource="empty",
+                    clear_color=(0.1, 0.1, 0.1, 1.0),
+                    clear_depth=1.0,
+                ),
             ],
-        }
+        )
 
         try:
             with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(template, f, indent=2, ensure_ascii=False)
+                json.dump(pipeline.serialize(), f, indent=2, ensure_ascii=False)
             self._refresh()
         except OSError as e:
             QMessageBox.warning(

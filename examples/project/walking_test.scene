@@ -4525,7 +4525,12 @@
         0.8744742100030436
       ],
       "radius": 6.5
-    }
+    },
+    "expanded_entities": [
+      "editor_ui",
+      "camera",
+      "EditorEntities"
+    ]
   },
   "resources": {
     "textures": {

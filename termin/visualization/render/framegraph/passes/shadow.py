@@ -10,7 +10,7 @@ Uses C++ implementation for core rendering.
 
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING
+from typing import List, Set, TYPE_CHECKING
 
 import numpy as np
 
@@ -73,8 +73,17 @@ class ShadowPass(_ShadowPassNative):
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":
-        """Create ShadowPass with pass_name; other fields set via InspectRegistry."""
         return cls(pass_name=data.get("pass_name", "Shadow"))
+
+    @property
+    def reads(self) -> Set[str]:
+        """Compute read resources dynamically (overrides C++ member)."""
+        return set()
+
+    @property
+    def writes(self) -> Set[str]:
+        """Compute write resources dynamically (overrides C++ member)."""
+        return {self.output_res}
 
     def serialize_data(self) -> dict:
         """Serialize fields via InspectRegistry (C++ INSPECT_FIELD)."""

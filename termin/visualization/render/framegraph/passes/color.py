@@ -1,7 +1,7 @@
 """ColorPass - main color rendering pass using C++ implementation."""
 from __future__ import annotations
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -62,8 +62,20 @@ class ColorPass(_ColorPassNative):
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
-        """Create ColorPass with pass_name; other fields set via InspectRegistry."""
         return cls(pass_name=data.get("pass_name", "Color"))
+
+    @property
+    def reads(self) -> Set[str]:
+        """Compute read resources dynamically (overrides C++ member)."""
+        result = {self.input_res}
+        if self.shadow_res:
+            result.add(self.shadow_res)
+        return result
+
+    @property
+    def writes(self) -> Set[str]:
+        """Compute write resources dynamically (overrides C++ member)."""
+        return {self.output_res}
 
     def serialize_data(self) -> dict:
         """Serialize fields via InspectRegistry (C++ INSPECT_FIELD)."""

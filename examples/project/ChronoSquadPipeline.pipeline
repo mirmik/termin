@@ -6,65 +6,57 @@
       "pass_name": "Skybox",
       "enabled": true,
       "passthrough": false,
-      "input_res": "empty",
-      "output_res": "skybox"
+      "data": {
+        "input_res": "empty",
+        "output_res": "skybox"
+      }
     },
     {
       "type": "ColorPass",
       "pass_name": "Color",
       "enabled": true,
-      "input_res": "skybox",
-      "output_res": "color",
-      "shadow_res": "",
-      "phase_mark": "opaque",
-      "sort_by_distance": false,
-      "clear_depth": false
+      "data": {
+        "input_res": "skybox",
+        "output_res": "color",
+        "shadow_res": "shadow_maps",
+        "phase_mark": "opaque",
+        "sort_by_distance": false,
+        "clear_depth": false
+      }
     },
     {
       "type": "PostProcessPass",
       "pass_name": "PostFX",
       "enabled": true,
       "passthrough": false,
-      "input_res": "color",
-      "output_res": "color_pp",
-      "effects": [
-        {
-          "type": "MaterialPostEffect",
-          "name": "TimeSpection",
-          "data": {
-            "_material_handle": {
-              "type": "uuid",
-              "uuid": "16cc8c42-4d8b-4cea-8b8a-173ecc39217e",
-              "name": "TimeSpection"
-            },
-            "_required_depth": false
-          }
-        }
-      ]
-    },
-    {
-      "type": "CanvasPass",
-      "pass_name": "Canvas",
-      "enabled": true,
-      "passthrough": false,
-      "src": "color_pp",
-      "dst": "color_ui"
+      "data": {
+        "input_res": "color",
+        "output_res": "color_pp"
+      }
     },
     {
       "type": "PresentToScreenPass",
       "pass_name": "Present",
       "enabled": true,
       "passthrough": false,
-      "input_res": "color_ui",
-      "output_res": "DISPLAY"
+      "data": {
+        "input_res": "color_pp",
+        "output_res": "DISPLAY"
+      }
     },
     {
-      "type": "DepthPass",
-      "pass_name": "DepthPass",
+      "type": "ShadowPass",
+      "pass_name": "ShadowPass",
       "enabled": true,
-      "passthrough": false,
-      "input_res": "empty_depth",
-      "output_res": "depth"
+      "data": {
+        "output_res": "shadow_maps",
+        "default_resolution": 1024.0,
+        "max_shadow_distance": 50.0,
+        "ortho_size": 20.0,
+        "near": 0.10000000149011612,
+        "far": 100.0,
+        "caster_offset": 50.0
+      }
     }
   ],
   "pipeline_specs": [

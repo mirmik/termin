@@ -5,6 +5,7 @@
 #include "inspect/inspect_registry.hpp"
 #include "entity/component.hpp"
 #include "render/material.hpp"
+#include "render/frame_pass.hpp"
 #include "../../core_c/include/tc_kind.hpp"
 #include "inspect_bindings.hpp"
 
@@ -32,6 +33,11 @@ static void* get_raw_pointer(nb::object obj) {
     // Material uses shared_ptr
     try {
         return static_cast<void*>(nb::cast<Material*>(obj));
+    } catch (const nb::cast_error&) {}
+
+    // FramePass (ColorPass, ShadowPass, etc.)
+    try {
+        return static_cast<void*>(nb::cast<FramePass*>(obj));
     } catch (const nb::cast_error&) {}
 
     // For pure Python objects (PythonComponent etc), return PyObject*

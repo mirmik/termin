@@ -7,10 +7,11 @@ Uses the new unified gizmo architecture with declarative gizmos.
 
 from __future__ import annotations
 
-from typing import Callable, List, Tuple, TYPE_CHECKING
+from typing import Callable, List, Set, Tuple, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.immediate import ImmediateRenderer
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.editor.gizmo import GizmoManager
@@ -26,6 +27,11 @@ class UnifiedGizmoPass(RenderFramePass):
     This replaces both the old entity-based GizmoPass and ImmediateGizmoPass.
     """
 
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
         gizmo_manager: "GizmoManager | Callable[[], GizmoManager | None] | None" = None,
@@ -33,15 +39,17 @@ class UnifiedGizmoPass(RenderFramePass):
         output_res: str = "color",
         pass_name: str = "UnifiedGizmoPass",
     ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-        )
+        super().__init__(pass_name=pass_name)
         self._gizmo_manager_source = gizmo_manager
         self.input_res = input_res
         self.output_res = output_res
         self._renderer = ImmediateRenderer()
+
+    def compute_reads(self) -> Set[str]:
+        return {self.input_res}
+
+    def compute_writes(self) -> Set[str]:
+        return {self.output_res}
 
     def _get_gizmo_manager(self) -> "GizmoManager | None":
         if self._gizmo_manager_source is None:

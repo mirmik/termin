@@ -783,7 +783,6 @@ class TestPipelineSerialization(unittest.TestCase):
         """Тест сериализации полного RenderPipeline."""
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
-        from termin.visualization.render.framegraph.passes.canvas import CanvasPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
 
@@ -809,12 +808,8 @@ class TestPipelineSerialization(unittest.TestCase):
                     input_res="color",
                     output_res="color_pp",
                 ),
-                CanvasPass(
-                    src="color_pp",
-                    dst="color_ui",
-                ),
                 PresentToScreenPass(
-                    input_res="color_ui",
+                    input_res="color_pp",
                 ),
             ],
             pipeline_specs=[
@@ -829,13 +824,12 @@ class TestPipelineSerialization(unittest.TestCase):
         # Сериализуем
         data = pipeline.serialize()
 
-        self.assertEqual(len(data["passes"]), 6)
+        self.assertEqual(len(data["passes"]), 5)
         self.assertEqual(data["passes"][0]["type"], "ShadowPass")
         self.assertEqual(data["passes"][1]["type"], "SkyBoxPass")
         self.assertEqual(data["passes"][2]["type"], "ColorPass")
         self.assertEqual(data["passes"][3]["type"], "PostProcessPass")
-        self.assertEqual(data["passes"][4]["type"], "CanvasPass")
-        self.assertEqual(data["passes"][5]["type"], "PresentToScreenPass")
+        self.assertEqual(data["passes"][4]["type"], "PresentToScreenPass")
 
         self.assertEqual(len(data["pipeline_specs"]), 1)
         self.assertEqual(data["pipeline_specs"][0]["resource"], "empty")
@@ -843,13 +837,12 @@ class TestPipelineSerialization(unittest.TestCase):
         # Десериализуем
         restored = RenderPipeline.deserialize(data, self.rm)
 
-        self.assertEqual(len(restored.passes), 6)
+        self.assertEqual(len(restored.passes), 5)
         self.assertIsInstance(restored.passes[0], ShadowPass)
         self.assertIsInstance(restored.passes[1], SkyBoxPass)
         self.assertIsInstance(restored.passes[2], ColorPass)
         self.assertIsInstance(restored.passes[3], PostProcessPass)
-        self.assertIsInstance(restored.passes[4], CanvasPass)
-        self.assertIsInstance(restored.passes[5], PresentToScreenPass)
+        self.assertIsInstance(restored.passes[4], PresentToScreenPass)
 
         # Проверяем параметры восстановленных пассов
         self.assertEqual(restored.passes[0].default_resolution, 1024)
