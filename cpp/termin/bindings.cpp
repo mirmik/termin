@@ -14,6 +14,7 @@
 namespace nb = nanobind;
 
 NB_MODULE(_native, m) {
+    nb::set_leak_warnings(false);
     m.doc() = "Native C++ module for termin";
 
     // Import _mesh_native and re-export as submodule

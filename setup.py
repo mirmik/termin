@@ -125,6 +125,8 @@ if __name__ == "__main__":
                 "robot/*",
                 "loaders/*",
                 "visualization/*",
+                "chronosquad/*",
+                "chronosquad/**/*",
                 "visualization/**/*",
                 "mesh/*",
                 "assets/*",

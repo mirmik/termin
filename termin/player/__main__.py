@@ -54,12 +54,13 @@ def main():
     # Find scene file
     scene_name = args.scene
     if scene_name is None:
-        # Look for first .scene file
-        scene_files = list(project_path.glob("*.scene"))
+        # Look for first .scene file (recursively)
+        scene_files = list(project_path.rglob("*.scene"))
         if not scene_files:
             print(f"Error: No .scene files found in {project_path}")
             sys.exit(1)
-        scene_name = scene_files[0].name
+        # Use relative path from project root
+        scene_name = str(scene_files[0].relative_to(project_path))
         print(f"Using scene: {scene_name}")
 
     from termin.player import run_project

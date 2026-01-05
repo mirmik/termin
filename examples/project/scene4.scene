@@ -3730,8 +3730,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                    "name": "StandartMaterial"
+                    "uuid": "00000000-0000-0000-0002-000000000003",
+                    "name": "AdvancedPBRMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -3778,8 +3778,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                    "name": "StandartMaterial"
+                    "uuid": "00000000-0000-0000-0002-000000000003",
+                    "name": "AdvancedPBRMaterial"
                   },
                   "cast_shadow": true
                 }
@@ -8004,18 +8004,22 @@
   "editor": {
     "camera": {
       "position": [
-        -6.805116176605225,
-        -3.9612927436828613,
-        4.178220272064209
+        7.947494029998779,
+        18.16146469116211,
+        5.265680313110352
       ],
       "rotation": [
-        -0.26593671238771593,
-        0.06581268063099513,
-        -0.2310372263580832,
-        0.9335781467608055
+        0.05331354046780616,
+        -0.2255321585261947,
+        0.9466849364362971,
+        -0.22378682489795354
       ],
-      "radius": 10.5
-    }
+      "radius": 13.5
+    },
+    "selected_entity": "entity21_copy",
+    "expanded_entities": [
+      "VoxelPlatform"
+    ]
   },
   "resources": {
     "textures": {

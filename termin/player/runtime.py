@@ -161,6 +161,8 @@ class PlayerRuntime:
             PrefabPreLoader,
             AudioPreLoader,
             GlslPreLoader,
+            NavMeshProcessor,
+            VoxelGridProcessor,
         )
 
         preloaders = [
@@ -173,6 +175,8 @@ class PlayerRuntime:
             GLBPreLoader(rm),
             PrefabPreLoader(rm),
             AudioPreLoader(rm),
+            NavMeshProcessor(rm),
+            VoxelGridProcessor(rm),
         ]
 
         # Build extension -> preloader map

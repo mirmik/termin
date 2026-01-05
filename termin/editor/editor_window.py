@@ -395,6 +395,7 @@ class EditorWindow(QMainWindow):
             on_after_new=self._on_after_scene_new,
             on_after_save=self._update_window_title,
             on_after_load=self._update_window_title,
+            get_project_path=self._get_project_path,
             log_message=self._log_to_console,
         )
 
@@ -1826,8 +1827,14 @@ class EditorWindow(QMainWindow):
         self._save_scene()
 
         # Run player in separate process
-        scene_name = Path(scene_path).name
         project_root = Path(project_path)
+        scene_path_obj = Path(scene_path)
+        # Get relative path from project root
+        try:
+            scene_name = str(scene_path_obj.relative_to(project_root))
+        except ValueError:
+            # Scene is outside project, use absolute path
+            scene_name = str(scene_path_obj)
         cmd = [
             sys.executable,
             "-m", "termin.player",

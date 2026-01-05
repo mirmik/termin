@@ -37,6 +37,7 @@ class SceneFileController:
         on_after_new: Callable[[], None],
         on_after_save: Callable[[], None],
         on_after_load: Callable[[], None],
+        get_project_path: Callable[[], str | None] | None = None,
         log_message: Callable[[str], None] | None = None,
     ):
         self._parent = parent
@@ -44,6 +45,7 @@ class SceneFileController:
         self._on_after_new = on_after_new
         self._on_after_save = on_after_save
         self._on_after_load = on_after_load
+        self._get_project_path = get_project_path
 
     def new_scene(self) -> bool:
         """
@@ -94,10 +96,18 @@ class SceneFileController:
         Returns:
             True if saved, False if cancelled.
         """
+        import os
+        default_dir = ""
+        if self._get_project_path is not None:
+            project_path = self._get_project_path()
+            if project_path:
+                default_dir = project_path
+        default_path = os.path.join(default_dir, "scene.scene") if default_dir else "scene.scene"
+
         file_path, _ = QFileDialog.getSaveFileName(
             self._parent,
             "Save Scene As",
-            "scene.scene",
+            default_path,
             "Scene Files (*.scene);;All Files (*)",
             options=QFileDialog.Option.DontUseNativeDialog,
         )
@@ -143,10 +153,16 @@ class SceneFileController:
         Returns:
             True if loaded, False if cancelled.
         """
+        default_dir = ""
+        if self._get_project_path is not None:
+            project_path = self._get_project_path()
+            if project_path:
+                default_dir = project_path
+
         file_path, _ = QFileDialog.getOpenFileName(
             self._parent,
             "Load Scene",
-            "",
+            default_dir,
             "Scene Files (*.scene);;All Files (*)",
             options=QFileDialog.Option.DontUseNativeDialog,
         )
