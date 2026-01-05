@@ -304,7 +304,7 @@ void bind_entity_class(nb::module_& m) {
                 Entity parent = nb::cast<Entity>(parent_obj);
                 e.set_parent(parent);
             }
-        }, nb::arg("parent"))
+        }, nb::arg("parent").none())
         .def_prop_ro("parent", [](Entity& e) -> nb::object {
             Entity p = e.parent();
             if (p.valid()) {

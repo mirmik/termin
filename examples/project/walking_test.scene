@@ -194,64 +194,6 @@
         ]
       },
       {
-        "uuid": "0000000000000007",
-        "name": "Agent",
-        "priority": 0,
-        "visible": true,
-        "active": true,
-        "pickable": true,
-        "selectable": true,
-        "layer": 0,
-        "flags": 0,
-        "pose": {
-          "position": [
-            2.3619000911712646,
-            1.4389933347702026,
-            0.5831781625747681
-          ],
-          "rotation": [
-            0,
-            0,
-            0,
-            1
-          ]
-        },
-        "scale": [
-          1,
-          1,
-          1
-        ],
-        "components": [
-          {
-            "type": "MeshRenderer",
-            "data": {
-              "enabled": true,
-              "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002",
-                "name": "Sphere"
-              },
-              "material": {
-                "type": "uuid",
-                "uuid": "00000000-0000-0000-0002-000000000003",
-                "name": "AdvancedPBRMaterial"
-              },
-              "cast_shadow": true
-            }
-          },
-          {
-            "type": "NavMeshAgentComponent",
-            "data": {
-              "enabled": false,
-              "speed": 5.0,
-              "stopping_distance": 0.1,
-              "debug_draw_path": true,
-              "click_to_move": true
-            }
-          }
-        ],
-        "children": []
-      },
-      {
         "uuid": "0000000000000008",
         "name": "GameCamera",
         "priority": 0,
@@ -304,8 +246,8 @@
         "children": []
       },
       {
-        "uuid": "0000000000000009",
-        "name": "HumanAgent",
+        "uuid": "0000000000000074",
+        "name": "ChronosphereController",
         "priority": 0,
         "visible": true,
         "active": true,
@@ -315,9 +257,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            0.9903036952018738,
-            -1.290578007698059,
-            0.5151959657669067
+            0,
+            0,
+            0
           ],
           "rotation": [
             0,
@@ -333,20 +275,130 @@
         ],
         "components": [
           {
-            "type": "NavMeshAgentComponent",
+            "type": "ChronosphereController",
             "data": {
-              "enabled": true,
-              "speed": 5.0,
-              "stopping_distance": 0.1,
-              "debug_draw_path": true,
-              "click_to_move": false
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "0000000000000075",
+        "name": "TimelineInitializer",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -8.881784197001252e-16,
+            1.7763568394002505e-15,
+            -4.440892098500626e-16
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1.0000000000000002
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "TimelineInitializer",
+            "data": {
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "0000000000000076",
+        "name": "OriginalTimeline",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "TimelineController",
+            "data": {
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "0000000000000077",
+        "name": "Glitch",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0.5686501860618591
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "ObjectController",
+            "data": {
+              "enabled": true
             }
           }
         ],
         "children": [
           {
             "uuid": "000000000000000a",
-            "name": "Glitch",
+            "name": "Model",
             "priority": 0,
             "visible": true,
             "active": true,
@@ -361,7 +413,7 @@
                 0
               ],
               "rotation": [
-                3.5762786865234375e-07,
+                0,
                 0,
                 0,
                 1
@@ -4348,6 +4400,44 @@
             ]
           }
         ]
+      },
+      {
+        "uuid": "0000000000000076",
+        "name": "ClickController",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "ClickController",
+            "data": {
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {},
@@ -4409,24 +4499,20 @@
   "editor": {
     "camera": {
       "position": [
-        1.901422381401062,
-        -2.043605327606201,
-        2.041469097137451
+        1.5976017713546753,
+        -4.205716133117676,
+        4.691441535949707
       ],
       "rotation": [
-        -0.1504172401622371,
-        -0.04887352710460467,
-        0.3051276654105825,
-        0.9390863325655524
+        -0.3858915811889661,
+        -0.07082436179279115,
+        0.1660453991160341,
+        0.9047101871740589
       ],
-      "radius": 3.0
+      "radius": 6.5
     },
+    "selected_entity": "ClickController",
     "expanded_entities": [
-      "camera",
-      "editor_ui",
-      "EditorEntities",
-      "HumanAgent",
-      "Glitch",
       "PlatformBase"
     ]
   },

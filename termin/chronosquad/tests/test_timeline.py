@@ -5,7 +5,8 @@ from termin.chronosquad.core import (
     Timeline,
     ObjectOfTimeline,
     Vec3,
-    Pose,
+    Quat,
+    Pose3,
     LinearMoveAnimatronic,
     GAME_FREQUENCY,
 )
@@ -88,8 +89,8 @@ class TestTimeline:
         # Add animatronic
         move = LinearMoveAnimatronic(
             0, 100,
-            Pose(Vec3(0, 0, 0), obj.pose.rotation),
-            Pose(Vec3(10, 0, 0), obj.pose.rotation),
+            Pose3(obj.local_rotation, Vec3(0, 0, 0)),
+            Pose3(obj.local_rotation, Vec3(10, 0, 0)),
         )
         obj.add_animatronic(move)
 
@@ -103,7 +104,7 @@ class TestTimeline:
     def test_copy(self):
         tl = Timeline("Main")
         obj = ObjectOfTimeline("Player")
-        obj.set_position(Vec3(5, 0, 0))
+        obj.set_local_position(Vec3(5, 0, 0))
         tl.add_object(obj)
         tl.promote(50)
 
@@ -116,7 +117,7 @@ class TestTimeline:
 
         copy_obj = copy.get_object("Player")
         assert copy_obj is not obj
-        assert copy_obj.position.x == pytest.approx(5.0)
+        assert copy_obj.local_position.x == pytest.approx(5.0)
 
     def test_copy_independence(self):
         tl = Timeline("Main")
@@ -125,8 +126,8 @@ class TestTimeline:
 
         move = LinearMoveAnimatronic(
             0, 100,
-            Pose(Vec3(0, 0, 0), obj.pose.rotation),
-            Pose(Vec3(10, 0, 0), obj.pose.rotation),
+            Pose3(obj.local_rotation, Vec3(0, 0, 0)),
+            Pose3(obj.local_rotation, Vec3(10, 0, 0)),
         )
         obj.add_animatronic(move)
 
@@ -140,8 +141,8 @@ class TestTimeline:
         main_obj = tl.get_object("Player")
         copy_obj = copy.get_object("Player")
 
-        assert main_obj.position.x == pytest.approx(10.0)
-        assert copy_obj.position.x == pytest.approx(0.0)
+        assert main_obj.local_position.x == pytest.approx(10.0)
+        assert copy_obj.local_position.x == pytest.approx(0.0)
 
     def test_info(self):
         tl = Timeline("Test")

@@ -209,7 +209,7 @@ void bind_transform(nb::module_& m) {
             } else {
                 self.set_parent(nb::cast<GeneralTransform3>(parent));
             }
-        })
+        }, nb::arg("parent").none())
         .def("_unparent", &GeneralTransform3::unparent)
         .def("unparent", &GeneralTransform3::unparent)
         .def("link", [](GeneralTransform3& self, GeneralTransform3 child) {

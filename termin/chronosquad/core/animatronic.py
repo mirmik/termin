@@ -8,12 +8,8 @@ They are evaluated at each step to get the interpolated pose.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
-from .object_of_timeline import Pose, Vec3, Quat
-
-if TYPE_CHECKING:
-    pass
+from termin.geombase import Pose3, Vec3, Quat
 
 
 class Animatronic(ABC):
@@ -43,7 +39,7 @@ class Animatronic(ABC):
         return max(0.0, min(1.0, t))
 
     @abstractmethod
-    def evaluate(self, step: int) -> Pose:
+    def evaluate(self, step: int) -> Pose3:
         """Evaluate pose at given step."""
         pass
 
@@ -58,13 +54,13 @@ class StaticAnimatronic(Animatronic):
     Animatronic that holds a static pose.
     """
 
-    def __init__(self, start_step: int, pose: Pose, finish_step: int | None = None):
+    def __init__(self, start_step: int, pose: Pose3, finish_step: int | None = None):
         if finish_step is None:
             finish_step = start_step + 1_000_000  # Very long duration
         super().__init__(start_step, finish_step)
         self.pose = pose
 
-    def evaluate(self, step: int) -> Pose:
+    def evaluate(self, step: int) -> Pose3:
         return self.pose.copy()
 
     def copy(self) -> StaticAnimatronic:
@@ -80,16 +76,16 @@ class LinearMoveAnimatronic(Animatronic):
         self,
         start_step: int,
         finish_step: int,
-        start_pose: Pose,
-        end_pose: Pose,
+        start_pose: Pose3,
+        end_pose: Pose3,
     ):
         super().__init__(start_step, finish_step)
         self.start_pose = start_pose
         self.end_pose = end_pose
 
-    def evaluate(self, step: int) -> Pose:
+    def evaluate(self, step: int) -> Pose3:
         t = self.progress(step)
-        return self.start_pose.lerp(self.end_pose, t)
+        return Pose3.lerp(self.start_pose, self.end_pose, t)
 
     def copy(self) -> LinearMoveAnimatronic:
         return LinearMoveAnimatronic(
@@ -110,8 +106,8 @@ class CubicMoveAnimatronic(Animatronic):
         self,
         start_step: int,
         finish_step: int,
-        start_pose: Pose,
-        end_pose: Pose,
+        start_pose: Pose3,
+        end_pose: Pose3,
     ):
         super().__init__(start_step, finish_step)
         self.start_pose = start_pose
@@ -124,10 +120,10 @@ class CubicMoveAnimatronic(Animatronic):
         else:
             return 1 - ((-2 * t + 2) ** 3) / 2
 
-    def evaluate(self, step: int) -> Pose:
+    def evaluate(self, step: int) -> Pose3:
         t = self.progress(step)
         smooth_t = self._smooth_step(t)
-        return self.start_pose.lerp(self.end_pose, smooth_t)
+        return Pose3.lerp(self.start_pose, self.end_pose, smooth_t)
 
     def copy(self) -> CubicMoveAnimatronic:
         return CubicMoveAnimatronic(
@@ -146,7 +142,7 @@ class WaypointAnimatronic(Animatronic):
     def __init__(
         self,
         start_step: int,
-        waypoints: list[tuple[int, Pose]],  # (step, pose) pairs
+        waypoints: list[tuple[int, Pose3]],  # (step, pose) pairs
     ):
         if not waypoints:
             raise ValueError("At least one waypoint required")
@@ -158,7 +154,7 @@ class WaypointAnimatronic(Animatronic):
         super().__init__(start_step, finish_step)
         self.waypoints = waypoints
 
-    def evaluate(self, step: int) -> Pose:
+    def evaluate(self, step: int) -> Pose3:
         # Find surrounding waypoints
         prev_wp = self.waypoints[0]
         next_wp = self.waypoints[-1]
@@ -182,7 +178,7 @@ class WaypointAnimatronic(Animatronic):
 
         t = (step - prev_step) / (next_step - prev_step)
         t = max(0.0, min(1.0, t))
-        return prev_pose.lerp(next_pose, t)
+        return Pose3.lerp(prev_pose, next_pose, t)
 
     def copy(self) -> WaypointAnimatronic:
         new_waypoints = [(s, p.copy()) for s, p in self.waypoints]

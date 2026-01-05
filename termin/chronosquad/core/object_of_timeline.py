@@ -7,83 +7,16 @@ Objects have position (pose), event cards, and can be moved through time.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from dataclasses import dataclass
+import math
+
+from termin.geombase import Vec3, Quat, Pose3, GeneralPose3
 
 from .event_line import EventLine
+from .timeline import GAME_FREQUENCY
 
 if TYPE_CHECKING:
     from .timeline import Timeline
     from .animatronic import Animatronic
-
-
-@dataclass
-class Vec3:
-    """Simple 3D vector."""
-    x: float = 0.0
-    y: float = 0.0
-    z: float = 0.0
-
-    def __add__(self, other: Vec3) -> Vec3:
-        return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
-
-    def __sub__(self, other: Vec3) -> Vec3:
-        return Vec3(self.x - other.x, self.y - other.y, self.z - other.z)
-
-    def __mul__(self, scalar: float) -> Vec3:
-        return Vec3(self.x * scalar, self.y * scalar, self.z * scalar)
-
-    def lerp(self, other: Vec3, t: float) -> Vec3:
-        """Linear interpolation between self and other."""
-        return self + (other - self) * t
-
-    def distance_to(self, other: Vec3) -> float:
-        dx = self.x - other.x
-        dy = self.y - other.y
-        dz = self.z - other.z
-        return (dx * dx + dy * dy + dz * dz) ** 0.5
-
-    def copy(self) -> Vec3:
-        return Vec3(self.x, self.y, self.z)
-
-    def __repr__(self) -> str:
-        return f"Vec3({self.x:.2f}, {self.y:.2f}, {self.z:.2f})"
-
-
-@dataclass
-class Quat:
-    """Simple quaternion for rotation."""
-    x: float = 0.0
-    y: float = 0.0
-    z: float = 0.0
-    w: float = 1.0
-
-    @staticmethod
-    def identity() -> Quat:
-        return Quat(0, 0, 0, 1)
-
-    def copy(self) -> Quat:
-        return Quat(self.x, self.y, self.z, self.w)
-
-
-@dataclass
-class Pose:
-    """Position + rotation."""
-    position: Vec3
-    rotation: Quat
-
-    @staticmethod
-    def identity() -> Pose:
-        return Pose(Vec3(), Quat.identity())
-
-    def copy(self) -> Pose:
-        return Pose(self.position.copy(), self.rotation.copy())
-
-    def lerp(self, other: Pose, t: float) -> Pose:
-        """Linear interpolation of position (rotation lerp is simplified)."""
-        return Pose(
-            self.position.lerp(other.position, t),
-            other.rotation.copy() if t > 0.5 else self.rotation.copy()
-        )
 
 
 class ObjectOfTimeline:
@@ -102,7 +35,7 @@ class ObjectOfTimeline:
         self._timeline: Timeline | None = None
 
         # Current local pose
-        self._local_pose: Pose = Pose.identity()
+        self._local_pose: Pose3 = Pose3.identity()
 
         # Event cards for state changes
         self._changes: EventLine[ObjectOfTimeline] = EventLine()
@@ -127,20 +60,28 @@ class ObjectOfTimeline:
         return self._local_step
 
     @property
-    def position(self) -> Vec3:
-        return self._local_pose.position
+    def local_position(self) -> Vec3:
+        return self._local_pose.lin
 
     @property
-    def pose(self) -> Pose:
+    def local_rotation(self) -> Quat:
+        return self._local_pose.ang
+
+    @property
+    def local_pose(self) -> Pose3:
         return self._local_pose
 
-    def set_position(self, pos: Vec3) -> None:
-        """Set position directly (for initialization)."""
-        self._local_pose.position = pos
+    def set_local_position(self, pos: Vec3) -> None:
+        """Set local position."""
+        self._local_pose.lin = pos
 
-    def set_pose(self, pose: Pose) -> None:
-        """Set pose directly (for initialization)."""
-        self._local_pose = pose
+    def set_local_rotation(self, rot: Quat) -> None:
+        """Set local rotation."""
+        self._local_pose.ang = rot
+
+    def set_local_pose(self, pose: Pose3 | GeneralPose3) -> None:
+        """Set local pose. Accepts Pose3 or GeneralPose3 (scale ignored)."""
+        self._local_pose = Pose3(pose.ang, pose.lin)
 
     def add_animatronic(self, anim: Animatronic) -> None:
         """Add an animatronic (movement card)."""
@@ -193,12 +134,54 @@ class ObjectOfTimeline:
 
     def current_position(self) -> Vec3:
         """Get current interpolated position."""
-        return self._local_pose.position
+        return self._local_pose.lin
 
     def info(self) -> str:
         """Debug info."""
         return (
             f"Object '{self._name}' at step {self._local_step}, "
-            f"pos={self._local_pose.position}, "
+            f"pos={self._local_pose.lin}, "
             f"animatronics={len(self._animatronics)}"
         )
+
+    def move_to(self, target: Vec3, speed: float = 5.0) -> None:
+        """
+        Move object to target position.
+
+        Creates a LinearMoveAnimatronic from current position to target.
+        Duration is calculated based on distance and speed.
+
+        Args:
+            target: Target position in world coordinates
+            speed: Movement speed in units per second (default 5.0)
+        """
+        from .animatronic import LinearMoveAnimatronic
+
+        if self._timeline is None:
+            return
+
+        current_pos = self._local_pose.lin
+        current_rot = self._local_pose.ang
+
+        # Calculate distance
+        dx = target.x - current_pos.x
+        dy = target.y - current_pos.y
+        dz = target.z - current_pos.z
+        distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        if distance < 0.001:
+            return  # Already at target
+
+        # Calculate duration in steps
+        duration_seconds = distance / speed
+        duration_steps = max(1, int(duration_seconds * GAME_FREQUENCY))
+
+        # Create animatronic
+        start_step = self._timeline.current_step
+        end_step = start_step + duration_steps
+
+        start_pose = Pose3(current_rot, current_pos)
+        end_pose = Pose3(current_rot, target)
+
+        move = LinearMoveAnimatronic(start_step, end_step, start_pose, end_pose)
+        self.add_animatronic(move)

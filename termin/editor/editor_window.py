@@ -60,8 +60,15 @@ from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindo
 class EditorWindow(QMainWindow):
     undo_stack_changed = pyqtSignal()
 
+    _instance: "EditorWindow | None" = None
+
+    @classmethod
+    def instance(cls) -> "EditorWindow | None":
+        return cls._instance
+
     def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend):
         super().__init__()
+        EditorWindow._instance = self
         self.undo_stack = UndoStack()
         self._menu_bar_controller: MenuBarController | None = None
         self._status_bar_label: QLabel | None = None

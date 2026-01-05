@@ -4,7 +4,7 @@ import pytest
 from termin.chronosquad.core import (
     ObjectOfTimeline,
     Vec3,
-    Pose,
+    Pose3,
     Quat,
     LinearMoveAnimatronic,
     CubicMoveAnimatronic,
@@ -42,41 +42,21 @@ class TestVec3:
         assert r.y == 4
         assert r.z == 6
 
-    def test_lerp(self):
-        a = Vec3(0, 0, 0)
-        b = Vec3(10, 20, 30)
 
-        mid = a.lerp(b, 0.5)
-        assert mid.x == pytest.approx(5)
-        assert mid.y == pytest.approx(10)
-        assert mid.z == pytest.approx(15)
-
-    def test_distance_to(self):
-        a = Vec3(0, 0, 0)
-        b = Vec3(3, 4, 0)
-        assert a.distance_to(b) == pytest.approx(5.0)
-
-    def test_copy(self):
-        v = Vec3(1, 2, 3)
-        c = v.copy()
-        c.x = 10
-        assert v.x == 1
-
-
-class TestPose:
+class TestPose3:
     def test_identity(self):
-        p = Pose.identity()
-        assert p.position.x == 0
-        assert p.position.y == 0
-        assert p.position.z == 0
-        assert p.rotation.w == 1
+        p = Pose3.identity()
+        assert p.lin.x == 0
+        assert p.lin.y == 0
+        assert p.lin.z == 0
+        assert p.ang.w == 1
 
     def test_lerp(self):
-        a = Pose(Vec3(0, 0, 0), Quat.identity())
-        b = Pose(Vec3(10, 0, 0), Quat.identity())
+        a = Pose3(Quat.identity(), Vec3(0, 0, 0))
+        b = Pose3(Quat.identity(), Vec3(10, 0, 0))
 
-        mid = a.lerp(b, 0.5)
-        assert mid.position.x == pytest.approx(5)
+        mid = Pose3.lerp(a, b, 0.5)
+        assert mid.lin.x == pytest.approx(5)
 
 
 class TestObjectOfTimeline:
@@ -88,15 +68,15 @@ class TestObjectOfTimeline:
 
     def test_set_position(self):
         obj = ObjectOfTimeline("Player")
-        obj.set_position(Vec3(5, 10, 15))
+        obj.set_local_position(Vec3(5, 10, 15))
 
-        assert obj.position.x == 5
-        assert obj.position.y == 10
-        assert obj.position.z == 15
+        assert obj.local_position.x == 5
+        assert obj.local_position.y == 10
+        assert obj.local_position.z == 15
 
     def test_add_animatronic(self):
         obj = ObjectOfTimeline("Player")
-        anim = StaticAnimatronic(0, Pose.identity())
+        anim = StaticAnimatronic(0, Pose3.identity())
         obj.add_animatronic(anim)
 
         # Promote to activate
@@ -107,19 +87,19 @@ class TestObjectOfTimeline:
         obj = ObjectOfTimeline("Player")
         move = LinearMoveAnimatronic(
             0, 100,
-            Pose(Vec3(0, 0, 0), Quat.identity()),
-            Pose(Vec3(10, 0, 0), Quat.identity()),
+            Pose3(Quat.identity(), Vec3(0, 0, 0)),
+            Pose3(Quat.identity(), Vec3(10, 0, 0)),
         )
         obj.add_animatronic(move)
 
         obj.promote(0)
-        assert obj.position.x == pytest.approx(0)
+        assert obj.local_position.x == pytest.approx(0)
 
         obj.promote(50)
-        assert obj.position.x == pytest.approx(5)
+        assert obj.local_position.x == pytest.approx(5)
 
         obj.promote(100)
-        assert obj.position.x == pytest.approx(10)
+        assert obj.local_position.x == pytest.approx(10)
 
     def test_sequential_animatronics(self):
         obj = ObjectOfTimeline("Player")
@@ -127,47 +107,47 @@ class TestObjectOfTimeline:
         # First move: X from 0 to 5
         move1 = LinearMoveAnimatronic(
             0, 50,
-            Pose(Vec3(0, 0, 0), Quat.identity()),
-            Pose(Vec3(5, 0, 0), Quat.identity()),
+            Pose3(Quat.identity(), Vec3(0, 0, 0)),
+            Pose3(Quat.identity(), Vec3(5, 0, 0)),
         )
 
         # Second move: Y from 0 to 5
         move2 = LinearMoveAnimatronic(
             50, 100,
-            Pose(Vec3(5, 0, 0), Quat.identity()),
-            Pose(Vec3(5, 5, 0), Quat.identity()),
+            Pose3(Quat.identity(), Vec3(5, 0, 0)),
+            Pose3(Quat.identity(), Vec3(5, 5, 0)),
         )
 
         obj.add_animatronic(move1)
         obj.add_animatronic(move2)
 
         obj.promote(25)
-        assert obj.position.x == pytest.approx(2.5)
-        assert obj.position.y == pytest.approx(0)
+        assert obj.local_position.x == pytest.approx(2.5)
+        assert obj.local_position.y == pytest.approx(0)
 
         obj.promote(75)
-        assert obj.position.x == pytest.approx(5)
-        assert obj.position.y == pytest.approx(2.5)
+        assert obj.local_position.x == pytest.approx(5)
+        assert obj.local_position.y == pytest.approx(2.5)
 
     def test_copy(self):
         obj = ObjectOfTimeline("Player")
-        obj.set_position(Vec3(5, 10, 15))
+        obj.set_local_position(Vec3(5, 10, 15))
 
         move = LinearMoveAnimatronic(
             0, 100,
-            Pose(Vec3(0, 0, 0), Quat.identity()),
-            Pose(Vec3(10, 0, 0), Quat.identity()),
+            Pose3(Quat.identity(), Vec3(0, 0, 0)),
+            Pose3(Quat.identity(), Vec3(10, 0, 0)),
         )
         obj.add_animatronic(move)
 
         copy = obj.copy(None)
         assert copy.name == "Player"
-        assert copy.position.x == pytest.approx(5)
+        assert copy.local_position.x == pytest.approx(5)
         assert len(copy._animatronics) == 1
 
         # Modifying copy shouldn't affect original
-        copy.set_position(Vec3(0, 0, 0))
-        assert obj.position.x == pytest.approx(5)
+        copy.set_local_position(Vec3(0, 0, 0))
+        assert obj.local_position.x == pytest.approx(5)
 
     def test_drop_to_current(self):
         obj = ObjectOfTimeline("Player")
@@ -175,8 +155,8 @@ class TestObjectOfTimeline:
         # Add animatronic starting in future
         move = LinearMoveAnimatronic(
             100, 200,
-            Pose(Vec3(0, 0, 0), Quat.identity()),
-            Pose(Vec3(10, 0, 0), Quat.identity()),
+            Pose3(Quat.identity(), Vec3(0, 0, 0)),
+            Pose3(Quat.identity(), Vec3(10, 0, 0)),
         )
         obj.add_animatronic(move)
 
