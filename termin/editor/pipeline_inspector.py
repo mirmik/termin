@@ -167,6 +167,11 @@ class PipelineInspector(QWidget):
         self._pass_inspector.field_changed.connect(self._on_pass_field_changed)
         self._details_layout.addWidget(self._pass_inspector)
 
+        # Set resources for handle widgets
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        self._pass_inspector.set_resources(rm)
+
         # PostEffect section (shown only for PostProcessPass)
         self._effects_group = QGroupBox("Post Effects")
         self._effects_group.setVisible(False)
@@ -229,6 +234,7 @@ class PipelineInspector(QWidget):
         # Effect inspector
         self._effect_inspector = InspectFieldPanel(parent=self._effects_group)
         self._effect_inspector.field_changed.connect(self._on_effect_field_changed)
+        self._effect_inspector.set_resources(rm)
         effects_layout.addWidget(self._effect_inspector)
 
         self._details_layout.addWidget(self._effects_group)

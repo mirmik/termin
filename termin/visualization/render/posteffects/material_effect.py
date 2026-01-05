@@ -60,9 +60,11 @@ class MaterialPostEffect(PostEffect):
 
     def _serialize_params(self) -> dict:
         """Serialize parameters."""
-        material_name = self._material_handle.get_name() if self._material_handle else ""
+        material_name = ""
+        if self._material_handle and self._material_handle.is_valid:
+            material_name = self._material_handle.name or ""
         return {
-            "material_path": material_name or "",
+            "material_path": material_name,
             "required_depth": self._required_depth,
         }
 

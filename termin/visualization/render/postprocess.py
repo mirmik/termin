@@ -31,6 +31,38 @@ class PostEffect:
     # Подклассы должны переопределить этот атрибут
     inspect_fields: dict = {}
 
+    def __init_subclass__(cls, **kwargs):
+        """Register subclass in InspectRegistry for inspector support."""
+        super().__init_subclass__(**kwargs)
+
+        # Don't register the base class itself
+        if cls.__name__ == "PostEffect":
+            return
+
+        try:
+            from termin._native.inspect import InspectRegistry
+            registry = InspectRegistry.instance()
+
+            # Register only own fields (not inherited)
+            own_fields = cls.__dict__.get('inspect_fields', {})
+            if own_fields:
+                registry.register_python_fields(cls.__name__, own_fields)
+
+            # Find parent type and register inheritance
+            parent_name = None
+            for klass in cls.__mro__[1:]:
+                if klass is PostEffect:
+                    parent_name = "PostEffect"
+                    break
+                if hasattr(klass, 'inspect_fields'):
+                    parent_name = klass.__name__
+                    break
+
+            if parent_name:
+                registry.set_type_parent(cls.__name__, parent_name)
+        except ImportError:
+            pass
+
     # ---- Сериализация ---------------------------------------------
 
     def serialize(self) -> dict:
