@@ -174,13 +174,13 @@ class SimpleDisplayInputManager:
 
         self._request_update()
 
-    def _handle_scroll(self, window, xoffset: float, yoffset: float) -> None:
+    def _handle_scroll(self, window, xoffset: float, yoffset: float, mods: int = 0) -> None:
         """Обработчик скролла."""
         x, y = self._backend_window.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y) or self._active_viewport
 
         if viewport is not None:
-            event = ScrollEvent(viewport=viewport, x=x, y=y, xoffset=xoffset, yoffset=yoffset)
+            event = ScrollEvent(viewport=viewport, x=x, y=y, xoffset=xoffset, yoffset=yoffset, mods=mods)
             viewport.scene.dispatch_input("on_scroll", event)
 
         self._request_update()

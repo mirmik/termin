@@ -134,8 +134,8 @@ class SDLWindowHandle(BackendWindow):
         if callback is None:
             self._window.set_scroll_callback(None)
         else:
-            def wrapper(win, x, y):
-                callback(self, x, y)
+            def wrapper(win, x, y, mods):
+                callback(self, x, y, mods)
             self._window.set_scroll_callback(wrapper)
 
     def set_mouse_button_callback(self, callback: Callable) -> None:

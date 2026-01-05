@@ -52,6 +52,40 @@ def _translate_key(scancode: int) -> Key:
     return Key.UNKNOWN
 
 
+def _translate_sdl_mods(sdl_mods: int) -> int:
+    """Translate SDL modifier flags to GLFW-compatible flags."""
+    # SDL: KMOD_LSHIFT=0x0001, KMOD_RSHIFT=0x0002
+    # SDL: KMOD_LCTRL=0x0040, KMOD_RCTRL=0x0080
+    # SDL: KMOD_LALT=0x0100, KMOD_RALT=0x0200
+    # GLFW: SHIFT=0x0001, CTRL=0x0002, ALT=0x0004, SUPER=0x0008
+    result = 0
+    if sdl_mods & (sdl2.KMOD_LSHIFT | sdl2.KMOD_RSHIFT):
+        result |= 0x0001  # MOD_SHIFT
+    if sdl_mods & (sdl2.KMOD_LCTRL | sdl2.KMOD_RCTRL):
+        result |= 0x0002  # MOD_CONTROL
+    if sdl_mods & (sdl2.KMOD_LALT | sdl2.KMOD_RALT):
+        result |= 0x0004  # MOD_ALT
+    return result
+
+
+def _get_qt_keyboard_mods() -> int:
+    """Get keyboard modifiers from Qt (since SDL doesn't receive key events when embedded)."""
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import Qt
+        qt_mods = QApplication.keyboardModifiers()
+        result = 0
+        if qt_mods & Qt.KeyboardModifier.ShiftModifier:
+            result |= 0x0001  # MOD_SHIFT
+        if qt_mods & Qt.KeyboardModifier.ControlModifier:
+            result |= 0x0002  # MOD_CONTROL
+        if qt_mods & Qt.KeyboardModifier.AltModifier:
+            result |= 0x0004  # MOD_ALT
+        return result
+    except Exception:
+        return 0
+
+
 def _get_native_window_handle(sdl_window) -> int:
     """Get native window handle from SDL window (HWND on Windows, Window on X11)."""
     wm_info = sdl2.SDL_SysWMinfo()
@@ -377,31 +411,37 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         elif event_type == sdl2.SDL_MOUSEWHEEL:
             if self._scroll_callback is not None:
+                # Use Qt for keyboard modifiers since SDL doesn't receive key events when embedded
+                mods = _get_qt_keyboard_mods()
                 self._scroll_callback(
-                    self, float(event.wheel.x), float(event.wheel.y)
+                    self, float(event.wheel.x), float(event.wheel.y), mods
                 )
 
         elif event_type == sdl2.SDL_MOUSEBUTTONDOWN:
             if self._mouse_button_callback is not None:
                 button = _translate_mouse_button(event.button.button)
-                self._mouse_button_callback(self, button, Action.PRESS, 0)
+                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+                self._mouse_button_callback(self, button, Action.PRESS, mods)
 
         elif event_type == sdl2.SDL_MOUSEBUTTONUP:
             if self._mouse_button_callback is not None:
                 button = _translate_mouse_button(event.button.button)
-                self._mouse_button_callback(self, button, Action.RELEASE, 0)
+                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+                self._mouse_button_callback(self, button, Action.RELEASE, mods)
 
         elif event_type == sdl2.SDL_KEYDOWN:
             if self._key_callback is not None:
                 key = _translate_key(event.key.keysym.scancode)
                 action = Action.REPEAT if event.key.repeat else Action.PRESS
-                self._key_callback(self, key, event.key.keysym.scancode, action, 0)
+                mods = _translate_sdl_mods(event.key.keysym.mod)
+                self._key_callback(self, key, event.key.keysym.scancode, action, mods)
 
         elif event_type == sdl2.SDL_KEYUP:
             if self._key_callback is not None:
                 key = _translate_key(event.key.keysym.scancode)
+                mods = _translate_sdl_mods(event.key.keysym.mod)
                 self._key_callback(
-                    self, key, event.key.keysym.scancode, Action.RELEASE, 0
+                    self, key, event.key.keysym.scancode, Action.RELEASE, mods
                 )
 
 

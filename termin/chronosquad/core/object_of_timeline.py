@@ -250,6 +250,7 @@ class ObjectOfTimeline:
 
         Returns a list of AnimatronicAnimationTask with blending coefficients.
         Most recent animatronic has highest coefficient, older ones blend out.
+        If the last animatronic has finished, returns Idle with blend from finished anim.
         """
         from .animatronic import AnimationType
 
@@ -258,7 +259,7 @@ class ObjectOfTimeline:
         if not self._animatronics:
             return result
 
-        # Find current animatronic (last one that's active or closest)
+        # Find current animatronic (last one whose start <= local_time)
         current_idx = -1
         for i, anim in enumerate(self._animatronics):
             if anim.start_local_time() <= local_time:
@@ -267,7 +268,44 @@ class ObjectOfTimeline:
         if current_idx < 0:
             return result
 
-        # Blend animations with overlap
+        current_anim = self._animatronics[current_idx]
+
+        # Check if current animatronic has finished - blend to Idle
+        if local_time > current_anim.finish_local_time():
+            time_after_finish = local_time - current_anim.finish_local_time()
+            OVERLAP = 0.5
+
+            # Blend coefficient: 0 at finish, 1.0 after OVERLAP seconds
+            idle_coeff = time_after_finish / OVERLAP if OVERLAP > 0 else 1.0
+            idle_coeff = max(0.0, min(1.0, idle_coeff))
+            anim_coeff = 1.0 - idle_coeff
+
+            # Add Idle as primary (first in list)
+            result.append(AnimatronicAnimationTask(
+                animation_type=AnimationType.IDLE,
+                animation_time=local_time,  # Idle loops, time doesn't matter much
+                coeff=idle_coeff,
+                loop=True,
+                animation_booster=1.0,
+                animatronic=None,
+            ))
+
+            # Add finished animatronic for blending out (if still significant)
+            if anim_coeff > 0.01:
+                result.append(AnimatronicAnimationTask(
+                    animation_type=current_anim.get_animation_type(),
+                    animation_time=current_anim.animation_time_on_local_time(
+                        current_anim.finish_local_time()
+                    ),
+                    coeff=anim_coeff,
+                    loop=current_anim.is_looped(),
+                    animation_booster=current_anim.animation_booster(),
+                    animatronic=current_anim,
+                ))
+
+            return result
+
+        # Animatronic is still active - blend with previous ones
         OVERLAP = 0.5  # seconds
         backpack = 1.0
         max_anims = 3
@@ -289,7 +327,6 @@ class ObjectOfTimeline:
             backpack = backpack - coeff
             backpack = max(0.0, min(1.0, backpack))
 
-            local_step = int(local_time * GAME_FREQUENCY)
             result.append(AnimatronicAnimationTask(
                 animation_type=anim.get_animation_type(),
                 animation_time=anim.animation_time_on_local_time(local_time),

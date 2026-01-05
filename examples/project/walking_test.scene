@@ -194,58 +194,6 @@
         ]
       },
       {
-        "uuid": "0000000000000008",
-        "name": "GameCamera",
-        "priority": 0,
-        "visible": true,
-        "active": true,
-        "pickable": true,
-        "selectable": true,
-        "layer": 0,
-        "flags": 0,
-        "pose": {
-          "position": [
-            -1.1634047031402588,
-            -2.9232845306396484,
-            4.221579074859619
-          ],
-          "rotation": [
-            -0.3712706247568503,
-            0.0357492913219129,
-            -0.08892915456526938,
-            0.9235646792894072
-          ]
-        },
-        "scale": [
-          1,
-          1,
-          1
-        ],
-        "components": [
-          {
-            "type": "CameraComponent",
-            "data": {
-              "enabled": true,
-              "projection_type": "perspective",
-              "fov_deg": 59.99999999999999,
-              "ortho_size": 5.0,
-              "near": 0.1,
-              "far": 100.0
-            }
-          },
-          {
-            "type": "OrbitCameraController",
-            "data": {
-              "enabled": true,
-              "radius": 8.5,
-              "min_radius": 1.0,
-              "max_radius": 100.0
-            }
-          }
-        ],
-        "children": []
-      },
-      {
         "uuid": "0000000000000074",
         "name": "ChronosphereController",
         "priority": 0,
@@ -4450,6 +4398,55 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "0000000000000077",
+        "name": "MainCamera",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            2.7965245246887207,
+            0,
+            1.5382750034332275
+          ],
+          "rotation": [
+            0,
+            0,
+            0.33820801973342896,
+            0.9410713911056519
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "ChronoCameraController",
+            "data": {
+              "enabled": true
+            }
+          },
+          {
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "projection_type": "perspective",
+              "fov_deg": 59.99999999999999,
+              "ortho_size": 5.0,
+              "near": 0.1,
+              "far": 100.0
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {},
@@ -4457,7 +4454,7 @@
     "viewport_configs": [
       {
         "display_name": "Display 0",
-        "camera_uuid": "0000000000000008",
+        "camera_uuid": "0000000000000077",
         "region": [
           0.0,
           0.0,
@@ -4511,22 +4508,18 @@
   "editor": {
     "camera": {
       "position": [
-        1.060326337814331,
-        -4.743626594543457,
-        4.315520286560059
+        -1.4943536520004272,
+        -3.9756641387939453,
+        4.920467853546143
       ],
       "rotation": [
-        -0.35296244169069574,
-        -0.03896742148255783,
-        0.10258246551816365,
-        0.9291802261063016
+        -0.4095724294760225,
+        0.07443191456806167,
+        -0.16257340897308975,
+        0.8945838148556625
       ],
       "radius": 6.5
-    },
-    "selected_entity": "Model",
-    "expanded_entities": [
-      "Glitch"
-    ]
+    }
   },
   "resources": {
     "textures": {

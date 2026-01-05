@@ -38,6 +38,7 @@ class ScrollEvent:
     y: float
     xoffset: float
     yoffset: float
+    mods: int = 0
 
 
 @dataclass

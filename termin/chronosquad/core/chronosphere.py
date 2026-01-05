@@ -160,6 +160,10 @@ class ChronoSphere:
         self._target_time_multiplier = -self._target_time_multiplier
         self._time_multiplier = -self._time_multiplier
 
+    def modify_target_time_in_pause_mode(self, delta_time: float) -> None:
+        """Modify target time in pause mode (for time scrubbing)."""
+        self._target_time_in_pause += delta_time
+
     def pause(self) -> None:
         """Toggle pause mode."""
         self.set_pause(not self._pause_mode)

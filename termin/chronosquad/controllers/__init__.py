@@ -7,6 +7,7 @@ from .chronosphere_controller import ChronosphereController
 from .click_controller import ClickController
 from .game_controller import GameController
 from .animation_controller import AnimationController
+from .chrono_camera_controller import ChronoCameraController
 
 __all__ = [
     "ObjectController",
@@ -16,4 +17,5 @@ __all__ = [
     "ClickController",
     "GameController",
     "AnimationController",
+    "ChronoCameraController",
 ]

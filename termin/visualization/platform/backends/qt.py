@@ -45,6 +45,20 @@ def _translate_key(key: int) -> Key:
         return Key.UNKNOWN
 
 
+def _translate_qt_mods(qt_mods: int) -> int:
+    """Translate Qt modifier flags to GLFW-compatible flags."""
+    # Qt: ShiftModifier=0x02000000, ControlModifier=0x04000000, AltModifier=0x08000000
+    # GLFW: SHIFT=0x0001, CTRL=0x0002, ALT=0x0004, SUPER=0x0008
+    result = 0
+    if qt_mods & 0x02000000:  # ShiftModifier
+        result |= 0x0001  # MOD_SHIFT
+    if qt_mods & 0x04000000:  # ControlModifier
+        result |= 0x0002  # MOD_CONTROL
+    if qt_mods & 0x08000000:  # AltModifier
+        result |= 0x0004  # MOD_ALT
+    return result
+
+
 class _QtGLWidget(QOpenGLWidget):
     def __init__(self, owner: "QtGLWindowHandle", parent=None):
         super().__init__(parent)
@@ -75,7 +89,8 @@ class _QtGLWidget(QOpenGLWidget):
         angle = event.angleDelta()
         cb = self._owner._scroll_callback
         if cb:
-            cb(self._owner, angle.x() / 120.0, angle.y() / 120.0)
+            mods = _translate_qt_mods(event.modifiers().value)
+            cb(self._owner, angle.x() / 120.0, angle.y() / 120.0, mods)
 
     def keyPressEvent(self, event):
         cb = self._owner._key_callback

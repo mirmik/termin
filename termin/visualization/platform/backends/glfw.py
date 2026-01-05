@@ -113,7 +113,18 @@ class GLFWWindowHandle(BackendWindow):
 
     def set_scroll_callback(self, callback: Callable):
         def wrapper(_win, xoffset, yoffset):
-            callback(self, xoffset, yoffset)
+            # Query modifier keys since GLFW scroll callback doesn't include mods
+            mods = 0
+            if glfw.get_key(_win, glfw.KEY_LEFT_SHIFT) == glfw.PRESS or \
+               glfw.get_key(_win, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS:
+                mods |= 0x0001  # MOD_SHIFT
+            if glfw.get_key(_win, glfw.KEY_LEFT_CONTROL) == glfw.PRESS or \
+               glfw.get_key(_win, glfw.KEY_RIGHT_CONTROL) == glfw.PRESS:
+                mods |= 0x0002  # MOD_CONTROL
+            if glfw.get_key(_win, glfw.KEY_LEFT_ALT) == glfw.PRESS or \
+               glfw.get_key(_win, glfw.KEY_RIGHT_ALT) == glfw.PRESS:
+                mods |= 0x0004  # MOD_ALT
+            callback(self, xoffset, yoffset, mods)
         glfw.set_scroll_callback(self._window, wrapper)
 
     def set_mouse_button_callback(self, callback: Callable):

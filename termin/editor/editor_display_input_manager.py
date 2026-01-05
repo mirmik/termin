@@ -86,6 +86,9 @@ class EditorDisplayInputManager:
         self._last_click_time: float = 0.0
         self._double_click_threshold: float = 0.3
 
+        # Current modifier keys state (updated on key events)
+        self._current_mods: int = 0
+
         # Подписываемся на события окна
         backend_window.set_cursor_pos_callback(self._handle_cursor_pos)
         backend_window.set_scroll_callback(self._handle_scroll)
@@ -458,13 +461,20 @@ class EditorDisplayInputManager:
 
         self._request_update()
 
-    def _handle_scroll(self, window, xoffset: float, yoffset: float) -> None:
+    def _handle_scroll(self, window, xoffset: float, yoffset: float, mods: int = 0) -> None:
         """Обработчик скролла."""
         x, y = self._backend_window.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y) or self._active_viewport
 
+        # Use mods from parameter if provided, otherwise fall back to tracked mods
+        actual_mods = mods if mods != 0 else self._current_mods
+
         if viewport is not None:
-            event = ScrollEvent(viewport=viewport, x=x, y=y, xoffset=xoffset, yoffset=yoffset)
+            event = ScrollEvent(
+                viewport=viewport, x=x, y=y,
+                xoffset=xoffset, yoffset=yoffset,
+                mods=actual_mods
+            )
             self._dispatch_to_editor_components(viewport, "on_scroll", event)
             self._dispatch_to_camera(viewport, "on_scroll", event)
 
@@ -472,6 +482,9 @@ class EditorDisplayInputManager:
 
     def _handle_key(self, window, key: Key, scancode: int, action: Action, mods: int) -> None:
         """Обработчик нажатия клавиши."""
+        # Update current mods state for use in scroll events
+        self._current_mods = mods
+
         # ESC в игровом режиме закрывает окно
         if self._world_mode == "game" and key == Key.ESCAPE and action == Action.PRESS:
             self._backend_window.set_should_close(True)

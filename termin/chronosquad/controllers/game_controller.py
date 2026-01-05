@@ -1,4 +1,4 @@
-"""GameController - handles game input for time control."""
+"""GameController - handles game input for time control and camera."""
 
 from __future__ import annotations
 
@@ -6,11 +6,17 @@ from typing import TYPE_CHECKING
 
 from termin._native import log
 from termin.visualization.core.component import InputComponent
-from termin.visualization.core.input_events import KeyEvent, ScrollEvent
+from termin.visualization.core.input_events import (
+    KeyEvent,
+    ScrollEvent,
+    MouseButtonEvent,
+    MouseMoveEvent,
+)
 from termin.visualization.platform.backends.base import Key, Action
 
 if TYPE_CHECKING:
     from .chronosphere_controller import ChronosphereController
+    from .chrono_camera_controller import ChronoCameraController
 
 
 # Modifier key masks (standard GLFW/SDL values)
@@ -19,10 +25,12 @@ MOD_SHIFT = 0x0001
 
 class GameController(InputComponent):
     """
-    Handles game input for controlling time.
+    Handles game input for controlling time and camera.
 
     - Space: Toggle pause
     - Shift + Scroll: Change time speed / rewind
+    - Scroll (without Shift): Camera zoom
+    - Mouse: Camera orbit/pan (forwarded to ChronoCameraController)
     """
 
     # Speed presets (from fast forward to rewind)
@@ -32,14 +40,16 @@ class GameController(InputComponent):
     def __init__(self, enabled: bool = True):
         super().__init__(enabled=enabled)
         self._chronosphere_controller: ChronosphereController | None = None
+        self._camera_controller: ChronoCameraController | None = None
         self._current_speed_index = self.DEFAULT_SPEED_INDEX
         self._initialized = False
 
     def _ensure_initialized(self) -> None:
-        """Find ChronosphereController if not yet initialized."""
+        """Find controllers if not yet initialized."""
         if self._initialized:
             return
         self._find_chronosphere_controller()
+        self._find_camera_controller()
         self._initialized = True
 
     def _find_chronosphere_controller(self) -> None:
@@ -56,6 +66,20 @@ class GameController(InputComponent):
                 log.info("[GameController] Found ChronosphereController")
                 return
 
+    def _find_camera_controller(self) -> None:
+        """Find ChronoCameraController in scene."""
+        if self._scene is None:
+            return
+
+        from .chrono_camera_controller import ChronoCameraController
+
+        for entity in self._scene.entities:
+            ctrl = entity.get_component(ChronoCameraController)
+            if ctrl is not None:
+                self._camera_controller = ctrl
+                log.info("[GameController] Found ChronoCameraController")
+                return
+
     @property
     def chronosphere(self):
         """Get the ChronoSphere."""
@@ -65,7 +89,6 @@ class GameController(InputComponent):
 
     def on_key(self, event: KeyEvent) -> None:
         """Handle keyboard events."""
-        # Only handle key press
         if event.action != Action.PRESS:
             return
 
@@ -76,18 +99,30 @@ class GameController(InputComponent):
 
     def on_scroll(self, event: ScrollEvent) -> None:
         """Handle scroll events."""
-        # Only with Shift held
-        if not (event.viewport and hasattr(event, 'mods')):
-            # For events without mods, check if shift is currently pressed
-            # This is a fallback - ideally mods should be in the event
-            pass
-
         self._ensure_initialized()
 
-        # Shift + scroll = time control
-        # Note: ScrollEvent doesn't have mods, so we handle all scroll for now
-        # In practice, you might want to check a global keyboard state
-        self._on_scroll_time_control(event.yoffset)
+        # Check Shift from event.mods (set by backend from Qt keyboard modifiers)
+        shift_held = bool(event.mods & MOD_SHIFT)
+
+        if shift_held:
+            # Shift + scroll = time control
+            self._on_scroll_time_control(event.yoffset)
+        else:
+            # No Shift = camera zoom
+            if self._camera_controller is not None:
+                self._camera_controller.handle_scroll(event)
+
+    def on_mouse_button(self, event: MouseButtonEvent) -> None:
+        """Handle mouse button events - forward to camera controller."""
+        self._ensure_initialized()
+        if self._camera_controller is not None:
+            self._camera_controller.handle_mouse_button(event)
+
+    def on_mouse_move(self, event: MouseMoveEvent) -> None:
+        """Handle mouse move events - forward to camera controller."""
+        self._ensure_initialized()
+        if self._camera_controller is not None:
+            self._camera_controller.handle_mouse_move(event)
 
     def _on_space_pressed(self) -> None:
         """Toggle pause."""
@@ -128,8 +163,7 @@ class GameController(InputComponent):
         else:
             # Scrub time in pause mode
             modifier = 0.2 if y > 0 else -0.2
-            # TODO: Implement time scrubbing in ChronoSphere
-            # cs.modify_target_time_in_pause_mode(modifier)
+            cs.modify_target_time_in_pause_mode(modifier)
             log.info(f"[GameController] Time scrub: {modifier}")
 
     def reset_speed(self) -> None:

@@ -20,7 +20,7 @@ public:
     // Callback types
     using FramebufferSizeCallback = std::function<void(SDLWindow*, int, int)>;
     using CursorPosCallback = std::function<void(SDLWindow*, double, double)>;
-    using ScrollCallback = std::function<void(SDLWindow*, double, double)>;
+    using ScrollCallback = std::function<void(SDLWindow*, double, double, int)>;  // x, y, mods
     using MouseButtonCallback = std::function<void(SDLWindow*, int, int, int)>;  // button, action, mods
     using KeyCallback = std::function<void(SDLWindow*, int, int, int, int)>;  // key, scancode, action, mods
 
@@ -185,34 +185,39 @@ public:
 
             case SDL_MOUSEWHEEL:
                 if (scroll_callback_) {
-                    scroll_callback_(this, event.wheel.x, event.wheel.y);
+                    int mods = translate_sdl_mods(SDL_GetModState());
+                    scroll_callback_(this, event.wheel.x, event.wheel.y, mods);
                 }
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
                 if (mouse_button_callback_) {
                     int button = translate_mouse_button(event.button.button);
-                    mouse_button_callback_(this, button, ACTION_PRESS, 0);
+                    int mods = translate_sdl_mods(SDL_GetModState());
+                    mouse_button_callback_(this, button, ACTION_PRESS, mods);
                 }
                 break;
 
             case SDL_MOUSEBUTTONUP:
                 if (mouse_button_callback_) {
                     int button = translate_mouse_button(event.button.button);
-                    mouse_button_callback_(this, button, ACTION_RELEASE, 0);
+                    int mods = translate_sdl_mods(SDL_GetModState());
+                    mouse_button_callback_(this, button, ACTION_RELEASE, mods);
                 }
                 break;
 
             case SDL_KEYDOWN:
                 if (key_callback_) {
                     int action = event.key.repeat ? ACTION_REPEAT : ACTION_PRESS;
-                    key_callback_(this, event.key.keysym.sym, event.key.keysym.scancode, action, 0);
+                    int mods = translate_sdl_mods(event.key.keysym.mod);
+                    key_callback_(this, event.key.keysym.sym, event.key.keysym.scancode, action, mods);
                 }
                 break;
 
             case SDL_KEYUP:
                 if (key_callback_) {
-                    key_callback_(this, event.key.keysym.sym, event.key.keysym.scancode, ACTION_RELEASE, 0);
+                    int mods = translate_sdl_mods(event.key.keysym.mod);
+                    key_callback_(this, event.key.keysym.sym, event.key.keysym.scancode, ACTION_RELEASE, mods);
                 }
                 break;
         }
@@ -226,6 +231,18 @@ private:
             case SDL_BUTTON_MIDDLE: return MOUSE_BUTTON_MIDDLE;
             default: return MOUSE_BUTTON_LEFT;
         }
+    }
+
+    static int translate_sdl_mods(Uint16 sdl_mods) {
+        // SDL: KMOD_LSHIFT=0x0001, KMOD_RSHIFT=0x0002
+        // SDL: KMOD_LCTRL=0x0040, KMOD_RCTRL=0x0080
+        // SDL: KMOD_LALT=0x0100, KMOD_RALT=0x0200
+        // GLFW: SHIFT=0x0001, CTRL=0x0002, ALT=0x0004, SUPER=0x0008
+        int result = 0;
+        if (sdl_mods & (KMOD_LSHIFT | KMOD_RSHIFT)) result |= 0x0001;
+        if (sdl_mods & (KMOD_LCTRL | KMOD_RCTRL)) result |= 0x0002;
+        if (sdl_mods & (KMOD_LALT | KMOD_RALT)) result |= 0x0004;
+        return result;
     }
 
     SDL_Window* window_;

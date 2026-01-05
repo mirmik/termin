@@ -58,9 +58,9 @@ void bind_sdl(nb::module_& m) {
                 self.set_scroll_callback(nullptr);
             } else {
                 self.set_scroll_callback(
-                    [callback](SDLWindow* win, double x, double y) {
+                    [callback](SDLWindow* win, double x, double y, int mods) {
                         nb::gil_scoped_acquire gil;
-                        callback(win, x, y);
+                        callback(win, x, y, mods);
                     }
                 );
             }

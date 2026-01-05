@@ -101,12 +101,21 @@ class AnimationController(PythonComponent):
 
         # Get animation tasks
         tasks = chrono_obj.animations(local_time)
-        if not tasks:
-            return
 
-        # Use the first (most recent) task for now
-        # TODO: Implement blending with multiple tasks
-        task = tasks[0]
+        if tasks:
+            # Use the first (most recent) task
+            # TODO: Implement blending with multiple tasks
+            task = tasks[0]
+        else:
+            # No animatronics - default to Idle
+            task = AnimatronicAnimationTask(
+                animation_type=AnimationType.IDLE,
+                animation_time=local_time,
+                coeff=1.0,
+                loop=True,
+                animation_booster=1.0,
+            )
+
         self._apply_animation_task(task)
 
     def _apply_animation_task(self, task: AnimatronicAnimationTask) -> None:
