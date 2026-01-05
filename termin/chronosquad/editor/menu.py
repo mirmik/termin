@@ -31,23 +31,6 @@ def install_menu() -> None:
     viewer_action = _menu.addAction("Chronosphere Viewer...")
     viewer_action.triggered.connect(_show_chronosphere_viewer)
 
-    _menu.addSeparator()
-
-    # Time controls
-    pause_action = _menu.addAction("Pause/Resume")
-    pause_action.setShortcut("Space")
-    pause_action.triggered.connect(_toggle_pause)
-
-    reverse_action = _menu.addAction("Reverse Time")
-    reverse_action.setShortcut("R")
-    reverse_action.triggered.connect(_reverse_time)
-
-    _menu.addSeparator()
-
-    # Branch
-    branch_action = _menu.addAction("Create Branch")
-    branch_action.triggered.connect(_create_branch)
-
     print("[ChronoSquad] Menu installed")
 
 
@@ -105,25 +88,3 @@ def _get_chronosphere_controller():
             return ctrl
 
     return None
-
-
-def _toggle_pause():
-    """Toggle pause state."""
-    ctrl = _get_chronosphere_controller()
-    if ctrl is not None:
-        ctrl.pause()
-
-
-def _reverse_time():
-    """Reverse time direction."""
-    ctrl = _get_chronosphere_controller()
-    if ctrl is not None:
-        ctrl.time_reverse()
-
-
-def _create_branch():
-    """Create a timeline branch."""
-    ctrl = _get_chronosphere_controller()
-    if ctrl is not None:
-        ctrl.create_branch()
-        print("[ChronoSquad] Branch created")
