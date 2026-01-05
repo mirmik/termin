@@ -313,6 +313,8 @@ void bind_entity_class(nb::module_& m) {
             return nb::none();
         })
         .def("children", &Entity::children)
+        .def("find_child", &Entity::find_child, nb::arg("name"),
+             "Find a child entity by name. Returns invalid Entity if not found.")
 
         // Lifecycle
         .def("update", &Entity::update, nb::arg("dt"))

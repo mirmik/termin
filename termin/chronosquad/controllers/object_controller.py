@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
 
 from termin._native import log
 from termin.visualization.core.python_component import PythonComponent
 from termin.chronosquad.core import (
     ObjectOfTimeline,
     Timeline,
-    Vec3,
-    Quat,
 )
 
 if TYPE_CHECKING:
@@ -24,6 +22,8 @@ class ObjectController(PythonComponent):
     Two-phase lifecycle:
     1. Template phase: Entity acts as a template, create_object() creates ObjectOfTimeline
     2. Runtime phase: bind() connects to Timeline, update() syncs Entity transform
+
+    Animation is handled separately by AnimationController.
     """
 
     # Object types

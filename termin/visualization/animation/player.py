@@ -154,6 +154,24 @@ class AnimationPlayer(PythonComponent):
     def stop(self):
         self.playing = False
 
+    def sample_at_time(self, time: float) -> None:
+        """
+        Sample animation at specific time and apply to skeleton.
+
+        Used by AnimationController for external time control.
+        Does not modify self.time or self.playing.
+        """
+        if not self.enabled or self.current is None:
+            return
+
+        sample = self.current.sample(time)
+
+        if self._target_skeleton is not None:
+            self._update_skeleton(sample)
+
+        if self.entity is not None:
+            self._update_entity(sample)
+
     _debug_frame_count = 0
     _debug_update_logged = False
 

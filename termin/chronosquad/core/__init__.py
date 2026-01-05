@@ -14,8 +14,9 @@ from termin.geombase import Vec3, Quat, Pose3
 
 from .event_line import EventCard, EventLine, TimeDirection
 from .timeline import Timeline, GAME_FREQUENCY
-from .object_of_timeline import ObjectOfTimeline
+from .object_of_timeline import ObjectOfTimeline, AnimatronicAnimationTask
 from .animatronic import (
+    AnimationType,
     Animatronic,
     StaticAnimatronic,
     LinearMoveAnimatronic,
@@ -37,6 +38,7 @@ __all__ = [
     "GAME_FREQUENCY",
     # Objects
     "ObjectOfTimeline",
+    "AnimatronicAnimationTask",
     "Vec3",
     "Quat",
     "Pose3",
@@ -46,6 +48,7 @@ __all__ = [
     "TimeFreeze",
     "TimeHaste",
     # Animatronics
+    "AnimationType",
     "Animatronic",
     "StaticAnimatronic",
     "LinearMoveAnimatronic",

@@ -48,6 +48,10 @@ class ChronoSphere:
     def target_time_multiplier(self) -> float:
         return self._target_time_multiplier
 
+    @target_time_multiplier.setter
+    def target_time_multiplier(self, value: float) -> None:
+        self._target_time_multiplier = value
+
     @property
     def is_paused(self) -> bool:
         return self._pause_mode
@@ -159,6 +163,10 @@ class ChronoSphere:
     def pause(self) -> None:
         """Toggle pause mode."""
         self.set_pause(not self._pause_mode)
+
+    def toggle_pause(self) -> None:
+        """Toggle pause mode (alias for pause())."""
+        self.pause()
 
     def set_pause(self, paused: bool) -> None:
         """Set pause mode."""

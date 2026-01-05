@@ -154,6 +154,22 @@ std::vector<Entity> Entity::children() const {
     return result;
 }
 
+Entity Entity::find_child(const std::string& name) const {
+    if (!valid()) return Entity();
+
+    size_t count = tc_entity_pool_children_count(_pool, _id);
+    for (size_t i = 0; i < count; i++) {
+        tc_entity_id child_id = tc_entity_pool_child_at(_pool, _id, i);
+        if (tc_entity_id_valid(child_id)) {
+            const char* child_name = tc_entity_pool_name(_pool, child_id);
+            if (child_name && name == child_name) {
+                return Entity(_pool, child_id);
+            }
+        }
+    }
+    return Entity();
+}
+
 void Entity::update(float dt) {
     if (!valid() || !active()) return;
 

@@ -393,6 +393,12 @@
             "data": {
               "enabled": true
             }
+          },
+          {
+            "type": "AnimationController",
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": [
@@ -415,8 +421,8 @@
               "rotation": [
                 0,
                 0,
-                0,
-                1
+                1,
+                6.123233995736766e-17
               ]
             },
             "scale": [
@@ -4435,6 +4441,12 @@
             "data": {
               "enabled": true
             }
+          },
+          {
+            "type": "GameController",
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": []
@@ -4499,21 +4511,21 @@
   "editor": {
     "camera": {
       "position": [
-        1.5976017713546753,
-        -4.205716133117676,
-        4.691441535949707
+        1.060326337814331,
+        -4.743626594543457,
+        4.315520286560059
       ],
       "rotation": [
-        -0.3858915811889661,
-        -0.07082436179279115,
-        0.1660453991160341,
-        0.9047101871740589
+        -0.35296244169069574,
+        -0.03896742148255783,
+        0.10258246551816365,
+        0.9291802261063016
       ],
       "radius": 6.5
     },
-    "selected_entity": "ClickController",
+    "selected_entity": "Model",
     "expanded_entities": [
-      "PlatformBase"
+      "Glitch"
     ]
   },
   "resources": {

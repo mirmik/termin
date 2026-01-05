@@ -62,6 +62,29 @@ struct Quat {
         return {n.x * s, n.y * s, n.z * s, std::cos(half)};
     }
 
+    // Create quaternion that looks in direction
+    // Convention: Forward = +Y, Up = +Z
+    // forward: the direction to look at
+    // up: the up vector (default Z-up)
+    static Quat look_rotation(const Vec3& forward, const Vec3& up = Vec3::unit_z()) {
+        Vec3 f = forward.normalized();
+        Vec3 r = f.cross(up).normalized();  // right = forward x up
+        Vec3 u = r.cross(f);                // corrected up = right x forward
+
+        // Build rotation matrix where:
+        // X-axis = right, Y-axis = forward, Z-axis = up
+        // Row-major: m[row*3 + col]
+        double m[9] = {
+            r.x, f.x, u.x,
+            r.y, f.y, u.y,
+            r.z, f.z, u.z
+        };
+        return from_rotation_matrix(m);
+    }
+
+    // Static slerp
+    static Quat slerp(const Quat& a, const Quat& b, double t);
+
     // Create from 3x3 rotation matrix (row-major: m[row*3+col])
     static Quat from_rotation_matrix(const double* m) {
         double trace = m[0] + m[4] + m[8];
@@ -142,6 +165,11 @@ inline Quat slerp(const Quat& q1, Quat q2, double t) {
         s1 * q1.z + s2 * q2.z,
         s1 * q1.w + s2 * q2.w
     };
+}
+
+// Static member implementation
+inline Quat Quat::slerp(const Quat& a, const Quat& b, double t) {
+    return termin::slerp(a, b, t);
 }
 
 

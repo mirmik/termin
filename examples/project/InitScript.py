@@ -3,6 +3,8 @@ import termin.chronosquad.controllers.object_controller
 import termin.chronosquad.controllers.chronosphere_controller
 import termin.chronosquad.controllers.timeline_controller
 import termin.chronosquad.controllers.click_controller
+import termin.chronosquad.controllers.game_controller
+import termin.chronosquad.controllers.animation_controller
 
 print("[Project InitScript] Starting project initialization...")
 

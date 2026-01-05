@@ -51,6 +51,18 @@ struct Vec3 {
         return n > 1e-10 ? *this / n : Vec3{0, 0, 1};
     }
 
+    // Angle between two vectors in radians
+    static double angle(const Vec3& a, const Vec3& b) {
+        double d = a.normalized().dot(b.normalized());
+        d = d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d);  // clamp
+        return std::acos(d);
+    }
+
+    // Angle between two vectors in degrees
+    static double angle_degrees(const Vec3& a, const Vec3& b) {
+        return angle(a, b) * 180.0 / 3.14159265358979323846;
+    }
+
     static Vec3 zero() { return {0, 0, 0}; }
     static Vec3 unit_x() { return {1, 0, 0}; }
     static Vec3 unit_y() { return {0, 1, 0}; }

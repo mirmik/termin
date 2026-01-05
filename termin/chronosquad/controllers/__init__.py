@@ -5,6 +5,8 @@ from .timeline_controller import TimelineController
 from .timeline_initializer import TimelineInitializer
 from .chronosphere_controller import ChronosphereController
 from .click_controller import ClickController
+from .game_controller import GameController
+from .animation_controller import AnimationController
 
 __all__ = [
     "ObjectController",
@@ -12,4 +14,6 @@ __all__ = [
     "TimelineInitializer",
     "ChronosphereController",
     "ClickController",
+    "GameController",
+    "AnimationController",
 ]

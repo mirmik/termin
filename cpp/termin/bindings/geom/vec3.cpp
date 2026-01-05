@@ -34,6 +34,12 @@ void bind_vec3(nb::module_& m) {
         .def_static("unit_x", &Vec3::unit_x)
         .def_static("unit_y", &Vec3::unit_y)
         .def_static("unit_z", &Vec3::unit_z)
+        .def_static("angle", &Vec3::angle,
+            nb::arg("a"), nb::arg("b"),
+            "Angle between two vectors in radians")
+        .def_static("angle_degrees", &Vec3::angle_degrees,
+            nb::arg("a"), nb::arg("b"),
+            "Angle between two vectors in degrees")
         .def("to_numpy", &vec3_to_numpy)
         .def("tolist", [](const Vec3& v) {
             nb::list lst;

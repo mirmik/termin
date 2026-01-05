@@ -135,6 +135,7 @@ public:
     void set_parent(const Entity& parent);
     Entity parent() const;
     std::vector<Entity> children() const;
+    Entity find_child(const std::string& name) const;
 
     // --- Lifecycle ---
 
