@@ -154,12 +154,12 @@ class AnimationPlayer(PythonComponent):
     def stop(self):
         self.playing = False
 
-    def sample_at_time(self, time: float) -> None:
+    def update_bones_at_time(self, time: float) -> None:
         """
-        Sample animation at specific time and apply to skeleton.
+        Update skeleton bones at specific animation time.
 
-        Used by AnimationController for external time control.
-        Does not modify self.time or self.playing.
+        Used for external time control (e.g. AnimationController).
+        Call this instead of relying on update() when playing=False.
         """
         if not self.enabled or self.current is None:
             return

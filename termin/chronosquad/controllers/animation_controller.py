@@ -141,6 +141,6 @@ class AnimationController(PythonComponent):
         else:
             anim_time = task.animation_time
 
-        # Sample animation at calculated time (with booster)
+        # Update bones at calculated time (with booster)
         final_time = anim_time * task.animation_booster
-        self._animation_player.sample_at_time(final_time)
+        self._animation_player.update_bones_at_time(final_time)
