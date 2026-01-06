@@ -137,6 +137,11 @@ class TimeModifierController(PythonComponent):
 
             shader.set_uniform_matrix4("u_inv_view", inv_view, True)
             shader.set_uniform_matrix4("u_inv_proj", inv_proj, True)
+
+            shader.set_uniform_float("u_grid_scale", 1.0)
+            shader.set_uniform_float("u_grid_line_width", 0.03)
+            shader.set_uniform_float("u_grid_intensity", 0.3)
+
         else:
             log.warning("[TimeModifierController] No CameraComponent to set near/far uniforms")
 

@@ -24,7 +24,8 @@
 
 @property Float u_time_modifier = 1.0 range(-2.0, 3.0)
 @property Float u_grid_intensity = 0.3 range(0.0, 1.0)
-@property Float u_grid_scale = 50.0 range(10.0, 200.0)
+@property Float u_grid_scale = 1.0 range(0.1, 10.0)
+@property Float u_grid_line_width = 0.03 range(0.01, 0.1)
 @property Color u_grid_color = Color(0.0, 0.9, 0.4, 1.0)
 
 @stage vertex
@@ -52,6 +53,7 @@ uniform vec2 u_resolution;
 uniform float u_time_modifier;
 uniform float u_grid_intensity;
 uniform float u_grid_scale;
+uniform float u_grid_line_width;
 uniform vec4 u_grid_color;
 
 uniform float u_near;
@@ -114,16 +116,22 @@ vec3 get_modified_color(vec3 color, float time_mod) {
     return color;
 }
 
-// Draw screen-space grid
-float grid(vec2 uv, float scale, float line_width) {
-    vec2 grid_uv = uv * scale;
-    vec2 grid_frac = fract(grid_uv);
+// World-space grid based on ChronoCore original
+// Returns 1.0 if pixel is on grid line, 0.0 otherwise
+float world_grid(vec3 world_pos, float scale, float line_width) {
+    // Compute fractional position in grid cells
+    float frac_x = fract(world_pos.x / scale);
+    float frac_y = fract(world_pos.y / scale);
+    float frac_z = fract(world_pos.z / scale);
 
-    // Check if near grid line
-    float line_x = step(grid_frac.x, line_width) + step(1.0 - line_width, grid_frac.x);
-    float line_y = step(grid_frac.y, line_width) + step(1.0 - line_width, grid_frac.y);
+    // Check if near grid line on any axis
+    bool on_x = (frac_x < line_width) || (frac_x > 1.0 - line_width);
+    bool on_y = (frac_y < line_width) || (frac_y > 1.0 - line_width);
+    bool on_z = (frac_z < line_width) || (frac_z > 1.0 - line_width);
 
-    return clamp(line_x + line_y, 0.0, 1.0);
+    // Grid line if on at least two axes (edge of cell)
+    // or on any axis for simpler look
+    return (on_x || on_y || on_z) ? 1.0 : 0.0;
 }
 
 vec4 doit()
@@ -131,26 +139,31 @@ vec4 doit()
     vec3 color = texture(u_color, v_uv).rgb;
     float linear_depth = texture(u_depth_texture, v_uv).r;
 
-    // Reconstruct world position (available for future effects)
+    // Reconstruct world position
     vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
 
-    return vec4(world_pos, 1.0); // Debug: output world position as color
+    //return vec4(world_pos, 1.0); // DEBUG: visualize world position
 
     // Apply time-based color modification
     vec3 modified = get_modified_color(color, u_time_modifier);
-
-    // Draw grid when time is slowed/paused
+    
+    // Draw world-space grid when time is slowed/paused
     if (u_time_modifier < 1.0 && u_grid_intensity > 0.0) {
-        // Adjust aspect ratio for grid
-        vec2 aspect_uv = v_uv;
-        aspect_uv.x *= u_resolution.x / u_resolution.y;
+        // Skip grid for sky (very far pixels)
+        if (linear_depth < 0.99) {
+            float g = world_grid(world_pos, u_grid_scale, u_grid_line_width);
 
-        float line_width = 0.02;
-        float g = grid(aspect_uv, u_grid_scale, line_width);
+            if (g < 0.5) {
+                return vec4(0.0, 0.0, 0.0, 1.0);
+            }
+            else {
+                return vec4(1.0, 1.0, 1.0, 1.0);
+            }
 
-        // Grid visibility depends on how much time is slowed
-        float grid_alpha = g * u_grid_intensity * (1.0 - u_time_modifier);
-        modified = mix(modified, u_grid_color.rgb, grid_alpha);
+            // Grid visibility depends on how much time is slowed
+            float grid_alpha = g * u_grid_intensity * (1.0 - u_time_modifier);
+            modified = mix(modified, u_grid_color.rgb, grid_alpha);
+        }
     }
 
     return vec4(modified, 1.0);
