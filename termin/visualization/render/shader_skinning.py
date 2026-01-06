@@ -239,11 +239,15 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     return result
 
 
+# Cache by C++ pointer address (stable, unlike Python object id which gets reused)
+_skinned_shader_ptr_cache: dict[int, ShaderProgram] = {}
+
+
 def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     """
     Get or create a skinned variant of a shader.
 
-    Uses source-hash-based registry for caching.
+    Uses C++ pointer address for fast cache lookup, falls back to source-hash registry.
 
     Args:
         shader: Original shader program
@@ -251,8 +255,14 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     Returns:
         Shader with skinning support injected
     """
+    # Fast path: check by C++ pointer address
+    ptr = shader.ptr()
+    if ptr in _skinned_shader_ptr_cache:
+        return _skinned_shader_ptr_cache[ptr]
+
     # Check if already has skinning (avoid double-injection)
     if 'u_bone_matrices' in shader.vertex_source:
+        _skinned_shader_ptr_cache[ptr] = shader
         return shader
 
     from termin.visualization.render.shader_variants import (
@@ -261,7 +271,9 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     )
 
     registry = get_variant_registry()
-    return registry.get_variant(shader, ShaderVariantOp.SKINNING)
+    result = registry.get_variant(shader, ShaderVariantOp.SKINNING)
+    _skinned_shader_ptr_cache[ptr] = result
+    return result
 
 
 # Cache for skinned material variants keyed by material id
@@ -323,6 +335,9 @@ def clear_skinning_cache() -> None:
     # Clear shader variants from registry
     registry = get_variant_registry()
     registry.clear_operation(ShaderVariantOp.SKINNING)
+
+    # Clear pointer cache
+    _skinned_shader_ptr_cache.clear()
 
     # Clear material cache
     _skinned_material_cache.clear()

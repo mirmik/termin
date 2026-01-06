@@ -180,6 +180,9 @@ void bind_shader(nb::module_& m) {
             }
         }, nb::arg("name"), nb::arg("value"), "Set uniform with automatic type inference")
         .def("delete", &ShaderProgram::release)
+        .def("ptr", [](const ShaderProgram& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(&self);
+        }, "Get C++ pointer address for stable caching")
         .def("direct_serialize", [](const ShaderProgram& prog) -> nb::dict {
             nb::dict result;
             if (!prog.source_path().empty()) {

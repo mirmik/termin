@@ -81,7 +81,7 @@ std::vector<ResourceSpec> NormalPass::get_resource_specs() const {
             input_res,                                   // resource
             "fbo",                                       // resource_type
             std::nullopt,                                // size
-            std::array<double, 4>{0.5, 0.5, 1.0, 1.0},   // clear_color: neutral normal (0,0,1) encoded
+            std::array<double, 4>{0.5, 0.5, 0.5, 1.0},   // clear_color: zero normal (no data)
             1.0f,                                        // clear_depth
             std::nullopt,                                // format: default RGBA8
             1                                            // samples
@@ -150,8 +150,8 @@ void NormalPass::execute_with_data(
     graphics->bind_framebuffer(fb);
     graphics->set_viewport(0, 0, rect.width, rect.height);
 
-    // Clear: neutral normal (pointing up in world space, encoded)
-    graphics->clear_color_depth(0.5f, 0.5f, 1.0f, 1.0f);
+    // Clear: zero normal (no data)
+    graphics->clear_color_depth(0.5f, 0.5f, 0.5f, 1.0f);
 
     // Apply render state
     RenderState state;
