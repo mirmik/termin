@@ -79,22 +79,22 @@ class TimeModifierController(PythonComponent):
 
     def _find_time_effect(self) -> None:
         """Find MaterialPostEffect named 'TimeSpection' in 'PostFX' pass."""
-        from termin.visualization.core.viewport_hint import ViewportHintComponent
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.material_effect import MaterialPostEffect
 
-        if self._entity is None:
-            log.warning("[TimeModifierController] No entity")
+        if self._camera is None:
+            log.warning("[TimeModifierController] No camera")
             return
 
-        hint = self._entity.get_component(ViewportHintComponent)
-        if hint is None:
-            log.warning("[TimeModifierController] ViewportHintComponent not found on entity")
+        # Get live pipeline from camera's viewport
+        viewport = self._camera.viewport
+        if viewport is None:
+            log.warning("[TimeModifierController] Camera has no viewport")
             return
 
-        pipeline = hint.get_pipeline()
+        pipeline = viewport.pipeline
         if pipeline is None:
-            log.warning("[TimeModifierController] Pipeline not found")
+            log.warning("[TimeModifierController] Viewport has no pipeline")
             return
 
         # Find PostFX pass
@@ -118,7 +118,6 @@ class TimeModifierController(PythonComponent):
     def _before_draw(self, shader: "ShaderProgram") -> None:
         """Callback to set uniforms for the post-effect shader."""
         import numpy as np
-        print("Before draw TimeModifierController")
 
         # Set time modifier
         if self._chronosphere_controller is not None:
@@ -136,11 +135,8 @@ class TimeModifierController(PythonComponent):
             inv_view = np.linalg.inv(view).astype(np.float32)
             inv_proj = np.linalg.inv(proj).astype(np.float32)
 
-            print("Inv View Matrix:\n", inv_view)
-            print("Inv Projection Matrix:\n", inv_proj)
-
-            shader.set_uniform_matrix4("u_inv_view", inv_view)
-            shader.set_uniform_matrix4("u_inv_proj", inv_proj)
+            shader.set_uniform_matrix4("u_inv_view", inv_view, True)
+            shader.set_uniform_matrix4("u_inv_proj", inv_proj, True)
         else:
             log.warning("[TimeModifierController] No CameraComponent to set near/far uniforms")
 

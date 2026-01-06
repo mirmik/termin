@@ -9,15 +9,32 @@
 
 namespace termin {
 
+// Texture formats for framebuffer color attachment
+enum class FBOFormat {
+    RGBA8,     // Default: 8-bit per channel
+    R16F,      // Single channel 16-bit float (for depth maps)
+    R32F,      // Single channel 32-bit float
+    RGBA16F,   // 4 channels 16-bit float (HDR)
+    RGBA32F    // 4 channels 32-bit float
+};
+
+inline FBOFormat parse_fbo_format(const std::string& format_str) {
+    if (format_str == "r16f") return FBOFormat::R16F;
+    if (format_str == "r32f") return FBOFormat::R32F;
+    if (format_str == "rgba16f") return FBOFormat::RGBA16F;
+    if (format_str == "rgba32f") return FBOFormat::RGBA32F;
+    return FBOFormat::RGBA8;
+}
+
 /**
  * Standard framebuffer with color and depth attachments.
- * Supports MSAA (samples > 1).
+ * Supports MSAA (samples > 1) and various texture formats.
  */
 class OpenGLFramebufferHandle : public FramebufferHandle {
 public:
-    OpenGLFramebufferHandle(int width, int height, int samples = 1)
+    OpenGLFramebufferHandle(int width, int height, int samples = 1, FBOFormat format = FBOFormat::RGBA8)
         : fbo_(0), color_tex_(0), depth_rb_(0),
-          width_(width), height_(height), samples_(samples),
+          width_(width), height_(height), samples_(samples), format_(format),
           owns_attachments_(true), color_ref_(0) {
         create();
     }
@@ -39,7 +56,7 @@ private:
     // Private constructor for external FBOs
     OpenGLFramebufferHandle(uint32_t fbo_id, int width, int height, bool /*external*/)
         : fbo_(fbo_id), color_tex_(0), depth_rb_(0),
-          width_(width), height_(height), samples_(1),
+          width_(width), height_(height), samples_(1), format_(FBOFormat::RGBA8),
           owns_attachments_(false), color_ref_(0) {
         // No create() - external FBO
     }
@@ -112,15 +129,48 @@ public:
     }
 
 private:
+    void get_format_params(GLenum& internal_format, GLenum& pixel_format, GLenum& pixel_type) const {
+        switch (format_) {
+            case FBOFormat::R16F:
+                internal_format = GL_R16F;
+                pixel_format = GL_RED;
+                pixel_type = GL_FLOAT;
+                break;
+            case FBOFormat::R32F:
+                internal_format = GL_R32F;
+                pixel_format = GL_RED;
+                pixel_type = GL_FLOAT;
+                break;
+            case FBOFormat::RGBA16F:
+                internal_format = GL_RGBA16F;
+                pixel_format = GL_RGBA;
+                pixel_type = GL_FLOAT;
+                break;
+            case FBOFormat::RGBA32F:
+                internal_format = GL_RGBA32F;
+                pixel_format = GL_RGBA;
+                pixel_type = GL_FLOAT;
+                break;
+            default:  // RGBA8
+                internal_format = GL_RGBA8;
+                pixel_format = GL_RGBA;
+                pixel_type = GL_UNSIGNED_BYTE;
+                break;
+        }
+    }
+
     void create() {
         glGenFramebuffers(1, &fbo_);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+
+        GLenum internal_format, pixel_format, pixel_type;
+        get_format_params(internal_format, pixel_format, pixel_type);
 
         if (samples_ > 1) {
             // MSAA
             glGenTextures(1, &color_tex_);
             glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, color_tex_);
-            glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, samples_, GL_RGBA8, width_, height_, GL_TRUE);
+            glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, samples_, internal_format, width_, height_, GL_TRUE);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, color_tex_, 0);
 
             glGenRenderbuffers(1, &depth_rb_);
@@ -131,7 +181,7 @@ private:
             // No MSAA
             glGenTextures(1, &color_tex_);
             glBindTexture(GL_TEXTURE_2D, color_tex_);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width_, height_, 0, pixel_format, pixel_type, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -159,6 +209,7 @@ private:
     int width_;
     int height_;
     int samples_;
+    FBOFormat format_;
     bool owns_attachments_;
     OpenGLTextureRef color_ref_;
 };

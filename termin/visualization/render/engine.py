@@ -241,15 +241,18 @@ class RenderEngine:
                         resources[name] = None
                 continue
 
-            # Определяем размер и samples из ResourceSpec
+            # Определяем размер, samples и format из ResourceSpec
             resource_size = (pw, ph)
             resource_samples = 1
+            resource_format = ""
             if spec is not None:
                 if spec.size is not None:
                     resource_size = spec.size
                 resource_samples = spec.samples
+                if spec.format is not None:
+                    resource_format = spec.format
 
-            fb = self._ensure_fbo(state, canon, resource_size, resource_samples)
+            fb = self._ensure_fbo(state, canon, resource_size, resource_samples, resource_format)
             for name in names:
                 resources[name] = fb
 
@@ -346,6 +349,7 @@ class RenderEngine:
         key: str,
         size: Tuple[int, int],
         samples: int = 1,
+        format: str = "",
     ) -> "FramebufferHandle":
         """
         Получает или создаёт FBO для ресурса.
@@ -355,15 +359,16 @@ class RenderEngine:
             key: Имя ресурса.
             size: Требуемый размер (width, height).
             samples: Количество MSAA samples (1 = без MSAA).
+            format: Формат текстуры ("r16f", "r32f", "rgba16f", "rgba32f", "" = rgba8).
 
         Возвращает:
             FramebufferHandle подходящего размера.
         """
         framebuffer = state.fbos.get(key)
         if framebuffer is None:
-            framebuffer = self.graphics.create_framebuffer(size, samples=samples)
+            framebuffer = self.graphics.create_framebuffer(size, samples=samples, format=format)
             state.fbos[key] = framebuffer
         else:
-            # TODO: пересоздать FBO если изменился samples
+            # TODO: пересоздать FBO если изменился samples или format
             framebuffer.resize(size)
         return framebuffer

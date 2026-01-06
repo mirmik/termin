@@ -68,12 +68,14 @@ class DepthPass(RenderFramePass):
         Объявляет требования к входному ресурсу empty_depth.
 
         Очистка: белый цвет (максимальная глубина) + depth=1.0
+        Формат: r16f для высокой точности линейной глубины (65536 уровней vs 256 у RGBA8)
         """
         return [
             ResourceSpec(
                 resource=self.input_res,
                 clear_color=(1.0, 1.0, 1.0, 1.0),
                 clear_depth=1.0,
+                format="r16f",
             )
         ]
 

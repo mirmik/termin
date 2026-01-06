@@ -215,9 +215,7 @@ class MaterialPostEffect(PostEffect):
             self._set_uniform(shader, uniform_name, uniform_value)
 
         # Call before_draw callback for custom uniforms
-        print("MaterialPostEffect: Calling before_draw callback")
         if self._before_draw is not None:
-            print("MaterialPostEffect: Executing before_draw callback")
             self._before_draw(shader)
 
         # Draw fullscreen quad

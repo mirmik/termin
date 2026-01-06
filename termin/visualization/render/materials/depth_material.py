@@ -23,8 +23,8 @@ void main()
     vec4 world_pos = u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
     
-    float z = -view_pos.z;
-    float depth = (z - u_near) / (u_far - u_near);
+    float y = view_pos.y; // forward = +Y in view space
+    float depth = (y - u_near) / (u_far - u_near);
     
     v_linear_depth = depth;
     gl_Position = u_projection * view_pos;
@@ -40,7 +40,8 @@ out vec4 FragColor;
 void main()
 {
     float d = clamp(v_linear_depth, 0.0, 1.0);
-    FragColor = vec4(d, d, d, 1.0);
+    // R16F format - only red channel is used
+    FragColor = vec4(d, 0.0, 0.0, 1.0);
 }
 """
 

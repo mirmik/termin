@@ -96,12 +96,12 @@ public:
         return create_texture(data, size.width, size.height, channels, mipmap, clamp);
     }
 
-    virtual FramebufferHandlePtr create_framebuffer(int width, int height, int samples = 1) = 0;
+    virtual FramebufferHandlePtr create_framebuffer(int width, int height, int samples = 1, const std::string& format = "") = 0;
     virtual FramebufferHandlePtr create_shadow_framebuffer(int width, int height) = 0;
 
     // Convenience overloads with Size2i
-    FramebufferHandlePtr create_framebuffer(Size2i size, int samples = 1) {
-        return create_framebuffer(size.width, size.height, samples);
+    FramebufferHandlePtr create_framebuffer(Size2i size, int samples = 1, const std::string& format = "") {
+        return create_framebuffer(size.width, size.height, samples, format);
     }
     FramebufferHandlePtr create_shadow_framebuffer(Size2i size) {
         return create_shadow_framebuffer(size.width, size.height);

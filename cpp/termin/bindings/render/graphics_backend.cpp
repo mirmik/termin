@@ -186,11 +186,12 @@ void bind_graphics_backend(nb::module_& m) {
             return self.create_texture(data.data(), width, height, channels, mipmap, clamp);
         }, nb::arg("data"), nb::arg("size"), nb::arg("channels") = 4, nb::arg("mipmap") = true, nb::arg("clamp") = false)
         // create_framebuffer with (width, height) and with tuple size
-        .def("create_framebuffer", static_cast<FramebufferHandlePtr (OpenGLGraphicsBackend::*)(int, int, int)>(&OpenGLGraphicsBackend::create_framebuffer),
-            nb::arg("width"), nb::arg("height"), nb::arg("samples") = 1)
-        .def("create_framebuffer", [](OpenGLGraphicsBackend& self, nb::tuple size, int samples) {
-            return self.create_framebuffer(nb::cast<int>(size[0]), nb::cast<int>(size[1]), samples);
-        }, nb::arg("size"), nb::arg("samples") = 1)
+        .def("create_framebuffer", [](OpenGLGraphicsBackend& self, int width, int height, int samples, const std::string& format) {
+            return self.create_framebuffer(width, height, samples, format);
+        }, nb::arg("width"), nb::arg("height"), nb::arg("samples") = 1, nb::arg("format") = "")
+        .def("create_framebuffer", [](OpenGLGraphicsBackend& self, nb::tuple size, int samples, const std::string& format) {
+            return self.create_framebuffer(nb::cast<int>(size[0]), nb::cast<int>(size[1]), samples, format);
+        }, nb::arg("size"), nb::arg("samples") = 1, nb::arg("format") = "")
         // create_shadow_framebuffer
         .def("create_shadow_framebuffer", static_cast<FramebufferHandlePtr (OpenGLGraphicsBackend::*)(int, int)>(&OpenGLGraphicsBackend::create_shadow_framebuffer))
         .def("create_shadow_framebuffer", [](OpenGLGraphicsBackend& self, nb::tuple size) {
