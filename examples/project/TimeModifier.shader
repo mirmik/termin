@@ -49,6 +49,7 @@ in vec2 v_uv;
 
 uniform sampler2D u_color;
 uniform sampler2D u_depth_texture;
+uniform sampler2D u_normal_texture;
 uniform vec2 u_resolution;
 uniform float u_time_modifier;
 uniform float u_grid_intensity;
@@ -118,7 +119,8 @@ vec3 get_modified_color(vec3 color, float time_mod) {
 
 // World-space grid based on ChronoCore original
 // Returns 1.0 if pixel is on grid line, 0.0 otherwise
-float world_grid(vec3 world_pos, float scale, float line_width) {
+// Uses surface normal to avoid drawing lines on surfaces parallel to that line
+float world_grid(vec3 world_pos, vec3 normal, float scale, float line_width) {
     // Compute fractional position in grid cells
     float frac_x = fract(world_pos.x / scale);
     float frac_y = fract(world_pos.y / scale);
@@ -129,13 +131,21 @@ float world_grid(vec3 world_pos, float scale, float line_width) {
     bool on_y = (frac_y < line_width) || (frac_y > 1.0 - line_width);
     bool on_z = (frac_z < line_width) || (frac_z > 1.0 - line_width);
 
-    // Grid line if on at least two axes (edge of cell)
-    // or on any axis for simpler look
-    return (on_x || on_y || on_z) ? 1.0 : 0.0;
+    // Only draw grid line if surface is NOT parallel to that axis
+    // (i.e., normal component is not dominant)
+    // Threshold 0.9 means: skip line if surface is nearly perpendicular to view axis
+    bool show_x = abs(normal.x) < 0.9 && on_x;
+    bool show_y = abs(normal.y) < 0.9 && on_y;
+    bool show_z = abs(normal.z) < 0.9 && on_z;
+
+    return (show_x || show_y || show_z) ? 1.0 : 0.0;
 }
 
 vec4 doit()
 {
+    vec3 normal_shifted = texture(u_normal_texture, v_uv).rgb;
+    vec3 normal = normal_shifted * 2.0 - 1.0;
+
     vec3 color = texture(u_color, v_uv).rgb;
     float linear_depth = texture(u_depth_texture, v_uv).r;
 
@@ -151,14 +161,14 @@ vec4 doit()
     if (u_time_modifier < 1.0 && u_grid_intensity > 0.0) {
         // Skip grid for sky (very far pixels)
         if (linear_depth < 0.99) {
-            float g = world_grid(world_pos, u_grid_scale, u_grid_line_width);
+            float g = world_grid(world_pos, normal, u_grid_scale, u_grid_line_width);
 
-            if (g < 0.5) {
-                return vec4(0.0, 0.0, 0.0, 1.0);
-            }
-            else {
-                return vec4(1.0, 1.0, 1.0, 1.0);
-            }
+            // if (g < 0.5) {
+            //     return vec4(0.0, 0.0, 0.0, 1.0);
+            // }
+            // else {
+            //     return vec4(1.0, 1.0, 1.0, 1.0);
+            // }
 
             // Grid visibility depends on how much time is slowed
             float grid_alpha = g * u_grid_intensity * (1.0 - u_time_modifier);

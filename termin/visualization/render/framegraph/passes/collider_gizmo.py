@@ -158,8 +158,9 @@ class ColliderGizmoPass(RenderFramePass):
         ct = collider.transform
         center_local = np.array([ct.lin.x, ct.lin.y, ct.lin.z], dtype=np.float32)
 
-        # Transform center to world space
-        center_world = entity_pose.transform_point(center_local)
+        # Transform center to world space (convert Vec3 to numpy)
+        cw = entity_pose.transform_point(center_local)
+        center_world = np.array([cw.x, cw.y, cw.z], dtype=np.float32)
 
         # Scale radius by entity's uniform scale
         entity_scale = min(entity_pose.scale.x, entity_pose.scale.y, entity_pose.scale.z)
@@ -206,9 +207,11 @@ class ColliderGizmoPass(RenderFramePass):
         a_local = center - axis * half_height
         b_local = center + axis * half_height
 
-        # Transform to world space
-        a_world = entity_pose.transform_point(a_local)
-        b_world = entity_pose.transform_point(b_local)
+        # Transform to world space (convert Vec3 to numpy)
+        a_vec = entity_pose.transform_point(a_local)
+        b_vec = entity_pose.transform_point(b_local)
+        a_world = np.array([a_vec.x, a_vec.y, a_vec.z], dtype=np.float32)
+        b_world = np.array([b_vec.x, b_vec.y, b_vec.z], dtype=np.float32)
 
         # Scale radius by entity's uniform scale
         entity_scale = min(entity_pose.scale.x, entity_pose.scale.y, entity_pose.scale.z)

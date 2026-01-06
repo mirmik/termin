@@ -1133,6 +1133,19 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) return;
 
+    // Notify component it's being removed from scene
+    tc_component_on_removed(c);
+
+    // Unregister from scene's type lists
+    tc_scene* scene = pool->scene;
+    if (scene) {
+        tc_scene_unregister_component(scene, c);
+    }
+
+    // Notify component it's being removed from entity
+    tc_component_on_removed_from_entity(c);
+
+    // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
 
     // Release Python reference (matches incref in add_component/set_py_wrap)

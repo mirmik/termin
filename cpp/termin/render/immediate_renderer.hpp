@@ -3,11 +3,15 @@
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/render/types.hpp"
+#include "termin/render/shader_program.hpp"
 
 #include <vector>
-#include <cstdint>
+#include <memory>
+#include <functional>
 
 namespace termin {
+
+class GraphicsBackend;
 
 /**
  * Immediate mode renderer for debug visualization, gizmos, etc.
@@ -19,7 +23,7 @@ namespace termin {
  *     renderer.begin();
  *     renderer.line(start, end, color);
  *     renderer.circle(center, normal, radius, color);
- *     renderer.flush(view_matrix, proj_matrix);
+ *     renderer.flush(graphics, view_matrix, proj_matrix);
  */
 class ImmediateRenderer {
 public:
@@ -31,30 +35,17 @@ public:
     std::vector<float> line_vertices_depth;
     std::vector<float> tri_vertices_depth;
 
-private:
-    // OpenGL resources
-    uint32_t _shader_program = 0;
-    uint32_t _line_vao = 0;
-    uint32_t _line_vbo = 0;
-    uint32_t _tri_vao = 0;
-    uint32_t _tri_vbo = 0;
-    bool _initialized = false;
-
-    // Uniform locations
-    int _u_view_loc = -1;
-    int _u_proj_loc = -1;
-
 public:
     ImmediateRenderer() = default;
-    ~ImmediateRenderer();
+    ~ImmediateRenderer() = default;
 
     // Non-copyable
     ImmediateRenderer(const ImmediateRenderer&) = delete;
     ImmediateRenderer& operator=(const ImmediateRenderer&) = delete;
 
     // Movable
-    ImmediateRenderer(ImmediateRenderer&& other) noexcept;
-    ImmediateRenderer& operator=(ImmediateRenderer&& other) noexcept;
+    ImmediateRenderer(ImmediateRenderer&& other) noexcept = default;
+    ImmediateRenderer& operator=(ImmediateRenderer&& other) noexcept = default;
 
     /**
      * Clear all accumulated primitives. Call at start of frame.
@@ -175,8 +166,10 @@ public:
 
     /**
      * Render all accumulated primitives (no depth test buffer).
+     * Clears buffers after rendering.
      */
     void flush(
+        GraphicsBackend* graphics,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool depth_test = true,
@@ -185,8 +178,10 @@ public:
 
     /**
      * Render only depth-tested primitives.
+     * Clears depth buffers after rendering.
      */
     void flush_depth(
+        GraphicsBackend* graphics,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool blend = true
@@ -213,17 +208,22 @@ public:
     size_t triangle_count_depth() const { return tri_vertices_depth.size() / 21; }
 
 private:
-    void _ensure_initialized();
     void _add_vertex(std::vector<float>& buffer, const Vec3& pos, const Color4& color);
     std::pair<Vec3, Vec3> _build_basis(const Vec3& axis);
+
+    void _ensure_shader(GraphicsBackend* graphics);
+
     void _flush_buffers(
-        const std::vector<float>& lines,
-        const std::vector<float>& tris,
+        GraphicsBackend* graphics,
+        std::vector<float>& lines,
+        std::vector<float>& tris,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool depth_test,
         bool blend
     );
+
+    std::unique_ptr<ShaderProgram> _shader;
 };
 
 } // namespace termin

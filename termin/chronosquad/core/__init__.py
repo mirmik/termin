@@ -8,6 +8,7 @@ Core concepts:
 - ObjectTime: object's personal time (broken time + modifiers)
 - EventCard/EventLine: events that trigger at specific time steps
 - Animatronic: smooth movement interpolation
+- CommandBuffer: manages actor commands (MovingCommand, etc.)
 """
 
 from termin.geombase import Vec3, Quat, Pose3
@@ -25,6 +26,9 @@ from .animatronic import (
 )
 from .object_time import ObjectTime, TimeModifier, TimeFreeze, TimeHaste
 from .chronosphere import ChronoSphere
+from .actor_command import ActorCommand
+from .command_buffer import CommandBuffer
+from .moving_command import MovingCommand, WalkingType
 
 __all__ = [
     # ChronoSphere
@@ -54,4 +58,9 @@ __all__ = [
     "LinearMoveAnimatronic",
     "CubicMoveAnimatronic",
     "WaypointAnimatronic",
+    # Command system
+    "ActorCommand",
+    "CommandBuffer",
+    "MovingCommand",
+    "WalkingType",
 ]

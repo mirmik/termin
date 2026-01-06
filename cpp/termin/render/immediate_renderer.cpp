@@ -1,5 +1,6 @@
 #include "immediate_renderer.hpp"
-#include "glad/include/glad/glad.h"
+#include "termin/render/graphics_backend.hpp"
+#include "termin/render/render_state.hpp"
 
 #include <cmath>
 #include <algorithm>
@@ -39,111 +40,8 @@ void main() {
 }
 )";
 
-uint32_t compile_shader(GLenum type, const char* source) {
-    uint32_t shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    int success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char log[512];
-        glGetShaderInfoLog(shader, 512, nullptr, log);
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-uint32_t create_shader_program(const char* vert_src, const char* frag_src) {
-    uint32_t vert = compile_shader(GL_VERTEX_SHADER, vert_src);
-    if (!vert) return 0;
-
-    uint32_t frag = compile_shader(GL_FRAGMENT_SHADER, frag_src);
-    if (!frag) {
-        glDeleteShader(vert);
-        return 0;
-    }
-
-    uint32_t program = glCreateProgram();
-    glAttachShader(program, vert);
-    glAttachShader(program, frag);
-    glLinkProgram(program);
-
-    glDeleteShader(vert);
-    glDeleteShader(frag);
-
-    int success;
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success) {
-        glDeleteProgram(program);
-        return 0;
-    }
-
-    return program;
-}
-
 } // anonymous namespace
 
-
-ImmediateRenderer::~ImmediateRenderer() {
-    if (_shader_program) glDeleteProgram(_shader_program);
-    if (_line_vao) glDeleteVertexArrays(1, &_line_vao);
-    if (_line_vbo) glDeleteBuffers(1, &_line_vbo);
-    if (_tri_vao) glDeleteVertexArrays(1, &_tri_vao);
-    if (_tri_vbo) glDeleteBuffers(1, &_tri_vbo);
-}
-
-ImmediateRenderer::ImmediateRenderer(ImmediateRenderer&& other) noexcept
-    : line_vertices(std::move(other.line_vertices))
-    , tri_vertices(std::move(other.tri_vertices))
-    , _shader_program(other._shader_program)
-    , _line_vao(other._line_vao)
-    , _line_vbo(other._line_vbo)
-    , _tri_vao(other._tri_vao)
-    , _tri_vbo(other._tri_vbo)
-    , _initialized(other._initialized)
-    , _u_view_loc(other._u_view_loc)
-    , _u_proj_loc(other._u_proj_loc)
-{
-    other._shader_program = 0;
-    other._line_vao = 0;
-    other._line_vbo = 0;
-    other._tri_vao = 0;
-    other._tri_vbo = 0;
-    other._initialized = false;
-}
-
-ImmediateRenderer& ImmediateRenderer::operator=(ImmediateRenderer&& other) noexcept {
-    if (this != &other) {
-        // Clean up existing resources
-        if (_shader_program) glDeleteProgram(_shader_program);
-        if (_line_vao) glDeleteVertexArrays(1, &_line_vao);
-        if (_line_vbo) glDeleteBuffers(1, &_line_vbo);
-        if (_tri_vao) glDeleteVertexArrays(1, &_tri_vao);
-        if (_tri_vbo) glDeleteBuffers(1, &_tri_vbo);
-
-        // Move from other
-        line_vertices = std::move(other.line_vertices);
-        tri_vertices = std::move(other.tri_vertices);
-        _shader_program = other._shader_program;
-        _line_vao = other._line_vao;
-        _line_vbo = other._line_vbo;
-        _tri_vao = other._tri_vao;
-        _tri_vbo = other._tri_vbo;
-        _initialized = other._initialized;
-        _u_view_loc = other._u_view_loc;
-        _u_proj_loc = other._u_proj_loc;
-
-        other._shader_program = 0;
-        other._line_vao = 0;
-        other._line_vbo = 0;
-        other._tri_vao = 0;
-        other._tri_vbo = 0;
-        other._initialized = false;
-    }
-    return *this;
-}
 
 void ImmediateRenderer::begin() {
     line_vertices.clear();
@@ -546,58 +444,19 @@ void ImmediateRenderer::arrow_solid(
 // Rendering
 // ============================================================
 
-void ImmediateRenderer::_ensure_initialized() {
-    if (_initialized) return;
+void ImmediateRenderer::_ensure_shader(GraphicsBackend* graphics) {
+    if (_shader) return;
 
-    // Check if OpenGL context is available
-    if (!glCreateShader) {
-        // OpenGL not loaded, skip initialization
-        return;
-    }
-
-    _shader_program = create_shader_program(IMMEDIATE_VERT, IMMEDIATE_FRAG);
-    if (!_shader_program) return;
-
-    _u_view_loc = glGetUniformLocation(_shader_program, "u_view");
-    _u_proj_loc = glGetUniformLocation(_shader_program, "u_projection");
-
-    // Line VAO/VBO
-    glGenVertexArrays(1, &_line_vao);
-    glGenBuffers(1, &_line_vbo);
-
-    glBindVertexArray(_line_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, _line_vbo);
-
-    GLsizei stride = 7 * sizeof(float);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    // Triangle VAO/VBO
-    glGenVertexArrays(1, &_tri_vao);
-    glGenBuffers(1, &_tri_vbo);
-
-    glBindVertexArray(_tri_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, _tri_vbo);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    _initialized = true;
+    _shader = std::make_unique<ShaderProgram>(IMMEDIATE_VERT, IMMEDIATE_FRAG);
+    _shader->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+        return graphics->create_shader(v, f, g);
+    });
 }
 
 void ImmediateRenderer::_flush_buffers(
-    const std::vector<float>& lines,
-    const std::vector<float>& tris,
+    GraphicsBackend* graphics,
+    std::vector<float>& lines,
+    std::vector<float>& tris,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool depth_test,
@@ -605,90 +464,65 @@ void ImmediateRenderer::_flush_buffers(
 ) {
     if (lines.empty() && tris.empty()) return;
 
-    _ensure_initialized();
-    if (!_initialized) return;
+    _ensure_shader(graphics);
+    if (!_shader) return;
 
-    // Setup state
-    if (depth_test) {
-        glEnable(GL_DEPTH_TEST);
-    } else {
-        glDisable(GL_DEPTH_TEST);
-    }
+    // Setup render state
+    RenderState state;
+    state.depth_test = depth_test;
+    state.depth_write = depth_test;
+    state.blend = blend;
+    state.blend_src = BlendFactor::SrcAlpha;
+    state.blend_dst = BlendFactor::OneMinusSrcAlpha;
+    state.cull = false;
+    graphics->apply_render_state(state);
 
-    if (blend) {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    }
+    // Use shader and set uniforms
+    _shader->use();
 
-    glDisable(GL_CULL_FACE);
-
-    // Use shader
-    glUseProgram(_shader_program);
-
-    // Set uniforms (Mat44 is column-major, same as OpenGL)
-    // Convert double to float for OpenGL
+    // Convert Mat44 (double) to float for OpenGL
     float view_f[16], proj_f[16];
     for (int i = 0; i < 16; ++i) {
         view_f[i] = static_cast<float>(view_matrix.data[i]);
         proj_f[i] = static_cast<float>(proj_matrix.data[i]);
     }
-    glUniformMatrix4fv(_u_view_loc, 1, GL_FALSE, view_f);
-    glUniformMatrix4fv(_u_proj_loc, 1, GL_FALSE, proj_f);
+    _shader->set_uniform_matrix4("u_view", view_f, false);
+    _shader->set_uniform_matrix4("u_projection", proj_f, false);
 
     // Draw lines
     if (!lines.empty()) {
-        glBindVertexArray(_line_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, _line_vbo);
-        glBufferData(GL_ARRAY_BUFFER,
-                     lines.size() * sizeof(float),
-                     lines.data(),
-                     GL_DYNAMIC_DRAW);
-
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lines.size() / 7));
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        int vertex_count = static_cast<int>(lines.size() / 7);
+        graphics->draw_immediate_lines(lines.data(), vertex_count);
+        lines.clear();
     }
 
     // Draw triangles
     if (!tris.empty()) {
-        glBindVertexArray(_tri_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, _tri_vbo);
-        glBufferData(GL_ARRAY_BUFFER,
-                     tris.size() * sizeof(float),
-                     tris.data(),
-                     GL_DYNAMIC_DRAW);
-
-        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(tris.size() / 7));
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        int vertex_count = static_cast<int>(tris.size() / 7);
+        graphics->draw_immediate_triangles(tris.data(), vertex_count);
+        tris.clear();
     }
 
-    // Restore state
-    glEnable(GL_CULL_FACE);
-    if (!blend) {
-        glDisable(GL_BLEND);
-    }
-
-    glUseProgram(0);
+    _shader->stop();
 }
 
 void ImmediateRenderer::flush(
+    GraphicsBackend* graphics,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool depth_test,
     bool blend
 ) {
-    _flush_buffers(line_vertices, tri_vertices, view_matrix, proj_matrix, depth_test, blend);
+    _flush_buffers(graphics, line_vertices, tri_vertices, view_matrix, proj_matrix, depth_test, blend);
 }
 
 void ImmediateRenderer::flush_depth(
+    GraphicsBackend* graphics,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool blend
 ) {
-    _flush_buffers(line_vertices_depth, tri_vertices_depth, view_matrix, proj_matrix, true, blend);
+    _flush_buffers(graphics, line_vertices_depth, tri_vertices_depth, view_matrix, proj_matrix, true, blend);
 }
 
 } // namespace termin

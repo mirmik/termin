@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+#include <tc_log.hpp>
 
 namespace termin {
 
@@ -123,7 +124,7 @@ nb::object ComponentRegistry::get_class(const std::string& name) const {
                 return skeleton_mod.attr(name.c_str());
             }
         } catch (...) {
-            // Ignore import errors
+            tc::Log::error("ComponentRegistry::get_class: error importing module for component %s", name.c_str());
         }
         return nb::none();
     } else {

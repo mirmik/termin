@@ -7,10 +7,61 @@ They are evaluated at each step to get the interpolated pose.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 
 from termin.geombase import Pose3, Vec3, Quat
+
+
+def _angle_between_vectors(v1: Vec3, v2: Vec3) -> float:
+    """Compute angle in degrees between two vectors."""
+    n1 = v1.norm()
+    n2 = v2.norm()
+    if n1 < 1e-6 or n2 < 1e-6:
+        return 0.0
+    dot = v1.dot(v2) / (n1 * n2)
+    dot = max(-1.0, min(1.0, dot))  # Clamp for numerical stability
+    return math.degrees(math.acos(dot))
+
+
+def _quat_slerp(q1: Quat, q2: Quat, t: float) -> Quat:
+    """Spherical linear interpolation between two quaternions."""
+    # Compute dot product
+    dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w
+
+    # If dot is negative, negate one quaternion to take shorter path
+    if dot < 0:
+        q2 = Quat(-q2.x, -q2.y, -q2.z, -q2.w)
+        dot = -dot
+
+    # Clamp for numerical stability
+    dot = min(1.0, dot)
+
+    # If quaternions are very close, use linear interpolation
+    if dot > 0.9995:
+        x = q1.x + t * (q2.x - q1.x)
+        y = q1.y + t * (q2.y - q1.y)
+        z = q1.z + t * (q2.z - q1.z)
+        w = q1.w + t * (q2.w - q1.w)
+        result = Quat(x, y, z, w)
+        return result.normalized()
+
+    # Slerp
+    theta_0 = math.acos(dot)
+    theta = theta_0 * t
+    sin_theta = math.sin(theta)
+    sin_theta_0 = math.sin(theta_0)
+
+    s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+    s1 = sin_theta / sin_theta_0
+
+    x = s0 * q1.x + s1 * q2.x
+    y = s0 * q1.y + s1 * q2.y
+    z = s0 * q1.z + s1 * q2.z
+    w = s0 * q1.w + s1 * q2.w
+
+    return Quat(x, y, z, w)
 
 
 class AnimationType(Enum):
@@ -19,6 +70,8 @@ class AnimationType(Enum):
     IDLE = auto()
     WALK = auto()
     RUN = auto()
+    CROUCH_WALK = auto()
+    SPRINT = auto()
     DEATH = auto()
 
 
@@ -172,7 +225,7 @@ class LinearMoveAnimatronic(Animatronic):
         forward = Vec3(0, 1, 0)  # +Y is forward
         start_dir = start_pose.ang.rotate(forward)
         end_dir = end_pose.ang.rotate(forward)
-        angle_deg = Vec3.angle_degrees(start_dir, end_dir)
+        angle_deg = _angle_between_vectors(start_dir, end_dir)
         self._time_to_rotate = angle_deg / angular_speed if angular_speed > 0 else 0.0
         self._steps_to_rotate = int(self._time_to_rotate * GAME_FREQUENCY)
 
@@ -191,7 +244,7 @@ class LinearMoveAnimatronic(Animatronic):
         time_from_start = (step - self.start_step) / GAME_FREQUENCY
         if self._time_to_rotate > 0 and time_from_start < self._time_to_rotate:
             t_rot = time_from_start / self._time_to_rotate
-            rot = Quat.slerp(self.start_pose.ang, self.end_pose.ang, t_rot)
+            rot = _quat_slerp(self.start_pose.ang, self.end_pose.ang, t_rot)
         else:
             rot = self.end_pose.ang
 
@@ -199,6 +252,10 @@ class LinearMoveAnimatronic(Animatronic):
 
     def get_animation_type(self) -> AnimationType:
         return self._animation_type
+
+    def set_animation_type(self, anim_type: AnimationType) -> None:
+        """Set the animation type."""
+        self._animation_type = anim_type
 
     def copy(self) -> LinearMoveAnimatronic:
         return LinearMoveAnimatronic(

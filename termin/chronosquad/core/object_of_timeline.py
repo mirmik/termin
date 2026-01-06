@@ -1,7 +1,7 @@
 """
 ObjectOfTimeline - base class for all objects that exist on a timeline.
 
-Objects have position (pose), event cards, and can be moved through time.
+Objects have position (pose), event cards, command buffer, and can be moved through time.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ from .timeline import GAME_FREQUENCY
 if TYPE_CHECKING:
     from .timeline import Timeline
     from .animatronic import Animatronic, AnimationType
+    from .command_buffer import CommandBuffer
+    from .moving_command import WalkingType
 
 
 @dataclass
@@ -70,6 +72,9 @@ class ObjectOfTimeline:
         self._local_step: int = 0
         self._time_modifier: float = 1.0
 
+        # Command buffer for managing actor commands
+        self._command_buffer: CommandBuffer | None = None
+
     @property
     def name(self) -> str:
         return self._name
@@ -94,6 +99,14 @@ class ObjectOfTimeline:
     def time_modifier(self) -> float:
         """Current time modifier (from ObjectTime)."""
         return self._time_modifier
+
+    @property
+    def command_buffer(self) -> CommandBuffer:
+        """Get or create command buffer."""
+        if self._command_buffer is None:
+            from .command_buffer import CommandBuffer
+            self._command_buffer = CommandBuffer(self)
+        return self._command_buffer
 
     def local_time_real_time(self, timeline_time: float) -> float:
         """Convert timeline time (seconds) to object's local time."""
@@ -133,24 +146,48 @@ class ObjectOfTimeline:
         # Keep sorted by start_step
         self._animatronics.sort(key=lambda a: a.start_step)
 
+    def _find_current_animatronic(self) -> None:
+        """
+        Find current animatronic at local_step.
+
+        Picks the LAST animatronic (highest start_step) where start_step <= local_step.
+        This is critical for correct behavior when a new command interrupts movement:
+        the new animatronic starts at the same step, and we need to use it, not the old one.
+        Old animatronics are kept in the list for reverse time playback.
+        """
+        self._current_animatronic = None
+        # Animatronics are sorted by start_step ascending
+        # We need the last one with start_step <= local_step
+        for anim in self._animatronics:
+            if anim.start_step <= self._local_step:
+                self._current_animatronic = anim
+            else:
+                break  # List is sorted, no need to continue
+
     def promote(self, timeline_step: int) -> None:
         """
         Promote object to timeline step.
-        Updates local step and evaluates animatronics.
+        Updates local step, evaluates animatronics, then executes commands.
         """
         # Update object time and get local step
         self._object_time.promote(timeline_step)
         self._local_step = self._object_time.timeline_to_local(timeline_step)
         self._time_modifier = self._object_time.current_time_multiplier()
 
-        # Find active animatronic at local step
-        self._current_animatronic = None
-        for anim in self._animatronics:
-            if anim.is_active_at(self._local_step):
-                self._current_animatronic = anim
-                break
+        # First, find and evaluate active animatronic at local step
+        # This must happen BEFORE command execution so commands see current pose
+        self._find_current_animatronic()
+        if self._current_animatronic is not None:
+            self._local_pose = self._current_animatronic.evaluate(self._local_step)
 
-        # Evaluate pose from animatronic
+        # Execute command buffer (may add new animatronics)
+        # Commands can now read the current pose correctly
+        if self._command_buffer is not None and self._timeline is not None:
+            self._command_buffer.execute(self._local_step, self._timeline)
+
+        # Re-find animatronic after command execution
+        # (command may have added a new animatronic starting at this step)
+        self._find_current_animatronic()
         if self._current_animatronic is not None:
             self._local_pose = self._current_animatronic.evaluate(self._local_step)
 
@@ -162,23 +199,32 @@ class ObjectOfTimeline:
         self._changes.add(card)
 
     def drop_to_current(self) -> None:
-        """Drop future events/animatronics."""
+        """Drop future events/animatronics/commands."""
         self._changes.drop_future()
-        # Remove animatronics that start after current step
+        # Remove animatronics that START after current step
+        # Keep animatronics that started before (even if they extend past current step)
+        # They're needed for reverse time playback
         self._animatronics = [
             a for a in self._animatronics
             if a.start_step <= self._local_step
         ]
+        # Drop future commands
+        if self._command_buffer is not None:
+            self._command_buffer.drop_to_current_state()
 
     def copy(self, new_timeline: Timeline) -> ObjectOfTimeline:
         """Create a copy for a new timeline."""
         new_obj = ObjectOfTimeline(self._name)
+        new_obj._timeline = new_timeline
         new_obj._local_pose = self._local_pose.copy()
         new_obj._local_step = self._local_step
         new_obj._time_modifier = self._time_modifier
         new_obj._changes = self._changes.copy()
         new_obj._animatronics = [a.copy() for a in self._animatronics]
         new_obj._object_time = self._object_time.copy()
+        # Copy command buffer
+        if self._command_buffer is not None:
+            new_obj._command_buffer = self._command_buffer.copy(new_obj)
         return new_obj
 
     def current_position(self) -> Vec3:
@@ -195,54 +241,57 @@ class ObjectOfTimeline:
 
     def move_to(self, target: Vec3, speed: float = 5.0) -> None:
         """
-        Move object to target position.
+        Move object to target position using MovingCommand.
 
-        Creates a LinearMoveAnimatronic from current position to target.
-        Duration is calculated based on distance and speed.
-        Target rotation is calculated to face movement direction.
+        Creates a MovingCommand that will generate the appropriate animatronic.
+        Walking type is determined by speed.
 
         Args:
             target: Target position in world coordinates
             speed: Movement speed in units per second (default 5.0)
         """
-        from .animatronic import LinearMoveAnimatronic
+        from .moving_command import MovingCommand, WalkingType
 
         if self._timeline is None:
             return
 
-        current_pos = self._local_pose.lin
-        current_rot = self._local_pose.ang
-
-        # Calculate direction and distance
-        dx = target.x - current_pos.x
-        dy = target.y - current_pos.y
-        dz = target.z - current_pos.z
-        distance = math.sqrt(dx * dx + dy * dy + dz * dz)
-
-        if distance < 0.001:
-            return  # Already at target
-
-        # Calculate target rotation (look in movement direction)
-        # Convention: Forward = +Y, Up = +Z, so horizontal plane is XY
-        direction = Vec3(dx, dy, 0)  # Ignore Z for horizontal look direction
-        if direction.norm() > 0.001:
-            target_rot = Quat.look_rotation(direction)
+        # Determine walking type based on speed
+        if speed <= 1.0:
+            walking_type = WalkingType.CROUCH
+        elif speed <= 2.5:
+            walking_type = WalkingType.WALK
+        elif speed <= 6.0:
+            walking_type = WalkingType.RUN
         else:
-            target_rot = current_rot
+            walking_type = WalkingType.SPRINT
 
-        # Calculate duration in steps
-        duration_seconds = distance / speed
-        duration_steps = max(1, int(duration_seconds * GAME_FREQUENCY))
+        # Create and add command
+        cmd = MovingCommand(target, walking_type, self._local_step)
+        self.command_buffer.add_command(cmd)
 
-        # Create animatronic
-        start_step = self._timeline.current_step
-        end_step = start_step + duration_steps
+    def move_command(
+        self,
+        target: Vec3,
+        walking_type: WalkingType | None = None,
+    ) -> None:
+        """
+        Move object to target position using MovingCommand.
 
-        start_pose = Pose3(current_rot, current_pos)
-        end_pose = Pose3(target_rot, target)
+        Args:
+            target: Target position in world coordinates
+            walking_type: Type of walking animation/speed (default: RUN)
+        """
+        from .moving_command import MovingCommand, WalkingType
 
-        move = LinearMoveAnimatronic(start_step, end_step, start_pose, end_pose)
-        self.add_animatronic(move)
+        if self._timeline is None:
+            return
+
+        if walking_type is None:
+            from .moving_command import WalkingType
+            walking_type = WalkingType.RUN
+
+        cmd = MovingCommand(target, walking_type, self._local_step)
+        self.command_buffer.add_command(cmd)
 
     def animations(self, local_time: float) -> list[AnimatronicAnimationTask]:
         """

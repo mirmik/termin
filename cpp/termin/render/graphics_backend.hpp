@@ -143,6 +143,19 @@ public:
     // --- UI drawing (for immediate mode) ---
     virtual void draw_ui_vertices(int64_t context_key, const float* vertices, int vertex_count) = 0;
     virtual void draw_ui_textured_quad(int64_t context_key) = 0;
+
+    // --- Immediate mode rendering ---
+    // Vertices: x, y, z, r, g, b, a (7 floats per vertex)
+    // Shader must have u_view and u_projection uniforms
+    virtual void draw_immediate_lines(
+        const float* vertices,
+        int vertex_count
+    ) = 0;
+
+    virtual void draw_immediate_triangles(
+        const float* vertices,
+        int vertex_count
+    ) = 0;
 };
 
 using GraphicsBackendPtr = std::unique_ptr<GraphicsBackend>;

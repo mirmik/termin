@@ -373,6 +373,22 @@ public:
         draw_ui_textured_quad_impl(context_key, vertices, vertex_count);
     }
 
+    // --- Immediate mode rendering ---
+
+    void draw_immediate_lines(
+        const float* vertices,
+        int vertex_count
+    ) override {
+        draw_immediate_impl(vertices, vertex_count, GL_LINES);
+    }
+
+    void draw_immediate_triangles(
+        const float* vertices,
+        int vertex_count
+    ) override {
+        draw_immediate_impl(vertices, vertex_count, GL_TRIANGLES);
+    }
+
 private:
     void draw_ui_textured_quad_impl(int64_t context_key, const float* vertices, int vertex_count) {
         auto& [vao, vbo] = get_ui_buffers(context_key);
@@ -404,8 +420,46 @@ private:
         return ui_buffers_[context_key];
     }
 
+    void draw_immediate_impl(const float* vertices, int vertex_count, GLenum mode) {
+        if (vertex_count <= 0 || !vertices) return;
+
+        ensure_immediate_buffers();
+
+        glBindVertexArray(immediate_vao_);
+        glBindBuffer(GL_ARRAY_BUFFER, immediate_vbo_);
+        glBufferData(GL_ARRAY_BUFFER, vertex_count * 7 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
+
+        glDrawArrays(mode, 0, vertex_count);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
+    void ensure_immediate_buffers() {
+        if (immediate_vao_ != 0) return;
+
+        glGenVertexArrays(1, &immediate_vao_);
+        glGenBuffers(1, &immediate_vbo_);
+
+        glBindVertexArray(immediate_vao_);
+        glBindBuffer(GL_ARRAY_BUFFER, immediate_vbo_);
+
+        constexpr GLsizei stride = 7 * sizeof(float);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, nullptr);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(3 * sizeof(float)));
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
     bool initialized_;
     std::unordered_map<int64_t, std::pair<GLuint, GLuint>> ui_buffers_;
+
+    // Immediate mode rendering resources
+    GLuint immediate_vao_ = 0;
+    GLuint immediate_vbo_ = 0;
 
     // Static flag for GLAD initialization (shared across all backends)
     static inline bool glad_initialized_ = false;

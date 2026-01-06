@@ -88,7 +88,7 @@
           {
             "type": "VoxelizerComponent",
             "data": {
-              "enabled": false,
+              "enabled": true,
               "grid_name": "Plt",
               "cell_size": 0.25,
               "voxelize_mode": 4.0,
@@ -97,7 +97,7 @@
               "navmesh_output_path": "Scenes/Plt.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
-              "max_edge_length": 8.0,
+              "max_edge_length": 6.0,
               "min_edge_length": 1.0,
               "min_contour_edge_length": 0.5,
               "max_vertex_valence": 0.0,
@@ -110,8 +110,8 @@
               "show_region_voxels": false,
               "show_sparse_boundary": false,
               "show_simplified_contours": false,
-              "show_bridged_contours": false,
-              "show_triangulated": true
+              "show_bridged_contours": true,
+              "show_triangulated": false
             }
           },
           {
@@ -122,7 +122,7 @@
               "use_funnel": true,
               "use_los_optimization": true,
               "use_edge_centers": false,
-              "show_graph_edges": true,
+              "show_graph_edges": false,
               "show_portals": false
             }
           }
@@ -167,8 +167,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "00000000-0000-0000-0002-000000000003",
-                    "name": "AdvancedPBRMaterial"
+                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                    "name": "Kairon"
                   },
                   "cast_shadow": true
                 }
@@ -186,6 +186,54 @@
                   "sphere_radius": 0.5,
                   "capsule_height": 1.0,
                   "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "0000000000000077",
+            "name": "entity1",
+            "priority": 0,
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                -1.8450000286102295,
+                2.0851423740386963,
+                1.4498344659805298
+              ],
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "scale": [
+              2,
+              2,
+              2
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "type": "uuid",
+                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
+                    "name": "StandartMaterial"
+                  },
+                  "cast_shadow": true
                 }
               }
             ],
@@ -776,6 +824,14 @@
                   ],
                   "_current_clip_name": "Walk",
                   "playing": true
+                }
+              },
+              {
+                "type": "HumanModelCollider",
+                "data": {
+                  "enabled": true,
+                  "scale": 1.0,
+                  "overlap_radius": 0.023
                 }
               }
             ],
@@ -4461,54 +4517,6 @@
           }
         ],
         "children": []
-      },
-      {
-        "uuid": "0000000000000077",
-        "name": "entity1",
-        "priority": 0,
-        "visible": true,
-        "active": true,
-        "pickable": true,
-        "selectable": true,
-        "layer": 0,
-        "flags": 0,
-        "pose": {
-          "position": [
-            -1.8450000286102295,
-            2.0851423740386963,
-            1.4498344659805298
-          ],
-          "rotation": [
-            0,
-            0,
-            0,
-            1
-          ]
-        },
-        "scale": [
-          2,
-          2,
-          2
-        ],
-        "components": [
-          {
-            "type": "MeshRenderer",
-            "data": {
-              "enabled": true,
-              "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001",
-                "name": "Cube"
-              },
-              "material": {
-                "type": "uuid",
-                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                "name": "StandartMaterial"
-              },
-              "cast_shadow": true
-            }
-          }
-        ],
-        "children": []
       }
     ],
     "layer_names": {},
@@ -4570,19 +4578,18 @@
   "editor": {
     "camera": {
       "position": [
-        1.9004650115966797,
-        -5.819913864135742,
-        5.352873802185059
+        6.555078506469727,
+        6.795816421508789,
+        6.287069320678711
       ],
       "rotation": [
-        -0.32721707826145835,
-        -0.04656989334991527,
-        0.13298273520914514,
-        0.9343852636165164
+        -0.08831151172493072,
+        -0.23248169951687828,
+        0.9054564089494778,
+        0.34395061822726464
       ],
-      "radius": 8.0
-    },
-    "selected_entity": "entity1"
+      "radius": 11.0
+    }
   },
   "resources": {
     "textures": {

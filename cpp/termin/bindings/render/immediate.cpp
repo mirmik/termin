@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "termin/render/immediate_renderer.hpp"
+#include "termin/render/graphics_backend.hpp"
 
 namespace termin {
 
@@ -51,10 +52,8 @@ void bind_immediate(nb::module_& m) {
              nb::arg("shaft_radius") = 0.03, nb::arg("head_radius") = 0.06,
              nb::arg("head_length_ratio") = 0.25, nb::arg("segments") = 16, nb::arg("depth_test") = false)
         // Rendering
-        // Note: graphics parameter is ignored (C++ initializes OpenGL resources itself)
-        // but kept for backward compatibility with existing Python callers
         .def("flush", [](ImmediateRenderer& self,
-                         nb::object /*graphics*/,
+                         GraphicsBackend* graphics,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool depth_test,
@@ -67,12 +66,12 @@ void bind_immediate(nb::module_& m) {
                 }
             }
 
-            self.flush(view_mat, proj_mat, depth_test, blend);
+            self.flush(graphics, view_mat, proj_mat, depth_test, blend);
         },
              nb::arg("graphics"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("depth_test") = true, nb::arg("blend") = true)
         .def("flush_depth", [](ImmediateRenderer& self,
-                         nb::object /*graphics*/,
+                         GraphicsBackend* graphics,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool blend) {
@@ -84,7 +83,7 @@ void bind_immediate(nb::module_& m) {
                 }
             }
 
-            self.flush_depth(view_mat, proj_mat, blend);
+            self.flush_depth(graphics, view_mat, proj_mat, blend);
         },
              nb::arg("graphics"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("blend") = true)
