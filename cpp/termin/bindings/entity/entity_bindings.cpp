@@ -21,6 +21,23 @@ namespace nb = nanobind;
 
 namespace termin {
 
+// Iterator for traversing ancestor entities
+class EntityAncestorIterator {
+public:
+    Entity _current;
+
+    explicit EntityAncestorIterator(Entity start) : _current(start.parent()) {}
+
+    nb::object next() {
+        if (!_current.valid()) {
+            throw nb::stop_iteration();
+        }
+        Entity result = _current;
+        _current = _current.parent();
+        return nb::cast(result);
+    }
+};
+
 // Helper: register component with Python Scene if entity is in a scene's pool
 static void register_component_with_scene(Entity& e, nb::object component) {
     tc_entity_pool* pool = e.pool();
@@ -39,6 +56,11 @@ static void register_component_with_scene(Entity& e, nb::object component) {
 }
 
 void bind_entity_class(nb::module_& m) {
+    // Ancestor iterator
+    nb::class_<EntityAncestorIterator>(m, "_EntityAncestorIterator")
+        .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })
+        .def("__next__", &EntityAncestorIterator::next);
+
     nb::class_<Entity>(m, "Entity")
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
             new (self) Entity(Entity::create(get_standalone_pool(), name));
@@ -315,6 +337,9 @@ void bind_entity_class(nb::module_& m) {
         .def("children", &Entity::children)
         .def("find_child", &Entity::find_child, nb::arg("name"),
              "Find a child entity by name. Returns invalid Entity if not found.")
+        .def("ancestors", [](Entity& e) {
+            return EntityAncestorIterator(e);
+        }, "Iterate over ancestor entities from immediate parent to root.")
 
         // Lifecycle
         .def("update", &Entity::update, nb::arg("dt"))

@@ -10,6 +10,8 @@ from termin.visualization.core.input_events import MouseButtonEvent
 from termin.visualization.platform.backends.base import MouseButton, Action
 from termin.chronosquad.core import Vec3
 
+from termin.chronosquad.controllers.object_controller import ObjectController
+
 if TYPE_CHECKING:
     from .object_controller import ObjectController
     from .chronosphere_controller import ChronosphereController
@@ -30,9 +32,9 @@ class ClickController(InputComponent):
     ):
         super().__init__(enabled=enabled)
         self._move_speed = move_speed
-        self._object_controller: ObjectController | None = None
         self._chronosphere_controller: ChronosphereController | None = None
         self._initialized = False
+        self._selected_actor: ObjectController | None = None
 
     def _ensure_initialized(self) -> None:
         """Find controllers if not yet initialized."""
@@ -46,16 +48,9 @@ class ClickController(InputComponent):
         if self._scene is None:
             return
 
-        from .object_controller import ObjectController
         from .chronosphere_controller import ChronosphereController
 
         for entity in self._scene.entities:
-            if self._object_controller is None:
-                ctrl = entity.get_component(ObjectController)
-                if ctrl is not None:
-                    self._object_controller = ctrl
-                    log.info(f"[ClickController] Found ObjectController on '{entity.name}'")
-
             if self._chronosphere_controller is None:
                 ctrl = entity.get_component(ChronosphereController)
                 if ctrl is not None:
@@ -83,30 +78,66 @@ class ClickController(InputComponent):
                 return
 
             hitted_entity = hit.entity
+            layer = hitted_entity.layer
 
-            print(f"hitted_entity: name: {hitted_entity.name}, layer: {hitted_entity.layer}")
+            layer_name = scene.get_layer_name(layer)
 
-            # Convert hit point to Vec3 if needed
-            point = hit.collider_point
+            if layer == 0:
+                self.hit_ground(hit)
 
-            if not isinstance(point, Vec3):
-                # numpy array or list
-                point = Vec3(float(point[0]), float(point[1]), float(point[2]))
+            elif layer_name == "Actor":
+                self.hit_actor(hitted_entity, hit)
 
-            # Move to hit point
-            self.move_to(point)
         except Exception as e:
             log.error(f"[ClickController] Error in on_mouse_button: {e}")
+
+    def hit_actor(self, entity, hit) -> None:
+        """Handle hit on actor layer."""
+        log.info("[ClickController] Hit actor - no action taken")
+
+        object_controller = None 
+
+        for parent in entity.ancestors():
+            object_controller = parent.get_component(ObjectController)
+            if object_controller is not None and object_controller.selectable:
+                break
+            object_controller = None
+
+        if object_controller is None:
+            log.info("[ClickController] Hit actor has no ObjectController")
+            return
+        
+        log.info(f"[ClickController] Selecting actor '{object_controller.entity.name}'")
+        self._select_actor(object_controller)
+
+    def _select_actor(self, object_controller: ObjectController) -> None:
+        """Select the given actor."""
+        if self._selected_actor is not None:
+            log.info(f"[ClickController] Deselecting actor '{self._selected_actor.entity.name}'")
+        self._selected_actor = object_controller
+        log.info(f"[ClickController] Selected actor '{self._selected_actor.entity.name}'")
+
+    def hit_ground(self, hit) -> None:        
+        """Handle hit on ground layer."""
+        # Convert hit point to Vec3 if needed
+        point = hit.collider_point
+
+        if not isinstance(point, Vec3):
+            # numpy array or list
+            point = Vec3(float(point[0]), float(point[1]), float(point[2]))
+
+        # Move to hit point
+        self.move_to(point)
 
     def move_to(self, target: Vec3) -> None:
         """
         Command the object to move to target position.
         """
-        if self._object_controller is None:
-            log.warning("[ClickController] No ObjectController found")
+        if self._selected_actor is None:
+            log.warning("[ClickController] No actor selected to move")
             return
 
-        chrono_obj = self._object_controller.chrono_object
+        chrono_obj = self._selected_actor.chrono_object
         if chrono_obj is None:
             log.warning("[ClickController] ObjectController has no chrono object")
             return

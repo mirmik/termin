@@ -387,7 +387,8 @@
           {
             "type": "ObjectController",
             "data": {
-              "enabled": true
+              "enabled": true,
+              "selectable": true
             }
           },
           {
@@ -406,7 +407,7 @@
             "active": true,
             "pickable": true,
             "selectable": true,
-            "layer": 0,
+            "layer": 1,
             "flags": 0,
             "pose": {
               "position": [
@@ -844,7 +845,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -874,7 +875,7 @@
                     "active": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
+                    "layer": 1,
                     "flags": 0,
                     "pose": {
                       "position": [
@@ -920,7 +921,7 @@
                         "active": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
+                        "layer": 1,
                         "flags": 0,
                         "pose": {
                           "position": [
@@ -950,7 +951,7 @@
                             "active": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
+                            "layer": 1,
                             "flags": 0,
                             "pose": {
                               "position": [
@@ -980,7 +981,7 @@
                                 "active": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -1010,7 +1011,7 @@
                                     "active": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -1056,7 +1057,7 @@
                                         "active": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -1086,7 +1087,7 @@
                                             "active": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -1116,7 +1117,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -1155,7 +1156,7 @@
                                 "active": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -1185,7 +1186,7 @@
                                     "active": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -1231,7 +1232,7 @@
                                         "active": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -1277,7 +1278,7 @@
                                             "active": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -1323,7 +1324,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -1353,7 +1354,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -1383,7 +1384,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -1413,7 +1414,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -1443,7 +1444,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -1473,7 +1474,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -1514,7 +1515,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -1544,7 +1545,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -1574,7 +1575,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -1604,7 +1605,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -1634,7 +1635,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -1664,7 +1665,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -1705,7 +1706,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -1735,7 +1736,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -1765,7 +1766,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -1795,7 +1796,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -1825,7 +1826,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -1855,7 +1856,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -1896,7 +1897,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -1926,7 +1927,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -1956,7 +1957,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -1986,7 +1987,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -2016,7 +2017,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -2046,7 +2047,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -2087,7 +2088,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -2117,7 +2118,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -2147,7 +2148,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -2177,7 +2178,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -2207,7 +2208,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -2237,7 +2238,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -2286,7 +2287,7 @@
                                 "active": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -2316,7 +2317,7 @@
                                     "active": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -2362,7 +2363,7 @@
                                         "active": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -2408,7 +2409,7 @@
                                             "active": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -2454,7 +2455,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -2484,7 +2485,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -2514,7 +2515,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -2544,7 +2545,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -2574,7 +2575,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -2604,7 +2605,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -2645,7 +2646,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -2675,7 +2676,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -2705,7 +2706,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -2735,7 +2736,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -2765,7 +2766,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -2795,7 +2796,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -2836,7 +2837,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -2866,7 +2867,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -2896,7 +2897,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -2926,7 +2927,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -2956,7 +2957,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -2986,7 +2987,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -3027,7 +3028,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -3057,7 +3058,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -3087,7 +3088,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -3117,7 +3118,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -3147,7 +3148,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -3177,7 +3178,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -3218,7 +3219,7 @@
                                                 "active": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -3248,7 +3249,7 @@
                                                     "active": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -3278,7 +3279,7 @@
                                                         "active": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -3308,7 +3309,7 @@
                                                             "active": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -3338,7 +3339,7 @@
                                                                 "active": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -3368,7 +3369,7 @@
                                                                     "active": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -3423,7 +3424,7 @@
                     "active": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
+                    "layer": 1,
                     "flags": 0,
                     "pose": {
                       "position": [
@@ -3469,7 +3470,7 @@
                         "active": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
+                        "layer": 1,
                         "flags": 0,
                         "pose": {
                           "position": [
@@ -3515,7 +3516,7 @@
                             "active": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
+                            "layer": 1,
                             "flags": 0,
                             "pose": {
                               "position": [
@@ -3561,7 +3562,7 @@
                                 "active": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -3591,7 +3592,7 @@
                                     "active": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -3621,7 +3622,7 @@
                                         "active": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -3651,7 +3652,7 @@
                                             "active": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -3694,7 +3695,7 @@
                     "active": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
+                    "layer": 1,
                     "flags": 0,
                     "pose": {
                       "position": [
@@ -3740,7 +3741,7 @@
                         "active": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
+                        "layer": 1,
                         "flags": 0,
                         "pose": {
                           "position": [
@@ -3786,7 +3787,7 @@
                             "active": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
+                            "layer": 1,
                             "flags": 0,
                             "pose": {
                               "position": [
@@ -3832,7 +3833,7 @@
                                 "active": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -3862,7 +3863,7 @@
                                     "active": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -3892,7 +3893,7 @@
                                         "active": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -3922,7 +3923,7 @@
                                             "active": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -3967,7 +3968,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4015,7 +4016,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4063,7 +4064,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4111,7 +4112,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4159,7 +4160,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4207,7 +4208,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4255,7 +4256,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4303,7 +4304,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4351,7 +4352,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4399,7 +4400,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4447,7 +4448,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4495,7 +4496,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4543,7 +4544,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4591,7 +4592,7 @@
                 "active": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -4816,7 +4817,12 @@
       ],
       "radius": 5.5
     },
-    "selected_entity": "Glitch"
+    "selected_entity": "Glitch",
+    "expanded_entities": [
+      "EditorEntities",
+      "editor_ui",
+      "camera"
+    ]
   },
   "resources": {
     "textures": {

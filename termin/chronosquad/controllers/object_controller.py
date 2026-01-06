@@ -10,6 +10,7 @@ from termin.chronosquad.core import (
     ObjectOfTimeline,
     Timeline,
 )
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.entity import Entity
@@ -25,19 +26,21 @@ class ObjectController(PythonComponent):
 
     Animation is handled separately by AnimationController.
     """
-
-    # Object types
-    PHYSICAL = "Physical"
-    ACTOR = "Actor"
-    CAMERA = "Camera"
+    
+    inspect_fields = {
+        "selectable": InspectField(
+            path="selectable",
+            label="Selectable",
+            kind="bool",
+        )
+    }
 
     def __init__(
         self,
-        enabled: bool = True,
-        object_type: str = "Physical",
+        enabled: bool = True
     ):
         super().__init__(enabled=enabled)
-        self.object_type = object_type
+        self.selectable: bool = False
 
         # Runtime binding
         self._timeline: Timeline | None = None
