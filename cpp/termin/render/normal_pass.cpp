@@ -167,6 +167,9 @@ void NormalPass::execute_with_data(
     shader->set_uniform_matrix4("u_view", view.data, false);
     shader->set_uniform_matrix4("u_projection", projection.data, false);
 
+    // Empty extra_uniforms (normal pass doesn't need extra uniforms)
+    nb::dict extra_uniforms;
+
     // Create render context
     RenderContext context;
     context.view = view;
@@ -175,6 +178,7 @@ void NormalPass::execute_with_data(
     context.graphics = graphics;
     context.phase = "normal";
     context.current_shader = shader;
+    context.extra_uniforms = extra_uniforms;
 
     // Collect draw calls
     auto draw_calls = collect_draw_calls(entities);

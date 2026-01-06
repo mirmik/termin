@@ -239,15 +239,11 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     return result
 
 
-# Fast cache by shader object id (avoids expensive hash computation)
-_skinned_shader_id_cache: dict[int, ShaderProgram] = {}
-
-
 def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     """
     Get or create a skinned variant of a shader.
 
-    Uses fast id-based cache first, falls back to source-hash-based registry.
+    Uses source-hash-based registry for caching.
 
     Args:
         shader: Original shader program
@@ -255,14 +251,8 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     Returns:
         Shader with skinning support injected
     """
-    # Fast path: check by object id
-    shader_id = id(shader)
-    if shader_id in _skinned_shader_id_cache:
-        return _skinned_shader_id_cache[shader_id]
-
     # Check if already has skinning (avoid double-injection)
     if 'u_bone_matrices' in shader.vertex_source:
-        _skinned_shader_id_cache[shader_id] = shader
         return shader
 
     from termin.visualization.render.shader_variants import (
@@ -271,9 +261,7 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     )
 
     registry = get_variant_registry()
-    result = registry.get_variant(shader, ShaderVariantOp.SKINNING)
-    _skinned_shader_id_cache[shader_id] = result
-    return result
+    return registry.get_variant(shader, ShaderVariantOp.SKINNING)
 
 
 # Cache for skinned material variants keyed by material id
