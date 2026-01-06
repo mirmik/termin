@@ -363,7 +363,7 @@
         "active": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
+        "layer": 1,
         "flags": 0,
         "pose": {
           "position": [
@@ -830,8 +830,8 @@
                 "type": "HumanModelCollider",
                 "data": {
                   "enabled": true,
-                  "scale": 1.0,
-                  "overlap_radius": 0.023
+                  "scale": 1.5,
+                  "overlap_radius": 0.1
                 }
               }
             ],
@@ -894,7 +894,23 @@
                       0.9999998807907104,
                       0.9999999403953552
                     ],
-                    "components": [],
+                    "components": [
+                      {
+                        "type": "ColliderComponent",
+                        "data": {
+                          "enabled": true,
+                          "collider_type": "Capsule",
+                          "box_size": [
+                            1.0,
+                            1.0,
+                            1.0
+                          ],
+                          "sphere_radius": 0.5,
+                          "capsule_height": 0.06,
+                          "capsule_radius": 0.16400000000000003
+                        }
+                      }
+                    ],
                     "children": [
                       {
                         "uuid": "000000000000001c",
@@ -1014,7 +1030,23 @@
                                       1,
                                       1
                                     ],
-                                    "components": [],
+                                    "components": [
+                                      {
+                                        "type": "ColliderComponent",
+                                        "data": {
+                                          "enabled": true,
+                                          "collider_type": "Sphere",
+                                          "box_size": [
+                                            1.0,
+                                            1.0,
+                                            1.0
+                                          ],
+                                          "sphere_radius": 0.16650000000000004,
+                                          "capsule_height": 1.0,
+                                          "capsule_radius": 0.25
+                                        }
+                                      }
+                                    ],
                                     "children": [
                                       {
                                         "uuid": "0000000000000020",
@@ -1173,7 +1205,23 @@
                                       1.0000001192092896,
                                       1.0000001192092896
                                     ],
-                                    "components": [],
+                                    "components": [
+                                      {
+                                        "type": "ColliderComponent",
+                                        "data": {
+                                          "enabled": true,
+                                          "collider_type": "Capsule",
+                                          "box_size": [
+                                            1.0,
+                                            1.0,
+                                            1.0
+                                          ],
+                                          "sphere_radius": 0.5,
+                                          "capsule_height": 0.045,
+                                          "capsule_radius": 0.15600000000000003
+                                        }
+                                      }
+                                    ],
                                     "children": [
                                       {
                                         "uuid": "0000000000000025",
@@ -1203,7 +1251,23 @@
                                           1.0000001192092896,
                                           0.9999999403953552
                                         ],
-                                        "components": [],
+                                        "components": [
+                                          {
+                                            "type": "ColliderComponent",
+                                            "data": {
+                                              "enabled": true,
+                                              "collider_type": "Capsule",
+                                              "box_size": [
+                                                1.0,
+                                                1.0,
+                                                1.0
+                                              ],
+                                              "sphere_radius": 0.5,
+                                              "capsule_height": 0.045,
+                                              "capsule_radius": 0.15600000000000003
+                                            }
+                                          }
+                                        ],
                                         "children": [
                                           {
                                             "uuid": "0000000000000026",
@@ -1233,7 +1297,23 @@
                                               1,
                                               1.0000001192092896
                                             ],
-                                            "components": [],
+                                            "components": [
+                                              {
+                                                "type": "ColliderComponent",
+                                                "data": {
+                                                  "enabled": true,
+                                                  "collider_type": "Capsule",
+                                                  "box_size": [
+                                                    1.0,
+                                                    1.0,
+                                                    1.0
+                                                  ],
+                                                  "sphere_radius": 0.5,
+                                                  "capsule_height": 0.045,
+                                                  "capsule_radius": 0.15800000000000003
+                                                }
+                                              }
+                                            ],
                                             "children": [
                                               {
                                                 "uuid": "0000000000000027",
@@ -2256,7 +2336,23 @@
                                       1.0000001192092896,
                                       1.0000001192092896
                                     ],
-                                    "components": [],
+                                    "components": [
+                                      {
+                                        "type": "ColliderComponent",
+                                        "data": {
+                                          "enabled": true,
+                                          "collider_type": "Capsule",
+                                          "box_size": [
+                                            1.0,
+                                            1.0,
+                                            1.0
+                                          ],
+                                          "sphere_radius": 0.5,
+                                          "capsule_height": 0.045,
+                                          "capsule_radius": 0.15600000000000003
+                                        }
+                                      }
+                                    ],
                                     "children": [
                                       {
                                         "uuid": "0000000000000047",
@@ -2286,7 +2382,23 @@
                                           1,
                                           1
                                         ],
-                                        "components": [],
+                                        "components": [
+                                          {
+                                            "type": "ColliderComponent",
+                                            "data": {
+                                              "enabled": true,
+                                              "collider_type": "Capsule",
+                                              "box_size": [
+                                                1.0,
+                                                1.0,
+                                                1.0
+                                              ],
+                                              "sphere_radius": 0.5,
+                                              "capsule_height": 0.045,
+                                              "capsule_radius": 0.15600000000000003
+                                            }
+                                          }
+                                        ],
                                         "children": [
                                           {
                                             "uuid": "0000000000000048",
@@ -2316,7 +2428,23 @@
                                               0.9999999403953552,
                                               0.9999999403953552
                                             ],
-                                            "components": [],
+                                            "components": [
+                                              {
+                                                "type": "ColliderComponent",
+                                                "data": {
+                                                  "enabled": true,
+                                                  "collider_type": "Capsule",
+                                                  "box_size": [
+                                                    1.0,
+                                                    1.0,
+                                                    1.0
+                                                  ],
+                                                  "sphere_radius": 0.5,
+                                                  "capsule_height": 0.045,
+                                                  "capsule_radius": 0.15800000000000003
+                                                }
+                                              }
+                                            ],
                                             "children": [
                                               {
                                                 "uuid": "0000000000000049",
@@ -3315,7 +3443,23 @@
                       0.9999990463256836,
                       0.9999998807907104
                     ],
-                    "components": [],
+                    "components": [
+                      {
+                        "type": "ColliderComponent",
+                        "data": {
+                          "enabled": true,
+                          "collider_type": "Capsule",
+                          "box_size": [
+                            1.0,
+                            1.0,
+                            1.0
+                          ],
+                          "sphere_radius": 0.5,
+                          "capsule_height": 0.07500000000000001,
+                          "capsule_radius": 0.15800000000000003
+                        }
+                      }
+                    ],
                     "children": [
                       {
                         "uuid": "0000000000000068",
@@ -3345,7 +3489,23 @@
                           0.9999999403953552,
                           1
                         ],
-                        "components": [],
+                        "components": [
+                          {
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Capsule",
+                              "box_size": [
+                                1.0,
+                                1.0,
+                                1.0
+                              ],
+                              "sphere_radius": 0.5,
+                              "capsule_height": 0.07500000000000001,
+                              "capsule_radius": 0.15800000000000003
+                            }
+                          }
+                        ],
                         "children": [
                           {
                             "uuid": "0000000000000069",
@@ -3375,7 +3535,23 @@
                               0.9999999403953552,
                               1
                             ],
-                            "components": [],
+                            "components": [
+                              {
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Capsule",
+                                  "box_size": [
+                                    1.0,
+                                    1.0,
+                                    1.0
+                                  ],
+                                  "sphere_radius": 0.5,
+                                  "capsule_height": 0.045,
+                                  "capsule_radius": 0.15800000000000003
+                                }
+                              }
+                            ],
                             "children": [
                               {
                                 "uuid": "000000000000006a",
@@ -3538,7 +3714,23 @@
                       0.9999991059303284,
                       0.9999999403953552
                     ],
-                    "components": [],
+                    "components": [
+                      {
+                        "type": "ColliderComponent",
+                        "data": {
+                          "enabled": true,
+                          "collider_type": "Capsule",
+                          "box_size": [
+                            1.0,
+                            1.0,
+                            1.0
+                          ],
+                          "sphere_radius": 0.5,
+                          "capsule_height": 0.07500000000000001,
+                          "capsule_radius": 0.15800000000000003
+                        }
+                      }
+                    ],
                     "children": [
                       {
                         "uuid": "000000000000006f",
@@ -3568,7 +3760,23 @@
                           1.0000001192092896,
                           1.0000001192092896
                         ],
-                        "components": [],
+                        "components": [
+                          {
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Capsule",
+                              "box_size": [
+                                1.0,
+                                1.0,
+                                1.0
+                              ],
+                              "sphere_radius": 0.5,
+                              "capsule_height": 0.07500000000000001,
+                              "capsule_radius": 0.15800000000000003
+                            }
+                          }
+                        ],
                         "children": [
                           {
                             "uuid": "0000000000000070",
@@ -3598,7 +3806,23 @@
                               1,
                               1
                             ],
-                            "components": [],
+                            "components": [
+                              {
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Capsule",
+                                  "box_size": [
+                                    1.0,
+                                    1.0,
+                                    1.0
+                                  ],
+                                  "sphere_radius": 0.5,
+                                  "capsule_height": 0.045,
+                                  "capsule_radius": 0.15800000000000003
+                                }
+                              }
+                            ],
                             "children": [
                               {
                                 "uuid": "0000000000000071",
@@ -4519,7 +4743,9 @@
         "children": []
       }
     ],
-    "layer_names": {},
+    "layer_names": {
+      "1": "Actor"
+    },
     "flag_names": {},
     "viewport_configs": [
       {
@@ -4578,18 +4804,19 @@
   "editor": {
     "camera": {
       "position": [
-        6.555078506469727,
-        6.795816421508789,
-        6.287069320678711
+        2.263488531112671,
+        3.725170612335205,
+        3.934826135635376
       ],
       "rotation": [
-        -0.08831151172493072,
-        -0.23248169951687828,
-        0.9054564089494778,
-        0.34395061822726464
+        -0.06512917823569705,
+        -0.2712825624460946,
+        0.9337606961663526,
+        0.22417609986337125
       ],
-      "radius": 11.0
-    }
+      "radius": 5.5
+    },
+    "selected_entity": "Glitch"
   },
   "resources": {
     "textures": {

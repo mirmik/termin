@@ -82,8 +82,13 @@ class ClickController(InputComponent):
             if hit is None:
                 return
 
+            hitted_entity = hit.entity
+
+            print(f"hitted_entity: name: {hitted_entity.name}, layer: {hitted_entity.layer}")
+
             # Convert hit point to Vec3 if needed
             point = hit.collider_point
+
             if not isinstance(point, Vec3):
                 # numpy array or list
                 point = Vec3(float(point[0]), float(point[1]), float(point[2]))

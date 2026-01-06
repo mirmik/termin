@@ -65,6 +65,32 @@ class EntityPropertyEditCommand(UndoCommand):
         return f"EntityPropertyEditCommand({self._property_name})"
 
 
+class RecursiveLayerChangeCommand(UndoCommand):
+    """Undo command for changing layer on entity and all its descendants."""
+
+    def __init__(
+        self,
+        entities_and_old_layers: list[tuple["Entity", int]],
+        new_layer: int,
+    ):
+        self._entities_and_old_layers = entities_and_old_layers
+        self._new_layer = new_layer
+
+    def do(self) -> None:
+        for entity, _ in self._entities_and_old_layers:
+            entity.layer = self._new_layer
+
+    def undo(self) -> None:
+        for entity, old_layer in self._entities_and_old_layers:
+            entity.layer = old_layer
+
+    def merge_with(self, other: UndoCommand) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return f"RecursiveLayerChangeCommand({len(self._entities_and_old_layers)} entities)"
+
+
 class EntityInspector(QWidget):
     """Inspector widget for entity properties."""
 
@@ -109,10 +135,24 @@ class EntityInspector(QWidget):
         self._uuid_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         form.addRow("UUID:", self._uuid_label)
 
-        # Layer
+        # Layer (combo + apply to children button)
+        layer_layout = QHBoxLayout()
+        layer_layout.setContentsMargins(0, 0, 0, 0)
+        layer_layout.setSpacing(4)
+
         self._layer_combo = QComboBox()
         self._layer_combo.currentIndexChanged.connect(self._on_layer_changed)
-        form.addRow("Layer:", self._layer_combo)
+        layer_layout.addWidget(self._layer_combo, 1)
+
+        self._apply_layer_btn = QPushButton("↓")
+        self._apply_layer_btn.setFixedWidth(24)
+        self._apply_layer_btn.setToolTip("Apply layer to all children")
+        self._apply_layer_btn.clicked.connect(self._on_apply_layer_to_children)
+        layer_layout.addWidget(self._apply_layer_btn)
+
+        layer_widget = QWidget()
+        layer_widget.setLayout(layer_layout)
+        form.addRow("Layer:", layer_widget)
 
         layout.addLayout(form)
 
@@ -141,6 +181,7 @@ class EntityInspector(QWidget):
         """Enable/disable all controls."""
         self._name_edit.setEnabled(enabled)
         self._layer_combo.setEnabled(enabled)
+        self._apply_layer_btn.setEnabled(enabled)
         for cb in self._flag_checkboxes:
             cb.setEnabled(enabled)
 
@@ -278,3 +319,52 @@ class EntityInspector(QWidget):
             self._entity.flags = new_flags
 
         self.entity_changed.emit()
+
+    def _on_apply_layer_to_children(self) -> None:
+        """Apply current layer to all descendants."""
+        if self._entity is None:
+            return
+
+        new_layer = self._entity.layer
+
+        # Collect all descendants and their current layers
+        entities_and_old_layers: list[tuple["Entity", int]] = []
+        self._collect_descendants(self._entity, entities_and_old_layers)
+
+        from termin._native import log
+
+        if not entities_and_old_layers:
+            log.info("No descendants to apply layer to")
+            return
+
+        # Check if any child has a different layer
+        has_changes = any(old_layer != new_layer for _, old_layer in entities_and_old_layers)
+        if not has_changes:
+            layer_name = self._layer_combo.itemText(new_layer) if self._scene else f"Layer {new_layer}"
+            log.info(f"All {len(entities_and_old_layers)} descendant(s) already have layer '{layer_name}'")
+            return
+
+        if self._push_undo_command is not None:
+            cmd = RecursiveLayerChangeCommand(entities_and_old_layers, new_layer)
+            self._push_undo_command(cmd, False)
+        else:
+            for entity, _ in entities_and_old_layers:
+                entity.layer = new_layer
+
+        # Log the operation
+        layer_name = self._layer_combo.itemText(new_layer) if self._scene else f"Layer {new_layer}"
+        log.info(f"Applied layer '{layer_name}' to {len(entities_and_old_layers)} descendant(s)")
+
+        self.entity_changed.emit()
+
+    def _collect_descendants(
+        self,
+        entity: "Entity",
+        result: list[tuple["Entity", int]],
+    ) -> None:
+        """Recursively collect all descendants with their current layers."""
+        for child_transform in entity.transform.children:
+            child_entity = child_transform.entity
+            if child_entity is not None:
+                result.append((child_entity, child_entity.layer))
+                self._collect_descendants(child_entity, result)
