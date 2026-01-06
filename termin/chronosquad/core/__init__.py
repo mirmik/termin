@@ -23,12 +23,16 @@ from .animatronic import (
     LinearMoveAnimatronic,
     CubicMoveAnimatronic,
     WaypointAnimatronic,
+    MovingAnimatronic,
+    ANIMATION_DURATIONS,
+    get_animation_duration,
 )
 from .object_time import ObjectTime, TimeModifier, TimeFreeze, TimeHaste
 from .chronosphere import ChronoSphere
 from .actor_command import ActorCommand
 from .command_buffer import CommandBuffer
 from .moving_command import MovingCommand, WalkingType
+from .unit_path import UnitPath, UnitPathPoint, UnitPathPointType, BracedCoordinates
 
 __all__ = [
     # ChronoSphere
@@ -58,9 +62,17 @@ __all__ = [
     "LinearMoveAnimatronic",
     "CubicMoveAnimatronic",
     "WaypointAnimatronic",
+    "MovingAnimatronic",
+    "ANIMATION_DURATIONS",
+    "get_animation_duration",
     # Command system
     "ActorCommand",
     "CommandBuffer",
     "MovingCommand",
     "WalkingType",
+    # Pathfinding
+    "UnitPath",
+    "UnitPathPoint",
+    "UnitPathPointType",
+    "BracedCoordinates",
 ]

@@ -73,6 +73,41 @@ class AnimationType(Enum):
     CROUCH_WALK = auto()
     SPRINT = auto()
     DEATH = auto()
+    LOW_GRAVITY_WALK = auto()
+    LOW_GRAVITY_RUN = auto()
+    ZERO_GRAVITY_WALK = auto()
+    ZERO_GRAVITY_CRAWL = auto()
+    CLIMBING_UP_WALL = auto()
+    CLIMBING_DOWN_WALL = auto()
+    BRACED_HANG_LEFT = auto()
+    BRACED_HANG_RIGHT = auto()
+    DOOR_ENTRANCE = auto()
+    PULLED_MOVE = auto()
+
+
+# Default animation durations in seconds (from original game data)
+ANIMATION_DURATIONS: dict[AnimationType, float] = {
+    AnimationType.IDLE: 1.0,
+    AnimationType.WALK: 1.0,
+    AnimationType.RUN: 0.7,
+    AnimationType.CROUCH_WALK: 1.2,
+    AnimationType.SPRINT: 0.5,
+    AnimationType.LOW_GRAVITY_WALK: 1.2,
+    AnimationType.LOW_GRAVITY_RUN: 0.8,
+    AnimationType.ZERO_GRAVITY_WALK: 1.5,
+    AnimationType.ZERO_GRAVITY_CRAWL: 2.0,
+    AnimationType.CLIMBING_UP_WALL: 1.0,
+    AnimationType.CLIMBING_DOWN_WALL: 1.0,
+    AnimationType.BRACED_HANG_LEFT: 1.0,
+    AnimationType.BRACED_HANG_RIGHT: 1.0,
+    AnimationType.DOOR_ENTRANCE: 0.5,
+    AnimationType.PULLED_MOVE: 1.0,
+}
+
+
+def get_animation_duration(anim_type: AnimationType) -> float:
+    """Get animation cycle duration in seconds."""
+    return ANIMATION_DURATIONS.get(anim_type, 1.0)
 
 
 class Animatronic(ABC):
@@ -366,3 +401,156 @@ class WaypointAnimatronic(Animatronic):
     def copy(self) -> WaypointAnimatronic:
         new_waypoints = [(s, p.copy()) for s, p in self.waypoints]
         return WaypointAnimatronic(self.start_step, new_waypoints, self._animation_type)
+
+
+class MovingAnimatronic(Animatronic):
+    """
+    Animatronic for walking/running movement.
+
+    Matches original C# MovingAnimatronic behavior:
+    - Position interpolates linearly over entire duration
+    - Rotation happens at start with angular_speed (degrees/sec)
+    - Animation is looped
+    - Tracks animation_duration for foot cycle synchronization
+    """
+
+    DEFAULT_ANGULAR_SPEED = 360.0  # degrees per second
+
+    def __init__(
+        self,
+        animation_type: AnimationType,
+        start_pose: Pose3,
+        finish_pose: Pose3,
+        start_step: int,
+        finish_step: int,
+        animation_duration: float,
+        angular_speed: float = DEFAULT_ANGULAR_SPEED,
+        animation_booster: float = 1.0,
+    ):
+        super().__init__(start_step, finish_step)
+        self._animation_type = animation_type
+        self._start_pose = start_pose
+        self._finish_pose = finish_pose
+        self._animation_duration = animation_duration
+        self._angular_speed = angular_speed
+        self._animation_booster_value = animation_booster
+
+        # Calculate time to rotate (in seconds)
+        from .timeline import GAME_FREQUENCY
+        forward = Vec3(0, 1, 0)  # +Y is forward
+        start_dir = start_pose.ang.rotate(forward)
+        end_dir = finish_pose.ang.rotate(forward)
+        angle_deg = _angle_between_vectors(start_dir, end_dir)
+        self._time_to_rotate = angle_deg / angular_speed if angular_speed > 0 else 0.0
+
+    @property
+    def start_pose(self) -> Pose3:
+        return self._start_pose
+
+    @property
+    def finish_pose(self) -> Pose3:
+        return self._finish_pose
+
+    def initial_direction(self) -> Vec3:
+        """Get initial facing direction."""
+        forward = Vec3(0, 1, 0)
+        return self._start_pose.ang.rotate(forward)
+
+    def target_direction(self) -> Vec3:
+        """Get target facing direction."""
+        forward = Vec3(0, 1, 0)
+        return self._finish_pose.ang.rotate(forward)
+
+    def target_rotation(self) -> Quat:
+        """Get target rotation."""
+        return self._finish_pose.ang
+
+    def target_position(self) -> Vec3:
+        """Get target position."""
+        return self._finish_pose.lin
+
+    def initial_position(self) -> Vec3:
+        """Get initial position."""
+        return self._start_pose.lin
+
+    def time_to_rotate(self) -> float:
+        """Time needed for rotation phase (seconds)."""
+        return self._time_to_rotate
+
+    def final_pose(self) -> Pose3:
+        """Get final pose."""
+        return Pose3(self._finish_pose.ang, self._finish_pose.lin)
+
+    def evaluate(self, step: int) -> Pose3:
+        """Evaluate pose at given step."""
+        from .timeline import GAME_FREQUENCY
+
+        # Position: linear interpolation
+        if step <= self.start_step:
+            pos = self._start_pose.lin
+        elif step >= self.finish_step:
+            pos = self._finish_pose.lin
+        else:
+            koeff = (step - self.start_step) / (self.finish_step - self.start_step)
+            pos = Vec3(
+                self._start_pose.lin.x + koeff * (self._finish_pose.lin.x - self._start_pose.lin.x),
+                self._start_pose.lin.y + koeff * (self._finish_pose.lin.y - self._start_pose.lin.y),
+                self._start_pose.lin.z + koeff * (self._finish_pose.lin.z - self._start_pose.lin.z),
+            )
+
+        # Rotation: slerp during rotation phase, then hold target
+        time_from_start = (step - self.start_step) / GAME_FREQUENCY
+        if self._time_to_rotate > 0 and time_from_start < self._time_to_rotate:
+            koeff = time_from_start / self._time_to_rotate
+            rot = _quat_slerp(self._start_pose.ang, self._finish_pose.ang, koeff)
+        else:
+            rot = self._finish_pose.ang
+
+        return Pose3(rot, pos)
+
+    def get_animation_type(self) -> AnimationType:
+        return self._animation_type
+
+    def is_looped(self) -> bool:
+        """Walking animations are looped."""
+        return True
+
+    def animation_booster(self) -> float:
+        """Animation speed multiplier."""
+        return self._animation_booster_value
+
+    def moving_phase_for_step(self, step: int) -> float:
+        """
+        Get animation phase (0.0-1.0) at given step.
+
+        Used for synchronizing foot cycles between movement segments.
+        """
+        time_from_start = self.animation_time_on_step(step)
+        if self._animation_duration <= 0:
+            return 0.0
+        phase = time_from_start / self._animation_duration
+        # Return fractional part (0.0-1.0)
+        return phase - int(phase)
+
+    def initial_walking_time_for_phase(self, phase: float) -> float:
+        """
+        Convert animation phase to initial animation time offset.
+
+        Used when creating a new animatronic that continues from
+        the foot cycle phase of a previous one.
+        """
+        return phase * self._animation_duration
+
+    def copy(self) -> MovingAnimatronic:
+        anim = MovingAnimatronic(
+            self._animation_type,
+            self._start_pose.copy(),
+            self._finish_pose.copy(),
+            self.start_step,
+            self.finish_step,
+            self._animation_duration,
+            self._angular_speed,
+            self._animation_booster_value,
+        )
+        anim._initial_animation_time = self._initial_animation_time
+        return anim

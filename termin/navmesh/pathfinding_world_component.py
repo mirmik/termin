@@ -37,7 +37,17 @@ class PathfindingWorldComponent(PythonComponent):
     1. Добавить компонент к любой сущности в сцене
     2. Компонент автоматически соберёт NavMesh из всех VoxelizerComponent
     3. Вызывать find_path(start, end) для поиска пути
+
+    Доступ через статический instance:
+        PathfindingWorldComponent.instance()
     """
+
+    _instance: "PathfindingWorldComponent | None" = None
+
+    @classmethod
+    def instance(cls) -> "PathfindingWorldComponent | None":
+        """Get the global PathfindingWorldComponent instance."""
+        return cls._instance
 
     inspect_fields = {
         "skip_astar_if_los": InspectField(
@@ -126,6 +136,10 @@ class PathfindingWorldComponent(PythonComponent):
     def start(self) -> None:
         """Инициализация при старте сцены."""
         super().start()
+
+        # Register as global instance
+        PathfindingWorldComponent._instance = self
+
         scene = get_current_scene()
         if not scene:
             return
