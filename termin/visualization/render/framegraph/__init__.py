@@ -15,6 +15,8 @@ from termin.visualization.render.framegraph.resource import (
 )
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.passes.color import ColorPass
+from termin.visualization.render.framegraph.passes.depth import DepthPass
+from termin.visualization.render.framegraph.passes.normal_pass import NormalPass
 from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
 from termin.visualization.render.framegraph.passes.id_pass import IdPass
 from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, ResolvePass, blit_fbo_to_fbo
@@ -37,8 +39,10 @@ __all__ = [
     "BlitPass",
     "ColorPass",
     "ColliderGizmoPass",
+    "DepthPass",
     "GizmoPass",
     "IdPass",
+    "NormalPass",
     "PresentToScreenPass",
     "ResolvePass",
     "UIWidgetPass",

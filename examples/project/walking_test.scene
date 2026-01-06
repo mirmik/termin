@@ -4461,6 +4461,54 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "0000000000000077",
+        "name": "entity1",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -1.8450000286102295,
+            2.0851423740386963,
+            1.4498344659805298
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          2,
+          2,
+          2
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
+                "name": "StandartMaterial"
+              },
+              "cast_shadow": true
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {},
@@ -4522,24 +4570,19 @@
   "editor": {
     "camera": {
       "position": [
-        -2.6256887912750244,
-        -3.454516887664795,
-        4.97404670715332
+        1.9004650115966797,
+        -5.819913864135742,
+        5.352873802185059
       ],
       "rotation": [
-        -0.36400848582365447,
-        0.12321006722518202,
-        -0.29599317158051086,
-        0.8744742100030436
+        -0.32721707826145835,
+        -0.04656989334991527,
+        0.13298273520914514,
+        0.9343852636165164
       ],
-      "radius": 6.5
+      "radius": 8.0
     },
-    "selected_entity": "MainCamera",
-    "expanded_entities": [
-      "camera",
-      "EditorEntities",
-      "editor_ui"
-    ]
+    "selected_entity": "entity1"
   },
   "resources": {
     "textures": {

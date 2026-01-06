@@ -1,34 +1,32 @@
-"""DepthPass - linear depth rendering pass using C++ implementation."""
+"""NormalPass - world-space normal rendering pass using C++ implementation."""
 from __future__ import annotations
 
 from typing import List, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
 
-from termin._native.render import DepthPass as _DepthPassNative
+from termin._native.render import NormalPass as _NormalPassNative
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
 
 
-class DepthPass(_DepthPassNative):
+class NormalPass(_NormalPassNative):
     """
-    Depth rendering pass - writes linear depth to texture.
+    Normal rendering pass - writes world-space normals to texture.
 
     Renders all scene entities with Drawable components, writing
-    linear depth normalized to [0, 1] where 0 = near, 1 = far.
+    normals encoded as RGB where (normal * 0.5 + 0.5).
 
     Uses C++ implementation for core rendering with skinning support.
-    Output format: R16F for high precision (65536 levels vs 256 for RGBA8).
     """
 
     def __init__(
         self,
-        input_res: str = "empty_depth",
-        output_res: str = "depth",
-        pass_name: str = "Depth",
+        input_res: str = "empty_normal",
+        output_res: str = "normal",
+        pass_name: str = "Normal",
     ):
-        # Call C++ constructor
         super().__init__(
             input_res=input_res,
             output_res=output_res,
@@ -36,8 +34,8 @@ class DepthPass(_DepthPassNative):
         )
 
     @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "DepthPass":
-        return cls(pass_name=data.get("pass_name", "Depth"))
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "NormalPass":
+        return cls(pass_name=data.get("pass_name", "Normal"))
 
     @property
     def reads(self) -> Set[str]:
@@ -62,7 +60,7 @@ class DepthPass(_DepthPassNative):
         InspectRegistry.instance().deserialize_all(self, data)
 
     def serialize(self) -> dict:
-        """Serialize DepthPass to dict."""
+        """Serialize NormalPass to dict."""
         return {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
@@ -71,7 +69,7 @@ class DepthPass(_DepthPassNative):
         }
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
-        """DepthPass reads input_res and writes output_res inplace."""
+        """NormalPass reads input_res and writes output_res inplace."""
         return [(self.input_res, self.output_res)]
 
     def get_internal_symbols(self) -> List[str]:
@@ -90,23 +88,10 @@ class DepthPass(_DepthPassNative):
         lights=None,
         canvas=None,
     ):
-        """Execute depth pass using C++ implementation."""
-        # Get camera matrices
+        """Execute normal pass using C++ implementation."""
         view = camera.get_view_matrix()
         projection = camera.get_projection_matrix()
 
-        # Get near/far planes
-        try:
-            near_plane = float(camera.near)
-        except AttributeError:
-            near_plane = 0.1
-
-        try:
-            far_plane = float(camera.far)
-        except AttributeError:
-            far_plane = 100.0
-
-        # Call C++ execute_with_data
         self.execute_with_data(
             graphics=graphics,
             reads_fbos=reads_fbos,
@@ -116,6 +101,4 @@ class DepthPass(_DepthPassNative):
             view=view.astype(np.float32),
             projection=projection.astype(np.float32),
             context_key=context_key,
-            near_plane=near_plane,
-            far_plane=far_plane,
         )

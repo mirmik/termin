@@ -200,9 +200,8 @@ class RenderEngine:
 
         # Сначала собираем ResourceSpec'ы из всех pass'ов
         for render_pass in frame_passes:
-            if isinstance(render_pass, RenderFramePass):
-                for spec in render_pass.get_resource_specs():
-                    resource_specs_map[spec.resource] = spec
+            for spec in render_pass.get_resource_specs():
+                resource_specs_map[spec.resource] = spec
 
         # Затем добавляем pipeline-level ResourceSpec'ы (они имеют приоритет)
         if pipeline.pipeline_specs:

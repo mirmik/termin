@@ -28,7 +28,6 @@
       "type": "DepthPass",
       "pass_name": "DepthPass",
       "enabled": true,
-      "passthrough": false,
       "data": {
         "input_res": "empty_depth",
         "output_res": "depth"
@@ -53,7 +52,7 @@
                 "name": "TimeSpection"
               },
               "_required_depth": false,
-              "extra_resources_str": "depth:u_depth_texture"
+              "extra_resources_str": "depth:u_depth_texture, normal:u_normal_texture"
             }
           }
         ]
@@ -81,6 +80,15 @@
         "near": 0.10000000149011612,
         "far": 100.0,
         "caster_offset": 50.0
+      }
+    },
+    {
+      "type": "NormalPass",
+      "pass_name": "NormalPass",
+      "enabled": true,
+      "data": {
+        "input_res": "empty_normal",
+        "output_res": "normal"
       }
     }
   ],

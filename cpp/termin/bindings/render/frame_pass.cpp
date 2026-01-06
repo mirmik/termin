@@ -6,6 +6,8 @@
 #include "termin/render/render.hpp"
 #include "termin/render/shader_program.hpp"
 #include "termin/render/color_pass.hpp"
+#include "termin/render/depth_pass.hpp"
+#include "termin/render/normal_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/lighting/light.hpp"
@@ -404,6 +406,222 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("shadow_settings") = nb::none())
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.pass_name + "' phase='" + p.phase_mark + "'>";
+        });
+
+    // DepthPass - linear depth rendering pass
+    nb::class_<DepthPass, FramePass>(m, "DepthPass")
+        .def("__init__", [](DepthPass* self, const std::string& input_res,
+                            const std::string& output_res, const std::string& pass_name) {
+            new (self) DepthPass(input_res, output_res, pass_name);
+        },
+             nb::arg("input_res") = "empty_depth",
+             nb::arg("output_res") = "depth",
+             nb::arg("pass_name") = "Depth")
+        .def_rw("input_res", &DepthPass::input_res)
+        .def_rw("output_res", &DepthPass::output_res)
+        .def("get_resource_specs", &DepthPass::get_resource_specs)
+        .def("get_internal_symbols", &DepthPass::get_internal_symbols)
+        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
+             nb::arg("window").none(),
+             nb::arg("depth_callback").none() = nb::none())
+        .def("get_debugger_window", &RenderFramePass::get_debugger_window)
+        .def_rw("debugger_window", &RenderFramePass::debugger_window)
+        .def_prop_rw("_debugger_window",
+            [](const DepthPass& self) { return self.debugger_window; },
+            [](DepthPass& self, nb::object val) { self.debugger_window = val; })
+        .def("execute_with_data", [](
+            DepthPass& self,
+            GraphicsBackend* graphics,
+            nb::dict reads_fbos_py,
+            nb::dict writes_fbos_py,
+            nb::tuple rect_py,
+            nb::list entities_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
+            int64_t context_key,
+            float near_plane,
+            float far_plane
+        ) {
+            // Convert FBO maps
+            FBOMap reads_fbos, writes_fbos;
+            for (auto item : reads_fbos_py) {
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (!val.is_none()) {
+                    try {
+                        reads_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
+                        // Skip non-FBO resources
+                    }
+                }
+            }
+            for (auto item : writes_fbos_py) {
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (!val.is_none()) {
+                    try {
+                        writes_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
+                        // Skip non-FBO resources
+                    }
+                }
+            }
+
+            // Convert rect
+            Rect4i rect;
+            rect.x = nb::cast<int>(rect_py[0]);
+            rect.y = nb::cast<int>(rect_py[1]);
+            rect.width = nb::cast<int>(rect_py[2]);
+            rect.height = nb::cast<int>(rect_py[3]);
+
+            // Convert entities
+            std::vector<Entity> entities;
+            for (auto item : entities_py) {
+                entities.push_back(nb::cast<Entity>(item));
+            }
+
+            // Convert view matrix (row-major numpy -> column-major Mat44f)
+            Mat44f view;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    view(col, row) = view_py(row, col);
+                }
+            }
+
+            // Convert projection matrix
+            Mat44f projection;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    projection(col, row) = projection_py(row, col);
+                }
+            }
+
+            // Call C++ execute_with_data
+            self.execute_with_data(
+                graphics,
+                reads_fbos,
+                writes_fbos,
+                rect,
+                entities,
+                view,
+                projection,
+                context_key,
+                near_plane,
+                far_plane
+            );
+        },
+        nb::arg("graphics"),
+        nb::arg("reads_fbos"),
+        nb::arg("writes_fbos"),
+        nb::arg("rect"),
+        nb::arg("entities"),
+        nb::arg("view"),
+        nb::arg("projection"),
+        nb::arg("context_key"),
+        nb::arg("near_plane"),
+        nb::arg("far_plane"))
+        .def("__repr__", [](const DepthPass& p) {
+            return "<DepthPass '" + p.pass_name + "'>";
+        });
+
+    // NormalPass - world-space normal rendering pass
+    nb::class_<NormalPass, FramePass>(m, "NormalPass")
+        .def("__init__", [](NormalPass* self, const std::string& input_res,
+                            const std::string& output_res, const std::string& pass_name) {
+            new (self) NormalPass(input_res, output_res, pass_name);
+        },
+             nb::arg("input_res") = "empty_normal",
+             nb::arg("output_res") = "normal",
+             nb::arg("pass_name") = "Normal")
+        .def_rw("input_res", &NormalPass::input_res)
+        .def_rw("output_res", &NormalPass::output_res)
+        .def("get_resource_specs", &NormalPass::get_resource_specs)
+        .def("get_internal_symbols", &NormalPass::get_internal_symbols)
+        .def("execute_with_data", [](
+            NormalPass& self,
+            GraphicsBackend* graphics,
+            nb::dict reads_fbos_py,
+            nb::dict writes_fbos_py,
+            nb::tuple rect_py,
+            nb::list entities_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
+            int64_t context_key
+        ) {
+            // Convert FBO maps
+            FBOMap reads_fbos, writes_fbos;
+            for (auto item : reads_fbos_py) {
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (!val.is_none()) {
+                    try {
+                        reads_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
+                    }
+                }
+            }
+            for (auto item : writes_fbos_py) {
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (!val.is_none()) {
+                    try {
+                        writes_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
+                    }
+                }
+            }
+
+            // Convert rect
+            Rect4i rect;
+            rect.x = nb::cast<int>(rect_py[0]);
+            rect.y = nb::cast<int>(rect_py[1]);
+            rect.width = nb::cast<int>(rect_py[2]);
+            rect.height = nb::cast<int>(rect_py[3]);
+
+            // Convert entities
+            std::vector<Entity> entities;
+            for (auto item : entities_py) {
+                entities.push_back(nb::cast<Entity>(item));
+            }
+
+            // Convert view matrix (row-major numpy -> column-major Mat44f)
+            Mat44f view;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    view(col, row) = view_py(row, col);
+                }
+            }
+
+            // Convert projection matrix
+            Mat44f projection;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    projection(col, row) = projection_py(row, col);
+                }
+            }
+
+            // Call C++ execute_with_data
+            self.execute_with_data(
+                graphics,
+                reads_fbos,
+                writes_fbos,
+                rect,
+                entities,
+                view,
+                projection,
+                context_key
+            );
+        },
+        nb::arg("graphics"),
+        nb::arg("reads_fbos"),
+        nb::arg("writes_fbos"),
+        nb::arg("rect"),
+        nb::arg("entities"),
+        nb::arg("view"),
+        nb::arg("projection"),
+        nb::arg("context_key"))
+        .def("__repr__", [](const NormalPass& p) {
+            return "<NormalPass '" + p.pass_name + "'>";
         });
 
     // ShadowMapResult - result of shadow map rendering
