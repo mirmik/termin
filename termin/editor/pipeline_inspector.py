@@ -515,7 +515,6 @@ class PipelineInspector(QWidget):
         try:
             new_effect = effect_cls()
             self._selected_postprocess.effects.append(new_effect)
-            self._selected_postprocess.rebuild_reads()
             self._rebuild_effects_list()
             self.pipeline_changed.emit(self._pipeline)
         except Exception as e:
@@ -549,7 +548,6 @@ class PipelineInspector(QWidget):
             return
 
         del self._selected_postprocess.effects[row]
-        self._selected_postprocess.rebuild_reads()
         self._rebuild_effects_list()
         self._effect_inspector.set_target(None)
         self.pipeline_changed.emit(self._pipeline)

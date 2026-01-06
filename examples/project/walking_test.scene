@@ -4395,12 +4395,6 @@
             "data": {
               "enabled": true
             }
-          },
-          {
-            "type": "TimeModifierController",
-            "data": {
-              "enabled": true
-            }
           }
         ],
         "children": []
@@ -4449,6 +4443,20 @@
               "ortho_size": 5.0,
               "near": 0.1,
               "far": 100.0
+            }
+          },
+          {
+            "type": "ViewportHintComponent",
+            "data": {
+              "enabled": true,
+              "pipeline_name": "ChronoSquadPipeline",
+              "layer_mask": "0xffffffffffffffff"
+            }
+          },
+          {
+            "type": "TimeModifierController",
+            "data": {
+              "enabled": true
             }
           }
         ],
@@ -4526,10 +4534,11 @@
       ],
       "radius": 6.5
     },
+    "selected_entity": "MainCamera",
     "expanded_entities": [
-      "editor_ui",
       "camera",
-      "EditorEntities"
+      "EditorEntities",
+      "editor_ui"
     ]
   },
   "resources": {

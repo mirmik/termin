@@ -205,18 +205,30 @@ class PostProcessPass(RenderFramePass):
     def compute_writes(self) -> Set[str]:
         return {self.output_res}
 
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры PostProcessPass."""
+    def serialize_data(self) -> dict:
+        """Сериализует данные PostProcessPass включая эффекты."""
         return {
             "input_res": self.input_res,
             "output_res": self.output_res,
             "effects": [eff.serialize() for eff in self.effects],
         }
 
+    def deserialize_data(self, data: dict) -> None:
+        """Десериализует данные PostProcessPass включая эффекты."""
+        if not data:
+            return
+        if "input_res" in data:
+            self.input_res = data["input_res"]
+        if "output_res" in data:
+            self.output_res = data["output_res"]
+        # Effects уже десериализованы в _deserialize_instance
+
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "PostProcessPass":
         """Создаёт PostProcessPass из сериализованных данных."""
-        effects_data = data.get("effects", [])
+        # Effects и другие данные находятся внутри data["data"]
+        inner_data = data.get("data", {})
+        effects_data = inner_data.get("effects", [])
         effects = []
 
         for eff_data in effects_data:
@@ -228,8 +240,8 @@ class PostProcessPass(RenderFramePass):
 
         return cls(
             effects=effects,
-            input_res=data.get("input_res", "color"),
-            output_res=data.get("output_res", "color_pp"),
+            input_res=inner_data.get("input_res", "color"),
+            output_res=inner_data.get("output_res", "color_pp"),
             pass_name=data.get("pass_name", "PostProcess"),
         )
 

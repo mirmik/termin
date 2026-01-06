@@ -28,6 +28,7 @@ class MaterialPostEffect(PostEffect):
     - u_color: Main color texture (from previous pass)
     - u_depth: Depth texture (if required_depth=True)
     - u_resolution: vec2 with (width, height)
+    - Extra resources specified via add_resource() as their uniform names
 
     Additional textures and uniforms come from the material itself.
     """
@@ -44,6 +45,11 @@ class MaterialPostEffect(PostEffect):
             path="_required_depth",
             label="Require Depth",
             kind="bool",
+        ),
+        "extra_resources": InspectField(
+            path="extra_resources_str",
+            label="Extra Resources (res:uni, ...)",
+            kind="string",
         ),
     }
 
@@ -62,6 +68,30 @@ class MaterialPostEffect(PostEffect):
             self._material_handle = MaterialHandle.from_name(material_path)
         self._required_depth = required_depth
         self._before_draw: Optional[BeforeDrawCallback] = None
+        # Map: resource_name -> uniform_name
+        self._extra_resources: dict[str, str] = {}
+
+    @property
+    def extra_resources_str(self) -> str:
+        """Get extra resources as string for inspector."""
+        if not self._extra_resources:
+            return ""
+        return ", ".join(f"{res}:{uni}" for res, uni in self._extra_resources.items())
+
+    @extra_resources_str.setter
+    def extra_resources_str(self, value: str) -> None:
+        """Set extra resources from string (format: 'resource:uniform, ...')."""
+        self._extra_resources.clear()
+        if not value or not value.strip():
+            return
+        for pair in value.split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                res, uni = pair.split(":", 1)
+                res = res.strip()
+                uni = uni.strip()
+                if res and uni:
+                    self._extra_resources[res] = uni
 
     def set_before_draw(self, callback: Optional[BeforeDrawCallback]) -> None:
         """
@@ -75,9 +105,39 @@ class MaterialPostEffect(PostEffect):
         """
         self._before_draw = callback
 
+    def add_resource(self, resource_name: str, uniform_name: str) -> "MaterialPostEffect":
+        """
+        Add a FrameGraph resource to be bound as a texture uniform.
+
+        Args:
+            resource_name: Name of the FrameGraph resource (e.g. "id", "depth").
+            uniform_name: Name of the sampler uniform in the shader (e.g. "u_id").
+
+        Returns:
+            self for chaining.
+
+        Example:
+            effect.add_resource("id", "u_id").add_resource("depth", "u_depth")
+        """
+        self._extra_resources[resource_name] = uniform_name
+        return self
+
+    def remove_resource(self, resource_name: str) -> "MaterialPostEffect":
+        """
+        Remove a previously added resource.
+
+        Args:
+            resource_name: Name of the FrameGraph resource to remove.
+
+        Returns:
+            self for chaining.
+        """
+        self._extra_resources.pop(resource_name, None)
+        return self
+
     def required_resources(self) -> Set[str]:
         """Return required FrameGraph resources."""
-        resources = set()
+        resources = set(self._extra_resources.keys())
         if self._required_depth:
             resources.add("depth")
         return resources
@@ -122,9 +182,17 @@ class MaterialPostEffect(PostEffect):
         color_tex.bind(0)
         shader.set_uniform_int("u_color", 0)
 
-        # Bind depth if required and available
+        # Bind extra resources as texture uniforms
         texture_unit = 1
-        if self._required_depth:
+        for resource_name, uniform_name in self._extra_resources.items():
+            tex = extra_textures.get(resource_name)
+            if tex is not None:
+                tex.bind(texture_unit)
+                shader.set_uniform_int(uniform_name, texture_unit)
+                texture_unit += 1
+
+        # Bind depth if required and available (legacy support)
+        if self._required_depth and "depth" not in self._extra_resources:
             depth_tex = extra_textures.get("depth")
             if depth_tex is not None:
                 depth_tex.bind(texture_unit)
@@ -147,7 +215,9 @@ class MaterialPostEffect(PostEffect):
             self._set_uniform(shader, uniform_name, uniform_value)
 
         # Call before_draw callback for custom uniforms
+        print("MaterialPostEffect: Calling before_draw callback")
         if self._before_draw is not None:
+            print("MaterialPostEffect: Executing before_draw callback")
             self._before_draw(shader)
 
         # Draw fullscreen quad

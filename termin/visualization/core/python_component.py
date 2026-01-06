@@ -250,6 +250,8 @@ class PythonComponent:
         Uses the same mechanism as CxxComponent - kind handlers are applied
         for enum, handles, etc.
         """
+        # Ensure builtin kind handlers are registered
+        import termin.serialization.kind  # noqa: F401
         from termin._native.inspect import InspectRegistry
         return InspectRegistry.instance().serialize_all(self)
 
@@ -261,6 +263,8 @@ class PythonComponent:
         """
         if not data:
             return
+        # Ensure builtin kind handlers are registered
+        import termin.serialization.kind  # noqa: F401
         from termin._native.inspect import InspectRegistry
         InspectRegistry.instance().deserialize_all(self, data)
 

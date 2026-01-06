@@ -123,6 +123,8 @@ class DepthPass(RenderFramePass):
             phase="depth",
         )
 
+        from termin._native import log
+
         depth_material = self._get_material()
 
         # Аккуратно получаем near/far без getattr
@@ -149,6 +151,7 @@ class DepthPass(RenderFramePass):
         )
 
         # Обход сущностей и рисование глубины
+        drawn_count = 0
         for ent in scene.entities:
             mr = ent.get_component(MeshRenderer)
             if mr is None:
@@ -163,8 +166,7 @@ class DepthPass(RenderFramePass):
             if tc_mesh is not None and tc_mesh.is_valid:
                 gpu = mr.mesh_gpu
                 gpu.draw(render_ctx, tc_mesh.mesh, tc_mesh.version)
-
-            # TODO: реализовать дебаг через debugger_window
+                drawn_count += 1
 
     def _blit_to_debug(
         self,

@@ -37,7 +37,8 @@ DEPTH_FRAG = """
 in float v_linear_depth;
 out vec4 FragColor;
 
-void main() {
+void main()
+{
     float d = clamp(v_linear_depth, 0.0, 1.0);
     FragColor = vec4(d, d, d, 1.0);
 }
@@ -60,5 +61,6 @@ class DepthMaterial(Material):
         )
 
     def update_camera_planes(self, near_plane: float, far_plane: float):
-        self.uniforms["u_near"] = float(near_plane)
-        self.uniforms["u_far"] = float(far_plane)
+        from termin._native import log
+        self.set_param("u_near", float(near_plane))
+        self.set_param("u_far", float(far_plane))

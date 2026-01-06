@@ -47,13 +47,44 @@ void main() {
 in vec2 v_uv;
 
 uniform sampler2D u_color;
+uniform sampler2D u_depth_texture;
 uniform vec2 u_resolution;
 uniform float u_time_modifier;
 uniform float u_grid_intensity;
 uniform float u_grid_scale;
 uniform vec4 u_grid_color;
 
+uniform float u_near;
+uniform float u_far;
+uniform mat4 u_inv_view;
+uniform mat4 u_inv_proj;
+
 out vec4 FragColor;
+
+// Reconstruct world position from depth and screen UV
+vec3 reconstruct_world_pos(vec2 uv, float linear_depth) {
+    // Linear depth to view-space Z (positive distance from camera)
+    float z_view = linear_depth * (u_far - u_near) + u_near;
+
+    // Screen UV to NDC xy (-1 to 1)
+    vec2 ndc_xy = uv * 2.0 - 1.0;
+
+    // Get ray direction in view space using inverse projection
+    // We use NDC point at z=1 (far plane) to get direction
+    vec4 ray_clip = vec4(ndc_xy, 1.0, 1.0);
+    vec4 ray_view = u_inv_proj * ray_clip;
+
+    vec3 ray_dir = normalize(ray_view.xyz / ray_view.w);
+
+    // Scale ray by actual distance to get view-space position
+    // ray_dir.y is the forward component in Y-forward convention
+    vec3 view_pos = ray_dir * (z_view / max(abs(ray_dir.y), 0.001));
+
+    // Transform to world space
+    vec4 world_pos = u_inv_view * vec4(view_pos, 1.0);
+
+    return world_pos.xyz;
+}
 
 // Convert color based on time modifier
 vec3 get_modified_color(vec3 color, float time_mod) {
@@ -97,8 +128,15 @@ float grid(vec2 uv, float scale, float line_width) {
     return clamp(line_x + line_y, 0.0, 1.0);
 }
 
-void main() {
+vec4 doit()
+{
     vec3 color = texture(u_color, v_uv).rgb;
+    float linear_depth = texture(u_depth_texture, v_uv).r;
+
+    // Reconstruct world position (available for future effects)
+    vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
+
+    return vec4(world_pos, 1.0); // Debug: output world position as color
 
     // Apply time-based color modification
     vec3 modified = get_modified_color(color, u_time_modifier);
@@ -117,7 +155,11 @@ void main() {
         modified = mix(modified, u_grid_color.rgb, grid_alpha);
     }
 
-    FragColor = vec4(modified, 1.0);
+    return vec4(modified, 1.0);
+}
+
+void main() {
+    FragColor = doit();
 }
 @endstage
 

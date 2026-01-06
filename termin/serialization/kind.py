@@ -118,3 +118,23 @@ def register_kind(name: str):
 
 
 __all__ = ["KindRegistry", "register_kind"]
+
+
+# ============================================================================
+# Builtin kind handlers
+# ============================================================================
+
+@register_kind("layer_mask")
+class LayerMaskKind:
+    """Handler for layer_mask kind (64-bit unsigned int as hex string)."""
+
+    @staticmethod
+    def serialize(obj):
+        # Serialize as hex string to handle values > int64_t max
+        return hex(obj)
+
+    @staticmethod
+    def deserialize(data):
+        if isinstance(data, str):
+            return int(data, 16) if data.startswith("0x") else int(data)
+        return int(data)
