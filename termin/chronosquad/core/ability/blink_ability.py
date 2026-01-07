@@ -4,17 +4,16 @@ BlinkAbility - instant teleportation ability.
 Matches original C# BlinkAbility:
 - Instantly teleports actor to target position
 - Has cooldown
-- Uses ReferencedPoint for time-stable positioning
+- Uses BlinkCommand for execution
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.geombase import Vec3, Pose3
+from termin.geombase import Vec3
 
 from .ability import Ability
-from termin.chronosquad.core.animatronic import StaticAnimatronic
 
 if TYPE_CHECKING:
     from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
@@ -26,8 +25,7 @@ class BlinkAbility(Ability):
     """
     Instant teleportation ability.
 
-    Teleports the actor to the target position instantly.
-    Creates a StaticAnimatronic at the destination.
+    Teleports the actor to the target position using BlinkCommand.
     """
 
     def __init__(self, blink_time_lapse: float = 0.5, cooldown: float = 3.0):
@@ -35,7 +33,7 @@ class BlinkAbility(Ability):
         Initialize blink ability.
 
         Args:
-            blink_time_lapse: Visual effect duration (not used in core logic)
+            blink_time_lapse: Visual effect duration
             cooldown: Cooldown time in seconds
         """
         super().__init__(cooldown)
@@ -56,8 +54,12 @@ class BlinkAbility(Ability):
         """
         Teleport actor to target position.
 
-        Matches original BlinkAbility.UseOnEnvironmentImpl().
+        Matches original BlinkAbility.UseOnEnvironmentImpl():
+        - Creates BlinkCommand
+        - Adds it to actor's command buffer
         """
+        from termin.chronosquad.core.commands.blink_command import BlinkCommand
+
         actor = ability_list.actor
 
         # Get target position (handle both ReferencedPoint and Vec3)
@@ -70,21 +72,15 @@ class BlinkAbility(Ability):
             # Assume it has x, y, z attributes
             target_pos = Vec3(target_position.x, target_position.y, target_position.z)
 
-        # Create new pose at target (keep rotation)
-        new_pose = Pose3(actor.local_rotation, target_pos)
-
-        # Create static animatronic at new position
-        # This "snaps" the actor to the new position
-        local_step = actor.local_step
-        static_anim = StaticAnimatronic(
-            pose=new_pose,
-            start_step=local_step,
-            finish_step=local_step + 1,  # Single step
+        # Create BlinkCommand
+        command = BlinkCommand(
+            target_pos,
+            self._blink_time_lapse,
+            actor.local_step + 1,
         )
-        actor.add_animatronic(static_anim)
 
-        # Directly set pose for immediate effect
-        actor.set_local_pose(new_pose)
+        # Add command to actor
+        actor.command_buffer.add_command(command)
 
     def info(self) -> str:
         return f"BlinkAbility(cooldown={self.cooldown_time:.1f}s, lapse={self._blink_time_lapse:.1f}s)"

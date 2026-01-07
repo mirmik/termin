@@ -10,7 +10,7 @@ from termin.chronosquad.core import (
     Pose3,
     GAME_FREQUENCY,
 )
-from termin.chronosquad.core.moving_command import MovingCommand, WalkingType, _look_rotation
+from termin.chronosquad.core.commands.moving_command import MovingCommand, WalkingType, _look_rotation
 
 
 class TestLookRotation:

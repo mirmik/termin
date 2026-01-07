@@ -11,9 +11,9 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .object_of_timeline import ObjectOfTimeline
-    from .timeline import Timeline
-    from .command_buffer import CommandBuffer
+    from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
+    from termin.chronosquad.core.timeline import Timeline
+    from termin.chronosquad.core.command_buffer import CommandBuffer
 
 
 class ActorCommand(ABC):

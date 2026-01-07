@@ -29,9 +29,9 @@ from .animatronic import (
 )
 from .object_time import ObjectTime, TimeModifier, TimeFreeze, TimeHaste
 from .chronosphere import ChronoSphere
-from .actor_command import ActorCommand
+from .commands.actor_command import ActorCommand
 from .command_buffer import CommandBuffer
-from .moving_command import MovingCommand, WalkingType
+from .commands.moving_command import MovingCommand, WalkingType
 from .unit_path import UnitPath, UnitPathPoint, UnitPathPointType, BracedCoordinates
 from .ability.ability import Ability, AbilityList, CooldownRecord, CooldownList
 from .ability.blink_ability import BlinkAbility

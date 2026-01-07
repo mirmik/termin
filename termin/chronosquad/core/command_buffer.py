@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .actor_command import ActorCommand
+from termin.chronosquad.core.commands.actor_command import ActorCommand
 
 if TYPE_CHECKING:
-    from .object_of_timeline import ObjectOfTimeline
-    from .timeline import Timeline
+    from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
+    from termin.chronosquad.core.timeline import Timeline
 
 
 class CommandBuffer:
@@ -96,11 +96,23 @@ class CommandBuffer:
         Execute current command.
 
         Called each frame to run the active command.
+        Matches original C# CommandBuffer.Execute().
         """
         self.promote(local_step, timeline)
 
         current = self.current_command
         if current is None or current.start_step == self._marked_finished_step:
+            # No active command - create IdleAnimatronic if needed
+            if self._actor.current_animatronic_is_finished():
+                from termin.chronosquad.core.animatronic import IdleAnimatronic, AnimationType
+
+                idle_state = IdleAnimatronic(
+                    start_step=local_step,
+                    pose=self._actor.local_pose.copy(),
+                    idle_animation=AnimationType.IDLE,
+                )
+                self._actor.add_animatronic(idle_state)
+
             self._commands_added.clear()
             return
 

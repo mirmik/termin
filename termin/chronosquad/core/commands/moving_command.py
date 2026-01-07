@@ -18,15 +18,15 @@ import numpy as np
 
 from termin.geombase import Vec3, Quat, Pose3
 
-from .actor_command import ActorCommand
-from .animatronic import MovingAnimatronic, AnimationType, get_animation_duration
-from .unit_path import UnitPath, UnitPathPointType
-from .timeline import GAME_FREQUENCY
+from termin.chronosquad.core.commands.actor_command import ActorCommand
+from termin.chronosquad.core.animatronic import MovingAnimatronic, AnimationType, get_animation_duration
+from termin.chronosquad.core.unit_path import UnitPath, UnitPathPointType
+from termin.chronosquad.core.timeline import GAME_FREQUENCY
 
 if TYPE_CHECKING:
-    from .object_of_timeline import ObjectOfTimeline
-    from .timeline import Timeline
-    from .command_buffer import CommandBuffer
+    from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
+    from termin.chronosquad.core.timeline import Timeline
+    from termin.chronosquad.core.command_buffer import CommandBuffer
 
 
 def _look_rotation(direction: Vec3) -> Quat:

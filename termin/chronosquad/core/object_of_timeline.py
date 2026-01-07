@@ -12,16 +12,16 @@ import math
 
 from termin.geombase import Vec3, Quat, Pose3, GeneralPose3
 
-from .event_line import EventLine
-from .object_time import ObjectTime
-from .timeline import GAME_FREQUENCY
+from termin.chronosquad.core.event_line import EventLine
+from termin.chronosquad.core.object_time import ObjectTime
+from termin.chronosquad.core.timeline import GAME_FREQUENCY
 
 if TYPE_CHECKING:
-    from .timeline import Timeline
-    from .animatronic import Animatronic, AnimationType
-    from .command_buffer import CommandBuffer
-    from .moving_command import WalkingType
-    from .ability import Ability, AbilityList
+    from termin.chronosquad.core.timeline import Timeline
+    from termin.chronosquad.core.animatronic import Animatronic, AnimationType
+    from termin.chronosquad.core.command_buffer import CommandBuffer
+    from termin.chronosquad.core.commands.moving_command import WalkingType
+    from termin.chronosquad.core.ability.ability import Ability, AbilityList
 
 
 @dataclass
@@ -98,6 +98,25 @@ class ObjectOfTimeline:
     @property
     def current_animatronic(self) -> Animatronic | None:
         return self._current_animatronic
+
+    def current_animatronic_is_finished(self) -> bool:
+        """
+        Check if current animatronic is finished.
+
+        Matches original C# ObjectOfTimeline.CurrentAnimatronicIsFinished():
+        - Returns true if no animatronic exists
+        - Returns true if current step > animatronic's finish_step
+        - Used by CommandBuffer to know when to create IdleAnimatronic
+        """
+        if self._current_animatronic is not None:
+            return False
+
+        if not self._animatronics:
+            return True
+
+        # Check if local_step > last animatronic's finish_step
+        last_anim = self._animatronics[-1]
+        return self._local_step > last_anim.finish_step
 
     @property
     def time_modifier(self) -> float:
@@ -292,7 +311,7 @@ class ObjectOfTimeline:
             target: Target position in world coordinates
             speed: Movement speed in units per second (default 5.0)
         """
-        from .moving_command import MovingCommand, WalkingType
+        from termin.chronosquad.core.commands.moving_command import MovingCommand, WalkingType
 
         if self._timeline is None:
             return
@@ -323,13 +342,13 @@ class ObjectOfTimeline:
             target: Target position in world coordinates
             walking_type: Type of walking animation/speed (default: RUN)
         """
-        from .moving_command import MovingCommand, WalkingType
+        from termin.chronosquad.core.commands.moving_command import MovingCommand, WalkingType
 
         if self._timeline is None:
             return
 
         if walking_type is None:
-            from .moving_command import WalkingType
+            from termin.chronosquad.core.commands.moving_command import WalkingType
             walking_type = WalkingType.RUN
 
         cmd = MovingCommand(target, walking_type, self._local_step)

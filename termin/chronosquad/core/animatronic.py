@@ -204,9 +204,12 @@ class Animatronic(ABC):
         pass
 
 
-class StaticAnimatronic(Animatronic):
+class NullAnimatronic(Animatronic):
     """
     Animatronic that holds a static pose (Idle animation).
+
+    Matches original C# NullAnimatronic - used for initial state
+    and other cases where object doesn't move.
     """
 
     def __init__(self, start_step: int, pose: Pose3, finish_step: int | None = None):
@@ -224,8 +227,126 @@ class StaticAnimatronic(Animatronic):
     def is_looped(self) -> bool:
         return True
 
-    def copy(self) -> StaticAnimatronic:
-        return StaticAnimatronic(self.start_step, self.pose.copy(), self.finish_step)
+    def copy(self) -> NullAnimatronic:
+        return NullAnimatronic(self.start_step, self.pose.copy(), self.finish_step)
+
+
+# Alias for backwards compatibility
+StaticAnimatronic = NullAnimatronic
+
+
+class IdleAnimatronic(Animatronic):
+    """
+    Animatronic for idle/stationary state.
+
+    Matches original C# IdleAnimatronic:
+    - Holds pose until interrupted by new command
+    - finish_step = infinite by default (long.MaxValue in C#)
+    - Created by CommandBuffer when no command is active
+    """
+
+    def __init__(
+        self,
+        start_step: int,
+        pose: Pose3,
+        idle_animation: AnimationType = AnimationType.IDLE,
+        finish_step: int | None = None,
+    ):
+        if finish_step is None:
+            finish_step = 2**62  # Matches C# long.MaxValue
+        super().__init__(start_step, finish_step)
+        self._pose = pose
+        self._idle_animation = idle_animation
+
+    @property
+    def pose(self) -> Pose3:
+        return self._pose
+
+    def evaluate(self, step: int) -> Pose3:
+        return self._pose.copy()
+
+    def get_animation_type(self) -> AnimationType:
+        return self._idle_animation
+
+    def is_looped(self) -> bool:
+        return True
+
+    def copy(self) -> IdleAnimatronic:
+        anim = IdleAnimatronic(
+            self.start_step,
+            self._pose.copy(),
+            self._idle_animation,
+            self.finish_step,
+        )
+        anim._initial_animation_time = self._initial_animation_time
+        return anim
+
+    def info(self) -> str:
+        return f"IdleAnimatronic(start={self.start_step}, anim={self._idle_animation.name})"
+
+
+class BlinkedMovingState(Animatronic):
+    """
+    Animatronic for blink teleportation.
+
+    Matches original C# BlinkedMovingState:
+    - Has initial_pose and target_pose
+    - Returns initial_pose in first half of duration
+    - Returns target_pose in second half
+    - Used for instant teleportation with visual effect
+    """
+
+    def __init__(
+        self,
+        initial_pose: Pose3,
+        target_pose: Pose3,
+        start_step: int,
+        finish_step: int,
+    ):
+        super().__init__(start_step, finish_step)
+        self._initial_pose = initial_pose
+        self._target_pose = target_pose
+
+    @property
+    def initial_pose(self) -> Pose3:
+        return self._initial_pose
+
+    @property
+    def target_pose(self) -> Pose3:
+        return self._target_pose
+
+    def evaluate(self, step: int) -> Pose3:
+        """Return initial pose in first half, target pose in second half."""
+        center = (self.start_step + self.finish_step) // 2
+        if step <= center:
+            return self._initial_pose.copy()
+        else:
+            return self._target_pose.copy()
+
+    def intensivity(self, step: int) -> float:
+        """Get blink effect intensity (0 at edges, 1 at center)."""
+        center = (self.finish_step - self.start_step) / 2
+        a = (step - self.start_step) - center
+        return 1 - abs(a / center) if center > 0 else 0
+
+    def get_animation_type(self) -> AnimationType:
+        return AnimationType.IDLE
+
+    def is_looped(self) -> bool:
+        return False
+
+    def copy(self) -> BlinkedMovingState:
+        anim = BlinkedMovingState(
+            self._initial_pose.copy(),
+            self._target_pose.copy(),
+            self.start_step,
+            self.finish_step,
+        )
+        anim._initial_animation_time = self._initial_animation_time
+        return anim
+
+    def info(self) -> str:
+        return f"BlinkedMovingState(start={self.start_step}, finish={self.finish_step})"
 
 
 class LinearMoveAnimatronic(Animatronic):
