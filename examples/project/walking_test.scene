@@ -398,6 +398,14 @@
             }
           },
           {
+            "type": "HumanModelCollider",
+            "data": {
+              "enabled": true,
+              "scale": 1.0,
+              "overlap_radius": 0.023
+            }
+          },
+          {
             "type": "BlinkActionComponent",
             "data": {
               "enabled": true,
@@ -834,14 +842,6 @@
                   ],
                   "_current_clip_name": "Walk",
                   "playing": true
-                }
-              },
-              {
-                "type": "HumanModelCollider",
-                "data": {
-                  "enabled": true,
-                  "scale": 1.5,
-                  "overlap_radius": 0.1
                 }
               }
             ],
@@ -4793,6 +4793,14 @@
             "data": {
               "enabled": true
             }
+          },
+          {
+            "type": "HumanModelCollider",
+            "data": {
+              "enabled": true,
+              "scale": 1.0,
+              "overlap_radius": 0.023
+            }
           }
         ],
         "children": [
@@ -5405,14 +5413,6 @@
                   ],
                   "_current_clip_name": "",
                   "playing": false
-                }
-              },
-              {
-                "type": "HumanModelCollider",
-                "data": {
-                  "enabled": true,
-                  "scale": 2.0,
-                  "overlap_radius": 1.0
                 }
               }
             ],
@@ -9150,6 +9150,44 @@
             ]
           }
         ]
+      },
+      {
+        "uuid": "00000000000000de",
+        "name": "ActionServer",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "ActionServerComponent",
+            "data": {
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -9213,26 +9251,23 @@
   "editor": {
     "camera": {
       "position": [
-        3.2954883575439453,
-        1.8424021005630493,
-        4.028426647186279
+        3.3810060024261475,
+        1.9557764530181885,
+        3.84002685546875
       ],
       "rotation": [
-        -0.11839094282720047,
-        -0.30681732332884687,
-        0.8810592747107129,
-        0.33997245360181905
+        -0.10895570087451584,
+        -0.28383933183214183,
+        0.88938611845359,
+        0.3414033117210246
       ],
       "radius": 4.5
     },
     "selected_entity": "Glitch",
     "expanded_entities": [
-      "Glitch",
-      "EditorEntities",
+      "camera",
       "editor_ui",
-      "Model",
-      "Arthur",
-      "camera"
+      "EditorEntities"
     ]
   },
   "resources": {

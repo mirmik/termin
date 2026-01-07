@@ -12,11 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
-from .timeline import GAME_FREQUENCY
+from termin.chronosquad.core.timeline import GAME_FREQUENCY
 
 if TYPE_CHECKING:
-    from .object_of_timeline import ObjectOfTimeline
-    from .timeline import Timeline
+    from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
+    from termin.chronosquad.core.timeline import Timeline
 
 
 @dataclass

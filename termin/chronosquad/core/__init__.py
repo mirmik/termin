@@ -33,8 +33,8 @@ from .actor_command import ActorCommand
 from .command_buffer import CommandBuffer
 from .moving_command import MovingCommand, WalkingType
 from .unit_path import UnitPath, UnitPathPoint, UnitPathPointType, BracedCoordinates
-from .ability import Ability, AbilityList, CooldownRecord, CooldownList
-from .blink_ability import BlinkAbility
+from .ability.ability import Ability, AbilityList, CooldownRecord, CooldownList
+from .ability.blink_ability import BlinkAbility
 
 __all__ = [
     # ChronoSphere

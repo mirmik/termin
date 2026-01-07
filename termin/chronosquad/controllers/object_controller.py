@@ -46,6 +46,9 @@ class ObjectController(PythonComponent):
         self._timeline: Timeline | None = None
         self._object_name: str | None = None
 
+        # Action list cache
+        self._action_list: list[ActionComponent] | None = None
+
     # =========================================================================
     # Phase 1: Template - create ObjectOfTimeline from Entity
     # =========================================================================
@@ -67,20 +70,30 @@ class ObjectController(PythonComponent):
         obj.set_local_pose(self.entity.transform.local_pose())
 
         # Find ActionComponents and add their abilities
-        self._collect_action_components(obj)
+        self._action_list = self._collect_action_components(obj)
+        self.attach_abilities(self._action_list, obj)
 
         return obj
 
     def _collect_action_components(self, obj: ObjectOfTimeline) -> None:
         """Find ActionComponents on this entity and add their abilities."""
-        from .action_component import ActionComponent
+        from termin.chronosquad.controllers.action.action_component import ActionComponent
 
         if self.entity is None:
             return
 
+        lst = []
         for component in self.entity.components:
             if isinstance(component, ActionComponent):
                 component.set_object_controller(self)
+                lst.append(component)
+        return lst
+
+
+    def attach_abilities(self, action_components: list[ActionComponent], obj: ObjectOfTimeline) -> None:
+        """Create and attach abilities from ActionComponents to ObjectOfTimeline."""
+        for component in action_components:
+            if component.enabled:
                 ability = component.init_ability()
                 if ability is not None:
                     obj.add_ability(ability)
@@ -145,3 +158,22 @@ class ObjectController(PythonComponent):
     def is_bound(self) -> bool:
         """Check if bound to a timeline."""
         return self._timeline is not None and self.chrono_object is not None
+
+    def find_action_with_shortcut(self, key: Key) -> ActionComponent | None:
+        """Find action component with given shortcut key."""
+        if self._action_list is None:
+            return None
+
+        for action in self._action_list:
+            if action.shortcut_key == key:
+                return action
+            
+        return None
+
+    def activate_action_with_shortcut(self, key: Key) -> bool:
+        """Activate action component with given shortcut key. Returns True if activated."""
+        action = self.find_action_with_shortcut(key)
+        if action is not None:
+            action.activate()
+            return True
+        return False

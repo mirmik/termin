@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from termin._native import log
 from termin.editor.inspect_field import InspectField
-from termin.chronosquad.core.blink_ability import BlinkAbility
+from termin.chronosquad.core.ability.blink_ability import BlinkAbility
 from termin.chronosquad.core import Ability
 from termin.visualization.platform.backends.base import Key
 
-from .action_component import ActionComponent, ActionSpec, ActionSpecType, ClickInfo
+from termin.chronosquad.controllers.action.action_component import ActionComponent, ActionSpec, ActionSpecType, ClickInfo
 
 
 class BlinkActionComponent(ActionComponent):
@@ -56,6 +56,7 @@ class BlinkActionComponent(ActionComponent):
         self.cooldown: float = cooldown
         self.max_distance: float = max_distance
         self.blink_time_lapse: float = blink_time_lapse
+        self.shortcut_key: Key = Key.B  # Default key for blink action
 
     def create_ability(self) -> Ability | None:
         """Create BlinkAbility."""
@@ -113,8 +114,3 @@ class BlinkActionComponent(ActionComponent):
         """Get tooltip text."""
         return "Blink: Instantly teleport to target position"
 
-    def on_key(self, event) -> None:
-        """Called when action key is pressed."""
-        if event.key == Key.B:
-            log.info("[BlinkActionComponent] Blink action key pressed")
-            self.activate()

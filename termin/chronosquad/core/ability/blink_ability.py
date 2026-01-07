@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING
 from termin.geombase import Vec3, Pose3
 
 from .ability import Ability
-from .animatronic import StaticAnimatronic
+from termin.chronosquad.core.animatronic import StaticAnimatronic
 
 if TYPE_CHECKING:
-    from .object_of_timeline import ObjectOfTimeline
-    from .timeline import Timeline
-    from .ability import AbilityList
+    from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
+    from termin.chronosquad.core.timeline import Timeline
+    from termin.chronosquad.core.ability.ability import AbilityList
 
 
 class BlinkAbility(Ability):

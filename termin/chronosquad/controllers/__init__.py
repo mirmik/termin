@@ -10,8 +10,8 @@ from .animation_controller import AnimationController
 from .chrono_camera_controller import ChronoCameraController
 from .time_modifier_controller import TimeModifierController
 from .action_server_component import ActionServerComponent
-from .action_component import ActionComponent, ActionSpec, ActionSpecType, ClickInfo
-from .blink_action_component import BlinkActionComponent
+from .action.action_component import ActionComponent, ActionSpec, ActionSpecType, ClickInfo
+from .action.blink_action_component import BlinkActionComponent
 
 __all__ = [
     "ObjectController",

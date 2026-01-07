@@ -11,12 +11,12 @@ from termin.visualization.platform.backends.base import MouseButton, Action as I
 from termin.chronosquad.core import Vec3
 
 from termin.chronosquad.controllers.object_controller import ObjectController
-from termin.chronosquad.controllers.action_component import ClickInfo
+from termin.chronosquad.controllers.action.action_component import ClickInfo
 from termin.chronosquad.controllers.action_server_component import ActionServerComponent
 
 if TYPE_CHECKING:
-    from .object_controller import ObjectController
-    from .chronosphere_controller import ChronosphereController
+    from termin.chronosquad.controllers.object_controller import ObjectController
+    from termin.chronosquad.controllers.chronosphere_controller import ChronosphereController
 
 
 class ClickController(InputComponent):
@@ -191,3 +191,10 @@ class ClickController(InputComponent):
             log.info("[ClickController] Action applied successfully")
         else:
             log.info("[ClickController] Action failed to apply")
+
+    def on_key(self, event) -> None:
+        """Handle key events."""
+        if self._selected_actor is None:
+            return
+        
+        ok = self._selected_actor.activate_action_with_shortcut(event.key)

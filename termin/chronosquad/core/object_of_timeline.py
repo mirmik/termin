@@ -120,7 +120,7 @@ class ObjectOfTimeline:
         Matches original ObjectOfTimeline.AbilityList property.
         """
         if self._ability_list is None:
-            from .ability import AbilityList
+            from .ability.ability import AbilityList
             self._ability_list = AbilityList(self)
         return self._ability_list
 

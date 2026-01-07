@@ -18,7 +18,7 @@ from termin.visualization.core.python_component import PythonComponent, InputCom
 
 if TYPE_CHECKING:
     from termin.chronosquad.core import ObjectOfTimeline, Ability
-    from .object_controller import ObjectController
+    from termin.chronosquad.controllers.object_controller import ObjectController
 
 
 class ActionSpecType(Enum):
@@ -77,7 +77,7 @@ class ClickInfo:
     frame_name: str = ""  # For ReferencedPoint
 
 
-class ActionComponent(InputComponent):
+class ActionComponent(PythonComponent):
     """
     Base class for action components.
 
@@ -98,6 +98,7 @@ class ActionComponent(InputComponent):
         self._object_controller: ObjectController | None = None
         self._ability: Ability | None = None
         self._is_active: bool = False
+        self.shortcut_key = None  # Optional key binding
 
     # =========================================================================
     # Called by ObjectController
@@ -176,7 +177,7 @@ class ActionComponent(InputComponent):
 
     def activate(self) -> None:
         """Activate this action."""
-        from .action_server_component import ActionServerComponent
+        from termin.chronosquad.controllers.action_server_component import ActionServerComponent
 
         if not self.can_activate():
             log.info(f"[{self.type_name()}] Cannot activate (on cooldown or no ability)")
@@ -193,7 +194,7 @@ class ActionComponent(InputComponent):
 
     def cancel(self) -> None:
         """Cancel this action."""
-        from .action_server_component import ActionServerComponent
+        from termin.chronosquad.controllers.action_server_component import ActionServerComponent
 
         self._is_active = False
         server = ActionServerComponent.instance()
@@ -218,9 +219,4 @@ class ActionComponent(InputComponent):
         """Get tooltip text for UI. Override in subclasses."""
         return ""
 
-    def on_key(self, event) -> None:
-        """Called when action icon/key is pressed."""
-        print(f"[{self.type_name()}] Action icon/key pressed")
-        pass
-        
         
