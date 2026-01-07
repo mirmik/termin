@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from .animatronic import Animatronic, AnimationType
     from .command_buffer import CommandBuffer
     from .moving_command import WalkingType
+    from .ability import Ability, AbilityList
 
 
 @dataclass
@@ -75,6 +76,9 @@ class ObjectOfTimeline:
         # Command buffer for managing actor commands
         self._command_buffer: CommandBuffer | None = None
 
+        # Ability list for actor abilities and cooldowns
+        self._ability_list: AbilityList | None = None
+
     @property
     def name(self) -> str:
         return self._name
@@ -107,6 +111,26 @@ class ObjectOfTimeline:
             from .command_buffer import CommandBuffer
             self._command_buffer = CommandBuffer(self)
         return self._command_buffer
+
+    @property
+    def ability_list(self) -> AbilityList:
+        """
+        Get or create ability list.
+
+        Matches original ObjectOfTimeline.AbilityList property.
+        """
+        if self._ability_list is None:
+            from .ability import AbilityList
+            self._ability_list = AbilityList(self)
+        return self._ability_list
+
+    def ability_list_panel(self) -> AbilityList:
+        """
+        Get ability list panel interface.
+
+        Matches original ObjectOfTimeline.AbilityListPanel().
+        """
+        return self.ability_list
 
     def local_time_real_time(self, timeline_time: float) -> float:
         """Convert timeline time (seconds) to object's local time."""
@@ -194,12 +218,20 @@ class ObjectOfTimeline:
         # Promote event cards
         self._changes.promote(self._local_step, self)
 
+        # Promote ability cooldowns (matches original Promote)
+        if self._ability_list is not None:
+            self._ability_list.promote_cooldowns()
+
     def add_card(self, card) -> None:
         """Add an event card."""
         self._changes.add(card)
 
     def drop_to_current(self) -> None:
-        """Drop future events/animatronics/commands."""
+        """
+        Drop future events/animatronics/commands/cooldowns.
+
+        Matches original ObjectOfTimeline.DropToCurrentState().
+        """
         self._changes.drop_future()
         # Remove animatronics that START after current step
         # Keep animatronics that started before (even if they extend past current step)
@@ -211,9 +243,16 @@ class ObjectOfTimeline:
         # Drop future commands
         if self._command_buffer is not None:
             self._command_buffer.drop_to_current_state()
+        # Drop future cooldowns (matches original DropToCurrentState)
+        if self._ability_list is not None:
+            self._ability_list.drop_to_current_state(self._local_step)
 
     def copy(self, new_timeline: Timeline) -> ObjectOfTimeline:
-        """Create a copy for a new timeline."""
+        """
+        Create a copy for a new timeline.
+
+        Matches original ObjectOfTimeline.CopyFrom().
+        """
         new_obj = ObjectOfTimeline(self._name)
         new_obj._timeline = new_timeline
         new_obj._local_pose = self._local_pose.copy()
@@ -225,6 +264,9 @@ class ObjectOfTimeline:
         # Copy command buffer
         if self._command_buffer is not None:
             new_obj._command_buffer = self._command_buffer.copy(new_obj)
+        # Copy ability list (matches original CopyFrom)
+        if self._ability_list is not None:
+            new_obj._ability_list = self._ability_list.copy(new_obj)
         return new_obj
 
     def current_position(self) -> Vec3:
@@ -292,6 +334,113 @@ class ObjectOfTimeline:
 
         cmd = MovingCommand(target, walking_type, self._local_step)
         self.command_buffer.add_command(cmd)
+
+    # ========== Ability Methods ==========
+    # Matches original C# ObjectOfTimeline ability methods
+
+    def add_ability(self, ability: Ability) -> Ability:
+        """
+        Add ability to actor.
+
+        Matches original ObjectOfTimeline.AddAbility().
+        """
+        return self.ability_list.add_or_change(ability)
+
+    def get_ability(self, ability_type: type[Ability]) -> Ability | None:
+        """
+        Get ability by type.
+
+        Matches original ObjectOfTimeline.GetAbility<T>().
+        """
+        return self.ability_list.get_ability(ability_type)
+
+    def get_ability_cooldown_percent(self, ability_or_type) -> float:
+        """
+        Get cooldown percent (0-100) for ability.
+
+        Matches original ObjectOfTimeline.GetAbilityCooldownPercent().
+        """
+        if isinstance(ability_or_type, type):
+            return self.ability_list.get_cooldown_percent(ability_or_type)
+        else:
+            return self.ability_list.get_cooldown_percent(type(ability_or_type))
+
+    def can_use_ability(self, ability_type: type[Ability], target: ObjectOfTimeline) -> bool:
+        """
+        Check if ability can be used on target.
+
+        Matches original ObjectOfTimeline.CanUseAbility<T>().
+        """
+        ability = self.get_ability(ability_type)
+        if ability is None:
+            return False
+        return ability.can_use_ability(target)
+
+    def ability_can_use(self, ability_type: type[Ability]) -> bool:
+        """
+        Check if ability can be used (not on cooldown).
+
+        Matches original ObjectOfTimeline.AbilityCanUse<T>().
+        """
+        if self._timeline is None:
+            return False
+        return self.ability_list.can_use(ability_type, self._timeline)
+
+    def ability_use_self(
+        self,
+        ability_type: type[Ability],
+        ignore_cooldown: bool = False,
+    ) -> None:
+        """
+        Use ability on self.
+
+        Matches original ObjectOfTimeline.AbilityUseSelf<T>().
+        """
+        if self._timeline is None:
+            return
+        ability = self.get_ability(ability_type)
+        if ability is not None:
+            ability.use_self(self._timeline, self.ability_list, ignore_cooldown)
+
+    def ability_use_on_object(
+        self,
+        ability_type: type[Ability],
+        target: ObjectOfTimeline,
+        ignore_cooldown: bool = False,
+    ) -> None:
+        """
+        Use ability on target object.
+
+        Matches original ObjectOfTimeline.AbilityUseOnObject<T>().
+        """
+        if self._timeline is None:
+            return
+        ability = self.get_ability(ability_type)
+        if ability is not None:
+            ability.use_on_object(target, self._timeline, self.ability_list, ignore_cooldown)
+
+    def ability_use_on_environment(
+        self,
+        ability_type: type[Ability],
+        target_position,  # ReferencedPoint
+        ignore_cooldown: bool = False,
+    ) -> None:
+        """
+        Use ability on environment position.
+
+        Matches original ObjectOfTimeline.AbilityUseOnEnvironment<T>().
+        """
+        if self._timeline is None:
+            return
+        ability = self.get_ability(ability_type)
+        if ability is not None:
+            ability.use_on_environment(
+                target_position,
+                self._timeline,
+                self.ability_list,
+                None,
+                ignore_cooldown,
+            )
 
     def animations(self, local_time: float) -> list[AnimatronicAnimationTask]:
         """

@@ -55,6 +55,7 @@ class ObjectController(PythonComponent):
         Create ObjectOfTimeline using Entity as template.
 
         Called by TimelineInitializer during initialization phase.
+        Collects ActionComponents and adds their abilities to the object.
         """
         if self.entity is None:
             raise RuntimeError("ObjectController must be attached to Entity")
@@ -65,7 +66,25 @@ class ObjectController(PythonComponent):
         # Copy transform from Entity
         obj.set_local_pose(self.entity.transform.local_pose())
 
+        # Find ActionComponents and add their abilities
+        self._collect_action_components(obj)
+
         return obj
+
+    def _collect_action_components(self, obj: ObjectOfTimeline) -> None:
+        """Find ActionComponents on this entity and add their abilities."""
+        from .action_component import ActionComponent
+
+        if self.entity is None:
+            return
+
+        for component in self.entity.components:
+            if isinstance(component, ActionComponent):
+                component.set_object_controller(self)
+                ability = component.init_ability()
+                if ability is not None:
+                    obj.add_ability(ability)
+                    log.info(f"[ObjectController] Added {type(ability).__name__} to '{obj.name}'")
 
     # =========================================================================
     # Phase 2: Runtime - bind to Timeline and sync

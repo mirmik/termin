@@ -614,7 +614,10 @@ class Scene:
                 return True
             handler = getattr(component, event_name, None)
             if handler:
-                handler(event)
+                try:
+                    handler(event)
+                except Exception as e:
+                    print(f"Error in input handler '{event_name}' of component '{component}': {e}")
             return True
 
         self._tc_scene.foreach_component_of_type("InputComponent", dispatch_to_component)

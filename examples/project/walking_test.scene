@@ -396,6 +396,15 @@
             "data": {
               "enabled": true
             }
+          },
+          {
+            "type": "BlinkActionComponent",
+            "data": {
+              "enabled": true,
+              "cooldown": 3.0,
+              "max_distance": 15.0,
+              "blink_time_lapse": 0.5
+            }
           }
         ],
         "children": [
@@ -9204,26 +9213,26 @@
   "editor": {
     "camera": {
       "position": [
-        2.242642402648926,
-        0.6812746524810791,
-        2.786130905151367
+        3.2954883575439453,
+        1.8424021005630493,
+        4.028426647186279
       ],
       "rotation": [
-        -0.11839093756644661,
-        -0.30681730727592,
-        0.8810592792913708,
-        0.3399724580501514
+        -0.11839094282720047,
+        -0.30681732332884687,
+        0.8810592747107129,
+        0.33997245360181905
       ],
-      "radius": 2.5
+      "radius": 4.5
     },
-    "selected_entity": "spikyMesh",
+    "selected_entity": "Glitch",
     "expanded_entities": [
+      "Glitch",
+      "EditorEntities",
       "editor_ui",
-      "camera",
       "Model",
       "Arthur",
-      "EditorEntities",
-      "Glitch"
+      "camera"
     ]
   },
   "resources": {

@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING
 from termin._native import log
 from termin.visualization.core.component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent
-from termin.visualization.platform.backends.base import MouseButton, Action
+from termin.visualization.platform.backends.base import MouseButton, Action as InputAction
 from termin.chronosquad.core import Vec3
 
 from termin.chronosquad.controllers.object_controller import ObjectController
+from termin.chronosquad.controllers.action_component import ClickInfo
+from termin.chronosquad.controllers.action_server_component import ActionServerComponent
 
 if TYPE_CHECKING:
     from .object_controller import ObjectController
@@ -61,7 +63,7 @@ class ClickController(InputComponent):
         """Handle mouse button events."""
         try:
             # Only on left click press
-            if event.button != MouseButton.LEFT or event.action != Action.PRESS:
+            if event.button != MouseButton.LEFT or event.action != InputAction.PRESS:
                 return
 
             self._ensure_initialized()
@@ -75,6 +77,12 @@ class ClickController(InputComponent):
             scene = event.viewport.scene
             hit = scene.raycast(ray)
             if hit is None:
+                return
+
+            # Check if ActionServerComponent is charged - handle action click first
+            server = ActionServerComponent.instance()
+            if server is not None and server.is_charged():
+                self._handle_action_click(hit, event, server)
                 return
 
             hitted_entity = hit.entity
@@ -151,3 +159,35 @@ class ClickController(InputComponent):
         )
 
         chrono_obj.move_to(target, self._move_speed)
+
+    def _handle_action_click(self, hit, event: MouseButtonEvent, server: ActionServerComponent) -> None:
+        """
+        Handle click when action is charged.
+
+        Creates ClickInfo and passes to ActionServerComponent.
+        """
+        # Get world position from hit
+        point = hit.collider_point
+        if not isinstance(point, Vec3):
+            point = Vec3(float(point[0]), float(point[1]), float(point[2]))
+
+        # Get hit normal
+        normal = hit.normal if hasattr(hit, 'normal') else Vec3(0, 0, 1)
+        if not isinstance(normal, Vec3):
+            normal = Vec3(float(normal[0]), float(normal[1]), float(normal[2]))
+
+        # Create ClickInfo
+        click_info = ClickInfo(
+            world_position=point,
+            screen_position=(event.x, event.y),
+            target_object=None,  # TODO: get ObjectOfTimeline from entity
+            hit_normal=normal,
+            frame_name="",  # TODO: get frame name for ReferencedPoint
+        )
+
+        # Apply to action server component
+        success = server.apply_click(click_info)
+        if success:
+            log.info("[ClickController] Action applied successfully")
+        else:
+            log.info("[ClickController] Action failed to apply")

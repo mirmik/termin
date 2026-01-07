@@ -9,7 +9,8 @@ Demonstrates:
 """
 
 from .timeline import Timeline, GAME_FREQUENCY
-from .object_of_timeline import ObjectOfTimeline, Vec3, Pose
+from .object_of_timeline import ObjectOfTimeline
+from termin.geombase import Vec3, Pose3, Quat
 from .animatronic import LinearMoveAnimatronic, CubicMoveAnimatronic
 
 
@@ -22,12 +23,12 @@ def test_basic_movement():
 
     # Create object at origin
     obj = ObjectOfTimeline("Player")
-    obj.set_position(Vec3(0, 0, 0))
+    obj.set_local_position(Vec3(0, 0, 0))
     tl.add_object(obj)
 
     # Add movement: move from (0,0,0) to (10,0,0) over 100 steps (1 second)
-    start_pose = Pose(Vec3(0, 0, 0), obj.pose.rotation)
-    end_pose = Pose(Vec3(10, 0, 0), obj.pose.rotation)
+    start_pose = Pose3(obj.local_pose.ang, Vec3(0, 0, 0))
+    end_pose = Pose3(obj.local_pose.ang, Vec3(10, 0, 0))
     move = LinearMoveAnimatronic(
         start_step=0,
         finish_step=100,
@@ -61,12 +62,12 @@ def test_smooth_movement():
 
     tl = Timeline("TestTimeline")
     obj = ObjectOfTimeline("Player")
-    obj.set_position(Vec3(0, 0, 0))
+    obj.set_local_position(Vec3(0, 0, 0))
     tl.add_object(obj)
 
     # Smooth movement
-    start_pose = Pose(Vec3(0, 0, 0), obj.pose.rotation)
-    end_pose = Pose(Vec3(10, 0, 0), obj.pose.rotation)
+    start_pose = Pose3(obj.local_pose.ang, Vec3(0, 0, 0))
+    end_pose = Pose3(obj.local_pose.ang, Vec3(10, 0, 0))
     move = CubicMoveAnimatronic(
         start_step=0,
         finish_step=100,
@@ -95,12 +96,12 @@ def test_timeline_copy():
 
     tl = Timeline("Main")
     obj = ObjectOfTimeline("Player")
-    obj.set_position(Vec3(0, 0, 0))
+    obj.set_local_position(Vec3(0, 0, 0))
     tl.add_object(obj)
 
     # Add movement
-    start_pose = Pose(Vec3(0, 0, 0), obj.pose.rotation)
-    end_pose = Pose(Vec3(10, 0, 0), obj.pose.rotation)
+    start_pose = Pose3(obj.local_pose.ang, Vec3(0, 0, 0))
+    end_pose = Pose3(obj.local_pose.ang, Vec3(10, 0, 0))
     move = LinearMoveAnimatronic(0, 100, start_pose, end_pose)
     obj.add_animatronic(move)
 
@@ -130,21 +131,21 @@ def test_multiple_animatronics():
 
     tl = Timeline("Test")
     obj = ObjectOfTimeline("Player")
-    obj.set_position(Vec3(0, 0, 0))
+    obj.set_local_position(Vec3(0, 0, 0))
     tl.add_object(obj)
 
     # First movement: 0->50, move from (0,0,0) to (5,0,0)
     move1 = LinearMoveAnimatronic(
         0, 50,
-        Pose(Vec3(0, 0, 0), obj.pose.rotation),
-        Pose(Vec3(5, 0, 0), obj.pose.rotation),
+        Pose3(obj.local_pose.ang, Vec3(0, 0, 0)),
+        Pose3(obj.local_pose.ang, Vec3(5, 0, 0)),
     )
 
     # Second movement: 50->100, move from (5,0,0) to (5,5,0)
     move2 = LinearMoveAnimatronic(
         50, 100,
-        Pose(Vec3(5, 0, 0), obj.pose.rotation),
-        Pose(Vec3(5, 5, 0), obj.pose.rotation),
+        Pose3(obj.local_pose.ang, Vec3(5, 0, 0)),
+        Pose3(obj.local_pose.ang, Vec3(5, 5, 0)),
     )
 
     obj.add_animatronic(move1)

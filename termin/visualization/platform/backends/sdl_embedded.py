@@ -25,6 +25,7 @@ def _translate_qt_key(qt_key: int) -> Key:
     """Translate Qt key code to our Key enum."""
     from PyQt6.QtCore import Qt
     mapping = {
+        # Special keys
         Qt.Key.Key_Escape: Key.ESCAPE,
         Qt.Key.Key_Space: Key.SPACE,
         Qt.Key.Key_Return: Key.ENTER,
@@ -36,10 +37,23 @@ def _translate_qt_key(qt_key: int) -> Key:
         Qt.Key.Key_Right: Key.RIGHT,
         Qt.Key.Key_Up: Key.UP,
         Qt.Key.Key_Down: Key.DOWN,
+        # Function keys
+        Qt.Key.Key_F1: Key.F1,
+        Qt.Key.Key_F2: Key.F2,
+        Qt.Key.Key_F3: Key.F3,
+        Qt.Key.Key_F4: Key.F4,
+        Qt.Key.Key_F5: Key.F5,
+        Qt.Key.Key_F6: Key.F6,
+        Qt.Key.Key_F7: Key.F7,
+        Qt.Key.Key_F8: Key.F8,
+        Qt.Key.Key_F9: Key.F9,
+        Qt.Key.Key_F10: Key.F10,
+        Qt.Key.Key_F11: Key.F11,
+        Qt.Key.Key_F12: Key.F12,
     }
     if qt_key in mapping:
         return mapping[qt_key]
-    # For ASCII keys (A-Z, 0-9, etc.) - try to map directly
+    # For ASCII keys (A-Z, 0-9, etc.) - Qt uses ASCII values
     if 0 <= qt_key < 128:
         try:
             return Key(qt_key)
