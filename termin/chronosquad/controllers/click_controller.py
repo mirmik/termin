@@ -1,6 +1,8 @@
 """ClickController - handles click input and issues movement commands."""
 
 from __future__ import annotations
+import traceback
+
 
 from typing import TYPE_CHECKING
 
@@ -98,6 +100,7 @@ class ClickController(InputComponent):
 
         except Exception as e:
             log.error(f"[ClickController] Error in on_mouse_button: {e}")
+            traceback.print_exc()
 
     def hit_actor(self, entity, hit) -> None:
         """Handle hit on actor layer."""

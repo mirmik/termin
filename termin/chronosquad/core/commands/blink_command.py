@@ -16,10 +16,11 @@ from termin.geombase import Vec3, Quat, Pose3
 from termin.chronosquad.core.commands.actor_command import ActorCommand
 from termin.chronosquad.core.animatronic import BlinkedMovingState
 from termin.chronosquad.core.timeline import GAME_FREQUENCY
+from termin.chronosquad.core.effects.blind_effect import BlindEffect
+from termin.chronosquad.core.timeline import Timeline
 
 if TYPE_CHECKING:
     from termin.chronosquad.core.object_of_timeline import ObjectOfTimeline
-    from termin.chronosquad.core.timeline import Timeline
 
 
 class BlinkCommand(ActorCommand):
@@ -92,6 +93,13 @@ class BlinkCommand(ActorCommand):
             finish_step=finish_step,
         )
         actor.add_animatronic(blink_anim)
+
+        blind_effect = BlindEffect(
+            start_step=local_step + 1,
+            finish_step=finish_step,
+            position=target_pos,
+        )
+        timeline.add_visual_effect_event(blind_effect)
 
         # Command finishes immediately (matches original C# returning true)
         return True

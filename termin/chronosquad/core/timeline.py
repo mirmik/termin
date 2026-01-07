@@ -40,6 +40,7 @@ class Timeline:
 
         # Global events (not tied to specific objects)
         self._global_events: EventLine[Timeline] = EventLine()
+        self._visual_effect_events: EventLine[Timeline] = EventLine()
 
         # Time boundaries
         self._last_positive_step: int = 0
@@ -132,10 +133,15 @@ class Timeline:
 
         # Promote global events
         self._global_events.promote(step, self)
+        self._visual_effect_events.promote(step, self)
 
     def add_global_event(self, event) -> None:
         """Add a global event (not tied to an object)."""
         self._global_events.add(event)
+
+    def add_visual_effect_event(self, event) -> None:
+        """Add a visual effect event."""
+        self._visual_effect_events.add(event)
 
     def set_reversed(self, value: bool) -> None:
         """Set whether this timeline is in reversed pass mode."""
@@ -159,6 +165,7 @@ class Timeline:
             obj.drop_to_current()
 
         self._global_events.drop_future()
+        self._visual_effect_events.drop_future()
         self._last_positive_step = self._current_step
         self._last_negative_step = self._current_step
 
@@ -183,6 +190,7 @@ class Timeline:
 
         # Copy global events
         new_tl._global_events = self._global_events.copy()
+        new_tl._visual_effect_events = self._visual_effect_events.copy()
 
         return new_tl
 
@@ -197,5 +205,6 @@ class Timeline:
             f"  Reversed: {self._is_reversed_pass}",
             f"  Objects: {len(self._objects_list)}",
             f"  Global events: {self._global_events.count()}",
+            f"  Visual effect events: {self._visual_effect_events.count()}",
         ]
         return "\n".join(lines)
