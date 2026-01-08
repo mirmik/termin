@@ -225,7 +225,6 @@ class PrefabEditController:
         from termin.editor.scene_manager import SceneMode
         if self._scene_manager.has_scene("editor"):
             self._scene_manager.set_mode("editor", SceneMode.EDITOR)
-            self._scene_manager.set_active("editor")
 
         self._editing = False
         self._prefab_path = None

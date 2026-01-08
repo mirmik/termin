@@ -20,6 +20,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
 
 import numpy as np
+from PyQt6.QtCore import QTimer, QElapsedTimer
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -78,7 +79,7 @@ class SceneManager:
         self,
         resource_manager: "ResourceManager",
         scene_factory: Optional[Callable[[], "Scene"]] = None,
-        on_scene_changed: Optional[Callable[[str, "Scene | None"], None]] = None,
+        on_request_render: Optional[Callable[[], None]] = None,
         # Editor state callbacks
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
@@ -94,7 +95,7 @@ class SceneManager:
         Args:
             resource_manager: Resource manager for loading assets.
             scene_factory: Factory for creating new scenes. If None, uses Scene().
-            on_scene_changed: Callback when scene changes (name, scene).
+            on_request_render: Callback to request viewport render (called by game loop).
             get_editor_camera_data: Callback to get editor camera state.
             set_editor_camera_data: Callback to set editor camera state.
             get_selected_entity_name: Callback to get selected entity name.
@@ -107,7 +108,12 @@ class SceneManager:
         """
         self._resource_manager = resource_manager
         self._scene_factory = scene_factory
-        self._on_scene_changed = on_scene_changed
+        self._on_request_render = on_request_render
+
+        # Game loop timer (auto-starts when GAME scenes exist)
+        self._game_timer = QTimer()
+        self._game_timer.timeout.connect(self._game_loop_tick)
+        self._elapsed_timer = QElapsedTimer()
 
         # Editor state callbacks
         self._get_editor_camera_data = get_editor_camera_data
@@ -124,12 +130,10 @@ class SceneManager:
         self._scenes: dict[str, "Scene"] = {}
         self._modes: dict[str, SceneMode] = {}
         self._paths: dict[str, str | None] = {}  # scene_name -> file_path
+        self._editor_data: dict[str, dict] = {}  # scene_name -> stored editor data
 
         # Resources initialized flag
         self._resources_initialized: bool = False
-
-        # Active scene name
-        self._active_scene_name: str | None = None
 
     @property
     def resource_manager(self) -> "ResourceManager":
@@ -140,25 +144,6 @@ class SceneManager:
     def scene_names(self) -> list[str]:
         """List of all scene names."""
         return list(self._scenes.keys())
-
-    @property
-    def active_scene_name(self) -> str | None:
-        """Name of the currently active scene."""
-        return self._active_scene_name
-
-    @property
-    def scene(self) -> "Scene | None":
-        """Currently active scene (for backwards compatibility)."""
-        if self._active_scene_name is None:
-            return None
-        return self._scenes.get(self._active_scene_name)
-
-    @property
-    def current_scene_path(self) -> str | None:
-        """Path of the currently active scene."""
-        if self._active_scene_name is None:
-            return None
-        return self._paths.get(self._active_scene_name)
 
     def initialize_resources(self) -> None:
         """
@@ -183,13 +168,12 @@ class SceneManager:
 
     # --- Scene Lifecycle ---
 
-    def create_scene(self, name: str, activate: bool = True) -> "Scene":
+    def create_scene(self, name: str) -> "Scene":
         """
         Create a new empty scene with given name.
 
         Args:
             name: Scene name (must be unique).
-            activate: If True, set as active scene.
 
         Returns:
             Created scene.
@@ -205,21 +189,15 @@ class SceneManager:
         self._modes[name] = SceneMode.INACTIVE
         self._paths[name] = None
 
-        if activate:
-            self._active_scene_name = name
-            self._modes[name] = SceneMode.EDITOR
-
-        self._notify_scene_changed(name, scene)
         return scene
 
-    def copy_scene(self, source_name: str, dest_name: str, activate: bool = False) -> "Scene":
+    def copy_scene(self, source_name: str, dest_name: str) -> "Scene":
         """
         Create a copy of existing scene.
 
         Args:
             source_name: Name of scene to copy.
             dest_name: Name for the copy (must be unique).
-            activate: If True, set copy as active scene.
 
         Returns:
             Copied scene.
@@ -244,21 +222,15 @@ class SceneManager:
         self._modes[dest_name] = SceneMode.INACTIVE
         self._paths[dest_name] = None  # Copy has no file path
 
-        if activate:
-            self._active_scene_name = dest_name
-            self._modes[dest_name] = SceneMode.EDITOR
-
-        self._notify_scene_changed(dest_name, dest)
         return dest
 
-    def load_scene(self, name: str, path: str, activate: bool = True) -> "Scene":
+    def load_scene(self, name: str, path: str) -> "Scene":
         """
         Load scene from file.
 
         Args:
             name: Name for the loaded scene.
             path: File path to load from.
-            activate: If True, set as active scene.
 
         Returns:
             Loaded scene.
@@ -285,47 +257,83 @@ class SceneManager:
         self._modes[name] = SceneMode.INACTIVE
         self._paths[name] = path
 
-        if activate:
-            self._active_scene_name = name
-            self._modes[name] = SceneMode.EDITOR
+        # Store editor data for later application (after editor entities are created)
+        self._editor_data[name] = self._extract_editor_data(data)
 
         # Notify editor start
         scene.notify_editor_start()
 
-        self._notify_scene_changed(name, scene)
-
-        # Restore editor state from file
-        self._restore_editor_state(data)
-
         return scene
 
-    def _restore_editor_state(self, data: dict) -> None:
-        """Restore editor state from loaded data."""
+    def _extract_editor_data(self, data: dict) -> dict:
+        """Extract editor data from loaded file in normalized form."""
         editor_data = data.get("editor", {})
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
 
-        # Camera
-        editor_camera_data = editor_data.get("camera")
-        if editor_camera_data is None and scene_data:
-            editor_camera_data = scene_data.get("editor_camera")
-        if editor_camera_data is not None and self._set_editor_camera_data is not None:
-            self._set_editor_camera_data(editor_camera_data)
+        result = {}
+
+        # Camera (check both locations for backwards compatibility)
+        camera_data = editor_data.get("camera")
+        if camera_data is None and scene_data:
+            camera_data = scene_data.get("editor_camera")
+        if camera_data is not None:
+            result["camera"] = camera_data
 
         # Selection
-        selected_name = editor_data.get("selected_entity")
-        if selected_name is None:
+        selected = editor_data.get("selected_entity")
+        if selected is None:
             editor_state = data.get("editor_state", {})
-            selected_name = editor_state.get("selected_entity_name")
+            selected = editor_state.get("selected_entity_name")
+        if selected:
+            result["selected_entity"] = selected
+
+        # Displays
+        displays = editor_data.get("displays")
+        if displays is not None:
+            result["displays"] = displays
+
+        # Expanded entities
+        expanded = editor_data.get("expanded_entities")
+        if expanded is not None:
+            result["expanded_entities"] = expanded
+
+        return result
+
+    def get_stored_editor_data(self, name: str) -> dict:
+        """
+        Get stored editor data for a scene.
+
+        Returns editor data that was stored when scene was loaded.
+        Used by EditorWindow to apply camera/selection/etc. after creating editor entities.
+        """
+        return self._editor_data.get(name, {})
+
+    def clear_stored_editor_data(self, name: str) -> None:
+        """Clear stored editor data for a scene (after it's been applied)."""
+        self._editor_data.pop(name, None)
+
+    def apply_editor_data(self, data: dict) -> None:
+        """
+        Apply editor data (camera, selection, displays, expanded entities).
+
+        Called by EditorWindow after editor entities are created.
+        """
+        # Camera
+        camera_data = data.get("camera")
+        if camera_data is not None and self._set_editor_camera_data is not None:
+            self._set_editor_camera_data(camera_data)
+
+        # Selection
+        selected_name = data.get("selected_entity")
         if selected_name and self._select_entity_by_name is not None:
             self._select_entity_by_name(selected_name)
 
-        # Displays
-        displays_data = editor_data.get("displays")
+        # Displays - always call to attach viewport_configs from scene
         if self._set_displays_data is not None:
-            self._set_displays_data(displays_data)
+            self._set_displays_data(data.get("displays"))
 
         # Expanded entities
-        expanded_entities = editor_data.get("expanded_entities")
+        expanded_entities = data.get("expanded_entities")
         if expanded_entities is not None and self._set_expanded_entities is not None:
             self._set_expanded_entities(expanded_entities)
 
@@ -435,10 +443,9 @@ class SceneManager:
         scene = self._scenes.pop(name)
         self._modes.pop(name, None)
         self._paths.pop(name, None)
+        self._editor_data.pop(name, None)
 
-        # Update active scene if closing active
-        if self._active_scene_name == name:
-            self._active_scene_name = None
+        self._update_timer_state()
 
         scene.destroy()
 
@@ -462,20 +469,6 @@ class SceneManager:
         """Check if scene exists."""
         return name in self._scenes
 
-    def set_active(self, name: str) -> None:
-        """
-        Set scene as active.
-
-        Args:
-            name: Scene name.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-        """
-        if name not in self._scenes:
-            raise KeyError(f"Scene '{name}' not found")
-        self._active_scene_name = name
-
     # --- Scene Mode ---
 
     def set_mode(self, name: str, mode: SceneMode) -> None:
@@ -492,6 +485,7 @@ class SceneManager:
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
         self._modes[name] = mode
+        self._update_timer_state()
 
     def get_mode(self, name: str) -> SceneMode:
         """
@@ -566,6 +560,42 @@ class SceneManager:
                 # Game mode: full simulation
                 scene.update(dt)
 
+    def before_render(self) -> None:
+        """
+        Call before_render on all non-INACTIVE scenes.
+
+        Updates bone matrices for skinning, etc.
+        """
+        for name, scene in self._scenes.items():
+            mode = self._modes.get(name, SceneMode.INACTIVE)
+            if mode != SceneMode.INACTIVE:
+                scene.before_render()
+
+    def _update_timer_state(self) -> None:
+        """Start or stop game timer based on whether GAME scenes exist."""
+        has_game_scenes = any(m == SceneMode.GAME for m in self._modes.values())
+
+        if has_game_scenes and not self._game_timer.isActive():
+            self._elapsed_timer.start()
+            self._game_timer.start(16)  # ~60 FPS
+        elif not has_game_scenes and self._game_timer.isActive():
+            self._game_timer.stop()
+
+    def _game_loop_tick(self) -> None:
+        """Called by game timer to update GAME scenes."""
+        elapsed_ms = self._elapsed_timer.restart()
+        dt = elapsed_ms / 1000.0
+
+        self.tick(dt)
+
+        if self._on_request_render is not None:
+            self._on_request_render()
+
+    @property
+    def is_game_mode(self) -> bool:
+        """True if any scene is in GAME mode."""
+        return any(m == SceneMode.GAME for m in self._modes.values())
+
     # --- Reset/New Scene ---
 
     def close_all_scenes(self) -> None:
@@ -575,7 +605,6 @@ class SceneManager:
             scene.destroy()
         self._modes.clear()
         self._paths.clear()
-        self._active_scene_name = None
 
     # --- Debug Info ---
 
@@ -584,7 +613,7 @@ class SceneManager:
         Get debug information about all scenes.
 
         Returns:
-            Dict with scene info: {name: {mode, entity_count, path, active}, ...}
+            Dict with scene info: {name: {mode, entity_count, path}, ...}
         """
         info = {}
         for name, scene in self._scenes.items():
@@ -593,13 +622,6 @@ class SceneManager:
                 "mode": mode.name,
                 "entity_count": len(list(scene.entities)),
                 "path": self._paths.get(name),
-                "active": name == self._active_scene_name,
             }
         return info
 
-    # --- Internal ---
-
-    def _notify_scene_changed(self, name: str, scene: "Scene | None") -> None:
-        """Notify callback about scene change."""
-        if self._on_scene_changed is not None:
-            self._on_scene_changed(name, scene)

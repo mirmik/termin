@@ -8,7 +8,7 @@ from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QStatusBar, QToolBar, QPushButton, QSizePolicy
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt, QEvent, pyqtSignal, QTimer, QElapsedTimer
+from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
@@ -88,7 +88,7 @@ class EditorWindow(QMainWindow):
         # Создаётся ПЕРВЫМ, до всех контроллеров
         self.scene_manager = SceneManager(
             resource_manager=self.resource_manager,
-            on_scene_changed=self._on_scene_changed,
+            on_request_render=self._request_viewport_update,
             get_editor_camera_data=self._get_editor_camera_data,
             set_editor_camera_data=self._set_editor_camera_data,
             get_selected_entity_name=self._get_selected_entity_name,
@@ -105,19 +105,16 @@ class EditorWindow(QMainWindow):
         if initial_scene is not None:
             self.scene_manager._scenes[self._editor_scene_name] = initial_scene
             self.scene_manager._modes[self._editor_scene_name] = SceneMode.EDITOR
-            self.scene_manager._active_scene_name = self._editor_scene_name
         else:
-            self.scene_manager.create_scene(self._editor_scene_name, activate=True)
+            self.scene_manager.create_scene(self._editor_scene_name)
+            self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
 
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
         self.editor_viewport: EditorViewportFeatures | None = None
         self.gizmo_manager: GizmoManager | None = None
         self.selection_manager: SelectionManager | None = None
-        # Game mode
-        self._game_timer: QTimer | None = None
-        self._game_elapsed_timer: QElapsedTimer | None = None
-        self._editor_scene_name: str | None = None  # e.g. "walking_test"
+        # Game mode scene name (editor scene name set above)
         self._game_scene_name: str | None = None    # e.g. "walking_test(game)"
         self.prefab_edit_controller: PrefabEditController | None = None
         self.project_browser = None
@@ -388,11 +385,6 @@ class EditorWindow(QMainWindow):
             on_hover_changed=self._on_hover_changed_internal,
         )
 
-        # --- Game mode timer ---
-        self._game_timer = QTimer()
-        self._game_timer.timeout.connect(self._game_tick)
-        self._game_elapsed_timer = QElapsedTimer()
-
         # --- PrefabEditController - режим изоляции для редактирования префабов ---
         self.prefab_edit_controller = PrefabEditController(
             scene_manager=self.scene_manager,
@@ -406,9 +398,8 @@ class EditorWindow(QMainWindow):
         self._scene_file_controller = SceneFileController(
             parent=self,
             get_scene_manager=lambda: self.scene_manager,
-            on_after_new=self._on_after_scene_new,
+            switch_to_scene=self.switch_to_scene,
             on_after_save=self._update_window_title,
-            on_after_load=self._update_window_title,
             get_project_path=self._get_project_path,
             get_editor_scene_name=lambda: self._editor_scene_name,
             set_editor_scene_name=self._set_editor_scene_name,
@@ -432,13 +423,17 @@ class EditorWindow(QMainWindow):
 
     @property
     def scene(self):
-        """Текущая сцена. Всегда получаем из SceneManager."""
-        return self.scene_manager.scene
+        """Текущая сцена редактора (или game сцена в game mode)."""
+        if self.is_game_mode and self._game_scene_name:
+            return self.scene_manager.get_scene(self._game_scene_name)
+        if self._editor_scene_name:
+            return self.scene_manager.get_scene(self._editor_scene_name)
+        return None
 
     @property
     def is_game_mode(self) -> bool:
         """True if currently in game mode."""
-        return self._game_scene_name is not None
+        return self.scene_manager.is_game_mode
 
     def _set_editor_scene_name(self, name: str | None) -> None:
         """Set editor scene name."""
@@ -648,6 +643,8 @@ class EditorWindow(QMainWindow):
         """
         Выделяет сущность по имени.
         """
+        if self.scene is None:
+            return
         # Ищем сущность в сцене
         entity = None
         for ent in self.scene.entities:
@@ -714,7 +711,9 @@ class EditorWindow(QMainWindow):
         """Restore expanded entities from saved names."""
         if self.scene_tree_controller is None:
             return
-        # Rebuild tree first - entities were added after initial rebuild
+        # Update scene reference (may have changed during load)
+        self.scene_tree_controller.set_scene(self.scene)
+        # Rebuild tree - entities were added after initial rebuild
         self.scene_tree_controller.rebuild()
         self.scene_tree_controller.set_expanded_entity_names(names)
 
@@ -1752,14 +1751,25 @@ class EditorWindow(QMainWindow):
             )
             log.info(f"[Editor] Migrated {migrated} .spec files to .meta")
 
-    # ----------- SceneManager колбэки -----------
+    # ----------- Scene switching -----------
 
-    def _on_scene_changed(self, scene_name: str, new_scene) -> None:
+    def switch_to_scene(self, name: str) -> None:
         """
-        Callback from SceneManager when scene changes.
-        Called on create, load, or switch to existing scene.
-        Serializes EditorEntities from old scene and restores them into new scene.
+        Switch editor to a different scene.
+
+        Activates the scene in SceneManager and sets up all editor UI.
+        Transfers EditorEntities from old scene to new scene.
         """
+        new_scene = self.scene_manager.get_scene(name)
+        if new_scene is None:
+            from termin._native import log
+            log.error(f"Cannot switch to scene '{name}': not found")
+            return
+
+        # Update editor scene name and mode
+        self._editor_scene_name = name
+        self.scene_manager.set_mode(name, SceneMode.EDITOR)
+
         # Clear undo stack
         self.undo_stack.clear()
         self._update_undo_redo_actions()
@@ -1790,7 +1800,7 @@ class EditorWindow(QMainWindow):
 
         # Update scene tree
         if self.scene_tree_controller is not None:
-            self.scene_tree_controller._scene = new_scene
+            self.scene_tree_controller.set_scene(new_scene)
             self.scene_tree_controller.rebuild()
 
         # Clear inspector and update scene for layer/flag names
@@ -1799,7 +1809,14 @@ class EditorWindow(QMainWindow):
         if self.inspector is not None:
             self.inspector.set_target(None)
 
+        # Apply stored editor data (camera position, selection, displays, etc.) from loaded scene
+        # Must be after all viewport/scene setup is complete
+        stored_data = self.scene_manager.get_stored_editor_data(name)
+        self.scene_manager.apply_editor_data(stored_data)
+        self.scene_manager.clear_stored_editor_data(name)
+
         self._request_viewport_update()
+        self._update_window_title()
 
     # ----------- сохранение/загрузка сцены -----------
 
@@ -1848,12 +1865,6 @@ class EditorWindow(QMainWindow):
 
             self._request_viewport_update()
 
-    def _on_after_scene_new(self) -> None:
-        """Callback after new scene created."""
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.rebuild()
-        self._request_viewport_update()
-
     # ----------- game mode -----------
 
     def _toggle_game_mode(self) -> None:
@@ -1878,16 +1889,11 @@ class EditorWindow(QMainWindow):
         game_scene = self.scene_manager.copy_scene(
             self._editor_scene_name,
             self._game_scene_name,
-            activate=False
         )
 
-        # Устанавливаем режимы
+        # Устанавливаем режимы (таймер запустится автоматически)
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
         self.scene_manager.set_mode(self._game_scene_name, SceneMode.GAME)
-
-        # Запускаем игровой цикл
-        self._game_elapsed_timer.start()
-        self._game_timer.start(16)  # ~60 FPS
 
         self._on_game_mode_changed(True, game_scene, camera_names)
 
@@ -1896,62 +1902,19 @@ class EditorWindow(QMainWindow):
         if not self.is_game_mode:
             return
 
-        # Останавливаем игровой цикл
-        self._game_timer.stop()
-
         # Сохраняем имена камер ДО уничтожения game scene
         camera_names = self._get_viewport_camera_names()
 
         # Возвращаемся к editor сцене
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
+        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
 
-        # Уведомляем о переключении на editor сцену
-        self.scene_manager._notify_scene_changed(self._editor_scene_name, editor_scene)
-
-        # Закрываем game сцену
-        self.scene_manager.close_scene(self._game_scene_name)
-        self._game_scene_name = None
-
+        # Сначала переключаем viewports на editor сцену
         self._on_game_mode_changed(False, editor_scene, camera_names)
 
-    def _game_tick(self) -> None:
-        """Вызывается таймером для обновления сцены в game mode."""
-        if not self.is_game_mode:
-            return
-
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-        profiler.begin_frame()
-
-        # Вычисляем dt в секундах
-        elapsed_ms = self._game_elapsed_timer.restart()
-        dt = elapsed_ms / 1000.0
-
-        # Обновляем сцены через SceneManager
-        with profiler.section("Components"):
-            self.scene_manager.tick(dt)
-
-        # Обновляем FPS
-        self._update_game_fps(dt)
-
-        # Перерисовываем viewport
-        self._request_viewport_update()
-
-        # Завершаем frame после рендера
-        profiler.end_frame()
-
-    def _update_game_fps(self, dt: float) -> None:
-        """Обновляет FPS счётчик в game mode."""
-        if dt <= 0.0:
-            return
-        fps_instant = 1.0 / dt
-        if self._fps_smooth is None:
-            self._fps_smooth = fps_instant
-        else:
-            alpha = self._fps_alpha
-            self._fps_smooth = self._fps_smooth * (1.0 - alpha) + fps_instant * alpha
-        self._update_status_bar()
+        # Теперь безопасно закрываем game сцену
+        self.scene_manager.close_scene(self._game_scene_name)
+        self._game_scene_name = None
 
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""
@@ -1965,7 +1928,7 @@ class EditorWindow(QMainWindow):
             QMessageBox.warning(self, "No Project", "Please open a project first.")
             return
 
-        scene_path = self.scene_manager.current_scene_path
+        scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
         if scene_path is None:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "No Scene", "Please save the scene first.")
@@ -2008,9 +1971,10 @@ class EditorWindow(QMainWindow):
         """Колбэк при изменении игрового режима."""
         from termin.visualization.core.camera import CameraComponent
 
-        # Обновляем world mode для всех viewport'ов
+        # Обновляем world mode и сцену для всех viewport'ов с EditorViewportFeatures
         for editor_features in self._editor_features.values():
             editor_features.set_world_mode("game" if is_playing else "editor")
+            editor_features.set_scene(scene)
 
         # Обновляем viewports у display'ов без EditorViewportFeatures
         if self._rendering_controller is not None:
@@ -2154,7 +2118,7 @@ class EditorWindow(QMainWindow):
             parts.append(f"[Prefab: {prefab_name}]")
         elif self.scene_manager is not None:
             # Добавляем имя сцены
-            scene_path = self.scene_manager.current_scene_path
+            scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
             if scene_path is not None:
                 scene_name = Path(scene_path).stem
                 parts.append(f"[{scene_name}]")
@@ -2271,7 +2235,7 @@ class EditorWindow(QMainWindow):
         Main tick function called from render loop.
 
         Handles rendering through unified RenderingController.
-        Note: Game mode updates are handled by _game_tick via QTimer.
+        Note: Game mode updates are handled by SceneManager's internal timer.
         """
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
@@ -2299,8 +2263,7 @@ class EditorWindow(QMainWindow):
         # Render all displays through RenderingController (unified render path)
         if needs_render and self._rendering_controller is not None:
             # Call before_render on all components (e.g. SkeletonController updates bone matrices)
-            if self.scene is not None:
-                self.scene.before_render()
+            self.scene_manager.before_render()
 
             self._rendering_controller.render_all_displays()
 

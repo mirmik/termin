@@ -5852,7 +5852,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "ef4c078e-95e8-4a3f-9bcf-2cf382cf3b83",
+                              "uuid": "80aea516-54b5-4c7c-8af1-779d36e9b023",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6246,7 +6246,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "ef4c078e-95e8-4a3f-9bcf-2cf382cf3b83",
+                              "uuid": "80aea516-54b5-4c7c-8af1-779d36e9b023",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6467,7 +6467,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "ef4c078e-95e8-4a3f-9bcf-2cf382cf3b83",
+                              "uuid": "80aea516-54b5-4c7c-8af1-779d36e9b023",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9603,19 +9603,18 @@
   "editor": {
     "camera": {
       "position": [
-        2.8279759883880615,
-        0.9290897846221924,
-        2.823256254196167
+        2.4355151653289795,
+        2.779099225997925,
+        2.4614951610565186
       ],
       "rotation": [
-        -0.1189182751993793,
-        -0.2670948283614068,
-        0.8736278757725038,
-        0.3889641772186972
+        -0.04491369695126943,
+        -0.16417684341960528,
+        0.9504825048406211,
+        0.2600225603728311
       ],
-      "radius": 2.5
+      "radius": 3.5
     },
-    "selected_entity": "editor_ui",
     "expanded_entities": [
       "EditorEntities",
       "camera"

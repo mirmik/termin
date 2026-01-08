@@ -76,7 +76,7 @@ class SceneManagerViewer(QWidget):
         left_layout.addWidget(scenes_label)
 
         self._scenes_tree = QTreeWidget()
-        self._scenes_tree.setHeaderLabels(["Name", "Mode", "Entities", "Active"])
+        self._scenes_tree.setHeaderLabels(["Name", "Mode", "Entities"])
         self._scenes_tree.setAlternatingRowColors(True)
         self._scenes_tree.itemClicked.connect(self._on_scene_clicked)
         left_layout.addWidget(self._scenes_tree)
@@ -138,12 +138,10 @@ class SceneManagerViewer(QWidget):
 
         mode = self._scene_manager.get_mode(scene_name)
         path = self._scene_manager.get_scene_path(scene_name)
-        is_active = scene_name == self._scene_manager.active_scene_name
 
         lines = [
             f"Name: {scene_name}",
             f"Mode: {mode.name}",
-            f"Active: {'Yes' if is_active else 'No'}",
             f"Path: {path or '(unsaved)'}",
             f"",
             f"=== Entities ===",
@@ -177,7 +175,6 @@ class SceneManagerViewer(QWidget):
         self._scenes_tree.clear()
 
         debug_info = self._scene_manager.get_debug_info()
-        active_name = self._scene_manager.active_scene_name
 
         # Color brushes for different modes
         mode_colors = {
@@ -189,7 +186,6 @@ class SceneManagerViewer(QWidget):
         for name, info in sorted(debug_info.items()):
             mode = info["mode"]
             entity_count = info["entity_count"]
-            is_active = info["active"]
             path = info.get("path")
 
             # Show file name if available, otherwise slot name
@@ -204,7 +200,6 @@ class SceneManagerViewer(QWidget):
                 display_name,
                 mode,
                 str(entity_count),
-                "*" if is_active else "",
             ])
             # Store slot name for click handler
             item.setData(0, Qt.ItemDataRole.UserRole, name)
@@ -213,16 +208,10 @@ class SceneManagerViewer(QWidget):
             if mode in mode_colors:
                 item.setForeground(1, mode_colors[mode])
 
-            # Bold active scene
-            if is_active:
-                font = item.font(0)
-                font.setBold(True)
-                item.setFont(0, font)
-
             self._scenes_tree.addTopLevelItem(item)
 
         # Resize columns
-        for i in range(4):
+        for i in range(3):
             self._scenes_tree.resizeColumnToContents(i)
 
         # Update details if scene selected
@@ -232,9 +221,10 @@ class SceneManagerViewer(QWidget):
         # Update status
         total_scenes = len(debug_info)
         total_entities = sum(info["entity_count"] for info in debug_info.values())
+        game_scenes = sum(1 for info in debug_info.values() if info["mode"] == "GAME")
         self._status_label.setText(
             f"Scenes: {total_scenes} | "
             f"Total entities: {total_entities} | "
-            f"Active: {active_name or '(none)'}"
+            f"Game scenes: {game_scenes}"
         )
 

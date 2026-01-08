@@ -34,9 +34,8 @@ class SceneFileController:
         self,
         parent: QWidget,
         get_scene_manager: Callable[[], "SceneManager | None"],
-        on_after_new: Callable[[], None],
+        switch_to_scene: Callable[[str], None],
         on_after_save: Callable[[], None],
-        on_after_load: Callable[[], None],
         get_project_path: Callable[[], str | None] | None = None,
         get_editor_scene_name: Callable[[], str | None] | None = None,
         set_editor_scene_name: Callable[[str | None], None] | None = None,
@@ -44,9 +43,8 @@ class SceneFileController:
     ):
         self._parent = parent
         self._get_scene_manager = get_scene_manager
-        self._on_after_new = on_after_new
+        self._switch_to_scene = switch_to_scene
         self._on_after_save = on_after_save
-        self._on_after_load = on_after_load
         self._get_project_path = get_project_path
         self._get_editor_scene_name = get_editor_scene_name
         self._set_editor_scene_name = set_editor_scene_name
@@ -80,12 +78,13 @@ class SceneFileController:
 
             # Create new untitled scene
             new_scene_name = "untitled"
-            sm.create_scene(new_scene_name, activate=True)
+            sm.create_scene(new_scene_name)
 
             if self._set_editor_scene_name is not None:
                 self._set_editor_scene_name(new_scene_name)
 
-        self._on_after_new()
+            self._switch_to_scene(new_scene_name)
+
         return True
 
     def save_scene(self) -> bool:
@@ -99,7 +98,8 @@ class SceneFileController:
         if sm is None:
             return False
 
-        current_path = sm.current_scene_path
+        scene_name = self._get_editor_scene_name() if self._get_editor_scene_name else None
+        current_path = sm.get_scene_path(scene_name) if scene_name else None
         if current_path is not None:
             return self.save_scene_to_file(current_path)
         else:
@@ -217,15 +217,16 @@ class SceneFileController:
             if old_scene_name and sm.has_scene(old_scene_name):
                 sm.close_scene(old_scene_name)
 
-            sm.load_scene(new_scene_name, file_path, activate=True)
-
-            # Update editor scene name
+            # Set editor scene name BEFORE load (load triggers _restore_editor_state)
             if self._set_editor_scene_name is not None:
                 self._set_editor_scene_name(new_scene_name)
 
+            sm.load_scene(new_scene_name, file_path)
+
+            self._switch_to_scene(new_scene_name)
+
             EditorSettings.instance().set_last_scene_path(file_path)
             log.info(f"Scene loaded: {file_path}")
-            self._on_after_load()
             return True
 
         except Exception as e:
@@ -250,7 +251,6 @@ class SceneFileController:
         last_scene_path = settings.get_last_scene_path()
 
         if last_scene_path is None:
-            self._on_after_load()  # Update title even without scene
             return False
 
         try:
@@ -268,17 +268,16 @@ class SceneFileController:
             if old_scene_name and sm.has_scene(old_scene_name):
                 sm.close_scene(old_scene_name)
 
-            sm.load_scene(new_scene_name, str(last_scene_path), activate=True)
-
-            # Update editor scene name
+            # Set editor scene name BEFORE load (load triggers _restore_editor_state)
             if self._set_editor_scene_name is not None:
                 self._set_editor_scene_name(new_scene_name)
 
-            self._on_after_load()
+            sm.load_scene(new_scene_name, str(last_scene_path))
+
+            self._switch_to_scene(new_scene_name)
             return True
 
         except Exception as e:
             import traceback
             log.warning(f"Could not restore last scene: {e}\n{traceback.format_exc()}")
-            self._on_after_load()  # Update title
             return False

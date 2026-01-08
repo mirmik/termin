@@ -184,6 +184,9 @@ class EditorCameraManager:
         Returns:
             Serialized data dict, or None if no editor entities.
         """
+        # Check if scene is valid (not None and not destroyed)
+        if self._scene is None or self._scene._tc_scene is None:
+            return None
         if self.editor_entities is None:
             return None
 
