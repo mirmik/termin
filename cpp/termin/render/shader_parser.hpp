@@ -70,7 +70,8 @@ struct ShaderStage {
  * Shader phase: stages + render state flags + uniform properties.
  */
 struct ShaderPhase {
-    std::string phase_mark;
+    std::string phase_mark;  // Primary/default mark
+    std::vector<std::string> available_marks;  // All available marks (for user choice)
     int priority = 0;
 
     // Render state flags (null = not specified, use default)
@@ -86,7 +87,12 @@ struct ShaderPhase {
     std::vector<MaterialProperty> uniforms;
 
     ShaderPhase() = default;
-    ShaderPhase(std::string mark) : phase_mark(std::move(mark)) {}
+    ShaderPhase(std::string mark) : phase_mark(std::move(mark)) {
+        available_marks.push_back(phase_mark);
+    }
+    ShaderPhase(std::vector<std::string> marks)
+        : phase_mark(marks.empty() ? "" : marks[0]),
+          available_marks(std::move(marks)) {}
 };
 
 
@@ -129,6 +135,8 @@ public:
  *
  * Supported directives:
  *   @program <name>
+ *
+ *   // Traditional multi-phase (explicit):
  *   @phase <mark>
  *   @priority <int>
  *   @glDepthMask <bool>
@@ -139,6 +147,13 @@ public:
  *   @stage <stage_name>
  *   @endstage
  *   @endphase
+ *
+ *   // Shared stages multi-phase (new syntax):
+ *   @phases <mark1>, <mark2>, ...     // Declares phases with shared code
+ *   @settings <mark>                  // Per-phase render state overrides
+ *   @endsettings                      // Optional end of settings block
+ *   @property ...                     // Shared properties (outside @phase)
+ *   @stage vertex / @stage fragment   // Shared stages (outside @phase)
  */
 ShaderMultyPhaseProgramm parse_shader_text(const std::string& text);
 

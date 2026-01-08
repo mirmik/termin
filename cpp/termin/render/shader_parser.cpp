@@ -190,7 +190,10 @@ MaterialProperty parse_property_directive(const std::string& line) {
         name = parts[1];
     }
 
-    // Validate type
+    // Validate type (Texture2D is alias for Texture)
+    if (property_type == "Texture2D") {
+        property_type = "Texture";
+    }
     static const std::vector<std::string> valid_types = {
         "Float", "Int", "Bool", "Vec2", "Vec3", "Vec4", "Color", "Texture"
     };
@@ -218,24 +221,37 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     std::string program_name;
     std::vector<ShaderPhase> phases;
 
+    // For @phases mode (shared stages)
+    std::vector<std::string> declared_phases;  // From @phases directive
+    std::unordered_map<std::string, ShaderStage> shared_stages;
+    std::vector<MaterialProperty> shared_uniforms;
+    std::unordered_map<std::string, ShaderPhase> phase_settings;  // Per-phase overrides
+
     ShaderPhase* current_phase = nullptr;
+    std::string current_settings_phase;  // Which phase @settings applies to
     std::string current_stage_name;
     std::vector<std::string> current_stage_lines;
+    bool in_shared_stage = false;  // Stage outside @phase (for @phases mode)
 
     auto close_current_stage = [&]() {
         if (current_stage_name.empty()) return;
-        if (!current_phase) {
-            throw std::runtime_error("@endstage outside @phase");
-        }
 
         std::string source;
         for (const auto& l : current_stage_lines) {
             source += l;
         }
 
-        current_phase->stages[current_stage_name] = ShaderStage(current_stage_name, source);
+        if (in_shared_stage) {
+            // Shared stage (for @phases mode)
+            shared_stages[current_stage_name] = ShaderStage(current_stage_name, source);
+        } else if (current_phase) {
+            // Traditional @phase mode
+            current_phase->stages[current_stage_name] = ShaderStage(current_stage_name, source);
+        }
+
         current_stage_name.clear();
         current_stage_lines.clear();
+        in_shared_stage = false;
     };
 
     auto close_current_phase = [&]() {
@@ -270,6 +286,14 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
                 close_current_stage();
                 // Fall through to handle @endphase below
             }
+            else if (starts_with(line, "@settings ")) {
+                close_current_stage();
+                // Fall through to handle @settings below
+            }
+            else if (starts_with(line, "@endsettings")) {
+                close_current_stage();
+                // Fall through
+            }
             else {
                 current_stage_lines.push_back(line_with_newline);
                 continue;
@@ -293,65 +317,126 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
                 program_name += " " + parts[i];
             }
         }
+        else if (directive == "@phases") {
+            // Parse comma-separated phase names: @phases opaque, transparent
+            std::string rest = line.substr(7);  // len("@phases") = 7
+            std::string phase_name;
+            for (char c : rest) {
+                if (c == ',' || c == ' ' || c == '\t') {
+                    std::string trimmed = trim(phase_name);
+                    if (!trimmed.empty()) {
+                        declared_phases.push_back(trimmed);
+                        phase_name.clear();
+                    }
+                } else {
+                    phase_name += c;
+                }
+            }
+            std::string trimmed = trim(phase_name);
+            if (!trimmed.empty()) {
+                declared_phases.push_back(trimmed);
+            }
+        }
+        else if (directive == "@settings") {
+            if (parts.size() < 2) {
+                throw std::runtime_error("@settings without phase name");
+            }
+            current_settings_phase = parts[1];
+            // Initialize settings for this phase if not exists
+            if (phase_settings.find(current_settings_phase) == phase_settings.end()) {
+                phase_settings[current_settings_phase] = ShaderPhase(current_settings_phase);
+            }
+        }
+        else if (directive == "@endsettings") {
+            current_settings_phase.clear();
+        }
         else if (directive == "@phase") {
             if (parts.size() < 2) {
                 throw std::runtime_error("@phase without mark");
             }
             close_current_phase();
-            current_phase = new ShaderPhase(parts[1]);
+
+            // Parse comma-separated marks: @phase mark1, mark2
+            std::string rest = line.substr(6);  // len("@phase") = 6
+            std::vector<std::string> marks;
+            std::string mark_name;
+            for (char c : rest) {
+                if (c == ',' || c == ' ' || c == '\t') {
+                    std::string trimmed = trim(mark_name);
+                    if (!trimmed.empty()) {
+                        marks.push_back(trimmed);
+                        mark_name.clear();
+                    }
+                } else {
+                    mark_name += c;
+                }
+            }
+            std::string trimmed = trim(mark_name);
+            if (!trimmed.empty()) {
+                marks.push_back(trimmed);
+            }
+
+            current_phase = new ShaderPhase(std::move(marks));
         }
         else if (directive == "@endphase") {
             close_current_phase();
         }
         else if (directive == "@priority") {
-            if (!current_phase) {
-                throw std::runtime_error("@priority outside @phase");
+            if (!current_settings_phase.empty()) {
+                if (parts.size() < 2) throw std::runtime_error("@priority without value");
+                phase_settings[current_settings_phase].priority = std::stoi(parts[1]);
+            } else if (current_phase) {
+                if (parts.size() < 2) throw std::runtime_error("@priority without value");
+                current_phase->priority = std::stoi(parts[1]);
+            } else {
+                throw std::runtime_error("@priority outside @phase or @settings");
             }
-            if (parts.size() < 2) {
-                throw std::runtime_error("@priority without value");
-            }
-            current_phase->priority = std::stoi(parts[1]);
         }
         else if (directive == "@glDepthMask") {
-            if (!current_phase) {
-                throw std::runtime_error("@glDepthMask outside @phase");
+            if (parts.size() < 2) throw std::runtime_error("@glDepthMask without value");
+            bool val = parse_bool(parts[1]);
+            if (!current_settings_phase.empty()) {
+                phase_settings[current_settings_phase].gl_depth_mask = val;
+            } else if (current_phase) {
+                current_phase->gl_depth_mask = val;
+            } else {
+                throw std::runtime_error("@glDepthMask outside @phase or @settings");
             }
-            if (parts.size() < 2) {
-                throw std::runtime_error("@glDepthMask without value");
-            }
-            current_phase->gl_depth_mask = parse_bool(parts[1]);
         }
         else if (directive == "@glDepthTest") {
-            if (!current_phase) {
-                throw std::runtime_error("@glDepthTest outside @phase");
+            if (parts.size() < 2) throw std::runtime_error("@glDepthTest without value");
+            bool val = parse_bool(parts[1]);
+            if (!current_settings_phase.empty()) {
+                phase_settings[current_settings_phase].gl_depth_test = val;
+            } else if (current_phase) {
+                current_phase->gl_depth_test = val;
+            } else {
+                throw std::runtime_error("@glDepthTest outside @phase or @settings");
             }
-            if (parts.size() < 2) {
-                throw std::runtime_error("@glDepthTest without value");
-            }
-            current_phase->gl_depth_test = parse_bool(parts[1]);
         }
         else if (directive == "@glBlend") {
-            if (!current_phase) {
-                throw std::runtime_error("@glBlend outside @phase");
+            if (parts.size() < 2) throw std::runtime_error("@glBlend without value");
+            bool val = parse_bool(parts[1]);
+            if (!current_settings_phase.empty()) {
+                phase_settings[current_settings_phase].gl_blend = val;
+            } else if (current_phase) {
+                current_phase->gl_blend = val;
+            } else {
+                throw std::runtime_error("@glBlend outside @phase or @settings");
             }
-            if (parts.size() < 2) {
-                throw std::runtime_error("@glBlend without value");
-            }
-            current_phase->gl_blend = parse_bool(parts[1]);
         }
         else if (directive == "@glCull") {
-            if (!current_phase) {
-                throw std::runtime_error("@glCull outside @phase");
+            if (parts.size() < 2) throw std::runtime_error("@glCull without value");
+            bool val = parse_bool(parts[1]);
+            if (!current_settings_phase.empty()) {
+                phase_settings[current_settings_phase].gl_cull = val;
+            } else if (current_phase) {
+                current_phase->gl_cull = val;
+            } else {
+                throw std::runtime_error("@glCull outside @phase or @settings");
             }
-            if (parts.size() < 2) {
-                throw std::runtime_error("@glCull without value");
-            }
-            current_phase->gl_cull = parse_bool(parts[1]);
         }
         else if (directive == "@stage") {
-            if (!current_phase) {
-                throw std::runtime_error("@stage outside @phase");
-            }
             if (parts.size() < 2) {
                 throw std::runtime_error("@stage without name");
             }
@@ -360,16 +445,21 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
             }
             current_stage_name = parts[1];
             current_stage_lines.clear();
+
+            // If inside @phase, it's phase-specific; otherwise shared
+            in_shared_stage = (current_phase == nullptr);
         }
         else if (directive == "@endstage") {
             close_current_stage();
         }
         else if (directive == "@property") {
-            if (!current_phase) {
-                throw std::runtime_error("@property outside @phase");
-            }
             auto prop = parse_property_directive(line);
-            current_phase->uniforms.push_back(std::move(prop));
+            if (current_phase) {
+                current_phase->uniforms.push_back(std::move(prop));
+            } else {
+                // Shared property (for @phases mode)
+                shared_uniforms.push_back(std::move(prop));
+            }
         }
         else {
             throw std::runtime_error("Unknown directive: " + directive);
@@ -377,11 +467,45 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     }
 
     // Close anything remaining
-    if (!current_stage_name.empty()) {
-        close_current_stage();
-    }
+    close_current_stage();
     if (current_phase) {
         close_current_phase();
+    }
+
+    // If @phases was used, generate ONE phase with all marks as available choices
+    if (!declared_phases.empty()) {
+        ShaderPhase phase(declared_phases);  // Constructor sets phase_mark to first, available_marks to all
+
+        // Copy shared stages
+        phase.stages = shared_stages;
+
+        // Copy shared uniforms
+        phase.uniforms = shared_uniforms;
+
+        // Apply default opaque settings (will be overridden by @settings for selected mark)
+        phase.gl_depth_test = true;
+        phase.gl_depth_mask = true;
+        phase.gl_blend = false;
+        phase.gl_cull = true;
+        phase.priority = 0;
+
+        // Apply settings for the default (first) phase mark
+        auto it = phase_settings.find(phase.phase_mark);
+        if (it != phase_settings.end()) {
+            const auto& overrides = it->second;
+            if (overrides.gl_depth_test.has_value())
+                phase.gl_depth_test = overrides.gl_depth_test;
+            if (overrides.gl_depth_mask.has_value())
+                phase.gl_depth_mask = overrides.gl_depth_mask;
+            if (overrides.gl_blend.has_value())
+                phase.gl_blend = overrides.gl_blend;
+            if (overrides.gl_cull.has_value())
+                phase.gl_cull = overrides.gl_cull;
+            if (overrides.priority != 0)
+                phase.priority = overrides.priority;
+        }
+
+        phases.push_back(std::move(phase));
     }
 
     return ShaderMultyPhaseProgramm(program_name, std::move(phases));

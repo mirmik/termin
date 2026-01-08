@@ -1,0 +1,16 @@
+{
+  "uuid": "0ac62d42-1e3c-4bb3-90f9-2418c0f53ec2",
+  "shader": "DefaultShader",
+  "phase_marks": [
+    "opaque"
+  ],
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_shininess": 32.0
+  }
+}

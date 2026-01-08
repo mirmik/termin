@@ -9241,6 +9241,150 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "00000000000000e0",
+        "name": "entity2",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.497128963470459,
+            -2.206026315689087,
+            1.1354347467422485
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "997249bf-9de4-40fc-829c-08146e5bed0e",
+                "name": "BlindEffectMaterial"
+              },
+              "cast_shadow": true
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "00000000000000e1",
+        "name": "entity3",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -2.9766578674316406,
+            -3.390488624572754,
+            1.3829948902130127
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "0ac62d42-1e3c-4bb3-90f9-2418c0f53ec2",
+                "name": "SomeMaterial"
+              },
+              "cast_shadow": true
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "00000000000000e2",
+        "name": "entity4",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            2.295976400375366,
+            -1.7307894229888916,
+            1.1729645729064941
+          ],
+          "rotation": [
+            -0.09710317850112915,
+            0,
+            0,
+            0.9952743053436279
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc",
+                "name": "TransparentMaterial"
+              },
+              "cast_shadow": true
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -9304,18 +9448,19 @@
   "editor": {
     "camera": {
       "position": [
-        6.380853652954102,
-        5.287445545196533,
-        7.026073455810547
+        4.116652011871338,
+        -7.61079216003418,
+        3.717428207397461
       ],
       "rotation": [
-        -0.10895569983202906,
-        -0.28383934037355096,
-        0.8893861207191479,
-        0.3414032990505006
+        -0.13108322514768062,
+        -0.04133038760143337,
+        0.29785197445526507,
+        0.9446656490307552
       ],
-      "radius": 10.0
-    }
+      "radius": 9.0
+    },
+    "selected_entity": "entity2"
   },
   "resources": {
     "textures": {

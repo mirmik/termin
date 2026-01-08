@@ -1,17 +1,20 @@
 {
   "uuid": "997249bf-9de4-40fc-829c-08146e5bed0e",
-  "shader": "BlindEffect",
+  "shader": "AdvancedPBR",
+  "phase_marks": [
+    "transparent"
+  ],
   "uniforms": {
+    "u_color": [
+      0.737087070941925,
+      0.11743343621492386,
+      0.11743343621492386,
+      0.6589999794960022
+    ],
+    "u_metallic": 0.0,
+    "u_roughness": 0.5,
     "u_subsurface": 0.0,
     "u_time": 0.0,
-    "u_metallic": 0.0,
-    "u_color": [
-      1.0,
-      1.0,
-      1.0,
-      1.0
-    ],
-    "u_roughness": 0.5,
     "u_shininess": 32.0
   }
 }

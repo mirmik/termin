@@ -2,15 +2,15 @@
   "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
   "shader": "StandardShader",
   "uniforms": {
+    "u_metallic": 0.0,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_metallic": 0.0,
-    "u_shininess": 32.0,
     "u_ambient": 0.10000000149011612,
+    "u_shininess": 32.0,
     "u_roughness": 0.4000000059604645,
     "u_subsurface": 0.0
   },

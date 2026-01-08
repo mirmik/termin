@@ -52,6 +52,9 @@ public:
     // Phase identifier ("opaque", "shadow", "transparent", etc.)
     std::string phase_mark = "opaque";
 
+    // Available marks for user choice (if >1, user can select in inspector)
+    std::vector<std::string> available_marks;
+
     // Priority within phase (lower = rendered earlier)
     int priority = 0;
 
@@ -138,6 +141,11 @@ public:
 
     // Shader name (for editor display)
     std::string shader_name = "DefaultShader";
+
+    // Active phase mark (empty = use all phases, non-empty = use only this phase)
+    // Used when shader has multiple phases (e.g., opaque, transparent) and user
+    // wants to force a specific rendering mode.
+    std::string active_phase_mark;
 
     // All phases of this material
     std::vector<MaterialPhase> phases;

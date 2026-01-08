@@ -390,6 +390,7 @@ class MaterialInspector(QWidget):
         self._material: Material | None = None
         self._shader_program: ShaderMultyPhaseProgramm | None = None
         self._uniform_widgets: Dict[str, QWidget] = {}
+        self._phase_combos: List[tuple[int, QComboBox]] = []
 
         self._setup_ui()
 
@@ -491,16 +492,22 @@ class MaterialInspector(QWidget):
         Returns:
             True если сохранение успешно
         """
+        from termin._native import log
+
         if self._material is None:
+            log.warning("[MaterialInspector] save_material_file: material is None")
             return False
 
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
         asset = rm.get_material_asset(self._material.name)
 
+        log.info(f"[MaterialInspector] save_material_file: material.name={self._material.name}, asset={asset}")
+
         # Определяем путь для сохранения
         if path is None:
             path = asset.source_path if asset else self._material.source_path
+            log.info(f"[MaterialInspector] save_material_file: resolved path={path}")
 
         if path is None:
             # Открываем диалог выбора файла
@@ -522,10 +529,13 @@ class MaterialInspector(QWidget):
 
         if asset is not None:
             # Use asset's save method (handles UUID automatically)
+            log.info(f"[MaterialInspector] saving via asset.save_to_file({path})")
             if asset.save_to_file(path):
                 self._material.source_path = str(path)
+                log.info("[MaterialInspector] save SUCCESS")
                 return True
             else:
+                log.error(f"[MaterialInspector] asset.save_to_file returned False")
                 QMessageBox.critical(
                     self,
                     "Error Saving Material",
@@ -534,9 +544,10 @@ class MaterialInspector(QWidget):
                 return False
         else:
             # No asset - save directly (shouldn't normally happen)
+            log.warning("[MaterialInspector] No asset found, saving directly")
             try:
-                from termin.visualization.core.material_asset import save_material_file
-                save_material_file(self._material, path)
+                from termin.assets.material_asset import _save_material_file
+                _save_material_file(self._material, path, uuid="")
                 self._material.source_path = str(path)
                 return True
             except Exception as e:
@@ -553,6 +564,7 @@ class MaterialInspector(QWidget):
 
         # Очищаем старые виджеты свойств
         self._uniform_widgets.clear()
+        self._phase_combos = []
         while self._properties_layout.count() > 1:
             item = self._properties_layout.takeAt(0)
             if item.widget():
@@ -586,6 +598,15 @@ class MaterialInspector(QWidget):
             self._shader_combo.setCurrentIndex(idx)
         self._shader_combo.blockSignals(False)
 
+        # Phase selectors for phases with multiple available marks
+        self._phase_combos: List[tuple[int, QComboBox]] = []
+        for i, phase in enumerate(self._material.phases):
+            available = phase.available_marks
+            if len(available) > 1:
+                self._create_phase_selector(i, phase, available)
+            elif len(available) == 1:
+                self._create_phase_label(available[0])
+
         # Собираем все properties из всех фаз
         all_properties: Dict[str, MaterialProperty] = {}
         if self._shader_program is not None:
@@ -597,6 +618,77 @@ class MaterialInspector(QWidget):
         # Создаём редакторы для каждого property
         for prop in all_properties.values():
             self._create_property_editor(prop)
+
+    def _create_phase_label(self, phase_mark: str) -> None:
+        """Create a simple label showing the phase when there's no choice."""
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 2, 0, 2)
+        row_layout.setSpacing(8)
+
+        label = QLabel("Render Mode:")
+        label.setFixedWidth(100)
+        row_layout.addWidget(label)
+
+        value_label = QLabel(phase_mark)
+        value_label.setStyleSheet("color: #888;")
+        row_layout.addWidget(value_label, 1)
+
+        self._properties_layout.insertWidget(
+            self._properties_layout.count() - 1, row_widget
+        )
+
+    def _create_phase_selector(self, phase_index: int, phase: Any, available_marks: List[str]) -> None:
+        """Create phase selector ComboBox for a phase with multiple available marks."""
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 2, 0, 2)
+        row_layout.setSpacing(8)
+
+        # Label shows phase index if multiple phases
+        label_text = f"Phase {phase_index + 1}:" if len(self._material.phases) > 1 else "Render Mode:"
+        label = QLabel(label_text)
+        label.setFixedWidth(100)
+        row_layout.addWidget(label)
+
+        combo = QComboBox()
+        for mark in available_marks:
+            combo.addItem(mark, mark)
+
+        # Set current value
+        current = phase.phase_mark
+        index = combo.findData(current)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+        combo.currentIndexChanged.connect(
+            lambda idx, pi=phase_index: self._on_phase_mark_changed(pi, idx)
+        )
+        row_layout.addWidget(combo, 1)
+
+        self._phase_combos.append((phase_index, combo))
+        self._properties_layout.insertWidget(
+            self._properties_layout.count() - 1, row_widget
+        )
+
+    def _on_phase_mark_changed(self, phase_index: int, combo_index: int) -> None:
+        """Handle phase mark selection change."""
+        if self._material is None or phase_index >= len(self._material.phases):
+            return
+
+        combo = None
+        for pi, c in self._phase_combos:
+            if pi == phase_index:
+                combo = c
+                break
+
+        if combo is None:
+            return
+
+        new_mark = combo.itemData(combo_index)
+        self._material.phases[phase_index].set_phase_mark(new_mark)
+        self.material_changed.emit()
+        self.save_material_file()
 
     def _create_property_editor(self, prop: MaterialProperty) -> None:
         """Создать редактор для свойства материала."""
@@ -766,8 +858,11 @@ class MaterialInspector(QWidget):
             return
 
         # Обновляем значение во всех фазах материала
+        # NOTE: phase.uniforms returns a copy, so we must reassign the whole dict
         for phase in self._material.phases:
-            phase.uniforms[name] = value
+            uniforms = phase.uniforms
+            uniforms[name] = value
+            phase.uniforms = uniforms
 
         self.material_changed.emit()
 

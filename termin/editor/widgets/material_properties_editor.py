@@ -7,7 +7,7 @@ This widget can be embedded in MaterialInspector or in component inspectors
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from PyQt6.QtWidgets import (
@@ -18,11 +18,12 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QSpinBox,
     QCheckBox,
+    QComboBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import Material
+    from termin.visualization.core.material import Material, MaterialPhase
     from termin.visualization.render.shader_parser import (
         ShaderMultyPhaseProgramm,
         MaterialProperty,
@@ -50,6 +51,7 @@ class MaterialPropertiesEditor(QWidget):
         self._material: Material | None = None
         self._shader_program: ShaderMultyPhaseProgramm | None = None
         self._property_widgets: Dict[str, QWidget] = {}
+        self._phase_combos: List[Tuple[int, QComboBox]] = []  # (phase_index, combo)
 
         self._setup_ui()
 
@@ -88,6 +90,7 @@ class MaterialPropertiesEditor(QWidget):
         """Rebuild the UI for the current material."""
         # Clear existing widgets
         self._property_widgets.clear()
+        self._phase_combos = []
         while self._layout.count() > 0:
             item = self._layout.takeAt(0)
             if item.widget():
@@ -95,6 +98,14 @@ class MaterialPropertiesEditor(QWidget):
 
         if self._material is None or self._shader_program is None:
             return
+
+        # Phase selectors for each phase with multiple available marks
+        for i, phase in enumerate(self._material.phases):
+            available = phase.available_marks
+            if len(available) > 1:
+                self._create_phase_selector_for_phase(i, phase)
+            elif len(available) == 1:
+                self._create_phase_label(available[0])
 
         # Collect all properties from all phases
         all_properties: Dict[str, "MaterialProperty"] = {}
@@ -106,6 +117,76 @@ class MaterialPropertiesEditor(QWidget):
         # Create editors for each property
         for prop in all_properties.values():
             self._create_property_editor(prop)
+
+    def _create_phase_label(self, phase_mark: str) -> None:
+        """Create a simple label showing the phase when there's no choice."""
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 2, 0, 2)
+        row_layout.setSpacing(8)
+
+        label = QLabel("Render Mode:")
+        label.setFixedWidth(100)
+        row_layout.addWidget(label)
+
+        value_label = QLabel(phase_mark)
+        value_label.setStyleSheet("color: #888;")
+        row_layout.addWidget(value_label, 1)
+
+        self._layout.addWidget(row_widget)
+
+    def _create_phase_selector_for_phase(self, phase_index: int, phase: "MaterialPhase") -> None:
+        """Create phase selector ComboBox for a specific phase with multiple available marks."""
+        from termin.visualization.core.material import MaterialPhase
+
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 2, 0, 2)
+        row_layout.setSpacing(8)
+
+        # Label shows phase index if multiple phases, otherwise just "Render Mode"
+        label_text = f"Phase {phase_index + 1}:" if len(self._material.phases) > 1 else "Render Mode:"
+        label = QLabel(label_text)
+        label.setFixedWidth(100)
+        row_layout.addWidget(label)
+
+        combo = QComboBox()
+        for mark in phase.available_marks:
+            combo.addItem(mark, mark)
+
+        # Set current value
+        current = phase.phase_mark
+        index = combo.findData(current)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+        combo.currentIndexChanged.connect(
+            lambda idx, pi=phase_index: self._on_phase_mark_changed(pi, idx)
+        )
+        row_layout.addWidget(combo, 1)
+
+        self._phase_combos.append((phase_index, combo))
+        self._layout.addWidget(row_widget)
+
+    def _on_phase_mark_changed(self, phase_index: int, combo_index: int) -> None:
+        """Handle phase mark selection change for a specific phase."""
+        if self._material is None or phase_index >= len(self._material.phases):
+            return
+
+        # Find the combo for this phase
+        combo = None
+        for pi, c in self._phase_combos:
+            if pi == phase_index:
+                combo = c
+                break
+
+        if combo is None:
+            return
+
+        new_mark = combo.itemData(combo_index)
+        self._material.phases[phase_index].set_phase_mark(new_mark)
+        self.property_changed.emit(f"phase_{phase_index}_mark", new_mark)
+        self._on_editing_finished()
 
     def _create_property_editor(self, prop: "MaterialProperty") -> None:
         """Create an editor widget for a material property."""

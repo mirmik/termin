@@ -200,6 +200,7 @@ def _parse_material_content(
 
     shader_name = data.get("shader", "DefaultShader")
     file_uuid = data.get("uuid")
+    phase_marks = data.get("phase_marks", [])  # Per-phase mark overrides
 
     rm = ResourceManager.instance()
     program = rm.get_shader(shader_name)
@@ -233,6 +234,11 @@ def _parse_material_content(
         source_path=source_path,
     )
     mat.shader_name = shader_name
+
+    # Apply per-phase mark overrides (use set_phase_mark to also apply render state)
+    for i, mark in enumerate(phase_marks):
+        if i < len(mat.phases) and mark:
+            mat.phases[i].set_phase_mark(mark)
 
     return mat, file_uuid
 
@@ -292,6 +298,20 @@ def _save_material_file(material: "Material", path: str | Path, uuid: str) -> No
         "uuid": uuid,
         "shader": material.shader_name,
     }
+
+    # Save per-phase marks (only if different from default)
+    phase_marks = []
+    has_overrides = False
+    for phase in material.phases:
+        default_mark = phase.available_marks[0] if phase.available_marks else ""
+        if phase.phase_mark != default_mark:
+            phase_marks.append(phase.phase_mark)
+            has_overrides = True
+        else:
+            phase_marks.append("")
+    if has_overrides:
+        result["phase_marks"] = phase_marks
+
     if uniforms:
         result["uniforms"] = uniforms
     if textures:

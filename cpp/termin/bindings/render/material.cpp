@@ -123,6 +123,16 @@ void bind_material(nb::module_& m) {
                 }
             })
         .def_rw("phase_mark", &MaterialPhase::phase_mark)
+        .def_rw("available_marks", &MaterialPhase::available_marks)
+        .def_rw("mark_render_states", &MaterialPhase::mark_render_states)
+        .def("set_phase_mark", [](MaterialPhase& self, const std::string& mark) {
+            self.phase_mark = mark;
+            // Apply render state for this mark if available
+            auto it = self.mark_render_states.find(mark);
+            if (it != self.mark_render_states.end()) {
+                self.render_state = it->second;
+            }
+        }, nb::arg("mark"), "Set phase mark and apply corresponding render state")
         .def_rw("priority", &MaterialPhase::priority)
         .def_rw("textures", &MaterialPhase::textures)
         .def_prop_rw("uniforms",
@@ -431,6 +441,17 @@ void bind_material(nb::module_& m) {
             rs.cull = shader_phase.gl_cull.value_or(true);
 
             MaterialPhase phase(shader, rs, shader_phase.phase_mark, shader_phase.priority);
+            phase.available_marks = shader_phase.available_marks;
+
+            // Copy per-mark render states from shader
+            for (const auto& [mark, settings] : shader_phase.mark_settings) {
+                RenderState mark_rs;
+                mark_rs.depth_write = settings.gl_depth_mask.value_or(true);
+                mark_rs.depth_test = settings.gl_depth_test.value_or(true);
+                mark_rs.blend = settings.gl_blend.value_or(false);
+                mark_rs.cull = settings.gl_cull.value_or(true);
+                phase.mark_render_states[mark] = mark_rs;
+            }
 
             // 3. Apply uniforms from defaults
             for (const auto& prop : shader_phase.uniforms) {
@@ -622,6 +643,7 @@ void bind_material(nb::module_& m) {
         .def_rw("name", &Material::name)
         .def_rw("source_path", &Material::source_path)
         .def_rw("shader_name", &Material::shader_name)
+        .def_rw("active_phase_mark", &Material::active_phase_mark)
         .def_rw("phases", &Material::phases)
         .def("default_phase", static_cast<MaterialPhase& (Material::*)()>(&Material::default_phase),
              nb::rv_policy::reference)
@@ -799,6 +821,7 @@ void bind_material(nb::module_& m) {
         .def("set_color", [](Material& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
             self.set_color(Vec4{rgba(0), rgba(1), rgba(2), rgba(3)});
         })
+        .def("color", &Material::color)
         .def("update_color", [](Material& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
             self.set_color(Vec4{rgba(0), rgba(1), rgba(2), rgba(3)});
         })

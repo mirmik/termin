@@ -179,6 +179,7 @@ void bind_shader_parser(nb::module_& m) {
             nb::arg("uniforms") = std::vector<MaterialProperty>{}
         )
         .def_rw("phase_mark", &ShaderPhase::phase_mark)
+        .def_rw("available_marks", &ShaderPhase::available_marks)
         .def_rw("priority", &ShaderPhase::priority)
         .def_rw("gl_depth_mask", &ShaderPhase::gl_depth_mask)
         .def_rw("gl_depth_test", &ShaderPhase::gl_depth_test)
