@@ -224,11 +224,16 @@ class MaterialPostEffect(PostEffect):
     def _set_uniform(self, shader, name: str, value) -> None:
         """Set uniform based on value type."""
         import numpy as np
+        from termin.geombase import Vec3, Vec4
 
         if isinstance(value, (int, bool)):
             shader.set_uniform_int(name, int(value))
         elif isinstance(value, float):
             shader.set_uniform_float(name, value)
+        elif isinstance(value, Vec3):
+            shader.set_uniform_vec3(name, np.array([value.x, value.y, value.z], dtype=np.float32))
+        elif isinstance(value, Vec4):
+            shader.set_uniform_vec4(name, np.array([value.x, value.y, value.z, value.w], dtype=np.float32))
         elif isinstance(value, np.ndarray):
             if value.size == 2:
                 shader.set_uniform_vec2(name, value.astype(np.float32))
