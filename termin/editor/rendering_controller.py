@@ -1070,7 +1070,7 @@ class RenderingController:
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
-        # Начинаем frame если ещё не начат (в game mode его начинает game_mode_controller)
+        # Начинаем frame если ещё не начат (в game mode его начинает _game_tick)
         frame_started_here = profiler._current_frame is None
         profiler.begin_frame()
 

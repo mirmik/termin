@@ -175,12 +175,11 @@ class EditorCameraManager:
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
 
-    def serialize_editor_entities(self) -> dict | None:
+    def serialize_and_destroy_editor_entities(self) -> dict | None:
         """
-        Serialize EditorEntities hierarchy for transfer to another scene.
+        Serialize EditorEntities hierarchy and destroy them.
 
-        Temporarily enables serializable flag on all entities in hierarchy,
-        serializes, then restores the flag.
+        Used when transferring EditorEntities to another scene.
 
         Returns:
             Serialized data dict, or None if no editor entities.
@@ -199,9 +198,15 @@ class EditorCameraManager:
         try:
             data = self.editor_entities.serialize()
         finally:
-            # Restore serializable=False
+            # Restore serializable=False (before destroy)
             for ent in entities_to_serialize:
                 ent.serializable = False
+
+        # Remove entities from scene (children first, then parent)
+        for ent in reversed(entities_to_serialize):
+            self._scene.remove(ent)
+        self.editor_entities = None
+        self.camera = None
 
         return data
 

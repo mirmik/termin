@@ -128,7 +128,7 @@ class SceneManager:
         # Resources initialized flag
         self._resources_initialized: bool = False
 
-        # Active scene name (for backwards compatibility)
+        # Active scene name
         self._active_scene_name: str | None = None
 
     @property
@@ -442,8 +442,6 @@ class SceneManager:
 
         scene.destroy()
 
-        self._notify_scene_changed(name, None)
-
     def get_scene(self, name: str) -> "Scene | None":
         """
         Get scene by name.
@@ -568,68 +566,16 @@ class SceneManager:
                 # Game mode: full simulation
                 scene.update(dt)
 
-    # --- Game Mode Helpers ---
-
-    def enter_game_mode(self) -> "Scene":
-        """
-        Enter game mode: create copy of editor scene for playing.
-
-        Returns:
-            Game scene (copy).
-        """
-        if self.has_scene("game"):
-            return self.get_scene("game")
-
-        if not self.has_scene("editor"):
-            raise RuntimeError("No editor scene to copy")
-
-        # Copy editor scene
-        game_scene = self.copy_scene("editor", "game", activate=False)
-
-        # Set modes
-        self.set_mode("editor", SceneMode.INACTIVE)
-        self.set_mode("game", SceneMode.GAME)
-
-        return game_scene
-
-    def exit_game_mode(self) -> "Scene | None":
-        """
-        Exit game mode: destroy game scene, reactivate editor scene.
-
-        Returns:
-            Editor scene.
-        """
-        if self.has_scene("game"):
-            self.close_scene("game")
-
-        if self.has_scene("editor"):
-            self.set_mode("editor", SceneMode.EDITOR)
-            return self.get_scene("editor")
-
-        return None
-
-    @property
-    def is_game_mode(self) -> bool:
-        """True if currently in game mode."""
-        return self.has_scene("game") and self.get_mode("game") == SceneMode.GAME
-
     # --- Reset/New Scene ---
 
-    def reset(self) -> None:
-        """
-        Reset to empty editor scene.
-        Closes all scenes and creates new empty editor scene.
-        """
-        # Close all scenes
+    def close_all_scenes(self) -> None:
+        """Close and destroy all scenes."""
         for name in list(self._scenes.keys()):
             scene = self._scenes.pop(name)
             scene.destroy()
         self._modes.clear()
         self._paths.clear()
         self._active_scene_name = None
-
-        # Create new editor scene
-        self.create_scene("editor", activate=True)
 
     # --- Debug Info ---
 

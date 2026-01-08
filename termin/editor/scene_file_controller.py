@@ -38,6 +38,8 @@ class SceneFileController:
         on_after_save: Callable[[], None],
         on_after_load: Callable[[], None],
         get_project_path: Callable[[], str | None] | None = None,
+        get_editor_scene_name: Callable[[], str | None] | None = None,
+        set_editor_scene_name: Callable[[str | None], None] | None = None,
         log_message: Callable[[str], None] | None = None,
     ):
         self._parent = parent
@@ -46,6 +48,8 @@ class SceneFileController:
         self._on_after_save = on_after_save
         self._on_after_load = on_after_load
         self._get_project_path = get_project_path
+        self._get_editor_scene_name = get_editor_scene_name
+        self._set_editor_scene_name = set_editor_scene_name
 
     def new_scene(self) -> bool:
         """
@@ -67,7 +71,19 @@ class SceneFileController:
 
         sm = self._get_scene_manager()
         if sm is not None:
-            sm.reset()
+            # Close existing editor scene if any
+            old_scene_name = None
+            if self._get_editor_scene_name is not None:
+                old_scene_name = self._get_editor_scene_name()
+            if old_scene_name and sm.has_scene(old_scene_name):
+                sm.close_scene(old_scene_name)
+
+            # Create new untitled scene
+            new_scene_name = "untitled"
+            sm.create_scene(new_scene_name, activate=True)
+
+            if self._set_editor_scene_name is not None:
+                self._set_editor_scene_name(new_scene_name)
 
         self._on_after_new()
         return True
@@ -131,7 +147,13 @@ class SceneFileController:
             if sm is None:
                 raise RuntimeError("SceneManager not initialized")
 
-            sm.save_scene("editor", file_path)
+            scene_name = None
+            if self._get_editor_scene_name is not None:
+                scene_name = self._get_editor_scene_name()
+            if scene_name is None:
+                raise RuntimeError("No editor scene to save")
+
+            sm.save_scene(scene_name, file_path)
             EditorSettings.instance().set_last_scene_path(file_path)
             log.info(f"Scene saved: {file_path}")
             self._on_after_save()
@@ -178,16 +200,29 @@ class SceneFileController:
         Returns:
             True if loaded, False on error.
         """
+        import os
+
         try:
             sm = self._get_scene_manager()
             if sm is None:
                 raise RuntimeError("SceneManager not initialized")
 
-            # Close existing editor scene if any
-            if sm.has_scene("editor"):
-                sm.close_scene("editor")
+            # Get scene name from file path
+            new_scene_name = os.path.splitext(os.path.basename(file_path))[0]
 
-            sm.load_scene("editor", file_path, activate=True)
+            # Close existing editor scene if any
+            old_scene_name = None
+            if self._get_editor_scene_name is not None:
+                old_scene_name = self._get_editor_scene_name()
+            if old_scene_name and sm.has_scene(old_scene_name):
+                sm.close_scene(old_scene_name)
+
+            sm.load_scene(new_scene_name, file_path, activate=True)
+
+            # Update editor scene name
+            if self._set_editor_scene_name is not None:
+                self._set_editor_scene_name(new_scene_name)
+
             EditorSettings.instance().set_last_scene_path(file_path)
             log.info(f"Scene loaded: {file_path}")
             self._on_after_load()
@@ -209,6 +244,8 @@ class SceneFileController:
         Returns:
             True if loaded, False if no last scene or error.
         """
+        import os
+
         settings = EditorSettings.instance()
         last_scene_path = settings.get_last_scene_path()
 
@@ -221,11 +258,22 @@ class SceneFileController:
             if sm is None:
                 return False
 
-            # Close existing editor scene if any
-            if sm.has_scene("editor"):
-                sm.close_scene("editor")
+            # Get scene name from file path
+            new_scene_name = os.path.splitext(os.path.basename(str(last_scene_path)))[0]
 
-            sm.load_scene("editor", str(last_scene_path), activate=True)
+            # Close existing editor scene if any
+            old_scene_name = None
+            if self._get_editor_scene_name is not None:
+                old_scene_name = self._get_editor_scene_name()
+            if old_scene_name and sm.has_scene(old_scene_name):
+                sm.close_scene(old_scene_name)
+
+            sm.load_scene(new_scene_name, str(last_scene_path), activate=True)
+
+            # Update editor scene name
+            if self._set_editor_scene_name is not None:
+                self._set_editor_scene_name(new_scene_name)
+
             self._on_after_load()
             return True
 
