@@ -61,6 +61,18 @@ except ImportError as e:
     print("[Project InitScript] ChronoSquad HumanModelCollider not found, skipping initialization: ", e)
     traceback.print_exc()    
 
+try:
+    import termin.chronosquad.controllers.visual_effects_controller
+except ImportError as e:
+    print("[Project InitScript] ChronoSquad VisualEffectsController not found, skipping initialization: ", e)
+    traceback.print_exc()
+
+try:
+    import termin.chronosquad.controllers.effects.blind_effect
+except ImportError as e:
+    print("[Project InitScript] ChronoSquad BlindEffect not found, skipping initialization: ", e)
+    traceback.print_exc()
+
 # Install ChronoSquad menu
 from termin.chronosquad.editor import install_menu
 install_menu()

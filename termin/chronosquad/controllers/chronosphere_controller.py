@@ -25,11 +25,19 @@ class ChronosphereController(PythonComponent):
     - Handles timeline switching
     """
 
+    _instance: ChronosphereController | None = None
+
     def __init__(self, enabled: bool = True):
         super().__init__(enabled=enabled)
         self._chronosphere = ChronoSphere()
         self._timeline_controller: TimelineController | None = None
         self._initialized = False
+        ChronosphereController._instance = self
+
+    @classmethod
+    def instance(cls) -> ChronosphereController | None:
+        """Get singleton instance of ChronosphereController."""
+        return cls._instance
 
     @property
     def chronosphere(self) -> ChronoSphere:

@@ -235,6 +235,21 @@
                   },
                   "cast_shadow": true
                 }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
               }
             ],
             "children": []
@@ -9188,6 +9203,44 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "00000000000000df",
+        "name": "VisualEffects",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "VisualEffectsController",
+            "data": {
+              "enabled": true
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -9251,24 +9304,18 @@
   "editor": {
     "camera": {
       "position": [
-        3.3810060024261475,
-        1.9557764530181885,
-        3.84002685546875
+        6.380853652954102,
+        5.287445545196533,
+        7.026073455810547
       ],
       "rotation": [
-        -0.10895570087451584,
-        -0.28383933183214183,
-        0.88938611845359,
-        0.3414033117210246
+        -0.10895569983202906,
+        -0.28383934037355096,
+        0.8893861207191479,
+        0.3414032990505006
       ],
-      "radius": 4.5
-    },
-    "selected_entity": "Glitch",
-    "expanded_entities": [
-      "camera",
-      "editor_ui",
-      "EditorEntities"
-    ]
+      "radius": 10.0
+    }
   },
   "resources": {
     "textures": {

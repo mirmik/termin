@@ -1,0 +1,17 @@
+{
+  "uuid": "997249bf-9de4-40fc-829c-08146e5bed0e",
+  "shader": "BlindEffect",
+  "uniforms": {
+    "u_subsurface": 0.0,
+    "u_time": 0.0,
+    "u_metallic": 0.0,
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_roughness": 0.5,
+    "u_shininess": 32.0
+  }
+}

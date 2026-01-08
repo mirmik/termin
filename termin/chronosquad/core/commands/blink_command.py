@@ -97,7 +97,14 @@ class BlinkCommand(ActorCommand):
         blind_effect = BlindEffect(
             start_step=local_step + 1,
             finish_step=finish_step,
-            position=target_pos,
+            position=initial_pose.lin + actor.up() * 0.8,
+        )
+        timeline.add_visual_effect_event(blind_effect)
+
+        blind_effect = BlindEffect(
+            start_step=local_step + 1,
+            finish_step=finish_step,
+            position=target_pos + actor.up() * 0.8,
         )
         timeline.add_visual_effect_event(blind_effect)
 

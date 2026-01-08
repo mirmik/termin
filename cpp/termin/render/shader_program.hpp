@@ -10,6 +10,10 @@
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/vec3.hpp"
 
+
+// TODO: Перенести данные щейдера полностью в core_c (tc_shader) и убрать дублирование
+
+
 namespace termin {
 
 /**
@@ -21,7 +25,17 @@ namespace termin {
  * Note: GLSL preprocessing (#include) should be done before passing
  * sources to this class.
  */
-class ShaderProgram {
+class ShaderProgram 
+{
+    std::string vertex_source_;
+    std::string fragment_source_;
+    std::string geometry_source_;
+    std::string source_path_;
+    std::string name_;
+    ShaderHandlePtr handle_;
+    TcShader tc_shader_;
+    uint32_t compiled_version_ = 0;
+
 public:
     ShaderProgram() = default;
 
@@ -252,15 +266,6 @@ private:
             source_path_
         );
     }
-
-    std::string vertex_source_;
-    std::string fragment_source_;
-    std::string geometry_source_;
-    std::string source_path_;
-    std::string name_;
-    ShaderHandlePtr handle_;
-    TcShader tc_shader_;
-    uint32_t compiled_version_ = 0;
 };
 
 } // namespace termin

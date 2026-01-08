@@ -245,6 +245,10 @@ class ObjectOfTimeline:
         """Add an event card."""
         self._changes.add(card)
 
+    def up(self) -> Vec3:
+        """Get object's up vector based on local rotation."""
+        return self._local_pose.transform_vector(Vec3(0, 0, 1))
+
     def drop_to_current(self) -> None:
         """
         Drop future events/animatronics/commands/cooldowns.
