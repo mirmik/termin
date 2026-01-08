@@ -8,6 +8,7 @@
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/render/normal_pass.hpp"
+#include "termin/render/id_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/lighting/light.hpp"
@@ -622,6 +623,116 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("context_key"))
         .def("__repr__", [](const NormalPass& p) {
             return "<NormalPass '" + p.pass_name + "'>";
+        });
+
+    // IdPass - entity ID rendering pass for picking
+    nb::class_<IdPass, FramePass>(m, "IdPass")
+        .def("__init__", [](IdPass* self, const std::string& input_res,
+                            const std::string& output_res, const std::string& pass_name) {
+            new (self) IdPass(input_res, output_res, pass_name);
+        },
+             nb::arg("input_res") = "empty",
+             nb::arg("output_res") = "id",
+             nb::arg("pass_name") = "IdPass")
+        .def_rw("input_res", &IdPass::input_res)
+        .def_rw("output_res", &IdPass::output_res)
+        .def("get_resource_specs", &IdPass::get_resource_specs)
+        .def("get_internal_symbols", &IdPass::get_internal_symbols)
+        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
+             nb::arg("window").none(),
+             nb::arg("depth_callback").none() = nb::none())
+        .def("get_debugger_window", &RenderFramePass::get_debugger_window)
+        .def_rw("debugger_window", &RenderFramePass::debugger_window)
+        .def_prop_rw("_debugger_window",
+            [](const IdPass& self) { return self.debugger_window; },
+            [](IdPass& self, nb::object val) { self.debugger_window = val; })
+        .def("execute_with_data", [](
+            IdPass& self,
+            GraphicsBackend* graphics,
+            nb::dict reads_fbos_py,
+            nb::dict writes_fbos_py,
+            nb::tuple rect_py,
+            nb::list entities_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
+            int64_t context_key
+        ) {
+            // Convert FBO maps
+            FBOMap reads_fbos, writes_fbos;
+            for (auto item : reads_fbos_py) {
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (!val.is_none()) {
+                    try {
+                        reads_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
+                        // Skip non-FBO resources
+                    }
+                }
+            }
+            for (auto item : writes_fbos_py) {
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (!val.is_none()) {
+                    try {
+                        writes_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
+                        // Skip non-FBO resources
+                    }
+                }
+            }
+
+            // Convert rect
+            Rect4i rect;
+            rect.x = nb::cast<int>(rect_py[0]);
+            rect.y = nb::cast<int>(rect_py[1]);
+            rect.width = nb::cast<int>(rect_py[2]);
+            rect.height = nb::cast<int>(rect_py[3]);
+
+            // Convert entities
+            std::vector<Entity> entities;
+            for (auto item : entities_py) {
+                entities.push_back(nb::cast<Entity>(item));
+            }
+
+            // Convert view matrix (row-major numpy -> column-major Mat44f)
+            Mat44f view;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    view(col, row) = view_py(row, col);
+                }
+            }
+
+            // Convert projection matrix
+            Mat44f projection;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    projection(col, row) = projection_py(row, col);
+                }
+            }
+
+            // Call C++ execute_with_data
+            self.execute_with_data(
+                graphics,
+                reads_fbos,
+                writes_fbos,
+                rect,
+                entities,
+                view,
+                projection,
+                context_key
+            );
+        },
+        nb::arg("graphics"),
+        nb::arg("reads_fbos"),
+        nb::arg("writes_fbos"),
+        nb::arg("rect"),
+        nb::arg("entities"),
+        nb::arg("view"),
+        nb::arg("projection"),
+        nb::arg("context_key"))
+        .def("__repr__", [](const IdPass& p) {
+            return "<IdPass '" + p.pass_name + "'>";
         });
 
     // ShadowMapResult - result of shadow map rendering

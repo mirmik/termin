@@ -62,48 +62,6 @@ void SkinnedMeshRenderer::upload_bone_matrices(ShaderProgram& shader) {
     shader.set_uniform_int("u_bone_count", _bone_count);
 }
 
-Material* SkinnedMeshRenderer::get_skinned_material() {
-    Material* base_mat = get_material();
-    if (base_mat == nullptr) {
-        return nullptr;
-    }
-
-    // Check if cache is still valid
-    int base_mat_id = reinterpret_cast<intptr_t>(base_mat);
-    if (_skinned_material_cache != nullptr && _cached_base_material_id == base_mat_id) {
-        return _skinned_material_cache;
-    }
-
-    // Check if shader already has skinning
-    if (!base_mat->phases.empty() && base_mat->phases[0].shader) {
-        const std::string& vert_source = base_mat->phases[0].shader->vertex_source();
-        if (vert_source.find("u_bone_matrices") != std::string::npos) {
-            // Already has skinning, use as-is
-            _skinned_material_cache = base_mat;
-            _cached_base_material_id = base_mat_id;
-            return base_mat;
-        }
-    }
-
-    // Create skinned variant via Python
-    try {
-        nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
-        nb::object skinned_mat_obj = skinning_module.attr("get_skinned_material")(base_mat);
-        if (!skinned_mat_obj.is_none()) {
-            _skinned_material_cache = nb::cast<Material*>(skinned_mat_obj);
-            _cached_base_material_id = base_mat_id;
-            return _skinned_material_cache;
-        }
-    } catch (const nb::python_error& e) {
-        tc::Log::warn(e, "SkinnedMeshRenderer::get_skinned_material");
-        PyErr_Clear();
-    }
-
-    tc::Log::warn("[SkinnedMeshRenderer::get_skinned_material] failed to inject skinning into '%s'",
-        base_mat->name.c_str());
-    return base_mat;
-}
-
 ShaderProgram* SkinnedMeshRenderer::override_shader(
     const std::string& phase_mark,
     const std::string& geometry_id,
@@ -152,23 +110,8 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
 }
 
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
-    Material* mat = get_skinned_material();
-    if (mat == nullptr) {
-        return {};
-    }
-
-    std::vector<GeometryDrawCall> result;
-    for (auto& phase : mat->phases) {
-        if (phase_mark == nullptr || phase_mark->empty() || phase.phase_mark == *phase_mark) {
-            result.emplace_back(&phase, "");
-        }
-    }
-
-    std::sort(result.begin(), result.end(), [](const GeometryDrawCall& a, const GeometryDrawCall& b) {
-        return a.phase->priority < b.phase->priority;
-    });
-
-    return result;
+    // Use parent implementation - shader override happens in override_shader()
+    return MeshRenderer::get_geometry_draws(phase_mark);
 }
 
 void SkinnedMeshRenderer::start() {

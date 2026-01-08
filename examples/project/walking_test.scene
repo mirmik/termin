@@ -3991,7 +3991,7 @@
                 "name": "gymuniformMesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4187,7 +4187,7 @@
                 "name": "male_muscle_13290Mesh.001",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4236,7 +4236,7 @@
                 "name": "MC-SciFi-Armor_HeliosMesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4285,7 +4285,7 @@
                 "name": "mens_shirt_untuck_elvbhp1fMesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4368,8 +4368,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0000-0000-0002-000000000003",
+                        "name": "AdvancedPBRMaterial"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -4383,7 +4383,7 @@
                 "name": "mens_tanks_elv1fMesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -5747,7 +5747,7 @@
                 "name": "harvey_vestv1Mesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -5830,11 +5830,36 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0000-0000-0002-000000000003",
+                        "name": "AdvancedPBRMaterial"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_metallic": 0,
+                            "u_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0
+                          }
+                        ],
+                        "phases_textures": [
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "ef4c078e-95e8-4a3f-9bcf-2cf382cf3b83",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -6124,11 +6149,37 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0000-0000-0002-000000000003",
+                        "name": "AdvancedPBRMaterial"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_metallic": 0,
+                            "u_color": [
+                              0.19502556324005127,
+                              0.5998169183731079,
+                              0.6056305766105652,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0,
+                            "u_shininess": 32
+                          }
+                        ],
+                        "phases_textures": [
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "3deafdca-0c04-4e23-97eb-2e1bd76f98e9",
+                              "name": "6830-1745580165",
+                              "type": "path",
+                              "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -6173,11 +6224,36 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0000-0000-0002-000000000003",
+                        "name": "AdvancedPBRMaterial"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_metallic": 0,
+                            "u_color": [
+                              0.7699549794197083,
+                              0.03654535859823227,
+                              0.03654535859823227,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0
+                          }
+                        ],
+                        "phases_textures": [
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "ef4c078e-95e8-4a3f-9bcf-2cf382cf3b83",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -6369,11 +6445,36 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "e4dee1c0-cbfb-4092-a3b1-592371eac13d",
-                        "name": "Hair"
+                        "uuid": "00000000-0000-0000-0002-000000000003",
+                        "name": "AdvancedPBRMaterial"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_metallic": 0,
+                            "u_color": [
+                              0.2722972333431244,
+                              0.11631952226161957,
+                              0.014770733192563057,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0
+                          }
+                        ],
+                        "phases_textures": [
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "ef4c078e-95e8-4a3f-9bcf-2cf382cf3b83",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -9430,6 +9531,9 @@
                       0.5
                     ]
                   }
+                ],
+                "phases_textures": [
+                  {}
                 ]
               }
             }
@@ -9499,26 +9603,22 @@
   "editor": {
     "camera": {
       "position": [
-        4.193328380584717,
-        -3.6856985092163086,
-        3.4368107318878174
+        2.8279759883880615,
+        0.9290897846221924,
+        2.823256254196167
       ],
       "rotation": [
-        -0.21430574976889083,
-        -0.07884916623910401,
-        0.33617504896552564,
-        0.9136969908303401
+        -0.1189182751993793,
+        -0.2670948283614068,
+        0.8736278757725038,
+        0.3889641772186972
       ],
-      "radius": 5.0
+      "radius": 2.5
     },
-    "selected_entity": "entity4",
+    "selected_entity": "editor_ui",
     "expanded_entities": [
       "EditorEntities",
-      "PlatformBase",
-      "editor_ui",
-      "Arthur",
-      "camera",
-      "Model"
+      "camera"
     ]
   },
   "resources": {

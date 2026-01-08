@@ -1,42 +1,25 @@
+"""IdPass - entity ID rendering pass for picking using C++ implementation."""
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
 from typing import List, Set, Tuple, TYPE_CHECKING
 
-from termin._native import log
-from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-from termin.visualization.core.picking import id_to_rgb
-from termin.visualization.render.render_context import RenderContext
-from termin.visualization.render.renderpass import RenderState
-from termin.visualization.render.system_shaders import get_system_shader
-from termin.visualization.render.drawable import Drawable
-from termin.editor.inspect_field import InspectField
+import numpy as np
+
+from termin._native.render import IdPass as _IdPassNative
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
-    from termin.visualization.core.entity import Entity
 
 
-@dataclass
-class PickDrawCall:
-    """Pre-collected draw call for IdPass."""
-    entity: "Entity"
-    drawable: Drawable
-    pick_id: int
+class IdPass(_IdPassNative):
+    """
+    ID rendering pass - writes entity pick IDs as colors for picking.
 
+    Renders all pickable scene entities with Drawable components,
+    encoding pick IDs as RGB colors for mouse picking.
 
-class IdPass(RenderFramePass):
-    """Проход для ID-карты (picking)."""
-
-    _DEBUG_TIMING = False  # Profile timing breakdown
-    _DEBUG_DRAW_COUNT = False  # Log draw call count
-
-    inspect_fields = {
-        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
-        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
-    }
+    Uses C++ implementation for core rendering with skinning support.
+    """
 
     def __init__(
         self,
@@ -44,82 +27,60 @@ class IdPass(RenderFramePass):
         output_res: str = "id",
         pass_name: str = "IdPass",
     ):
-        super().__init__(pass_name=pass_name)
-        self.input_res = input_res
-        self.output_res = output_res
+        # Call C++ constructor
+        super().__init__(
+            input_res=input_res,
+            output_res=output_res,
+            pass_name=pass_name,
+        )
 
-        # Кэш имён отрисовываемых pickable-энтити.
-        self._entity_names: List[str] = []
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "IdPass":
+        return cls(pass_name=data.get("pass_name", "IdPass"))
 
-    def compute_reads(self) -> Set[str]:
+    @property
+    def reads(self) -> Set[str]:
+        """Compute read resources dynamically."""
         return {self.input_res}
 
-    def compute_writes(self) -> Set[str]:
+    @property
+    def writes(self) -> Set[str]:
+        """Compute write resources dynamically."""
         return {self.output_res}
 
+    def serialize_data(self) -> dict:
+        """Serialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().serialize_all(self)
+
+    def deserialize_data(self, data: dict) -> None:
+        """Deserialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        if not data:
+            return
+        from termin._native.inspect import InspectRegistry
+        InspectRegistry.instance().deserialize_all(self, data)
+
+    def serialize(self) -> dict:
+        """Serialize IdPass to dict."""
+        return {
+            "type": self.__class__.__name__,
+            "pass_name": self.pass_name,
+            "enabled": self.enabled,
+            "data": self.serialize_data(),
+        }
+
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
-        """IdPass читает input_res и пишет output_res inplace."""
+        """IdPass reads input_res and writes output_res inplace."""
         return [(self.input_res, self.output_res)]
 
     def get_internal_symbols(self) -> List[str]:
-        """
-        Список имён pickable-сущностей сцены.
-
-        Используется дебаггером для выбора промежуточного состояния
-        после прорисовки конкретной сущности в ID-карту.
-        """
-        return list(self._entity_names)
-
-    def get_resource_specs(self) -> list[ResourceSpec]:
-        """
-        Объявляет требования к входному ресурсу empty_id.
-
-        Очистка: чёрный цвет (0.0, 0.0, 0.0) + depth=1.0
-        """
-        return [
-            ResourceSpec(
-                resource=self.input_res,
-                clear_color=(0.0, 0.0, 0.0, 1.0),
-                clear_depth=1.0,
-            )
-        ]
-
-    def _collect_draw_calls(self, scene) -> List[PickDrawCall]:
-        """
-        Собирает все draw calls для pickable entities.
-
-        Один проход по сцене, плоский список результатов.
-        """
-        draw_calls: List[PickDrawCall] = []
-
-        for entity in scene.entities:
-            if not (entity.visible and entity.enabled):
-                continue
-
-            if not entity.is_pickable():
-                continue
-
-            pick_id = entity.pick_id
-
-            for component in entity.components:
-                if not component.enabled:
-                    continue
-
-                if not isinstance(component, Drawable):
-                    continue
-
-                draw_calls.append(PickDrawCall(
-                    entity=entity,
-                    drawable=component,
-                    pick_id=pick_id,
-                ))
-
-        return draw_calls
+        """Return list of entity names (from C++ implementation)."""
+        return super().get_internal_symbols()
 
     def execute(
         self,
         graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle | None"],
         writes_fbos: dict[str, "FramebufferHandle | None"],
         rect: tuple[int, int, int, int],
         scene,
@@ -128,90 +89,19 @@ class IdPass(RenderFramePass):
         lights=None,
         canvas=None,
     ):
-        px, py, pw, ph = rect
+        """Execute ID pass using C++ implementation."""
+        # Get camera matrices
+        view = camera.get_view_matrix()
+        projection = camera.get_projection_matrix()
 
-        fb = writes_fbos.get(self.output_res)
-        if fb is None:
-            return
-
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, pw, ph)
-        graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))
-
-        # Матрицы камеры
-        view = camera.view_matrix()
-        proj = camera.projection_matrix()
-
-        # Жёсткое состояние для ID-прохода
-        graphics.apply_render_state(RenderState(
-            depth_test=True,
-            depth_write=True,
-            blend=False,
-            cull=True,
-        ))
-
-        # Получаем шейдер из глобального реестра
-        shader = get_system_shader("pick", graphics)
-        shader.use()
-        shader.set_uniform_matrix4("u_view", view)
-        shader.set_uniform_matrix4("u_projection", proj)
-
-        # Extra uniforms для передачи в SkinnedMeshRenderer
-        extra_uniforms: dict = {}
-
-        # Контекст рендеринга
-        render_ctx = RenderContext(
-            view=view,
-            projection=proj,
+        # Call C++ execute_with_data
+        self.execute_with_data(
             graphics=graphics,
+            reads_fbos=reads_fbos,
+            writes_fbos=writes_fbos,
+            rect=rect,
+            entities=list(scene.entities),
+            view=view.astype(np.float32),
+            projection=projection.astype(np.float32),
             context_key=context_key,
-            scene=scene,
-            camera=camera,
-            phase="pick",
-            current_shader=shader,
-            extra_uniforms=extra_uniforms,
         )
-
-        # Собираем draw calls один раз
-        draw_calls = self._collect_draw_calls(scene)
-
-        # Обновляем список имён для debug
-        self._entity_names = []
-        seen_entities = set()
-
-        # Текущий pick_id для батчинга
-        current_pick_id = -1
-        current_color: tuple = (0.0, 0.0, 0.0)
-
-        # Рисуем все draw calls
-        for dc in draw_calls:
-            # Re-bind shader before setting uniforms (draw_geometry may switch shaders)
-            shader.use()
-
-            # Обновляем pick color только при смене entity
-            if dc.pick_id != current_pick_id:
-                current_pick_id = dc.pick_id
-                current_color = id_to_rgb(dc.pick_id)
-                shader.set_uniform_vec3("u_pickColor", current_color)
-                # Обновляем extra_uniforms для SkinnedMeshRenderer
-                extra_uniforms["u_pickColor"] = ("vec3", current_color)
-
-            # Обновляем model matrix
-            model = dc.entity.model_matrix()
-            shader.set_uniform_matrix4("u_model", model)
-            render_ctx.model = model
-
-            # Debug: track entity names (unique)
-            if dc.entity.name not in seen_entities:
-                seen_entities.add(dc.entity.name)
-                self._entity_names.append(dc.entity.name)
-
-            # Рисуем геометрию
-            dc.drawable.draw_geometry(render_ctx)
-
-            # Debugger: блит после отрисовки выбранного символа
-            if self.debug_internal_symbol and dc.entity.name == self.debug_internal_symbol:
-                self._blit_to_debugger(graphics, fb)
-
-        if self._DEBUG_DRAW_COUNT:
-            log.debug(f"[IdPass] draw_calls: {len(draw_calls)}")

@@ -122,6 +122,8 @@ void MeshRenderer::apply_pending_override_data() {
             _overridden_material->phases.size());
 
     const nos::trent& override_data = *_pending_override_data;
+
+    // Apply uniforms
     if (override_data.contains("phases_uniforms")) {
         const nos::trent& phases_uniforms = override_data["phases_uniforms"];
         if (phases_uniforms.is_list()) {
@@ -152,6 +154,32 @@ void MeshRenderer::apply_pending_override_data() {
                                 static_cast<float>(lst[3].as_numer())
                             };
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply textures
+    if (override_data.contains("phases_textures")) {
+        const nos::trent& phases_textures = override_data["phases_textures"];
+        if (phases_textures.is_list()) {
+            size_t phase_count = std::min(phases_textures.as_list().size(), _overridden_material->phases.size());
+            for (size_t i = 0; i < phase_count; ++i) {
+                const nos::trent& phase_textures = phases_textures.at(i);
+                if (!phase_textures.is_dict()) continue;
+
+                auto& phase = _overridden_material->phases[i];
+                for (const auto& [key, val] : phase_textures.as_dict()) {
+                    if (!val.is_dict()) continue;
+
+                    // Deserialize TextureHandle using existing method
+                    TextureHandle tex_handle;
+                    tex_handle.deserialize_from(val, nullptr);
+
+                    if (tex_handle.is_valid()) {
+                        phase.textures[key] = std::move(tex_handle);
+                        fprintf(stderr, "[MeshRenderer] Applied texture '%s' to phase %zu\n", key.c_str(), i);
                     }
                 }
             }
@@ -248,7 +276,11 @@ nos::trent MeshRenderer::get_override_data() const {
     nos::trent phases_uniforms;
     phases_uniforms.init(nos::trent_type::list);
 
+    nos::trent phases_textures;
+    phases_textures.init(nos::trent_type::list);
+
     for (const auto& phase : _overridden_material->phases) {
+        // Serialize uniforms
         nos::trent phase_uniforms;
         phase_uniforms.init(nos::trent_type::dict);
 
@@ -280,8 +312,44 @@ nos::trent MeshRenderer::get_override_data() const {
             }, val);
         }
         phases_uniforms.as_list().push_back(std::move(phase_uniforms));
+
+        // Serialize textures
+        nos::trent phase_textures;
+        phase_textures.init(nos::trent_type::dict);
+
+        for (const auto& [key, tex_handle] : phase.textures) {
+            if (!tex_handle.is_valid()) continue;
+
+            nos::trent tex_data;
+            tex_data.init(nos::trent_type::dict);
+
+            // Serialize TextureHandle (similar to TextureHandle::serialize())
+            if (!tex_handle.asset.is_none()) {
+                try {
+                    tex_data["uuid"] = nb::cast<std::string>(tex_handle.asset.attr("uuid"));
+                    tex_data["name"] = nb::cast<std::string>(tex_handle.asset.attr("name"));
+                    nb::object source_path = tex_handle.asset.attr("source_path");
+                    if (!source_path.is_none()) {
+                        tex_data["type"] = "path";
+                        tex_data["path"] = nb::cast<std::string>(nb::str(source_path.attr("as_posix")()));
+                    } else {
+                        tex_data["type"] = "named";
+                    }
+                } catch (const nb::python_error& e) {
+                    fprintf(stderr, "[MeshRenderer] Error serializing texture '%s': %s\n", key.c_str(), e.what());
+                    continue;
+                }
+            } else {
+                tex_data["type"] = "none";
+            }
+
+            phase_textures[key] = std::move(tex_data);
+        }
+        phases_textures.as_list().push_back(std::move(phase_textures));
     }
+
     override_data["phases_uniforms"] = std::move(phases_uniforms);
+    override_data["phases_textures"] = std::move(phases_textures);
     return override_data;
 }
 

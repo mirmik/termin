@@ -282,8 +282,6 @@ void bind_renderers(nb::module_& m) {
             nb::rv_policy::reference)
         .def("update_bone_matrices", &SkinnedMeshRenderer::update_bone_matrices)
         .def("upload_bone_matrices", &SkinnedMeshRenderer::upload_bone_matrices)
-        .def("get_skinned_material", &SkinnedMeshRenderer::get_skinned_material,
-            nb::rv_policy::reference)
         .def_ro("_bone_count", &SkinnedMeshRenderer::_bone_count)
         .def("get_bone_matrices_flat", [](SkinnedMeshRenderer& self) {
             if (self._bone_count == 0) {

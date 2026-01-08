@@ -156,7 +156,11 @@ class SceneTreeModel(QAbstractItemModel):
             return False
         node: NodeWrapper = index.internalPointer()
         if role == Qt.ItemDataRole.CheckStateRole and isinstance(node.obj, Entity):
-            enabled = (value == Qt.CheckState.Checked)
+            # PyQt6: value can be int or Qt.CheckState
+            if isinstance(value, int):
+                enabled = (value == Qt.CheckState.Checked.value)
+            else:
+                enabled = (value == Qt.CheckState.Checked)
             node.obj.enabled = enabled
             self.dataChanged.emit(index, index, [role, Qt.ItemDataRole.ForegroundRole])
             self.entity_enabled_changed.emit(node.obj, enabled)
