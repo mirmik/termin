@@ -85,6 +85,25 @@ public:
     virtual std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) = 0;
 
     /**
+     * Override shader for a draw call.
+     *
+     * Called by pass before applying uniforms. Allows drawable to substitute
+     * a different shader (e.g., with skinning injected).
+     *
+     * @param phase_mark Current phase mark
+     * @param geometry_id Geometry being drawn
+     * @param original_shader Shader the pass intends to use
+     * @return Shader to use (original or modified)
+     */
+    virtual ShaderProgram* override_shader(
+        const std::string& phase_mark,
+        const std::string& geometry_id,
+        ShaderProgram* original_shader
+    ) {
+        return original_shader;  // Default: no override
+    }
+
+    /**
      * Check if this drawable participates in a given phase.
      */
     bool has_phase(const std::string& phase_mark) const {
@@ -108,6 +127,7 @@ private:
     static bool _cb_has_phase(tc_component* c, const char* phase_mark);
     static void _cb_draw_geometry(tc_component* c, void* render_context, const char* geometry_id);
     static void* _cb_get_geometry_draws(tc_component* c, const char* phase_mark);
+    static void* _cb_override_shader(tc_component* c, const char* phase_mark, const char* geometry_id, void* original_shader);
 };
 
 // Draw call for passes - combines entity, component, phase, and geometry.

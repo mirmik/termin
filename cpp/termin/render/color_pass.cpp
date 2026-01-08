@@ -201,27 +201,36 @@ void ColorPass::execute_with_data(
         }
         graphics->apply_render_state(state);
 
-        // Apply material (binds shader, uploads MVP, textures, uniforms)
-        dc.phase->apply(model, view, projection, graphics, context_key);
+        // Get shader (allow drawable to override for skinning etc.)
+        ShaderProgram* shader_to_use = dc.phase->shader.get();
+        ShaderProgram* overridden = static_cast<ShaderProgram*>(
+            tc_component_override_shader(dc.component, phase_mark.c_str(), dc.geometry_id.c_str(), shader_to_use)
+        );
+        if (overridden != nullptr) {
+            shader_to_use = overridden;
+        }
+
+        // Apply material uniforms to the (possibly overridden) shader
+        dc.phase->apply_to_shader(shader_to_use, model, view, projection, graphics, context_key);
 
         // Upload camera position
-        if (dc.phase->shader) {
-            dc.phase->shader->set_uniform_vec3("u_camera_position",
+        if (shader_to_use) {
+            shader_to_use->set_uniform_vec3("u_camera_position",
                 static_cast<float>(camera_position.x),
                 static_cast<float>(camera_position.y),
                 static_cast<float>(camera_position.z));
 
             // Upload lights with entity name for debugging
-            upload_lights_to_shader(dc.phase->shader.get(), lights, ename);
+            upload_lights_to_shader(shader_to_use, lights, ename);
 
             // Upload ambient
-            upload_ambient_to_shader(dc.phase->shader.get(), ambient_color, ambient_intensity);
+            upload_ambient_to_shader(shader_to_use, ambient_color, ambient_intensity);
 
             // Upload shadow maps
-            upload_shadow_maps_to_shader(dc.phase->shader.get(), shadow_maps);
-            upload_shadow_settings_to_shader(dc.phase->shader.get(), shadow_settings);
+            upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+            upload_shadow_settings_to_shader(shader_to_use, shadow_settings);
 
-            context.current_shader = dc.phase->shader.get();
+            context.current_shader = shader_to_use;
         }
 
         // Draw geometry via vtable

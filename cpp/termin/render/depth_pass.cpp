@@ -201,12 +201,8 @@ void DepthPass::execute_with_data(
     std::set<std::string> seen_entities;
 
     for (const auto& dc : draw_calls) {
-        // Re-bind shader (draw_geometry may switch shaders)
-        shader->use();
-
         // Set model matrix
         Mat44f model = get_model_matrix(dc.entity);
-        shader->set_uniform_matrix4("u_model", model.data, false);
         context.model = model;
 
         // Track entity names
@@ -215,6 +211,29 @@ void DepthPass::execute_with_data(
             seen_entities.insert(name);
             entity_names.push_back(name);
         }
+
+        // Allow drawable to override shader (for skinning injection)
+        ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
+            tc_component_override_shader(dc.component, "depth", "", shader)
+        );
+        if (shader_to_use == nullptr) {
+            shader_to_use = shader;
+        }
+
+        // Ensure shader is ready and bind
+        shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+            return graphics->create_shader(v, f, g);
+        });
+        shader_to_use->use();
+
+        // Apply uniforms to (possibly overridden) shader
+        shader_to_use->set_uniform_matrix4("u_model", model.data, false);
+        shader_to_use->set_uniform_matrix4("u_view", view.data, false);
+        shader_to_use->set_uniform_matrix4("u_projection", projection.data, false);
+        shader_to_use->set_uniform_float("u_near", near_plane);
+        shader_to_use->set_uniform_float("u_far", far_plane);
+
+        context.current_shader = shader_to_use;
 
         // Draw geometry (handles bone matrix upload for skinned meshes)
         tc_component_draw_geometry(dc.component, &context, "");

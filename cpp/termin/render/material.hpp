@@ -129,6 +129,28 @@ public:
     );
 
     /**
+     * Apply uniforms to a specific shader (for shader override scenarios).
+     *
+     * Like apply(), but uses the provided shader instead of this->shader.
+     * Used when drawable overrides shader (e.g., for skinning injection).
+     *
+     * @param target_shader Shader to upload uniforms to
+     * @param model Model matrix
+     * @param view View matrix
+     * @param projection Projection matrix
+     * @param graphics Graphics backend
+     * @param context_key Context key for caching
+     */
+    void apply_to_shader(
+        ShaderProgram* target_shader,
+        const Mat44f& model,
+        const Mat44f& view,
+        const Mat44f& projection,
+        GraphicsBackend* graphics,
+        int64_t context_key = 0
+    );
+
+    /**
      * Apply render state to graphics backend.
      */
     void apply_state(GraphicsBackend* graphics);

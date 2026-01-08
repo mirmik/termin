@@ -81,5 +81,8 @@
       "ZeroJumpStart": "98671a03-a4d0-496c-a20c-8e0a07f92638",
       "ZeroJumpToGround": "c39551b3-9bdc-4cd7-b692-3db140d9ff7a"
     }
-  }
+  },
+  "convert_to_z_up": true,
+  "normalize_scale": true,
+  "blender_z_up_fix": true
 }

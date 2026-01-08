@@ -50,11 +50,29 @@ void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) 
     return &drawable->_cached_geometry_draws;
 }
 
+void* Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, const char* geometry_id, void* original_shader) {
+    if (!c || c->kind != TC_CXX_COMPONENT) return original_shader;
+
+    CxxComponent* comp = CxxComponent::from_tc(c);
+    if (!comp) return original_shader;
+
+    Drawable* drawable = dynamic_cast<Drawable*>(comp);
+    if (!drawable) return original_shader;
+
+    ShaderProgram* shader = static_cast<ShaderProgram*>(original_shader);
+    return drawable->override_shader(
+        phase_mark ? phase_mark : "",
+        geometry_id ? geometry_id : "",
+        shader
+    );
+}
+
 // Static vtable instance
 const tc_drawable_vtable Drawable::cxx_drawable_vtable = {
     &Drawable::_cb_has_phase,
     &Drawable::_cb_draw_geometry,
-    &Drawable::_cb_get_geometry_draws
+    &Drawable::_cb_get_geometry_draws,
+    &Drawable::_cb_override_shader
 };
 
 } // namespace termin

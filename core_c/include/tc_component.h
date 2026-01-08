@@ -33,6 +33,12 @@ struct tc_drawable_vtable {
     // Returns opaque pointer to be interpreted by caller (std::vector<GeometryDrawCall>* in C++)
     // Caller must NOT free the returned pointer
     void* (*get_geometry_draws)(tc_component* self, const char* phase_mark);
+
+    // Override shader for a draw call (for skinning injection, etc.)
+    // Pass calls this before applying uniforms to let drawable modify the shader.
+    // Returns original_shader if no override needed, or a different shader.
+    // original_shader is opaque (ShaderProgram* in C++)
+    void* (*override_shader)(tc_component* self, const char* phase_mark, const char* geometry_id, void* original_shader);
 };
 
 // ============================================================================
@@ -236,6 +242,13 @@ static inline void* tc_component_get_geometry_draws(tc_component* c, const char*
         return c->drawable_vtable->get_geometry_draws(c, phase_mark);
     }
     return NULL;
+}
+
+static inline void* tc_component_override_shader(tc_component* c, const char* phase_mark, const char* geometry_id, void* original_shader) {
+    if (c && c->drawable_vtable && c->drawable_vtable->override_shader) {
+        return c->drawable_vtable->override_shader(c, phase_mark, geometry_id, original_shader);
+    }
+    return original_shader;
 }
 
 // ============================================================================

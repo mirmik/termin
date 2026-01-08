@@ -24,8 +24,6 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
-import numpy as np
-
 from termin.assets.data_asset import DataAsset
 from termin._native import log
 
@@ -209,11 +207,20 @@ def _parse_material_content(
         raise ValueError(f"Shader '{shader_name}' not found in ResourceManager")
 
     # Convert uniforms
+    from termin.geombase import Vec3, Vec4
+
     uniforms_data = data.get("uniforms", {})
     uniforms: Dict[str, Any] = {}
     for uname, value in uniforms_data.items():
         if isinstance(value, list):
-            uniforms[uname] = np.array(value, dtype=np.float32)
+            # Convert lists to Vec3/Vec4
+            if len(value) == 3:
+                uniforms[uname] = Vec3(value[0], value[1], value[2])
+            elif len(value) == 4:
+                uniforms[uname] = Vec4(value[0], value[1], value[2], value[3])
+            else:
+                # Keep as list for other sizes (vec2, etc.)
+                uniforms[uname] = [float(v) for v in value]
         else:
             uniforms[uname] = value
 
@@ -273,8 +280,13 @@ def _save_material_file(material: "Material", path: str | Path, uuid: str) -> No
     from termin.assets.resources import ResourceManager
 
     def serialize_value(val: Any) -> Any:
-        if isinstance(val, np.ndarray):
-            return val.tolist()
+        from termin.geombase import Vec3, Vec4
+        if isinstance(val, Vec3):
+            return [val.x, val.y, val.z]
+        elif isinstance(val, Vec4):
+            return [val.x, val.y, val.z, val.w]
+        elif isinstance(val, (list, tuple)):
+            return [float(v) for v in val]
         return val
 
     rm = ResourceManager.instance()

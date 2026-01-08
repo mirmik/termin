@@ -281,12 +281,29 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
         // Render all shadow casters
         for (const auto& dc : draw_calls) {
-            // Re-bind shader (draw_geometry may have switched to skinned variant)
-            shadow_shader_program->use();
-
             Mat44f model = get_model_matrix(*dc.entity);
-            shadow_shader_program->set_uniform_matrix4("u_model", model, false);
             context.model = model;
+
+            // Allow drawable to override shader (for skinning injection)
+            ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
+                tc_component_override_shader(dc.component, "shadow", dc.geometry_id.c_str(), shadow_shader_program)
+            );
+            if (shader_to_use == nullptr) {
+                shader_to_use = shadow_shader_program;
+            }
+
+            // Ensure shader is ready and bind
+            shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+                return graphics->create_shader(v, f, g);
+            });
+            shader_to_use->use();
+
+            // Apply uniforms to (possibly overridden) shader
+            shader_to_use->set_uniform_matrix4("u_model", model, false);
+            shader_to_use->set_uniform_matrix4("u_view", view_matrix, false);
+            shader_to_use->set_uniform_matrix4("u_projection", proj_matrix, false);
+
+            context.current_shader = shader_to_use;
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
         }

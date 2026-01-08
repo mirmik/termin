@@ -104,75 +104,46 @@ Material* SkinnedMeshRenderer::get_skinned_material() {
     return base_mat;
 }
 
+ShaderProgram* SkinnedMeshRenderer::override_shader(
+    const std::string& phase_mark,
+    const std::string& geometry_id,
+    ShaderProgram* original_shader
+) {
+    if (_skeleton_controller == nullptr || original_shader == nullptr) {
+        return original_shader;
+    }
+
+    // Check if shader already has skinning
+    const std::string& vert_source = original_shader->vertex_source();
+    if (vert_source.find("u_bone_matrices") != std::string::npos) {
+        return original_shader;
+    }
+
+    // Inject skinning via Python
+    try {
+        nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
+        nb::object skinned_shader_obj = skinning_module.attr("get_skinned_shader")(original_shader);
+        if (!skinned_shader_obj.is_none()) {
+            return nb::cast<ShaderProgram*>(skinned_shader_obj);
+        }
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "SkinnedMeshRenderer::override_shader");
+        PyErr_Clear();
+    }
+
+    return original_shader;
+}
+
 void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
     if (!mesh.is_valid()) {
         return;
     }
 
-    ShaderProgram* shader_to_use = context.current_shader;
-
-    // Check if current shader needs skinning injection
+    // Upload bone matrices if we have a skeleton
     if (_skeleton_controller != nullptr && context.current_shader != nullptr) {
         update_bone_matrices();
-
         if (_bone_count > 0) {
-            // Check if shader already has skinning
-            const std::string& vert_source = context.current_shader->vertex_source();
-            bool has_skinning = vert_source.find("u_bone_matrices") != std::string::npos;
-
-            if (!has_skinning) {
-                // Need to inject skinning into this shader
-                try {
-                    nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
-                    nb::object skinned_shader_obj = skinning_module.attr("get_skinned_shader")(context.current_shader);
-                    if (!skinned_shader_obj.is_none()) {
-                        shader_to_use = nb::cast<ShaderProgram*>(skinned_shader_obj);
-                        // Ensure shader is compiled
-                        GraphicsBackend* graphics = context.graphics;
-                        shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-                            return graphics->create_shader(v, f, g);
-                        });
-                        // Use the skinned shader
-                        shader_to_use->use();
-                        // Re-apply uniforms from original shader context
-                        shader_to_use->set_uniform_matrix4("u_view", context.view, false);
-                        shader_to_use->set_uniform_matrix4("u_projection", context.projection, false);
-                        shader_to_use->set_uniform_matrix4("u_model", context.model, false);
-
-                        // Apply extra_uniforms (e.g., u_pickColor for IdPass)
-                        if (context.extra_uniforms.ptr() != nullptr &&
-                            !context.extra_uniforms.is_none() &&
-                            nb::isinstance<nb::dict>(context.extra_uniforms)) {
-                            nb::dict extra = nb::cast<nb::dict>(context.extra_uniforms);
-                            for (auto item : extra) {
-                                std::string name = nb::cast<std::string>(nb::str(item.first));
-                                nb::tuple val_tuple = nb::cast<nb::tuple>(item.second);
-                                if (nb::len(val_tuple) >= 2) {
-                                    std::string type_name = nb::cast<std::string>(val_tuple[0]);
-                                    if (type_name == "vec3") {
-                                        nb::tuple val = nb::cast<nb::tuple>(val_tuple[1]);
-                                        float x = nb::cast<float>(val[0]);
-                                        float y = nb::cast<float>(val[1]);
-                                        float z = nb::cast<float>(val[2]);
-                                        shader_to_use->set_uniform_vec3(name.c_str(), x, y, z);
-                                    } else if (type_name == "float") {
-                                        float val = nb::cast<float>(val_tuple[1]);
-                                        shader_to_use->set_uniform_float(name.c_str(), val);
-                                    } else if (type_name == "int") {
-                                        int val = nb::cast<int>(val_tuple[1]);
-                                        shader_to_use->set_uniform_int(name.c_str(), val);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (const nb::python_error& e) {
-                    tc::Log::warn(e, "SkinnedMeshRenderer::draw_geometry skinning injection");
-                    PyErr_Clear();
-                }
-            }
-
-            upload_bone_matrices(*shader_to_use);
+            upload_bone_matrices(*context.current_shader);
         }
     }
 

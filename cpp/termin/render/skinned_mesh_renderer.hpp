@@ -86,6 +86,16 @@ public:
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 
     /**
+     * Override shader to inject skinning if needed.
+     * Called by passes before applying uniforms.
+     */
+    ShaderProgram* override_shader(
+        const std::string& phase_mark,
+        const std::string& geometry_id,
+        ShaderProgram* original_shader
+    ) override;
+
+    /**
      * Component lifecycle: find skeleton controller on start.
      */
     void start() override;

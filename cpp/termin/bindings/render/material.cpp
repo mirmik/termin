@@ -89,15 +89,10 @@ void bind_material(nb::module_& m) {
                         self->uniforms[key] = nb::cast<int>(val);
                     } else if (nb::isinstance<nb::float_>(val)) {
                         self->uniforms[key] = nb::cast<float>(val);
-                    } else if (nb::ndarray_check(val)) {
-                        nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(val);
-                        float* ptr = arr.data();
-                        size_t size = arr.shape(0);
-                        if (size == 3) {
-                            self->uniforms[key] = Vec3{ptr[0], ptr[1], ptr[2]};
-                        } else if (size == 4) {
-                            self->uniforms[key] = Vec4{ptr[0], ptr[1], ptr[2], ptr[3]};
-                        }
+                    } else if (nb::isinstance<Vec3>(val)) {
+                        self->uniforms[key] = nb::cast<Vec3>(val);
+                    } else if (nb::isinstance<Vec4>(val)) {
+                        self->uniforms[key] = nb::cast<Vec4>(val);
                     }
                 }
             }
@@ -159,20 +154,10 @@ void bind_material(nb::module_& m) {
                 for (const auto& [key, val] : self.uniforms) {
                     std::visit([&](auto&& arg) {
                         using T = std::decay_t<decltype(arg)>;
-                        if constexpr (std::is_same_v<T, bool>) {
+                        if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int> ||
+                                      std::is_same_v<T, float> || std::is_same_v<T, Vec3> ||
+                                      std::is_same_v<T, Vec4>) {
                             result[key.c_str()] = arg;
-                        } else if constexpr (std::is_same_v<T, int>) {
-                            result[key.c_str()] = arg;
-                        } else if constexpr (std::is_same_v<T, float>) {
-                            result[key.c_str()] = arg;
-                        } else if constexpr (std::is_same_v<T, Vec3>) {
-                            float* data = new float[3]{static_cast<float>(arg.x), static_cast<float>(arg.y), static_cast<float>(arg.z)};
-                            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                            result[key.c_str()] = nb::cast(nb::ndarray<nb::numpy, float, nb::shape<3>>(data, {3}, owner));
-                        } else if constexpr (std::is_same_v<T, Vec4>) {
-                            float* data = new float[4]{static_cast<float>(arg.x), static_cast<float>(arg.y), static_cast<float>(arg.z), static_cast<float>(arg.w)};
-                            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                            result[key.c_str()] = nb::cast(nb::ndarray<nb::numpy, float, nb::shape<4>>(data, {4}, owner));
                         }
                     }, val);
                 }
@@ -188,15 +173,10 @@ void bind_material(nb::module_& m) {
                         self.uniforms[key] = nb::cast<int>(val);
                     } else if (nb::isinstance<nb::float_>(val)) {
                         self.uniforms[key] = nb::cast<float>(val);
-                    } else if (nb::ndarray_check(val)) {
-                        nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(val);
-                        float* ptr = arr.data();
-                        size_t size = arr.shape(0);
-                        if (size == 3) {
-                            self.uniforms[key] = Vec3{ptr[0], ptr[1], ptr[2]};
-                        } else if (size == 4) {
-                            self.uniforms[key] = Vec4{ptr[0], ptr[1], ptr[2], ptr[3]};
-                        }
+                    } else if (nb::isinstance<Vec3>(val)) {
+                        self.uniforms[key] = nb::cast<Vec3>(val);
+                    } else if (nb::isinstance<Vec4>(val)) {
+                        self.uniforms[key] = nb::cast<Vec4>(val);
                     }
                 }
             })
@@ -210,15 +190,10 @@ void bind_material(nb::module_& m) {
                 self.set_param(name, nb::cast<int>(value));
             } else if (nb::isinstance<nb::float_>(value)) {
                 self.set_param(name, nb::cast<float>(value));
-            } else if (nb::ndarray_check(value)) {
-                nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(value);
-                float* ptr = arr.data();
-                size_t size = arr.shape(0);
-                if (size == 3) {
-                    self.set_param(name, Vec3{ptr[0], ptr[1], ptr[2]});
-                } else if (size == 4) {
-                    self.set_param(name, Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});
-                }
+            } else if (nb::isinstance<Vec3>(value)) {
+                self.set_param(name, nb::cast<Vec3>(value));
+            } else if (nb::isinstance<Vec4>(value)) {
+                self.set_param(name, nb::cast<Vec4>(value));
             }
         })
         .def("set_color", [](MaterialPhase& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
@@ -504,15 +479,10 @@ void bind_material(nb::module_& m) {
                         phase.uniforms[key] = nb::cast<int>(val);
                     } else if (nb::isinstance<nb::float_>(val)) {
                         phase.uniforms[key] = nb::cast<float>(val);
-                    } else if (nb::ndarray_check(val)) {
-                        nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(val);
-                        float* ptr = arr.data();
-                        size_t size = arr.shape(0);
-                        if (size == 3) {
-                            phase.uniforms[key] = Vec3{ptr[0], ptr[1], ptr[2]};
-                        } else if (size == 4) {
-                            phase.uniforms[key] = Vec4{ptr[0], ptr[1], ptr[2], ptr[3]};
-                        }
+                    } else if (nb::isinstance<Vec3>(val)) {
+                        phase.uniforms[key] = nb::cast<Vec3>(val);
+                    } else if (nb::isinstance<Vec4>(val)) {
+                        phase.uniforms[key] = nb::cast<Vec4>(val);
                     }
                 }
             }
@@ -538,10 +508,8 @@ void bind_material(nb::module_& m) {
 
             // 6. Set color
             if (!color.is_none()) {
-                if (nb::ndarray_check(color)) {
-                    nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(color);
-                    float* ptr = arr.data();
-                    phase.set_color(Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});
+                if (nb::isinstance<Vec4>(color)) {
+                    phase.set_color(nb::cast<Vec4>(color));
                 } else if (nb::isinstance<nb::tuple>(color) || nb::isinstance<nb::list>(color)) {
                     nb::sequence seq = nb::cast<nb::sequence>(color);
                     phase.set_color(Vec4{
@@ -648,15 +616,10 @@ void bind_material(nb::module_& m) {
                         self->default_phase().uniforms[key] = nb::cast<int>(val);
                     } else if (nb::isinstance<nb::float_>(val)) {
                         self->default_phase().uniforms[key] = nb::cast<float>(val);
-                    } else if (nb::ndarray_check(val)) {
-                        nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(val);
-                        float* ptr = arr.data();
-                        size_t size = arr.shape(0);
-                        if (size == 3) {
-                            self->default_phase().uniforms[key] = Vec3{ptr[0], ptr[1], ptr[2]};
-                        } else if (size == 4) {
-                            self->default_phase().uniforms[key] = Vec4{ptr[0], ptr[1], ptr[2], ptr[3]};
-                        }
+                    } else if (nb::isinstance<Vec3>(val)) {
+                        self->default_phase().uniforms[key] = nb::cast<Vec3>(val);
+                    } else if (nb::isinstance<Vec4>(val)) {
+                        self->default_phase().uniforms[key] = nb::cast<Vec4>(val);
                     }
                 }
             }
@@ -708,18 +671,8 @@ void bind_material(nb::module_& m) {
             // Get MaterialPhase class for from_shader_phase
             nb::object MaterialPhase_cls = nb::module_::import_("termin._native.render").attr("MaterialPhase");
 
-            // Convert old values to nb::object for from_shader_phase
-            nb::object py_color = nb::none();
-            if (old_color.has_value()) {
-                float* data = new float[4]{
-                    static_cast<float>(old_color->x),
-                    static_cast<float>(old_color->y),
-                    static_cast<float>(old_color->z),
-                    static_cast<float>(old_color->w)
-                };
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                py_color = nb::cast(nb::ndarray<nb::numpy, float, nb::shape<4>>(data, {4}, owner));
-            }
+            // Pass Vec4 directly if available
+            nb::object py_color = old_color.has_value() ? nb::cast(old_color.value()) : nb::none();
 
             for (const auto& shader_phase : program.phases) {
                 MaterialPhase phase = nb::cast<MaterialPhase>(MaterialPhase_cls.attr("from_shader_phase")(
@@ -765,27 +718,16 @@ void bind_material(nb::module_& m) {
                 for (const auto& [key, val] : self.default_phase().uniforms) {
                     std::visit([&](auto&& arg) {
                         using T = std::decay_t<decltype(arg)>;
-                        if constexpr (std::is_same_v<T, bool>) {
+                        if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int> ||
+                                      std::is_same_v<T, float> || std::is_same_v<T, Vec3> ||
+                                      std::is_same_v<T, Vec4>) {
                             result[key.c_str()] = arg;
-                        } else if constexpr (std::is_same_v<T, int>) {
-                            result[key.c_str()] = arg;
-                        } else if constexpr (std::is_same_v<T, float>) {
-                            result[key.c_str()] = arg;
-                        } else if constexpr (std::is_same_v<T, Vec3>) {
-                            float* data = new float[3]{static_cast<float>(arg.x), static_cast<float>(arg.y), static_cast<float>(arg.z)};
-                            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                            result[key.c_str()] = nb::cast(nb::ndarray<nb::numpy, float, nb::shape<3>>(data, {3}, owner));
-                        } else if constexpr (std::is_same_v<T, Vec4>) {
-                            float* data = new float[4]{static_cast<float>(arg.x), static_cast<float>(arg.y), static_cast<float>(arg.z), static_cast<float>(arg.w)};
-                            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                            result[key.c_str()] = nb::cast(nb::ndarray<nb::numpy, float, nb::shape<4>>(data, {4}, owner));
                         }
                     }, val);
                 }
                 return result;
             },
             [](Material& self, nb::dict uniforms) {
-                // Convert from Python dict to C++ map
                 for (auto item : uniforms) {
                     std::string key = nb::cast<std::string>(item.first);
                     nb::object val = nb::borrow<nb::object>(item.second);
@@ -795,15 +737,10 @@ void bind_material(nb::module_& m) {
                         self.default_phase().uniforms[key] = nb::cast<int>(val);
                     } else if (nb::isinstance<nb::float_>(val)) {
                         self.default_phase().uniforms[key] = nb::cast<float>(val);
-                    } else if (nb::ndarray_check(val)) {
-                        nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(val);
-                        float* ptr = arr.data();
-                        size_t size = arr.shape(0);
-                        if (size == 3) {
-                            self.default_phase().uniforms[key] = Vec3{ptr[0], ptr[1], ptr[2]};
-                        } else if (size == 4) {
-                            self.default_phase().uniforms[key] = Vec4{ptr[0], ptr[1], ptr[2], ptr[3]};
-                        }
+                    } else if (nb::isinstance<Vec3>(val)) {
+                        self.default_phase().uniforms[key] = nb::cast<Vec3>(val);
+                    } else if (nb::isinstance<Vec4>(val)) {
+                        self.default_phase().uniforms[key] = nb::cast<Vec4>(val);
                     }
                 }
             })
@@ -815,15 +752,10 @@ void bind_material(nb::module_& m) {
                 self.set_param(name, nb::cast<int>(value));
             } else if (nb::isinstance<nb::float_>(value)) {
                 self.set_param(name, nb::cast<float>(value));
-            } else if (nb::ndarray_check(value)) {
-                nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(value);
-                float* ptr = arr.data();
-                size_t size = arr.shape(0);
-                if (size == 3) {
-                    self.set_param(name, Vec3{ptr[0], ptr[1], ptr[2]});
-                } else if (size == 4) {
-                    self.set_param(name, Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});
-                }
+            } else if (nb::isinstance<Vec3>(value)) {
+                self.set_param(name, nb::cast<Vec3>(value));
+            } else if (nb::isinstance<Vec4>(value)) {
+                self.set_param(name, nb::cast<Vec4>(value));
             }
         })
         .def("set_color", [](Material& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
