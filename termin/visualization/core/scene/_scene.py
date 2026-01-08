@@ -81,6 +81,10 @@ class Scene:
         # Viewport configuration (display_name -> camera/region mapping)
         self._viewport_configs: List[ViewportConfig] = []
 
+        # Editor viewport state (runtime only, not serialized)
+        # Stores camera name used in editor viewport for restore after game mode
+        self.editor_viewport_camera_name: str | None = None
+
         # Entity lifecycle events
         self._on_entity_added: Event[Entity] = Event()
         self._on_entity_removed: Event[Entity] = Event()

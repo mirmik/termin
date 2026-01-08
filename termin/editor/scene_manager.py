@@ -221,6 +221,9 @@ class SceneManager:
         dest = self._create_new_scene()
         dest.load_from_data(scene_data, context=None, update_settings=True)
 
+        # Copy runtime state (not serialized)
+        dest.editor_viewport_camera_name = source.editor_viewport_camera_name
+
         self._scenes[dest_name] = dest
         self._modes[dest_name] = SceneMode.INACTIVE
         self._paths[dest_name] = None  # Copy has no file path

@@ -1891,10 +1891,14 @@ class EditorWindow(QMainWindow):
         if self._editor_scene_name is None:
             return
 
-        # Сохраняем имена камер ДО смены сцены
-        camera_names = self._get_viewport_camera_names()
+        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
+        if editor_scene is None:
+            return
 
-        # Создаём копию сцены для game mode
+        # Сохраняем камеру editor viewport в editor сцену
+        self._save_editor_viewport_camera_to_scene(editor_scene)
+
+        # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
         self._game_scene_name = f"{self._editor_scene_name}(game)"
         game_scene = self.scene_manager.copy_scene(
             self._editor_scene_name,
@@ -1902,23 +1906,19 @@ class EditorWindow(QMainWindow):
         )
 
         # Явно удаляем viewports editor сцены перед деактивацией
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-        if self._rendering_controller is not None and editor_scene is not None:
+        if self._rendering_controller is not None:
             self._rendering_controller.remove_viewports_for_scene(editor_scene)
 
         # Устанавливаем режимы (таймер запустится автоматически)
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
         self.scene_manager.set_mode(self._game_scene_name, SceneMode.GAME)
 
-        self._on_game_mode_changed(True, game_scene, camera_names)
+        self._on_game_mode_changed(True, game_scene)
 
     def _stop_game_mode(self) -> None:
         """Выходит из игрового режима."""
         if not self.is_game_mode:
             return
-
-        # Сохраняем имена камер ДО уничтожения game scene
-        camera_names = self._get_viewport_camera_names()
 
         # Явно удаляем viewports game сцены
         game_scene = self.scene_manager.get_scene(self._game_scene_name)
@@ -1933,8 +1933,8 @@ class EditorWindow(QMainWindow):
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
         editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
 
-        # Создаём viewports для editor сцены и обновляем UI
-        self._on_game_mode_changed(False, editor_scene, camera_names)
+        # Создаём viewports для editor сцены (камера читается из scene.editor_viewport_camera_name)
+        self._on_game_mode_changed(False, editor_scene)
 
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""
@@ -1975,19 +1975,20 @@ class EditorWindow(QMainWindow):
 
         subprocess.Popen(cmd, cwd=str(project_root))
 
-    def _get_viewport_camera_names(self) -> dict[int, str | None]:
-        """Возвращает словарь id(viewport) -> имя камеры для всех viewport'ов."""
-        result: dict[int, str | None] = {}
-        if self._rendering_controller is not None:
-            for display in self._rendering_controller.displays:
-                for viewport in display.viewports:
-                    camera_name = None
-                    if viewport.camera is not None and viewport.camera.entity is not None:
-                        camera_name = viewport.camera.entity.name
-                    result[id(viewport)] = camera_name
-        return result
+    def _save_editor_viewport_camera_to_scene(self, scene) -> None:
+        """Сохраняет имя камеры editor viewport в сцену."""
+        if self._rendering_controller is None:
+            return
+        editor_display = self._rendering_controller.editor_display
+        if editor_display is None or not editor_display.viewports:
+            return
+        viewport = editor_display.viewports[0]
+        camera_name = None
+        if viewport.camera is not None and viewport.camera.entity is not None:
+            camera_name = viewport.camera.entity.name
+        scene.editor_viewport_camera_name = camera_name
 
-    def _on_game_mode_changed(self, is_playing: bool, scene, viewport_camera_names: dict) -> None:
+    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
         """Колбэк при изменении игрового режима."""
         from termin.visualization.core.camera import CameraComponent
 
@@ -2007,35 +2008,29 @@ class EditorWindow(QMainWindow):
                 if entity.name:
                     cameras_by_name[entity.name] = cam
 
-        # Создаём viewports для каждого display (старые были удалены при INACTIVE)
+        # Читаем сохранённое имя камеры из сцены
+        saved_camera_name = scene.editor_viewport_camera_name
+
+        # Создаём viewports для каждого display (старые были удалены)
         for display in self._rendering_controller.displays:
             display_id = id(display)
             editor_features = self._editor_features.get(display_id)
 
             if editor_features is not None:
-                # Editor display - создаём viewport с editor pipeline
-                if is_playing:
-                    # Game mode: используем камеру из game scene
-                    camera = first_scene_camera
-                    if camera is None:
-                        from termin._native import log
-                        log.error("No camera found in game scene")
-                        continue
+                # Editor display - ищем камеру по сохранённому имени
+                # Если камера была игровой (есть в cameras_by_name) - используем её копию
+                # Иначе используем editor camera
+                if saved_camera_name and saved_camera_name in cameras_by_name:
+                    camera = cameras_by_name[saved_camera_name]
                 else:
-                    # Editor mode: используем editor camera
                     camera = self._camera_manager.camera
                 self._rendering_controller.create_editor_viewport(scene, camera)
                 editor_features.set_world_mode("game" if is_playing else "editor")
             else:
-                # Simple display - создаём viewport с простым пайплайном
-                # Ищем камеру по сохранённому имени
+                # Simple display - используем первую камеру сцены
+                # TODO: сохранять/восстанавливать камеры для simple displays
                 camera = first_scene_camera
-                for old_vp_id, camera_name in viewport_camera_names.items():
-                    if camera_name and camera_name in cameras_by_name:
-                        camera = cameras_by_name[camera_name]
-                        break
                 if camera is None:
-                    # No camera in scene - skip this display
                     continue
 
                 viewport = display.create_viewport(
