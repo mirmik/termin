@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
-    from termin.editor.world_persistence import WorldPersistence
+    from termin.editor.scene_manager import SceneManager
     from termin.visualization.core.resources import ResourceManager
     from termin.visualization.core.entity import Entity
 
@@ -21,14 +21,13 @@ class PrefabEditController:
     """
     Manages prefab editing in isolation mode.
 
-    Similar to GameModeController but for editing prefabs.
-    Saves the current scene state, loads prefab into a temporary scene,
-    and allows saving changes back to the prefab or discarding them.
+    Uses SceneManager to create a "prefab" scene for editing.
+    The "editor" scene is set to INACTIVE while editing prefab.
     """
 
     def __init__(
         self,
-        world_persistence: "WorldPersistence",
+        scene_manager: "SceneManager",
         resource_manager: "ResourceManager",
         on_mode_changed: Optional[Callable[[bool, str | None], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
@@ -36,13 +35,13 @@ class PrefabEditController:
     ):
         """
         Args:
-            world_persistence: Scene lifecycle manager.
+            scene_manager: Scene lifecycle manager.
             resource_manager: Resource manager for materials/meshes.
             on_mode_changed: Callback(is_editing, prefab_name) when mode changes.
             on_request_update: Callback to request viewport update.
             log_message: Callback to log messages to console.
         """
-        self._world_persistence = world_persistence
+        self._scene_manager = scene_manager
         self._resource_manager = resource_manager
         self._on_mode_changed = on_mode_changed
         self._on_request_update = on_request_update
@@ -50,7 +49,6 @@ class PrefabEditController:
 
         self._editing = False
         self._prefab_path: Path | None = None
-        self._saved_scene_state: dict | None = None
         self._root_entity: "Entity" | None = None
 
     @property
@@ -79,7 +77,7 @@ class PrefabEditController:
         """
         Enter prefab editing mode.
 
-        Saves current scene state and loads prefab into a temporary scene.
+        Creates a "prefab" scene and sets "editor" scene to INACTIVE.
 
         Args:
             prefab_path: Path to .prefab file to edit.
@@ -96,18 +94,20 @@ class PrefabEditController:
             self._log(f"Prefab file not found: {prefab_path}")
             return False
 
-        # Save current scene state
-        self._saved_scene_state = self._world_persistence.save_state()
         self._prefab_path = prefab_path
 
-        # Load prefab into a new scene
+        # Load prefab into a new "prefab" scene
         try:
             self._load_prefab_into_scene(prefab_path)
         except Exception as e:
             self._log(f"Failed to load prefab: {e}")
-            self._saved_scene_state = None
             self._prefab_path = None
             return False
+
+        # Set editor scene to inactive
+        from termin.editor.scene_manager import SceneMode
+        if self._scene_manager.has_scene("editor"):
+            self._scene_manager.set_mode("editor", SceneMode.INACTIVE)
 
         self._editing = True
         self._log(f"Editing prefab: {self.prefab_name}")
@@ -134,7 +134,7 @@ class PrefabEditController:
             self._log("No prefab path set")
             return False
 
-        # Find root entity from current scene (not the cached one)
+        # Find root entity from current scene
         root_entity = self._find_prefab_root()
         if root_entity is None:
             self._log("No root entity found in scene")
@@ -165,7 +165,10 @@ class PrefabEditController:
         """
         from termin.editor.prefab_persistence import PrefabPersistence
 
-        scene = self._world_persistence.scene
+        scene = self._scene_manager.get_scene("prefab")
+        if scene is None:
+            return None
+
         fallback = None
 
         for entity in scene.entities:
@@ -190,7 +193,7 @@ class PrefabEditController:
         """
         Exit editing mode without saving.
 
-        Simply restores the original scene.
+        Closes prefab scene and reactivates editor scene.
         """
         if not self._editing:
             return
@@ -211,13 +214,18 @@ class PrefabEditController:
         return False
 
     def _exit_editing_mode(self) -> None:
-        """Exit editing mode and restore original scene."""
+        """Exit editing mode and restore editor scene."""
         prefab_name = self.prefab_name
 
-        # Restore original scene
-        if self._saved_scene_state is not None:
-            self._world_persistence.restore_state(self._saved_scene_state)
-            self._saved_scene_state = None
+        # Close prefab scene
+        if self._scene_manager.has_scene("prefab"):
+            self._scene_manager.close_scene("prefab")
+
+        # Reactivate editor scene
+        from termin.editor.scene_manager import SceneMode
+        if self._scene_manager.has_scene("editor"):
+            self._scene_manager.set_mode("editor", SceneMode.EDITOR)
+            self._scene_manager.set_active("editor")
 
         self._editing = False
         self._prefab_path = None
@@ -231,24 +239,24 @@ class PrefabEditController:
 
     def _load_prefab_into_scene(self, prefab_path: Path) -> None:
         """
-        Load prefab contents into a new empty scene.
+        Load prefab contents into a new "prefab" scene.
         """
         from termin.editor.prefab_persistence import PrefabPersistence
-        from termin.visualization.core.scene import Scene
+        from termin.editor.scene_manager import SceneMode
 
         # Load prefab entity
         persistence = PrefabPersistence(self._resource_manager)
         root_entity = persistence.load(prefab_path)
         self._root_entity = root_entity
 
-        # Create new empty scene
-        new_scene = Scene()
+        # Create new "prefab" scene
+        prefab_scene = self._scene_manager.create_scene("prefab", activate=True)
 
         # Add prefab root entity to scene
-        new_scene.add(root_entity)
+        prefab_scene.add(root_entity)
 
-        # Replace current scene (triggers on_scene_changed in EditorWindow)
-        self._world_persistence.replace_scene(new_scene)
+        # Set mode to EDITOR for prefab scene
+        self._scene_manager.set_mode("prefab", SceneMode.EDITOR)
 
     def _log(self, message: str) -> None:
         """Log message to console."""

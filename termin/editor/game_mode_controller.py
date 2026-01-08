@@ -9,7 +9,7 @@ from PyQt6.QtCore import QTimer, QElapsedTimer
 from termin.core.profiler import Profiler
 
 if TYPE_CHECKING:
-    from termin.editor.world_persistence import WorldPersistence
+    from termin.editor.scene_manager import SceneManager
     from termin.visualization.core.scene import Scene
 
 
@@ -26,18 +26,18 @@ class GameModeController:
     Игра работает на копии, оригинал не изменяется.
     Undo/redo стек остаётся валидным.
 
-    ВАЖНО: Использует WorldPersistence для доступа к сцене.
+    ВАЖНО: Использует SceneManager для доступа к сценам.
     """
 
     def __init__(
         self,
-        world_persistence: "WorldPersistence",
+        scene_manager: "SceneManager",
         on_mode_changed: Optional[Callable[[bool, "Scene", dict], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
         on_tick: Optional[Callable[[float], None]] = None,
         get_viewport_camera_names: Optional[Callable[[], dict]] = None,
     ):
-        self._world_persistence = world_persistence
+        self._scene_manager = scene_manager
         self._on_mode_changed = on_mode_changed
         self._on_request_update = on_request_update
         self._on_tick = on_tick
@@ -52,8 +52,10 @@ class GameModeController:
 
     @property
     def scene(self):
-        """Текущая сцена (всегда актуальная)."""
-        return self._world_persistence.scene
+        """Текущая сцена (game scene в game mode, иначе editor scene)."""
+        if self._game_mode:
+            return self._scene_manager.get_scene("game")
+        return self._scene_manager.get_scene("editor")
 
     @property
     def is_playing(self) -> bool:
@@ -77,7 +79,7 @@ class GameModeController:
             camera_names = self._get_viewport_camera_names()
 
         # Создаём копию сцены для game mode
-        game_scene = self._world_persistence.enter_game_mode()
+        game_scene = self._scene_manager.enter_game_mode()
 
         # Переключаем режим
         self._game_mode = True
@@ -103,7 +105,7 @@ class GameModeController:
             camera_names = self._get_viewport_camera_names()
 
         # Выходим из game mode - копия уничтожается
-        editor_scene = self._world_persistence.exit_game_mode()
+        editor_scene = self._scene_manager.exit_game_mode()
 
         # Переключаем режим
         self._game_mode = False
@@ -123,9 +125,11 @@ class GameModeController:
         elapsed_ms = self._elapsed_timer.restart()
         dt = elapsed_ms / 1000.0
 
-        # Обновляем сцену (получаем актуальную через property)
-        with profiler.section("Components"):
-            self.scene.update(dt)
+        # Обновляем game сцену
+        game_scene = self._scene_manager.get_scene("game")
+        if game_scene is not None:
+            with profiler.section("Components"):
+                game_scene.update(dt)
 
         if self._on_tick is not None:
             self._on_tick(dt)

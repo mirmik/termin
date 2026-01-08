@@ -17,7 +17,7 @@ from termin.editor.editor_viewport_features import EditorViewportFeatures
 from termin.editor.gizmo import GizmoManager
 from termin.editor.game_mode_controller import GameModeController
 from termin.editor.prefab_edit_controller import PrefabEditController
-from termin.editor.world_persistence import WorldPersistence
+from termin.editor.scene_manager import SceneManager, SceneMode
 from termin.editor.selection_manager import SelectionManager
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
@@ -85,10 +85,9 @@ class EditorWindow(QMainWindow):
         self.resource_manager.register_builtin_frame_passes()
         self.resource_manager.register_builtin_post_effects()
 
-        # --- WorldPersistence - ЕДИНСТВЕННЫЙ владелец сцены ---
+        # --- SceneManager - владеет всеми сценами ---
         # Создаётся ПЕРВЫМ, до всех контроллеров
-        self.world_persistence = WorldPersistence(
-            scene=initial_scene,
+        self.scene_manager = SceneManager(
             resource_manager=self.resource_manager,
             on_scene_changed=self._on_scene_changed,
             get_editor_camera_data=self._get_editor_camera_data,
@@ -101,6 +100,14 @@ class EditorWindow(QMainWindow):
             set_expanded_entities=self._set_expanded_entities,
             rescan_file_resources=self._rescan_file_resources,
         )
+
+        # Создаём начальную сцену "editor" (или используем переданную)
+        if initial_scene is not None:
+            self.scene_manager._scenes["editor"] = initial_scene
+            self.scene_manager._modes["editor"] = SceneMode.EDITOR
+            self.scene_manager._active_scene_name = "editor"
+        else:
+            self.scene_manager.create_scene("editor", activate=True)
 
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
@@ -377,9 +384,9 @@ class EditorWindow(QMainWindow):
             on_hover_changed=self._on_hover_changed_internal,
         )
 
-        # --- GameModeController - использует WorldPersistence ---
+        # --- GameModeController - использует SceneManager ---
         self.game_mode_controller = GameModeController(
-            world_persistence=self.world_persistence,
+            scene_manager=self.scene_manager,
             on_mode_changed=self._on_game_mode_changed,
             on_request_update=self._request_viewport_update,
             on_tick=self._on_game_tick,
@@ -388,7 +395,7 @@ class EditorWindow(QMainWindow):
 
         # --- PrefabEditController - режим изоляции для редактирования префабов ---
         self.prefab_edit_controller = PrefabEditController(
-            world_persistence=self.world_persistence,
+            scene_manager=self.scene_manager,
             resource_manager=self.resource_manager,
             on_mode_changed=self._on_prefab_mode_changed,
             on_request_update=self._request_viewport_update,
@@ -398,7 +405,7 @@ class EditorWindow(QMainWindow):
         # --- SceneFileController ---
         self._scene_file_controller = SceneFileController(
             parent=self,
-            get_world_persistence=lambda: self.world_persistence,
+            get_scene_manager=lambda: self.scene_manager,
             on_after_new=self._on_after_scene_new,
             on_after_save=self._update_window_title,
             on_after_load=self._update_window_title,
@@ -416,15 +423,15 @@ class EditorWindow(QMainWindow):
         EditorSettings.instance().init_text_editor_if_empty()
 
         # --- Инициализируем ресурсы один раз при старте ---
-        self.world_persistence.initialize_resources()
+        self.scene_manager.initialize_resources()
 
         # --- Загружаем последнюю открытую сцену ---
         self._scene_file_controller.load_last_scene()
 
     @property
     def scene(self):
-        """Текущая сцена. Всегда получаем из WorldPersistence."""
-        return self.world_persistence.scene
+        """Текущая сцена. Всегда получаем из SceneManager."""
+        return self.scene_manager.scene
 
     # ----------- undo / redo -----------
 
@@ -458,6 +465,7 @@ class EditorWindow(QMainWindow):
             on_show_audio_debugger=self._show_audio_debugger,
             on_show_core_registry_viewer=self._show_core_registry_viewer,
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
+            on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_fullscreen=self._toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
@@ -573,6 +581,12 @@ class EditorWindow(QMainWindow):
     def _show_inspect_registry_viewer(self) -> None:
         """Opens inspect registry viewer dialog."""
         self._dialog_manager.show_inspect_registry_viewer()
+
+    def _show_scene_manager_viewer(self) -> None:
+        """Opens scene manager viewer window."""
+        from termin.editor.scene_manager_viewer import SceneManagerViewer
+        viewer = SceneManagerViewer(self.scene_manager, parent=self)
+        viewer.show()
 
     def _toggle_profiler(self, checked: bool) -> None:
         """Toggle profiler panel visibility."""
@@ -1033,7 +1047,7 @@ class EditorWindow(QMainWindow):
         self._log_to_console(f"Opened project: {project_file}")
 
         # Сбрасываем сцену и пересканируем ресурсы
-        self.world_persistence.reset()
+        self.scene_manager.reset()
 
     def _show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
@@ -1727,13 +1741,13 @@ class EditorWindow(QMainWindow):
             )
             log.info(f"[Editor] Migrated {migrated} .spec files to .meta")
 
-    # ----------- WorldPersistence колбэки -----------
+    # ----------- SceneManager колбэки -----------
 
-    def _on_scene_changed(self, new_scene) -> None:
+    def _on_scene_changed(self, scene_name: str, new_scene) -> None:
         """
-        Callback from WorldPersistence when scene changes.
-        Called on reset(), load(), restore_state(), close_scene().
-        Recreates all editor entities in the new scene, or clears them if new_scene is None.
+        Callback from SceneManager when scene changes.
+        Called on create, load, close.
+        Serializes EditorEntities from old scene and restores them into new scene.
         """
         # Clear undo stack
         self.undo_stack.clear()
@@ -1745,13 +1759,19 @@ class EditorWindow(QMainWindow):
             self.selection_manager.clear()
 
         if new_scene is not None:
-            # Recreate editor entities in new scene
-            self._camera_manager.recreate_in_scene(new_scene)
+            # Serialize EditorEntities from old scene (if exists)
+            editor_entities_data = self._camera_manager.serialize_editor_entities()
+
+            # Restore into new scene
+            self._camera_manager.restore_editor_entities_into(new_scene, editor_entities_data)
             self.editor_entities = self._camera_manager.editor_entities
             self.camera = self._camera_manager.camera
         else:
-            # No scene - clear editor entities but keep camera
+            # Scene closed - clear references
             self.editor_entities = []
+            self._camera_manager.editor_entities = None
+            self._camera_manager.camera = None
+            self._camera_manager._scene = None
 
         # Clear gizmo target for new scene
         if self.editor_viewport is not None:
@@ -1802,7 +1822,8 @@ class EditorWindow(QMainWindow):
 
     def _close_scene(self) -> None:
         """Close current scene (enter no-scene mode)."""
-        self.world_persistence.close_scene()
+        if self.scene_manager.has_scene("editor"):
+            self.scene_manager.close_scene("editor")
 
     def _on_after_scene_new(self) -> None:
         """Callback after new scene created."""
@@ -1829,7 +1850,7 @@ class EditorWindow(QMainWindow):
             QMessageBox.warning(self, "No Project", "Please open a project first.")
             return
 
-        scene_path = self.world_persistence.current_scene_path
+        scene_path = self.scene_manager.current_scene_path
         if scene_path is None:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "No Scene", "Please save the scene first.")
@@ -1872,41 +1893,19 @@ class EditorWindow(QMainWindow):
         """Колбэк от GameModeController при изменении режима."""
         from termin.visualization.core.camera import CameraComponent
 
-        # Сбрасываем выделение (entity из разных сцен несовместимы)
-        if self.selection_manager is not None:
-            self.selection_manager.clear()
-
-        # Сохраняем позицию камеры перед переключением
-        camera_data = self._camera_manager.get_camera_data()
-
-        # Пересоздаём editor entities в новой сцене
-        # (в game_scene их нет, в editor_scene они уже есть - _ensure находит существующие)
-        self._camera_manager.recreate_in_scene(scene)
-        self.editor_entities = self._camera_manager.editor_entities
-        self.camera = self._camera_manager.camera
-
-        # Восстанавливаем позицию камеры
-        if camera_data is not None:
-            self._camera_manager.set_camera_data(camera_data)
-
-        # Строим словарь камер в новой сцене по имени entity
-        cameras_by_name: dict[str, CameraComponent] = {}
-        for entity in scene.entities:
-            cam = entity.get_component(CameraComponent)
-            if cam is not None and entity.name:
-                cameras_by_name[entity.name] = cam
-
-        # Переключаем все viewport'ы на новую сцену и камеру
+        # Обновляем world mode для всех viewport'ов
         for editor_features in self._editor_features.values():
-            editor_features.set_scene(scene)
-            # Для editor viewport всегда используем editor camera
-            editor_features.set_camera(self._camera_manager.camera)
             editor_features.set_world_mode("game" if is_playing else "editor")
-            editor_features.selected_entity_id = 0
-            editor_features.hover_entity_id = 0
 
         # Обновляем viewports у display'ов без EditorViewportFeatures
         if self._rendering_controller is not None:
+            # Строим словарь камер в новой сцене по имени entity
+            cameras_by_name: dict[str, CameraComponent] = {}
+            for entity in scene.entities:
+                cam = entity.get_component(CameraComponent)
+                if cam is not None and entity.name:
+                    cameras_by_name[entity.name] = cam
+
             for display in self._rendering_controller.displays:
                 display_id = id(display)
                 if display_id not in self._editor_features:
@@ -1923,21 +1922,6 @@ class EditorWindow(QMainWindow):
                             new_camera = self._camera_manager.camera
                         viewport.camera = new_camera
                         new_camera.add_viewport(viewport)
-
-        # Clear gizmo target when switching scenes
-        if self.editor_viewport is not None:
-            self.editor_viewport.set_gizmo_target(None)
-
-        # Обновляем scene tree
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.set_scene(scene)
-            self.scene_tree_controller.rebuild()
-
-        # Обновляем inspector scene reference и сбрасываем target
-        if self._inspector_controller is not None:
-            self._inspector_controller.set_scene(scene)
-        if self.inspector is not None:
-            self.inspector.set_target(None)
 
         # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None
@@ -2070,9 +2054,9 @@ class EditorWindow(QMainWindow):
         if is_editing_prefab:
             prefab_name = self.prefab_edit_controller.prefab_name
             parts.append(f"[Prefab: {prefab_name}]")
-        elif self.world_persistence is not None:
+        elif self.scene_manager is not None:
             # Добавляем имя сцены
-            scene_path = self.world_persistence.current_scene_path
+            scene_path = self.scene_manager.current_scene_path
             if scene_path is not None:
                 scene_name = Path(scene_path).stem
                 parts.append(f"[{scene_name}]")

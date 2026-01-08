@@ -174,3 +174,86 @@ class EditorCameraManager:
 
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
+
+    def serialize_editor_entities(self) -> dict | None:
+        """
+        Serialize EditorEntities hierarchy for transfer to another scene.
+
+        Temporarily enables serializable flag on all entities in hierarchy,
+        serializes, then restores the flag.
+
+        Returns:
+            Serialized data dict, or None if no editor entities.
+        """
+        if self.editor_entities is None:
+            return None
+
+        # Collect all entities in hierarchy
+        entities_to_serialize = []
+        self._collect_hierarchy(self.editor_entities, entities_to_serialize)
+
+        # Temporarily enable serializable
+        for ent in entities_to_serialize:
+            ent.serializable = True
+
+        try:
+            data = self.editor_entities.serialize()
+        finally:
+            # Restore serializable=False
+            for ent in entities_to_serialize:
+                ent.serializable = False
+
+        return data
+
+    def _collect_hierarchy(self, entity: Entity, result: list) -> None:
+        """Recursively collect entity and all descendants."""
+        result.append(entity)
+        for child_tf in entity.transform.children:
+            if child_tf.entity is not None:
+                self._collect_hierarchy(child_tf.entity, result)
+
+    def restore_editor_entities_into(self, new_scene: "Scene", data: dict) -> None:
+        """
+        Restore EditorEntities from serialized data into a new scene.
+
+        Args:
+            new_scene: Scene to add editor entities to.
+            data: Serialized data from serialize_editor_entities().
+        """
+        self._scene = new_scene
+        self.editor_entities = None
+        self.camera = None
+
+        if data is None:
+            # Fallback to creating from scratch
+            self._ensure_editor_entities_root()
+            self._ensure_editor_camera()
+            return
+
+        # Deserialize into new scene
+        editor_entities = Entity.deserialize_with_children(data, None, new_scene)
+        if editor_entities is None:
+            # Fallback
+            self._ensure_editor_entities_root()
+            self._ensure_editor_camera()
+            return
+
+        # Mark all as non-serializable
+        entities = []
+        self._collect_hierarchy(editor_entities, entities)
+        for ent in entities:
+            ent.serializable = False
+
+        self.editor_entities = editor_entities
+
+        # Find camera component
+        for child_tf in editor_entities.transform.children:
+            if child_tf.entity and child_tf.entity.name == "camera":
+                camera = child_tf.entity.get_component(PerspectiveCameraComponent)
+                if camera is not None:
+                    self.camera = camera
+                    break
+
+        # Fallback if camera not found
+        if self.camera is None:
+            self._ensure_editor_camera()

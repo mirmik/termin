@@ -16,7 +16,7 @@ from termin.editor.settings import EditorSettings
 from termin._native import log
 
 if TYPE_CHECKING:
-    from termin.editor.world_persistence import WorldPersistence
+    from termin.editor.scene_manager import SceneManager
 
 
 class SceneFileController:
@@ -33,7 +33,7 @@ class SceneFileController:
     def __init__(
         self,
         parent: QWidget,
-        get_world_persistence: Callable[[], "WorldPersistence | None"],
+        get_scene_manager: Callable[[], "SceneManager | None"],
         on_after_new: Callable[[], None],
         on_after_save: Callable[[], None],
         on_after_load: Callable[[], None],
@@ -41,7 +41,7 @@ class SceneFileController:
         log_message: Callable[[str], None] | None = None,
     ):
         self._parent = parent
-        self._get_world_persistence = get_world_persistence
+        self._get_scene_manager = get_scene_manager
         self._on_after_new = on_after_new
         self._on_after_save = on_after_save
         self._on_after_load = on_after_load
@@ -65,9 +65,9 @@ class SceneFileController:
         if reply != QMessageBox.StandardButton.Yes:
             return False
 
-        wp = self._get_world_persistence()
-        if wp is not None:
-            wp.reset()
+        sm = self._get_scene_manager()
+        if sm is not None:
+            sm.reset()
 
         self._on_after_new()
         return True
@@ -79,11 +79,11 @@ class SceneFileController:
         Returns:
             True if saved, False otherwise.
         """
-        wp = self._get_world_persistence()
-        if wp is None:
+        sm = self._get_scene_manager()
+        if sm is None:
             return False
 
-        current_path = wp.current_scene_path
+        current_path = sm.current_scene_path
         if current_path is not None:
             return self.save_scene_to_file(current_path)
         else:
@@ -127,11 +127,11 @@ class SceneFileController:
             True if saved, False on error.
         """
         try:
-            wp = self._get_world_persistence()
-            if wp is None:
-                raise RuntimeError("WorldPersistence not initialized")
+            sm = self._get_scene_manager()
+            if sm is None:
+                raise RuntimeError("SceneManager not initialized")
 
-            wp.save(file_path)
+            sm.save_scene("editor", file_path)
             EditorSettings.instance().set_last_scene_path(file_path)
             log.info(f"Scene saved: {file_path}")
             self._on_after_save()
@@ -179,11 +179,15 @@ class SceneFileController:
             True if loaded, False on error.
         """
         try:
-            wp = self._get_world_persistence()
-            if wp is None:
-                raise RuntimeError("WorldPersistence not initialized")
+            sm = self._get_scene_manager()
+            if sm is None:
+                raise RuntimeError("SceneManager not initialized")
 
-            wp.load(file_path)
+            # Close existing editor scene if any
+            if sm.has_scene("editor"):
+                sm.close_scene("editor")
+
+            sm.load_scene("editor", file_path, activate=True)
             EditorSettings.instance().set_last_scene_path(file_path)
             log.info(f"Scene loaded: {file_path}")
             self._on_after_load()
@@ -213,11 +217,15 @@ class SceneFileController:
             return False
 
         try:
-            wp = self._get_world_persistence()
-            if wp is None:
+            sm = self._get_scene_manager()
+            if sm is None:
                 return False
 
-            wp.load(str(last_scene_path))
+            # Close existing editor scene if any
+            if sm.has_scene("editor"):
+                sm.close_scene("editor")
+
+            sm.load_scene("editor", str(last_scene_path), activate=True)
             self._on_after_load()
             return True
 
