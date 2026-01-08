@@ -74,7 +74,7 @@ typedef struct tc_scene_entity_info {
     const char* uuid;
     size_t component_count;
     bool visible;
-    bool active;
+    bool enabled;
 } tc_scene_entity_info;
 
 // Get entity info for a scene by scene ID

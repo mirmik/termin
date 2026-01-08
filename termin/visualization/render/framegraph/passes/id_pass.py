@@ -93,7 +93,7 @@ class IdPass(RenderFramePass):
         draw_calls: List[PickDrawCall] = []
 
         for entity in scene.entities:
-            if not (entity.active and entity.visible):
+            if not (entity.visible and entity.enabled):
                 continue
 
             if not entity.is_pickable():

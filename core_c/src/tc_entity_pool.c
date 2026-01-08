@@ -70,7 +70,7 @@ struct tc_entity_pool {
 
     // Hot data - SoA for iteration
     bool* visible;
-    bool* active;
+    bool* enabled;
     bool* pickable;
     bool* selectable;
     bool* serializable;
@@ -235,7 +235,7 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->alive = calloc(initial_capacity, sizeof(bool));
 
     pool->visible = calloc(initial_capacity, sizeof(bool));
-    pool->active = calloc(initial_capacity, sizeof(bool));
+    pool->enabled = calloc(initial_capacity, sizeof(bool));
     pool->pickable = calloc(initial_capacity, sizeof(bool));
     pool->selectable = calloc(initial_capacity, sizeof(bool));
     pool->serializable = calloc(initial_capacity, sizeof(bool));
@@ -313,7 +313,7 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->generations);
     free(pool->alive);
     free(pool->visible);
-    free(pool->active);
+    free(pool->enabled);
     free(pool->pickable);
     free(pool->selectable);
     free(pool->serializable);
@@ -367,13 +367,13 @@ static void pool_grow(tc_entity_pool* pool) {
     memset(pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
 
     pool->visible = realloc(pool->visible, new_cap * sizeof(bool));
-    pool->active = realloc(pool->active, new_cap * sizeof(bool));
+    pool->enabled = realloc(pool->enabled, new_cap * sizeof(bool));
     pool->pickable = realloc(pool->pickable, new_cap * sizeof(bool));
     pool->selectable = realloc(pool->selectable, new_cap * sizeof(bool));
     pool->serializable = realloc(pool->serializable, new_cap * sizeof(bool));
     pool->transform_dirty = realloc(pool->transform_dirty, new_cap * sizeof(bool));
     memset(pool->visible + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
-    memset(pool->active + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->enabled + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->pickable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->selectable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->serializable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
@@ -439,7 +439,7 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
 
     pool->alive[idx] = true;
     pool->visible[idx] = true;
-    pool->active[idx] = true;
+    pool->enabled[idx] = true;
     pool->pickable[idx] = true;
     pool->selectable[idx] = true;
     pool->serializable[idx] = true;
@@ -641,14 +641,14 @@ void tc_entity_pool_set_visible(tc_entity_pool* pool, tc_entity_id id, bool v) {
     pool->visible[id.index] = v;
 }
 
-bool tc_entity_pool_active(const tc_entity_pool* pool, tc_entity_id id) {
+bool tc_entity_pool_enabled(const tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) return false;
-    return pool->active[id.index];
+    return pool->enabled[id.index];
 }
 
-void tc_entity_pool_set_active(tc_entity_pool* pool, tc_entity_id id, bool v) {
+void tc_entity_pool_set_enabled(tc_entity_pool* pool, tc_entity_id id, bool v) {
     if (!tc_entity_pool_alive(pool, id)) return;
-    pool->active[id.index] = v;
+    pool->enabled[id.index] = v;
 }
 
 bool tc_entity_pool_pickable(const tc_entity_pool* pool, tc_entity_id id) {
@@ -1122,6 +1122,10 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
 
+    // Set owner entity reference
+    c->owner_entity_id = id;
+    c->owner_pool = pool;
+
     // Keep Python object alive while attached to entity
     if (c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
         Py_INCREF((PyObject*)c->py_wrap);
@@ -1144,6 +1148,10 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
 
     // Notify component it's being removed from entity
     tc_component_on_removed_from_entity(c);
+
+    // Clear owner entity reference
+    c->owner_entity_id = (tc_entity_id){0xFFFFFFFF, 0};
+    c->owner_pool = NULL;
 
     // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
@@ -1194,7 +1202,7 @@ tc_entity_id tc_entity_pool_migrate(
 
     // Copy flags
     dst_pool->visible[dst_idx] = src_pool->visible[src_idx];
-    dst_pool->active[dst_idx] = src_pool->active[src_idx];
+    dst_pool->enabled[dst_idx] = src_pool->enabled[src_idx];
     dst_pool->pickable[dst_idx] = src_pool->pickable[src_idx];
     dst_pool->selectable[dst_idx] = src_pool->selectable[src_idx];
     dst_pool->serializable[dst_idx] = src_pool->serializable[src_idx];

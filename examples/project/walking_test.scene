@@ -14,7 +14,7 @@
         "name": "Light",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -61,7 +61,7 @@
         "name": "PlatformBase",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -133,7 +133,7 @@
             "name": "Platform",
             "priority": 0,
             "visible": true,
-            "active": true,
+            "enabled": true,
             "pickable": true,
             "selectable": true,
             "layer": 0,
@@ -196,7 +196,7 @@
             "name": "entity1",
             "priority": 0,
             "visible": true,
-            "active": true,
+            "enabled": true,
             "pickable": true,
             "selectable": true,
             "layer": 0,
@@ -261,7 +261,7 @@
         "name": "ChronosphereController",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -299,7 +299,7 @@
         "name": "TimelineInitializer",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -337,7 +337,7 @@
         "name": "OriginalTimeline",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -375,7 +375,7 @@
         "name": "Glitch",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 1,
@@ -436,7 +436,7 @@
             "name": "Model",
             "priority": 0,
             "visible": true,
-            "active": true,
+            "enabled": true,
             "pickable": true,
             "selectable": true,
             "layer": 1,
@@ -866,7 +866,7 @@
                 "name": "mixamorig:Hips",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -896,7 +896,7 @@
                     "name": "mixamorig:Spine",
                     "priority": 0,
                     "visible": true,
-                    "active": true,
+                    "enabled": true,
                     "pickable": true,
                     "selectable": true,
                     "layer": 1,
@@ -942,7 +942,7 @@
                         "name": "mixamorig:Spine1",
                         "priority": 0,
                         "visible": true,
-                        "active": true,
+                        "enabled": true,
                         "pickable": true,
                         "selectable": true,
                         "layer": 1,
@@ -972,7 +972,7 @@
                             "name": "mixamorig:Spine2",
                             "priority": 0,
                             "visible": true,
-                            "active": true,
+                            "enabled": true,
                             "pickable": true,
                             "selectable": true,
                             "layer": 1,
@@ -1002,7 +1002,7 @@
                                 "name": "mixamorig:Neck",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
                                 "layer": 1,
@@ -1032,7 +1032,7 @@
                                     "name": "mixamorig:Head",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
                                     "layer": 1,
@@ -1078,7 +1078,7 @@
                                         "name": "mixamorig:HeadTop_End",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
                                         "layer": 1,
@@ -1108,7 +1108,7 @@
                                             "name": "mixamorig:HeadTop_End_end",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
                                             "layer": 1,
@@ -1138,7 +1138,7 @@
                                                 "name": "mixamorig:HeadTop_End_end_end",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -1177,7 +1177,7 @@
                                 "name": "mixamorig:LeftShoulder",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
                                 "layer": 1,
@@ -1207,7 +1207,7 @@
                                     "name": "mixamorig:LeftArm",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
                                     "layer": 1,
@@ -1253,7 +1253,7 @@
                                         "name": "mixamorig:LeftForeArm",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
                                         "layer": 1,
@@ -1299,7 +1299,7 @@
                                             "name": "mixamorig:LeftHand",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
                                             "layer": 1,
@@ -1345,7 +1345,7 @@
                                                 "name": "mixamorig:LeftHandThumb1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -1375,7 +1375,7 @@
                                                     "name": "mixamorig:LeftHandThumb2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -1405,7 +1405,7 @@
                                                         "name": "mixamorig:LeftHandThumb3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -1435,7 +1435,7 @@
                                                             "name": "mixamorig:LeftHandThumb4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -1465,7 +1465,7 @@
                                                                 "name": "mixamorig:LeftHandThumb4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -1495,7 +1495,7 @@
                                                                     "name": "mixamorig:LeftHandThumb4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -1536,7 +1536,7 @@
                                                 "name": "mixamorig:LeftHandIndex1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -1566,7 +1566,7 @@
                                                     "name": "mixamorig:LeftHandIndex2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -1596,7 +1596,7 @@
                                                         "name": "mixamorig:LeftHandIndex3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -1626,7 +1626,7 @@
                                                             "name": "mixamorig:LeftHandIndex4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -1656,7 +1656,7 @@
                                                                 "name": "mixamorig:LeftHandIndex4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -1686,7 +1686,7 @@
                                                                     "name": "mixamorig:LeftHandIndex4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -1727,7 +1727,7 @@
                                                 "name": "mixamorig:LeftHandMiddle1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -1757,7 +1757,7 @@
                                                     "name": "mixamorig:LeftHandMiddle2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -1787,7 +1787,7 @@
                                                         "name": "mixamorig:LeftHandMiddle3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -1817,7 +1817,7 @@
                                                             "name": "mixamorig:LeftHandMiddle4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -1847,7 +1847,7 @@
                                                                 "name": "mixamorig:LeftHandMiddle4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -1877,7 +1877,7 @@
                                                                     "name": "mixamorig:LeftHandMiddle4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -1918,7 +1918,7 @@
                                                 "name": "mixamorig:LeftHandRing1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -1948,7 +1948,7 @@
                                                     "name": "mixamorig:LeftHandRing2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -1978,7 +1978,7 @@
                                                         "name": "mixamorig:LeftHandRing3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -2008,7 +2008,7 @@
                                                             "name": "mixamorig:LeftHandRing4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -2038,7 +2038,7 @@
                                                                 "name": "mixamorig:LeftHandRing4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -2068,7 +2068,7 @@
                                                                     "name": "mixamorig:LeftHandRing4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -2109,7 +2109,7 @@
                                                 "name": "mixamorig:LeftHandPinky1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -2139,7 +2139,7 @@
                                                     "name": "mixamorig:LeftHandPinky2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -2169,7 +2169,7 @@
                                                         "name": "mixamorig:LeftHandPinky3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -2199,7 +2199,7 @@
                                                             "name": "mixamorig:LeftHandPinky4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -2229,7 +2229,7 @@
                                                                 "name": "mixamorig:LeftHandPinky4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -2259,7 +2259,7 @@
                                                                     "name": "mixamorig:LeftHandPinky4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -2308,7 +2308,7 @@
                                 "name": "mixamorig:RightShoulder",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
                                 "layer": 1,
@@ -2338,7 +2338,7 @@
                                     "name": "mixamorig:RightArm",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
                                     "layer": 1,
@@ -2384,7 +2384,7 @@
                                         "name": "mixamorig:RightForeArm",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
                                         "layer": 1,
@@ -2430,7 +2430,7 @@
                                             "name": "mixamorig:RightHand",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
                                             "layer": 1,
@@ -2476,7 +2476,7 @@
                                                 "name": "mixamorig:RightHandThumb1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -2506,7 +2506,7 @@
                                                     "name": "mixamorig:RightHandThumb2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -2536,7 +2536,7 @@
                                                         "name": "mixamorig:RightHandThumb3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -2566,7 +2566,7 @@
                                                             "name": "mixamorig:RightHandThumb4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -2596,7 +2596,7 @@
                                                                 "name": "mixamorig:RightHandThumb4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -2626,7 +2626,7 @@
                                                                     "name": "mixamorig:RightHandThumb4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -2667,7 +2667,7 @@
                                                 "name": "mixamorig:RightHandIndex1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -2697,7 +2697,7 @@
                                                     "name": "mixamorig:RightHandIndex2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -2727,7 +2727,7 @@
                                                         "name": "mixamorig:RightHandIndex3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -2757,7 +2757,7 @@
                                                             "name": "mixamorig:RightHandIndex4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -2787,7 +2787,7 @@
                                                                 "name": "mixamorig:RightHandIndex4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -2817,7 +2817,7 @@
                                                                     "name": "mixamorig:RightHandIndex4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -2858,7 +2858,7 @@
                                                 "name": "mixamorig:RightHandMiddle1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -2888,7 +2888,7 @@
                                                     "name": "mixamorig:RightHandMiddle2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -2918,7 +2918,7 @@
                                                         "name": "mixamorig:RightHandMiddle3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -2948,7 +2948,7 @@
                                                             "name": "mixamorig:RightHandMiddle4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -2978,7 +2978,7 @@
                                                                 "name": "mixamorig:RightHandMiddle4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -3008,7 +3008,7 @@
                                                                     "name": "mixamorig:RightHandMiddle4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -3049,7 +3049,7 @@
                                                 "name": "mixamorig:RightHandRing1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -3079,7 +3079,7 @@
                                                     "name": "mixamorig:RightHandRing2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -3109,7 +3109,7 @@
                                                         "name": "mixamorig:RightHandRing3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -3139,7 +3139,7 @@
                                                             "name": "mixamorig:RightHandRing4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -3169,7 +3169,7 @@
                                                                 "name": "mixamorig:RightHandRing4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -3199,7 +3199,7 @@
                                                                     "name": "mixamorig:RightHandRing4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -3240,7 +3240,7 @@
                                                 "name": "mixamorig:RightHandPinky1",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
                                                 "layer": 1,
@@ -3270,7 +3270,7 @@
                                                     "name": "mixamorig:RightHandPinky2",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
                                                     "layer": 1,
@@ -3300,7 +3300,7 @@
                                                         "name": "mixamorig:RightHandPinky3",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
                                                         "layer": 1,
@@ -3330,7 +3330,7 @@
                                                             "name": "mixamorig:RightHandPinky4",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
                                                             "layer": 1,
@@ -3360,7 +3360,7 @@
                                                                 "name": "mixamorig:RightHandPinky4_end",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
                                                                 "layer": 1,
@@ -3390,7 +3390,7 @@
                                                                     "name": "mixamorig:RightHandPinky4_end_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
                                                                     "layer": 1,
@@ -3445,7 +3445,7 @@
                     "name": "mixamorig:LeftUpLeg",
                     "priority": 0,
                     "visible": true,
-                    "active": true,
+                    "enabled": true,
                     "pickable": true,
                     "selectable": true,
                     "layer": 1,
@@ -3491,7 +3491,7 @@
                         "name": "mixamorig:LeftLeg",
                         "priority": 0,
                         "visible": true,
-                        "active": true,
+                        "enabled": true,
                         "pickable": true,
                         "selectable": true,
                         "layer": 1,
@@ -3537,7 +3537,7 @@
                             "name": "mixamorig:LeftFoot",
                             "priority": 0,
                             "visible": true,
-                            "active": true,
+                            "enabled": true,
                             "pickable": true,
                             "selectable": true,
                             "layer": 1,
@@ -3583,7 +3583,7 @@
                                 "name": "mixamorig:LeftToeBase",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
                                 "layer": 1,
@@ -3613,7 +3613,7 @@
                                     "name": "mixamorig:LeftToe_End",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
                                     "layer": 1,
@@ -3643,7 +3643,7 @@
                                         "name": "mixamorig:LeftToe_End_end",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
                                         "layer": 1,
@@ -3673,7 +3673,7 @@
                                             "name": "mixamorig:LeftToe_End_end_end",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
                                             "layer": 1,
@@ -3716,7 +3716,7 @@
                     "name": "mixamorig:RightUpLeg",
                     "priority": 0,
                     "visible": true,
-                    "active": true,
+                    "enabled": true,
                     "pickable": true,
                     "selectable": true,
                     "layer": 1,
@@ -3762,7 +3762,7 @@
                         "name": "mixamorig:RightLeg",
                         "priority": 0,
                         "visible": true,
-                        "active": true,
+                        "enabled": true,
                         "pickable": true,
                         "selectable": true,
                         "layer": 1,
@@ -3808,7 +3808,7 @@
                             "name": "mixamorig:RightFoot",
                             "priority": 0,
                             "visible": true,
-                            "active": true,
+                            "enabled": true,
                             "pickable": true,
                             "selectable": true,
                             "layer": 1,
@@ -3854,7 +3854,7 @@
                                 "name": "mixamorig:RightToeBase",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
                                 "layer": 1,
@@ -3884,7 +3884,7 @@
                                     "name": "mixamorig:RightToe_End",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
                                     "layer": 1,
@@ -3914,7 +3914,7 @@
                                         "name": "mixamorig:RightToe_End_end",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
                                         "layer": 1,
@@ -3944,7 +3944,7 @@
                                             "name": "mixamorig:RightToe_End_end_end",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
                                             "layer": 1,
@@ -3989,7 +3989,7 @@
                 "name": "gymuniformMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4037,7 +4037,7 @@
                 "name": "jammers3Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4085,7 +4085,7 @@
                 "name": "low-polyMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4133,7 +4133,7 @@
                 "name": "male_muscle_13290Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4181,7 +4181,7 @@
                 "name": "male_muscle_13290Mesh.001",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4229,7 +4229,7 @@
                 "name": "MC-SciFi-Armor_HeliosMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4277,7 +4277,7 @@
                 "name": "mens_shirt_untuck_elvbhp1fMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4325,7 +4325,7 @@
                 "name": "mens_shirt_untuck_elvbhp1fMesh.001",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4373,7 +4373,7 @@
                 "name": "mens_tanks_elv1fMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4421,7 +4421,7 @@
                 "name": "mens_trouser_f_elv_chrMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4469,7 +4469,7 @@
                 "name": "mind_eyebrows_14Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4517,7 +4517,7 @@
                 "name": "mind_eyelashes_03Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4565,7 +4565,7 @@
                 "name": "shoes06Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4613,7 +4613,7 @@
                 "name": "spikyMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4665,7 +4665,7 @@
         "name": "GameController",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -4709,7 +4709,7 @@
         "name": "MainCamera",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -4772,7 +4772,7 @@
         "name": "Arthur",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 1,
@@ -4808,26 +4808,18 @@
             "data": {
               "enabled": true
             }
-          },
-          {
-            "type": "HumanModelCollider",
-            "data": {
-              "enabled": true,
-              "scale": 1.0,
-              "overlap_radius": 0.023
-            }
           }
         ],
         "children": [
           {
             "uuid": "00000000000000e3",
-            "name": "ArthurDecimated",
+            "name": "Model",
             "priority": 0,
             "visible": true,
-            "active": true,
+            "enabled": true,
             "pickable": true,
             "selectable": true,
-            "layer": 0,
+            "layer": 1,
             "flags": 0,
             "pose": {
               "position": [
@@ -5429,6 +5421,14 @@
                   "_current_clip_name": "",
                   "playing": false
                 }
+              },
+              {
+                "type": "HumanModelCollider",
+                "data": {
+                  "enabled": true,
+                  "scale": 1.0,
+                  "overlap_radius": 0.18
+                }
               }
             ],
             "children": [
@@ -5437,10 +5437,10 @@
                 "name": "cargo_pantsMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5485,10 +5485,10 @@
                 "name": "collier_02Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5533,10 +5533,10 @@
                 "name": "combatbootsMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5581,10 +5581,10 @@
                 "name": "eyebrow001Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5629,10 +5629,10 @@
                 "name": "eyelashes01Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5677,10 +5677,10 @@
                 "name": "Glactic_Warrior_02Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5725,10 +5725,10 @@
                 "name": "harvey_vestv1Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5773,10 +5773,10 @@
                 "name": "jade_maskMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5821,10 +5821,10 @@
                 "name": "jammers3Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5869,10 +5869,10 @@
                 "name": "low-polyMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5917,10 +5917,10 @@
                 "name": "male_muscle_13290Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -5951,8 +5951,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b",
+                        "name": "AdvancedSkin"
                       },
                       "cast_shadow": true
                     }
@@ -5965,10 +5965,10 @@
                 "name": "male_muscle_13290Mesh.001",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6013,10 +6013,10 @@
                 "name": "MC-BodySuit-2021Mesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6061,10 +6061,10 @@
                 "name": "mens_cargo_short1jMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6109,10 +6109,10 @@
                 "name": "mens_tanks_elv1fMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6157,10 +6157,10 @@
                 "name": "mma_glovesMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6205,10 +6205,10 @@
                 "name": "Monks_HoodMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6253,10 +6253,10 @@
                 "name": "sneakersMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6301,10 +6301,10 @@
                 "name": "spikyMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6335,8 +6335,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "e4dee1c0-cbfb-4092-a3b1-592371eac13d",
+                        "name": "Hair"
                       },
                       "cast_shadow": true
                     }
@@ -6349,10 +6349,10 @@
                 "name": "Vietnam_Military_JacketMesh",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6397,10 +6397,10 @@
                 "name": "Base",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -6427,10 +6427,10 @@
                     "name": "mixamorig:Hips",
                     "priority": 0,
                     "visible": true,
-                    "active": true,
+                    "enabled": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
+                    "layer": 1,
                     "flags": 0,
                     "pose": {
                       "position": [
@@ -6457,10 +6457,10 @@
                         "name": "mixamorig:Spine",
                         "priority": 0,
                         "visible": true,
-                        "active": true,
+                        "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
+                        "layer": 1,
                         "flags": 0,
                         "pose": {
                           "position": [
@@ -6480,17 +6480,33 @@
                           0.9999999403953552,
                           0.9999999403953552
                         ],
-                        "components": [],
+                        "components": [
+                          {
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Capsule",
+                              "box_size": [
+                                1.0,
+                                1.0,
+                                1.0
+                              ],
+                              "sphere_radius": 0.5,
+                              "capsule_height": 0.06,
+                              "capsule_radius": 0.194
+                            }
+                          }
+                        ],
                         "children": [
                           {
                             "uuid": "00000000000000fb",
                             "name": "mixamorig:Spine1",
                             "priority": 0,
                             "visible": true,
-                            "active": true,
+                            "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
+                            "layer": 1,
                             "flags": 0,
                             "pose": {
                               "position": [
@@ -6517,10 +6533,10 @@
                                 "name": "mixamorig:Spine2",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -6547,10 +6563,10 @@
                                     "name": "mixamorig:Neck",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -6577,10 +6593,10 @@
                                         "name": "mixamorig:Head",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -6600,17 +6616,33 @@
                                           0.9999999403953552,
                                           0.9999999403953552
                                         ],
-                                        "components": [],
+                                        "components": [
+                                          {
+                                            "type": "ColliderComponent",
+                                            "data": {
+                                              "enabled": true,
+                                              "collider_type": "Sphere",
+                                              "box_size": [
+                                                1.0,
+                                                1.0,
+                                                1.0
+                                              ],
+                                              "sphere_radius": 0.191,
+                                              "capsule_height": 1.0,
+                                              "capsule_radius": 0.25
+                                            }
+                                          }
+                                        ],
                                         "children": [
                                           {
                                             "uuid": "00000000000000ff",
                                             "name": "mixamorig:HeadTop_End",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -6637,10 +6669,10 @@
                                                 "name": "mixamorig:HeadTop_End_end",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -6674,10 +6706,10 @@
                                     "name": "mixamorig:LeftShoulder",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -6704,10 +6736,10 @@
                                         "name": "mixamorig:LeftArm",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -6727,17 +6759,33 @@
                                           1.0000001192092896,
                                           1.0000001192092896
                                         ],
-                                        "components": [],
+                                        "components": [
+                                          {
+                                            "type": "ColliderComponent",
+                                            "data": {
+                                              "enabled": true,
+                                              "collider_type": "Capsule",
+                                              "box_size": [
+                                                1.0,
+                                                1.0,
+                                                1.0
+                                              ],
+                                              "sphere_radius": 0.5,
+                                              "capsule_height": 0.03,
+                                              "capsule_radius": 0.186
+                                            }
+                                          }
+                                        ],
                                         "children": [
                                           {
                                             "uuid": "0000000000000103",
                                             "name": "mixamorig:LeftForeArm",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -6757,17 +6805,33 @@
                                               1,
                                               0.9999999403953552
                                             ],
-                                            "components": [],
+                                            "components": [
+                                              {
+                                                "type": "ColliderComponent",
+                                                "data": {
+                                                  "enabled": true,
+                                                  "collider_type": "Capsule",
+                                                  "box_size": [
+                                                    1.0,
+                                                    1.0,
+                                                    1.0
+                                                  ],
+                                                  "sphere_radius": 0.5,
+                                                  "capsule_height": 0.03,
+                                                  "capsule_radius": 0.186
+                                                }
+                                              }
+                                            ],
                                             "children": [
                                               {
                                                 "uuid": "0000000000000104",
                                                 "name": "mixamorig:LeftHand",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -6787,17 +6851,33 @@
                                                   0.9999998211860657,
                                                   0.9999999403953552
                                                 ],
-                                                "components": [],
+                                                "components": [
+                                                  {
+                                                    "type": "ColliderComponent",
+                                                    "data": {
+                                                      "enabled": true,
+                                                      "collider_type": "Capsule",
+                                                      "box_size": [
+                                                        1.0,
+                                                        1.0,
+                                                        1.0
+                                                      ],
+                                                      "sphere_radius": 0.5,
+                                                      "capsule_height": 0.03,
+                                                      "capsule_radius": 0.188
+                                                    }
+                                                  }
+                                                ],
                                                 "children": [
                                                   {
                                                     "uuid": "0000000000000105",
                                                     "name": "mixamorig:LeftHandThumb1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -6824,10 +6904,10 @@
                                                         "name": "mixamorig:LeftHandThumb2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -6854,10 +6934,10 @@
                                                             "name": "mixamorig:LeftHandThumb3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -6884,10 +6964,10 @@
                                                                 "name": "mixamorig:LeftHandThumb4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -6914,10 +6994,10 @@
                                                                     "name": "mixamorig:LeftHandThumb4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -6953,10 +7033,10 @@
                                                     "name": "mixamorig:LeftHandIndex1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -6983,10 +7063,10 @@
                                                         "name": "mixamorig:LeftHandIndex2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -7013,10 +7093,10 @@
                                                             "name": "mixamorig:LeftHandIndex3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -7043,10 +7123,10 @@
                                                                 "name": "mixamorig:LeftHandIndex4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -7073,10 +7153,10 @@
                                                                     "name": "mixamorig:LeftHandIndex4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -7112,10 +7192,10 @@
                                                     "name": "mixamorig:LeftHandMiddle1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -7142,10 +7222,10 @@
                                                         "name": "mixamorig:LeftHandMiddle2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -7172,10 +7252,10 @@
                                                             "name": "mixamorig:LeftHandMiddle3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -7202,10 +7282,10 @@
                                                                 "name": "mixamorig:LeftHandMiddle4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -7232,10 +7312,10 @@
                                                                     "name": "mixamorig:LeftHandMiddle4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -7271,10 +7351,10 @@
                                                     "name": "mixamorig:LeftHandRing1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -7301,10 +7381,10 @@
                                                         "name": "mixamorig:LeftHandRing2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -7331,10 +7411,10 @@
                                                             "name": "mixamorig:LeftHandRing3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -7361,10 +7441,10 @@
                                                                 "name": "mixamorig:LeftHandRing4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -7391,10 +7471,10 @@
                                                                     "name": "mixamorig:LeftHandRing4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -7430,10 +7510,10 @@
                                                     "name": "mixamorig:LeftHandPinky1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -7460,10 +7540,10 @@
                                                         "name": "mixamorig:LeftHandPinky2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -7490,10 +7570,10 @@
                                                             "name": "mixamorig:LeftHandPinky3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -7520,10 +7600,10 @@
                                                                 "name": "mixamorig:LeftHandPinky4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -7550,10 +7630,10 @@
                                                                     "name": "mixamorig:LeftHandPinky4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -7597,10 +7677,10 @@
                                     "name": "mixamorig:RightShoulder",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -7627,10 +7707,10 @@
                                         "name": "mixamorig:RightArm",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -7650,17 +7730,33 @@
                                           0.9999999403953552,
                                           0.9999998211860657
                                         ],
-                                        "components": [],
+                                        "components": [
+                                          {
+                                            "type": "ColliderComponent",
+                                            "data": {
+                                              "enabled": true,
+                                              "collider_type": "Capsule",
+                                              "box_size": [
+                                                1.0,
+                                                1.0,
+                                                1.0
+                                              ],
+                                              "sphere_radius": 0.5,
+                                              "capsule_height": 0.03,
+                                              "capsule_radius": 0.186
+                                            }
+                                          }
+                                        ],
                                         "children": [
                                           {
                                             "uuid": "0000000000000120",
                                             "name": "mixamorig:RightForeArm",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -7680,17 +7776,33 @@
                                               1,
                                               1
                                             ],
-                                            "components": [],
+                                            "components": [
+                                              {
+                                                "type": "ColliderComponent",
+                                                "data": {
+                                                  "enabled": true,
+                                                  "collider_type": "Capsule",
+                                                  "box_size": [
+                                                    1.0,
+                                                    1.0,
+                                                    1.0
+                                                  ],
+                                                  "sphere_radius": 0.5,
+                                                  "capsule_height": 0.03,
+                                                  "capsule_radius": 0.186
+                                                }
+                                              }
+                                            ],
                                             "children": [
                                               {
                                                 "uuid": "0000000000000121",
                                                 "name": "mixamorig:RightHand",
                                                 "priority": 0,
                                                 "visible": true,
-                                                "active": true,
+                                                "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 0,
+                                                "layer": 1,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
@@ -7710,17 +7822,33 @@
                                                   1,
                                                   1.0000001192092896
                                                 ],
-                                                "components": [],
+                                                "components": [
+                                                  {
+                                                    "type": "ColliderComponent",
+                                                    "data": {
+                                                      "enabled": true,
+                                                      "collider_type": "Capsule",
+                                                      "box_size": [
+                                                        1.0,
+                                                        1.0,
+                                                        1.0
+                                                      ],
+                                                      "sphere_radius": 0.5,
+                                                      "capsule_height": 0.03,
+                                                      "capsule_radius": 0.188
+                                                    }
+                                                  }
+                                                ],
                                                 "children": [
                                                   {
                                                     "uuid": "0000000000000122",
                                                     "name": "mixamorig:RightHandThumb1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -7747,10 +7875,10 @@
                                                         "name": "mixamorig:RightHandThumb2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -7777,10 +7905,10 @@
                                                             "name": "mixamorig:RightHandThumb3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -7807,10 +7935,10 @@
                                                                 "name": "mixamorig:RightHandThumb4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -7837,10 +7965,10 @@
                                                                     "name": "mixamorig:RightHandThumb4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -7876,10 +8004,10 @@
                                                     "name": "mixamorig:RightHandIndex1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -7906,10 +8034,10 @@
                                                         "name": "mixamorig:RightHandIndex2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -7936,10 +8064,10 @@
                                                             "name": "mixamorig:RightHandIndex3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -7966,10 +8094,10 @@
                                                                 "name": "mixamorig:RightHandIndex4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -7996,10 +8124,10 @@
                                                                     "name": "mixamorig:RightHandIndex4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -8035,10 +8163,10 @@
                                                     "name": "mixamorig:RightHandMiddle1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -8065,10 +8193,10 @@
                                                         "name": "mixamorig:RightHandMiddle2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -8095,10 +8223,10 @@
                                                             "name": "mixamorig:RightHandMiddle3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -8125,10 +8253,10 @@
                                                                 "name": "mixamorig:RightHandMiddle4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -8155,10 +8283,10 @@
                                                                     "name": "mixamorig:RightHandMiddle4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -8194,10 +8322,10 @@
                                                     "name": "mixamorig:RightHandRing1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -8224,10 +8352,10 @@
                                                         "name": "mixamorig:RightHandRing2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -8254,10 +8382,10 @@
                                                             "name": "mixamorig:RightHandRing3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -8284,10 +8412,10 @@
                                                                 "name": "mixamorig:RightHandRing4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -8314,10 +8442,10 @@
                                                                     "name": "mixamorig:RightHandRing4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -8353,10 +8481,10 @@
                                                     "name": "mixamorig:RightHandPinky1",
                                                     "priority": 0,
                                                     "visible": true,
-                                                    "active": true,
+                                                    "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 0,
+                                                    "layer": 1,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
@@ -8383,10 +8511,10 @@
                                                         "name": "mixamorig:RightHandPinky2",
                                                         "priority": 0,
                                                         "visible": true,
-                                                        "active": true,
+                                                        "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 0,
+                                                        "layer": 1,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
@@ -8413,10 +8541,10 @@
                                                             "name": "mixamorig:RightHandPinky3",
                                                             "priority": 0,
                                                             "visible": true,
-                                                            "active": true,
+                                                            "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 0,
+                                                            "layer": 1,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
@@ -8443,10 +8571,10 @@
                                                                 "name": "mixamorig:RightHandPinky4",
                                                                 "priority": 0,
                                                                 "visible": true,
-                                                                "active": true,
+                                                                "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 0,
+                                                                "layer": 1,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
@@ -8473,10 +8601,10 @@
                                                                     "name": "mixamorig:RightHandPinky4_end",
                                                                     "priority": 0,
                                                                     "visible": true,
-                                                                    "active": true,
+                                                                    "enabled": true,
                                                                     "pickable": true,
                                                                     "selectable": true,
-                                                                    "layer": 0,
+                                                                    "layer": 1,
                                                                     "flags": 0,
                                                                     "pose": {
                                                                       "position": [
@@ -8526,10 +8654,10 @@
                         "name": "mixamorig:LeftUpLeg",
                         "priority": 0,
                         "visible": true,
-                        "active": true,
+                        "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
+                        "layer": 1,
                         "flags": 0,
                         "pose": {
                           "position": [
@@ -8549,17 +8677,33 @@
                           1.000000238418579,
                           1
                         ],
-                        "components": [],
+                        "components": [
+                          {
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Capsule",
+                              "box_size": [
+                                1.0,
+                                1.0,
+                                1.0
+                              ],
+                              "sphere_radius": 0.5,
+                              "capsule_height": 0.05,
+                              "capsule_radius": 0.188
+                            }
+                          }
+                        ],
                         "children": [
                           {
                             "uuid": "000000000000013c",
                             "name": "mixamorig:LeftLeg",
                             "priority": 0,
                             "visible": true,
-                            "active": true,
+                            "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
+                            "layer": 1,
                             "flags": 0,
                             "pose": {
                               "position": [
@@ -8579,17 +8723,33 @@
                               0.9999998807907104,
                               0.9999998807907104
                             ],
-                            "components": [],
+                            "components": [
+                              {
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Capsule",
+                                  "box_size": [
+                                    1.0,
+                                    1.0,
+                                    1.0
+                                  ],
+                                  "sphere_radius": 0.5,
+                                  "capsule_height": 0.05,
+                                  "capsule_radius": 0.188
+                                }
+                              }
+                            ],
                             "children": [
                               {
                                 "uuid": "000000000000013d",
                                 "name": "mixamorig:LeftFoot",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -8609,17 +8769,33 @@
                                   1.0000001192092896,
                                   1.0000001192092896
                                 ],
-                                "components": [],
+                                "components": [
+                                  {
+                                    "type": "ColliderComponent",
+                                    "data": {
+                                      "enabled": true,
+                                      "collider_type": "Capsule",
+                                      "box_size": [
+                                        1.0,
+                                        1.0,
+                                        1.0
+                                      ],
+                                      "sphere_radius": 0.5,
+                                      "capsule_height": 0.03,
+                                      "capsule_radius": 0.188
+                                    }
+                                  }
+                                ],
                                 "children": [
                                   {
                                     "uuid": "000000000000013e",
                                     "name": "mixamorig:LeftToeBase",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -8646,10 +8822,10 @@
                                         "name": "mixamorig:LeftToe_End",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -8676,10 +8852,10 @@
                                             "name": "mixamorig:LeftToe_End_end",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -8717,10 +8893,10 @@
                         "name": "mixamorig:RightUpLeg",
                         "priority": 0,
                         "visible": true,
-                        "active": true,
+                        "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
+                        "layer": 1,
                         "flags": 0,
                         "pose": {
                           "position": [
@@ -8740,17 +8916,33 @@
                           1.000001072883606,
                           0.9999998807907104
                         ],
-                        "components": [],
+                        "components": [
+                          {
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Capsule",
+                              "box_size": [
+                                1.0,
+                                1.0,
+                                1.0
+                              ],
+                              "sphere_radius": 0.5,
+                              "capsule_height": 0.05,
+                              "capsule_radius": 0.188
+                            }
+                          }
+                        ],
                         "children": [
                           {
                             "uuid": "0000000000000142",
                             "name": "mixamorig:RightLeg",
                             "priority": 0,
                             "visible": true,
-                            "active": true,
+                            "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
+                            "layer": 1,
                             "flags": 0,
                             "pose": {
                               "position": [
@@ -8770,17 +8962,33 @@
                               1.0000001192092896,
                               1
                             ],
-                            "components": [],
+                            "components": [
+                              {
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Capsule",
+                                  "box_size": [
+                                    1.0,
+                                    1.0,
+                                    1.0
+                                  ],
+                                  "sphere_radius": 0.5,
+                                  "capsule_height": 0.05,
+                                  "capsule_radius": 0.188
+                                }
+                              }
+                            ],
                             "children": [
                               {
                                 "uuid": "0000000000000143",
                                 "name": "mixamorig:RightFoot",
                                 "priority": 0,
                                 "visible": true,
-                                "active": true,
+                                "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 0,
+                                "layer": 1,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
@@ -8800,17 +9008,33 @@
                                   1,
                                   1
                                 ],
-                                "components": [],
+                                "components": [
+                                  {
+                                    "type": "ColliderComponent",
+                                    "data": {
+                                      "enabled": true,
+                                      "collider_type": "Capsule",
+                                      "box_size": [
+                                        1.0,
+                                        1.0,
+                                        1.0
+                                      ],
+                                      "sphere_radius": 0.5,
+                                      "capsule_height": 0.03,
+                                      "capsule_radius": 0.188
+                                    }
+                                  }
+                                ],
                                 "children": [
                                   {
                                     "uuid": "0000000000000144",
                                     "name": "mixamorig:RightToeBase",
                                     "priority": 0,
                                     "visible": true,
-                                    "active": true,
+                                    "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 0,
+                                    "layer": 1,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
@@ -8837,10 +9061,10 @@
                                         "name": "mixamorig:RightToe_End",
                                         "priority": 0,
                                         "visible": true,
-                                        "active": true,
+                                        "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 0,
+                                        "layer": 1,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
@@ -8867,10 +9091,10 @@
                                             "name": "mixamorig:RightToe_End_end",
                                             "priority": 0,
                                             "visible": true,
-                                            "active": true,
+                                            "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 0,
+                                            "layer": 1,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
@@ -8912,10 +9136,10 @@
                 "name": "neutral_bone",
                 "priority": 0,
                 "visible": true,
-                "active": true,
+                "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
+                "layer": 1,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -8947,7 +9171,7 @@
         "name": "ActionServer",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -8985,7 +9209,7 @@
         "name": "VisualEffects",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -9023,7 +9247,7 @@
         "name": "entity2",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -9071,7 +9295,7 @@
         "name": "entity3",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -9119,7 +9343,7 @@
         "name": "entity4",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,
@@ -9224,27 +9448,25 @@
   "editor": {
     "camera": {
       "position": [
-        1.945704460144043,
-        1.2264947891235352,
-        3.029466390609741
+        2.920316696166992,
+        1.7248910665512085,
+        1.177734613418579
       ],
       "rotation": [
-        -0.034024615159973425,
-        -0.2853391079734267,
-        0.9510846990299031,
-        0.1134099391382596
+        0.0011766722134911615,
+        0.003286318204237145,
+        0.941464814401724,
+        0.33709319008056177
       ],
-      "radius": 4.0
+      "radius": 3.0
     },
-    "selected_entity": "Vietnam_Military_JacketMesh",
+    "selected_entity": "harvey_vestv1Mesh",
     "expanded_entities": [
-      "editor_ui",
-      "Arthur",
-      "Model",
-      "ArthurDecimated",
-      "camera",
       "EditorEntities",
-      "Glitch"
+      "editor_ui",
+      "camera",
+      "Arthur",
+      "Model"
     ]
   },
   "resources": {

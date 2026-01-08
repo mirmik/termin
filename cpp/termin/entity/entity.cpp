@@ -171,7 +171,7 @@ Entity Entity::find_child(const std::string& name) const {
 }
 
 void Entity::update(float dt) {
-    if (!valid() || !active()) return;
+    if (!valid() || !enabled()) return;
 
     // Update components
     size_t count = component_count();
@@ -203,7 +203,7 @@ nos::trent Entity::serialize_base() const {
     data["name"] = std::string(name());
     data["priority"] = priority();
     data["visible"] = visible();
-    data["active"] = active();
+    data["enabled"] = enabled();
     data["pickable"] = pickable();
     data["selectable"] = selectable();
     data["layer"] = static_cast<int64_t>(layer());
@@ -309,7 +309,12 @@ Entity Entity::deserialize(tc_entity_pool* pool, const nos::trent& data) {
     // Restore flags
     ent.set_priority(static_cast<int>(data["priority"].as_numer_default(0)));
     ent.set_visible(data["visible"].as_bool_default(true));
-    ent.set_active(data["active"].as_bool_default(true));
+    // Support both "enabled" (new) and "active" (legacy) keys
+    if (data.contains("enabled")) {
+        ent.set_enabled(data["enabled"].as_bool_default(true));
+    } else {
+        ent.set_enabled(data["active"].as_bool_default(true));
+    }
     ent.set_pickable(data["pickable"].as_bool_default(true));
     ent.set_selectable(data["selectable"].as_bool_default(true));
     ent.set_layer(static_cast<uint64_t>(data["layer"].as_numer_default(1)));

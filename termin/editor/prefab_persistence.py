@@ -164,7 +164,7 @@ class PrefabPersistence:
                 "priority": 0,
                 "scale": [1.0, 1.0, 1.0],
                 "visible": True,
-                "active": True,
+                "enabled": True,
                 "pickable": True,
                 "selectable": True,
                 "pose": {

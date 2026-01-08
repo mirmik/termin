@@ -24,10 +24,13 @@ extern "C" {
 // EntityId - generational index
 // ============================================================================
 
+#ifndef TC_ENTITY_ID_DEFINED
+#define TC_ENTITY_ID_DEFINED
 typedef struct {
     uint32_t index;
     uint32_t generation;
 } tc_entity_id;
+#endif
 
 #ifdef __cplusplus
     #define TC_ENTITY_ID_INVALID (tc_entity_id{0xFFFFFFFF, 0})
@@ -90,8 +93,8 @@ TC_POOL_API uint64_t tc_entity_pool_runtime_id(const tc_entity_pool* pool, tc_en
 TC_POOL_API bool tc_entity_pool_visible(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_visible(tc_entity_pool* pool, tc_entity_id id, bool v);
 
-TC_POOL_API bool tc_entity_pool_active(const tc_entity_pool* pool, tc_entity_id id);
-TC_POOL_API void tc_entity_pool_set_active(tc_entity_pool* pool, tc_entity_id id, bool v);
+TC_POOL_API bool tc_entity_pool_enabled(const tc_entity_pool* pool, tc_entity_id id);
+TC_POOL_API void tc_entity_pool_set_enabled(tc_entity_pool* pool, tc_entity_id id, bool v);
 
 TC_POOL_API bool tc_entity_pool_pickable(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_pickable(tc_entity_pool* pool, tc_entity_id id, bool v);

@@ -77,6 +77,7 @@ class SceneTreeController:
         self._model.prefab_drop_requested.connect(self._on_prefab_drop_requested)
         self._model.fbx_drop_requested.connect(self._on_fbx_drop_requested)
         self._model.glb_drop_requested.connect(self._on_glb_drop_requested)
+        self._model.entity_enabled_changed.connect(self._on_entity_enabled_changed)
 
         sel_model = self._tree.selectionModel()
         if sel_model is not None:
@@ -390,6 +391,13 @@ class SceneTreeController:
         if copy is not None:
             self.add_entity_hierarchy(copy)
 
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    # ---------- entity enabled toggle ----------
+
+    def _on_entity_enabled_changed(self, entity: Entity, enabled: bool) -> None:
+        """Handle entity enabled state change from checkbox."""
         if self._request_viewport_update is not None:
             self._request_viewport_update()
 

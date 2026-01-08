@@ -112,7 +112,7 @@ std::vector<DepthPass::DepthDrawCall> DepthPass::collect_draw_calls(
     std::vector<DepthDrawCall> draw_calls;
 
     for (const Entity& ent : entities) {
-        if (!ent.active() || !ent.visible()) {
+        if (!ent.visible() || !ent.enabled()) {
             continue;
         }
 

@@ -541,8 +541,8 @@ class CoreRegistryViewer(QDialog):
 
             # Add status indicators
             status = ""
-            if not entity["active"]:
-                status += " [inactive]"
+            if not entity["enabled"]:
+                status += " [disabled]"
             if not entity["visible"]:
                 status += " [hidden]"
 
@@ -569,7 +569,7 @@ class CoreRegistryViewer(QDialog):
             f"UUID:           {info['uuid']}",
             "",
             "--- State ---",
-            f"Active:         {info['active']}",
+            f"Enabled:        {info['enabled']}",
             f"Visible:        {info['visible']}",
             "",
             "--- Components ---",

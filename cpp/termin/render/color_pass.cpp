@@ -71,7 +71,7 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
     std::vector<PhaseDrawCall> draw_calls;
 
     for (const Entity& ent : entities) {
-        if (!ent.active() || !ent.visible()) {
+        if (!ent.visible() || !ent.enabled()) {
             continue;
         }
 

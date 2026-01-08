@@ -87,8 +87,8 @@ public:
     bool visible() const { return tc_entity_pool_visible(_pool, _id); }
     void set_visible(bool v) { tc_entity_pool_set_visible(_pool, _id, v); }
 
-    bool active() const { return tc_entity_pool_active(_pool, _id); }
-    void set_active(bool v) { tc_entity_pool_set_active(_pool, _id, v); }
+    bool enabled() const { return tc_entity_pool_enabled(_pool, _id); }
+    void set_enabled(bool v) { tc_entity_pool_set_enabled(_pool, _id, v); }
 
     bool pickable() const { return tc_entity_pool_pickable(_pool, _id); }
     void set_pickable(bool v) { tc_entity_pool_set_pickable(_pool, _id, v); }

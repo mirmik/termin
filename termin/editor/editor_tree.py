@@ -52,6 +52,10 @@ class SceneTreeModel(QAbstractItemModel):
     # Args: (glb_path: str, parent_entity: Entity | None)
     glb_drop_requested = pyqtSignal(str, object)
 
+    # Signal emitted when entity enabled state changes via checkbox
+    # Args: (entity: Entity, enabled: bool)
+    entity_enabled_changed = pyqtSignal(Entity, bool)
+
     def __init__(self, scene: Scene):
         super().__init__()
         self.scene = scene
@@ -139,7 +143,25 @@ class SceneTreeModel(QAbstractItemModel):
                 from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
                 if node.obj.get_component(PrefabInstanceMarker) is not None:
                     return QColor(70, 130, 220)  # Steel blue
+                # Gray color for disabled entities
+                if not node.obj.enabled:
+                    return QColor(128, 128, 128)
+        if role == Qt.ItemDataRole.CheckStateRole:
+            if isinstance(node.obj, Entity):
+                return Qt.CheckState.Checked if node.obj.enabled else Qt.CheckState.Unchecked
         return None
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if not index.isValid():
+            return False
+        node: NodeWrapper = index.internalPointer()
+        if role == Qt.ItemDataRole.CheckStateRole and isinstance(node.obj, Entity):
+            enabled = (value == Qt.CheckState.Checked)
+            node.obj.enabled = enabled
+            self.dataChanged.emit(index, index, [role, Qt.ItemDataRole.ForegroundRole])
+            self.entity_enabled_changed.emit(node.obj, enabled)
+            return True
+        return False
 
     # ==============================================================
     #   Поиск индекса по объекту сцены
@@ -335,7 +357,7 @@ class SceneTreeModel(QAbstractItemModel):
     # ==============================================================
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-        """Return item flags including drag-drop capability."""
+        """Return item flags including drag-drop capability and checkbox."""
         default_flags = super().flags(index)
 
         if not index.isValid():
@@ -344,11 +366,12 @@ class SceneTreeModel(QAbstractItemModel):
 
         node: NodeWrapper = index.internalPointer()
         if isinstance(node.obj, Entity):
-            # Entities can be dragged and can accept drops
+            # Entities can be dragged, accept drops, and have enabled checkbox
             return (
                 default_flags
                 | Qt.ItemFlag.ItemIsDragEnabled
                 | Qt.ItemFlag.ItemIsDropEnabled
+                | Qt.ItemFlag.ItemIsUserCheckable
             )
 
         return default_flags

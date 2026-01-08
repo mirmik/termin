@@ -14,7 +14,7 @@
         "name": "entity1",
         "priority": 0,
         "visible": true,
-        "active": true,
+        "enabled": true,
         "pickable": true,
         "selectable": true,
         "layer": 0,

@@ -451,7 +451,7 @@ void bind_tc_scene(nb::module_& m) {
                 d["uuid"] = infos[i].uuid ? std::string(infos[i].uuid) : "";
                 d["component_count"] = infos[i].component_count;
                 d["visible"] = infos[i].visible;
-                d["active"] = infos[i].active;
+                d["enabled"] = infos[i].enabled;
                 result.append(d);
             }
             free(infos);

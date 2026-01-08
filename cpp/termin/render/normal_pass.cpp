@@ -105,7 +105,7 @@ std::vector<NormalPass::NormalDrawCall> NormalPass::collect_draw_calls(
     std::vector<NormalDrawCall> draw_calls;
 
     for (const Entity& ent : entities) {
-        if (!ent.active() || !ent.visible()) {
+        if (!ent.visible() || !ent.enabled()) {
             continue;
         }
 

@@ -34,7 +34,7 @@ class PropertyPath:
 
     # Entity properties that can be overridden
     ENTITY_PROPS = frozenset({
-        "name", "visible", "active", "pickable", "selectable",
+        "name", "visible", "enabled", "pickable", "selectable",
         "layer", "flags", "priority",
     })
 

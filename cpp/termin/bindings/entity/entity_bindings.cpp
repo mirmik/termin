@@ -151,9 +151,9 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_rw("visible",
             [](const Entity& e) { return e.visible(); },
             [](Entity& e, bool v) { e.set_visible(v); })
-        .def_prop_rw("active",
-            [](const Entity& e) { return e.active(); },
-            [](Entity& e, bool v) { e.set_active(v); })
+        .def_prop_rw("enabled",
+            [](const Entity& e) { return e.enabled(); },
+            [](Entity& e, bool v) { e.set_enabled(v); })
         .def_prop_rw("pickable",
             [](const Entity& e) { return e.pickable(); },
             [](Entity& e, bool v) { e.set_pickable(v); })
@@ -226,7 +226,7 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("flag"))
 
         .def("is_pickable", [](Entity& e) {
-            return e.pickable() && e.visible() && e.active();
+            return e.pickable() && e.visible() && e.enabled();
         })
 
         // Component management
@@ -445,8 +445,8 @@ void bind_entity_class(nb::module_& m) {
                 if (dict_data.contains("visible")) {
                     ent.set_visible(nb::cast<bool>(dict_data["visible"]));
                 }
-                if (dict_data.contains("active")) {
-                    ent.set_active(nb::cast<bool>(dict_data["active"]));
+                if (dict_data.contains("enabled")) {
+                    ent.set_enabled(nb::cast<bool>(dict_data["enabled"]));
                 }
                 if (dict_data.contains("pickable")) {
                     ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
@@ -634,8 +634,8 @@ void bind_entity_class(nb::module_& m) {
                 if (dict_data.contains("visible")) {
                     ent.set_visible(nb::cast<bool>(dict_data["visible"]));
                 }
-                if (dict_data.contains("active")) {
-                    ent.set_active(nb::cast<bool>(dict_data["active"]));
+                if (dict_data.contains("enabled")) {
+                    ent.set_enabled(nb::cast<bool>(dict_data["enabled"]));
                 }
                 if (dict_data.contains("pickable")) {
                     ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));

@@ -3,9 +3,21 @@
 #define TC_COMPONENT_H
 
 #include "tc_types.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+// Forward declarations for entity pool types
+typedef struct tc_entity_pool tc_entity_pool;
+#ifndef TC_ENTITY_ID_DEFINED
+#define TC_ENTITY_ID_DEFINED
+typedef struct {
+    uint32_t index;
+    uint32_t generation;
+} tc_entity_id;
 #endif
 
 // ============================================================================
@@ -89,8 +101,12 @@ struct tc_component {
     // Drawable vtable (NULL if component is not drawable)
     const tc_drawable_vtable* drawable_vtable;
 
-    // Owner entity (set by entity_add_component)
+    // Owner entity (set by entity_add_component) - DEPRECATED, use owner_entity_id
     tc_entity* entity;
+
+    // Owner entity ID and pool (set when added to entity)
+    tc_entity_id owner_entity_id;
+    tc_entity_pool* owner_pool;
 
     // Instance-specific type name (takes precedence over vtable->type_name)
     const char* type_name;
@@ -128,6 +144,12 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->vtable = vtable;
     c->drawable_vtable = NULL;
     c->entity = NULL;
+#ifdef __cplusplus
+    c->owner_entity_id = tc_entity_id{0xFFFFFFFF, 0};  // invalid
+#else
+    c->owner_entity_id = (tc_entity_id){0xFFFFFFFF, 0};  // invalid
+#endif
+    c->owner_pool = NULL;
     c->type_name = NULL;
     c->kind = TC_CXX_COMPONENT;
     c->python_allocated = false;

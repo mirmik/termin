@@ -97,7 +97,7 @@ std::vector<ShadowDrawCall> ShadowPass::collect_shadow_casters(
 
     for (size_t ei = 0; ei < entities.size(); ++ei) {
         const Entity& ent = entities[ei];
-        if (!ent.active() || !ent.visible()) {
+        if (!ent.visible() || !ent.enabled()) {
             continue;
         }
 

@@ -226,6 +226,12 @@ static void process_pending_start(tc_scene* s, bool editor_mode) {
     free(copy);
 }
 
+// Check if component's owner entity is enabled
+static inline bool component_entity_enabled(tc_component* c) {
+    if (!c->owner_pool) return true;  // No pool = not attached, allow
+    return tc_entity_pool_enabled(c->owner_pool, c->owner_entity_id);
+}
+
 void tc_scene_update(tc_scene* s, double dt) {
     if (!s) return;
 
@@ -239,7 +245,7 @@ void tc_scene_update(tc_scene* s, double dt) {
     while (s->accumulated_time >= s->fixed_timestep) {
         for (size_t i = 0; i < s->fixed_update_list.count; i++) {
             tc_component* c = s->fixed_update_list.items[i];
-            if (c->enabled) {
+            if (c->enabled && component_entity_enabled(c)) {
                 if (profile) tc_profiler_begin_section(tc_component_type_name(c));
                 tc_component_fixed_update(c, (float)s->fixed_timestep);
                 if (profile) tc_profiler_end_section();
@@ -251,7 +257,7 @@ void tc_scene_update(tc_scene* s, double dt) {
     // 3. Regular update
     for (size_t i = 0; i < s->update_list.count; i++) {
         tc_component* c = s->update_list.items[i];
-        if (c->enabled) {
+        if (c->enabled && component_entity_enabled(c)) {
             if (profile) tc_profiler_begin_section(tc_component_type_name(c));
             tc_component_update(c, (float)dt);
             if (profile) tc_profiler_end_section();
@@ -275,7 +281,7 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
     while (s->accumulated_time >= s->fixed_timestep) {
         for (size_t i = 0; i < s->fixed_update_list.count; i++) {
             tc_component* c = s->fixed_update_list.items[i];
-            if (c->enabled && c->active_in_editor) {
+            if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
                 if (profile) tc_profiler_begin_section(tc_component_type_name(c));
                 tc_component_fixed_update(c, (float)s->fixed_timestep);
                 if (profile) tc_profiler_end_section();
@@ -287,7 +293,7 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
     // Regular update - only active_in_editor components
     for (size_t i = 0; i < s->update_list.count; i++) {
         tc_component* c = s->update_list.items[i];
-        if (c->enabled && c->active_in_editor) {
+        if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
             if (profile) tc_profiler_begin_section(tc_component_type_name(c));
             tc_component_update(c, (float)dt);
             if (profile) tc_profiler_end_section();
@@ -305,7 +311,7 @@ void tc_scene_before_render(tc_scene* s) {
 
     for (size_t i = 0; i < s->before_render_list.count; i++) {
         tc_component* c = s->before_render_list.items[i];
-        if (c->enabled) {
+        if (c->enabled && component_entity_enabled(c)) {
             if (profile) tc_profiler_begin_section(tc_component_type_name(c));
             tc_component_before_render(c);
             if (profile) tc_profiler_end_section();

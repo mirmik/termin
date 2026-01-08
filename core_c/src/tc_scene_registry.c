@@ -233,7 +233,7 @@ static bool collect_entity_info(tc_entity_pool* pool, tc_entity_id id, void* use
     info->uuid = tc_entity_pool_uuid(pool, id);
     info->component_count = tc_entity_pool_component_count(pool, id);
     info->visible = tc_entity_pool_visible(pool, id);
-    info->active = tc_entity_pool_active(pool, id);
+    info->enabled = tc_entity_pool_enabled(pool, id);
 
     return true;
 }

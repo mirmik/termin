@@ -247,7 +247,7 @@ class SceneVoxelizer:
         # Собираем все entity с MeshRenderer
         mesh_entities = []
         for entity in scene.entities:
-            if not entity.active or not entity.visible:
+            if not entity.visible or not entity.enabled:
                 continue
             for comp in entity.components:
                 if isinstance(comp, MeshRenderer):
@@ -333,7 +333,7 @@ def _compute_scene_bounds(scene: "Scene"):
     scene_max = None
 
     for entity in scene.entities:
-        if not entity.active or not entity.visible:
+        if not entity.visible or not entity.enabled:
             continue
 
         for comp in entity.components:
