@@ -89,6 +89,7 @@ class EditorWindow(QMainWindow):
         self.scene_manager = SceneManager(
             resource_manager=self.resource_manager,
             on_request_render=self._request_viewport_update,
+            on_before_scene_close=self._on_before_scene_close,
             get_editor_camera_data=self._get_editor_camera_data,
             set_editor_camera_data=self._set_editor_camera_data,
             get_selected_entity_name=self._get_selected_entity_name,
@@ -1256,6 +1257,11 @@ class EditorWindow(QMainWindow):
             backend = self._rendering_controller.editor_backend_window
             if backend is not None:
                 backend.request_update()
+
+    def _on_before_scene_close(self, scene) -> None:
+        """Called before a scene is destroyed. Removes viewports referencing this scene."""
+        if self._rendering_controller is not None:
+            self._rendering_controller.remove_viewports_for_scene(scene)
 
     def _on_tree_object_selected(self, obj: object | None) -> None:
         """

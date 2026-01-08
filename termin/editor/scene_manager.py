@@ -80,6 +80,7 @@ class SceneManager:
         resource_manager: "ResourceManager",
         scene_factory: Optional[Callable[[], "Scene"]] = None,
         on_request_render: Optional[Callable[[], None]] = None,
+        on_before_scene_close: Optional[Callable[["Scene"], None]] = None,
         # Editor state callbacks
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
@@ -96,6 +97,7 @@ class SceneManager:
             resource_manager: Resource manager for loading assets.
             scene_factory: Factory for creating new scenes. If None, uses Scene().
             on_request_render: Callback to request viewport render (called by game loop).
+            on_before_scene_close: Callback(scene) called before scene is destroyed.
             get_editor_camera_data: Callback to get editor camera state.
             set_editor_camera_data: Callback to set editor camera state.
             get_selected_entity_name: Callback to get selected entity name.
@@ -109,6 +111,7 @@ class SceneManager:
         self._resource_manager = resource_manager
         self._scene_factory = scene_factory
         self._on_request_render = on_request_render
+        self._on_before_scene_close = on_before_scene_close
 
         # Game loop timer (auto-starts when GAME scenes exist)
         self._game_timer = QTimer()
@@ -440,7 +443,13 @@ class SceneManager:
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
 
-        scene = self._scenes.pop(name)
+        scene = self._scenes[name]
+
+        # Notify before closing (allows cleanup of viewports, etc.)
+        if self._on_before_scene_close is not None:
+            self._on_before_scene_close(scene)
+
+        self._scenes.pop(name)
         self._modes.pop(name, None)
         self._paths.pop(name, None)
         self._editor_data.pop(name, None)

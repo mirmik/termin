@@ -487,6 +487,21 @@ class RenderingController:
             self._viewport_list.set_display_name(display, name)
         self._update_center_tabs()
 
+    def remove_viewports_for_scene(self, scene: "Scene") -> None:
+        """
+        Remove all viewports that reference the given scene.
+
+        Called before scene is destroyed to prevent rendering with invalid scene.
+        Skips editor display - its viewport is managed separately.
+        """
+        for display in self._manager.displays:
+            if self.is_editor_display(display):
+                continue
+            viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
+            for vp in viewports_to_remove:
+                display.remove_viewport(vp)
+        self._viewport_list.refresh()
+
     # --- Editor display ---
 
     def create_editor_display(
