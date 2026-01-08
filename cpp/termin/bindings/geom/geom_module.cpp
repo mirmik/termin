@@ -7,6 +7,7 @@ NB_MODULE(_geom_native, m) {
 
     // Bind all geometry types in order of dependencies
     bind_vec3(m);
+    bind_vec4(m);
     bind_quat(m);
     bind_mat44(m);
     bind_pose3(m);

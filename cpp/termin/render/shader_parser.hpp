@@ -67,6 +67,17 @@ struct ShaderStage {
 
 
 /**
+ * Render state settings for a specific phase mark.
+ */
+struct PhaseRenderSettings {
+    std::optional<bool> gl_depth_mask;
+    std::optional<bool> gl_depth_test;
+    std::optional<bool> gl_blend;
+    std::optional<bool> gl_cull;
+    int priority = 0;
+};
+
+/**
  * Shader phase: stages + render state flags + uniform properties.
  */
 struct ShaderPhase {
@@ -79,6 +90,9 @@ struct ShaderPhase {
     std::optional<bool> gl_depth_test;
     std::optional<bool> gl_blend;
     std::optional<bool> gl_cull;
+
+    // Per-mark render settings (from @settings blocks)
+    std::unordered_map<std::string, PhaseRenderSettings> mark_settings;
 
     // Stages by name (vertex, fragment, geometry)
     std::unordered_map<std::string, ShaderStage> stages;

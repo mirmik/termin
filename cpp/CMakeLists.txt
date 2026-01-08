@@ -59,6 +59,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 nanobind_add_module(_geom_native
     termin/bindings/geom/geom_module.cpp
     termin/bindings/geom/vec3.cpp
+    termin/bindings/geom/vec4.cpp
     termin/bindings/geom/quat.cpp
     termin/bindings/geom/mat44.cpp
     termin/bindings/geom/pose3.cpp

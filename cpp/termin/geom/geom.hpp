@@ -2,6 +2,7 @@
 
 // Convenience header for all geom types
 #include "vec3.hpp"
+#include "vec4.hpp"
 #include "quat.hpp"
 #include "mat44.hpp"
 #include "pose3.hpp"

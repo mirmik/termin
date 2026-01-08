@@ -95,36 +95,43 @@ void bind_material(nb::module_& m) {
         .def_rw("shader_programm", &MaterialPhase::shader)  // Python compatibility alias
         .def_rw("render_state", &MaterialPhase::render_state)
         .def_prop_rw("color",
-            [](MaterialPhase& self) -> nb::object {
-                if (!self.color.has_value()) return nb::none();
-                Vec4 c = self.color.value();
-                float* data = new float[4]{static_cast<float>(c.x), static_cast<float>(c.y),
-                                           static_cast<float>(c.z), static_cast<float>(c.w)};
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                return nb::cast(nb::ndarray<nb::numpy, float, nb::shape<4>>(data, {4}, owner));
+            [](const MaterialPhase& self) -> std::optional<Vec4> {
+                return self.color;
             },
-            [](MaterialPhase& self, std::optional<nb::object> val) {
-                if (!val.has_value() || val->is_none()) {
+            [](MaterialPhase& self, nb::object val) {
+                if (val.is_none()) {
                     self.color = std::nullopt;
-                } else if (nb::ndarray_check(*val)) {
-                    nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(*val);
-                    float* ptr = arr.data();
-                    self.set_color(Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});
-                } else if (nb::isinstance<nb::tuple>(*val) || nb::isinstance<nb::list>(*val)) {
-                    nb::sequence seq = nb::cast<nb::sequence>(*val);
+                } else if (nb::isinstance<Vec4>(val)) {
+                    self.set_color(nb::cast<Vec4>(val));
+                } else if (nb::isinstance<nb::tuple>(val) || nb::isinstance<nb::list>(val)) {
+                    nb::sequence seq = nb::cast<nb::sequence>(val);
                     self.set_color(Vec4{
-                        nb::cast<float>(seq[0]),
-                        nb::cast<float>(seq[1]),
-                        nb::cast<float>(seq[2]),
-                        nb::cast<float>(seq[3])
+                        nb::cast<double>(seq[0]),
+                        nb::cast<double>(seq[1]),
+                        nb::cast<double>(seq[2]),
+                        nb::cast<double>(seq[3])
                     });
-                } else {
-                    throw std::runtime_error("color must be a numpy array, tuple, or list");
                 }
             })
         .def_rw("phase_mark", &MaterialPhase::phase_mark)
         .def_rw("available_marks", &MaterialPhase::available_marks)
-        .def_rw("mark_render_states", &MaterialPhase::mark_render_states)
+        // Note: mark_render_states is not exposed - managed internally in C++
+        .def_prop_rw("mark_render_states",
+            [](const MaterialPhase& self) {
+                nb::dict result;
+                for (const auto& [key, val] : self.mark_render_states) {
+                    result[key.c_str()] = val;
+                }
+                return result;
+            },
+            [](MaterialPhase& self, nb::dict d) {
+                self.mark_render_states.clear();
+                for (auto item : d) {
+                    std::string key = nb::cast<std::string>(item.first);
+                    RenderState val = nb::cast<RenderState>(item.second);
+                    self.mark_render_states[key] = val;
+                }
+            })
         .def("set_phase_mark", [](MaterialPhase& self, const std::string& mark) {
             self.phase_mark = mark;
             // Apply render state for this mark if available
@@ -717,31 +724,18 @@ void bind_material(nb::module_& m) {
             }
         }, nb::arg("program"), nb::arg("shader_name") = "")
         .def_prop_rw("color",
-            [](Material& self) -> nb::object {
-                if (!self.default_phase().color.has_value()) return nb::none();
-                Vec4 c = self.default_phase().color.value();
-                float* data = new float[4]{static_cast<float>(c.x), static_cast<float>(c.y),
-                                           static_cast<float>(c.z), static_cast<float>(c.w)};
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                return nb::cast(nb::ndarray<nb::numpy, float, nb::shape<4>>(data, {4}, owner));
-            },
-            [](Material& self, std::optional<nb::object> val) {
-                if (!val.has_value() || val->is_none()) {
-                    self.default_phase().color = std::nullopt;
-                } else if (nb::ndarray_check(*val)) {
-                    nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(*val);
-                    float* ptr = arr.data();
-                    self.set_color(Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});
-                } else if (nb::isinstance<nb::tuple>(*val) || nb::isinstance<nb::list>(*val)) {
-                    nb::sequence seq = nb::cast<nb::sequence>(*val);
+            [](const Material& self) { return self.color(); },
+            [](Material& self, nb::object val) {
+                if (nb::isinstance<Vec4>(val)) {
+                    self.set_color(nb::cast<Vec4>(val));
+                } else if (nb::isinstance<nb::tuple>(val) || nb::isinstance<nb::list>(val)) {
+                    nb::sequence seq = nb::cast<nb::sequence>(val);
                     self.set_color(Vec4{
-                        nb::cast<float>(seq[0]),
-                        nb::cast<float>(seq[1]),
-                        nb::cast<float>(seq[2]),
-                        nb::cast<float>(seq[3])
+                        nb::cast<double>(seq[0]),
+                        nb::cast<double>(seq[1]),
+                        nb::cast<double>(seq[2]),
+                        nb::cast<double>(seq[3])
                     });
-                } else {
-                    throw std::runtime_error("color must be a numpy array, tuple, or list");
                 }
             })
         .def_prop_rw("textures",
@@ -821,7 +815,6 @@ void bind_material(nb::module_& m) {
         .def("set_color", [](Material& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
             self.set_color(Vec4{rgba(0), rgba(1), rgba(2), rgba(3)});
         })
-        .def("color", &Material::color)
         .def("update_color", [](Material& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
             self.set_color(Vec4{rgba(0), rgba(1), rgba(2), rgba(3)});
         })

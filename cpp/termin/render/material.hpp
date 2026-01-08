@@ -41,6 +41,9 @@ using MaterialUniformValue = std::variant<
  * - "shadow" for shadow map pass
  * - "transparent" for alpha-blended objects
  */
+// Forward declaration
+struct PhaseRenderSettings;
+
 class MaterialPhase {
 public:
     // Shader program for this phase (shared - compiled once, used by many phases)
@@ -54,6 +57,9 @@ public:
 
     // Available marks for user choice (if >1, user can select in inspector)
     std::vector<std::string> available_marks;
+
+    // Per-mark render settings (for switching between marks)
+    std::unordered_map<std::string, RenderState> mark_render_states;
 
     // Priority within phase (lower = rendered earlier)
     int priority = 0;
@@ -187,6 +193,16 @@ public:
         for (auto& phase : phases) {
             phase.set_param(name, value);
         }
+    }
+
+    /**
+     * Get color from default phase.
+     */
+    Vec4 color() const {
+        if (phases.empty() || !phases[0].color.has_value()) {
+            return Vec4{0, 0, 0, 1};
+        }
+        return phases[0].color.value();
     }
 
     /**

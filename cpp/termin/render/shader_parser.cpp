@@ -482,27 +482,56 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
         // Copy shared uniforms
         phase.uniforms = shared_uniforms;
 
-        // Apply default opaque settings (will be overridden by @settings for selected mark)
+        // Apply default opaque settings
         phase.gl_depth_test = true;
         phase.gl_depth_mask = true;
         phase.gl_blend = false;
         phase.gl_cull = true;
         phase.priority = 0;
 
+        // Store per-mark settings from @settings blocks
+        for (const auto& mark : declared_phases) {
+            PhaseRenderSettings settings;
+            // Default opaque settings
+            settings.gl_depth_test = true;
+            settings.gl_depth_mask = true;
+            settings.gl_blend = false;
+            settings.gl_cull = true;
+            settings.priority = 0;
+
+            // Apply overrides from @settings
+            auto it = phase_settings.find(mark);
+            if (it != phase_settings.end()) {
+                const auto& overrides = it->second;
+                if (overrides.gl_depth_test.has_value())
+                    settings.gl_depth_test = overrides.gl_depth_test;
+                if (overrides.gl_depth_mask.has_value())
+                    settings.gl_depth_mask = overrides.gl_depth_mask;
+                if (overrides.gl_blend.has_value())
+                    settings.gl_blend = overrides.gl_blend;
+                if (overrides.gl_cull.has_value())
+                    settings.gl_cull = overrides.gl_cull;
+                if (overrides.priority != 0)
+                    settings.priority = overrides.priority;
+            }
+
+            // Default priority for transparent
+            if (mark == "transparent" && settings.priority == 0) {
+                settings.priority = 1000;
+            }
+
+            phase.mark_settings[mark] = settings;
+        }
+
         // Apply settings for the default (first) phase mark
-        auto it = phase_settings.find(phase.phase_mark);
-        if (it != phase_settings.end()) {
-            const auto& overrides = it->second;
-            if (overrides.gl_depth_test.has_value())
-                phase.gl_depth_test = overrides.gl_depth_test;
-            if (overrides.gl_depth_mask.has_value())
-                phase.gl_depth_mask = overrides.gl_depth_mask;
-            if (overrides.gl_blend.has_value())
-                phase.gl_blend = overrides.gl_blend;
-            if (overrides.gl_cull.has_value())
-                phase.gl_cull = overrides.gl_cull;
-            if (overrides.priority != 0)
-                phase.priority = overrides.priority;
+        auto it = phase.mark_settings.find(phase.phase_mark);
+        if (it != phase.mark_settings.end()) {
+            const auto& s = it->second;
+            phase.gl_depth_test = s.gl_depth_test;
+            phase.gl_depth_mask = s.gl_depth_mask;
+            phase.gl_blend = s.gl_blend;
+            phase.gl_cull = s.gl_cull;
+            phase.priority = s.priority;
         }
 
         phases.push_back(std::move(phase));

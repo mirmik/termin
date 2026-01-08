@@ -31,10 +31,10 @@ class BlindEffectView(EffectView):
 
     def update_color(self, stepstamp: int) -> None:
         """Update the color of the blind effect based on the current stepstamp."""
-        color = self.material.color()
+        color = self.material.color
         intensity = self.intensivity(stepstamp)
         color.w = intensity  # Update alpha based on intensity
-        self.material.set_color(color)
+        self.material.color = color
 
     def intensivity(self, stepstamp: int) -> float:
         """Get blink effect intensity (0 at edges, 1 at center)."""
