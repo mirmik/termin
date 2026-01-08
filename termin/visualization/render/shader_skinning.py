@@ -313,9 +313,8 @@ def get_skinned_material(material: Material) -> Material:
             render_state=phase.render_state,
             phase_mark=phase.phase_mark,
             priority=phase.priority,
-            color=phase.color.copy() if phase.color is not None else None,
             textures=dict(phase.textures),
-            uniforms=dict(phase.uniforms),
+            uniforms=dict(phase.uniforms),  # includes u_color
         )
         new_phases.append(skinned_phase)
 

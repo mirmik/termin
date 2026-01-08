@@ -64,9 +64,6 @@ public:
     // Priority within phase (lower = rendered earlier)
     int priority = 0;
 
-    // Base color (optional, stored as u_color uniform)
-    std::optional<Vec4> color;
-
     // Texture bindings: uniform_name -> texture handle (asset-based)
     std::unordered_map<std::string, TextureHandle> textures;
 
@@ -93,10 +90,22 @@ public:
     }
 
     /**
-     * Set color (also updates u_color uniform).
+     * Get color from u_color uniform.
+     */
+    std::optional<Vec4> color() const {
+        auto it = uniforms.find("u_color");
+        if (it != uniforms.end()) {
+            if (auto* v = std::get_if<Vec4>(&it->second)) {
+                return *v;
+            }
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * Set color (u_color uniform).
      */
     void set_color(const Vec4& rgba) {
-        color = rgba;
         uniforms["u_color"] = rgba;
     }
 
@@ -199,10 +208,11 @@ public:
      * Get color from default phase.
      */
     Vec4 color() const {
-        if (phases.empty() || !phases[0].color.has_value()) {
+        if (phases.empty()) {
             return Vec4{0, 0, 0, 1};
         }
-        return phases[0].color.value();
+        auto c = phases[0].color();
+        return c.value_or(Vec4{0, 0, 0, 1});
     }
 
     /**

@@ -82,9 +82,8 @@ MaterialPhase MaterialPhase::copy() const {
     result.render_state = render_state;
     result.phase_mark = phase_mark;
     result.priority = priority;
-    result.color = color;
     result.textures = textures;  // Texture handles are shared
-    result.uniforms = uniforms;  // Deep copy of variant map
+    result.uniforms = uniforms;  // Deep copy of variant map (includes u_color)
     return result;
 }
 

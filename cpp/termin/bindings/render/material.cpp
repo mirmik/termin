@@ -89,6 +89,15 @@ void bind_material(nb::module_& m) {
                         self->uniforms[key] = nb::cast<int>(val);
                     } else if (nb::isinstance<nb::float_>(val)) {
                         self->uniforms[key] = nb::cast<float>(val);
+                    } else if (nb::ndarray_check(val)) {
+                        nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(val);
+                        float* ptr = arr.data();
+                        size_t size = arr.shape(0);
+                        if (size == 3) {
+                            self->uniforms[key] = Vec3{ptr[0], ptr[1], ptr[2]};
+                        } else if (size == 4) {
+                            self->uniforms[key] = Vec4{ptr[0], ptr[1], ptr[2], ptr[3]};
+                        }
                     }
                 }
             }
@@ -98,11 +107,11 @@ void bind_material(nb::module_& m) {
         .def_rw("render_state", &MaterialPhase::render_state)
         .def_prop_rw("color",
             [](const MaterialPhase& self) -> std::optional<Vec4> {
-                return self.color;
+                return self.color();
             },
             [](MaterialPhase& self, nb::object val) {
                 if (val.is_none()) {
-                    self.color = std::nullopt;
+                    self.uniforms.erase("u_color");
                 } else if (nb::isinstance<Vec4>(val)) {
                     self.set_color(nb::cast<Vec4>(val));
                 } else if (nb::isinstance<nb::tuple>(val) || nb::isinstance<nb::list>(val)) {
@@ -243,9 +252,10 @@ void bind_material(nb::module_& m) {
             result["phase_mark"] = self.phase_mark;
             result["priority"] = self.priority;
 
-            // Color
-            if (self.color.has_value()) {
-                Vec4 c = self.color.value();
+            // Color (from u_color uniform)
+            auto col = self.color();
+            if (col.has_value()) {
+                Vec4 c = col.value();
                 nb::list col_list;
                 col_list.append(c.x);
                 col_list.append(c.y);
@@ -686,7 +696,7 @@ void bind_material(nb::module_& m) {
             std::unordered_map<std::string, MaterialUniformValue> old_uniforms;
 
             if (!self.phases.empty()) {
-                old_color = self.phases[0].color;
+                old_color = self.phases[0].color();
                 old_textures = self.phases[0].textures;
                 old_uniforms = self.phases[0].uniforms;
             }
@@ -900,9 +910,10 @@ void bind_material(nb::module_& m) {
                 phase_dict["phase_mark"] = phase.phase_mark;
                 phase_dict["priority"] = phase.priority;
 
-                // Color
-                if (phase.color.has_value()) {
-                    Vec4 c = phase.color.value();
+                // Color (from u_color uniform)
+                auto col = phase.color();
+                if (col.has_value()) {
+                    Vec4 c = col.value();
                     nb::list col_list;
                     col_list.append(c.x);
                     col_list.append(c.y);
