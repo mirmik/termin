@@ -48,6 +48,10 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
         # For C++ types (and fallback), use InspectRegistry
         cpp_fields = registry.all_fields(type_name)
         for info in cpp_fields:
+            # Skip non-inspectable fields (e.g. SERIALIZABLE_FIELD)
+            if not info.is_inspectable:
+                continue
+
             # Convert C++ EnumChoice list to Python tuple list
             choices = None
             if info.choices:

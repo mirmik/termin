@@ -20,7 +20,8 @@ class InspectField:
     step      – шаг (для спинбоксов)
     choices   – для enum: список (value, label)
     getter, setter – если нужно обращаться к полю вручную.
-    non_serializable – при True поле не попадает в сохранённые данные
+    is_serializable – при True поле сериализуется (default True)
+    is_inspectable  – при True поле показывается в инспекторе (default True)
     action    – для kind='button': callable, вызывается при нажатии (принимает объект)
     read_only – виджет будет только для чтения
     """
@@ -33,7 +34,8 @@ class InspectField:
     choices: list[tuple[Any, str]] | None = None
     getter: Optional[Callable[[Any], Any]] = None
     setter: Optional[Callable[[Any, Any], None]] = None
-    non_serializable: bool = False
+    is_serializable: bool = True
+    is_inspectable: bool = True
     action: Optional[Callable[[Any], None]] = None
     read_only: bool = False
 
@@ -108,7 +110,8 @@ class InspectAttr:
         choices: list[tuple[Any, str]] | None = None,
         getter: Optional[Callable[[Any], Any]] = None,
         setter: Optional[Callable[[Any, Any], None]] = None,
-        non_serializable: bool = False,
+        is_serializable: bool = True,
+        is_inspectable: bool = True,
         action: Optional[Callable[[Any], None]] = None,
         read_only: bool = False,
     ):
@@ -123,7 +126,8 @@ class InspectAttr:
             choices=choices,
             getter=getter,
             setter=setter,
-            non_serializable=non_serializable,
+            is_serializable=is_serializable,
+            is_inspectable=is_inspectable,
             action=action,
             read_only=read_only,
         )
@@ -161,6 +165,6 @@ def inspect(default: Any = None, **meta) -> InspectAttr:
     """
     Сахар: aaa = inspect(42, label="AAA", kind="int").
 
-    meta → параметры для InspectField (label, kind, min, max, step, non_serializable, ...)
+    meta → параметры для InspectField (label, kind, min, max, step, is_serializable, is_inspectable, ...)
     """
     return InspectAttr(default, **meta)

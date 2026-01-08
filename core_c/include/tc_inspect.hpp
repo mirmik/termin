@@ -191,7 +191,8 @@ struct InspectFieldInfo {
     double min = 0.0;
     double max = 1.0;
     double step = 0.01;
-    bool non_serializable = false;
+    bool is_serializable = true;   // Include in serialization
+    bool is_inspectable = true;    // Show in inspector
     std::vector<EnumChoice> choices;
     nb::object action;
 
@@ -205,6 +206,11 @@ struct InspectFieldInfo {
     // C++ getter/setter - for C++ fields only
     std::function<std::any(void*)> cpp_getter;
     std::function<void(void*, const std::any&)> cpp_setter;
+
+    // Trent getter/setter - for SERIALIZABLE_FIELD (serialize-only, no inspector)
+    // Returns/accepts trent directly, bypassing kind handlers
+    std::function<nos::trent(void*)> trent_getter;
+    std::function<void(void*, const nos::trent&)> trent_setter;
 };
 
 // ============================================================================
@@ -434,6 +440,11 @@ public:
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
+    // Add a serializable-only field (for SERIALIZABLE_FIELD macro)
+    void add_serializable_field(const std::string& type_name, InspectFieldInfo&& info) {
+        _py_fields[type_name].push_back(std::move(info));
+    }
+
     // ========================================================================
     // Field registration (Python types)
     // ========================================================================
@@ -546,7 +557,16 @@ public:
         result.init(nos::trent_type::dict);
 
         for (const auto& f : all_fields(type_name)) {
-            if (f.non_serializable) continue;
+            if (!f.is_serializable) continue;
+
+            // SERIALIZABLE_FIELD: direct trent getter/setter
+            if (f.trent_getter) {
+                nos::trent val = f.trent_getter(obj);
+                if (!val.is_nil()) {
+                    result[f.path] = val;
+                }
+                continue;
+            }
 
             if (f.py_getter) {
                 nb::object val = f.py_getter(obj);
@@ -571,19 +591,27 @@ public:
                 result[f.path] = t;
             }
         }
+
         return result;
     }
 
     // Takes both raw C++ pointer (for cpp_setter) and nb::object (for py_setter)
     void deserialize_fields_of_cxx_component_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data, tc_scene* scene = nullptr) {
         for (const auto& f : all_fields(type_name)) {
-            if (f.non_serializable) continue;
+            if (!f.is_serializable) continue;
 
             nb::str key(f.path.c_str());
             if (!data.contains(key)) continue;
 
             nb::object field_data = data[key];
             if (field_data.is_none()) continue;
+
+            // SERIALIZABLE_FIELD: direct trent getter/setter (no kind handler)
+            if (f.trent_setter) {
+                nos::trent t = nb_to_trent_compat(field_data);
+                f.trent_setter(ptr, t);
+                continue;
+            }
 
             if (f.backend == TypeBackend::Cpp) {
                 if (!f.cpp_setter) {
@@ -626,7 +654,7 @@ public:
                 continue;
             }
 
-            if (f.non_serializable) continue;
+            if (!f.is_serializable) continue;
 
             nb::str key(f.path.c_str());
             if (!data.contains(key)) continue;
@@ -716,6 +744,38 @@ struct InspectFieldCallbackRegistrar {
         InspectRegistry::instance().add_with_callbacks<C, T>(
             type_name, path, label, kind, getter, setter
         );
+    }
+};
+
+// Registrar for SERIALIZABLE_FIELD (serialize-only fields with trent getter/setter)
+template<typename C>
+struct SerializableFieldRegistrar {
+    SerializableFieldRegistrar(
+        const char* type_name,
+        const char* path,
+        std::function<nos::trent(C*)> getter,
+        std::function<void(C*, const nos::trent&)> setter
+    ) {
+        InspectFieldInfo info;
+        info.type_name = type_name;
+        info.path = path;
+        info.label = "";
+        info.kind = "";
+        info.backend = TypeBackend::Cpp;
+        info.is_inspectable = false;  // Not shown in inspector
+        info.is_serializable = true;
+
+        info.trent_getter = [getter](void* obj) -> nos::trent {
+            return getter(static_cast<C*>(obj));
+        };
+
+        info.trent_setter = [setter](void* obj, const nos::trent& val) {
+            setter(static_cast<C*>(obj), val);
+        };
+
+        // Access private member via friend-like workaround: add to _py_fields directly
+        // Note: We need to add a method for this in InspectRegistry
+        InspectRegistry::instance().add_serializable_field(type_name, std::move(info));
     }
 };
 
@@ -835,3 +895,14 @@ inline nb::object trent_to_nb_compat(const nos::trent& t) {
 #define INSPECT_FIELD_CALLBACK(cls, type, name, label, kind, getter_fn, setter_fn) \
     inline static ::tc::InspectFieldCallbackRegistrar<cls, type> \
         _inspect_reg_##cls##_##name{#cls, #name, label, kind, getter_fn, setter_fn};
+
+// SERIALIZABLE_FIELD - serialize-only field with custom trent getter/setter
+// Not shown in inspector, only used for serialization/deserialization
+// Usage: SERIALIZABLE_FIELD(MyClass, field_key, get_data(), set_data(val))
+//   - getter expression receives 'this' implicitly, returns nos::trent
+//   - setter expression receives 'this' and 'val' (const nos::trent&)
+#define SERIALIZABLE_FIELD(cls, name, getter_expr, setter_expr) \
+    inline static ::tc::SerializableFieldRegistrar<cls> \
+        _serialize_reg_##cls##_##name{#cls, #name, \
+            [](cls* self) -> nos::trent { return self->getter_expr; }, \
+            [](cls* self, const nos::trent& val) { self->setter_expr; }};

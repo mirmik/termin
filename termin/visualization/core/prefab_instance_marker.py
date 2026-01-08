@@ -43,13 +43,13 @@ class PrefabInstanceMarker(PythonComponent):
             label="Prefab",
             kind="string",
             read_only=True,
-            non_serializable=True,
+            is_serializable=False,
         ),
         "override_count": InspectField(
             label="Overrides",
             kind="int",
             read_only=True,
-            non_serializable=True,
+            is_serializable=False,
             getter=lambda self: len(self.overrides),
         ),
     }

@@ -33,7 +33,7 @@ class PhysicsWorldComponent(PythonComponent):
             path="gravity",
             label="Gravity",
             kind="vec3",
-            non_serializable=True,  # getter/setter работают с C++ объектом
+            is_serializable=False,  # getter/setter работают с C++ объектом
         ),
         "iterations": InspectField(
             path="iterations",
@@ -41,7 +41,7 @@ class PhysicsWorldComponent(PythonComponent):
             kind="int",
             min=1,
             max=100,
-            non_serializable=True,
+            is_serializable=False,
         ),
         "restitution": InspectField(
             path="restitution",
@@ -50,7 +50,7 @@ class PhysicsWorldComponent(PythonComponent):
             min=0.0,
             max=1.0,
             step=0.05,
-            non_serializable=True,
+            is_serializable=False,
         ),
         "friction": InspectField(
             path="friction",
@@ -59,20 +59,20 @@ class PhysicsWorldComponent(PythonComponent):
             min=0.0,
             max=2.0,
             step=0.05,
-            non_serializable=True,
+            is_serializable=False,
         ),
         "ground_enabled": InspectField(
             path="ground_enabled",
             label="Ground Enabled",
             kind="bool",
-            non_serializable=True,
+            is_serializable=False,
         ),
         "ground_height": InspectField(
             path="ground_height",
             label="Ground Height",
             kind="float",
             step=0.1,
-            non_serializable=True,
+            is_serializable=False,
         ),
     }
 

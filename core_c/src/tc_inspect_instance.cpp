@@ -51,8 +51,16 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
             info.step = nb::cast<double>(field_obj.attr("step"));
         }
 
-        if (nb::hasattr(field_obj, "non_serializable")) {
-            info.non_serializable = nb::cast<bool>(field_obj.attr("non_serializable"));
+        // is_serializable (default true, can be set via is_serializable=False or legacy non_serializable=True)
+        if (nb::hasattr(field_obj, "is_serializable")) {
+            info.is_serializable = nb::cast<bool>(field_obj.attr("is_serializable"));
+        } else if (nb::hasattr(field_obj, "non_serializable")) {
+            info.is_serializable = !nb::cast<bool>(field_obj.attr("non_serializable"));
+        }
+
+        // is_inspectable (default true)
+        if (nb::hasattr(field_obj, "is_inspectable")) {
+            info.is_inspectable = nb::cast<bool>(field_obj.attr("is_inspectable"));
         }
 
         // Choices for enum

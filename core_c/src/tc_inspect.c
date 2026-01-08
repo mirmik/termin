@@ -528,7 +528,7 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
     size_t count = tc_inspect_field_count(type_name);
     for (size_t i = 0; i < count; i++) {
         const tc_field_desc* f = tc_inspect_field_at(type_name, i);
-        if (!f || f->non_serializable) continue;
+        if (!f || !f->is_serializable) continue;
 
         tc_value val = tc_inspect_get(obj, type_name, f->path);
 
@@ -552,7 +552,7 @@ void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* da
     size_t count = tc_inspect_field_count(type_name);
     for (size_t i = 0; i < count; i++) {
         const tc_field_desc* f = tc_inspect_field_at(type_name, i);
-        if (!f || f->non_serializable) continue;
+        if (!f || !f->is_serializable) continue;
 
         tc_value* field_data = tc_value_dict_get((tc_value*)data, f->path);
         if (!field_data || field_data->type == TC_VALUE_NIL) continue;

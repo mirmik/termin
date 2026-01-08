@@ -106,7 +106,7 @@ class VoxelizerComponent(PythonComponent):
             label="Voxelize",
             kind="button",
             action=_voxelize_action,
-            non_serializable=True,
+            is_serializable=False,
         ),
         # --- NavMesh ---
         "navmesh_output_path": InspectField(
@@ -196,7 +196,7 @@ class VoxelizerComponent(PythonComponent):
             label="Build NavMesh",
             kind="button",
             action=_build_navmesh_action,
-            non_serializable=True,
+            is_serializable=False,
         ),
         # --- Debug ---
         "show_region_voxels": InspectField(

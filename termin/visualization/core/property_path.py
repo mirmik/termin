@@ -428,7 +428,7 @@ class PropertyPath:
                 inspect_fields.update(klass.inspect_fields)
 
         for name, field in inspect_fields.items():
-            if field.non_serializable:
+            if not field.is_serializable:
                 continue
             try:
                 value = field.get_value(component)

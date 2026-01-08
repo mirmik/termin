@@ -185,8 +185,10 @@ class InspectRegistryViewer(QDialog):
                 if f.choices:
                     choices_str = ", ".join(f"{c.value}={c.label}" for c in f.choices)
                     lines.append(f"    choices: {choices_str}")
-                if f.non_serializable:
-                    lines.append(f"    non_serializable: True")
+                if not f.is_serializable:
+                    lines.append(f"    is_serializable: False")
+                if not f.is_inspectable:
+                    lines.append(f"    is_inspectable: False")
                 lines.append("")
         else:
             lines.append("  (none)")

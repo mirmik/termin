@@ -249,16 +249,15 @@ class ComponentInspectorPanel(QWidget):
 
     def _update_material_props_editor(self) -> None:
         """Update material properties editor visibility and content."""
-        # Check if component has override_material field
-        has_override = (
-            self._component is not None
-            and hasattr(self._component, "override_material")
-            and hasattr(self._component, "overridden_material")
-        )
+        from termin._native.render import MeshRenderer  # SkinnedMeshRenderer inherits from this
 
-        if has_override and self._component.override_material:
-            # Show editor with overridden material
-            mat = self._component.overridden_material
+        if isinstance(self._component, MeshRenderer) and self._component.override_material:
+            mat = self._component.overridden_material()
+            # If override enabled but material not created (e.g. after scene load), recreate it
+            if mat is None:
+                self._component._override_material = False
+                self._component.set_override_material(True)
+                mat = self._component.overridden_material()
             self._material_props_editor.set_material(mat)
             self._material_props_editor.setVisible(True)
         else:
@@ -285,8 +284,13 @@ class ComponentInspectorPanel(QWidget):
             )
             self._push_undo_command(cmd, True)
 
-        # If override_material changed, update the material props editor
-        if key == "override_material":
+        # If override_material changed, call the setter to create/delete the override copy
+        if key == "_override_material":
+            from termin._native.render import MeshRenderer
+            if isinstance(self._component, MeshRenderer):
+                # Force setter to run by resetting field first (setter has early-return check)
+                self._component._override_material = not new_value
+                self._component.set_override_material(new_value)
             self._update_material_props_editor()
 
         self.field_changed.emit(self._component, key, new_value)

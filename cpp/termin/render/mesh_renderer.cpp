@@ -1,4 +1,5 @@
 #include "mesh_renderer.hpp"
+#include "termin/inspect/inspect_registry.hpp"
 
 #include <algorithm>
 
@@ -24,8 +25,14 @@ void MeshRenderer::set_mesh_by_name(const std::string& name) {
 }
 
 Material* MeshRenderer::get_material() const {
-    if (_override_material && _overridden_material != nullptr) {
-        return _overridden_material;
+    if (_override_material) {
+        // Lazy initialization of overridden material
+        if (_overridden_material == nullptr) {
+            const_cast<MeshRenderer*>(this)->try_create_override_material();
+        }
+        if (_overridden_material != nullptr) {
+            return _overridden_material;
+        }
     }
     // Returns nullptr if material is Python-based (not C++ Material)
     return material.get();
@@ -88,7 +95,71 @@ void MeshRenderer::recreate_overridden_material() {
         // Create a copy
         _overridden_material = new Material(base->copy());
         _overridden_material->name = base->name + "_override";
+
+        // Apply pending override data if exists (from deserialization)
+        apply_pending_override_data();
     }
+}
+
+void MeshRenderer::try_create_override_material() {
+    if (_overridden_material != nullptr) return;
+
+    Material* base = material.get_material_or_none();
+    if (base == nullptr) return;
+
+    // Create override material from base
+    _overridden_material = new Material(base->copy());
+    _overridden_material->name = base->name + "_override";
+
+    // Apply pending override data if exists
+    apply_pending_override_data();
+}
+
+void MeshRenderer::apply_pending_override_data() {
+    if (!_pending_override_data || _overridden_material == nullptr) return;
+
+    fprintf(stderr, "[MeshRenderer] Applying pending override data, phases: %zu\n",
+            _overridden_material->phases.size());
+
+    const nos::trent& override_data = *_pending_override_data;
+    if (override_data.contains("phases_uniforms")) {
+        const nos::trent& phases_uniforms = override_data["phases_uniforms"];
+        if (phases_uniforms.is_list()) {
+            size_t phase_count = std::min(phases_uniforms.as_list().size(), _overridden_material->phases.size());
+            for (size_t i = 0; i < phase_count; ++i) {
+                const nos::trent& phase_uniforms = phases_uniforms.at(i);
+                if (!phase_uniforms.is_dict()) continue;
+
+                auto& phase = _overridden_material->phases[i];
+                for (const auto& [key, val] : phase_uniforms.as_dict()) {
+                    if (val.is_bool()) {
+                        phase.uniforms[key] = val.as_bool();
+                    } else if (val.is_numer()) {
+                        phase.uniforms[key] = static_cast<float>(val.as_numer());
+                    } else if (val.is_list()) {
+                        const auto& lst = val.as_list();
+                        if (lst.size() == 3) {
+                            phase.uniforms[key] = Vec3{
+                                static_cast<float>(lst[0].as_numer()),
+                                static_cast<float>(lst[1].as_numer()),
+                                static_cast<float>(lst[2].as_numer())
+                            };
+                        } else if (lst.size() == 4) {
+                            phase.uniforms[key] = Vec4{
+                                static_cast<float>(lst[0].as_numer()),
+                                static_cast<float>(lst[1].as_numer()),
+                                static_cast<float>(lst[2].as_numer()),
+                                static_cast<float>(lst[3].as_numer())
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Clear pending data after applying
+    _pending_override_data.reset();
 }
 
 std::set<std::string> MeshRenderer::get_phase_marks() const {
@@ -163,6 +234,63 @@ std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string
     });
 
     return result;
+}
+
+nos::trent MeshRenderer::get_override_data() const {
+    // Return nil if override is not enabled or no overridden material
+    if (!_override_material || _overridden_material == nullptr) {
+        return nos::trent::nil();
+    }
+
+    nos::trent override_data;
+    override_data.init(nos::trent_type::dict);
+
+    nos::trent phases_uniforms;
+    phases_uniforms.init(nos::trent_type::list);
+
+    for (const auto& phase : _overridden_material->phases) {
+        nos::trent phase_uniforms;
+        phase_uniforms.init(nos::trent_type::dict);
+
+        for (const auto& [key, val] : phase.uniforms) {
+            std::visit([&](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, bool>) {
+                    phase_uniforms[key] = arg;
+                } else if constexpr (std::is_same_v<T, int>) {
+                    phase_uniforms[key] = static_cast<int64_t>(arg);
+                } else if constexpr (std::is_same_v<T, float>) {
+                    phase_uniforms[key] = static_cast<double>(arg);
+                } else if constexpr (std::is_same_v<T, Vec3>) {
+                    nos::trent vec;
+                    vec.init(nos::trent_type::list);
+                    vec.as_list().push_back(static_cast<double>(arg.x));
+                    vec.as_list().push_back(static_cast<double>(arg.y));
+                    vec.as_list().push_back(static_cast<double>(arg.z));
+                    phase_uniforms[key] = std::move(vec);
+                } else if constexpr (std::is_same_v<T, Vec4>) {
+                    nos::trent vec;
+                    vec.init(nos::trent_type::list);
+                    vec.as_list().push_back(static_cast<double>(arg.x));
+                    vec.as_list().push_back(static_cast<double>(arg.y));
+                    vec.as_list().push_back(static_cast<double>(arg.z));
+                    vec.as_list().push_back(static_cast<double>(arg.w));
+                    phase_uniforms[key] = std::move(vec);
+                }
+            }, val);
+        }
+        phases_uniforms.as_list().push_back(std::move(phase_uniforms));
+    }
+    override_data["phases_uniforms"] = std::move(phases_uniforms);
+    return override_data;
+}
+
+void MeshRenderer::set_override_data(const nos::trent& val) {
+    // Save data for lazy application (base material may not be loaded yet)
+    if (!val.is_nil()) {
+        _pending_override_data = std::make_unique<nos::trent>(val);
+        fprintf(stderr, "[MeshRenderer] Saved pending override data\n");
+    }
 }
 
 } // namespace termin

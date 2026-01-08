@@ -165,7 +165,8 @@ typedef struct tc_field_desc {
     double step;
 
     // Flags
-    bool non_serializable;
+    bool is_serializable;   // Include in serialization (default true)
+    bool is_inspectable;    // Show in inspector (default true)
 
     // For enum fields
     const tc_enum_choice* choices;
@@ -251,7 +252,7 @@ TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path
 // Serialization
 // ============================================================================
 
-// Serialize all fields to dict (skips non_serializable)
+// Serialize all fields to dict (only is_serializable fields)
 TC_API tc_value tc_inspect_serialize(void* obj, const char* type_name);
 
 // Deserialize from dict

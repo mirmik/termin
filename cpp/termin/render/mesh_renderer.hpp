@@ -13,6 +13,8 @@
 #include "termin/render/render_context.hpp"
 #include "termin/render/mesh_gpu.hpp"
 #include "termin/inspect/inspect_registry.hpp"
+#include "trent/trent.h"
+#include <memory>
 
 namespace termin {
 
@@ -36,11 +38,13 @@ public:
     // Material override
     bool _override_material = false;
     Material* _overridden_material = nullptr;
+    std::unique_ptr<nos::trent> _pending_override_data;
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
     INSPECT_FIELD(MeshRenderer, material, "Material", "material_handle")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
+    INSPECT_FIELD(MeshRenderer, _override_material, "Override Material", "bool")
 
     MeshRenderer();
     virtual ~MeshRenderer() = default;
@@ -149,10 +153,9 @@ public:
      */
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 
-    // --- Serialization (nb::dict based) ---
-
-    // nos::trent serialize_data() const;
-    // void deserialize_data(const nos::trent& data);
+    // For SERIALIZABLE_FIELD (must be public for macro access)
+    nos::trent get_override_data() const;
+    void set_override_data(const nos::trent& val);
 
 protected:
     // GPU mesh cache (uploaded buffers)
@@ -160,7 +163,12 @@ protected:
 
 private:
     void recreate_overridden_material();
+    void try_create_override_material();
+    void apply_pending_override_data();
 };
+
+// Serializable field for override material data (must be after class definition)
+SERIALIZABLE_FIELD(MeshRenderer, _overridden_material_data, get_override_data(), set_override_data(val))
 
 REGISTER_COMPONENT(MeshRenderer, Component);
 } // namespace termin

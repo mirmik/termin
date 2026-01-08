@@ -50,14 +50,14 @@ class HumanModelCollider(PythonComponent):
             label="Add Colliders",
             kind="button",
             action=lambda self: self.add_colliders(),
-            non_serializable=True,
+            is_serializable=False,
         ),
         "remove_colliders_btn": InspectField(
             path=None,
             label="Remove All Colliders",
             kind="button",
             action=lambda self: self.remove_all_colliders(),
-            non_serializable=True,
+            is_serializable=False,
         ),
     }
 

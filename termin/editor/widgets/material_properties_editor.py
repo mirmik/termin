@@ -349,9 +349,7 @@ class MaterialPropertiesEditor(QWidget):
             val = tuple(val.tolist())
         editor = ColorButton(val)
         editor.color_changed.connect(
-            lambda v, name=prop.name: self._on_property_changed(
-                name, np.array(v, dtype=np.float32)
-            )
+            lambda v, name=prop.name: self._on_property_changed(name, v)  # v is Vec4
         )
         editor.editing_finished.connect(self._on_editing_finished)
         return editor
@@ -391,9 +389,19 @@ class MaterialPropertiesEditor(QWidget):
         if self._material is None:
             return
 
+        # Convert numpy arrays to Vec3/Vec4 for C++ set_param
+        from termin.geombase import Vec3, Vec4
+        converted_value = value
+        if isinstance(value, np.ndarray):
+            if value.size == 3:
+                converted_value = Vec3(float(value[0]), float(value[1]), float(value[2]))
+            elif value.size == 4:
+                converted_value = Vec4(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
+
         # Update value in all phases of the material
+        # Use set_param to properly update C++ uniforms map
         for phase in self._material.phases:
-            phase.uniforms[name] = value
+            phase.set_param(name, converted_value)
 
         self.property_changed.emit(name, value)
 
@@ -414,7 +422,7 @@ class MaterialPropertiesEditor(QWidget):
 
         if texture_handle is not None:
             for phase in self._material.phases:
-                phase.textures[uniform_name] = texture_handle
+                phase.set_texture(uniform_name, texture_handle)
 
         self.property_changed.emit(uniform_name, texture_name)
 

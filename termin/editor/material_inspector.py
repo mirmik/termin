@@ -52,6 +52,7 @@ from PyQt6.QtGui import QColor, QImage, QPixmap
 
 from termin.editor.color_dialog import ColorDialog
 from termin.visualization.core.material import Material
+from termin.geombase import Vec4
 from termin.visualization.render.shader_parser import (
     ShaderMultyPhaseProgramm,
     MaterialProperty,
@@ -61,40 +62,45 @@ from termin.visualization.render.shader_parser import (
 class ColorButton(QPushButton):
     """Кнопка для выбора цвета с превью."""
 
-    color_changed = pyqtSignal(tuple)
+    color_changed = pyqtSignal(object)  # Vec4
     editing_finished = pyqtSignal()
 
-    def __init__(self, color: tuple = (1.0, 1.0, 1.0, 1.0), parent: QWidget | None = None):
+    def __init__(self, color: Vec4 | tuple = (1.0, 1.0, 1.0, 1.0), parent: QWidget | None = None):
         super().__init__(parent)
-        self._color = color
+        self._color = self._to_vec4(color)
         self.setFixedSize(60, 24)
         self._update_style()
         self.clicked.connect(self._on_clicked)
 
-    def set_color(self, color: tuple) -> None:
-        self._color = color
+    def _to_vec4(self, color: Vec4 | tuple) -> Vec4:
+        if isinstance(color, Vec4):
+            return color
+        return Vec4(color[0], color[1], color[2], color[3])
+
+    def set_color(self, color: Vec4 | tuple) -> None:
+        self._color = self._to_vec4(color)
         self._update_style()
 
-    def get_color(self) -> tuple:
+    def get_color(self) -> Vec4:
         return self._color
 
     def _update_style(self) -> None:
-        r, g, b, a = self._color
-        # Конвертируем в 0-255
-        r255 = int(r * 255)
-        g255 = int(g * 255)
-        b255 = int(b * 255)
+        r255 = int(self._color.x * 255)
+        g255 = int(self._color.y * 255)
+        b255 = int(self._color.z * 255)
+        a255 = int(self._color.w * 255)
         self.setStyleSheet(
-            f"background-color: rgba({r255}, {g255}, {b255}, {int(a * 255)}); "
+            f"background-color: rgba({r255}, {g255}, {b255}, {a255}); "
             f"border: 1px solid #555;"
         )
 
     def _on_clicked(self) -> None:
-        dlg = ColorDialog(self._color, self)
+        dlg = ColorDialog((self._color.x, self._color.y, self._color.z, self._color.w), self)
         dlg.color_changed.connect(self._on_dialog_color_changed)
         dlg.exec()
         # При закрытии диалога (OK или Cancel) — сохраняем
-        self._color = dlg.get_color_01()
+        t = dlg.get_color_01()
+        self._color = Vec4(t[0], t[1], t[2], t[3])
         self._update_style()
         self.color_changed.emit(self._color)
         self.editing_finished.emit()
@@ -103,7 +109,8 @@ class ColorButton(QPushButton):
         """Обработчик изменения цвета в диалоге (live preview)."""
         dlg = self.sender()
         if dlg is not None:
-            self._color = dlg.get_color_01()
+            t = dlg.get_color_01()
+            self._color = Vec4(t[0], t[1], t[2], t[3])
             self._update_style()
             self.color_changed.emit(self._color)
 
@@ -821,7 +828,7 @@ class MaterialInspector(QWidget):
             val = tuple(val.tolist())
         editor = ColorButton(val)
         editor.color_changed.connect(
-            lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+            lambda v, name=prop.name: self._on_uniform_changed(name, v)  # v is Vec4
         )
         editor.editing_finished.connect(self._on_editing_finished)
         return editor
@@ -857,12 +864,18 @@ class MaterialInspector(QWidget):
         if self._material is None:
             return
 
+        # Convert numpy arrays to Vec3/Vec4 for C++ set_param
+        from termin.geombase import Vec3
+        converted_value = value
+        if isinstance(value, np.ndarray):
+            if value.size == 3:
+                converted_value = Vec3(float(value[0]), float(value[1]), float(value[2]))
+            elif value.size == 4:
+                converted_value = Vec4(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
+
         # Обновляем значение во всех фазах материала
-        # NOTE: phase.uniforms returns a copy, so we must reassign the whole dict
         for phase in self._material.phases:
-            uniforms = phase.uniforms
-            uniforms[name] = value
-            phase.uniforms = uniforms
+            phase.set_param(name, converted_value)
 
         self.material_changed.emit()
 

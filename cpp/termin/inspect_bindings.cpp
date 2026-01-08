@@ -179,7 +179,8 @@ void bind_inspect(nb::module_& m) {
         .def_ro("min", &InspectFieldInfo::min)
         .def_ro("max", &InspectFieldInfo::max)
         .def_ro("step", &InspectFieldInfo::step)
-        .def_ro("non_serializable", &InspectFieldInfo::non_serializable)
+        .def_ro("is_serializable", &InspectFieldInfo::is_serializable)
+        .def_ro("is_inspectable", &InspectFieldInfo::is_inspectable)
         .def_ro("choices", &InspectFieldInfo::choices)
         .def_prop_ro("action", [](const InspectFieldInfo& self) -> nb::object {
             if (self.action.ptr() == nullptr || self.action.is_none()) {

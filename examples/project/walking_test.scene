@@ -170,7 +170,8 @@
                     "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
                     "name": "Kairon"
                   },
-                  "cast_shadow": true
+                  "cast_shadow": true,
+                  "_override_material": false
                 }
               },
               {
@@ -233,7 +234,8 @@
                     "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                     "name": "StandartMaterial"
                   },
-                  "cast_shadow": true
+                  "cast_shadow": true,
+                  "_override_material": false
                 }
               },
               {
@@ -4026,7 +4028,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4074,7 +4077,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4122,7 +4126,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4170,7 +4175,8 @@
                         "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b",
                         "name": "AdvancedSkin"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4218,7 +4224,8 @@
                         "uuid": "00000000-0000-0000-0002-000000000003",
                         "name": "AdvancedPBRMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4266,7 +4273,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4314,7 +4322,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4362,7 +4371,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4410,7 +4420,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4458,7 +4469,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4506,7 +4518,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4554,7 +4567,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4602,7 +4616,8 @@
                         "uuid": "00000000-0000-0000-0002-000000000003",
                         "name": "AdvancedPBRMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4650,7 +4665,8 @@
                         "uuid": "00000000-0000-0000-0002-000000000001",
                         "name": "DefaultMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5474,7 +5490,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5522,7 +5539,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5570,7 +5588,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5618,7 +5637,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5666,7 +5686,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5714,7 +5735,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5762,7 +5784,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5810,7 +5833,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5858,7 +5882,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5906,7 +5931,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -5954,7 +5980,8 @@
                         "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b",
                         "name": "AdvancedSkin"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6002,7 +6029,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6050,7 +6078,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6098,7 +6127,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6146,7 +6176,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6194,7 +6225,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6242,7 +6274,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6290,7 +6323,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6338,7 +6372,8 @@
                         "uuid": "e4dee1c0-cbfb-4092-a3b1-592371eac13d",
                         "name": "Hair"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6386,7 +6421,8 @@
                         "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
                         "name": "StandartMaterial"
                       },
-                      "cast_shadow": true
+                      "cast_shadow": true,
+                      "_override_material": false
                     }
                   }
                 ],
@@ -9284,7 +9320,8 @@
                 "uuid": "997249bf-9de4-40fc-829c-08146e5bed0e",
                 "name": "BlindEffectMaterial"
               },
-              "cast_shadow": true
+              "cast_shadow": true,
+              "_override_material": false
             }
           }
         ],
@@ -9332,7 +9369,8 @@
                 "uuid": "0ac62d42-1e3c-4bb3-90f9-2418c0f53ec2",
                 "name": "SomeMaterial"
               },
-              "cast_shadow": true
+              "cast_shadow": true,
+              "_override_material": false
             }
           }
         ],
@@ -9380,7 +9418,20 @@
                 "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc",
                 "name": "TransparentMaterial"
               },
-              "cast_shadow": true
+              "cast_shadow": true,
+              "_override_material": true,
+              "_overridden_material_data": {
+                "phases_uniforms": [
+                  {
+                    "u_color": [
+                      0.1266193687915802,
+                      0.7099260091781616,
+                      0.7183032035827637,
+                      0.5
+                    ]
+                  }
+                ]
+              }
             }
           }
         ],
@@ -9448,24 +9499,25 @@
   "editor": {
     "camera": {
       "position": [
-        2.920316696166992,
-        1.7248910665512085,
-        1.177734613418579
+        4.193328380584717,
+        -3.6856985092163086,
+        3.4368107318878174
       ],
       "rotation": [
-        0.0011766722134911615,
-        0.003286318204237145,
-        0.941464814401724,
-        0.33709319008056177
+        -0.21430574976889083,
+        -0.07884916623910401,
+        0.33617504896552564,
+        0.9136969908303401
       ],
-      "radius": 3.0
+      "radius": 5.0
     },
-    "selected_entity": "harvey_vestv1Mesh",
+    "selected_entity": "entity4",
     "expanded_entities": [
       "EditorEntities",
+      "PlatformBase",
       "editor_ui",
-      "camera",
       "Arthur",
+      "camera",
       "Model"
     ]
   },
