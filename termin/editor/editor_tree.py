@@ -140,6 +140,9 @@ class SceneTreeModel(QAbstractItemModel):
         if role == Qt.ItemDataRole.ForegroundRole:
             # Blue color for prefab instances
             if isinstance(node.obj, Entity):
+                # Check if entity is still valid (not destroyed)
+                if not node.obj.valid:
+                    return None
                 from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
                 if node.obj.get_component(PrefabInstanceMarker) is not None:
                     return QColor(70, 130, 220)  # Steel blue
@@ -148,6 +151,9 @@ class SceneTreeModel(QAbstractItemModel):
                     return QColor(128, 128, 128)
         if role == Qt.ItemDataRole.CheckStateRole:
             if isinstance(node.obj, Entity):
+                # Check if entity is still valid (not destroyed)
+                if not node.obj.valid:
+                    return None
                 return Qt.CheckState.Checked if node.obj.enabled else Qt.CheckState.Unchecked
         return None
 

@@ -40,6 +40,7 @@ class SceneFileController:
         get_editor_scene_name: Callable[[], str | None] | None = None,
         set_editor_scene_name: Callable[[str | None], None] | None = None,
         log_message: Callable[[str], None] | None = None,
+        on_before_close_scene: Callable[[str], None] | None = None,
     ):
         self._parent = parent
         self._get_scene_manager = get_scene_manager
@@ -48,6 +49,7 @@ class SceneFileController:
         self._get_project_path = get_project_path
         self._get_editor_scene_name = get_editor_scene_name
         self._set_editor_scene_name = set_editor_scene_name
+        self._on_before_close_scene = on_before_close_scene
 
     def new_scene(self) -> bool:
         """
@@ -74,6 +76,9 @@ class SceneFileController:
             if self._get_editor_scene_name is not None:
                 old_scene_name = self._get_editor_scene_name()
             if old_scene_name and sm.has_scene(old_scene_name):
+                # Notify before closing (unbind UI, set INACTIVE)
+                if self._on_before_close_scene is not None:
+                    self._on_before_close_scene(old_scene_name)
                 sm.close_scene(old_scene_name)
 
             # Create new untitled scene
@@ -215,6 +220,9 @@ class SceneFileController:
             if self._get_editor_scene_name is not None:
                 old_scene_name = self._get_editor_scene_name()
             if old_scene_name and sm.has_scene(old_scene_name):
+                # Notify before closing (unbind UI, set INACTIVE)
+                if self._on_before_close_scene is not None:
+                    self._on_before_close_scene(old_scene_name)
                 sm.close_scene(old_scene_name)
 
             # Set editor scene name BEFORE load (load triggers _restore_editor_state)

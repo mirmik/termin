@@ -405,6 +405,7 @@ class EditorWindow(QMainWindow):
             get_editor_scene_name=lambda: self._editor_scene_name,
             set_editor_scene_name=self._set_editor_scene_name,
             log_message=self._log_to_console,
+            on_before_close_scene=self._on_before_close_editor_scene,
         )
 
         # --- Project Browser ---
@@ -1263,6 +1264,21 @@ class EditorWindow(QMainWindow):
         if self._rendering_controller is not None:
             self._rendering_controller.remove_viewports_for_scene(scene)
 
+    def _on_before_close_editor_scene(self, scene_name: str) -> None:
+        """Called before editor scene is closed. Unbinds UI and sets INACTIVE."""
+        # Unbind scene tree first (prevents access to destroyed entities)
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(None)
+
+        # Remove viewports for this scene
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is not None and self._rendering_controller is not None:
+            self._rendering_controller.remove_viewports_for_scene(scene)
+
+        # Set INACTIVE mode
+        if self.scene_manager.has_scene(scene_name):
+            self.scene_manager.set_mode(scene_name, SceneMode.INACTIVE)
+
     def _on_tree_object_selected(self, obj: object | None) -> None:
         """
         Колбэк от SceneTreeController при изменении выделения в дереве.
@@ -1776,15 +1792,6 @@ class EditorWindow(QMainWindow):
         self._editor_scene_name = name
         self.scene_manager.set_mode(name, SceneMode.EDITOR)
 
-        # Clear undo stack
-        self.undo_stack.clear()
-        self._update_undo_redo_actions()
-        self.undo_stack_changed.emit()
-
-        # Clear selection
-        if self.selection_manager is not None:
-            self.selection_manager.clear()
-
         # Serialize and destroy EditorEntities from old scene (if exists)
         editor_entities_data = self._camera_manager.serialize_and_destroy_editor_entities()
 
@@ -1794,8 +1801,18 @@ class EditorWindow(QMainWindow):
         self.camera = self._camera_manager.camera
 
         # Create editor viewport for the new scene (old viewport was removed when scene went inactive)
+        # Must be before selection clear, as selection change callbacks access the viewport
         if self._rendering_controller is not None and self.camera is not None:
             self._rendering_controller.create_editor_viewport(new_scene, self.camera)
+
+        # Clear undo stack
+        self.undo_stack.clear()
+        self._update_undo_redo_actions()
+        self.undo_stack_changed.emit()
+
+        # Clear selection (viewport must exist before this, as callbacks access it)
+        if self.selection_manager is not None:
+            self.selection_manager.clear()
 
         # Clear gizmo target for new scene
         if self.editor_viewport is not None:
@@ -1898,6 +1915,10 @@ class EditorWindow(QMainWindow):
         # Сохраняем камеру editor viewport в editor сцену
         self._save_editor_viewport_camera_to_scene(editor_scene)
 
+        # Сохраняем viewport_configs перед копированием (для восстановления через attach_scene)
+        if self._rendering_controller is not None:
+            self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
+
         # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
         self._game_scene_name = f"{self._editor_scene_name}(game)"
         game_scene = self.scene_manager.copy_scene(
@@ -1995,52 +2016,35 @@ class EditorWindow(QMainWindow):
         if self._rendering_controller is None:
             return
 
-        # Строим словарь камер в новой сцене по имени entity (исключая editor entities)
-        cameras_by_name: dict[str, CameraComponent] = {}
-        first_scene_camera: CameraComponent | None = None
-        for entity in scene.entities:
-            if not entity.serializable:
-                continue  # Skip editor entities
-            cam = entity.get_component(CameraComponent)
-            if cam is not None:
-                if first_scene_camera is None:
-                    first_scene_camera = cam
-                if entity.name:
+        # 1. Обычные дисплеи - через attach_scene (читает scene.viewport_configs)
+        self._rendering_controller.attach_scene(scene)
+
+        # 2. Editor display - отдельная логика
+        editor_display = self._rendering_controller.editor_display
+        if editor_display is not None:
+            # Строим словарь камер по имени (исключая editor entities)
+            cameras_by_name: dict[str, CameraComponent] = {}
+            for entity in scene.entities:
+                if not entity.serializable:
+                    continue
+                cam = entity.get_component(CameraComponent)
+                if cam is not None and entity.name:
                     cameras_by_name[entity.name] = cam
 
-        # Читаем сохранённое имя камеры из сцены
-        saved_camera_name = scene.editor_viewport_camera_name
-
-        # Создаём viewports для каждого display (старые были удалены)
-        for display in self._rendering_controller.displays:
-            display_id = id(display)
-            editor_features = self._editor_features.get(display_id)
-
-            if editor_features is not None:
-                # Editor display - ищем камеру по сохранённому имени
-                # Если камера была игровой (есть в cameras_by_name) - используем её копию
-                # Иначе используем editor camera
-                if saved_camera_name and saved_camera_name in cameras_by_name:
-                    camera = cameras_by_name[saved_camera_name]
-                else:
-                    camera = self._camera_manager.camera
-                self._rendering_controller.create_editor_viewport(scene, camera)
-                editor_features.set_world_mode("game" if is_playing else "editor")
+            # Ищем камеру по сохранённому имени, иначе используем editor camera
+            saved_camera_name = scene.editor_viewport_camera_name
+            if saved_camera_name and saved_camera_name in cameras_by_name:
+                camera = cameras_by_name[saved_camera_name]
             else:
-                # Simple display - используем первую камеру сцены
-                # TODO: сохранять/восстанавливать камеры для simple displays
-                camera = first_scene_camera
-                if camera is None:
-                    continue
+                camera = self._camera_manager.camera
 
-                viewport = display.create_viewport(
-                    scene=scene,
-                    camera=camera,
-                    rect=(0.0, 0.0, 1.0, 1.0),
-                )
-                # TODO: restore pipeline for simple displays
+            self._rendering_controller.create_editor_viewport(scene, camera)
 
-        self._rendering_controller._viewport_list.refresh()
+            # Обновляем world_mode для EditorViewportFeatures
+            editor_display_id = id(editor_display)
+            editor_features = self._editor_features.get(editor_display_id)
+            if editor_features is not None:
+                editor_features.set_world_mode("game" if is_playing else "editor")
 
         # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None

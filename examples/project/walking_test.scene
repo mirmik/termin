@@ -194,7 +194,7 @@
           },
           {
             "uuid": "0000000000000077",
-            "name": "entity1",
+            "name": "KEntity",
             "priority": 0,
             "visible": true,
             "enabled": true,
@@ -231,8 +231,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                    "name": "StandartMaterial"
+                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                    "name": "Kairon"
                   },
                   "cast_shadow": true,
                   "_override_material": false
@@ -4770,7 +4770,7 @@
             "type": "ViewportHintComponent",
             "data": {
               "enabled": true,
-              "pipeline_name": "ChronoSquadPipeline",
+              "pipeline_name": "Default",
               "layer_mask": "0xffffffffffffffff"
             }
           },
@@ -5852,7 +5852,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "80aea516-54b5-4c7c-8af1-779d36e9b023",
+                              "uuid": "50e7e82f-c681-49d1-a5e9-c07b15917533",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6246,7 +6246,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "80aea516-54b5-4c7c-8af1-779d36e9b023",
+                              "uuid": "50e7e82f-c681-49d1-a5e9-c07b15917533",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6467,7 +6467,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "80aea516-54b5-4c7c-8af1-779d36e9b023",
+                              "uuid": "50e7e82f-c681-49d1-a5e9-c07b15917533",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9559,7 +9559,7 @@
         "depth": 0,
         "input_mode": "simple",
         "block_input_in_editor": false,
-        "pipeline_uuid": "5baa602e-b819-4020-a428-c5a1f06a69a4"
+        "pipeline_uuid": "00000000-0000-0000-0004-000000000001"
       }
     ],
     "light_direction": [
@@ -9603,21 +9603,23 @@
   "editor": {
     "camera": {
       "position": [
-        2.4355151653289795,
-        2.779099225997925,
-        2.4614951610565186
+        6.628389358520508,
+        -4.547876834869385,
+        5.485920429229736
       ],
       "rotation": [
-        -0.04491369695126943,
-        -0.16417684341960528,
-        0.9504825048406211,
-        0.2600225603728311
+        -0.22900364897228764,
+        -0.11318066224654806,
+        0.4283716191071542,
+        0.8667440351074389
       ],
-      "radius": 3.5
+      "radius": 8.5
     },
+    "selected_entity": "MainCamera",
     "expanded_entities": [
+      "camera",
       "EditorEntities",
-      "camera"
+      "PlatformBase"
     ]
   },
   "resources": {
