@@ -51,7 +51,9 @@ void bind_material(nb::module_& m) {
             // Set color
             if (kwargs.contains("color") && !kwargs["color"].is_none()) {
                 nb::object color_obj = nb::borrow<nb::object>(kwargs["color"]);
-                if (nb::ndarray_check(color_obj)) {
+                if (nb::isinstance<Vec4>(color_obj)) {
+                    self->set_color(nb::cast<Vec4>(color_obj));
+                } else if (nb::ndarray_check(color_obj)) {
                     nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(color_obj);
                     float* ptr = arr.data();
                     self->set_color(Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});
@@ -598,7 +600,9 @@ void bind_material(nb::module_& m) {
             // Set color
             if (kwargs.contains("color") && !kwargs["color"].is_none()) {
                 nb::object color_obj = nb::borrow<nb::object>(kwargs["color"]);
-                if (nb::ndarray_check(color_obj)) {
+                if (nb::isinstance<Vec4>(color_obj)) {
+                    self->set_color(nb::cast<Vec4>(color_obj));
+                } else if (nb::ndarray_check(color_obj)) {
                     nb::ndarray<nb::numpy, float> arr = nb::cast<nb::ndarray<nb::numpy, float>>(color_obj);
                     float* ptr = arr.data();
                     self->set_color(Vec4{ptr[0], ptr[1], ptr[2], ptr[3]});

@@ -17,6 +17,10 @@ NB_MODULE(_native, m) {
     nb::set_leak_warnings(false);
     m.doc() = "Native C++ module for termin";
 
+    // Import _geom_native for Vec4 type (used by Material::color)
+    nb::module_ geom_native = nb::module_::import_("termin.geombase._geom_native");
+    m.attr("geom") = geom_native;
+
     // Import _mesh_native and re-export as submodule
     // This allows types to be shared across modules
     nb::module_ mesh_native = nb::module_::import_("termin.mesh._mesh_native");

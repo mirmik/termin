@@ -2,7 +2,7 @@ from termin.chronosquad.core.effects.blind_effect import BlindEffect
 from termin.assets import ResourceManager
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.chronosquad.controllers.visual_effects_controller import EffectView
-from termin.geombase import Pose3, Vec3
+from termin.geombase import Pose3, Vec3, Vec4
 import numpy
 
 
@@ -21,6 +21,7 @@ class BlindEffectView(EffectView):
 
         entity.transform.relocate(Pose3(lin=effect._position))
         self.material = rm.get_material("BlindEffectMaterial").copy()
+        self.material.color = Vec4(0.0, 0.8, 0.8, 0.0)  # Initial color with 0 alpha
         self.update_color(effect.start_step)
         sphere_mesh = rm.get_mesh("Sphere")
         mr = entity.add_component(MeshRenderer(mesh=sphere_mesh, material=self.material))
@@ -33,7 +34,7 @@ class BlindEffectView(EffectView):
         """Update the color of the blind effect based on the current stepstamp."""
         color = self.material.color
         intensity = self.intensivity(stepstamp)
-        color.w = intensity  # Update alpha based on intensity
+        color.w = intensity * 0.6  # Update alpha based on intensity
         self.material.color = color
 
     def intensivity(self, stepstamp: int) -> float:
@@ -46,8 +47,7 @@ class BlindEffectView(EffectView):
         """Update the visual effect based on the effect state and current step."""
         intensity = self.intensivity(current_step)
         self.update_color(current_step)
-        print(f"BlindEffectView updated at step {current_step} with intensity {intensity}")
-
+    
     def destroy(self, scene) -> None:
         """Clean up visual effect resources."""
         scene.remove(self._entity)

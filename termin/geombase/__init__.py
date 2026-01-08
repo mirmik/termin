@@ -16,6 +16,7 @@ from termin import _dll_setup  # noqa: F401
 # Import C++ native implementations
 from ._geom_native import (
     Vec3,
+    Vec4,
     Quat,
     Mat44,
     Pose3,
@@ -32,6 +33,7 @@ from termin.colliders._colliders_native import Ray3
 
 __all__ = [
     'Vec3',
+    'Vec4',
     'Quat',
     'Mat44',
     'Pose2',
