@@ -105,6 +105,10 @@ class MaterialPostEffect(PostEffect):
         """
         self._before_draw = callback
 
+    def clear_callbacks(self) -> None:
+        """Clear before_draw callback."""
+        self._before_draw = None
+
     def add_resource(self, resource_name: str, uniform_name: str) -> "MaterialPostEffect":
         """
         Add a FrameGraph resource to be bound as a texture uniform.

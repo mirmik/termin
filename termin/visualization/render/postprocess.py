@@ -168,6 +168,9 @@ class PostEffect:
         """
         raise NotImplementedError
 
+    def clear_callbacks(self) -> None:
+        """Clear any callbacks that reference external objects. Override in subclasses."""
+        pass
 
 
 class PostProcessPass(RenderFramePass):

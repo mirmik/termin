@@ -493,6 +493,15 @@ class SceneManager:
         """
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
+
+        old_mode = self._modes.get(name, SceneMode.INACTIVE)
+
+        # When transitioning to INACTIVE, notify to remove viewports
+        if mode == SceneMode.INACTIVE and old_mode != SceneMode.INACTIVE:
+            scene = self._scenes[name]
+            if self._on_before_scene_close is not None:
+                self._on_before_scene_close(scene)
+
         self._modes[name] = mode
         self._update_timer_state()
 

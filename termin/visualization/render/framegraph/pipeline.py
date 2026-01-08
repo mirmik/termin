@@ -82,3 +82,17 @@ class RenderPipeline:
     def copy(self) -> "RenderPipeline":
         """Create a deep copy of this pipeline via serialize/deserialize."""
         return RenderPipeline.deserialize(self.serialize())
+
+    def destroy(self) -> None:
+        """
+        Clean up pipeline resources and callbacks.
+
+        Iterates through all passes and clears callbacks on post-effects.
+        Should be called before discarding a pipeline to prevent dangling references.
+        """
+        from termin.visualization.render.postprocess import PostProcessPass
+
+        for render_pass in self.passes:
+            if isinstance(render_pass, PostProcessPass):
+                for effect in render_pass.effects:
+                    effect.clear_callbacks()

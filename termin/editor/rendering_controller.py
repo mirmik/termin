@@ -491,14 +491,14 @@ class RenderingController:
         """
         Remove all viewports that reference the given scene.
 
-        Called before scene is destroyed to prevent rendering with invalid scene.
-        Skips editor display - its viewport is managed separately.
+        Called before scene is destroyed or deactivated.
+        Destroys pipelines to clear callbacks, then removes viewports.
         """
         for display in self._manager.displays:
-            if self.is_editor_display(display):
-                continue
             viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
             for vp in viewports_to_remove:
+                if vp.pipeline is not None:
+                    vp.pipeline.destroy()
                 display.remove_viewport(vp)
         self._viewport_list.refresh()
 
@@ -593,6 +593,44 @@ class RenderingController:
             return None
         _container, backend_window, _qwindow = self._display_tabs[self._editor_display_id]
         return backend_window
+
+    def create_editor_viewport(
+        self,
+        scene: "Scene",
+        camera: "CameraComponent",
+        pipeline: Optional["RenderPipeline"] = None,
+    ) -> Optional["Viewport"]:
+        """
+        Create a viewport in the editor display for a scene.
+
+        Called when switching to a new scene to create its editor viewport.
+        Uses editor pipeline getter if no pipeline specified.
+
+        Args:
+            scene: Scene to display.
+            camera: Camera component for the viewport.
+            pipeline: Optional pipeline. If None, uses editor pipeline.
+
+        Returns:
+            Created Viewport or None if editor display doesn't exist.
+        """
+        display = self.editor_display
+        if display is None:
+            return None
+
+        # Get pipeline from getter if not specified
+        if pipeline is None and self._get_editor_pipeline is not None:
+            pipeline = self._get_editor_pipeline()
+
+        viewport = display.create_viewport(
+            scene=scene,
+            camera=camera,
+            rect=(0.0, 0.0, 1.0, 1.0),
+        )
+        viewport.pipeline = pipeline
+
+        self._viewport_list.refresh()
+        return viewport
 
     @property
     def editor_gl_widget(self) -> Optional[QWidget]:

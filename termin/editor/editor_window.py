@@ -1793,6 +1793,10 @@ class EditorWindow(QMainWindow):
         self.editor_entities = self._camera_manager.editor_entities
         self.camera = self._camera_manager.camera
 
+        # Create editor viewport for the new scene (old viewport was removed when scene went inactive)
+        if self._rendering_controller is not None and self.camera is not None:
+            self._rendering_controller.create_editor_viewport(new_scene, self.camera)
+
         # Clear gizmo target for new scene
         if self.editor_viewport is not None:
             self.editor_viewport.set_gizmo_target(None)
@@ -1897,6 +1901,11 @@ class EditorWindow(QMainWindow):
             self._game_scene_name,
         )
 
+        # Явно удаляем viewports editor сцены перед деактивацией
+        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
+        if self._rendering_controller is not None and editor_scene is not None:
+            self._rendering_controller.remove_viewports_for_scene(editor_scene)
+
         # Устанавливаем режимы (таймер запустится автоматически)
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
         self.scene_manager.set_mode(self._game_scene_name, SceneMode.GAME)
@@ -1911,16 +1920,21 @@ class EditorWindow(QMainWindow):
         # Сохраняем имена камер ДО уничтожения game scene
         camera_names = self._get_viewport_camera_names()
 
+        # Явно удаляем viewports game сцены
+        game_scene = self.scene_manager.get_scene(self._game_scene_name)
+        if self._rendering_controller is not None and game_scene is not None:
+            self._rendering_controller.remove_viewports_for_scene(game_scene)
+
+        # Закрываем game сцену (теперь is_game_mode станет False)
+        self.scene_manager.close_scene(self._game_scene_name)
+        self._game_scene_name = None
+
         # Возвращаемся к editor сцене
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
         editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
 
-        # Сначала переключаем viewports на editor сцену
+        # Создаём viewports для editor сцены и обновляем UI
         self._on_game_mode_changed(False, editor_scene, camera_names)
-
-        # Теперь безопасно закрываем game сцену
-        self.scene_manager.close_scene(self._game_scene_name)
-        self._game_scene_name = None
 
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""
@@ -1977,36 +1991,61 @@ class EditorWindow(QMainWindow):
         """Колбэк при изменении игрового режима."""
         from termin.visualization.core.camera import CameraComponent
 
-        # Обновляем world mode и сцену для всех viewport'ов с EditorViewportFeatures
-        for editor_features in self._editor_features.values():
-            editor_features.set_world_mode("game" if is_playing else "editor")
-            editor_features.set_scene(scene)
+        if self._rendering_controller is None:
+            return
 
-        # Обновляем viewports у display'ов без EditorViewportFeatures
-        if self._rendering_controller is not None:
-            # Строим словарь камер в новой сцене по имени entity
-            cameras_by_name: dict[str, CameraComponent] = {}
-            for entity in scene.entities:
-                cam = entity.get_component(CameraComponent)
-                if cam is not None and entity.name:
+        # Строим словарь камер в новой сцене по имени entity (исключая editor entities)
+        cameras_by_name: dict[str, CameraComponent] = {}
+        first_scene_camera: CameraComponent | None = None
+        for entity in scene.entities:
+            if not entity.serializable:
+                continue  # Skip editor entities
+            cam = entity.get_component(CameraComponent)
+            if cam is not None:
+                if first_scene_camera is None:
+                    first_scene_camera = cam
+                if entity.name:
                     cameras_by_name[entity.name] = cam
 
-            for display in self._rendering_controller.displays:
-                display_id = id(display)
-                if display_id not in self._editor_features:
-                    # Display в режиме "simple" - обновляем viewport'ы
-                    for viewport in display.viewports:
-                        viewport.scene = scene
-                        # Ищем камеру с тем же именем в новой сцене
-                        old_camera_name = viewport_camera_names.get(id(viewport))
-                        new_camera = None
-                        if old_camera_name is not None:
-                            new_camera = cameras_by_name.get(old_camera_name)
-                        # Fallback на editor camera если не нашли
-                        if new_camera is None:
-                            new_camera = self._camera_manager.camera
-                        viewport.camera = new_camera
-                        new_camera.add_viewport(viewport)
+        # Создаём viewports для каждого display (старые были удалены при INACTIVE)
+        for display in self._rendering_controller.displays:
+            display_id = id(display)
+            editor_features = self._editor_features.get(display_id)
+
+            if editor_features is not None:
+                # Editor display - создаём viewport с editor pipeline
+                if is_playing:
+                    # Game mode: используем камеру из game scene
+                    camera = first_scene_camera
+                    if camera is None:
+                        from termin._native import log
+                        log.error("No camera found in game scene")
+                        continue
+                else:
+                    # Editor mode: используем editor camera
+                    camera = self._camera_manager.camera
+                self._rendering_controller.create_editor_viewport(scene, camera)
+                editor_features.set_world_mode("game" if is_playing else "editor")
+            else:
+                # Simple display - создаём viewport с простым пайплайном
+                # Ищем камеру по сохранённому имени
+                camera = first_scene_camera
+                for old_vp_id, camera_name in viewport_camera_names.items():
+                    if camera_name and camera_name in cameras_by_name:
+                        camera = cameras_by_name[camera_name]
+                        break
+                if camera is None:
+                    # No camera in scene - skip this display
+                    continue
+
+                viewport = display.create_viewport(
+                    scene=scene,
+                    camera=camera,
+                    rect=(0.0, 0.0, 1.0, 1.0),
+                )
+                # TODO: restore pipeline for simple displays
+
+        self._rendering_controller._viewport_list.refresh()
 
         # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None
