@@ -30,15 +30,46 @@ class EditorCameraManager:
     - Creation of EditorEntities root entity
     - Creation of editor camera with OrbitCameraController
     - Serialization/deserialization of camera state
+
+    Supports two usage patterns:
+    1. Legacy: EditorCameraManager(scene) - creates EditorEntities immediately
+    2. New: EditorCameraManager() + attach_to_scene(scene) - deferred creation
     """
 
-    def __init__(self, scene: "Scene"):
-        self._scene = scene
+    def __init__(self, scene: "Scene | None" = None):
+        self._scene: "Scene | None" = None
         self.editor_entities: Entity | None = None
         self.camera: PerspectiveCameraComponent | None = None
 
+        # Legacy: if scene provided, attach immediately
+        if scene is not None:
+            self.attach_to_scene(scene)
+
+    def attach_to_scene(self, scene: "Scene") -> None:
+        """
+        Attach to a scene and create EditorEntities.
+
+        Args:
+            scene: Scene to attach to.
+        """
+        if self._scene is not None:
+            self.detach_from_scene()
+
+        self._scene = scene
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
+
+    def detach_from_scene(self) -> None:
+        """
+        Detach from current scene and remove EditorEntities.
+
+        After detach, camera and editor_entities become None.
+        """
+        if self._scene is None:
+            return
+
+        self.destroy_editor_entities()
+        self._scene = None
 
     def _ensure_editor_entities_root(self) -> None:
         """Find or create root entity for editor objects (camera, gizmo, etc.)."""

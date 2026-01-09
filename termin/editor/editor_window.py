@@ -22,6 +22,7 @@ from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
 from termin.editor.editor_camera import EditorCameraManager
+from termin.editor.editor_scene_attachment import EditorSceneAttachment
 from termin.editor.resource_loader import ResourceLoader
 from termin.editor.viewport_list_widget import ViewportListWidget
 from termin.editor.rendering_controller import RenderingController
@@ -289,12 +290,8 @@ class EditorWindow(QMainWindow):
             project_file_watcher=self._project_file_watcher,
         )
 
-        # --- EditorCameraManager ---
-        self._camera_manager = EditorCameraManager(self.scene)
-
-        # Для обратной совместимости
-        self.editor_entities = self._camera_manager.editor_entities
-        self.camera = self._camera_manager.camera
+        # --- EditorSceneAttachment (created later, after editor display) ---
+        self._editor_attachment: EditorSceneAttachment | None = None
 
         # --- SpaceMouse support (initialized later after console is ready) ---
         self._spacemouse: SpaceMouseController | None = None
@@ -329,16 +326,6 @@ class EditorWindow(QMainWindow):
             height=600,
         )
 
-        # Create viewport in editor display
-        self.viewport = editor_display.create_viewport(
-            scene=self.scene,
-            camera=self.camera,
-        )
-        self.camera.add_viewport(self.viewport)
-
-        # Set editor pipeline
-        editor_pipeline = None  # Will be set after EditorViewportFeatures creation
-
         # Install event filter on GL widget
         gl_widget = self._rendering_controller.editor_gl_widget
         if gl_widget is not None:
@@ -350,6 +337,7 @@ class EditorWindow(QMainWindow):
         self.editorViewportTab.installEventFilter(self)
 
         # --- EditorViewportFeatures (editor UX layer) ---
+        # Created before attachment - viewport will be created by attachment.attach()
         self.editor_viewport = EditorViewportFeatures(
             display=editor_display,
             backend_window=backend_window,
@@ -367,14 +355,24 @@ class EditorWindow(QMainWindow):
         # Register in editor features dict
         self._editor_features[id(editor_display)] = self.editor_viewport
 
-        # Set editor pipeline through RenderingController
-        editor_pipeline = self.editor_viewport.make_editor_pipeline()
-        self._rendering_controller.set_viewport_pipeline(self.viewport, editor_pipeline)
-
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
         self._rendering_controller.set_editor_pipeline_maker(
             self.editor_viewport.make_editor_pipeline
         )
+
+        # --- EditorSceneAttachment ---
+        # Manages EditorEntities, viewport, and scene connection
+        self._editor_attachment = EditorSceneAttachment(
+            display=editor_display,
+            rendering_controller=self._rendering_controller,
+            make_editor_pipeline=self.editor_viewport.make_editor_pipeline,
+        )
+
+        # Attach to initial scene (creates EditorEntities and viewport)
+        self._editor_attachment.attach(self.scene, restore_state=False)
+
+        # Sync backward-compatible references from attachment
+        self._sync_attachment_refs()
 
         # For backwards compatibility
         self.viewport_controller = self.editor_viewport
@@ -622,13 +620,32 @@ class EditorWindow(QMainWindow):
 
     # ----------- editor camera -----------
 
+    def _sync_attachment_refs(self) -> None:
+        """
+        Sync backward-compatible references from EditorSceneAttachment.
+
+        Updates self.camera, self.editor_entities, self.viewport from attachment.
+        Call this after any attachment.attach() call.
+        """
+        if self._editor_attachment is None:
+            self.camera = None
+            self.editor_entities = None
+            self.viewport = None
+        else:
+            self.camera = self._editor_attachment.camera
+            self.editor_entities = self._editor_attachment.editor_entities
+            self.viewport = self._editor_attachment.viewport
+
     def _get_editor_camera_data(self) -> dict | None:
         """Get editor camera data for serialization."""
-        return self._camera_manager.get_camera_data()
+        if self._editor_attachment is None:
+            return None
+        return self._editor_attachment.get_camera_data()
 
     def _set_editor_camera_data(self, data: dict) -> None:
         """Apply saved camera data."""
-        self._camera_manager.set_camera_data(data)
+        if self._editor_attachment is not None:
+            self._editor_attachment.set_camera_data(data)
 
     def _get_selected_entity_name(self) -> str | None:
         """
@@ -1780,7 +1797,7 @@ class EditorWindow(QMainWindow):
         Switch editor to a different scene.
 
         Activates the scene in SceneManager and sets up all editor UI.
-        Transfers EditorEntities from old scene to new scene.
+        Uses EditorSceneAttachment for clean attach/detach.
         """
         print(f"[EditorWindow] Switching to scene: {name}")
 
@@ -1794,19 +1811,11 @@ class EditorWindow(QMainWindow):
         self._editor_scene_name = name
         self.scene_manager.set_mode(name, SceneMode.STOP)
 
-        # Save camera state, destroy old EditorEntities, recreate in new scene
-        camera_data = self._camera_manager.get_camera_data()
-        self._camera_manager.destroy_editor_entities()
-        self._camera_manager.recreate_in_scene(new_scene)
-        if camera_data is not None:
-            self._camera_manager.set_camera_data(camera_data)
-        self.editor_entities = self._camera_manager.editor_entities
-        self.camera = self._camera_manager.camera
+        # Attach to new scene (transfers camera state from previous scene)
+        self._editor_attachment.attach(new_scene, transfer_camera_state=True)
 
-        # Create editor viewport for the new scene (old viewport was removed when scene went inactive)
-        # Must be before selection clear, as selection change callbacks access the viewport
-        if self._rendering_controller is not None and self.camera is not None:
-            self._rendering_controller.create_editor_viewport(new_scene, self.camera)
+        # Update backward-compatible references
+        self._sync_attachment_refs()
 
         # Clear undo stack
         self.undo_stack.clear()
@@ -1824,7 +1833,7 @@ class EditorWindow(QMainWindow):
         # Update all EditorViewportFeatures
         for editor_features in self._editor_features.values():
             editor_features.set_scene(new_scene)
-            editor_features.set_camera(self._camera_manager.camera)
+            editor_features.set_camera(self._editor_attachment.camera)
             editor_features.selected_entity_id = 0
             editor_features.hover_entity_id = 0
 
@@ -1873,14 +1882,12 @@ class EditorWindow(QMainWindow):
     def _close_scene(self) -> None:
         """Close current scene (enter no-scene mode)."""
         if self._editor_scene_name and self.scene_manager.has_scene(self._editor_scene_name):
+            # Detach from scene before closing
+            self._editor_attachment.detach(save_state=False)
+            self._sync_attachment_refs()
+
             self.scene_manager.close_scene(self._editor_scene_name)
             self._editor_scene_name = None
-
-            # Clear editor state
-            self.editor_entities = []
-            self._camera_manager.editor_entities = None
-            self._camera_manager.camera = None
-            self._camera_manager._scene = None
 
             # Clear viewports
             for editor_features in self._editor_features.values():
@@ -1922,10 +1929,8 @@ class EditorWindow(QMainWindow):
         if self._rendering_controller is not None:
             self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
 
-        # Сохраняем состояние EditorEntities (камера, кнопки UI и т.д.)
-        camera_data = self._camera_manager.get_camera_data()
-        # Сохраняем в Scene для восстановления после game mode
-        editor_scene.editor_entities_data = camera_data
+        # Сохраняем состояние EditorEntities в editor_scene для восстановления после game mode
+        self._editor_attachment.save_state()
 
         # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
         self._game_scene_name = f"{self._editor_scene_name}(game)"
@@ -1934,16 +1939,9 @@ class EditorWindow(QMainWindow):
             self._game_scene_name,
         )
 
-        # Создаём EditorEntities в game_scene и применяем сохранённое состояние
-        self._camera_manager.recreate_in_scene(game_scene)
-        if camera_data is not None:
-            self._camera_manager.set_camera_data(camera_data)
-        self.editor_entities = self._camera_manager.editor_entities
-        self.camera = self._camera_manager.camera
-
-        # Явно удаляем viewports editor сцены перед деактивацией
-        if self._rendering_controller is not None:
-            self._rendering_controller.remove_viewports_for_scene(editor_scene)
+        # Detach from editor_scene, attach to game_scene with same camera state
+        self._editor_attachment.attach(game_scene, transfer_camera_state=True)
+        self._sync_attachment_refs()
 
         # Устанавливаем режимы (таймер запустится автоматически)
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
@@ -1956,10 +1954,8 @@ class EditorWindow(QMainWindow):
         if not self.is_game_mode:
             return
 
-        # Явно удаляем viewports game сцены
-        game_scene = self.scene_manager.get_scene(self._game_scene_name)
-        if self._rendering_controller is not None and game_scene is not None:
-            self._rendering_controller.remove_viewports_for_scene(game_scene)
+        # Detach from game_scene (don't save state - we discard game changes)
+        self._editor_attachment.detach(save_state=False)
 
         # Закрываем game сцену (теперь is_game_mode станет False)
         self.scene_manager.close_scene(self._game_scene_name)
@@ -1969,13 +1965,9 @@ class EditorWindow(QMainWindow):
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
 
-        # Переключаемся на EditorEntities в editor_scene
-        self._camera_manager.recreate_in_scene(editor_scene)
-        # Восстанавливаем состояние EditorEntities из сцены
-        if editor_scene.editor_entities_data is not None:
-            self._camera_manager.set_camera_data(editor_scene.editor_entities_data)
-        self.editor_entities = self._camera_manager.editor_entities
-        self.camera = self._camera_manager.camera
+        # Attach to editor_scene, restore state from scene.editor_entities_data
+        self._editor_attachment.attach(editor_scene, restore_state=True)
+        self._sync_attachment_refs()
 
         # Создаём viewports для editor сцены (камера читается из scene.editor_viewport_camera_name)
         self._on_game_mode_changed(False, editor_scene)
@@ -2034,39 +2026,16 @@ class EditorWindow(QMainWindow):
 
     def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
         """Колбэк при изменении игрового режима."""
-        from termin.visualization.core.camera import CameraComponent
-
         if self._rendering_controller is None:
             return
 
-        # 1. Обычные дисплеи - через attach_scene (читает scene.viewport_configs)
+        # Обычные дисплеи (не Editor) - через attach_scene (читает scene.viewport_configs)
         self._rendering_controller.attach_scene(scene)
 
-        # 2. Editor display - отдельная логика
+        # Editor display - viewport уже создан через EditorSceneAttachment.attach()
+        # Только обновляем world_mode
         editor_display = self._rendering_controller.editor_display
         if editor_display is not None:
-            # Строим словарь камер по имени (исключая editor entities)
-            cameras_by_name: dict[str, CameraComponent] = {}
-            for entity in scene.entities:
-                if not entity.serializable:
-                    continue
-                cam = entity.get_component(CameraComponent)
-                if cam is not None and entity.name:
-                    cameras_by_name[entity.name] = cam
-
-            # Ищем камеру по сохранённому имени, иначе используем editor camera
-            saved_camera_name = scene.editor_viewport_camera_name
-            if saved_camera_name and saved_camera_name in cameras_by_name:
-                camera = cameras_by_name[saved_camera_name]
-            else:
-                camera = self._camera_manager.camera
-
-            self._rendering_controller.create_editor_viewport(scene, camera)
-
-            # Уведомляем компоненты что сцена стала активной (после создания viewport)
-            scene.notify_scene_active()
-
-            # Обновляем world_mode для EditorViewportFeatures
             editor_display_id = id(editor_display)
             editor_features = self._editor_features.get(editor_display_id)
             if editor_features is not None:
@@ -2316,8 +2285,9 @@ class EditorWindow(QMainWindow):
 
         # Poll SpaceMouse input (only in editor mode)
         if not is_playing and self._spacemouse is not None:
-            orbit_controller = self._camera_manager.orbit_controller
-            self._spacemouse.update(orbit_controller, self._request_viewport_update)
+            if self._editor_attachment is not None and self._editor_attachment.camera_manager is not None:
+                orbit_controller = self._editor_attachment.camera_manager.orbit_controller
+                self._spacemouse.update(orbit_controller, self._request_viewport_update)
 
         # Update active_in_editor components in editor mode
         if not is_playing and self.scene is not None:

@@ -685,6 +685,38 @@ class RenderingController:
         self._viewport_list.refresh()
         return viewport
 
+    def remove_editor_viewports(self) -> None:
+        """
+        Remove all viewports from the editor display.
+
+        Called when detaching from a scene to clean up viewports.
+        Destroys pipelines and clears FBOs before removing.
+        """
+        display = self.editor_display
+        if display is None:
+            return
+
+        # Make GL context current
+        if self._editor_display_id is not None:
+            tab_info = self._display_tabs.get(self._editor_display_id)
+            if tab_info is not None:
+                _tab_container, backend_window, _qwindow = tab_info
+                if backend_window is not None:
+                    backend_window.make_current()
+
+        for vp in list(display.viewports):
+            # Destroy pipeline
+            if vp.pipeline is not None:
+                vp.pipeline.destroy()
+            # Clear FBOs and remove viewport state
+            state = self._manager.get_viewport_state(vp)
+            if state is not None:
+                state.clear_fbos()
+            self._manager.remove_viewport_state(vp)
+            display.remove_viewport(vp)
+
+        self._viewport_list.refresh()
+
     @property
     def editor_gl_widget(self) -> Optional[QWidget]:
         """Get the Qt widget containing the editor GL surface."""
