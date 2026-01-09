@@ -432,8 +432,15 @@ class EditorWindow(QMainWindow):
 
     @property
     def is_game_mode(self) -> bool:
-        """True if currently in game mode."""
-        return self.scene_manager.is_game_mode
+        """True if currently in game mode (including paused)."""
+        return self._game_scene_name is not None
+
+    @property
+    def is_game_paused(self) -> bool:
+        """True if game mode is paused (game scene in STOP mode)."""
+        if not self.is_game_mode:
+            return False
+        return self.scene_manager.get_mode(self._game_scene_name) == SceneMode.STOP
 
     def _set_editor_scene_name(self, name: str | None) -> None:
         """Set editor scene name."""
@@ -1181,6 +1188,35 @@ class EditorWindow(QMainWindow):
         play_btn.clicked.connect(self._toggle_game_mode)
         layout.addWidget(play_btn)
         self._play_button = play_btn
+
+        # Кнопка Pause (видна только в game mode)
+        pause_btn = QPushButton("Pause")
+        pause_btn.setFixedSize(60, 24)
+        pause_btn.setCheckable(True)
+        pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #505050;
+                color: #ffffff;
+                border: 1px solid #606060;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+            }
+            QPushButton:checked {
+                background-color: #d9a04a;
+                border-color: #e9b05a;
+            }
+            QPushButton:checked:hover {
+                background-color: #e9b05a;
+            }
+        """)
+        pause_btn.clicked.connect(self._toggle_pause)
+        pause_btn.setVisible(False)  # Hidden until game mode starts
+        layout.addWidget(pause_btn)
+        self._pause_button = pause_btn
+
         self._viewport_toolbar = toolbar
 
         # Правый спейсер для центрирования кнопки
@@ -1911,6 +1947,26 @@ class EditorWindow(QMainWindow):
         else:
             self._start_game_mode()
 
+    def _toggle_pause(self) -> None:
+        """Переключает паузу в игровом режиме."""
+        if not self.is_game_mode or self._game_scene_name is None:
+            return
+
+        current_mode = self.scene_manager.get_mode(self._game_scene_name)
+        if current_mode == SceneMode.PLAY:
+            # Pause: PLAY -> STOP
+            self.scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
+            if self._pause_button is not None:
+                self._pause_button.setChecked(True)
+        else:
+            # Resume: STOP -> PLAY
+            self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
+            if self._pause_button is not None:
+                self._pause_button.setChecked(False)
+
+        self._update_status_bar()
+        self._request_viewport_update()
+
     def _start_game_mode(self) -> None:
         """Входит в игровой режим."""
         if self.is_game_mode:
@@ -2058,6 +2114,12 @@ class EditorWindow(QMainWindow):
             self._play_button.setChecked(is_playing)
             self._play_button.setText("Stop" if is_playing else "Play")
 
+        # Показываем/скрываем кнопку Pause
+        if self._pause_button is not None:
+            self._pause_button.setVisible(is_playing)
+            if not is_playing:
+                self._pause_button.setChecked(False)
+
         self._update_window_title()
         self._update_status_bar()
 
@@ -2176,9 +2238,12 @@ class EditorWindow(QMainWindow):
         if self._status_bar_label is None:
             return
 
-        is_playing = self.is_game_mode
-        if not is_playing:
+        if not self.is_game_mode:
             self._status_bar_label.setText("Editor mode")
+            return
+
+        if self.is_game_paused:
+            self._status_bar_label.setText("Game mode (PAUSED)")
             return
 
         if self._fps_smooth is None:

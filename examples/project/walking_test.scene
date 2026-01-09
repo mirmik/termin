@@ -4378,9 +4378,9 @@
                           {
                             "u_metallic": 0,
                             "u_color": [
-                              0.8,
-                              0.8,
-                              0.8,
+                              0.800000011920929,
+                              0.800000011920929,
+                              0.800000011920929,
                               1
                             ],
                             "u_roughness": 0.5,
@@ -5877,7 +5877,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "dfe48d7c-ea85-4c09-9d80-2d97e619a21a",
+                              "uuid": "953ca255-5daf-43b0-9f9c-0c29aaddd006",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6271,7 +6271,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "dfe48d7c-ea85-4c09-9d80-2d97e619a21a",
+                              "uuid": "953ca255-5daf-43b0-9f9c-0c29aaddd006",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6492,7 +6492,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "dfe48d7c-ea85-4c09-9d80-2d97e619a21a",
+                              "uuid": "953ca255-5daf-43b0-9f9c-0c29aaddd006",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9628,17 +9628,17 @@
   "editor": {
     "camera": {
       "position": [
-        1.7251226902008057,
-        3.3169450759887695,
-        3.2021820545196533
+        0.32293403148651123,
+        -6.952219009399414,
+        8.331341743469238
       ],
       "rotation": [
-        -0.03437561342491064,
-        -0.24459525189603745,
-        0.9595853369772737,
-        0.13486089503554158
+        -0.36855575274513874,
+        -0.029653298822389134,
+        0.07451545052406015,
+        0.926139723055118
       ],
-      "radius": 4.0,
+      "radius": 10.0,
       "editor_entities": {
         "camera": [
           {
@@ -9656,7 +9656,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 4.0,
+              "radius": 10.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -9690,13 +9690,11 @@
         ]
       }
     },
-    "selected_entity": "mens_shirt_untuck_elvbhp1fMesh.001",
     "expanded_entities": [
-      "Model",
-      "camera",
+      null,
       "PlatformBase",
-      "EditorEntities",
-      "Glitch"
+      "Glitch",
+      "Model"
     ]
   },
   "resources": {

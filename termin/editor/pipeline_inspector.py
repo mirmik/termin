@@ -58,6 +58,8 @@ class PipelineInspector(QWidget):
         self._pipeline_name: str = ""
         self._source_path: Optional[str] = None
         self._selected_postprocess: Optional["PostProcessPass"] = None
+        self._selected_spec_index: int = -1
+        self._updating_spec_ui: bool = False  # Prevent recursive updates
 
         self._setup_ui()
 
@@ -244,6 +246,108 @@ class PipelineInspector(QWidget):
         scroll.setWidget(self._details_widget)
         main_layout.addWidget(scroll, 1)
 
+        # Resource Specs section (pipeline-level FBO configuration)
+        specs_group = QGroupBox("Resource Specs (FBO)")
+        specs_group_layout = QVBoxLayout(specs_group)
+        specs_group_layout.setContentsMargins(4, 4, 4, 4)
+        specs_group_layout.setSpacing(4)
+
+        # Specs list with buttons
+        specs_list_layout = QHBoxLayout()
+
+        self._specs_list = QListWidget()
+        self._specs_list.setMaximumHeight(100)
+        self._specs_list.currentRowChanged.connect(self._on_spec_selected)
+        specs_list_layout.addWidget(self._specs_list)
+
+        # Buttons for spec management
+        specs_btn_layout = QVBoxLayout()
+        specs_btn_layout.setSpacing(4)
+
+        self._add_spec_btn = QPushButton("+")
+        self._add_spec_btn.setFixedSize(24, 24)
+        self._add_spec_btn.setToolTip("Add resource spec")
+        self._add_spec_btn.clicked.connect(self._on_add_spec)
+        specs_btn_layout.addWidget(self._add_spec_btn)
+
+        self._remove_spec_btn = QPushButton("−")
+        self._remove_spec_btn.setFixedSize(24, 24)
+        self._remove_spec_btn.setToolTip("Remove resource spec")
+        self._remove_spec_btn.clicked.connect(self._on_remove_spec)
+        specs_btn_layout.addWidget(self._remove_spec_btn)
+
+        specs_btn_layout.addStretch()
+        specs_list_layout.addLayout(specs_btn_layout)
+
+        specs_group_layout.addLayout(specs_list_layout)
+
+        # Spec editor
+        self._spec_editor_widget = QWidget()
+        spec_editor_layout = QVBoxLayout(self._spec_editor_widget)
+        spec_editor_layout.setContentsMargins(0, 0, 0, 0)
+        spec_editor_layout.setSpacing(4)
+
+        # Resource name
+        res_layout = QHBoxLayout()
+        res_layout.addWidget(QLabel("Resource:"))
+        self._spec_resource_edit = QLineEdit()
+        self._spec_resource_edit.setPlaceholderText("e.g., empty, color, id")
+        self._spec_resource_edit.editingFinished.connect(self._on_spec_field_changed)
+        res_layout.addWidget(self._spec_resource_edit)
+        spec_editor_layout.addLayout(res_layout)
+
+        # Samples (MSAA)
+        samples_layout = QHBoxLayout()
+        samples_layout.addWidget(QLabel("Samples:"))
+        self._spec_samples_combo = QComboBox()
+        self._spec_samples_combo.addItems(["1 (No MSAA)", "2", "4", "8"])
+        self._spec_samples_combo.currentIndexChanged.connect(self._on_spec_field_changed)
+        samples_layout.addWidget(self._spec_samples_combo)
+        samples_layout.addStretch()
+        spec_editor_layout.addLayout(samples_layout)
+
+        # Clear color
+        clear_color_layout = QHBoxLayout()
+        self._spec_clear_color_check = QCheckBox("Clear Color:")
+        self._spec_clear_color_check.stateChanged.connect(self._on_spec_field_changed)
+        clear_color_layout.addWidget(self._spec_clear_color_check)
+        self._spec_clear_r = QLineEdit("0.0")
+        self._spec_clear_r.setFixedWidth(50)
+        self._spec_clear_r.editingFinished.connect(self._on_spec_field_changed)
+        self._spec_clear_g = QLineEdit("0.0")
+        self._spec_clear_g.setFixedWidth(50)
+        self._spec_clear_g.editingFinished.connect(self._on_spec_field_changed)
+        self._spec_clear_b = QLineEdit("0.0")
+        self._spec_clear_b.setFixedWidth(50)
+        self._spec_clear_b.editingFinished.connect(self._on_spec_field_changed)
+        self._spec_clear_a = QLineEdit("1.0")
+        self._spec_clear_a.setFixedWidth(50)
+        self._spec_clear_a.editingFinished.connect(self._on_spec_field_changed)
+        clear_color_layout.addWidget(self._spec_clear_r)
+        clear_color_layout.addWidget(self._spec_clear_g)
+        clear_color_layout.addWidget(self._spec_clear_b)
+        clear_color_layout.addWidget(self._spec_clear_a)
+        clear_color_layout.addStretch()
+        spec_editor_layout.addLayout(clear_color_layout)
+
+        # Clear depth
+        clear_depth_layout = QHBoxLayout()
+        self._spec_clear_depth_check = QCheckBox("Clear Depth:")
+        self._spec_clear_depth_check.stateChanged.connect(self._on_spec_field_changed)
+        clear_depth_layout.addWidget(self._spec_clear_depth_check)
+        self._spec_clear_depth = QLineEdit("1.0")
+        self._spec_clear_depth.setFixedWidth(50)
+        self._spec_clear_depth.editingFinished.connect(self._on_spec_field_changed)
+        clear_depth_layout.addWidget(self._spec_clear_depth)
+        clear_depth_layout.addStretch()
+        spec_editor_layout.addLayout(clear_depth_layout)
+
+        self._spec_editor_widget.setVisible(False)
+        specs_group_layout.addWidget(self._spec_editor_widget)
+
+        main_layout.addWidget(specs_group)
+        self._specs_group = specs_group
+
         # Save button
         self._save_btn = QPushButton("Save")
         self._save_btn.clicked.connect(self._on_save_clicked)
@@ -335,11 +439,15 @@ class PipelineInspector(QWidget):
         self._effect_name_edit.clear()
         self._effect_name_edit.setEnabled(False)
         self._effects_group.setVisible(False)
+        self._specs_list.clear()
+        self._spec_editor_widget.setVisible(False)
+        self._selected_spec_index = -1
 
         if self._pipeline is None:
             self._name_label.setText("")
             self._details_info.setText("No pipeline loaded")
             self._update_buttons_state()
+            self._update_specs_buttons_state()
             return
 
         self._name_label.setText(self._pipeline_name)
@@ -353,8 +461,12 @@ class PipelineInspector(QWidget):
             )
             self._pass_list.addItem(item)
 
+        # Add specs to list
+        self._rebuild_specs_list()
+
         self._details_info.setText("Select a pass to view details")
         self._update_buttons_state()
+        self._update_specs_buttons_state()
 
     def _on_pass_toggled(self, item: QListWidgetItem) -> None:
         """Handle pass enable/disable toggle."""
@@ -779,3 +891,212 @@ class PipelineInspector(QWidget):
     def pipeline(self) -> Optional["RenderPipeline"]:
         """Current pipeline."""
         return self._pipeline
+
+    # ---------- Resource Specs handling ----------
+
+    def _rebuild_specs_list(self) -> None:
+        """Rebuild the specs list from pipeline.pipeline_specs."""
+        self._specs_list.clear()
+        self._selected_spec_index = -1
+
+        if self._pipeline is None:
+            return
+
+        for spec in self._pipeline.pipeline_specs:
+            # Display: resource name + samples if MSAA enabled
+            label = spec.resource
+            if spec.samples > 1:
+                label += f" ({spec.samples}x MSAA)"
+            item = QListWidgetItem(label)
+            self._specs_list.addItem(item)
+
+    def _update_specs_buttons_state(self) -> None:
+        """Update enabled state of spec buttons."""
+        has_pipeline = self._pipeline is not None
+        row = self._specs_list.currentRow()
+        has_selection = row >= 0
+
+        self._add_spec_btn.setEnabled(has_pipeline)
+        self._remove_spec_btn.setEnabled(has_pipeline and has_selection)
+
+    def _on_spec_selected(self, row: int) -> None:
+        """Handle spec selection - show spec editor."""
+        self._update_specs_buttons_state()
+        self._selected_spec_index = row
+
+        if self._pipeline is None or row < 0 or row >= len(self._pipeline.pipeline_specs):
+            self._spec_editor_widget.setVisible(False)
+            return
+
+        spec = self._pipeline.pipeline_specs[row]
+        self._spec_editor_widget.setVisible(True)
+
+        # Block signals to prevent triggering _on_spec_field_changed
+        self._updating_spec_ui = True
+
+        # Resource name
+        self._spec_resource_edit.setText(spec.resource)
+
+        # Samples
+        samples_map = {1: 0, 2: 1, 4: 2, 8: 3}
+        samples_idx = samples_map.get(spec.samples, 0)
+        self._spec_samples_combo.setCurrentIndex(samples_idx)
+
+        # Clear color
+        if spec.clear_color is not None:
+            self._spec_clear_color_check.setChecked(True)
+            self._spec_clear_r.setText(str(spec.clear_color[0]))
+            self._spec_clear_g.setText(str(spec.clear_color[1]))
+            self._spec_clear_b.setText(str(spec.clear_color[2]))
+            self._spec_clear_a.setText(str(spec.clear_color[3]))
+        else:
+            self._spec_clear_color_check.setChecked(False)
+            self._spec_clear_r.setText("0.0")
+            self._spec_clear_g.setText("0.0")
+            self._spec_clear_b.setText("0.0")
+            self._spec_clear_a.setText("1.0")
+
+        # Clear depth
+        if spec.clear_depth is not None:
+            self._spec_clear_depth_check.setChecked(True)
+            self._spec_clear_depth.setText(str(spec.clear_depth))
+        else:
+            self._spec_clear_depth_check.setChecked(False)
+            self._spec_clear_depth.setText("1.0")
+
+        self._updating_spec_ui = False
+
+    def _on_add_spec(self) -> None:
+        """Add a new ResourceSpec to the pipeline."""
+        if self._pipeline is None:
+            return
+
+        from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+
+        # Ask for resource name
+        resource_name, ok = QInputDialog.getText(
+            self,
+            "Add Resource Spec",
+            "Enter resource name:",
+            text="new_resource",
+        )
+
+        if not ok or not resource_name.strip():
+            return
+
+        resource_name = resource_name.strip()
+
+        # Check for duplicates
+        for spec in self._pipeline.pipeline_specs:
+            if spec.resource == resource_name:
+                QMessageBox.warning(
+                    self,
+                    "Duplicate Resource",
+                    f"Resource '{resource_name}' already exists.",
+                )
+                return
+
+        # Create new spec with defaults
+        new_spec = ResourceSpec(resource=resource_name, resource_type="fbo")
+        self._pipeline.pipeline_specs.append(new_spec)
+
+        self._rebuild_specs_list()
+        # Select the new spec
+        self._specs_list.setCurrentRow(len(self._pipeline.pipeline_specs) - 1)
+        self.pipeline_changed.emit(self._pipeline)
+
+    def _on_remove_spec(self) -> None:
+        """Remove the selected ResourceSpec from the pipeline."""
+        if self._pipeline is None:
+            return
+
+        row = self._specs_list.currentRow()
+        if row < 0 or row >= len(self._pipeline.pipeline_specs):
+            return
+
+        spec = self._pipeline.pipeline_specs[row]
+
+        reply = QMessageBox.question(
+            self,
+            "Remove Resource Spec",
+            f"Remove resource spec '{spec.resource}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        del self._pipeline.pipeline_specs[row]
+        self._rebuild_specs_list()
+        self._spec_editor_widget.setVisible(False)
+        self._update_specs_buttons_state()
+        self.pipeline_changed.emit(self._pipeline)
+
+    def _on_spec_field_changed(self) -> None:
+        """Update ResourceSpec from editor fields."""
+        if self._updating_spec_ui:
+            return
+
+        if self._pipeline is None:
+            return
+
+        row = self._selected_spec_index
+        if row < 0 or row >= len(self._pipeline.pipeline_specs):
+            return
+
+        spec = self._pipeline.pipeline_specs[row]
+
+        # Update resource name
+        new_resource = self._spec_resource_edit.text().strip()
+        if new_resource and new_resource != spec.resource:
+            # Check for duplicates
+            for i, s in enumerate(self._pipeline.pipeline_specs):
+                if i != row and s.resource == new_resource:
+                    # Duplicate - don't update
+                    self._spec_resource_edit.setText(spec.resource)
+                    return
+            spec.resource = new_resource
+            # Update list item
+            item = self._specs_list.item(row)
+            if item:
+                label = spec.resource
+                if spec.samples > 1:
+                    label += f" ({spec.samples}x MSAA)"
+                item.setText(label)
+
+        # Update samples
+        samples_values = [1, 2, 4, 8]
+        spec.samples = samples_values[self._spec_samples_combo.currentIndex()]
+        # Update list item text if samples changed
+        item = self._specs_list.item(row)
+        if item:
+            label = spec.resource
+            if spec.samples > 1:
+                label += f" ({spec.samples}x MSAA)"
+            item.setText(label)
+
+        # Update clear color
+        if self._spec_clear_color_check.isChecked():
+            try:
+                r = float(self._spec_clear_r.text())
+                g = float(self._spec_clear_g.text())
+                b = float(self._spec_clear_b.text())
+                a = float(self._spec_clear_a.text())
+                spec.clear_color = (r, g, b, a)
+            except ValueError:
+                pass  # Invalid input, keep old value
+        else:
+            spec.clear_color = None
+
+        # Update clear depth
+        if self._spec_clear_depth_check.isChecked():
+            try:
+                depth = float(self._spec_clear_depth.text())
+                spec.clear_depth = depth
+            except ValueError:
+                pass  # Invalid input, keep old value
+        else:
+            spec.clear_depth = None
+
+        self.pipeline_changed.emit(self._pipeline)
