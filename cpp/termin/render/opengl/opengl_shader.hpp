@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "termin/render/handles.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -158,7 +159,17 @@ public:
 
 private:
     void ensure_compiled() {
-        if (program_ != 0) return;
+        // Check if program exists and is still valid (may be invalid after context change)
+        if (program_ != 0) {
+            if (glIsProgram(program_)) {
+                return;
+            }
+            tc::Log::warn("ensure_compiled: program %u invalid, recompiling", program_);
+        }
+
+        // Program invalid - clear uniform cache
+        program_ = 0;
+        uniform_cache_.clear();
 
         GLuint vert = compile_shader(vertex_source_.c_str(), GL_VERTEX_SHADER);
         GLuint frag = compile_shader(fragment_source_.c_str(), GL_FRAGMENT_SHADER);

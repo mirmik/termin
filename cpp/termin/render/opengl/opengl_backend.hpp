@@ -419,6 +419,13 @@ private:
         auto& [vao, vbo] = get_ui_buffers(context_key);
 
         glBindVertexArray(vao);
+
+        GLenum err_after_bind = glGetError();
+        if (err_after_bind != GL_NO_ERROR) {
+            tc::Log::error("draw_ui_textured_quad: GL error after glBindVertexArray(vao=%u, context_key=%lld): 0x%x",
+                           vao, (long long)context_key, err_after_bind);
+        }
+
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, vertex_count * 4 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
 
@@ -429,13 +436,27 @@ private:
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(2 * sizeof(float)));
 
         glDrawArrays(GL_TRIANGLE_STRIP, 0, vertex_count);
+
+        GLenum err_after_draw = glGetError();
+        if (err_after_draw != GL_NO_ERROR) {
+            tc::Log::error("draw_ui_textured_quad: GL error after glDrawArrays(context_key=%lld, vao=%u): 0x%x",
+                           (long long)context_key, vao, err_after_draw);
+        }
+
         glBindVertexArray(0);
     }
 
     std::pair<GLuint, GLuint>& get_ui_buffers(int64_t context_key) {
         auto it = ui_buffers_.find(context_key);
         if (it != ui_buffers_.end()) {
-            return it->second;
+            // Check if VAO is still valid (may be invalid after context change)
+            if (glIsVertexArray(it->second.first)) {
+                return it->second;
+            }
+            // VAO invalid - remove stale entry
+            tc::Log::warn("get_ui_buffers: VAO %u invalid for context_key=%lld, recreating",
+                          it->second.first, (long long)context_key);
+            ui_buffers_.erase(it);
         }
 
         GLuint vao, vbo;
@@ -461,7 +482,13 @@ private:
     }
 
     void ensure_immediate_buffers() {
-        if (immediate_vao_ != 0) return;
+        // Check if VAO exists and is still valid (may be invalid after context change)
+        if (immediate_vao_ != 0) {
+            if (glIsVertexArray(immediate_vao_)) {
+                return;
+            }
+            tc::Log::warn("ensure_immediate_buffers: VAO %u invalid, recreating", immediate_vao_);
+        }
 
         glGenVertexArrays(1, &immediate_vao_);
         glGenBuffers(1, &immediate_vbo_);

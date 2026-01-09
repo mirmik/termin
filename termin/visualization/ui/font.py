@@ -77,6 +77,13 @@ class FontTextureAtlas:
     def ensure_texture(self, graphics: GraphicsBackend, context_key: int | None = None) -> GPUTextureHandle:
         """Uploads atlas into the current graphics backend if not done yet."""
         handle = self._handles.get(context_key)
+        if handle is not None:
+            # Check if texture is still valid (may be invalid after context change)
+            import OpenGL.GL as gl
+            if not gl.glIsTexture(handle.get_id()):
+                log.warn(f"ensure_texture: texture {handle.get_id()} invalid for context_key={context_key}, recreating")
+                del self._handles[context_key]
+                handle = None
         if handle is None:
             handle = self._upload_texture(graphics)
             self._handles[context_key] = handle
