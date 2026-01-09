@@ -3,19 +3,20 @@
   "shader": "TimeModifier",
   "uniforms": {
     "u_time_modifier": 1.0,
-    "u_shininess": 32.0,
     "u_grid_intensity": 0.30000001192092896,
+    "u_shininess": 32.0,
+    "u_grid_scale": 50.0,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_grid_scale": 50.0,
+    "u_grid_line_width": 0.029999999329447746,
     "u_grid_color": [
-      0.0,
-      0.8999999761581421,
-      0.4000000059604645,
+      0.07753109186887741,
+      0.7887388467788696,
+      0.3980468511581421,
       1.0
     ]
   }

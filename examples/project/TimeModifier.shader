@@ -175,8 +175,11 @@ vec4 doit()
             modified = mix(modified, u_grid_color.rgb, grid_alpha);
         }
     }
+    //return vec4(1.0, 0.0, 0.0, 1.0);
+    
+    //modified = vec3(modified.r, modified.g, 0.0); // DEBUG: visualize red and green channels only
 
-    return vec4(modified, 1.0);
+    return vec4(modified, 1.0); 
     //return vec4(1.0, 0.0, 0.0, 1.0); // DEBUG: visualize red channel only
 
 
