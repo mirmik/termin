@@ -77,49 +77,56 @@ class ResourceManagerViewer(QDialog):
 
         # Материалы
         self._materials_tree = QTreeWidget()
-        self._materials_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._materials_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
         self._materials_tree.setAlternatingRowColors(True)
         self._materials_tree.itemClicked.connect(lambda item: self._on_item_clicked("material", item))
         self._tab_widget.addTab(self._materials_tree, "Materials")
 
+        # Шейдеры
+        self._shaders_tree = QTreeWidget()
+        self._shaders_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
+        self._shaders_tree.setAlternatingRowColors(True)
+        self._shaders_tree.itemClicked.connect(lambda item: self._on_item_clicked("shader", item))
+        self._tab_widget.addTab(self._shaders_tree, "Shaders")
+
         # Меши
         self._meshes_tree = QTreeWidget()
-        self._meshes_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._meshes_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
         self._meshes_tree.setAlternatingRowColors(True)
         self._meshes_tree.itemClicked.connect(lambda item: self._on_item_clicked("mesh", item))
         self._tab_widget.addTab(self._meshes_tree, "Meshes")
 
         # Текстуры
         self._textures_tree = QTreeWidget()
-        self._textures_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._textures_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
         self._textures_tree.setAlternatingRowColors(True)
         self._textures_tree.itemClicked.connect(lambda item: self._on_item_clicked("texture", item))
         self._tab_widget.addTab(self._textures_tree, "Textures")
 
         # VoxelGrid
         self._voxelgrids_tree = QTreeWidget()
-        self._voxelgrids_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._voxelgrids_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
         self._voxelgrids_tree.setAlternatingRowColors(True)
         self._voxelgrids_tree.itemClicked.connect(lambda item: self._on_item_clicked("voxelgrid", item))
         self._tab_widget.addTab(self._voxelgrids_tree, "VoxelGrids")
 
         # NavMesh
         self._navmeshes_tree = QTreeWidget()
-        self._navmeshes_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._navmeshes_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
         self._navmeshes_tree.setAlternatingRowColors(True)
         self._navmeshes_tree.itemClicked.connect(lambda item: self._on_item_clicked("navmesh", item))
         self._tab_widget.addTab(self._navmeshes_tree, "NavMeshes")
 
         # Skeletons
         self._skeletons_tree = QTreeWidget()
-        self._skeletons_tree.setHeaderLabels(["Name", "Status", "UUID"])
+        self._skeletons_tree.setHeaderLabels(["Name", "Status", "Ver", "UUID"])
         self._skeletons_tree.setAlternatingRowColors(True)
         self._skeletons_tree.itemClicked.connect(lambda item: self._on_item_clicked("skeleton", item))
         self._tab_widget.addTab(self._skeletons_tree, "Skeletons")
 
         # Pipelines
         self._pipelines_tree = QTreeWidget()
-        self._pipelines_tree.setHeaderLabels(["Name", "Passes", "UUID"])
+        self._pipelines_tree.setHeaderLabels(["Name", "Passes", "Ver", "UUID"])
         self._pipelines_tree.setAlternatingRowColors(True)
         self._pipelines_tree.itemClicked.connect(lambda item: self._on_item_clicked("pipeline", item))
         self._tab_widget.addTab(self._pipelines_tree, "Pipelines")
@@ -193,7 +200,12 @@ class ResourceManagerViewer(QDialog):
         self._selected_asset_type = asset_type
         self._selected_asset = None
 
-        if asset_type == "mesh":
+        if asset_type == "shader":
+            asset = self._resource_manager._shader_assets.get(name)
+            if asset:
+                self._selected_asset = asset
+                self._show_shader_details(name, asset)
+        elif asset_type == "mesh":
             asset = self._resource_manager._mesh_assets.get(name)
             if asset:
                 self._selected_asset = asset
@@ -244,6 +256,7 @@ class ResourceManagerViewer(QDialog):
             f"UUID: {asset.uuid}",
             f"Source: {asset.source_path or '(none)'}",
             f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
         ]
 
         if asset.is_loaded:
@@ -266,6 +279,7 @@ class ResourceManagerViewer(QDialog):
             f"UUID: {asset.uuid}",
             f"Source: {asset.source_path or '(none)'}",
             f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
         ]
 
         if asset.is_loaded:
@@ -277,11 +291,15 @@ class ResourceManagerViewer(QDialog):
 
     def _show_material_details(self, name: str, mat) -> None:
         """Показать детали материала."""
+        # mat is Material (C++), get version from MaterialAsset if available
+        mat_asset = self._resource_manager._material_assets.get(name)
+        version = str(mat_asset.version) if mat_asset and hasattr(mat_asset, 'version') else "-"
         lines = [
             f"Name: {name}",
             f"Source: {mat.source_path or '(inline)'}",
-            f"Shader: {getattr(mat, 'shader_path', None) or '(none)'}",
+            f"Shader: {mat.shader_name or '(none)'}",
             f"Phases: {len(mat.phases)}",
+            f"Version: {version}",
         ]
 
         for i, phase in enumerate(mat.phases):
@@ -297,6 +315,34 @@ class ResourceManagerViewer(QDialog):
 
         self._details_text.setText("\n".join(lines))
 
+    def _show_shader_details(self, name: str, asset) -> None:
+        """Показать детали шейдера."""
+        lines = [
+            f"Name: {name}",
+            f"UUID: {asset.uuid}",
+            f"Source: {asset.source_path or '(none)'}",
+            f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
+        ]
+
+        if asset.is_loaded:
+            program = asset.program
+            if program is not None:
+                lines.append(f"")
+                lines.append(f"=== Shader Program ===")
+                lines.append(f"Phases: {len(program.phases)}")
+
+                for i, phase_data in enumerate(program.phases):
+                    phase_mark = phase_data.phase_mark if hasattr(phase_data, 'phase_mark') else f"phase_{i}"
+                    lines.append(f"")
+                    lines.append(f"--- Phase: {phase_mark} ---")
+                    if hasattr(phase_data, 'uniforms') and phase_data.uniforms:
+                        lines.append(f"Uniforms: {len(phase_data.uniforms)}")
+                        for uname in phase_data.uniforms:
+                            lines.append(f"  - {uname}")
+
+        self._details_text.setText("\n".join(lines))
+
     def _show_voxelgrid_details(self, name: str, asset) -> None:
         """Показать детали VoxelGrid."""
         lines = [
@@ -304,6 +350,7 @@ class ResourceManagerViewer(QDialog):
             f"UUID: {asset.uuid}",
             f"Source: {asset.source_path or '(none)'}",
             f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
         ]
 
         if asset.is_loaded:
@@ -325,6 +372,7 @@ class ResourceManagerViewer(QDialog):
             f"UUID: {asset.uuid}",
             f"Source: {asset.source_path or '(none)'}",
             f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
         ]
 
         if asset.is_loaded:
@@ -348,6 +396,7 @@ class ResourceManagerViewer(QDialog):
             f"UUID: {asset.uuid}",
             f"Source: {asset.source_path or '(none)'}",
             f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
         ]
 
         if asset.is_loaded:
@@ -376,6 +425,7 @@ class ResourceManagerViewer(QDialog):
             f"UUID: {asset.uuid}",
             f"Source: {asset.source_path or '(builtin)'}",
             f"Loaded: {asset.is_loaded}",
+            f"Version: {asset.version}",
         ]
 
         if asset.is_loaded:
@@ -418,6 +468,7 @@ class ResourceManagerViewer(QDialog):
     def refresh(self) -> None:
         """Обновляет содержимое всех вкладок."""
         self._refresh_materials()
+        self._refresh_shaders()
         self._refresh_meshes()
         self._refresh_textures()
         self._refresh_voxelgrids()
@@ -435,14 +486,36 @@ class ResourceManagerViewer(QDialog):
 
         for name, mat in sorted(self._resource_manager.materials.items()):
             phases = f"{len(mat.phases)} phases"
-            # Materials don't have UUID in the same way
+            # Get version from MaterialAsset
+            mat_asset = self._resource_manager._material_assets.get(name)
+            version = str(mat_asset.version) if mat_asset and hasattr(mat_asset, 'version') else "-"
+            # Get UUID from MaterialAsset
             uuid_str = ""
+            if mat_asset:
+                uuid_str = mat_asset.uuid[:16] + "..." if len(mat_asset.uuid) > 16 else mat_asset.uuid
 
-            item = QTreeWidgetItem([name, phases, uuid_str])
+            item = QTreeWidgetItem([name, phases, version, uuid_str])
             self._materials_tree.addTopLevelItem(item)
 
         self._materials_tree.resizeColumnToContents(0)
         self._materials_tree.resizeColumnToContents(1)
+        self._materials_tree.resizeColumnToContents(2)
+
+    def _refresh_shaders(self) -> None:
+        """Обновляет список шейдеров."""
+        self._shaders_tree.clear()
+
+        for name, asset in sorted(self._resource_manager._shader_assets.items()):
+            status = "loaded" if asset.is_loaded else "not loaded"
+            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
+
+            item = QTreeWidgetItem([name, status, version, uuid_str])
+            self._shaders_tree.addTopLevelItem(item)
+
+        self._shaders_tree.resizeColumnToContents(0)
+        self._shaders_tree.resizeColumnToContents(1)
+        self._shaders_tree.resizeColumnToContents(2)
 
     def _refresh_meshes(self) -> None:
         """Обновляет список мешей."""
@@ -450,13 +523,15 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._mesh_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
+            version = str(asset.version) if hasattr(asset, 'version') else "-"
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            item = QTreeWidgetItem([name, status, uuid_str])
+            item = QTreeWidgetItem([name, status, version, uuid_str])
             self._meshes_tree.addTopLevelItem(item)
 
         self._meshes_tree.resizeColumnToContents(0)
         self._meshes_tree.resizeColumnToContents(1)
+        self._meshes_tree.resizeColumnToContents(2)
 
     def _refresh_textures(self) -> None:
         """Обновляет список текстур."""
@@ -464,13 +539,15 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._texture_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
+            version = str(asset.version) if hasattr(asset, 'version') else "-"
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            item = QTreeWidgetItem([name, status, uuid_str])
+            item = QTreeWidgetItem([name, status, version, uuid_str])
             self._textures_tree.addTopLevelItem(item)
 
         self._textures_tree.resizeColumnToContents(0)
         self._textures_tree.resizeColumnToContents(1)
+        self._textures_tree.resizeColumnToContents(2)
 
     def _refresh_voxelgrids(self) -> None:
         """Обновляет список VoxelGrid."""
@@ -478,13 +555,15 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._voxel_grid_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
+            version = str(asset.version) if hasattr(asset, 'version') else "-"
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            item = QTreeWidgetItem([name, status, uuid_str])
+            item = QTreeWidgetItem([name, status, version, uuid_str])
             self._voxelgrids_tree.addTopLevelItem(item)
 
         self._voxelgrids_tree.resizeColumnToContents(0)
         self._voxelgrids_tree.resizeColumnToContents(1)
+        self._voxelgrids_tree.resizeColumnToContents(2)
 
     def _refresh_navmeshes(self) -> None:
         """Обновляет список NavMesh."""
@@ -492,13 +571,15 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._navmesh_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
+            version = str(asset.version) if hasattr(asset, 'version') else "-"
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            item = QTreeWidgetItem([name, status, uuid_str])
+            item = QTreeWidgetItem([name, status, version, uuid_str])
             self._navmeshes_tree.addTopLevelItem(item)
 
         self._navmeshes_tree.resizeColumnToContents(0)
         self._navmeshes_tree.resizeColumnToContents(1)
+        self._navmeshes_tree.resizeColumnToContents(2)
 
     def _refresh_skeletons(self) -> None:
         """Обновляет список Skeleton."""
@@ -506,13 +587,15 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._skeleton_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
+            version = str(asset.version) if hasattr(asset, 'version') else "-"
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-            item = QTreeWidgetItem([name, status, uuid_str])
+            item = QTreeWidgetItem([name, status, version, uuid_str])
             self._skeletons_tree.addTopLevelItem(item)
 
         self._skeletons_tree.resizeColumnToContents(0)
         self._skeletons_tree.resizeColumnToContents(1)
+        self._skeletons_tree.resizeColumnToContents(2)
 
     def _refresh_pipelines(self) -> None:
         """Обновляет список Pipelines."""
@@ -524,13 +607,15 @@ class ResourceManagerViewer(QDialog):
                 pipeline = asset.data if asset.is_loaded else None
                 passes_count = len(pipeline.passes) if pipeline else "?"
                 status = f"{passes_count} passes"
+                version = str(asset.version) if hasattr(asset, 'version') else "-"
                 uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
-                item = QTreeWidgetItem([name, status, uuid_str])
+                item = QTreeWidgetItem([name, status, version, uuid_str])
                 self._pipelines_tree.addTopLevelItem(item)
 
         self._pipelines_tree.resizeColumnToContents(0)
         self._pipelines_tree.resizeColumnToContents(1)
+        self._pipelines_tree.resizeColumnToContents(2)
 
     def _refresh_components(self) -> None:
         """Обновляет список компонентов."""
@@ -633,6 +718,7 @@ class ResourceManagerViewer(QDialog):
 
         self._status_label.setText(
             f"Materials: {len(rm.materials)} | "
+            f"Shaders: {len(rm._shader_assets)} | "
             f"Meshes: {len(rm._mesh_assets)} | "
             f"Textures: {len(rm._texture_assets)} | "
             f"VoxelGrids: {len(rm._voxel_grid_assets)} | "

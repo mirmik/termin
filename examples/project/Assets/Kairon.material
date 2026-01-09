@@ -1,21 +1,21 @@
 {
   "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
-  "shader": "AdvancedPBRShader",
+  "shader": "DefaultShader",
   "phase_marks": [
     "opaque"
   ],
   "uniforms": {
+    "u_metallic": 0.10000000149011612,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_metallic": 0.20000000298023224,
-    "u_roughness": 0.30000001192092896,
-    "u_subsurface": 0.0,
     "u_ambient": 0.10000000149011612,
-    "u_shininess": 32.0
+    "u_shininess": 32.0,
+    "u_roughness": 0.30000001192092896,
+    "u_subsurface": 0.0
   },
   "textures": {
     "u_albedo_texture": "6830-1745580165"
