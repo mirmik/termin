@@ -25,12 +25,26 @@
       }
     },
     {
-      "type": "DepthPass",
-      "pass_name": "DepthPass",
+      "type": "ColorPass",
+      "pass_name": "TransparentPass",
       "enabled": true,
       "data": {
-        "input_res": "empty_depth",
-        "output_res": "depth"
+        "input_res": "color",
+        "output_res": "color+transparent",
+        "shadow_res": "shadow_maps",
+        "phase_mark": "transparent",
+        "sort_by_distance": true,
+        "clear_depth": false
+      }
+    },
+    {
+      "type": "ResolvePass",
+      "pass_name": "ResolvePass",
+      "enabled": true,
+      "passthrough": false,
+      "data": {
+        "input_res": "color+transparent",
+        "output_res": "resolved"
       }
     },
     {
@@ -39,7 +53,7 @@
       "enabled": true,
       "passthrough": false,
       "data": {
-        "input_res": "color+transparent",
+        "input_res": "resolved",
         "output_res": "color_pp",
         "effects": [
           {
@@ -59,16 +73,12 @@
       }
     },
     {
-      "type": "ColorPass",
-      "pass_name": "TransparentPass",
+      "type": "DepthPass",
+      "pass_name": "DepthPass",
       "enabled": true,
       "data": {
-        "input_res": "color",
-        "output_res": "color+transparent",
-        "shadow_res": "shadow_maps",
-        "phase_mark": "transparent",
-        "sort_by_distance": true,
-        "clear_depth": false
+        "input_res": "empty_depth",
+        "output_res": "depth"
       }
     },
     {
@@ -115,7 +125,8 @@
         0.1,
         1.0
       ],
-      "clear_depth": 1.0
+      "clear_depth": 1.0,
+      "samples": 8
     }
   ]
 }

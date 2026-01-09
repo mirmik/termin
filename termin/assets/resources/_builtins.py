@@ -54,6 +54,7 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     ("termin.visualization.render.framegraph.passes.ui_widget", "UIWidgetPass"),
     ("termin.visualization.render.framegraph.passes.present", "PresentToScreenPass"),
     ("termin.visualization.render.framegraph.passes.present", "BlitPass"),
+    ("termin.visualization.render.framegraph.passes.present", "ResolvePass"),
     # ID/Picking
     ("termin.visualization.render.framegraph.passes.id_pass", "IdPass"),
     ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
