@@ -4770,7 +4770,7 @@
             "type": "ViewportHintComponent",
             "data": {
               "enabled": true,
-              "pipeline_name": "Default",
+              "pipeline_name": "ChronoSquadPipeline",
               "layer_mask": "0xffffffffffffffff"
             }
           },
@@ -5852,7 +5852,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "50e7e82f-c681-49d1-a5e9-c07b15917533",
+                              "uuid": "3379eccd-042f-45a2-a777-6092c34071b6",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6246,7 +6246,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "50e7e82f-c681-49d1-a5e9-c07b15917533",
+                              "uuid": "3379eccd-042f-45a2-a777-6092c34071b6",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6467,7 +6467,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "50e7e82f-c681-49d1-a5e9-c07b15917533",
+                              "uuid": "3379eccd-042f-45a2-a777-6092c34071b6",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9559,7 +9559,7 @@
         "depth": 0,
         "input_mode": "simple",
         "block_input_in_editor": false,
-        "pipeline_uuid": "00000000-0000-0000-0004-000000000001"
+        "pipeline_uuid": "5baa602e-b819-4020-a428-c5a1f06a69a4"
       }
     ],
     "light_direction": [
@@ -9603,23 +9603,23 @@
   "editor": {
     "camera": {
       "position": [
-        6.628389358520508,
-        -4.547876834869385,
-        5.485920429229736
+        2.6028363704681396,
+        3.163891315460205,
+        2.772886037826538
       ],
       "rotation": [
-        -0.22900364897228764,
-        -0.11318066224654806,
-        0.4283716191071542,
-        0.8667440351074389
+        -0.04862263894518119,
+        -0.18273732597307812,
+        0.9489414136297741,
+        0.2524937666092803
       ],
-      "radius": 8.5
+      "radius": 4.0
     },
     "selected_entity": "MainCamera",
     "expanded_entities": [
-      "camera",
       "EditorEntities",
-      "PlatformBase"
+      "PlatformBase",
+      "camera"
     ]
   },
   "resources": {

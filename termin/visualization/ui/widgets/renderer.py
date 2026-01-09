@@ -71,9 +71,14 @@ class UIRenderer:
 
     def begin(self, viewport_w: int, viewport_h: int, context_key: int | None = None):
         """Begin UI rendering pass."""
+        from termin._native import log
+
         self._viewport_w = viewport_w
         self._viewport_h = viewport_h
         self._context_key = context_key
+
+        if context_key is None:
+            log.warn("[UIRenderer] context_key is None, using 0")
 
         self._ensure_shader()
 
@@ -123,13 +128,18 @@ class UIRenderer:
         ], dtype=np.float32)
 
         # Bind shader and set uniforms
-        self._shader.ensure_ready(self._graphics)
+        key = self._context_key if self._context_key is not None else 0
+        self._shader.ensure_ready(self._graphics, key)
         self._shader.use()
+        self._graphics.check_gl_error("UIRenderer: after shader.use")
         self._shader.set_uniform_vec4("u_color", np.array(color, dtype=np.float32))
         self._shader.set_uniform_int("u_use_texture", 0)
+        self._graphics.check_gl_error("UIRenderer: after set uniforms")
 
         # Draw
-        self._graphics.draw_ui_vertices(self._context_key, vertices)
+        key = self._context_key if self._context_key is not None else 0
+        self._graphics.draw_ui_vertices(key, vertices)
+        self._graphics.check_gl_error("UIRenderer: after draw_rect")
 
     def draw_text(self, x: float, y: float, text: str,
                   color: tuple[float, float, float, float],
@@ -139,15 +149,18 @@ class UIRenderer:
         if not font or not text:
             return
 
-        self._shader.ensure_ready(self._graphics)
+        key = self._context_key if self._context_key is not None else 0
+        self._shader.ensure_ready(self._graphics, key)
         self._shader.use()
         self._shader.set_uniform_vec4("u_color", np.array(color, dtype=np.float32))
         self._shader.set_uniform_int("u_use_texture", 1)
 
         # Bind font texture
-        texture_handle = font.ensure_texture(self._graphics, context_key=self._context_key)
+        key = self._context_key if self._context_key is not None else 0
+        texture_handle = font.ensure_texture(self._graphics, context_key=key)
         texture_handle.bind(0)
         self._shader.set_uniform_int("u_texture", 0)
+        self._graphics.check_gl_error("UIRenderer: after text setup")
 
         # Scale factor from font atlas size to desired size
         scale = font_size / font.size
@@ -184,7 +197,7 @@ class UIRenderer:
                 [right, bottom, u1, v1],
             ], dtype=np.float32)
 
-            self._graphics.draw_ui_textured_quad(self._context_key, vertices)
+            self._graphics.draw_ui_textured_quad(key, vertices)
 
             cursor_x += char_w
 

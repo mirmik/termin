@@ -166,3 +166,10 @@ class ShadowMapArrayResource(FrameGraphResource):
         Изменение размера отдельных FBO происходит в ShadowPass.
         """
         pass
+
+    def delete(self) -> None:
+        """Удаляет все FBO из entries."""
+        for entry in self.entries:
+            if entry.fbo is not None:
+                entry.fbo.delete()
+        self.entries.clear()

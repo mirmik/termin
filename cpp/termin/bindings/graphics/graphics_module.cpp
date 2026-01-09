@@ -312,6 +312,7 @@ void bind_graphics_backend(nb::module_& m) {
         })
         .def("read_pixel", &GraphicsBackend::read_pixel)
         .def("read_depth_pixel", &GraphicsBackend::read_depth_pixel)
+        .def("check_gl_error", &GraphicsBackend::check_gl_error)
         .def("read_depth_buffer", [](GraphicsBackend& self, FramebufferHandle* fbo) -> nb::object {
             if (fbo == nullptr) return nb::none();
             if (fbo->is_msaa()) return nb::none();

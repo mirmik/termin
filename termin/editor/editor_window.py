@@ -371,8 +371,8 @@ class EditorWindow(QMainWindow):
         editor_pipeline = self.editor_viewport.make_editor_pipeline()
         self._rendering_controller.set_viewport_pipeline(self.viewport, editor_pipeline)
 
-        # Set editor pipeline getter for RenderingController (and ViewportInspector)
-        self._rendering_controller.set_editor_pipeline_getter(
+        # Set editor pipeline maker for RenderingController (and ViewportInspector)
+        self._rendering_controller.set_editor_pipeline_maker(
             self.editor_viewport.make_editor_pipeline
         )
 
@@ -807,7 +807,7 @@ class EditorWindow(QMainWindow):
 
         # Update all viewports using this camera
         for viewport in camera.viewports:
-            viewport.pipeline = pipeline
+            self._rendering_controller.set_viewport_pipeline(viewport, pipeline)
 
         self._request_viewport_update()
 
@@ -2017,6 +2017,10 @@ class EditorWindow(QMainWindow):
             return
 
         # 1. Обычные дисплеи - через attach_scene (читает scene.viewport_configs)
+        from termin._native import log
+        log.info(f"[_on_game_mode_changed] is_playing={is_playing}, viewport_configs={len(scene.viewport_configs)}")
+        for i, cfg in enumerate(scene.viewport_configs):
+            log.info(f"  config[{i}]: display={cfg.display_name}, camera_uuid={cfg.camera_uuid}, pipeline_uuid={cfg.pipeline_uuid}")
         self._rendering_controller.attach_scene(scene)
 
         # 2. Editor display - отдельная логика

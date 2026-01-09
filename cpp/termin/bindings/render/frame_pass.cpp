@@ -251,7 +251,8 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
         .def("set_debugger_window", &RenderFramePass::set_debugger_window,
              nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none())
+             nb::arg("depth_callback").none() = nb::none(),
+             nb::arg("depth_error_callback").none() = nb::none())
         .def("get_debugger_window", &RenderFramePass::get_debugger_window)
         .def_rw("debugger_window", &RenderFramePass::debugger_window)
         .def_rw("depth_capture_callback", &RenderFramePass::depth_capture_callback)
@@ -405,6 +406,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("ambient_intensity"),
         nb::arg("shadow_array") = nb::none(),
         nb::arg("shadow_settings") = nb::none())
+        .def("destroy", &ColorPass::destroy)
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.pass_name + "' phase='" + p.phase_mark + "'>";
         });
@@ -424,7 +426,8 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_internal_symbols", &DepthPass::get_internal_symbols)
         .def("set_debugger_window", &RenderFramePass::set_debugger_window,
              nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none())
+             nb::arg("depth_callback").none() = nb::none(),
+             nb::arg("depth_error_callback").none() = nb::none())
         .def("get_debugger_window", &RenderFramePass::get_debugger_window)
         .def_rw("debugger_window", &RenderFramePass::debugger_window)
         .def_prop_rw("_debugger_window",
@@ -521,6 +524,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("context_key"),
         nb::arg("near_plane"),
         nb::arg("far_plane"))
+        .def("destroy", &DepthPass::destroy)
         .def("__repr__", [](const DepthPass& p) {
             return "<DepthPass '" + p.pass_name + "'>";
         });
@@ -621,6 +625,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("context_key"))
+        .def("destroy", &NormalPass::destroy)
         .def("__repr__", [](const NormalPass& p) {
             return "<NormalPass '" + p.pass_name + "'>";
         });
@@ -640,7 +645,8 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_internal_symbols", &IdPass::get_internal_symbols)
         .def("set_debugger_window", &RenderFramePass::set_debugger_window,
              nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none())
+             nb::arg("depth_callback").none() = nb::none(),
+             nb::arg("depth_error_callback").none() = nb::none())
         .def("get_debugger_window", &RenderFramePass::get_debugger_window)
         .def_rw("debugger_window", &RenderFramePass::debugger_window)
         .def_prop_rw("_debugger_window",
@@ -731,6 +737,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("context_key"))
+        .def("destroy", &IdPass::destroy)
         .def("__repr__", [](const IdPass& p) {
             return "<IdPass '" + p.pass_name + "'>";
         });
@@ -785,7 +792,8 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
         .def("set_debugger_window", &RenderFramePass::set_debugger_window,
              nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none())
+             nb::arg("depth_callback").none() = nb::none(),
+             nb::arg("depth_error_callback").none() = nb::none())
         .def("execute_shadow_pass", [](
             ShadowPass& self,
             GraphicsBackend* graphics,
@@ -841,6 +849,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("camera_view"),
         nb::arg("camera_projection"),
         nb::arg("context_key"))
+        .def("destroy", &ShadowPass::destroy)
         .def("__repr__", [](const ShadowPass& p) {
             return "<ShadowPass '" + p.pass_name + "'>";
         });

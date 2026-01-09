@@ -82,6 +82,12 @@ DepthPass::DepthPass(
 {
 }
 
+
+void DepthPass::destroy() {
+    _depth_shader.reset();
+}
+
+
 std::vector<ResourceSpec> DepthPass::get_resource_specs() const {
     return {
         ResourceSpec(

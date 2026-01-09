@@ -51,7 +51,7 @@ class GrayscaleEffect(PostEffect):
         w, h = size
 
         shader = self._get_shader()
-        shader.ensure_ready(gfx)
+        shader.ensure_ready(gfx, key)
         shader.use()
 
         # биндим цвет на юнит 0

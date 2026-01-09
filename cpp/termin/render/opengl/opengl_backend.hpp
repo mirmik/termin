@@ -389,6 +389,31 @@ public:
         draw_immediate_impl(vertices, vertex_count, GL_TRIANGLES);
     }
 
+    bool check_gl_error(const char* location) override {
+        GLenum err = glGetError();
+        if (err == GL_NO_ERROR) {
+            return false;
+        }
+
+        const char* name = "UNKNOWN";
+        switch (err) {
+            case GL_INVALID_ENUM: name = "GL_INVALID_ENUM"; break;
+            case GL_INVALID_VALUE: name = "GL_INVALID_VALUE"; break;
+            case GL_INVALID_OPERATION: name = "GL_INVALID_OPERATION"; break;
+            case GL_OUT_OF_MEMORY: name = "GL_OUT_OF_MEMORY"; break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION: name = "GL_INVALID_FRAMEBUFFER_OPERATION"; break;
+        }
+
+        GLint fbo = 0, program = 0, vao = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
+
+        tc::Log::error("GL error %s (0x%x) at '%s' [FBO=%d, program=%d, VAO=%d]",
+                       name, err, location, fbo, program, vao);
+        return true;
+    }
+
 private:
     void draw_ui_textured_quad_impl(int64_t context_key, const float* vertices, int vertex_count) {
         auto& [vao, vbo] = get_ui_buffers(context_key);

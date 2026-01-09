@@ -74,6 +74,12 @@ IdPass::IdPass(
 {
 }
 
+
+void IdPass::destroy() {
+    _pick_shader.reset();
+}
+
+
 std::vector<ResourceSpec> IdPass::get_resource_specs() const {
     return {
         ResourceSpec(

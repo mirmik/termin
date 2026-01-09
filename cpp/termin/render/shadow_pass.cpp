@@ -49,6 +49,11 @@ ShadowPass::ShadowPass(
 }
 
 
+void ShadowPass::destroy() {
+    fbo_pool_.clear();
+}
+
+
 std::vector<ResourceSpec> ShadowPass::get_resource_specs() const {
     return {
         ResourceSpec{

@@ -66,10 +66,10 @@ class GizmoPass(RenderFramePass):
         """GizmoPass читает input_res и пишет output_res inplace."""
         return [(self.input_res, self.output_res)]
 
-    def _ensure_shader(self, gfx) -> ShaderProgram:
+    def _ensure_shader(self, gfx, context_key: int = 0) -> ShaderProgram:
         if self._shader is None:
             self._shader = ShaderProgram(GIZMO_MASK_VERT, GIZMO_MASK_FRAG)
-            self._shader.ensure_ready(gfx)
+        self._shader.ensure_ready(gfx, context_key)
         return self._shader
 
     def execute(
@@ -104,8 +104,7 @@ class GizmoPass(RenderFramePass):
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
 
-        shader = self._ensure_shader(graphics)
-        shader.ensure_ready(graphics)
+        shader = self._ensure_shader(graphics, key)
         shader.use()
         shader.set_uniform_matrix4("u_view", view)
         shader.set_uniform_matrix4("u_projection", proj)

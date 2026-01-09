@@ -117,11 +117,10 @@ class RenderEngine:
                     error_msg = str(e)
                     if error_msg not in self._logged_errors:
                         self._logged_errors.add(error_msg)
-                        import logging
+                        from termin._native import log
                         import traceback
-                        logger = logging.getLogger(__name__)
                         tb = traceback.format_exc()
-                        logger.error(f"Pipeline error: {e}\n{tb}")
+                        log.error(f"Pipeline error: {e}\n{tb}")
 
             if present:
                 surface.present()
@@ -292,6 +291,9 @@ class RenderEngine:
             # Сброс GL-состояния перед каждым пассом
             self.graphics.reset_state()
 
+            # Очищаем pending GL ошибки перед пассом
+            self._clear_gl_errors()
+
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
 
@@ -317,6 +319,12 @@ class RenderEngine:
                 if name in pass_writes and pass_writes[name] is not None:
                     resources[name] = pass_writes[name]
 
+    def _clear_gl_errors(self) -> None:
+        """Очищает все pending GL ошибки."""
+        import OpenGL.GL as gl
+        while gl.glGetError() != gl.GL_NO_ERROR:
+            pass
+
     def _check_gl_errors(self, pass_name: str) -> None:
         """Проверяет и логирует GL ошибки после выполнения пасса."""
         import OpenGL.GL as gl
@@ -340,7 +348,14 @@ class RenderEngine:
             if error_key not in self._logged_errors:
                 self._logged_errors.add(error_key)
                 error_name = GL_ERROR_NAMES.get(err, f"UNKNOWN(0x{err:x})")
-                log.error(f"GL error {error_name} (0x{err:x}) after pass '{pass_name}'")
+                # Get current GL state for debugging
+                current_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
+                current_program = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
+                current_vao = gl.glGetIntegerv(gl.GL_VERTEX_ARRAY_BINDING)
+                log.error(
+                    f"GL error {error_name} (0x{err:x}) after pass '{pass_name}' "
+                    f"[FBO={current_fbo}, program={current_program}, VAO={current_vao}]"
+                )
 
     def _ensure_fbo(
         self,

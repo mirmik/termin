@@ -148,12 +148,14 @@ void ColorPass::execute_with_data(
 
     // Bind framebuffer and set viewport
     graphics->bind_framebuffer(fb);
+    graphics->check_gl_error("ColorPass: after bind_framebuffer");
     graphics->set_viewport(0, 0, rect.width, rect.height);
 
     // Clear depth if requested
     if (clear_depth) {
         graphics->clear_depth();
     }
+    graphics->check_gl_error("ColorPass: after setup");
 
     // Create render context
     RenderContext context;
@@ -235,6 +237,7 @@ void ColorPass::execute_with_data(
 
         // Draw geometry via vtable
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
+        graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
 
         // Check for debug blit
         if (!debug_symbol.empty() && ename && ename == debug_symbol) {

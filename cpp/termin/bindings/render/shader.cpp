@@ -94,11 +94,12 @@ void bind_shader(nb::module_& m) {
         .def("needs_recompile", &ShaderProgram::needs_recompile)
         .def("variant_is_stale", &ShaderProgram::variant_is_stale)
         .def("set_variant_info", &ShaderProgram::set_variant_info)
-        .def("ensure_ready", [](ShaderProgram& self, OpenGLGraphicsBackend& backend) {
+        .def("ensure_ready", [](ShaderProgram& self, OpenGLGraphicsBackend& backend, int64_t context_key) {
             self.ensure_ready([&backend](const char* v, const char* f, const char* g) {
                 return backend.create_shader(v, f, g);
-            });
-        }, nb::arg("graphics"), "Compile shader using graphics backend")
+            }, context_key);
+        }, nb::arg("graphics"), nb::arg("context_key") = 0, "Compile shader using graphics backend")
+        .def("invalidate", &ShaderProgram::invalidate, "Invalidate all cached handles")
         .def("set_handle", [](ShaderProgram& self, std::unique_ptr<ShaderHandle> handle) {
             self.set_handle(std::move(handle));
         })

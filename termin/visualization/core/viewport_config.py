@@ -24,8 +24,12 @@ class ViewportConfig:
     # Normalized region on display (x, y, width, height)
     region: Tuple[float, float, float, float] = field(default=(0.0, 0.0, 1.0, 1.0))
 
-    # Pipeline UUID (None = use default)
+    # Pipeline UUID (None = use default or pipeline_name)
     pipeline_uuid: str | None = None
+
+    # Pipeline name for special pipelines (e.g., "(Editor)")
+    # Used when pipeline_uuid is None
+    pipeline_name: str | None = None
 
     # Viewport depth (for ordering when multiple viewports on same display)
     depth: int = 0
@@ -48,6 +52,8 @@ class ViewportConfig:
         }
         if self.pipeline_uuid is not None:
             result["pipeline_uuid"] = self.pipeline_uuid
+        if self.pipeline_name is not None:
+            result["pipeline_name"] = self.pipeline_name
         return result
 
     @classmethod
@@ -55,19 +61,21 @@ class ViewportConfig:
         """Deserialize from dict."""
         region = data.get("region", [0.0, 0.0, 1.0, 1.0])
 
-        # Get pipeline_uuid, with backwards compatibility for pipeline_name
         pipeline_uuid = data.get("pipeline_uuid")
-        if pipeline_uuid is None:
-            # Backwards compatibility: convert pipeline_name to uuid
-            pipeline_name = data.get("pipeline_name")
-            if pipeline_name:
-                pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name)
+        pipeline_name = data.get("pipeline_name")
+
+        # Backwards compatibility: convert old pipeline_name (asset name) to uuid
+        # But preserve special names like "(Editor)"
+        if pipeline_uuid is None and pipeline_name and not pipeline_name.startswith("("):
+            pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name)
+            pipeline_name = None  # Clear old-style name after conversion
 
         return cls(
             display_name=data.get("display_name", "Main"),
             camera_uuid=data.get("camera_uuid", ""),
             region=tuple(region),
             pipeline_uuid=pipeline_uuid,
+            pipeline_name=pipeline_name,
             depth=data.get("depth", 0),
             input_mode=data.get("input_mode", "simple"),
             block_input_in_editor=data.get("block_input_in_editor", False),

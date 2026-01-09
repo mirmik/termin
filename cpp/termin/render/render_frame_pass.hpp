@@ -44,14 +44,20 @@ class RenderFramePass : public FramePass {
 public:
     nb::object debugger_window;
     nb::object depth_capture_callback;
+    nb::object depth_error_callback;
 
     using FramePass::FramePass;
 
     virtual ~RenderFramePass() = default;
 
-    void set_debugger_window(nb::object window, nb::object callback = nb::none()) {
+    void set_debugger_window(
+        nb::object window,
+        nb::object callback = nb::none(),
+        nb::object error_callback = nb::none()
+    ) {
         debugger_window = window;
         depth_capture_callback = callback;
+        depth_error_callback = error_callback;
     }
 
     nb::object get_debugger_window() const {
@@ -90,6 +96,14 @@ public:
     virtual std::vector<ResourceSpec> get_resource_specs() const {
         return {};
     }
+
+    /**
+     * Clean up pass resources (FBOs, shaders, etc).
+     *
+     * Called when switching pipelines to release cached GL resources.
+     * Subclasses should override to release their cached resources.
+     */
+    virtual void destroy() {}
 };
 
 using RenderFramePassPtr = std::unique_ptr<RenderFramePass>;

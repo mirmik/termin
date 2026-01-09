@@ -72,7 +72,7 @@ class GaussianBlurPass(PostEffect):
         w, h = size
         texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)
 
-        self.shader.ensure_ready(gfx)
+        self.shader.ensure_ready(gfx, key)
         self.shader.use()
 
         color_tex.bind(0)

@@ -156,6 +156,10 @@ public:
         const float* vertices,
         int vertex_count
     ) = 0;
+
+    // --- Debug ---
+    // Check for GL errors and log them. Returns true if error was found.
+    virtual bool check_gl_error(const char* location) = 0;
 };
 
 using GraphicsBackendPtr = std::unique_ptr<GraphicsBackend>;

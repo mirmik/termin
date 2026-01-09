@@ -128,7 +128,7 @@ class SystemShaderRegistry:
 
             vert, frag = self._definitions[name]
             shader = ShaderProgram(vert, frag)
-            shader.ensure_ready(graphics)
+            shader.ensure_ready(graphics, context_key)
             self._shaders[cache_key] = shader
 
         return self._shaders[cache_key]

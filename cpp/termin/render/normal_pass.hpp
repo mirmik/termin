@@ -52,6 +52,9 @@ public:
 
     virtual ~NormalPass() = default;
 
+    // Clean up cached shader
+    void destroy() override;
+
     /**
      * Execute the normal pass.
      */

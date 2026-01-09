@@ -75,6 +75,12 @@ NormalPass::NormalPass(
 {
 }
 
+
+void NormalPass::destroy() {
+    _normal_shader.reset();
+}
+
+
 std::vector<ResourceSpec> NormalPass::get_resource_specs() const {
     return {
         ResourceSpec(

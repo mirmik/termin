@@ -278,6 +278,20 @@ class PostProcessPass(RenderFramePass):
         fb.resize(size)
         return fb
 
+    def destroy(self) -> None:
+        """
+        Clean up resources.
+
+        Deletes temporary FBOs and clears callbacks on effects.
+        """
+        for fbo in self._temp_fbos:
+            if fbo is not None:
+                fbo.delete()
+        self._temp_fbos.clear()
+
+        for effect in self.effects:
+            effect.clear_callbacks()
+
     def add_effect(self, effect: PostEffect):
         """
         Добавляет эффект в конец цепочки.
@@ -370,6 +384,7 @@ class PostProcessPass(RenderFramePass):
                 graphics.set_viewport(0, 0, pw, ph)
 
                 effect.draw(graphics, key, current_tex, extra_textures, size)
+                graphics.check_gl_error(f"PostFX: {effect.name if hasattr(effect, 'name') else effect.__class__.__name__}")
 
                 # Debugger: блит после применения эффекта если выбран его символ
                 if debug_symbol == self._effect_symbol(i, effect):

@@ -55,7 +55,7 @@ class RenderingController:
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
-        get_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None,
+        make_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None,
         on_display_input_mode_changed: Optional[Callable[["Display", str], None]] = None,
     ):
         """
@@ -87,7 +87,7 @@ class RenderingController:
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
         self._on_request_update = on_request_update
-        self._get_editor_pipeline = get_editor_pipeline
+        self._make_editor_pipeline = make_editor_pipeline
         self._on_display_input_mode_changed_callback = on_display_input_mode_changed
 
         self._selected_display: Optional["Display"] = None
@@ -108,6 +108,9 @@ class RenderingController:
 
         # Register display factory with RenderingManager
         self._manager.set_display_factory(self._create_display_for_name)
+
+        # Register pipeline factory with RenderingManager
+        self._manager.set_pipeline_factory(self._create_pipeline_for_name)
 
         self._connect_signals()
 
@@ -131,21 +134,38 @@ class RenderingController:
         self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
 
         # Set editor pipeline getter for ViewportInspector
-        if self._get_editor_pipeline is not None:
-            self._inspector.viewport_inspector.set_editor_pipeline_getter(self._get_editor_pipeline)
+        if self._make_editor_pipeline is not None:
+            self._inspector.viewport_inspector.set_editor_pipeline_getter(self._make_editor_pipeline)
 
         # Connect center tabs signal for tab switching
         if self._center_tabs is not None:
             self._center_tabs.currentChanged.connect(self._on_center_tab_changed)
         self._inspector.viewport_inspector.depth_changed.connect(self._on_viewport_depth_changed)
 
-    def set_editor_pipeline_getter(self, getter: Callable[[], "RenderPipeline"]) -> None:
-        """Set callback for getting editor pipeline."""
-        self._get_editor_pipeline = getter
+    def set_editor_pipeline_maker(self, maker: Callable[[], "RenderPipeline"]) -> None:
+        """Set callback for creating editor pipeline."""
+        self._make_editor_pipeline = maker
         # Also update ViewportInspector
-        self._inspector.viewport_inspector.set_editor_pipeline_getter(getter)
+        self._inspector.viewport_inspector.set_editor_pipeline_getter(maker)
 
-    # --- Display Factory ---
+    # --- Factories ---
+
+    def _create_pipeline_for_name(self, name: str) -> Optional["RenderPipeline"]:
+        """
+        Factory callback for RenderingManager.
+
+        Creates a pipeline by special name (e.g., "(Editor)").
+
+        Args:
+            name: Pipeline special name.
+
+        Returns:
+            Created RenderPipeline or None if unknown name.
+        """
+        if name == "(Editor)":
+            if self._make_editor_pipeline is not None:
+                return self._make_editor_pipeline()
+        return None
 
     def _create_display_for_name(self, name: str) -> Optional["Display"]:
         """
@@ -358,10 +378,15 @@ class RenderingController:
                 if viewport.camera is not None and viewport.camera.entity is not None:
                     camera_uuid = viewport.camera.entity.uuid
 
-                # Get pipeline UUID
+                # Get pipeline UUID or special name
                 pipeline_uuid = None
+                pipeline_name = None
                 if viewport.pipeline is not None:
                     pipeline_uuid = self._get_pipeline_uuid(viewport.pipeline)
+                    # If no UUID found, check for special pipeline names
+                    if pipeline_uuid is None:
+                        if viewport.pipeline.name == "editor":
+                            pipeline_name = "(Editor)"
 
                 config = ViewportConfig(
                     display_name=display.name,
@@ -371,6 +396,7 @@ class RenderingController:
                     input_mode=viewport.input_mode,
                     block_input_in_editor=viewport.block_input_in_editor,
                     pipeline_uuid=pipeline_uuid,
+                    pipeline_name=pipeline_name,
                 )
                 scene.add_viewport_config(config)
 
@@ -492,13 +518,30 @@ class RenderingController:
         Remove all viewports that reference the given scene.
 
         Called before scene is destroyed or deactivated.
-        Destroys pipelines to clear callbacks, then removes viewports.
+        Destroys pipelines to clear callbacks, clears FBOs, then removes viewports.
         """
         for display in self._manager.displays:
+            display_id = id(display)
             viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
+            if not viewports_to_remove:
+                continue
+
+            # Make GL context current for this display before deleting resources
+            tab_info = self._display_tabs.get(display_id)
+            if tab_info is not None:
+                _tab_container, backend_window, _qwindow = tab_info
+                if backend_window is not None:
+                    backend_window.make_current()
+
             for vp in viewports_to_remove:
+                # Destroy pipeline
                 if vp.pipeline is not None:
                     vp.pipeline.destroy()
+                # Clear FBOs and remove viewport state
+                state = self._manager.get_viewport_state(vp)
+                if state is not None:
+                    state.clear_fbos()
+                self._manager.remove_viewport_state(vp)
                 display.remove_viewport(vp)
         self._viewport_list.refresh()
 
@@ -618,9 +661,9 @@ class RenderingController:
         if display is None:
             return None
 
-        # Get pipeline from getter if not specified
-        if pipeline is None and self._get_editor_pipeline is not None:
-            pipeline = self._get_editor_pipeline()
+        # Get pipeline from maker if not specified
+        if pipeline is None and self._make_editor_pipeline is not None:
+            pipeline = self._make_editor_pipeline()
 
         viewport = display.create_viewport(
             scene=scene,
@@ -998,11 +1041,14 @@ class RenderingController:
         old_pipeline = viewport.pipeline
         viewport.pipeline = pipeline
 
-        # Clear FBO pool when pipeline changes
+        # Clear FBO pool and destroy old pipeline when pipeline changes
         if old_pipeline is not pipeline:
             state = self._manager.get_viewport_state(viewport)
             if state is not None:
                 state.fbos.clear()
+            # Destroy old pipeline to release GL resources
+            if old_pipeline is not None:
+                old_pipeline.destroy()
 
         self._request_update()
 
@@ -1165,15 +1211,19 @@ class RenderingController:
             views_and_states = []
             sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 
+            from termin._native import log
             for viewport in sorted_viewports:
                 # Skip viewports without pipeline or scene
                 if viewport.pipeline is None:
+                    log.warn(f"[_render_displays] viewport has no pipeline, skipping")
                     continue
                 if viewport.scene is None:
+                    log.warn(f"[_render_displays] viewport has no scene, skipping")
                     continue
 
                 state = self._get_or_create_viewport_state(display_id, viewport)
                 if state is None:
+                    log.warn(f"[_render_displays] viewport state is None, skipping")
                     continue
                 view = RenderView(
                     scene=viewport.scene,

@@ -52,11 +52,11 @@ class ViewportRenderState:
 
     def clear_fbos(self) -> None:
         """
-        Удаляет все FBO из пула.
-        
-        Вызывает delete() для каждого FBO перед удалением из словаря.
+        Удаляет все ресурсы из пула.
+
+        Вызывает delete() для каждого ресурса.
         """
-        for fbo in self.fbos.values():
-            if fbo is not None:
-                fbo.delete()
+        for resource in self.fbos.values():
+            if resource is not None:
+                resource.delete()
         self.fbos.clear()

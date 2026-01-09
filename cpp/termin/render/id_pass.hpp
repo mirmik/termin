@@ -52,6 +52,9 @@ public:
 
     virtual ~IdPass() = default;
 
+    // Clean up cached shader
+    void destroy() override;
+
     /**
      * Execute the ID pass.
      */

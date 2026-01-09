@@ -118,7 +118,7 @@ class HighlightEffect(PostEffect):
         selected_id = self._get_id() or 0
 
         shader = self._get_shader()
-        shader.ensure_ready(gfx)
+        shader.ensure_ready(gfx, key)
         shader.use()
 
         # основной цвет

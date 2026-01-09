@@ -47,7 +47,9 @@ class GizmoManager:
     def __init__(self):
         self._gizmos: list[Gizmo] = []
         self._renderer: "ImmediateRenderer | None" = None
-        self._solid_renderer: "SolidPrimitiveRenderer | None" = None
+
+        # Solid renderer cache per GL context
+        self._solid_renderers: dict[int, "SolidPrimitiveRenderer"] = {}
 
         # Drag state
         self._active_gizmo: Gizmo | None = None
@@ -90,12 +92,15 @@ class GizmoManager:
     # Rendering
     # ============================================================
 
-    def _ensure_solid_renderer(self) -> "SolidPrimitiveRenderer":
-        """Lazily create SolidPrimitiveRenderer."""
-        if self._solid_renderer is None:
+    def _ensure_solid_renderer(self, context_key: int) -> "SolidPrimitiveRenderer":
+        """Get or create SolidPrimitiveRenderer for the given GL context.
+
+        VAOs are not shared across GL contexts, so we cache per context_key.
+        """
+        if context_key not in self._solid_renderers:
             from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
-            self._solid_renderer = SolidPrimitiveRenderer()
-        return self._solid_renderer
+            self._solid_renderers[context_key] = SolidPrimitiveRenderer()
+        return self._solid_renderers[context_key]
 
     def render(
         self,
@@ -103,6 +108,7 @@ class GizmoManager:
         graphics: "GraphicsBackend",
         view_matrix: np.ndarray,
         proj_matrix: np.ndarray,
+        context_key: int = 0,
     ) -> None:
         """Render all visible gizmos."""
         self._renderer = renderer
@@ -121,7 +127,7 @@ class GizmoManager:
 
         # Solid renderer gizmos (efficient GPU meshes)
         if solid_gizmos:
-            solid_renderer = self._ensure_solid_renderer()
+            solid_renderer = self._ensure_solid_renderer(context_key)
             solid_renderer.begin(graphics, view_matrix, proj_matrix, depth_test=True, blend=False)
             for gizmo in solid_gizmos:
                 gizmo.draw_solid(solid_renderer, graphics, view_matrix, proj_matrix)
@@ -144,7 +150,7 @@ class GizmoManager:
 
         # Solid renderer transparent
         if solid_gizmos:
-            solid_renderer = self._ensure_solid_renderer()
+            solid_renderer = self._ensure_solid_renderer(context_key)
             solid_renderer.begin(graphics, view_matrix, proj_matrix, depth_test=True, blend=True)
             for gizmo in solid_gizmos:
                 gizmo.draw_transparent_solid(solid_renderer, graphics, view_matrix, proj_matrix)

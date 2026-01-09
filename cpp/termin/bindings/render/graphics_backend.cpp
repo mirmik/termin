@@ -140,6 +140,7 @@ void bind_graphics_backend(nb::module_& m) {
         })
         .def("read_pixel", &GraphicsBackend::read_pixel)
         .def("read_depth_pixel", &GraphicsBackend::read_depth_pixel)
+        .def("check_gl_error", &GraphicsBackend::check_gl_error)
         // read_depth_buffer - returns numpy array or None
         .def("read_depth_buffer", [](GraphicsBackend& self, FramebufferHandle* fbo) -> nb::object {
             if (fbo == nullptr) return nb::none();

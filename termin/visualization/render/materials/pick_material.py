@@ -33,6 +33,6 @@ class PickMaterial(Material):
         super().__init__(shader=shader)
 
     def apply_for_pick(self, model, view, proj, pick_color, graphics, context_key):
-        self.shader.ensure_ready(graphics)
+        self.shader.ensure_ready(graphics, context_key)
         self.apply(model, view, proj, graphics=graphics, context_key=context_key)
         self.shader.set_uniform_vec3("u_pickColor", pick_color)

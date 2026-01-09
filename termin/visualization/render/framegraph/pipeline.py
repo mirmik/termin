@@ -87,12 +87,8 @@ class RenderPipeline:
         """
         Clean up pipeline resources and callbacks.
 
-        Iterates through all passes and clears callbacks on post-effects.
+        Iterates through all passes and destroys them (clears FBOs and callbacks).
         Should be called before discarding a pipeline to prevent dangling references.
         """
-        from termin.visualization.render.postprocess import PostProcessPass
-
         for render_pass in self.passes:
-            if isinstance(render_pass, PostProcessPass):
-                for effect in render_pass.effects:
-                    effect.clear_callbacks()
+            render_pass.destroy()

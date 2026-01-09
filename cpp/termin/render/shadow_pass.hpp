@@ -95,6 +95,9 @@ public:
     ShadowPass(ShadowPass&&) = default;
     ShadowPass& operator=(ShadowPass&&) = default;
 
+    // Clean up FBO pool
+    void destroy() override;
+
     /**
      * Execute shadow pass, rendering shadow maps for all lights.
      *

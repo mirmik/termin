@@ -102,7 +102,7 @@ class FogEffect(PostEffect):
         # Если depth нет — на всякий случай просто пробрасываем цвет
         if depth_tex is None:
             shader = self._get_shader()
-            shader.ensure_ready(gfx)
+            shader.ensure_ready(gfx, context_key)
             shader.use()
 
             color_tex.bind(0)
@@ -119,7 +119,7 @@ class FogEffect(PostEffect):
             return
 
         shader = self._get_shader()
-        shader.ensure_ready(gfx)
+        shader.ensure_ready(gfx, context_key)
         shader.use()
 
         # Основной цвет

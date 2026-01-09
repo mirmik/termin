@@ -73,7 +73,7 @@ def blit_fbo_to_fbo(
 
     # берём ту же фуллскрин-квад-программу, что и PresentToScreenPass
     shader = PresentToScreenPass._get_shader()
-    shader.ensure_ready(gfx)
+    shader.ensure_ready(gfx, context_key)
     shader.use()
     shader.set_uniform_int("u_tex", 0)
 

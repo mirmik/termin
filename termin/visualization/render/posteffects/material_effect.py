@@ -25,7 +25,7 @@ class MaterialPostEffect(PostEffect):
     with custom shaders and parameters editable in the inspector.
 
     The material shader receives:
-    - u_color: Main color texture (from previous pass)
+    - u_input_tex: Main color texture (from previous pass) on unit 0
     - u_depth: Depth texture (if required_depth=True)
     - u_resolution: vec2 with (width, height)
     - Extra resources specified via add_resource() as their uniform names
@@ -179,12 +179,14 @@ class MaterialPostEffect(PostEffect):
             self._draw_passthrough(gfx, context_key, color_tex)
             return
 
-        shader.ensure_ready(gfx)
+        shader.ensure_ready(gfx, context_key)
         shader.use()
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after shader.use")
 
-        # Bind main color texture
+        # Bind main color texture (use u_input_tex to avoid conflict with material's u_color)
         color_tex.bind(0)
-        shader.set_uniform_int("u_color", 0)
+        shader.set_uniform_int("u_input_tex", 0)
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after bind u_input_tex")
 
         # Bind extra resources as texture uniforms
         texture_unit = 1
@@ -194,6 +196,7 @@ class MaterialPostEffect(PostEffect):
                 tex.bind(texture_unit)
                 shader.set_uniform_int(uniform_name, texture_unit)
                 texture_unit += 1
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after extra resources")
 
         # Bind depth if required and available (legacy support)
         if self._required_depth and "depth" not in self._extra_resources:
@@ -206,6 +209,7 @@ class MaterialPostEffect(PostEffect):
         # Set resolution uniform
         w, h = size
         shader.set_uniform_vec2("u_resolution", np.array([w, h], dtype=np.float32))
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after resolution")
 
         # Bind material textures (starting from next available unit)
         for tex_name, tex_handle in phase.textures.items():
@@ -213,17 +217,21 @@ class MaterialPostEffect(PostEffect):
                 tex_handle.bind(texture_unit)
                 shader.set_uniform_int(tex_name, texture_unit)
                 texture_unit += 1
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after material textures")
 
         # Set material uniforms
         for uniform_name, uniform_value in phase.uniforms.items():
             self._set_uniform(shader, uniform_name, uniform_value)
+            gfx.check_gl_error(f"MaterialPostEffect({self.name}): after uniform '{uniform_name}'")
 
         # Call before_draw callback for custom uniforms
         if self._before_draw is not None:
             self._before_draw(shader)
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after before_draw callback")
 
         # Draw fullscreen quad
         gfx.draw_ui_textured_quad(context_key)
+        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after draw_quad")
 
     def _set_uniform(self, shader, name: str, value) -> None:
         """Set uniform based on value type."""
@@ -261,7 +269,7 @@ class MaterialPostEffect(PostEffect):
         from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 
         shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready(gfx)
+        shader.ensure_ready(gfx, context_key)
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         color_tex.bind(0)

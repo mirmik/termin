@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple  # Dict 
 # Takes display name, returns Display or None
 DisplayFactory = Callable[[str], Optional["Display"]]
 
+# Type alias for pipeline factory callback
+# Takes pipeline name (e.g., "(Editor)"), returns RenderPipeline or None
+PipelineFactory = Callable[[str], Optional["RenderPipeline"]]
+
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
@@ -71,6 +75,9 @@ class RenderingManager:
         # Display factory callback (creates displays on demand)
         self._display_factory: Optional[DisplayFactory] = None
 
+        # Pipeline factory callback (creates pipelines by special names)
+        self._pipeline_factory: Optional[PipelineFactory] = None
+
     # --- Configuration ---
 
     def set_graphics(self, graphics: "GraphicsBackend") -> None:
@@ -93,6 +100,19 @@ class RenderingManager:
             factory: Callable[[str], Display | None]
         """
         self._display_factory = factory
+
+    def set_pipeline_factory(self, factory: PipelineFactory) -> None:
+        """
+        Set callback for creating pipelines by special names.
+
+        The factory is called when attach_scene() needs a pipeline by name
+        (e.g., "(Editor)"). It receives the pipeline name and should return
+        a RenderPipeline or None if creation fails.
+
+        Args:
+            factory: Callable[[str], RenderPipeline | None]
+        """
+        self._pipeline_factory = factory
 
     @property
     def graphics(self) -> Optional["GraphicsBackend"]:
@@ -229,9 +249,10 @@ class RenderingManager:
         if camera is None:
             raise ValueError("No camera found in scene and none specified")
 
-        # Use default pipeline if not specified
+        # Use default pipeline if not specified (copy to avoid shared state)
         if pipeline is None:
-            pipeline = self._default_pipeline
+            if self._default_pipeline is not None:
+                pipeline = self._default_pipeline.copy()
 
         # Create viewport
         viewport = Viewport(
@@ -301,6 +322,9 @@ class RenderingManager:
                 entity = scene.get_entity(config.camera_uuid)
                 if entity is not None:
                     camera = entity.get_component(CameraComponent)
+                    log.info(f"[attach_scene] Found camera by UUID: {entity.name}")
+                else:
+                    log.warn(f"[attach_scene] Entity not found for camera_uuid={config.camera_uuid}")
 
             if camera is None:
                 # Fallback: find first camera in scene
@@ -308,6 +332,7 @@ class RenderingManager:
                     cam = entity.get_component(CameraComponent)
                     if cam is not None:
                         camera = cam
+                        log.info(f"[attach_scene] Using fallback camera: {entity.name}")
                         break
 
             if camera is None:
@@ -317,16 +342,30 @@ class RenderingManager:
                 )
                 continue
 
-            # Get pipeline by UUID
-            pipeline = self._default_pipeline
+            # Get pipeline by UUID or special name
+            pipeline = None
             if config.pipeline_uuid is not None:
                 from termin.assets.resources import ResourceManager
                 rm = ResourceManager.instance()
                 pipeline = rm.get_pipeline_by_uuid(config.pipeline_uuid)
                 if pipeline is None:
-                    pipeline = self._default_pipeline
+                    log.warn(f"[attach_scene] Pipeline not found for uuid={config.pipeline_uuid}")
+                else:
+                    log.info(f"[attach_scene] Found pipeline by UUID: {pipeline.name}")
+
+            # Try pipeline_name if UUID lookup failed or not set
+            if pipeline is None and config.pipeline_name is not None:
+                if self._pipeline_factory is not None:
+                    pipeline = self._pipeline_factory(config.pipeline_name)
+                    if pipeline is not None:
+                        log.info(f"[attach_scene] Created pipeline by name: {config.pipeline_name}")
+                    else:
+                        log.warn(f"[attach_scene] Pipeline factory returned None for name={config.pipeline_name}")
+                else:
+                    log.warn(f"[attach_scene] No pipeline factory set, cannot create pipeline for name={config.pipeline_name}")
 
             # Create viewport
+            log.info(f"[attach_scene] Creating viewport: display={config.display_name}, camera={camera.entity.name if camera.entity else 'N/A'}, pipeline={pipeline.name if pipeline else 'None'}")
             viewport = self.mount_scene(
                 scene=scene,
                 display=display,
@@ -334,10 +373,12 @@ class RenderingManager:
                 region=config.region,
                 pipeline=pipeline,
             )
+            log.info(f"[attach_scene] Created viewport id={id(viewport)}, pipeline passes={len(viewport.pipeline.passes) if viewport.pipeline else 0}")
             viewport.depth = config.depth
             viewport.input_mode = config.input_mode
             viewport.block_input_in_editor = config.block_input_in_editor
             viewports.append(viewport)
+            log.info(f"[attach_scene] Created viewport on {config.display_name}, display now has {len(display.viewports)} viewports")
 
         return viewports
 
@@ -368,9 +409,28 @@ class RenderingManager:
 
         return states.get(id(viewport))
 
+    def remove_viewport_state(self, viewport: "Viewport") -> None:
+        """Remove render state for a viewport (call after clearing FBOs)."""
+        from termin._native import log
+
+        display = viewport.display
+        if display is None:
+            return
+
+        display_id = id(display)
+        states = self._viewport_states.get(display_id)
+        if states is None:
+            return
+
+        viewport_id = id(viewport)
+        if viewport_id in states:
+            log.info(f"[remove_viewport_state] removing state for viewport_id={viewport_id}")
+            del states[viewport_id]
+
     def get_or_create_viewport_state(self, viewport: "Viewport") -> "ViewportRenderState":
         """Get or create render state for a viewport."""
         from termin.visualization.render.state import ViewportRenderState
+        from termin._native import log
 
         display = viewport.display
         if display is None:
@@ -384,6 +444,7 @@ class RenderingManager:
         states = self._viewport_states[display_id]
 
         if viewport_id not in states:
+            log.info(f"[get_or_create_viewport_state] creating NEW state for viewport_id={viewport_id}")
             states[viewport_id] = ViewportRenderState()
 
         return states[viewport_id]
@@ -398,7 +459,10 @@ class RenderingManager:
             display: Display to render.
             present: Whether to present (swap buffers) after rendering.
         """
+        from termin._native import log
+
         if self._graphics is None:
+            log.warn("[render_display] _graphics is None")
             return
 
         # Lazy create render engine
@@ -410,14 +474,21 @@ class RenderingManager:
 
         surface = display.surface
         if surface is None:
+            log.warn(f"[render_display] surface is None for display={display.name}")
             return
 
         # Collect views and states, sorted by depth
         views_and_states = []
         sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 
+        log.info(f"[render_display] display={display.name}, viewports={len(sorted_viewports)}")
         for viewport in sorted_viewports:
+            camera_name = viewport.camera.entity.name if viewport.camera and viewport.camera.entity else "None"
+            scene_id = id(viewport.scene) if viewport.scene else "None"
+            pipeline_name = viewport.pipeline.name if viewport.pipeline else "None"
+            log.info(f"  viewport: camera={camera_name}, scene_id={scene_id}, pipeline={pipeline_name}")
             if viewport.pipeline is None or viewport.scene is None:
+                log.warn(f"  SKIPPED: pipeline={viewport.pipeline}, scene={viewport.scene}")
                 continue
 
             state = self.get_or_create_viewport_state(viewport)

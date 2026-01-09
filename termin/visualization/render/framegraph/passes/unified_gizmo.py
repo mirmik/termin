@@ -90,7 +90,7 @@ class UnifiedGizmoPass(RenderFramePass):
         proj = camera.get_projection_matrix()
 
         # Render all gizmos
-        manager.render(self._renderer, graphics, view, proj)
+        manager.render(self._renderer, graphics, view, proj, context_key)
 
         # Flush debug lines added by components via ImmediateRenderer.instance()
         # Components add lines during update(), we flush them here

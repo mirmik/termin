@@ -53,6 +53,9 @@ public:
 
     virtual ~DepthPass() = default;
 
+    // Clean up cached shader
+    void destroy() override;
+
     /**
      * Execute the depth pass.
      */

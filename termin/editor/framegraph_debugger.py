@@ -303,7 +303,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
             }
             """
             self._shader = ShaderProgram(vert_src, frag_src)
-            self._shader.ensure_ready(self._graphics)
+            self._shader.ensure_ready(self._graphics, 0)  # debugger window context
         return self._shader
 
     def _init_fullscreen_quad(self) -> None:

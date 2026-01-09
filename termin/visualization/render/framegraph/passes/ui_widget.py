@@ -101,3 +101,4 @@ class UIWidgetPass(RenderFramePass):
                 if not (layer_mask & (1 << entity_layer)):
                     continue
             ui_comp.render(graphics, pw, ph, context_key)
+            graphics.check_gl_error(f"UIWidgets: {entity.name if entity else 'ui_component'}")

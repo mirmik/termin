@@ -47,7 +47,7 @@ void main() {
 
 in vec2 v_uv;
 
-uniform sampler2D u_color;
+uniform sampler2D u_input_tex;
 uniform sampler2D u_depth_texture;
 uniform sampler2D u_normal_texture;
 uniform vec2 u_resolution;
@@ -146,7 +146,7 @@ vec4 doit()
     vec3 normal_shifted = texture(u_normal_texture, v_uv).rgb;
     vec3 normal = normal_shifted * 2.0 - 1.0;
 
-    vec3 color = texture(u_color, v_uv).rgb;
+    vec3 color = texture(u_input_tex, v_uv).rgb;
     float linear_depth = texture(u_depth_texture, v_uv).r;
 
     // Reconstruct world position

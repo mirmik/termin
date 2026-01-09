@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "termin/render/handles.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
@@ -22,22 +23,38 @@ namespace termin {
  * Stores vertex/fragment/geometry sources and compiles lazily on first use.
  * Provides convenient uniform setters.
  *
+ * Handles are cached per GL context (context_key) to support multi-context rendering.
+ *
  * Note: GLSL preprocessing (#include) should be done before passing
  * sources to this class.
  */
-class ShaderProgram 
+class ShaderProgram
 {
     std::string vertex_source_;
     std::string fragment_source_;
     std::string geometry_source_;
     std::string source_path_;
     std::string name_;
-    ShaderHandlePtr handle_;
+
+    // Per-context compiled handles
+    std::unordered_map<int64_t, ShaderHandlePtr> handles_;
+    // Currently active handle (set by ensure_ready)
+    ShaderHandle* current_handle_ = nullptr;
+    int64_t current_context_key_ = 0;
+
     TcShader tc_shader_;
     uint32_t compiled_version_ = 0;
 
 public:
     ShaderProgram() = default;
+
+    // Non-copyable due to unique_ptr handles
+    ShaderProgram(const ShaderProgram&) = delete;
+    ShaderProgram& operator=(const ShaderProgram&) = delete;
+
+    // Movable
+    ShaderProgram(ShaderProgram&&) = default;
+    ShaderProgram& operator=(ShaderProgram&&) = default;
 
     ShaderProgram(
         std::string vertex_source,
@@ -73,8 +90,13 @@ public:
     const std::string& source_path() const { return source_path_; }
     const std::string& name() const { return name_; }
 
-    // Check if compiled
-    bool is_compiled() const { return handle_ != nullptr; }
+    // Check if compiled (for current context)
+    bool is_compiled() const { return current_handle_ != nullptr; }
+
+    // Check if compiled for specific context
+    bool is_compiled_for(int64_t context_key) const {
+        return handles_.find(context_key) != handles_.end();
+    }
 
     // Get the tc_shader handle
     const TcShader& tc_shader() const { return tc_shader_; }
@@ -84,7 +106,14 @@ public:
 
     // Check if shader needs recompilation (sources changed)
     bool needs_recompile() const {
-        if (!handle_) return true;
+        if (handles_.empty()) return true;
+        return compiled_version_ != tc_shader_.version();
+    }
+
+    // Check if needs recompile for specific context
+    bool needs_recompile_for(int64_t context_key) const {
+        auto it = handles_.find(context_key);
+        if (it == handles_.end()) return true;
         return compiled_version_ != tc_shader_.version();
     }
 
@@ -103,19 +132,28 @@ public:
     }
 
     /**
-     * Compile shader if not already compiled.
+     * Compile shader if not already compiled for the given context.
      *
      * Uses the provided compile function to create the ShaderHandle.
      * This allows decoupling from specific graphics backend.
      * Automatically preprocesses GLSL sources (resolves #include).
      *
      * @param compile_fn Function that takes (vert, frag, geom) and returns ShaderHandlePtr
+     * @param context_key GL context identifier for caching
      * @param preprocess Whether to preprocess sources (default: true)
      */
     template<typename CompileFn>
-    void ensure_ready(CompileFn compile_fn, bool preprocess = true) {
-        // Check if recompilation needed
-        if (handle_ && !needs_recompile()) return;
+    void ensure_ready(CompileFn compile_fn, int64_t context_key = 0, bool preprocess = true) {
+        // Check if we have a valid handle for this context
+        auto it = handles_.find(context_key);
+        bool needs_compile = (it == handles_.end()) || needs_recompile();
+
+        if (!needs_compile) {
+            // Already compiled for this context, just set as current
+            current_handle_ = it->second.get();
+            current_context_key_ = context_key;
+            return;
+        }
 
         std::string vs = vertex_source_;
         std::string fs = fragment_source_;
@@ -138,27 +176,42 @@ public:
         }
 
         const char* geom = gs.empty() ? nullptr : gs.c_str();
-        handle_ = compile_fn(vs.c_str(), fs.c_str(), geom);
+        auto handle = compile_fn(vs.c_str(), fs.c_str(), geom);
 
-        if (!handle_) {
+        if (!handle) {
             throw std::runtime_error("Failed to compile shader: " + source_path_);
         }
+
+        // Store in cache and set as current
+        handles_[context_key] = std::move(handle);
+        current_handle_ = handles_[context_key].get();
+        current_context_key_ = context_key;
 
         // Track compiled version
         compiled_version_ = tc_shader_.version();
     }
 
     /**
-     * Set the compiled handle directly (for when compilation happens externally).
+     * Set the compiled handle directly for a context.
      */
-    void set_handle(ShaderHandlePtr handle) {
-        handle_ = std::move(handle);
+    void set_handle(ShaderHandlePtr handle, int64_t context_key = 0) {
+        handles_[context_key] = std::move(handle);
+        current_handle_ = handles_[context_key].get();
+        current_context_key_ = context_key;
     }
 
     /**
-     * Get the underlying handle (may be null if not compiled).
+     * Get the underlying handle for current context (may be null if not compiled).
      */
-    ShaderHandle* handle() const { return handle_.get(); }
+    ShaderHandle* handle() const { return current_handle_; }
+
+    /**
+     * Get handle for specific context (may be null).
+     */
+    ShaderHandle* handle_for(int64_t context_key) const {
+        auto it = handles_.find(context_key);
+        return it != handles_.end() ? it->second.get() : nullptr;
+    }
 
     /**
      * Use this shader program.
@@ -171,17 +224,25 @@ public:
      * Stop using this shader program.
      */
     void stop() {
-        if (handle_) handle_->stop();
+        if (current_handle_) current_handle_->stop();
     }
 
     /**
-     * Release shader resources.
+     * Release shader resources for all contexts.
      */
     void release() {
-        if (handle_) {
-            handle_->release();
-            handle_.reset();
+        for (auto& [key, h] : handles_) {
+            if (h) h->release();
         }
+        handles_.clear();
+        current_handle_ = nullptr;
+    }
+
+    /**
+     * Invalidate all cached handles (e.g., when sources change).
+     */
+    void invalidate() {
+        release();
     }
 
     // ========== Uniform setters ==========
@@ -250,10 +311,10 @@ public:
 
 private:
     ShaderHandle* require_handle() {
-        if (!handle_) {
+        if (!current_handle_) {
             throw std::runtime_error("ShaderProgram not compiled. Call ensure_ready() first.");
         }
-        return handle_.get();
+        return current_handle_;
     }
 
     void register_in_registry() {

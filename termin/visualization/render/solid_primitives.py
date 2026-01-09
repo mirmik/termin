@@ -251,7 +251,7 @@ class SolidPrimitiveRenderer:
 
         # Shader
         self._shader = ShaderProgram(SOLID_VERT, SOLID_FRAG)
-        self._shader.ensure_ready(graphics)
+        self._shader.ensure_ready(graphics, 0)  # TODO: pass context_key properly
 
         def create_indexed_mesh(vertices: np.ndarray, indices: np.ndarray) -> Tuple[int, int, int, int]:
             vao = gl.glGenVertexArrays(1)
