@@ -92,6 +92,9 @@ public:
     void on_removed() override {
         NB_OVERRIDE(on_removed);
     }
+    void on_scene_active() override {
+        NB_OVERRIDE(on_scene_active);
+    }
 };
 
 NB_MODULE(_entity_native, m) {
@@ -110,6 +113,8 @@ NB_MODULE(_entity_native, m) {
         .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
         .def("on_added", &CxxComponent::on_added)
         .def("on_removed", &CxxComponent::on_removed)
+        .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
+        .def("on_scene_active", &CxxComponent::on_scene_active)
         .def("type_name", &CxxComponent::type_name)
         .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
         .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)

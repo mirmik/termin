@@ -221,6 +221,10 @@ void bind_mesh(nb::module_& m) {
         .value("INT8", TC_ATTRIB_INT8)
         .value("UINT8", TC_ATTRIB_UINT8);
 
+    nb::enum_<tc_draw_mode>(m, "TcDrawMode")
+        .value("TRIANGLES", TC_DRAW_TRIANGLES)
+        .value("LINES", TC_DRAW_LINES);
+
     nb::class_<tc_vertex_layout>(m, "TcVertexLayout")
         .def("__init__", [](tc_vertex_layout* self) {
             new (self) tc_vertex_layout();
@@ -276,6 +280,9 @@ void bind_mesh(nb::module_& m) {
         .def_prop_ro("index_count", &TcMesh::index_count)
         .def_prop_ro("triangle_count", &TcMesh::triangle_count)
         .def_prop_ro("stride", &TcMesh::stride)
+        .def_prop_rw("draw_mode",
+            &TcMesh::draw_mode,
+            &TcMesh::set_draw_mode)
         .def_prop_ro("mesh", [](const TcMesh& h) -> nb::object {
             tc_mesh* m = h.get();
             if (!m) return nb::none();
@@ -358,13 +365,15 @@ void bind_mesh(nb::module_& m) {
                 nb::ndarray<uint32_t, nb::c_contig, nb::device::cpu> indices,
                 const tc_vertex_layout& layout,
                 std::string name,
-                std::string uuid_hint) {
+                std::string uuid_hint,
+                tc_draw_mode draw_mode) {
             return TcMesh::from_interleaved(
                 vertices.data(), vertex_count,
                 indices.data(), indices.size(),
-                layout, name, uuid_hint);
+                layout, name, uuid_hint, draw_mode);
         }, nb::arg("vertices"), nb::arg("vertex_count"), nb::arg("indices"),
-           nb::arg("layout"), nb::arg("name") = "", nb::arg("uuid") = "")
+           nb::arg("layout"), nb::arg("name") = "", nb::arg("uuid") = "",
+           nb::arg("draw_mode") = TC_DRAW_TRIANGLES)
         .def_static("from_uuid", &TcMesh::from_uuid, nb::arg("uuid"))
         .def_static("get_or_create", &TcMesh::get_or_create, nb::arg("uuid"))
         .def_static("from_name", [](const std::string& name) {

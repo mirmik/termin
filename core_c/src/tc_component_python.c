@@ -65,6 +65,18 @@ static void py_vtable_on_removed(tc_component* c) {
     }
 }
 
+static void py_vtable_on_scene_inactive(tc_component* c) {
+    if (g_py_callbacks.on_scene_inactive && c->py_wrap) {
+        g_py_callbacks.on_scene_inactive(c->py_wrap);
+    }
+}
+
+static void py_vtable_on_scene_active(tc_component* c) {
+    if (g_py_callbacks.on_scene_active && c->py_wrap) {
+        g_py_callbacks.on_scene_active(c->py_wrap);
+    }
+}
+
 static void py_vtable_on_editor_start(tc_component* c) {
     if (g_py_callbacks.on_editor_start && c->py_wrap) {
         g_py_callbacks.on_editor_start(c->py_wrap);
@@ -86,6 +98,8 @@ static const tc_component_vtable g_python_vtable = {
     .on_removed_from_entity = py_vtable_on_removed_from_entity,
     .on_added = py_vtable_on_added,
     .on_removed = py_vtable_on_removed,
+    .on_scene_inactive = py_vtable_on_scene_inactive,
+    .on_scene_active = py_vtable_on_scene_active,
     .on_editor_start = py_vtable_on_editor_start,
     .setup_editor_defaults = NULL,  // Python handles this differently
     .drop = NULL,  // Python manages its own memory

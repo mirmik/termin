@@ -13,13 +13,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
-from termin.geombase import Pose3
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -115,7 +112,7 @@ class EditorCameraManager:
         """
         Get camera state for serialization.
 
-        Saves transform (position, rotation) and radius.
+        Saves transform (position, rotation), radius, and EditorEntities components.
         """
         if self.camera is None or self.camera.entity is None:
             return None
@@ -124,17 +121,57 @@ class EditorCameraManager:
         pose = entity.transform.global_pose()
         orbit_ctrl = self.orbit_controller
 
-        return {
+        result = {
             "position": [pose.lin.x, pose.lin.y, pose.lin.z],
             "rotation": [pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w],
             "radius": float(orbit_ctrl.radius) if orbit_ctrl else 5.0,
         }
 
+        # Serialize EditorEntities hierarchy components
+        if self.editor_entities is not None:
+            editor_entities_data = self._serialize_editor_entities_components()
+            if editor_entities_data:
+                result["editor_entities"] = editor_entities_data
+
+        return result
+
+    def _serialize_editor_entities_components(self) -> dict | None:
+        """Serialize components of all entities in EditorEntities hierarchy."""
+        from termin._native import log
+
+        log.info(f"[EditorCamera] Serializing editor_entities")
+
+        if self.editor_entities is None:
+            return None
+
+        entities = []
+        self._collect_hierarchy(self.editor_entities, entities)
+
+        result = {}
+        for ent in entities:
+            # Temporarily enable serializable
+            old_serializable = ent.serializable
+            ent.serializable = True
+            try:
+                # Serialize only components (not the entity itself)
+                components_data = []
+                for comp in ent.components:
+                    comp_data = comp.serialize()
+                    if comp_data:
+                        components_data.append(comp_data)
+                if components_data:
+                    result[ent.name] = components_data
+            finally:
+                ent.serializable = old_serializable
+
+        log.info(f"[EditorCamera] Serialized editor_entities: {result}")
+        return result if result else None
+
     def set_camera_data(self, data: dict) -> None:
         """
         Apply saved camera state.
 
-        Restores transform and radius, then lets OrbitCameraController sync.
+        Restores transform, radius, and EditorEntities components.
         """
         if self.camera is None or self.camera.entity is None:
             return
@@ -162,6 +199,38 @@ class EditorCameraManager:
         if orbit_ctrl:
             orbit_ctrl._sync_from_transform()
 
+        # Restore EditorEntities components
+        if "editor_entities" in data:
+            self._deserialize_editor_entities_components(data["editor_entities"])
+
+    def _deserialize_editor_entities_components(self, data: dict) -> None:
+        """Deserialize components of all entities in EditorEntities hierarchy."""
+        from termin._native import log
+
+        log.info(f"[EditorCamera] Deserializing editor_entities: {data}")
+
+        if self.editor_entities is None or not data:
+            return
+
+        entities = []
+        self._collect_hierarchy(self.editor_entities, entities)
+
+        for ent in entities:
+            components_data = data.get(ent.name)
+            if not components_data:
+                continue
+
+            for comp_data in components_data:
+                comp_type = comp_data.get("type")
+                comp_data_inner = comp_data.get("data", {})
+
+                # Find matching component by type
+                for comp in ent.components:
+                    if comp.type_name() == comp_type:
+                        log.info(f"[EditorCamera] Deserializing {comp_type}: {comp_data_inner}")
+                        comp.deserialize_data(comp_data_inner)
+                        break
+
     def recreate_in_scene(self, new_scene: "Scene") -> None:
         """
         Recreate editor entities and camera in a new scene.
@@ -175,43 +244,22 @@ class EditorCameraManager:
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
 
-    def serialize_and_destroy_editor_entities(self) -> dict | None:
-        """
-        Serialize EditorEntities hierarchy and destroy them.
-
-        Used when transferring EditorEntities to another scene.
-
-        Returns:
-            Serialized data dict, or None if no editor entities.
-        """
-        # Check if scene is valid (not None and not destroyed)
+    def destroy_editor_entities(self) -> None:
+        """Remove EditorEntities from scene."""
         if self._scene is None or self._scene._tc_scene is None:
-            return None
+            return
         if self.editor_entities is None:
-            return None
+            return
 
-        # Collect all entities in hierarchy
-        entities_to_serialize = []
-        self._collect_hierarchy(self.editor_entities, entities_to_serialize)
-
-        # Temporarily enable serializable
-        for ent in entities_to_serialize:
-            ent.serializable = True
-
-        try:
-            data = self.editor_entities.serialize()
-        finally:
-            # Restore serializable=False (before destroy)
-            for ent in entities_to_serialize:
-                ent.serializable = False
+        entities = []
+        self._collect_hierarchy(self.editor_entities, entities)
 
         # Remove entities from scene (children first, then parent)
-        for ent in reversed(entities_to_serialize):
+        for ent in reversed(entities):
             self._scene.remove(ent)
+
         self.editor_entities = None
         self.camera = None
-
-        return data
 
     def _collect_hierarchy(self, entity: Entity, result: list) -> None:
         """Recursively collect entity and all descendants."""
@@ -220,48 +268,3 @@ class EditorCameraManager:
             if child_tf.entity is not None:
                 self._collect_hierarchy(child_tf.entity, result)
 
-    def restore_editor_entities_into(self, new_scene: "Scene", data: dict) -> None:
-        """
-        Restore EditorEntities from serialized data into a new scene.
-
-        Args:
-            new_scene: Scene to add editor entities to.
-            data: Serialized data from serialize_editor_entities().
-        """
-        self._scene = new_scene
-        self.editor_entities = None
-        self.camera = None
-
-        if data is None:
-            # Fallback to creating from scratch
-            self._ensure_editor_entities_root()
-            self._ensure_editor_camera()
-            return
-
-        # Deserialize into new scene
-        editor_entities = Entity.deserialize_with_children(data, None, new_scene)
-        if editor_entities is None:
-            # Fallback
-            self._ensure_editor_entities_root()
-            self._ensure_editor_camera()
-            return
-
-        # Mark all as non-serializable
-        entities = []
-        self._collect_hierarchy(editor_entities, entities)
-        for ent in entities:
-            ent.serializable = False
-
-        self.editor_entities = editor_entities
-
-        # Find camera component
-        for child_tf in editor_entities.transform.children:
-            if child_tf.entity and child_tf.entity.name == "camera":
-                camera = child_tf.entity.get_component(PerspectiveCameraComponent)
-                if camera is not None:
-                    self.camera = camera
-                    break
-
-        # Fallback if camera not found
-        if self.camera is None:
-            self._ensure_editor_camera()

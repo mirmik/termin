@@ -540,6 +540,7 @@ NB_MODULE(_voxels_native, m) {
             if (nb::isinstance<nb::str>(data)) {
                 return nb::cast(VoxelGridHandle::from_uuid(nb::cast<std::string>(data)));
             }
+
             // Handle dict format
             if (nb::isinstance<nb::dict>(data)) {
                 nb::dict d = nb::cast<nb::dict>(data);

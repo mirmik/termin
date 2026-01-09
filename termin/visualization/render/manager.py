@@ -322,7 +322,6 @@ class RenderingManager:
                 entity = scene.get_entity(config.camera_uuid)
                 if entity is not None:
                     camera = entity.get_component(CameraComponent)
-                    log.info(f"[attach_scene] Found camera by UUID: {entity.name}")
                 else:
                     log.warn(f"[attach_scene] Entity not found for camera_uuid={config.camera_uuid}")
 
@@ -332,7 +331,6 @@ class RenderingManager:
                     cam = entity.get_component(CameraComponent)
                     if cam is not None:
                         camera = cam
-                        log.info(f"[attach_scene] Using fallback camera: {entity.name}")
                         break
 
             if camera is None:
@@ -350,22 +348,17 @@ class RenderingManager:
                 pipeline = rm.get_pipeline_by_uuid(config.pipeline_uuid)
                 if pipeline is None:
                     log.warn(f"[attach_scene] Pipeline not found for uuid={config.pipeline_uuid}")
-                else:
-                    log.info(f"[attach_scene] Found pipeline by UUID: {pipeline.name}")
 
             # Try pipeline_name if UUID lookup failed or not set
             if pipeline is None and config.pipeline_name is not None:
                 if self._pipeline_factory is not None:
                     pipeline = self._pipeline_factory(config.pipeline_name)
-                    if pipeline is not None:
-                        log.info(f"[attach_scene] Created pipeline by name: {config.pipeline_name}")
-                    else:
+                    if pipeline is None:
                         log.warn(f"[attach_scene] Pipeline factory returned None for name={config.pipeline_name}")
                 else:
                     log.warn(f"[attach_scene] No pipeline factory set, cannot create pipeline for name={config.pipeline_name}")
 
             # Create viewport
-            log.info(f"[attach_scene] Creating viewport: display={config.display_name}, camera={camera.entity.name if camera.entity else 'N/A'}, pipeline={pipeline.name if pipeline else 'None'}")
             viewport = self.mount_scene(
                 scene=scene,
                 display=display,
@@ -373,12 +366,10 @@ class RenderingManager:
                 region=config.region,
                 pipeline=pipeline,
             )
-            log.info(f"[attach_scene] Created viewport id={id(viewport)}, pipeline passes={len(viewport.pipeline.passes) if viewport.pipeline else 0}")
             viewport.depth = config.depth
             viewport.input_mode = config.input_mode
             viewport.block_input_in_editor = config.block_input_in_editor
             viewports.append(viewport)
-            log.info(f"[attach_scene] Created viewport on {config.display_name}, display now has {len(display.viewports)} viewports")
 
         return viewports
 
@@ -411,8 +402,6 @@ class RenderingManager:
 
     def remove_viewport_state(self, viewport: "Viewport") -> None:
         """Remove render state for a viewport (call after clearing FBOs)."""
-        from termin._native import log
-
         display = viewport.display
         if display is None:
             return
@@ -424,13 +413,11 @@ class RenderingManager:
 
         viewport_id = id(viewport)
         if viewport_id in states:
-            log.info(f"[remove_viewport_state] removing state for viewport_id={viewport_id}")
             del states[viewport_id]
 
     def get_or_create_viewport_state(self, viewport: "Viewport") -> "ViewportRenderState":
         """Get or create render state for a viewport."""
         from termin.visualization.render.state import ViewportRenderState
-        from termin._native import log
 
         display = viewport.display
         if display is None:
@@ -444,7 +431,6 @@ class RenderingManager:
         states = self._viewport_states[display_id]
 
         if viewport_id not in states:
-            log.info(f"[get_or_create_viewport_state] creating NEW state for viewport_id={viewport_id}")
             states[viewport_id] = ViewportRenderState()
 
         return states[viewport_id]

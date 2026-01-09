@@ -246,6 +246,8 @@ public:
     virtual void on_destroy() {}
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
+    virtual void on_scene_inactive() {}
+    virtual void on_scene_active() {}
 };
 
 // ============================================================================
@@ -473,6 +475,14 @@ inline void component_on_removed_from_entity(tc_component* c) {
     if (c && c->data) static_cast<Component*>(c->data)->on_removed_from_entity();
 }
 
+inline void component_on_scene_inactive(tc_component* c) {
+    if (c && c->data) static_cast<Component*>(c->data)->on_scene_inactive();
+}
+
+inline void component_on_scene_active(tc_component* c) {
+    if (c && c->data) static_cast<Component*>(c->data)->on_scene_active();
+}
+
 inline void component_drop(tc_component* c) {
     // tc_component is embedded in Component via comp_ member
     // When Component is deleted by C++ code, the embedded tc_component goes too
@@ -491,6 +501,8 @@ inline const tc_component_vtable cpp_component_vtable = {
     component_on_removed_from_entity,
     nullptr,  // on_added
     nullptr,  // on_removed
+    component_on_scene_inactive,
+    component_on_scene_active,
     nullptr,  // on_editor_start
     nullptr,  // setup_editor_defaults
     component_drop,

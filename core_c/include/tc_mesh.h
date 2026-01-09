@@ -30,6 +30,15 @@ typedef enum tc_attrib_type {
 } tc_attrib_type;
 
 // ============================================================================
+// Draw mode - primitive type for rendering
+// ============================================================================
+
+typedef enum tc_draw_mode {
+    TC_DRAW_TRIANGLES = 0,
+    TC_DRAW_LINES     = 1,
+} tc_draw_mode;
+
+// ============================================================================
 // Vertex attribute descriptor
 // ============================================================================
 
@@ -69,9 +78,11 @@ typedef struct tc_mesh {
     tc_resource_header header;   // common resource fields (uuid, name, version, etc.)
     void* vertices;              // raw vertex data blob
     size_t vertex_count;
-    uint32_t* indices;           // triangle indices (3 per triangle)
-    size_t index_count;          // total indices (not triangles)
+    uint32_t* indices;           // indices (3 per triangle or 2 per line)
+    size_t index_count;          // total indices
     tc_vertex_layout layout;
+    uint8_t draw_mode;           // tc_draw_mode (TC_DRAW_TRIANGLES or TC_DRAW_LINES)
+    uint8_t _pad2[7];            // padding for alignment
 } tc_mesh;
 
 

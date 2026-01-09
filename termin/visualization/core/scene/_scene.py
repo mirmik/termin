@@ -602,6 +602,18 @@ class Scene:
             for component in entity.components:
                 component.on_editor_start()
 
+    def notify_scene_inactive(self):
+        """Notify all components that scene is becoming inactive."""
+        for entity in self.entities:
+            for component in entity.components:
+                component.on_scene_inactive()
+
+    def notify_scene_active(self):
+        """Notify all components that scene is becoming active (from INACTIVE)."""
+        for entity in self.entities:
+            for component in entity.components:
+                component.on_scene_active()
+
     # --- Input dispatch ---
 
     def dispatch_input(self, event_name: str, event, filter_fn: Callable[[InputComponent], bool] | None = None):

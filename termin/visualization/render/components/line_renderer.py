@@ -4,24 +4,24 @@ LineRenderer — компонент для рендеринга линий.
 Реализует Drawable протокол для интеграции с ColorPass и другими пассами.
 
 Два режима работы:
-- raw_lines=False (по умолчанию): генерирует ленту из треугольников на CPU,
-  width гарантированно работает с любым шейдером
-- raw_lines=True: использует GL_LINES, width игнорируется,
-  пользователь может использовать geometry shader для толщины
+- raw_lines=False (по умолчанию): использует geometry shader для генерации
+  ленты на GPU, width работает с любым материалом
+- raw_lines=True: использует GL_LINES напрямую, width игнорируется,
+  пользователь может использовать свой geometry shader для толщины
 """
 
 from __future__ import annotations
 
+import uuid
 from typing import Iterable, List, Optional, Set, TYPE_CHECKING
 
 import numpy as np
 
-from termin.mesh.mesh import Mesh2, Mesh3
 from termin.mesh import TcMesh
+from termin.mesh._mesh_native import TcVertexLayout, TcAttribType, TcDrawMode
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import Mesh2Drawable
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.renderpass import RenderState
@@ -37,8 +37,6 @@ _DEFAULT_LINE_VERT = """
 #version 330 core
 
 layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_uv;
 
 uniform mat4 u_model;
 uniform mat4 u_view;
@@ -68,7 +66,7 @@ def _build_line_ribbon(
     up_hint: np.ndarray = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Строит ленту из треугольников для линии.
+    Строит ленту из треугольников для линии (CPU).
 
     Для каждого сегмента создаёт quad (2 треугольника).
     Ширина откладывается перпендикулярно направлению линии.
@@ -79,7 +77,7 @@ def _build_line_ribbon(
         up_hint: Подсказка для направления "вверх" (по умолчанию Y)
 
     Возвращает:
-        (vertices, triangles) — массивы для Mesh3
+        (vertices, triangles) — массивы для меша
     """
     if len(points) < 2:
         return np.zeros((0, 3), dtype=np.float32), np.zeros((0, 3), dtype=np.int32)
@@ -170,7 +168,7 @@ class LineRenderer(PythonComponent):
     Атрибуты:
         points: Список точек линии [(x, y, z), ...].
         width: Толщина линии (в мировых координатах).
-        raw_lines: Если True, использует GL_LINES без генерации квадов.
+        raw_lines: Если True, использует GL_LINES без geometry shader.
         material: Материал для рендеринга (если None — создаётся дефолтный).
 
     Фильтрация по фазам:
@@ -201,12 +199,10 @@ class LineRenderer(PythonComponent):
             setter=lambda obj, value: obj.set_raw_lines(value),
         ),
 
-        # не работает
         "material": InspectField(
-            path="material",
+            path="_material_handle",
             label="Material",
             kind="material_handle",
-            setter=lambda obj, value: obj.set_material(value.get()),
         ),
     }
 
@@ -228,13 +224,16 @@ class LineRenderer(PythonComponent):
         if material is not None:
             self._material_handle = MaterialHandle.from_material(material)
 
-        # Drawables для двух режимов
-        self._ribbon_mesh: TcMesh | None = None  # для quad режима
-        self._ribbon_gpu: Optional["MeshGPU"] = None
-        self._lines_drawable: Mesh2Drawable | None = None   # для raw_lines режима
+        # TcMesh (always GL_LINES)
+        self._mesh: TcMesh | None = None
+        self._mesh_gpu: Optional["MeshGPU"] = None
 
-        # Флаг необходимости перестроения
+        # Флаг необходимости перестроения меша
         self._dirty = True
+
+        # Cached line ribbon material
+        self._ribbon_material: Material | None = None
+        self._ribbon_material_source_id: int = 0
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -243,7 +242,7 @@ class LineRenderer(PythonComponent):
         Собирается из phase_mark каждой фазы материала.
         """
         marks: Set[str] = set()
-        mat = self._get_material_or_default()
+        mat = self._get_effective_material()
         if mat is None:
             return marks
         for phase in mat.phases:
@@ -259,33 +258,31 @@ class LineRenderer(PythonComponent):
 
     @points.setter
     def points(self, value: Iterable[tuple[float, float, float]]):
-        self._points = list(value)
-        self._dirty = True
+        new_points = list(value)
+        if new_points != self._points:
+            self._points = new_points
+            self._dirty = True
 
     @property
     def width(self) -> float:
-        """Толщина линии."""
+        """Толщина линии в мировых координатах."""
         return self._width
 
     @width.setter
     def width(self, value: float):
         self._width = value
-        self._dirty = True
+        # width не требует пересборки меша - передаётся как uniform
 
     @property
     def raw_lines(self) -> bool:
-        """Режим GL_LINES."""
+        """Режим GL_LINES без geometry shader."""
         return self._raw_lines
 
     @raw_lines.setter
     def raw_lines(self, value: bool):
-        self._raw_lines = value
-        self._dirty = True
-
-        # Проверяем совместимость с текущим материалом
-        mat = self._material_handle.get_material_or_none()
-        if mat is not None:
-            self._warn_if_incompatible(mat)
+        if self._raw_lines != value:
+            self._raw_lines = value
+            self._ribbon_material = None  # Invalidate cached ribbon material
 
     @property
     def material(self) -> Material | None:
@@ -298,24 +295,7 @@ class LineRenderer(PythonComponent):
             self._material_handle = MaterialHandle()
         else:
             self._material_handle = MaterialHandle.from_material(value)
-            self._warn_if_incompatible(value)
-
-    def _warn_if_incompatible(self, material: Material) -> None:
-        """Проверяет совместимость материала с режимом отрисовки."""
-        has_geometry_shader = any(
-            phase.shader_programm.geometry_source is not None
-            for phase in material.phases
-        )
-
-        if has_geometry_shader and not self._raw_lines:
-            import warnings
-            warnings.warn(
-                f"LineRenderer: материал '{material.name}' содержит geometry shader, "
-                f"но raw_lines=False. Geometry shader для линий ожидает GL_LINES на входе. "
-                f"Установите raw_lines=True или используйте материал без geometry shader.",
-                RuntimeWarning,
-                stacklevel=4,
-            )
+        self._ribbon_material = None  # Invalidate cached ribbon material
 
     # --- Setters for inspector ---
 
@@ -338,35 +318,45 @@ class LineRenderer(PythonComponent):
     def set_material_by_name(self, name: str):
         """Устанавливает материал по имени из ResourceManager."""
         self._material_handle = MaterialHandle.from_name(name)
+        self._ribbon_material = None
 
     # --- Geometry building ---
 
     def _rebuild_geometry(self):
-        """Перестраивает геометрию в зависимости от режима."""
-        self._ribbon_mesh = None
-        self._ribbon_gpu = None
-        self._lines_drawable = None
+        """Перестраивает меш из точек."""
+        self._mesh = None
+        self._mesh_gpu = None
 
-        if len(self._points) < 2:
+        n_points = len(self._points)
+        if n_points < 2:
             self._dirty = False
             return
 
-        if self._raw_lines:
-            # GL_LINES режим
-            edges = [[i, i + 1] for i in range(len(self._points) - 1)]
-            mesh2 = Mesh2.from_lists(self._points, edges)
-            self._lines_drawable = Mesh2Drawable(mesh2)
-        else:
-            # Ribbon режим (квады)
-            vertices, triangles = _build_line_ribbon(self._points, self._width)
-            if len(triangles) > 0:
-                from termin.voxels.voxel_mesh import create_voxel_mesh
-                self._ribbon_mesh = create_voxel_mesh(
-                    vertices=vertices,
-                    triangles=triangles,
-                    name="line_ribbon",
-                )
+        # Layout: position only (vec3)
+        layout = TcVertexLayout()
+        layout.add("position", 3, TcAttribType.FLOAT32)
 
+        # Vertices: just positions
+        vertices = np.array(self._points, dtype=np.float32).flatten()
+
+        # Indices: pairs for each line segment
+        n_segments = n_points - 1
+        indices = np.zeros(n_segments * 2, dtype=np.uint32)
+        for i in range(n_segments):
+            indices[i * 2] = i
+            indices[i * 2 + 1] = i + 1
+
+        # Generate unique uuid for mesh registry lookup
+        mesh_uuid = str(uuid.uuid4())
+        self._mesh = TcMesh.from_interleaved(
+            vertices=vertices,
+            vertex_count=n_points,
+            indices=indices,
+            layout=layout,
+            name="line_renderer",
+            uuid=mesh_uuid,
+            draw_mode=TcDrawMode.LINES,
+        )
         self._dirty = False
 
     def _ensure_geometry(self):
@@ -374,28 +364,19 @@ class LineRenderer(PythonComponent):
         if self._dirty:
             self._rebuild_geometry()
 
-    def _get_lines_drawable(self) -> Mesh2Drawable | None:
-        """Возвращает drawable для GL_LINES режима."""
+    def _get_mesh(self) -> TcMesh | None:
+        """Возвращает TcMesh."""
         self._ensure_geometry()
-        return self._lines_drawable
-
-    def _get_ribbon_mesh(self) -> TcMesh | None:
-        """Возвращает TcMesh для ribbon режима."""
-        self._ensure_geometry()
-        return self._ribbon_mesh
+        return self._mesh
 
     # Class-level cache for default line material
     _default_material: Optional[Material] = None
 
-    def _get_material_or_default(self) -> Optional[Material]:
-        """Возвращает материал или создаёт дефолтный (кэшированный)."""
+    def _get_base_material(self) -> Material:
+        """Возвращает базовый материал (без ribbon трансформации)."""
         mat = self._material_handle.get_material_or_none()
         if mat is None:
             if LineRenderer._default_material is None:
-                from termin.visualization.core.material import Material
-                from termin.visualization.render.shader import ShaderProgram
-                from termin.visualization.render.renderpass import RenderState
-
                 shader = ShaderProgram(
                     vertex_source=_DEFAULT_LINE_VERT,
                     fragment_source=_DEFAULT_LINE_FRAG,
@@ -410,6 +391,23 @@ class LineRenderer(PythonComponent):
             mat = LineRenderer._default_material
         return mat
 
+    def _get_effective_material(self) -> Material:
+        """Возвращает материал с учётом режима (ribbon или raw)."""
+        base_mat = self._get_base_material()
+
+        if self._raw_lines:
+            # Raw mode - use material as-is
+            return base_mat
+
+        # Ribbon mode - apply line ribbon transformation
+        source_id = id(base_mat)
+        if self._ribbon_material is None or self._ribbon_material_source_id != source_id:
+            from termin.visualization.render.shader_line_ribbon import get_line_ribbon_material
+            self._ribbon_material = get_line_ribbon_material(base_mat)
+            self._ribbon_material_source_id = source_id
+
+        return self._ribbon_material
+
     # --- Drawable protocol ---
 
     def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
@@ -420,17 +418,18 @@ class LineRenderer(PythonComponent):
             context: Контекст рендеринга.
             geometry_id: Идентификатор геометрии (игнорируется — одна геометрия).
         """
-        if self._raw_lines:
-            drawable = self._get_lines_drawable()
-            if drawable is not None:
-                drawable.draw(context)
-        else:
-            mesh = self._get_ribbon_mesh()
-            if mesh is not None and mesh.is_valid:
-                if self._ribbon_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._ribbon_gpu = MeshGPU()
-                self._ribbon_gpu.draw(context, mesh.mesh, mesh.version)
+        mesh = self._get_mesh()
+        if mesh is None or not mesh.is_valid:
+            return
+
+        # Set line width uniform for geometry shader
+        if not self._raw_lines and context.current_shader is not None:
+            context.current_shader.set_uniform_float("u_line_width", self._width)
+
+        if self._mesh_gpu is None:
+            from termin._native.render import MeshGPU
+            self._mesh_gpu = MeshGPU()
+        self._mesh_gpu.draw(context, mesh.mesh, mesh.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """
@@ -443,48 +442,16 @@ class LineRenderer(PythonComponent):
         Возвращает:
             Список GeometryDrawCall с совпадающим phase_mark, отсортированный по priority.
         """
-        mat = self._get_material_or_default()
+        mat = self._get_effective_material()
 
         if phase_mark is None:
             phases = list(mat.phases)
         else:
             phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
-        # Для ribbon режима отключаем culling
-        if not self._raw_lines:
-            for phase in phases:
-                phase.render_state.cull = False
+        # Disable backface culling for lines
+        for phase in phases:
+            phase.render_state.cull = False
 
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=p) for p in phases]
-
-    # --- Сериализация ---
-
-    def serialize_data(self) -> dict:
-        """Сериализует LineRenderer."""
-        from termin.visualization.core.resources import ResourceManager
-        rm = ResourceManager.instance()
-
-        data = {
-            "enabled": self.enabled,
-            "points": [list(p) for p in self._points],
-            "width": self._width,
-            "raw_lines": self._raw_lines,
-        }
-
-        # Материал (только если явно задан, не дефолтный)
-        mat = self._material_handle.get_material_or_none()
-        if mat is not None:
-            # Try to save UUID, fallback to name
-            mat_uuid = rm.find_material_uuid(mat)
-            if mat_uuid:
-                data["material"] = {"uuid": mat_uuid}
-            else:
-                mat_name = rm.find_material_name(mat)
-                if mat_name and mat_name != "__ErrorMaterial__":
-                    data["material"] = mat_name
-                elif mat.name and mat.name != "__ErrorMaterial__":
-                    data["material"] = mat.name
-
-        return data
-

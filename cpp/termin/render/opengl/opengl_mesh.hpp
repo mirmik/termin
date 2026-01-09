@@ -136,12 +136,16 @@ private:
 /**
  * Mesh handle that works directly with tc_mesh.
  * Uses tc_mesh's layout to set up vertex attributes automatically.
+ * Reads draw_mode from tc_mesh (TC_DRAW_TRIANGLES or TC_DRAW_LINES).
  */
 class OpenGLTcMeshHandle : public GPUMeshHandle {
 public:
-    OpenGLTcMeshHandle(const tc_mesh* mesh, DrawMode mode = DrawMode::Triangles)
-        : vao_(0), vbo_(0), ebo_(0), index_count_(0), draw_mode_(mode) {
-        if (mesh) upload(mesh);
+    OpenGLTcMeshHandle(const tc_mesh* mesh)
+        : vao_(0), vbo_(0), ebo_(0), index_count_(0), draw_mode_(DrawMode::Triangles) {
+        if (mesh) {
+            draw_mode_ = (mesh->draw_mode == TC_DRAW_LINES) ? DrawMode::Lines : DrawMode::Triangles;
+            upload(mesh);
+        }
     }
 
     ~OpenGLTcMeshHandle() override {

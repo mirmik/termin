@@ -29,9 +29,7 @@ class ShaderVariantOp(Enum):
     """Types of shader variant operations."""
 
     SKINNING = auto()  # Add skeletal animation support
-    # Future operations can be added here:
-    # INSTANCING = auto()
-    # MORPHING = auto()
+    LINE_RIBBON = auto()  # Convert lines to screen-space ribbons via geometry shader
 
 
 # Type alias for variant transform functions
@@ -172,6 +170,9 @@ def _register_default_transforms(registry: ShaderVariantRegistry) -> None:
     from termin.visualization.render.shader_skinning import (
         inject_skinning_into_vertex_shader,
     )
+    from termin.visualization.render.shader_line_ribbon import (
+        inject_line_ribbon_geometry_shader,
+    )
 
     def skinning_transform(shader: ShaderProgram) -> ShaderProgram:
         """Transform shader to add skinning support."""
@@ -183,7 +184,12 @@ def _register_default_transforms(registry: ShaderVariantRegistry) -> None:
             source_path=f"{shader.source_path}:skinned" if shader.source_path else "",
         )
 
+    def line_ribbon_transform(shader: ShaderProgram) -> ShaderProgram:
+        """Transform shader to add line ribbon geometry shader."""
+        return inject_line_ribbon_geometry_shader(shader)
+
     registry.register_transform(ShaderVariantOp.SKINNING, skinning_transform)
+    registry.register_transform(ShaderVariantOp.LINE_RIBBON, line_ribbon_transform)
 
 
 def clear_variant_cache() -> None:

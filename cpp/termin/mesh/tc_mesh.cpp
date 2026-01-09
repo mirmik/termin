@@ -146,7 +146,8 @@ TcMesh TcMesh::from_interleaved(
     const uint32_t* indices, size_t index_count,
     const tc_vertex_layout& layout,
     const std::string& name,
-    const std::string& uuid_hint) {
+    const std::string& uuid_hint,
+    tc_draw_mode draw_mode) {
 
     if (vertices == nullptr || vertex_count == 0) {
         return TcMesh();
@@ -184,6 +185,7 @@ TcMesh TcMesh::from_interleaved(
                         vertices, vertex_count, &layout,
                         indices, index_count,
                         name.empty() ? nullptr : name.c_str());
+        m->draw_mode = static_cast<uint8_t>(draw_mode);
     }
 
     return TcMesh(h);

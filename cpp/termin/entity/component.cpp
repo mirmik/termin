@@ -20,6 +20,8 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     // Scene relationship
     CxxComponent::_cb_on_added,
     CxxComponent::_cb_on_removed,
+    CxxComponent::_cb_on_scene_inactive,
+    CxxComponent::_cb_on_scene_active,
     // Editor
     CxxComponent::_cb_on_editor_start,
     CxxComponent::_cb_setup_editor_defaults,
@@ -124,6 +126,20 @@ void CxxComponent::_cb_on_removed(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->on_removed();
+    }
+}
+
+void CxxComponent::_cb_on_scene_inactive(tc_component* c) {
+    auto* self = from_tc(c);
+    if (self) {
+        self->on_scene_inactive();
+    }
+}
+
+void CxxComponent::_cb_on_scene_active(tc_component* c) {
+    auto* self = from_tc(c);
+    if (self) {
+        self->on_scene_active();
     }
 }
 

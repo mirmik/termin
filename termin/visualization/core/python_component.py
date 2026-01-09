@@ -234,6 +234,14 @@ class PythonComponent:
         """Called when entity is removed from scene."""
         self._scene = None
 
+    def on_scene_inactive(self) -> None:
+        """Called when scene mode changes to INACTIVE."""
+        pass
+
+    def on_scene_active(self) -> None:
+        """Called when scene mode changes from INACTIVE to active (EDITOR or GAME)."""
+        pass
+
     def destroy(self) -> None:
         """Explicitly release all resources. Called by Scene.destroy()."""
         self.on_destroy()

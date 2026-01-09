@@ -183,6 +183,10 @@ class CameraComponent(PythonComponent):
         """Check if camera is bound to viewport."""
         return viewport in self._viewports
 
+    def on_scene_inactive(self) -> None:
+        """Clear stale viewport references when scene becomes inactive."""
+        self._viewports.clear()
+
     # def on_added(self, scene):
     #     if self.entity is None:
     #         raise RuntimeError("CameraComponent must be attached to an entity.")

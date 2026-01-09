@@ -101,6 +101,8 @@ public:
     // Called when entity is added/removed from scene
     virtual void on_added(nb::object scene) { (void)scene; }
     virtual void on_removed() {}
+    virtual void on_scene_inactive() {}
+    virtual void on_scene_active() {}
 
     // Serialization - uses InspectRegistry for INSPECT_FIELD properties.
     // DO NOT OVERRIDE in derived components!
@@ -184,6 +186,8 @@ private:
     static void _cb_on_removed_from_entity(tc_component* c);
     static void _cb_on_added(tc_component* c, void* scene);
     static void _cb_on_removed(tc_component* c);
+    static void _cb_on_scene_inactive(tc_component* c);
+    static void _cb_on_scene_active(tc_component* c);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
 };

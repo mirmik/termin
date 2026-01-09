@@ -204,23 +204,6 @@
             }
           },
           {
-            "type": "NavMeshDisplayComponent",
-            "data": {
-              "enabled": true,
-              "navmesh": null,
-              "color": [
-                0.2,
-                0.8,
-                0.3,
-                0.7
-              ],
-              "wireframe": false,
-              "show_normals": false,
-              "show_contours": true,
-              "contour_width": 0.05
-            }
-          },
-          {
             "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
@@ -444,9 +427,11 @@
                 ]
               ],
               "width": 0.1,
-              "raw_lines": true,
-              "material": {
-                "uuid": "e2c8d676-0d1a-4c70-bdad-0ede59a7fb61"
+              "raw_lines": false,
+              "_material_handle": {
+                "type": "uuid",
+                "uuid": "00000000-0000-0000-0002-000000000001",
+                "name": "DefaultMaterial"
               }
             }
           }
@@ -665,23 +650,6 @@
                 0.3,
                 0.9
               ]
-            }
-          },
-          {
-            "type": "NavMeshDisplayComponent",
-            "data": {
-              "enabled": true,
-              "navmesh": null,
-              "color": [
-                0.2,
-                0.8,
-                0.3,
-                0.7
-              ],
-              "wireframe": false,
-              "show_normals": false,
-              "show_contours": true,
-              "contour_width": 0.005
             }
           }
         ],
@@ -3490,23 +3458,6 @@
                 0.9
               ]
             }
-          },
-          {
-            "type": "NavMeshDisplayComponent",
-            "data": {
-              "enabled": true,
-              "navmesh": null,
-              "color": [
-                0.2,
-                0.8,
-                0.3,
-                0.7
-              ],
-              "wireframe": false,
-              "show_normals": false,
-              "show_contours": true,
-              "contour_width": 0.005
-            }
           }
         ],
         "children": []
@@ -3567,23 +3518,6 @@
               "show_simplified_contours": false,
               "show_bridged_contours": false,
               "show_triangulated": true
-            }
-          },
-          {
-            "type": "NavMeshDisplayComponent",
-            "data": {
-              "enabled": false,
-              "navmesh": null,
-              "color": [
-                0.2,
-                0.8,
-                0.3,
-                0.7
-              ],
-              "wireframe": false,
-              "show_normals": false,
-              "show_contours": true,
-              "contour_width": 0.05
             }
           }
         ],
@@ -3880,16 +3814,6 @@
               "cast_shadow": true,
               "_override_material": false
             }
-          },
-          {
-            "type": "NavMeshAgentComponent",
-            "data": {
-              "enabled": true,
-              "speed": 5.0,
-              "stopping_distance": 0.1,
-              "debug_draw_path": true,
-              "click_to_move": true
-            }
           }
         ],
         "children": []
@@ -3922,20 +3846,7 @@
           1,
           1
         ],
-        "components": [
-          {
-            "type": "PathfindingWorldComponent",
-            "data": {
-              "enabled": false,
-              "skip_astar_if_los": true,
-              "use_funnel": true,
-              "use_los_optimization": true,
-              "use_edge_centers": true,
-              "show_graph_edges": true,
-              "show_portals": false
-            }
-          }
-        ],
+        "components": [],
         "children": []
       },
       {
@@ -8066,19 +7977,18 @@
   "editor": {
     "camera": {
       "position": [
-        10.946685791015625,
-        22.645475387573242,
-        2.4057090282440186
+        8.485311508178711,
+        -2.923116445541382,
+        1.209011435508728
       ],
       "rotation": [
-        -0.05059892336596564,
-        -0.18752793800559572,
-        0.9470853538352532,
-        0.2555432526448858
+        -0.33347818831668186,
+        -0.19098474640951374,
+        0.45881142056869445,
+        0.8011299550707452
       ],
-      "radius": 13.5
+      "radius": 6.5
     },
-    "selected_entity": "camera",
     "expanded_entities": [
       "EditorEntities",
       "VoxelPlatform"

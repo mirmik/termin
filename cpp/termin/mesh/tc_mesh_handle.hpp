@@ -128,6 +128,17 @@ public:
         return m ? &m->layout : nullptr;
     }
 
+    tc_draw_mode draw_mode() const {
+        tc_mesh* m = get();
+        return m ? static_cast<tc_draw_mode>(m->draw_mode) : TC_DRAW_TRIANGLES;
+    }
+
+    void set_draw_mode(tc_draw_mode mode) {
+        if (tc_mesh* m = get()) {
+            m->draw_mode = static_cast<uint8_t>(mode);
+        }
+    }
+
     void bump_version() {
         if (tc_mesh* m = get()) {
             m->header.version++;
@@ -154,7 +165,8 @@ public:
         const uint32_t* indices, size_t index_count,
         const tc_vertex_layout& layout,
         const std::string& name = "",
-        const std::string& uuid_hint = "");
+        const std::string& uuid_hint = "",
+        tc_draw_mode draw_mode = TC_DRAW_TRIANGLES);
 
     // Get by UUID from registry
     static TcMesh from_uuid(const std::string& uuid) {

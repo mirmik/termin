@@ -107,6 +107,7 @@ void register_kind_handlers() {
             if (data.is_none()) {
                 return nb::cast(MaterialHandle());
             }
+
             nb::dict d = nb::cast<nb::dict>(data);
             return nb::cast(MaterialHandle::deserialize(d));
         }),
@@ -130,7 +131,6 @@ void register_kind_handlers() {
             // Nothing worked
             nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
             std::string type_name = nb::cast<std::string>(type_str);
-            tc::Log::error("material_handle convert failed: cannot convert %s to MaterialHandle", type_name.c_str());
             return nb::cast(MaterialHandle());
         })
     );

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from termin._native import log
+from termin import log
 
 
 @dataclass
@@ -57,7 +57,7 @@ class InspectField:
             from termin._native.inspect import InspectRegistry
             InspectRegistry.instance().set(obj, self.path, value)
         except Exception as e:
-            log.debug(f"[InspectField] InspectRegistry.set failed for '{self.path}': {e}, falling back to setattr")
+            log.warn(e, f"[InspectField] falling back to setattr for '{self.path}'")
             _resolve_path_set(obj, self.path, value)
 
 

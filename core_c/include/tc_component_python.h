@@ -32,6 +32,8 @@ typedef void (*tc_py_on_added_to_entity_fn)(void* py_self);
 typedef void (*tc_py_on_removed_from_entity_fn)(void* py_self);
 typedef void (*tc_py_on_added_fn)(void* py_self, void* scene);
 typedef void (*tc_py_on_removed_fn)(void* py_self);
+typedef void (*tc_py_on_scene_inactive_fn)(void* py_self);
+typedef void (*tc_py_on_scene_active_fn)(void* py_self);
 typedef void (*tc_py_on_editor_start_fn)(void* py_self);
 
 // Global Python callback table.
@@ -46,6 +48,8 @@ typedef struct {
     tc_py_on_removed_from_entity_fn on_removed_from_entity;
     tc_py_on_added_fn on_added;
     tc_py_on_removed_fn on_removed;
+    tc_py_on_scene_inactive_fn on_scene_inactive;
+    tc_py_on_scene_active_fn on_scene_active;
     tc_py_on_editor_start_fn on_editor_start;
 } tc_python_callbacks;
 

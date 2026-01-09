@@ -5852,7 +5852,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "3379eccd-042f-45a2-a777-6092c34071b6",
+                              "uuid": "2013896b-ed4c-472b-8957-0846e4bfa933",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6246,7 +6246,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "3379eccd-042f-45a2-a777-6092c34071b6",
+                              "uuid": "2013896b-ed4c-472b-8957-0846e4bfa933",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6467,7 +6467,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "3379eccd-042f-45a2-a777-6092c34071b6",
+                              "uuid": "2013896b-ed4c-472b-8957-0846e4bfa933",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9603,23 +9603,72 @@
   "editor": {
     "camera": {
       "position": [
-        2.6028363704681396,
-        3.163891315460205,
-        2.772886037826538
+        3.111264228820801,
+        2.501190423965454,
+        3.2631821632385254
       ],
       "rotation": [
-        -0.04862263894518119,
-        -0.18273732597307812,
-        0.9489414136297741,
-        0.2524937666092803
+        -0.09279098440911321,
+        -0.2379965811025784,
+        0.9007808743299558,
+        0.3511997679914267
       ],
-      "radius": 4.0
+      "radius": 4.0,
+      "editor_entities": {
+        "camera": [
+          {
+            "type": "PerspectiveCameraComponent",
+            "data": {
+              "enabled": true,
+              "projection_type": "perspective",
+              "fov_deg": 59.99999999999999,
+              "ortho_size": 5.0,
+              "near": 0.1,
+              "far": 100.0
+            }
+          },
+          {
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "radius": 4.0,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "type": "ViewportHintComponent",
+            "data": {
+              "enabled": true,
+              "pipeline_name": "(Editor)",
+              "layer_mask": "0x2"
+            }
+          }
+        ],
+        "editor_ui": [
+          {
+            "type": "UIComponent",
+            "data": {
+              "enabled": true,
+              "ui_layout": null
+            }
+          },
+          {
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "ortho_enabled": false
+            }
+          }
+        ]
+      }
     },
-    "selected_entity": "MainCamera",
     "expanded_entities": [
+      "camera",
       "EditorEntities",
-      "PlatformBase",
-      "camera"
+      "PlatformBase"
     ]
   },
   "resources": {

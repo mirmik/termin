@@ -75,6 +75,8 @@ struct tc_component_vtable {
     // Scene relationship (scene is opaque void*)
     void (*on_added)(tc_component* self, void* scene);
     void (*on_removed)(tc_component* self);
+    void (*on_scene_inactive)(tc_component* self);
+    void (*on_scene_active)(tc_component* self);
 
     // Editor hooks
     void (*on_editor_start)(tc_component* self);
@@ -220,6 +222,18 @@ static inline void tc_component_on_added(tc_component* c, void* scene) {
 static inline void tc_component_on_removed(tc_component* c) {
     if (c && c->vtable && c->vtable->on_removed) {
         c->vtable->on_removed(c);
+    }
+}
+
+static inline void tc_component_on_scene_inactive(tc_component* c) {
+    if (c && c->vtable && c->vtable->on_scene_inactive) {
+        c->vtable->on_scene_inactive(c);
+    }
+}
+
+static inline void tc_component_on_scene_active(tc_component* c) {
+    if (c && c->vtable && c->vtable->on_scene_active) {
+        c->vtable->on_scene_active(c);
     }
 }
 

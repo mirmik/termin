@@ -136,6 +136,34 @@ static void py_cb_on_removed(void* py_self) {
     PyGILState_Release(gstate);
 }
 
+static void py_cb_on_scene_inactive(void* py_self) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    try {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_scene_inactive")) {
+            self.attr("on_scene_inactive")();
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_scene_inactive");
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+}
+
+static void py_cb_on_scene_active(void* py_self) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    try {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_scene_active")) {
+            self.attr("on_scene_active")();
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_scene_active");
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+}
+
 static void py_cb_on_editor_start(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
@@ -253,6 +281,8 @@ static void ensure_callbacks_initialized() {
         .on_removed_from_entity = py_cb_on_removed_from_entity,
         .on_added = py_cb_on_added,
         .on_removed = py_cb_on_removed,
+        .on_scene_inactive = py_cb_on_scene_inactive,
+        .on_scene_active = py_cb_on_scene_active,
         .on_editor_start = py_cb_on_editor_start,
     };
     tc_component_set_python_callbacks(&callbacks);

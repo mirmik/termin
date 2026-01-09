@@ -1782,6 +1782,8 @@ class EditorWindow(QMainWindow):
         Activates the scene in SceneManager and sets up all editor UI.
         Transfers EditorEntities from old scene to new scene.
         """
+        print(f"[EditorWindow] Switching to scene: {name}")
+
         new_scene = self.scene_manager.get_scene(name)
         if new_scene is None:
             from termin._native import log
@@ -1792,11 +1794,12 @@ class EditorWindow(QMainWindow):
         self._editor_scene_name = name
         self.scene_manager.set_mode(name, SceneMode.EDITOR)
 
-        # Serialize and destroy EditorEntities from old scene (if exists)
-        editor_entities_data = self._camera_manager.serialize_and_destroy_editor_entities()
-
-        # Restore into new scene
-        self._camera_manager.restore_editor_entities_into(new_scene, editor_entities_data)
+        # Save camera state, destroy old EditorEntities, recreate in new scene
+        camera_data = self._camera_manager.get_camera_data()
+        self._camera_manager.destroy_editor_entities()
+        self._camera_manager.recreate_in_scene(new_scene)
+        if camera_data is not None:
+            self._camera_manager.set_camera_data(camera_data)
         self.editor_entities = self._camera_manager.editor_entities
         self.camera = self._camera_manager.camera
 
@@ -1919,12 +1922,22 @@ class EditorWindow(QMainWindow):
         if self._rendering_controller is not None:
             self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
 
+        # Сохраняем состояние EditorEntities (камера, кнопки UI и т.д.)
+        camera_data = self._camera_manager.get_camera_data()
+
         # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
         self._game_scene_name = f"{self._editor_scene_name}(game)"
         game_scene = self.scene_manager.copy_scene(
             self._editor_scene_name,
             self._game_scene_name,
         )
+
+        # Создаём EditorEntities в game_scene и применяем сохранённое состояние
+        self._camera_manager.recreate_in_scene(game_scene)
+        if camera_data is not None:
+            self._camera_manager.set_camera_data(camera_data)
+        self.editor_entities = self._camera_manager.editor_entities
+        self.camera = self._camera_manager.camera
 
         # Явно удаляем viewports editor сцены перед деактивацией
         if self._rendering_controller is not None:
@@ -1953,6 +1966,11 @@ class EditorWindow(QMainWindow):
         # Возвращаемся к editor сцене
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
         editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
+
+        # Переключаемся на EditorEntities в editor_scene (они уже существуют с правильным состоянием)
+        self._camera_manager.recreate_in_scene(editor_scene)
+        self.editor_entities = self._camera_manager.editor_entities
+        self.camera = self._camera_manager.camera
 
         # Создаём viewports для editor сцены (камера читается из scene.editor_viewport_camera_name)
         self._on_game_mode_changed(False, editor_scene)
@@ -2017,10 +2035,6 @@ class EditorWindow(QMainWindow):
             return
 
         # 1. Обычные дисплеи - через attach_scene (читает scene.viewport_configs)
-        from termin._native import log
-        log.info(f"[_on_game_mode_changed] is_playing={is_playing}, viewport_configs={len(scene.viewport_configs)}")
-        for i, cfg in enumerate(scene.viewport_configs):
-            log.info(f"  config[{i}]: display={cfg.display_name}, camera_uuid={cfg.camera_uuid}, pipeline_uuid={cfg.pipeline_uuid}")
         self._rendering_controller.attach_scene(scene)
 
         # 2. Editor display - отдельная логика

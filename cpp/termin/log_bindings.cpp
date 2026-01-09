@@ -43,21 +43,55 @@ void bind_log(nb::module_& m) {
     }, nb::arg("callback"),
         "Set callback for log interception. Callback signature: (level: int, message: str)");
 
+    // Helper to format Python exception
+    auto format_exception = [](nb::object exc, const std::string& context) -> std::string {
+        std::string exc_str;
+        try {
+            exc_str = nb::cast<std::string>(nb::str(exc));
+        } catch (...) {
+            exc_str = "<unknown exception>";
+        }
+        if (context.empty()) {
+            return exc_str;
+        }
+        return context + ": " + exc_str;
+    };
+
     m.def("debug", [](const std::string& msg) {
         tc_log_debug("%s", msg.c_str());
     }, nb::arg("message"), "Log debug message");
+
+    m.def("debug", [format_exception](nb::object exc, const std::string& context) {
+        std::string msg = format_exception(exc, context);
+        tc_log_debug("%s", msg.c_str());
+    }, nb::arg("exception"), nb::arg("context") = "", "Log debug with exception");
 
     m.def("info", [](const std::string& msg) {
         tc_log_info("%s", msg.c_str());
     }, nb::arg("message"), "Log info message");
 
+    m.def("info", [format_exception](nb::object exc, const std::string& context) {
+        std::string msg = format_exception(exc, context);
+        tc_log_info("%s", msg.c_str());
+    }, nb::arg("exception"), nb::arg("context") = "", "Log info with exception");
+
     m.def("warn", [](const std::string& msg) {
         tc_log_warn("%s", msg.c_str());
     }, nb::arg("message"), "Log warning message");
 
+    m.def("warn", [format_exception](nb::object exc, const std::string& context) {
+        std::string msg = format_exception(exc, context);
+        tc_log_warn("%s", msg.c_str());
+    }, nb::arg("exception"), nb::arg("context") = "", "Log warning with exception");
+
     m.def("error", [](const std::string& msg) {
         tc_log_error("%s", msg.c_str());
     }, nb::arg("message"), "Log error message");
+
+    m.def("error", [format_exception](nb::object exc, const std::string& context) {
+        std::string msg = format_exception(exc, context);
+        tc_log_error("%s", msg.c_str());
+    }, nb::arg("exception"), nb::arg("context") = "", "Log error with exception");
 
     // Alias for consistency with Python's logging module
     m.def("warning", [](const std::string& msg) {
