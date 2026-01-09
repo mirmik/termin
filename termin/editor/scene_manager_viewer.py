@@ -146,8 +146,13 @@ class SceneManagerViewer(QWidget):
 
         actions_layout.addSpacing(20)
 
+        # Rendering attachment (creates viewports for non-editor displays)
+        render_label = QLabel("Render:")
+        render_label.setStyleSheet("color: gray;")
+        actions_layout.addWidget(render_label)
+
         self._attach_btn = QPushButton("Attach")
-        self._attach_btn.setToolTip("Attach scene to RenderingController (create viewports)")
+        self._attach_btn.setToolTip("Attach scene to RenderingController (create viewports for non-editor displays)")
         self._attach_btn.clicked.connect(self._on_attach_scene)
         self._attach_btn.setEnabled(False)
         actions_layout.addWidget(self._attach_btn)
@@ -157,6 +162,19 @@ class SceneManagerViewer(QWidget):
         self._detach_btn.clicked.connect(self._on_detach_scene)
         self._detach_btn.setEnabled(False)
         actions_layout.addWidget(self._detach_btn)
+
+        actions_layout.addSpacing(20)
+
+        # Editor attachment (attaches EditorSceneAttachment to scene)
+        editor_label = QLabel("Editor:")
+        editor_label.setStyleSheet("color: gray;")
+        actions_layout.addWidget(editor_label)
+
+        self._edit_btn = QPushButton("Edit")
+        self._edit_btn.setToolTip("Attach editor to this scene (EditorSceneAttachment)")
+        self._edit_btn.clicked.connect(self._on_edit_scene)
+        self._edit_btn.setEnabled(False)
+        actions_layout.addWidget(self._edit_btn)
 
         actions_layout.addStretch()
         layout.addLayout(actions_layout)
@@ -195,6 +213,7 @@ class SceneManagerViewer(QWidget):
         self._play_btn.setEnabled(has_selection)
         self._attach_btn.setEnabled(has_selection)
         self._detach_btn.setEnabled(has_selection)
+        self._edit_btn.setEnabled(has_selection)
 
     def _on_load_scene(self) -> None:
         """Load a scene from file."""
@@ -303,6 +322,74 @@ class SceneManagerViewer(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Detach Error", f"Failed to detach scene:\n{e}")
 
+    def _on_edit_scene(self) -> None:
+        """Attach editor to selected scene via EditorSceneAttachment."""
+        if self._selected_scene_name is None:
+            return
+
+        from termin.editor.editor_window import EditorWindow
+
+        editor = EditorWindow.instance()
+        if editor is None:
+            QMessageBox.warning(self, "No Editor", "EditorWindow not available")
+            return
+
+        attachment = editor._editor_attachment
+        if attachment is None:
+            QMessageBox.warning(self, "No Attachment", "EditorSceneAttachment not available")
+            return
+
+        scene = self._scene_manager.get_scene(self._selected_scene_name)
+        if scene is None:
+            return
+
+        # Check if already attached to this scene
+        if attachment.scene is scene:
+            QMessageBox.information(self, "Already Editing", f"Editor is already attached to '{self._selected_scene_name}'")
+            return
+
+        try:
+            # Attach editor to new scene (transfers camera state)
+            attachment.attach(scene, transfer_camera_state=True)
+            editor._sync_attachment_refs()
+
+            # Update editor scene name (used by game mode to know which scene to copy)
+            editor._editor_scene_name = self._selected_scene_name
+
+            # Set scene mode to STOP (editor mode)
+            self._scene_manager.set_mode(self._selected_scene_name, SceneMode.STOP)
+
+            # Update EditorViewportFeatures
+            for features in editor._editor_features.values():
+                features.set_scene(scene)
+                features.set_camera(attachment.camera)
+                features.selected_entity_id = 0
+                features.hover_entity_id = 0
+
+            # Update scene tree
+            if editor.scene_tree_controller is not None:
+                editor.scene_tree_controller.set_scene(scene)
+                editor.scene_tree_controller.rebuild()
+
+            # Clear selection
+            if editor.selection_manager is not None:
+                editor.selection_manager.clear()
+
+            # Clear gizmo
+            if editor.editor_viewport is not None:
+                editor.editor_viewport.set_gizmo_target(None)
+
+            # Update window title
+            editor._update_window_title()
+
+            editor._request_viewport_update()
+            self.refresh()
+            QMessageBox.information(self, "Editing", f"Editor attached to '{self._selected_scene_name}'")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Edit Error", f"Failed to attach editor:\n{e}")
+
     def _update_details(self, scene_name: str) -> None:
         """Update details panel for selected scene."""
         scene = self._scene_manager.get_scene(scene_name)
@@ -313,10 +400,18 @@ class SceneManagerViewer(QWidget):
         mode = self._scene_manager.get_mode(scene_name)
         path = self._scene_manager.get_scene_path(scene_name)
 
+        # Check if this scene is being edited
+        is_editing = False
+        from termin.editor.editor_window import EditorWindow
+        editor = EditorWindow.instance()
+        if editor is not None and editor._editor_attachment is not None:
+            is_editing = editor._editor_attachment.scene is scene
+
         lines = [
             f"Name: {scene_name}",
             f"Mode: {mode.name}",
             f"Path: {path or '(unsaved)'}",
+            f"Editing: {'YES' if is_editing else 'no'}",
             f"",
             f"=== Entities ===",
         ]
@@ -396,9 +491,26 @@ class SceneManagerViewer(QWidget):
         total_scenes = len(debug_info)
         total_entities = sum(info["entity_count"] for info in debug_info.values())
         play_scenes = sum(1 for info in debug_info.values() if info["mode"] == "PLAY")
+
+        # Find which scene is being edited
+        editing_scene = None
+        from termin.editor.editor_window import EditorWindow
+        editor = EditorWindow.instance()
+        if editor is not None and editor._editor_attachment is not None:
+            attached = editor._editor_attachment.scene
+            if attached is not None:
+                # Find scene name by scene object
+                for name, info in debug_info.items():
+                    scene = self._scene_manager.get_scene(name)
+                    if scene is attached:
+                        editing_scene = name
+                        break
+
+        editing_str = f" | Editing: {editing_scene}" if editing_scene else ""
         self._status_label.setText(
             f"Scenes: {total_scenes} | "
             f"Total entities: {total_entities} | "
             f"Playing: {play_scenes}"
+            f"{editing_str}"
         )
 
