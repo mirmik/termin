@@ -206,6 +206,12 @@ def _parse_material_content(
     if program is None:
         raise ValueError(f"Shader '{shader_name}' not found in ResourceManager")
 
+    # Get shader asset UUID for hot-reload support
+    shader_asset = rm._shader_assets.get(shader_name)
+    shader_uuid = shader_asset.uuid if shader_asset else ""
+
+    log.info(f"[MaterialAsset] _parse_material_content shader={shader_name} shader_uuid={shader_uuid} material={name}")
+
     # Convert uniforms
     from termin.geombase import Vec3, Vec4
 
@@ -232,15 +238,30 @@ def _parse_material_content(
         if tex_handle is not None:
             textures[uniform_name] = tex_handle
 
-    # Create material
-    mat = Material.from_parsed(
-        program,
-        uniforms=uniforms,
-        textures=textures if textures else None,
-        name=name or "material",
-        source_path=source_path,
-    )
+    # Create material with proper phase UUIDs for hot-reload
+    from termin.visualization.core.material import MaterialPhase
+    from termin.assets.shader_asset import make_phase_uuid
+
+    mat = Material()
+    mat.name = name or "material"
+    mat.source_path = source_path or ""
     mat.shader_name = shader_name
+
+    phases_list = []
+    for shader_phase in program.phases:
+        # Generate deterministic UUID for this phase
+        phase_uuid = make_phase_uuid(shader_uuid, shader_phase.phase_mark) if shader_uuid else ""
+
+        phase = MaterialPhase.from_shader_phase(
+            shader_phase,
+            color=None,
+            textures=textures if textures else None,
+            extra_uniforms=uniforms if uniforms else None,
+            program_name=shader_name,
+            phase_uuid=phase_uuid,
+        )
+        phases_list.append(phase)
+    mat.phases = phases_list
 
     # Apply per-phase mark overrides (use set_phase_mark to also apply render state)
     for i, mark in enumerate(phase_marks):

@@ -893,6 +893,7 @@ class MaterialInspector(QWidget):
             return
 
         from termin.visualization.core.resources import ResourceManager
+        from termin._native import log
 
         rm = ResourceManager.instance()
         program = rm.get_shader(shader_name)
@@ -900,9 +901,16 @@ class MaterialInspector(QWidget):
         if program is None:
             return
 
+        # Get shader asset UUID for hot-reload support
+        shader_asset = rm._shader_assets.get(shader_name)
+        shader_uuid = shader_asset.uuid if shader_asset else ""
+
+        log.info(f"[MaterialInspector] _on_shader_changed shader={shader_name} shader_uuid={shader_uuid}")
+
         # Обновляем shader_program и пересоздаём phases материала
+        from termin.assets.shader_asset import update_material_shader
         self._shader_program = program
-        self._material.set_shader(program, shader_name)
+        update_material_shader(self._material, program, shader_name, shader_uuid)
 
         # Перестраиваем UI (редакторы свойств)
         self._rebuild_ui()

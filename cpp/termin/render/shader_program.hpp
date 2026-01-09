@@ -10,6 +10,7 @@
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/vec3.hpp"
+#include "tc_log.hpp"
 
 
 // TODO: Перенести данные щейдера полностью в core_c (tc_shader) и убрать дублирование
@@ -35,6 +36,7 @@ class ShaderProgram
     std::string geometry_source_;
     std::string source_path_;
     std::string name_;
+    std::string uuid_;  // UUID for registry lookup (from shader asset)
 
     // Per-context compiled handles
     std::unordered_map<int64_t, ShaderHandlePtr> handles_;
@@ -61,12 +63,14 @@ public:
         std::string fragment_source,
         std::string geometry_source = "",
         std::string source_path = "",
-        std::string name = ""
+        std::string name = "",
+        std::string uuid = ""
     ) : vertex_source_(std::move(vertex_source)),
         fragment_source_(std::move(fragment_source)),
         geometry_source_(std::move(geometry_source)),
         source_path_(std::move(source_path)),
-        name_(std::move(name)) {
+        name_(std::move(name)),
+        uuid_(std::move(uuid)) {
         // Register in tc_shader registry
         register_in_registry();
     }
@@ -89,6 +93,7 @@ public:
     const std::string& geometry_source() const { return geometry_source_; }
     const std::string& source_path() const { return source_path_; }
     const std::string& name() const { return name_; }
+    const std::string& uuid() const { return uuid_; }
 
     // Check if compiled (for current context)
     bool is_compiled() const { return current_handle_ != nullptr; }
@@ -146,7 +151,14 @@ public:
     void ensure_ready(CompileFn compile_fn, int64_t context_key = 0, bool preprocess = true) {
         // Check if we have a valid handle for this context
         auto it = handles_.find(context_key);
-        bool needs_compile = (it == handles_.end()) || needs_recompile();
+        bool has_handle = (it != handles_.end());
+        bool version_mismatch = (compiled_version_ != tc_shader_.version());
+        bool needs_compile = !has_handle || version_mismatch;
+
+        if (needs_compile) {
+            tc::Log::info("[ShaderProgram] ensure_ready RECOMPILE uuid=%s name=%s has_handle=%d compiled_ver=%u tc_ver=%u",
+                uuid_.c_str(), name_.c_str(), has_handle ? 1 : 0, compiled_version_, tc_shader_.version());
+        }
 
         if (!needs_compile) {
             // Already compiled for this context, just set as current
@@ -155,14 +167,19 @@ public:
             return;
         }
 
-        std::string vs = vertex_source_;
-        std::string fs = fragment_source_;
-        std::string gs = geometry_source_;
+        // Get sources from tc_shader registry if valid (for hot-reload support)
+        // Otherwise fall back to local copies
+        std::string vs = tc_shader_.is_valid() ? tc_shader_.vertex_source() : vertex_source_;
+        std::string fs = tc_shader_.is_valid() ? tc_shader_.fragment_source() : fragment_source_;
+        std::string gs = tc_shader_.is_valid() ? tc_shader_.geometry_source() : geometry_source_;
+        std::string src_path = tc_shader_.is_valid() ? tc_shader_.source_path() : source_path_;
+
+        tc::Log::info("[ShaderProgram] using sources from tc_shader=%d", tc_shader_.is_valid() ? 1 : 0);
 
         // Preprocess if needed
         if (preprocess) {
             auto& pp = glsl_preprocessor();
-            std::string name = source_path_.empty() ? "<inline>" : source_path_;
+            std::string name = src_path.empty() ? "<inline>" : src_path;
 
             if (GlslPreprocessor::has_includes(vs)) {
                 vs = pp.preprocess(vs, name + ":vertex");
@@ -319,13 +336,33 @@ private:
 
     void register_in_registry() {
         if (vertex_source_.empty() && fragment_source_.empty()) return;
-        tc_shader_ = TcShader::from_sources(
-            vertex_source_,
-            fragment_source_,
-            geometry_source_,
-            name_,
-            source_path_
-        );
+
+        if (!uuid_.empty()) {
+            // UUID provided - use get_or_create for hot-reload support
+            tc_shader_ = TcShader::get_or_create(uuid_);
+            if (tc_shader_.is_valid()) {
+                uint32_t old_version = tc_shader_.version();
+                // Update sources (this bumps version if sources changed)
+                bool changed = tc_shader_.set_sources(
+                    vertex_source_,
+                    fragment_source_,
+                    geometry_source_,
+                    name_,
+                    source_path_
+                );
+                tc::Log::info("[ShaderProgram] register uuid=%s name=%s old_ver=%u new_ver=%u changed=%d",
+                    uuid_.c_str(), name_.c_str(), old_version, tc_shader_.version(), changed ? 1 : 0);
+            }
+        } else {
+            // No UUID - use hash-based lookup (legacy behavior)
+            tc_shader_ = TcShader::from_sources(
+                vertex_source_,
+                fragment_source_,
+                geometry_source_,
+                name_,
+                source_path_
+            );
+        }
     }
 };
 

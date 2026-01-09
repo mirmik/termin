@@ -43,6 +43,12 @@ void bind_shader(nb::module_& m) {
         .def_static("from_uuid", &TcShader::from_uuid)
         .def_static("from_hash", &TcShader::from_hash)
         .def_static("from_name", &TcShader::from_name)
+        .def_static("get_or_create", &TcShader::get_or_create, nb::arg("uuid"),
+            "Get existing tc_shader by UUID or create new one")
+        .def("set_sources", &TcShader::set_sources,
+            nb::arg("vertex"), nb::arg("fragment"),
+            nb::arg("geometry") = "", nb::arg("name") = "", nb::arg("source_path") = "",
+            "Set shader sources (bumps version if changed)")
         .def("__repr__", [](const TcShader& s) {
             if (!s.is_valid()) return std::string("<TcShader invalid>");
             std::string name = s.name();
@@ -77,17 +83,19 @@ void bind_shader(nb::module_& m) {
     });
     nb::class_<ShaderProgram>(m, "ShaderProgram")
         .def(nb::init<>())
-        .def(nb::init<std::string, std::string, std::string, std::string, std::string>(),
+        .def(nb::init<std::string, std::string, std::string, std::string, std::string, std::string>(),
             nb::arg("vertex_source"),
             nb::arg("fragment_source"),
             nb::arg("geometry_source") = "",
             nb::arg("source_path") = "",
-            nb::arg("name") = "")
+            nb::arg("name") = "",
+            nb::arg("uuid") = "")
         .def_prop_ro("vertex_source", &ShaderProgram::vertex_source)
         .def_prop_ro("fragment_source", &ShaderProgram::fragment_source)
         .def_prop_ro("geometry_source", &ShaderProgram::geometry_source)
         .def_prop_ro("source_path", &ShaderProgram::source_path)
         .def_prop_ro("name", &ShaderProgram::name)
+        .def_prop_ro("uuid", &ShaderProgram::uuid)
         .def_prop_ro("is_compiled", &ShaderProgram::is_compiled)
         .def_prop_ro("tc_shader", &ShaderProgram::tc_shader)
         .def_prop_ro("version", &ShaderProgram::version)

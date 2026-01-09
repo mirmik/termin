@@ -325,6 +325,19 @@ bool tc_shader_set_sources(
 ) {
     if (!shader) return false;
 
+    // Compute new hash to check if sources actually changed
+    char new_hash[TC_SHADER_HASH_LEN];
+    tc_shader_compute_hash(vertex_source, fragment_source, geometry_source, new_hash);
+
+    // Check if sources are the same (by hash)
+    if (shader->source_hash[0] != '\0' && strcmp(shader->source_hash, new_hash) == 0) {
+        tc_log(TC_LOG_INFO, "[tc_shader_set_sources] uuid=%s name=%s UNCHANGED (hash=%s)",
+            shader->uuid, shader->name ? shader->name : "?", new_hash);
+        return false;  // No change
+    }
+
+    uint32_t old_version = shader->version;
+
     // Remove from old hash mapping
     if (shader->source_hash[0] != '\0') {
         tc_resource_map_remove(g_hash_to_index, shader->source_hash);
@@ -339,7 +352,7 @@ bool tc_shader_set_sources(
     shader->geometry_source = dup_string(geometry_source);
 
     // Update hash
-    tc_shader_update_hash(shader);
+    memcpy(shader->source_hash, new_hash, TC_SHADER_HASH_LEN);
 
     // Add to hash map (find by hash for deduplication)
     if (shader->source_hash[0] != '\0') {
@@ -364,6 +377,9 @@ bool tc_shader_set_sources(
     }
 
     shader->version++;
+
+    tc_log(TC_LOG_INFO, "[tc_shader_set_sources] uuid=%s name=%s CHANGED ver %u -> %u",
+        shader->uuid, shader->name ? shader->name : "?", old_version, shader->version);
     return true;
 }
 
