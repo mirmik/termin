@@ -5852,7 +5852,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "2013896b-ed4c-472b-8957-0846e4bfa933",
+                              "uuid": "290b6263-6d69-4d1b-ade9-caee59282245",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6246,7 +6246,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "2013896b-ed4c-472b-8957-0846e4bfa933",
+                              "uuid": "290b6263-6d69-4d1b-ade9-caee59282245",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6467,7 +6467,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "2013896b-ed4c-472b-8957-0846e4bfa933",
+                              "uuid": "290b6263-6d69-4d1b-ade9-caee59282245",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9603,17 +9603,17 @@
   "editor": {
     "camera": {
       "position": [
-        3.111264228820801,
-        2.501190423965454,
-        3.2631821632385254
+        4.288344383239746,
+        3.7812557220458984,
+        4.251065731048584
       ],
       "rotation": [
-        -0.09279098440911321,
-        -0.2379965811025784,
-        0.9007808743299558,
-        0.3511997679914267
+        -0.09279098051349638,
+        -0.23799657799212778,
+        0.9007808788283029,
+        0.351199759590879
       ],
-      "radius": 4.0,
+      "radius": 6.0,
       "editor_entities": {
         "camera": [
           {
@@ -9631,7 +9631,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 4.0,
+              "radius": 6.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }

@@ -135,7 +135,7 @@ class EditorCameraUIController(PythonComponent):
         # Colliders
         collider_pass = self._find_pass_by_name("ColliderGizmo")
         if collider_pass is not None:
-            collider_pass.enabled = self.colliders_enabled
+            collider_pass.passthrough = not self.colliders_enabled
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
 
@@ -173,7 +173,7 @@ class EditorCameraUIController(PythonComponent):
 
         collider_pass = self._find_pass_by_name("ColliderGizmo")
         if collider_pass is not None:
-            collider_pass.enabled = self.colliders_enabled
+            collider_pass.passthrough = not self.colliders_enabled
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
 

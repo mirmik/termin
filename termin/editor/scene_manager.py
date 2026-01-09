@@ -506,10 +506,6 @@ class SceneManager:
             if self._on_before_scene_close is not None:
                 self._on_before_scene_close(scene)
 
-        # When transitioning from INACTIVE to active, notify components
-        if old_mode == SceneMode.INACTIVE and mode != SceneMode.INACTIVE:
-            scene.notify_scene_active()
-
         self._modes[name] = mode
         self._update_timer_state()
 

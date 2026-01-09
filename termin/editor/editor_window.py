@@ -2058,6 +2058,9 @@ class EditorWindow(QMainWindow):
 
             self._rendering_controller.create_editor_viewport(scene, camera)
 
+            # Уведомляем компоненты что сцена стала активной (после создания viewport)
+            scene.notify_scene_active()
+
             # Обновляем world_mode для EditorViewportFeatures
             editor_display_id = id(editor_display)
             editor_features = self._editor_features.get(editor_display_id)
