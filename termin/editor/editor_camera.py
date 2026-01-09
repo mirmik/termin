@@ -137,10 +137,6 @@ class EditorCameraManager:
 
     def _serialize_editor_entities_components(self) -> dict | None:
         """Serialize components of all entities in EditorEntities hierarchy."""
-        from termin._native import log
-
-        log.info(f"[EditorCamera] Serializing editor_entities")
-
         if self.editor_entities is None:
             return None
 
@@ -164,7 +160,6 @@ class EditorCameraManager:
             finally:
                 ent.serializable = old_serializable
 
-        log.info(f"[EditorCamera] Serialized editor_entities: {result}")
         return result if result else None
 
     def set_camera_data(self, data: dict) -> None:
@@ -205,10 +200,6 @@ class EditorCameraManager:
 
     def _deserialize_editor_entities_components(self, data: dict) -> None:
         """Deserialize components of all entities in EditorEntities hierarchy."""
-        from termin._native import log
-
-        log.info(f"[EditorCamera] Deserializing editor_entities: {data}")
-
         if self.editor_entities is None or not data:
             return
 
@@ -227,7 +218,6 @@ class EditorCameraManager:
                 # Find matching component by type
                 for comp in ent.components:
                     if comp.type_name() == comp_type:
-                        log.info(f"[EditorCamera] Deserializing {comp_type}: {comp_data_inner}")
                         comp.deserialize_data(comp_data_inner)
                         break
 

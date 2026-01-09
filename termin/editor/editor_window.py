@@ -105,10 +105,10 @@ class EditorWindow(QMainWindow):
         self._editor_scene_name = "untitled"
         if initial_scene is not None:
             self.scene_manager._scenes[self._editor_scene_name] = initial_scene
-            self.scene_manager._modes[self._editor_scene_name] = SceneMode.EDITOR
+            self.scene_manager._modes[self._editor_scene_name] = SceneMode.STOP
         else:
             self.scene_manager.create_scene(self._editor_scene_name)
-            self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
+            self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
 
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
@@ -1792,7 +1792,7 @@ class EditorWindow(QMainWindow):
 
         # Update editor scene name and mode
         self._editor_scene_name = name
-        self.scene_manager.set_mode(name, SceneMode.EDITOR)
+        self.scene_manager.set_mode(name, SceneMode.STOP)
 
         # Save camera state, destroy old EditorEntities, recreate in new scene
         camera_data = self._camera_manager.get_camera_data()
@@ -1924,6 +1924,8 @@ class EditorWindow(QMainWindow):
 
         # Сохраняем состояние EditorEntities (камера, кнопки UI и т.д.)
         camera_data = self._camera_manager.get_camera_data()
+        # Сохраняем в Scene для восстановления после game mode
+        editor_scene.editor_entities_data = camera_data
 
         # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
         self._game_scene_name = f"{self._editor_scene_name}(game)"
@@ -1945,7 +1947,7 @@ class EditorWindow(QMainWindow):
 
         # Устанавливаем режимы (таймер запустится автоматически)
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
-        self.scene_manager.set_mode(self._game_scene_name, SceneMode.GAME)
+        self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
 
         self._on_game_mode_changed(True, game_scene)
 
@@ -1964,11 +1966,14 @@ class EditorWindow(QMainWindow):
         self._game_scene_name = None
 
         # Возвращаемся к editor сцене
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.EDITOR)
+        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
 
-        # Переключаемся на EditorEntities в editor_scene (они уже существуют с правильным состоянием)
+        # Переключаемся на EditorEntities в editor_scene
         self._camera_manager.recreate_in_scene(editor_scene)
+        # Восстанавливаем состояние EditorEntities из сцены
+        if editor_scene.editor_entities_data is not None:
+            self._camera_manager.set_camera_data(editor_scene.editor_entities_data)
         self.editor_entities = self._camera_manager.editor_entities
         self.camera = self._camera_manager.camera
 

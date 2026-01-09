@@ -91,7 +91,6 @@ class EditorCameraUIController(PythonComponent):
         self._find_ui_component()
         self._bind_buttons()
 
-        print(f"EditorCameraUIController setup. camera={id(self._camera_component)}")
         self._sync_button_states()
 
     def _find_camera_component(self) -> None:
@@ -168,8 +167,6 @@ class EditorCameraUIController(PythonComponent):
     def _on_colliders_click(self) -> None:
         """Переключает отображение коллайдеров."""
         self.colliders_enabled = not self.colliders_enabled
-
-        print(f"[EditorCameraUIController] Colliders enabled: camera={id(self._camera_component)}, viewports={self._camera_component.viewports}")
 
         collider_pass = self._find_pass_by_name("ColliderGizmo")
         if collider_pass is not None:

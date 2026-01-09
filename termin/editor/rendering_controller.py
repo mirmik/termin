@@ -43,6 +43,13 @@ class RenderingController:
     Delegates core rendering to RenderingManager singleton.
     """
 
+    _instance: Optional["RenderingController"] = None
+
+    @classmethod
+    def instance(cls) -> Optional["RenderingController"]:
+        """Get the singleton instance."""
+        return cls._instance
+
     def __init__(
         self,
         viewport_list_widget: "ViewportListWidget",
@@ -73,6 +80,9 @@ class RenderingController:
             on_viewport_selected: Callback when viewport is selected.
             on_request_update: Callback to request viewport redraw.
         """
+        # Set singleton instance
+        RenderingController._instance = self
+
         # Core rendering manager (singleton)
         from termin.visualization.render.manager import RenderingManager
         self._manager = RenderingManager.instance()
@@ -665,14 +675,12 @@ class RenderingController:
         if pipeline is None and self._make_editor_pipeline is not None:
             pipeline = self._make_editor_pipeline()
 
-        print(f"[RenderingController] create_editor_viewport: camera={id(camera)}, viewports_before={camera.viewports}")
         viewport = display.create_viewport(
             scene=scene,
             camera=camera,
             rect=(0.0, 0.0, 1.0, 1.0),
         )
         viewport.pipeline = pipeline
-        print(f"[RenderingController] create_editor_viewport: viewports_after={camera.viewports}")
 
         self._viewport_list.refresh()
         return viewport

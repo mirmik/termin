@@ -4372,7 +4372,32 @@
                         "name": "AdvancedPBRMaterial"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_metallic": 0,
+                            "u_color": [
+                              0.8,
+                              0.8,
+                              0.8,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0
+                          }
+                        ],
+                        "phases_textures": [
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "3deafdca-0c04-4e23-97eb-2e1bd76f98e9",
+                              "name": "6830-1745580165",
+                              "type": "path",
+                              "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -5852,7 +5877,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "290b6263-6d69-4d1b-ade9-caee59282245",
+                              "uuid": "dfe48d7c-ea85-4c09-9d80-2d97e619a21a",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6246,7 +6271,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "290b6263-6d69-4d1b-ade9-caee59282245",
+                              "uuid": "dfe48d7c-ea85-4c09-9d80-2d97e619a21a",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6467,7 +6492,7 @@
                         "phases_textures": [
                           {
                             "u_albedo_texture": {
-                              "uuid": "290b6263-6d69-4d1b-ade9-caee59282245",
+                              "uuid": "dfe48d7c-ea85-4c09-9d80-2d97e619a21a",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9603,17 +9628,17 @@
   "editor": {
     "camera": {
       "position": [
-        4.288344383239746,
-        3.7812557220458984,
-        4.251065731048584
+        1.7251226902008057,
+        3.3169450759887695,
+        3.2021820545196533
       ],
       "rotation": [
-        -0.09279098051349638,
-        -0.23799657799212778,
-        0.9007808788283029,
-        0.351199759590879
+        -0.03437561342491064,
+        -0.24459525189603745,
+        0.9595853369772737,
+        0.13486089503554158
       ],
-      "radius": 6.0,
+      "radius": 4.0,
       "editor_entities": {
         "camera": [
           {
@@ -9631,7 +9656,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 6.0,
+              "radius": 4.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -9665,10 +9690,13 @@
         ]
       }
     },
+    "selected_entity": "mens_shirt_untuck_elvbhp1fMesh.001",
     "expanded_entities": [
+      "Model",
       "camera",
+      "PlatformBase",
       "EditorEntities",
-      "PlatformBase"
+      "Glitch"
     ]
   },
   "resources": {

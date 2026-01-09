@@ -118,9 +118,6 @@ void MeshRenderer::try_create_override_material() {
 void MeshRenderer::apply_pending_override_data() {
     if (!_pending_override_data || _overridden_material == nullptr) return;
 
-    fprintf(stderr, "[MeshRenderer] Applying pending override data, phases: %zu\n",
-            _overridden_material->phases.size());
-
     const nos::trent& override_data = *_pending_override_data;
 
     // Apply uniforms
@@ -179,7 +176,6 @@ void MeshRenderer::apply_pending_override_data() {
 
                     if (tex_handle.is_valid()) {
                         phase.textures[key] = std::move(tex_handle);
-                        fprintf(stderr, "[MeshRenderer] Applied texture '%s' to phase %zu\n", key.c_str(), i);
                     }
                 }
             }
@@ -357,7 +353,6 @@ void MeshRenderer::set_override_data(const nos::trent& val) {
     // Save data for lazy application (base material may not be loaded yet)
     if (!val.is_nil()) {
         _pending_override_data = std::make_unique<nos::trent>(val);
-        fprintf(stderr, "[MeshRenderer] Saved pending override data\n");
     }
 }
 

@@ -18,9 +18,14 @@ from PyQt6.QtWidgets import (
     QLabel,
     QTextEdit,
     QSplitter,
+    QFileDialog,
+    QInputDialog,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QBrush
+
+from termin.editor.scene_manager import SceneMode
 
 if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager
@@ -105,7 +110,58 @@ class SceneManagerViewer(QWidget):
         self._status_label.setFixedHeight(20)
         layout.addWidget(self._status_label)
 
-        # Buttons
+        # Scene actions toolbar
+        actions_layout = QHBoxLayout()
+
+        load_btn = QPushButton("Load...")
+        load_btn.setToolTip("Load scene from file")
+        load_btn.clicked.connect(self._on_load_scene)
+        actions_layout.addWidget(load_btn)
+
+        self._unload_btn = QPushButton("Unload")
+        self._unload_btn.setToolTip("Close selected scene")
+        self._unload_btn.clicked.connect(self._on_unload_scene)
+        self._unload_btn.setEnabled(False)
+        actions_layout.addWidget(self._unload_btn)
+
+        actions_layout.addSpacing(20)
+
+        self._inactive_btn = QPushButton("Inactive")
+        self._inactive_btn.setToolTip("Set scene mode to INACTIVE")
+        self._inactive_btn.clicked.connect(lambda: self._set_mode(SceneMode.INACTIVE))
+        self._inactive_btn.setEnabled(False)
+        actions_layout.addWidget(self._inactive_btn)
+
+        self._stop_btn = QPushButton("Stop")
+        self._stop_btn.setToolTip("Set scene mode to STOP")
+        self._stop_btn.clicked.connect(lambda: self._set_mode(SceneMode.STOP))
+        self._stop_btn.setEnabled(False)
+        actions_layout.addWidget(self._stop_btn)
+
+        self._play_btn = QPushButton("Play")
+        self._play_btn.setToolTip("Set scene mode to PLAY")
+        self._play_btn.clicked.connect(lambda: self._set_mode(SceneMode.PLAY))
+        self._play_btn.setEnabled(False)
+        actions_layout.addWidget(self._play_btn)
+
+        actions_layout.addSpacing(20)
+
+        self._attach_btn = QPushButton("Attach")
+        self._attach_btn.setToolTip("Attach scene to RenderingController (create viewports)")
+        self._attach_btn.clicked.connect(self._on_attach_scene)
+        self._attach_btn.setEnabled(False)
+        actions_layout.addWidget(self._attach_btn)
+
+        self._detach_btn = QPushButton("Detach")
+        self._detach_btn.setToolTip("Detach scene from RenderingController (remove viewports)")
+        self._detach_btn.clicked.connect(self._on_detach_scene)
+        self._detach_btn.setEnabled(False)
+        actions_layout.addWidget(self._detach_btn)
+
+        actions_layout.addStretch()
+        layout.addLayout(actions_layout)
+
+        # Bottom buttons
         button_layout = QHBoxLayout()
 
         refresh_btn = QPushButton("Refresh")
@@ -128,6 +184,124 @@ class SceneManagerViewer(QWidget):
             scene_name = item.text(0)  # Fallback
         self._selected_scene_name = scene_name
         self._update_details(scene_name)
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
+        """Update action buttons based on selected scene."""
+        has_selection = self._selected_scene_name is not None
+        self._unload_btn.setEnabled(has_selection)
+        self._inactive_btn.setEnabled(has_selection)
+        self._stop_btn.setEnabled(has_selection)
+        self._play_btn.setEnabled(has_selection)
+        self._attach_btn.setEnabled(has_selection)
+        self._detach_btn.setEnabled(has_selection)
+
+    def _on_load_scene(self) -> None:
+        """Load a scene from file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Scene",
+            "",
+            "Scene Files (*.scene);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+
+        # Ask for slot name
+        slot_name, ok = QInputDialog.getText(
+            self,
+            "Scene Slot Name",
+            "Enter slot name for this scene:",
+            text=f"scene_{len(self._scene_manager.get_debug_info())}",
+        )
+        if not ok or not slot_name:
+            return
+
+        try:
+            self._scene_manager.load_scene(slot_name, path)
+            self.refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Load Error", f"Failed to load scene:\n{e}")
+
+    def _on_unload_scene(self) -> None:
+        """Unload (close) selected scene."""
+        if self._selected_scene_name is None:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirm Unload",
+            f"Close scene '{self._selected_scene_name}'?\n\nUnsaved changes will be lost.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self._scene_manager.close_scene(self._selected_scene_name)
+            self._selected_scene_name = None
+            self._update_action_buttons()
+            self.refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Unload Error", f"Failed to close scene:\n{e}")
+
+    def _set_mode(self, mode: SceneMode) -> None:
+        """Set mode for selected scene."""
+        if self._selected_scene_name is None:
+            return
+
+        try:
+            self._scene_manager.set_mode(self._selected_scene_name, mode)
+            self.refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Mode Error", f"Failed to set mode:\n{e}")
+
+    def _on_attach_scene(self) -> None:
+        """Attach selected scene to RenderingController."""
+        if self._selected_scene_name is None:
+            return
+
+        from termin.editor.rendering_controller import RenderingController
+
+        rc = RenderingController.instance()
+        if rc is None:
+            QMessageBox.warning(self, "No Controller", "RenderingController not available")
+            return
+
+        scene = self._scene_manager.get_scene(self._selected_scene_name)
+        if scene is None:
+            return
+
+        try:
+            rc.attach_scene(scene)
+            self.refresh()
+            QMessageBox.information(self, "Attached", f"Scene '{self._selected_scene_name}' attached")
+        except Exception as e:
+            QMessageBox.critical(self, "Attach Error", f"Failed to attach scene:\n{e}")
+
+    def _on_detach_scene(self) -> None:
+        """Detach selected scene from RenderingController."""
+        if self._selected_scene_name is None:
+            return
+
+        from termin.editor.rendering_controller import RenderingController
+
+        rc = RenderingController.instance()
+        if rc is None:
+            QMessageBox.warning(self, "No Controller", "RenderingController not available")
+            return
+
+        scene = self._scene_manager.get_scene(self._selected_scene_name)
+        if scene is None:
+            return
+
+        try:
+            rc.detach_scene(scene)
+            self.refresh()
+            QMessageBox.information(self, "Detached", f"Scene '{self._selected_scene_name}' detached")
+        except Exception as e:
+            QMessageBox.critical(self, "Detach Error", f"Failed to detach scene:\n{e}")
 
     def _update_details(self, scene_name: str) -> None:
         """Update details panel for selected scene."""
@@ -179,8 +353,8 @@ class SceneManagerViewer(QWidget):
         # Color brushes for different modes
         mode_colors = {
             "INACTIVE": QBrush(QColor(128, 128, 128)),  # Gray
-            "EDITOR": QBrush(QColor(70, 130, 180)),     # Steel blue
-            "GAME": QBrush(QColor(50, 205, 50)),        # Lime green
+            "STOP": QBrush(QColor(70, 130, 180)),       # Steel blue
+            "PLAY": QBrush(QColor(50, 205, 50)),        # Lime green
         }
 
         for name, info in sorted(debug_info.items()):
@@ -221,10 +395,10 @@ class SceneManagerViewer(QWidget):
         # Update status
         total_scenes = len(debug_info)
         total_entities = sum(info["entity_count"] for info in debug_info.values())
-        game_scenes = sum(1 for info in debug_info.values() if info["mode"] == "GAME")
+        play_scenes = sum(1 for info in debug_info.values() if info["mode"] == "PLAY")
         self._status_label.setText(
             f"Scenes: {total_scenes} | "
             f"Total entities: {total_entities} | "
-            f"Game scenes: {game_scenes}"
+            f"Playing: {play_scenes}"
         )
 

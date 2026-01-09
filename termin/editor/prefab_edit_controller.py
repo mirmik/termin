@@ -224,7 +224,7 @@ class PrefabEditController:
         # Reactivate editor scene
         from termin.editor.scene_manager import SceneMode
         if self._scene_manager.has_scene("editor"):
-            self._scene_manager.set_mode("editor", SceneMode.EDITOR)
+            self._scene_manager.set_mode("editor", SceneMode.STOP)
 
         self._editing = False
         self._prefab_path = None
@@ -255,7 +255,7 @@ class PrefabEditController:
         prefab_scene.add(root_entity)
 
         # Set mode to EDITOR for prefab scene
-        self._scene_manager.set_mode("prefab", SceneMode.EDITOR)
+        self._scene_manager.set_mode("prefab", SceneMode.STOP)
 
     def _log(self, message: str) -> None:
         """Log message to console."""

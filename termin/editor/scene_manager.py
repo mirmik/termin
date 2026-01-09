@@ -30,8 +30,8 @@ if TYPE_CHECKING:
 class SceneMode(Enum):
     """Scene update mode."""
     INACTIVE = 0  # Loaded but not updated
-    EDITOR = 1    # Editor update (gizmos, selection)
-    GAME = 2      # Full simulation
+    STOP = 1      # Editor update (gizmos, selection)
+    PLAY = 2      # Full simulation
 
 
 def numpy_encoder(obj):
@@ -223,6 +223,7 @@ class SceneManager:
 
         # Copy runtime state (not serialized)
         dest.editor_viewport_camera_name = source.editor_viewport_camera_name
+        dest.editor_entities_data = source.editor_entities_data
 
         self._scenes[dest_name] = dest
         self._modes[dest_name] = SceneMode.INACTIVE
@@ -575,10 +576,10 @@ class SceneManager:
 
             if mode == SceneMode.INACTIVE:
                 continue
-            elif mode == SceneMode.EDITOR:
+            elif mode == SceneMode.STOP:
                 # Editor mode: minimal update for gizmos, etc.
                 scene.editor_update(dt)
-            elif mode == SceneMode.GAME:
+            elif mode == SceneMode.PLAY:
                 # Game mode: full simulation
                 scene.update(dt)
 
@@ -595,7 +596,7 @@ class SceneManager:
 
     def _update_timer_state(self) -> None:
         """Start or stop game timer based on whether GAME scenes exist."""
-        has_game_scenes = any(m == SceneMode.GAME for m in self._modes.values())
+        has_game_scenes = any(m == SceneMode.PLAY for m in self._modes.values())
 
         if has_game_scenes and not self._game_timer.isActive():
             self._elapsed_timer.start()
@@ -616,7 +617,7 @@ class SceneManager:
     @property
     def is_game_mode(self) -> bool:
         """True if any scene is in GAME mode."""
-        return any(m == SceneMode.GAME for m in self._modes.values())
+        return any(m == SceneMode.PLAY for m in self._modes.values())
 
     # --- Reset/New Scene ---
 

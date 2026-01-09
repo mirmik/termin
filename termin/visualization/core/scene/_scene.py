@@ -85,6 +85,10 @@ class Scene:
         # Stores camera name used in editor viewport for restore after game mode
         self.editor_viewport_camera_name: str | None = None
 
+        # Editor entities state (runtime only, not serialized to scene file)
+        # Stores EditorEntities component data for deserialization after game mode
+        self._editor_entities_data: dict | None = None
+
         # Entity lifecycle events
         self._on_entity_added: Event[Entity] = Event()
         self._on_entity_removed: Event[Entity] = Event()
@@ -324,6 +328,18 @@ class Scene:
     def clear_viewport_configs(self) -> None:
         """Clear all viewport configurations."""
         self._viewport_configs.clear()
+
+    # --- Editor entities data (runtime only) ---
+
+    @property
+    def editor_entities_data(self) -> dict | None:
+        """Get stored EditorEntities component data."""
+        return self._editor_entities_data
+
+    @editor_entities_data.setter
+    def editor_entities_data(self, value: dict | None) -> None:
+        """Store EditorEntities component data for later deserialization."""
+        self._editor_entities_data = value
 
     # --- Entity management ---
 
@@ -781,6 +797,10 @@ class Scene:
 
         # Clear collision world
         self._collision_world = None
+
+        # Clear runtime editor state
+        self._editor_entities_data = None
+        self.editor_viewport_camera_name = None
 
         # Clear events (break subscriber references)
         self._on_entity_added.clear()
