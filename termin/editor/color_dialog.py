@@ -1,11 +1,15 @@
 # ===== termin/editor/color_dialog.py =====
 """
 Кастомный ColorDialog в стиле Unity.
-Работает в диапазоне 0-1 для RGB.
+Работает в диапазоне 0-1 для RGB и HSV.
 
 Структура интерфейса:
 ┌─────────────────────────────────────────────────────┐
 │  [Квадрат SV (Saturation-Value)]  [Полоса Hue]     │
+│                                                     │
+│  H: [=====180=======]  180                         │
+│  S: [=====0.75=====]  0.75                         │
+│  V: [=====0.50=====]  0.50                         │
 │                                                     │
 │  R: [=====0.50=====]  0.50                         │
 │  G: [=====0.75=====]  0.75                         │
@@ -336,6 +340,11 @@ class ColorDialog(QDialog):
         self._b = self._old_b
         self._a = self._old_a
 
+        # HSV (H: 0..360, S: 0..1, V: 0..1)
+        self._h = 0.0
+        self._s = 0.0
+        self._v = 0.0
+
         self._updating = False  # флаг для предотвращения рекурсии
 
         self._setup_ui()
@@ -355,6 +364,54 @@ class ColorDialog(QDialog):
         picker_layout.addWidget(self._sv_square, 1)
         picker_layout.addWidget(self._hue_strip)
         layout.addLayout(picker_layout)
+
+        # === HSV слайдеры ===
+        hsv_layout = QGridLayout()
+        hsv_layout.setSpacing(4)
+
+        # H (Hue: 0..360)
+        hsv_layout.addWidget(QLabel("H:"), 0, 0)
+        self._h_slider = QSlider(Qt.Orientation.Horizontal)
+        self._h_slider.setRange(0, 360)
+        hsv_layout.addWidget(self._h_slider, 0, 1)
+        self._h_spin = QDoubleSpinBox()
+        self._h_spin.setRange(0.0, 360.0)
+        self._h_spin.setDecimals(1)
+        self._h_spin.setSingleStep(1.0)
+        self._h_spin.setFixedWidth(70)
+        hsv_layout.addWidget(self._h_spin, 0, 2)
+
+        # S (Saturation: 0..1)
+        hsv_layout.addWidget(QLabel("S:"), 1, 0)
+        self._s_slider = QSlider(Qt.Orientation.Horizontal)
+        self._s_slider.setRange(0, 1000)
+        hsv_layout.addWidget(self._s_slider, 1, 1)
+        self._s_spin = QDoubleSpinBox()
+        self._s_spin.setRange(0.0, 1.0)
+        self._s_spin.setDecimals(3)
+        self._s_spin.setSingleStep(0.01)
+        self._s_spin.setFixedWidth(70)
+        hsv_layout.addWidget(self._s_spin, 1, 2)
+
+        # V (Value: 0..1)
+        hsv_layout.addWidget(QLabel("V:"), 2, 0)
+        self._v_slider = QSlider(Qt.Orientation.Horizontal)
+        self._v_slider.setRange(0, 1000)
+        hsv_layout.addWidget(self._v_slider, 2, 1)
+        self._v_spin = QDoubleSpinBox()
+        self._v_spin.setRange(0.0, 1.0)
+        self._v_spin.setDecimals(3)
+        self._v_spin.setSingleStep(0.01)
+        self._v_spin.setFixedWidth(70)
+        hsv_layout.addWidget(self._v_spin, 2, 2)
+
+        layout.addLayout(hsv_layout)
+
+        # === Разделитель ===
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(separator)
 
         # === RGBA слайдеры (0..1) ===
         rgba_layout = QGridLayout()
@@ -438,6 +495,14 @@ class ColorDialog(QDialog):
         self._sv_square.sv_changed.connect(self._on_sv_changed)
         self._hue_strip.hue_changed.connect(self._on_hue_changed)
 
+        self._h_slider.valueChanged.connect(self._on_h_slider_changed)
+        self._s_slider.valueChanged.connect(self._on_s_slider_changed)
+        self._v_slider.valueChanged.connect(self._on_v_slider_changed)
+
+        self._h_spin.valueChanged.connect(self._on_h_spin_changed)
+        self._s_spin.valueChanged.connect(self._on_s_spin_changed)
+        self._v_spin.valueChanged.connect(self._on_v_spin_changed)
+
         self._r_slider.valueChanged.connect(self._on_r_slider_changed)
         self._g_slider.valueChanged.connect(self._on_g_slider_changed)
         self._b_slider.valueChanged.connect(self._on_b_slider_changed)
@@ -474,8 +539,21 @@ class ColorDialog(QDialog):
         if h < 0:
             h = self._hue_strip.hue()
 
+        # Обновляем внутренние HSV (H в градусах)
+        self._h = h * 360.0
+        self._s = s
+        self._v = v
+
         self._hue_strip.set_hue(h)
         self._sv_square.set_hsv(h, s, v)
+
+        # Слайдеры и спинбоксы HSV
+        self._h_slider.setValue(int(self._h))
+        self._s_slider.setValue(int(self._s * 1000))
+        self._v_slider.setValue(int(self._v * 1000))
+        self._h_spin.setValue(self._h)
+        self._s_spin.setValue(self._s)
+        self._v_spin.setValue(self._v)
 
         # Слайдеры RGB
         self._r_slider.setValue(int(self._r * 1000))
@@ -483,7 +561,7 @@ class ColorDialog(QDialog):
         self._b_slider.setValue(int(self._b * 1000))
         self._a_slider.setValue(int(self._a * 1000))
 
-        # Спинбоксы
+        # Спинбоксы RGB
         self._r_spin.setValue(self._r)
         self._g_spin.setValue(self._g)
         self._b_spin.setValue(self._b)
@@ -514,18 +592,31 @@ class ColorDialog(QDialog):
         s = self._sv_square.saturation()
         v = self._sv_square.value()
 
+        # Обновляем внутренние HSV (H в градусах)
+        self._h = h * 360.0
+        self._s = s
+        self._v = v
+
         qcolor = QColor.fromHsvF(h, s, v)
         self._r = qcolor.redF()
         self._g = qcolor.greenF()
         self._b = qcolor.blueF()
         # _a остаётся без изменений
 
-        # Слайдеры
+        # Слайдеры и спинбоксы HSV
+        self._h_slider.setValue(int(self._h))
+        self._s_slider.setValue(int(self._s * 1000))
+        self._v_slider.setValue(int(self._v * 1000))
+        self._h_spin.setValue(self._h)
+        self._s_spin.setValue(self._s)
+        self._v_spin.setValue(self._v)
+
+        # Слайдеры RGB
         self._r_slider.setValue(int(self._r * 1000))
         self._g_slider.setValue(int(self._g * 1000))
         self._b_slider.setValue(int(self._b * 1000))
 
-        # Спинбоксы
+        # Спинбоксы RGB
         self._r_spin.setValue(self._r)
         self._g_spin.setValue(self._g)
         self._b_spin.setValue(self._b)
@@ -552,6 +643,49 @@ class ColorDialog(QDialog):
 
     def _on_hue_changed(self, hue: float) -> None:
         self._sv_square.set_hue(hue)
+        self._sync_from_hsv()
+
+    def _on_h_slider_changed(self, val: int) -> None:
+        if self._updating:
+            return
+        self._h = float(val)
+        self._apply_hsv_change()
+
+    def _on_s_slider_changed(self, val: int) -> None:
+        if self._updating:
+            return
+        self._s = val / 1000.0
+        self._apply_hsv_change()
+
+    def _on_v_slider_changed(self, val: int) -> None:
+        if self._updating:
+            return
+        self._v = val / 1000.0
+        self._apply_hsv_change()
+
+    def _on_h_spin_changed(self, val: float) -> None:
+        if self._updating:
+            return
+        self._h = val
+        self._apply_hsv_change()
+
+    def _on_s_spin_changed(self, val: float) -> None:
+        if self._updating:
+            return
+        self._s = val
+        self._apply_hsv_change()
+
+    def _on_v_spin_changed(self, val: float) -> None:
+        if self._updating:
+            return
+        self._v = val
+        self._apply_hsv_change()
+
+    def _apply_hsv_change(self) -> None:
+        """Применить изменения HSV: обновить визуальные компоненты и RGB."""
+        h_normalized = self._h / 360.0
+        self._hue_strip.set_hue(h_normalized)
+        self._sv_square.set_hsv(h_normalized, self._s, self._v)
         self._sync_from_hsv()
 
     def _on_r_slider_changed(self, val: int) -> None:

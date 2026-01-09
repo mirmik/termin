@@ -68,6 +68,8 @@ class ColorButton(QPushButton):
     def __init__(self, color: Vec4 | tuple = (1.0, 1.0, 1.0, 1.0), parent: QWidget | None = None):
         super().__init__(parent)
         self._color = self._to_vec4(color)
+        self._original_color: Vec4 | None = None
+        self._dialog: ColorDialog | None = None
         self.setFixedSize(60, 24)
         self._update_style()
         self.clicked.connect(self._on_clicked)
@@ -95,24 +97,38 @@ class ColorButton(QPushButton):
         )
 
     def _on_clicked(self) -> None:
-        dlg = ColorDialog((self._color.x, self._color.y, self._color.z, self._color.w), self)
-        dlg.color_changed.connect(self._on_dialog_color_changed)
-        dlg.exec()
-        # При закрытии диалога (OK или Cancel) — сохраняем
-        t = dlg.get_color_01()
-        self._color = Vec4(t[0], t[1], t[2], t[3])
-        self._update_style()
-        self.color_changed.emit(self._color)
-        self.editing_finished.emit()
+        # Сохраняем исходный цвет для возможного отката
+        self._original_color = Vec4(self._color.x, self._color.y, self._color.z, self._color.w)
+
+        # Non-modal диалог чтобы не блокировать рендер
+        self._dialog = ColorDialog((self._color.x, self._color.y, self._color.z, self._color.w), self)
+        self._dialog.color_changed.connect(self._on_dialog_color_changed)
+        self._dialog.accepted.connect(self._on_dialog_accepted)
+        self._dialog.rejected.connect(self._on_dialog_rejected)
+        self._dialog.show()
 
     def _on_dialog_color_changed(self) -> None:
-        """Обработчик изменения цвета в диалоге (live preview)."""
-        dlg = self.sender()
-        if dlg is not None:
-            t = dlg.get_color_01()
+        """Live preview - обновляем цвет без сохранения."""
+        if self._dialog is not None:
+            t = self._dialog.get_color_01()
             self._color = Vec4(t[0], t[1], t[2], t[3])
             self._update_style()
             self.color_changed.emit(self._color)
+
+    def _on_dialog_accepted(self) -> None:
+        """OK - сохраняем в файл."""
+        self._dialog = None
+        self._original_color = None
+        self.editing_finished.emit()
+
+    def _on_dialog_rejected(self) -> None:
+        """Cancel - откатываем на исходный цвет."""
+        if self._original_color is not None:
+            self._color = self._original_color
+            self._update_style()
+            self.color_changed.emit(self._color)
+        self._dialog = None
+        self._original_color = None
 
 
 class Vec2Editor(QWidget):
