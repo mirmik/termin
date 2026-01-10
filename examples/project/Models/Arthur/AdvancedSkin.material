@@ -18,7 +18,8 @@
       0.0,
       0.0,
       1.0
-    ]
+    ],
+    "u_normal_strength": 1.0
   },
   "textures": {
     "u_albedo_texture": "young_lightskinned_male_diffuse2_png.001"

@@ -27,10 +27,11 @@ def _get_voxel_layout() -> TcVertexLayout:
     global _voxel_layout
     if _voxel_layout is None:
         layout = TcVertexLayout()
-        layout.add("position", 3, TcAttribType.FLOAT32)
-        layout.add("normal", 3, TcAttribType.FLOAT32)
-        layout.add("uv", 2, TcAttribType.FLOAT32)
-        layout.add("color", 3, TcAttribType.FLOAT32)
+        # Standard locations: 0=position, 1=normal, 2=uv, 5=color
+        layout.add("position", 3, TcAttribType.FLOAT32, 0)
+        layout.add("normal", 3, TcAttribType.FLOAT32, 1)
+        layout.add("uv", 2, TcAttribType.FLOAT32, 2)
+        layout.add("color", 3, TcAttribType.FLOAT32, 5)
         _voxel_layout = layout
     return _voxel_layout
 

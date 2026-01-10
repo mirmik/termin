@@ -514,13 +514,26 @@ void bind_material(nb::module_& m) {
                 }
             }
 
-            // 5. Set textures (use white texture as default for Texture properties)
-            nb::object white_tex_fn = nb::module_::import_("termin.visualization.core.texture_handle").attr("get_white_texture_handle");
+            // 5. Set textures (use appropriate default texture based on property default_value)
+            nb::object tex_handle_module = nb::module_::import_("termin.visualization.core.texture_handle");
+            nb::object white_tex_fn = tex_handle_module.attr("get_white_texture_handle");
+            nb::object normal_tex_fn = tex_handle_module.attr("get_normal_texture_handle");
             TextureHandle white_tex = nb::cast<TextureHandle>(white_tex_fn());
+            TextureHandle normal_tex = nb::cast<TextureHandle>(normal_tex_fn());
 
             for (const auto& prop : shader_phase.uniforms) {
                 if (prop.property_type == "Texture") {
-                    phase.textures[prop.name] = white_tex;
+                    // Check if default_value specifies "normal" texture
+                    if (std::holds_alternative<std::string>(prop.default_value)) {
+                        const std::string& default_tex_name = std::get<std::string>(prop.default_value);
+                        if (default_tex_name == "normal") {
+                            phase.textures[prop.name] = normal_tex;
+                        } else {
+                            phase.textures[prop.name] = white_tex;
+                        }
+                    } else {
+                        phase.textures[prop.name] = white_tex;
+                    }
                 }
             }
 

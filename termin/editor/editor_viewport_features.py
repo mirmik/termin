@@ -442,6 +442,7 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
         from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
+        from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
 
         def get_gizmo_manager():
             return self._gizmo_manager
@@ -517,6 +518,12 @@ class EditorViewportFeatures:
             pass_name="Shadow",
         )
 
+        tonemap_pass = TonemapPass(
+            input_res="color_pp",
+            output_res="color_tonemapped",
+            pass_name="Tonemap",
+        )
+        
         passes: list = [
             shadow_pass,
             skybox_pass,
@@ -530,7 +537,9 @@ class EditorViewportFeatures:
             IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
             resolve_pass,  # MSAA → обычный FBO
             postprocess,
+            tonemap_pass,  # HDR → LDR (after bloom)
             UIWidgetPass(
+                #input_res="color_tonemapped",
                 input_res="color_pp",
                 output_res="color+widgets",
             ),
@@ -570,6 +579,14 @@ class EditorViewportFeatures:
             ),
             ResourceSpec(
                 resource="color_resolved",
+                format=hdr_format,
+            ),
+            ResourceSpec(
+                resource="color_tonemapped",
+                format=hdr_format,
+            ),
+            ResourceSpec(
+                resource="color+widgets",
                 format=hdr_format,
             ),
             ResourceSpec(

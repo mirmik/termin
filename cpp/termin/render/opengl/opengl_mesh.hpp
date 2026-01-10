@@ -187,24 +187,13 @@ private:
         index_count_ = static_cast<GLsizei>(mesh->index_count);
 
         // Set up vertex attributes based on tc_mesh layout
-        // Standard attribute locations:
-        // 0 = position, 1 = normal, 2 = uv, 3 = joints, 4 = weights, 5 = color
+        // Location is stored in each attribute, no name-based lookup needed
         const tc_vertex_layout& layout = mesh->layout;
         GLsizei stride = layout.stride;
 
         for (uint8_t i = 0; i < layout.attrib_count; i++) {
             const tc_vertex_attrib& attr = layout.attribs[i];
-
-            // Map attribute name to location
-            GLuint location = 255;
-            if (strcmp(attr.name, "position") == 0) location = 0;
-            else if (strcmp(attr.name, "normal") == 0) location = 1;
-            else if (strcmp(attr.name, "uv") == 0) location = 2;
-            else if (strcmp(attr.name, "joints") == 0) location = 3;
-            else if (strcmp(attr.name, "weights") == 0) location = 4;
-            else if (strcmp(attr.name, "color") == 0) location = 5;
-
-            if (location == 255) continue;  // Unknown attribute, skip
+            GLuint location = attr.location;
 
             glEnableVertexAttribArray(location);
 

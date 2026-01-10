@@ -942,7 +942,7 @@ class MaterialInspector(QWidget):
             return
 
         from termin.visualization.core.resources import ResourceManager
-        from termin.visualization.core.texture_handle import get_white_texture_handle
+        from termin.visualization.core.texture_handle import get_white_texture_handle, get_normal_texture_handle
 
         rm = ResourceManager.instance()
 
@@ -951,9 +951,23 @@ class MaterialInspector(QWidget):
             texture_handle = rm.get_texture_handle(texture_name)
             log.info(f"[MaterialInspector] _on_texture_changed: name={texture_name}, handle={texture_handle}")
         else:
-            # None - используем белую текстуру
-            texture_handle = get_white_texture_handle()
-            log.info(f"[MaterialInspector] _on_texture_changed: using white texture, handle={texture_handle}")
+            # None - используем дефолтную текстуру из шейдера
+            # Ищем default_value для этого uniform в shader properties
+            default_tex_name = "white"
+            if self._shader_program is not None:
+                for phase in self._shader_program.phases:
+                    for prop in phase.uniforms:
+                        if prop.name == uniform_name and prop.property_type == "Texture":
+                            if isinstance(prop.default, str):
+                                default_tex_name = prop.default
+                            break
+
+            if default_tex_name == "normal":
+                texture_handle = get_normal_texture_handle()
+                log.info(f"[MaterialInspector] _on_texture_changed: using normal texture (default)")
+            else:
+                texture_handle = get_white_texture_handle()
+                log.info(f"[MaterialInspector] _on_texture_changed: using white texture (default)")
 
         if texture_handle is not None:
             # Обновляем текстуру во всех фазах материала

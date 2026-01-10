@@ -247,9 +247,9 @@ void bind_mesh(nb::module_& m) {
         })
         .def_ro("stride", &tc_vertex_layout::stride)
         .def_ro("attrib_count", &tc_vertex_layout::attrib_count)
-        .def("add", [](tc_vertex_layout& self, const std::string& name, uint8_t size, tc_attrib_type type) {
-            return tc_vertex_layout_add(&self, name.c_str(), size, type);
-        }, nb::arg("name"), nb::arg("size"), nb::arg("type"))
+        .def("add", [](tc_vertex_layout& self, const std::string& name, uint8_t size, tc_attrib_type type, uint8_t location) {
+            return tc_vertex_layout_add(&self, name.c_str(), size, type, location);
+        }, nb::arg("name"), nb::arg("size"), nb::arg("type"), nb::arg("location"))
         .def("find", [](const tc_vertex_layout& self, const std::string& name) -> nb::object {
             const tc_vertex_attrib* attr = tc_vertex_layout_find(&self, name.c_str());
             if (!attr) return nb::none();
@@ -257,6 +257,7 @@ void bind_mesh(nb::module_& m) {
             d["name"] = std::string(attr->name);
             d["size"] = attr->size;
             d["type"] = static_cast<tc_attrib_type>(attr->type);
+            d["location"] = attr->location;
             d["offset"] = attr->offset;
             return d;
         }, nb::arg("name"))

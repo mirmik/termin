@@ -61,16 +61,6 @@ out vec4 FragColor;
 
 const float PI = 3.14159265359;
 
-// ACES Tone Mapping
-vec3 aces_tonemap(vec3 x) {
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
 // Normal Distribution Function (GGX/Trowbridge-Reitz)
 float D_GGX(float NdotH, float roughness) {
     float a = roughness * roughness;
@@ -192,9 +182,7 @@ void main() {
 
     vec3 color = ambient + Lo;
 
-    // ACES tone mapping
-    color = aces_tonemap(color);
-
+    // HDR output (tonemapping applied in post-process)
     FragColor = vec4(color, alpha);
 }
 @endstage

@@ -34,7 +34,8 @@ bool tc_vertex_layout_add(
     tc_vertex_layout* layout,
     const char* name,
     uint8_t size,
-    tc_attrib_type type
+    tc_attrib_type type,
+    uint8_t location
 ) {
     if (!layout || !name) return false;
     if (layout->attrib_count >= TC_VERTEX_ATTRIBS_MAX) return false;
@@ -47,6 +48,7 @@ bool tc_vertex_layout_add(
 
     attr->size = size;
     attr->type = (uint8_t)type;
+    attr->location = location;
     attr->offset = layout->stride;
 
     // Update stride
@@ -72,60 +74,61 @@ const tc_vertex_attrib* tc_vertex_layout_find(
 
 // ============================================================================
 // Predefined layouts
+// Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
 // ============================================================================
 
 tc_vertex_layout tc_vertex_layout_pos(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     return layout;
 }
 
 tc_vertex_layout tc_vertex_layout_pos_normal(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
     return layout;
 }
 
 tc_vertex_layout tc_vertex_layout_pos_normal_uv(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32, 2);
     return layout;
 }
 
 tc_vertex_layout tc_vertex_layout_pos_normal_uv_tangent(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "tangent", 4, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32, 2);
+    tc_vertex_layout_add(&layout, "tangent", 4, TC_ATTRIB_FLOAT32, 3);
     return layout;
 }
 
 tc_vertex_layout tc_vertex_layout_pos_normal_uv_color(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32, 2);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
     return layout;
 }
 
 tc_vertex_layout tc_vertex_layout_skinned(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "joints", 4, TC_ATTRIB_FLOAT32);
-    tc_vertex_layout_add(&layout, "weights", 4, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32, 2);
+    tc_vertex_layout_add(&layout, "joints", 4, TC_ATTRIB_FLOAT32, 3);
+    tc_vertex_layout_add(&layout, "weights", 4, TC_ATTRIB_FLOAT32, 4);
     return layout;
 }
 

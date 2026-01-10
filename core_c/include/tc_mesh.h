@@ -49,6 +49,8 @@ typedef struct tc_vertex_attrib {
     char name[TC_ATTRIB_NAME_MAX];  // "position", "normal", "uv", "color", ...
     uint8_t size;                    // number of components: 1, 2, 3, 4
     uint8_t type;                    // tc_attrib_type
+    uint8_t location;                // shader attribute location (0-15)
+    uint8_t _pad;
     uint16_t offset;                 // byte offset from vertex start
 } tc_vertex_attrib;
 
@@ -121,7 +123,8 @@ TC_API bool tc_vertex_layout_add(
     tc_vertex_layout* layout,
     const char* name,
     uint8_t size,
-    tc_attrib_type type
+    tc_attrib_type type,
+    uint8_t location
 );
 
 // Find attribute by name, returns NULL if not found

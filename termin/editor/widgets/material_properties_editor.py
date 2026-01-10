@@ -411,14 +411,27 @@ class MaterialPropertiesEditor(QWidget):
             return
 
         from termin.visualization.core.resources import ResourceManager
-        from termin.visualization.core.texture_handle import get_white_texture_handle
+        from termin.visualization.core.texture_handle import get_white_texture_handle, get_normal_texture_handle
 
         rm = ResourceManager.instance()
 
         if texture_name:
             texture_handle = rm.get_texture_handle(texture_name)
         else:
-            texture_handle = get_white_texture_handle()
+            # Use default texture from shader property definition
+            default_tex_name = "white"
+            if self._shader_program is not None:
+                for phase in self._shader_program.phases:
+                    for prop in phase.uniforms:
+                        if prop.name == uniform_name and prop.property_type == "Texture":
+                            if isinstance(prop.default, str):
+                                default_tex_name = prop.default
+                            break
+
+            if default_tex_name == "normal":
+                texture_handle = get_normal_texture_handle()
+            else:
+                texture_handle = get_white_texture_handle()
 
         if texture_handle is not None:
             for phase in self._material.phases:

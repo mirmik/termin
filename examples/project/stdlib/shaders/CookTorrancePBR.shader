@@ -41,7 +41,7 @@
 @property Float u_subsurface = 0.0 range(0.0, 1.0)
 @property Float u_diffuse_mul = 1.0 range(0.1, 10.0)
 @property Color u_emission_color = Color(0.0, 0.0, 0.0, 1.0)
-@property Float u_emission_intensity = 0.0 range(0.0, 10.0)
+@property Float u_emission_intensity = 0.0 range(0.0, 100.0)
 @property Texture2D u_albedo_texture = "white"
 @property Texture2D u_normal_texture = "normal"
 @property Float u_normal_strength = 1.0 range(0.0, 2.0)
@@ -68,19 +68,28 @@ void main() {
     vec4 world = u_model * vec4(a_position, 1.0);
     v_world_pos = world.xyz;
 
-    // Transform normal and tangent to world space
+    // Transform normal to world space
     mat3 normal_matrix = transpose(inverse(mat3(u_model)));
     vec3 N = normalize(normal_matrix * a_normal);
-    vec3 T = normalize(normal_matrix * a_tangent.xyz);
 
-    // Re-orthogonalize T with respect to N (Gram-Schmidt)
-    T = normalize(T - dot(T, N) * N);
+    // Check if tangent data is valid (non-zero length)
+    float tangent_len = length(a_tangent.xyz);
+    if (tangent_len > 0.001) {
+        // Transform tangent to world space
+        vec3 T = normalize(normal_matrix * a_tangent.xyz);
 
-    // Bitangent = cross(N, T) * handedness
-    vec3 B = cross(N, T) * a_tangent.w;
+        // Re-orthogonalize T with respect to N (Gram-Schmidt)
+        T = normalize(T - dot(T, N) * N);
 
-    // TBN matrix transforms from tangent space to world space
-    v_TBN = mat3(T, B, N);
+        // Bitangent = cross(N, T) * handedness
+        vec3 B = cross(N, T) * a_tangent.w;
+
+        // TBN matrix transforms from tangent space to world space
+        v_TBN = mat3(T, B, N);
+    } else {
+        // No tangent data - set TBN to zero matrix (will be detected in fragment shader)
+        v_TBN = mat3(0.0);
+    }
 
     v_normal = N;
     v_uv = a_uv;
@@ -118,19 +127,6 @@ uniform float u_emission_intensity;
 out vec4 FragColor;
 
 const float PI = 3.14159265359;
-
-// ============== Tone Mapping ==============
-
-// ACES Filmic Tone Mapping
-// Better highlight rolloff than Reinhard
-vec3 aces_tonemap(vec3 x) {
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
 
 // ============== PBR Functions ==============
 
@@ -202,16 +198,16 @@ void main() {
         N = normalize(v_normal);
     }
 
-    // DEBUG
-    vec3 normals_by_map = texture(u_normal_texture, v_uv).rgb;
-    vec3 bitangent = normalize(v_TBN[1]);
-    vec3 normal = normalize(v_TBN[2]);
-    //FragColor = vec4(normals_by_map, 1.0);
-    FragColor = vec4(v_tangent * 0.5 + 0.5, 1.0);
-    return;
-    // DEBUG
-
     vec3 V = normalize(u_camera_position - v_world_pos);
+
+    // // DEBUG
+    // vec3 normals_by_map = texture(u_normal_texture, v_uv).rgb;
+    // vec3 bitangent = normalize(v_TBN[1]);
+    // vec3 normal = normalize(v_TBN[2]);
+    // //FragColor = vec4(normals_by_map, 1.0);
+    // FragColor = vec4(v_tangent * 0.5 + 0.5, 1.0);
+    // return;
+    // // DEBUG
 
     // Sample albedo
     vec4 tex_color = texture(u_albedo_texture, v_uv);
@@ -297,11 +293,8 @@ void main() {
 
     vec3 color = ambient + Lo;
 
-    // Emission (added before tone mapping for HDR bloom)
+    // Emission (HDR - will be tonemapped in post-process)
     color += u_emission_color.rgb * u_emission_intensity;
-
-    // Tone mapping (HDR -> LDR)
-    color = aces_tonemap(color);
 
     FragColor = vec4(color, alpha);
 }

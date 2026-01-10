@@ -179,12 +179,6 @@
                   "_overridden_material_data": {
                     "phases_uniforms": [
                       {
-                        "u_color": [
-                          0.34300756454467773,
-                          0.19903868436813354,
-                          0.07306019961833954,
-                          1
-                        ],
                         "u_diffuse_mul": 3.1414999961853027
                       },
                       {
@@ -192,9 +186,9 @@
                         "u_diffuse_mul": 3.1414999961853027,
                         "u_metallic": 0,
                         "u_color": [
-                          0.34300756454467773,
-                          0.19903868436813354,
-                          0.07306019961833954,
+                          1,
+                          1,
+                          1,
                           1
                         ],
                         "u_roughness": 0.5,
@@ -215,12 +209,6 @@
                           "name": "Ground_Dirt_009_BaseColor",
                           "type": "path",
                           "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_BaseColor.jpg"
-                        },
-                        "u_normal_texture": {
-                          "uuid": "26027ca3-c5d4-477b-bdcd-48e18619df6b",
-                          "name": "Ground_Dirt_009_Normal",
-                          "type": "path",
-                          "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_Normal.jpg"
                         }
                       },
                       {
@@ -231,10 +219,10 @@
                           "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_BaseColor.jpg"
                         },
                         "u_normal_texture": {
-                          "uuid": "26027ca3-c5d4-477b-bdcd-48e18619df6b",
-                          "name": "Ground_Dirt_009_Normal",
+                          "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                          "name": "__normal_1x1__",
                           "type": "path",
-                          "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_Normal.jpg"
+                          "path": "__normal_1x1__"
                         }
                       }
                     ]
@@ -4483,10 +4471,10 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
-                              "name": "__white_1x1__",
+                              "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                              "name": "__normal_1x1__",
                               "type": "path",
-                              "path": "__white_1x1__"
+                              "path": "__normal_1x1__"
                             }
                           }
                         ]
@@ -4584,7 +4572,7 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "uuid": "00000000-0001-0000-0001-000000000002",
                         "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
@@ -4592,13 +4580,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
-                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.15655755996704102,
                               0.31000229716300964,
                               0.20257876813411713,
                               1
-                            ]
+                            ],
+                            "u_diffuse_mul": 1
                           },
                           {
                             "u_emission_intensity": 0,
@@ -4625,16 +4613,16 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "uuid": "31069740-f496-4ad6-8c42-ad14ddd98d5c",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
-                              "name": "__white_1x1__",
+                              "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                              "name": "__normal_1x1__",
                               "type": "path",
-                              "path": "__white_1x1__"
+                              "path": "__normal_1x1__"
                             }
                           }
                         ]
@@ -4781,8 +4769,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
-                        "name": "CookTorrancePBR"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -4830,8 +4818,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
-                        "name": "CookTorrancePBR"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -5704,8 +5692,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
-                        "name": "CookTorrancePBR"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -5753,8 +5741,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
-                        "name": "CookTorrancePBR"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -5998,7 +5986,7 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "uuid": "00000000-0001-0000-0001-000000000002",
                         "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
@@ -6038,16 +6026,16 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "uuid": "31069740-f496-4ad6-8c42-ad14ddd98d5c",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
-                              "name": "__white_1x1__",
+                              "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                              "name": "__normal_1x1__",
                               "type": "path",
-                              "path": "__white_1x1__"
+                              "path": "__normal_1x1__"
                             }
                           }
                         ]
@@ -6341,7 +6329,7 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "uuid": "00000000-0001-0000-0001-000000000002",
                         "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
@@ -6389,10 +6377,10 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
-                              "name": "__white_1x1__",
+                              "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                              "name": "__normal_1x1__",
                               "type": "path",
-                              "path": "__white_1x1__"
+                              "path": "__normal_1x1__"
                             }
                           }
                         ]
@@ -6637,7 +6625,7 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "uuid": "00000000-0001-0000-0001-000000000002",
                         "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
@@ -6645,13 +6633,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
+                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.5704737901687622,
                               0.26240938901901245,
                               0.01739528588950634,
                               1
-                            ],
-                            "u_diffuse_mul": 1
+                            ]
                           },
                           {
                             "u_emission_intensity": 0,
@@ -6678,16 +6666,16 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "uuid": "31069740-f496-4ad6-8c42-ad14ddd98d5c",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
-                              "name": "__white_1x1__",
+                              "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                              "name": "__normal_1x1__",
                               "type": "path",
-                              "path": "__white_1x1__"
+                              "path": "__normal_1x1__"
                             }
                           }
                         ]
@@ -9692,13 +9680,13 @@
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
+                    "u_emission_intensity": 4,
                     "u_color": [
                       0.34726482629776,
                       0.7852292656898499,
                       0.15172044932842255,
                       1
                     ],
-                    "u_emission_intensity": 2,
                     "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
                       0.7799344062805176,
@@ -9708,7 +9696,7 @@
                     ]
                   },
                   {
-                    "u_emission_intensity": 2,
+                    "u_emission_intensity": 4,
                     "u_diffuse_mul": 1,
                     "u_metallic": 0,
                     "u_color": [
@@ -9732,16 +9720,16 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                      "uuid": "31069740-f496-4ad6-8c42-ad14ddd98d5c",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
-                      "name": "__white_1x1__",
+                      "uuid": "602a5a45-7cd8-4c2e-b05e-3b804a503aba",
+                      "name": "__normal_1x1__",
                       "type": "path",
-                      "path": "__white_1x1__"
+                      "path": "__normal_1x1__"
                     }
                   }
                 ]
@@ -9877,17 +9865,17 @@
   "editor": {
     "camera": {
       "position": [
-        1.520235538482666,
-        4.215132713317871,
-        2.7141072750091553
+        0.5632241368293762,
+        -4.66748046875,
+        3.1788415908813477
       ],
       "rotation": [
-        -0.04534309077058211,
-        -0.22899935226633192,
-        0.9538513074256497,
-        0.18886763646360963
+        -0.26333233421715163,
+        -0.054533510754212186,
+        0.19531715742490044,
+        0.9431507758444687
       ],
-      "radius": 4.5,
+      "radius": 4.0,
       "editor_entities": {
         "camera": [
           {
@@ -9905,7 +9893,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 4.5,
+              "radius": 4.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -9939,12 +9927,12 @@
         ]
       }
     },
-    "selected_entity": "Platform",
+    "selected_entity": "entity3",
     "expanded_entities": [
-      "Arthur",
+      "Model",
       "PlatformBase",
-      "Glitch",
-      "Model"
+      "Arthur",
+      "Glitch"
     ]
   },
   "resources": {
