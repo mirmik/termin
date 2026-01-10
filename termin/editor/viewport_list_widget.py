@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QWidget,
     QMenu,
+    QInputDialog,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ class ViewportListWidget(QWidget):
     viewport_add_requested = pyqtSignal(object)  # Display
     display_remove_requested = pyqtSignal(object)  # Display
     viewport_remove_requested = pyqtSignal(object)  # Viewport
+    viewport_renamed = pyqtSignal(object, str)  # Viewport, new_name
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -161,6 +163,9 @@ class ViewportListWidget(QWidget):
 
             # Add viewports as children
             for i, viewport in enumerate(display.viewports):
+                # Build viewport label: "name (camera)" or "Viewport i (camera)"
+                vp_name = viewport.name if viewport.name else f"Viewport {i}"
+
                 camera_name = "No Camera"
                 if viewport.camera is not None:
                     entity = viewport.camera.entity
@@ -169,7 +174,7 @@ class ViewportListWidget(QWidget):
                     else:
                         camera_name = f"Camera {i}"
 
-                viewport_item = ViewportItem(viewport, f"Viewport {i}: {camera_name}")
+                viewport_item = ViewportItem(viewport, f"{vp_name} ({camera_name})")
                 display_item.appendRow(viewport_item)
 
             self._model.appendRow(display_item)
@@ -265,6 +270,11 @@ class ViewportListWidget(QWidget):
         elif isinstance(item, ViewportItem):
             menu.addSeparator()
 
+            rename_action = menu.addAction("Rename...")
+            rename_action.triggered.connect(
+                lambda: self._rename_viewport(item.viewport)
+            )
+
             parent = item.parent()
             if isinstance(parent, DisplayItem):
                 add_viewport_action = menu.addAction("Add Viewport")
@@ -279,3 +289,17 @@ class ViewportListWidget(QWidget):
 
         global_pos = self._tree.viewport().mapToGlobal(pos)
         menu.exec(global_pos)
+
+    def _rename_viewport(self, viewport: "Viewport") -> None:
+        """Show rename dialog for viewport."""
+        current_name = viewport.name or ""
+        new_name, ok = QInputDialog.getText(
+            self,
+            "Rename Viewport",
+            "Viewport name:",
+            text=current_name,
+        )
+        if ok and new_name != current_name:
+            viewport.name = new_name
+            self.viewport_renamed.emit(viewport, new_name)
+            self._rebuild_tree()

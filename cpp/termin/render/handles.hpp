@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <array>
 #include <memory>
+#include <string>
 
 #include "termin/render/types.hpp"
 
@@ -75,6 +76,7 @@ public:
     virtual int get_height() const = 0;
     virtual int get_samples() const = 0;
     virtual bool is_msaa() const = 0;
+    virtual std::string get_format() const = 0;
 
     // Convenience methods
     Size2i get_size() const { return Size2i(get_width(), get_height()); }

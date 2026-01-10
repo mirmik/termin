@@ -36,6 +36,7 @@ from termin.editor.file_processors import (
     TextureFileProcessor,
     ComponentFileProcessor,
     PipelinePreLoader,
+    ScenePipelinePreLoader,
     VoxelGridProcessor,
     NavMeshProcessor,
     GLBPreLoader,
@@ -188,6 +189,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             PipelinePreLoader(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            ScenePipelinePreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )

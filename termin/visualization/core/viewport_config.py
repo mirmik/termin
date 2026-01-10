@@ -15,6 +15,9 @@ class ViewportConfig:
     to create viewports on appropriate displays.
     """
 
+    # Viewport name (used for scene pipeline targeting)
+    name: str = ""
+
     # Display name (RenderingManager will create/find display by this name)
     display_name: str = "Main"
 
@@ -43,6 +46,7 @@ class ViewportConfig:
     def serialize(self) -> dict:
         """Serialize to dict."""
         result = {
+            "name": self.name,
             "display_name": self.display_name,
             "camera_uuid": self.camera_uuid,
             "region": list(self.region),
@@ -71,6 +75,7 @@ class ViewportConfig:
             pipeline_name = None  # Clear old-style name after conversion
 
         return cls(
+            name=data.get("name", ""),
             display_name=data.get("display_name", "Main"),
             camera_uuid=data.get("camera_uuid", ""),
             region=tuple(region),

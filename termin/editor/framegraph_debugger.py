@@ -998,7 +998,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 w, h = fbo.get_size()
                 samples = fbo.get_samples()
                 is_msaa = fbo.is_msaa()
+                fmt = fbo.get_format()
                 info_parts.append(f"Размер: {w}×{h}")
+                info_parts.append(f"Формат: {fmt}")
                 if is_msaa:
                     info_parts.append(f"<span style='color: #ffaa00;'>MSAA: {samples}x</span>")
                 else:
@@ -1009,7 +1011,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             w, h = resource.get_size()
             samples = resource.get_samples()
             is_msaa = resource.is_msaa()
+            fmt = resource.get_format()
             info_parts.append(f"Размер: {w}×{h}")
+            info_parts.append(f"Формат: {fmt}")
             if is_msaa:
                 info_parts.append(f"<span style='color: #ffaa00;'>MSAA: {samples}x</span>")
             else:

@@ -153,6 +153,12 @@ class ViewportInspector(QWidget):
         self._hint_label.hide()
         form.addRow(self._hint_label)
 
+        # Scene pipeline label (shown when viewport is managed by scene pipeline)
+        self._scene_pipeline_label = QLabel("Managed by scene pipeline")
+        self._scene_pipeline_label.setStyleSheet("color: #6a9; font-style: italic;")
+        self._scene_pipeline_label.hide()
+        form.addRow(self._scene_pipeline_label)
+
         layout.addLayout(form)
         layout.addStretch()
 
@@ -239,6 +245,9 @@ class ViewportInspector(QWidget):
 
             # Check if camera has ViewportHintComponent
             self._update_hint_state(viewport)
+
+            # Check if viewport is managed by scene pipeline
+            self._update_scene_pipeline_state(viewport)
         finally:
             self._updating = False
 
@@ -289,6 +298,20 @@ class ViewportInspector(QWidget):
             self._hint_label.hide()
             self._pipeline_combo.setEnabled(True)
 
+    def _update_scene_pipeline_state(self, viewport: "Viewport") -> None:
+        """Update scene pipeline label visibility."""
+        if viewport.managed_by_scene_pipeline:
+            self._scene_pipeline_label.setText(
+                f"Managed by scene pipeline: {viewport.managed_by_scene_pipeline}"
+            )
+            self._scene_pipeline_label.show()
+            self._pipeline_combo.setEnabled(False)
+        else:
+            self._scene_pipeline_label.hide()
+            # Don't re-enable if ViewportHint is controlling
+            if not self._hint_label.isVisible():
+                self._pipeline_combo.setEnabled(True)
+
     def _clear(self) -> None:
         """Clear all fields."""
         self._updating = True
@@ -303,6 +326,7 @@ class ViewportInspector(QWidget):
             self._pipeline_combo.setCurrentIndex(0)
             self._pipeline_combo.setEnabled(True)
             self._hint_label.hide()
+            self._scene_pipeline_label.hide()
             self._current_pipeline_name = None
         finally:
             self._updating = False

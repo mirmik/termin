@@ -6,7 +6,16 @@ from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QWheelEvent, QMouseEvent, QKeyEvent
-from PyQt6.QtWidgets import QGraphicsView, QMenu
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDoubleSpinBox,
+    QGraphicsView,
+    QLineEdit,
+    QMenu,
+    QSpinBox,
+    QTextEdit,
+)
 
 from termin.nodegraph.scene import NodeGraphScene
 from termin.nodegraph.node import GraphNode
@@ -142,13 +151,15 @@ class NodeGraphView(QGraphicsView):
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press."""
-        if event.key() == Qt.Key.Key_Delete:
-            self._scene.delete_selected()
+        # Check if focus is on an editable widget - don't intercept keys
+        focus_widget = QApplication.focusWidget()
+        if isinstance(focus_widget, (QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox)):
+            # Let the widget handle the key event
+            super().keyPressEvent(event)
             return
 
-        if event.key() == Qt.Key.Key_F:
-            # Frame all nodes
-            self.fit_in_view()
+        if event.key() == Qt.Key.Key_Delete:
+            self._scene.delete_selected()
             return
 
         super().keyPressEvent(event)

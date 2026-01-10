@@ -399,6 +399,7 @@ class RenderingController:
                             pipeline_name = "(Editor)"
 
                 config = ViewportConfig(
+                    name=viewport.name or "",
                     display_name=display.name,
                     camera_uuid=camera_uuid,
                     region=viewport.rect,
@@ -680,6 +681,7 @@ class RenderingController:
             camera=camera,
             rect=(0.0, 0.0, 1.0, 1.0),
         )
+        viewport.name = "(Editor)"
         viewport.pipeline = pipeline
 
         self._viewport_list.refresh()

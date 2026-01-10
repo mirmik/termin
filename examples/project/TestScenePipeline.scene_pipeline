@@ -3,16 +3,16 @@
   "nodes": [
     {
       "type": "ShadowPass",
-      "x": -463.0998889980087,
-      "y": -84.40618210334083,
+      "x": -513.3224777426832,
+      "y": -90.36479432728525,
       "params": {
-        "caster_offset": 0.0
+        "caster_offset": 50.0
       }
     },
     {
       "type": "SkyboxPass",
-      "x": -475.78810720268,
-      "y": -334.7587939698492
+      "x": -479.19302847350554,
+      "y": -333.9075636521428
     },
     {
       "type": "ColorPass",
@@ -20,19 +20,19 @@
       "y": -335.41743632182977,
       "params": {
         "phase_mark": "opaque",
-        "sort_mode": "near_to_far",
+        "sort_mode": "none",
         "clear_depth": false
       }
     },
     {
       "type": "Present",
-      "x": 485.3157453936348,
-      "y": -251.62353433835844
+      "x": 717.2376084079374,
+      "y": -258.1017986683669
     },
     {
       "type": "ColorPass",
-      "x": 38.6896984924623,
-      "y": -249.9949748743718,
+      "x": -11.610127871296669,
+      "y": -314.69048708137,
       "params": {
         "phase_mark": "transparent",
         "sort_mode": "far_to_near",
@@ -41,8 +41,8 @@
     },
     {
       "type": "BloomPass",
-      "x": 266.9856377574757,
-      "y": -254.06697786598505,
+      "x": 484.65531924575964,
+      "y": -274.7974237220121,
       "node_type": "effect",
       "params": {
         "threshold": 0.0,
@@ -56,6 +56,7 @@
       "x": -729.9042838692282,
       "y": -334.8086021878023,
       "node_type": "resource",
+      "name": "color",
       "params": {
         "name": "fbo",
         "format": "rgba16f",
@@ -70,12 +71,36 @@
     },
     {
       "type": "FBO",
-      "x": -150.2957324561961,
-      "y": -18.13914012402364,
+      "x": 270.8139788412739,
+      "y": -80.76201914652071,
       "node_type": "resource",
+      "name": "bloom",
       "params": {
         "name": "fbo",
-        "format": "rgba8",
+        "format": "rgba16f",
+        "samples": "1",
+        "size_mode": "viewport",
+        "scale": "1.0",
+        "width": 100,
+        "height": 100,
+        "has_color": true,
+        "has_depth": true
+      }
+    },
+    {
+      "type": "ResolvePass",
+      "x": 235.78012074886357,
+      "y": -212.83456589386873
+    },
+    {
+      "type": "FBO",
+      "x": 3.915659461449195,
+      "y": -112.57520951666463,
+      "node_type": "resource",
+      "name": "resolve",
+      "params": {
+        "name": "fbo",
+        "format": "rgba16f",
         "samples": "1",
         "size_mode": "viewport",
         "scale": "1.0",
@@ -106,12 +131,6 @@
       "to_socket": "input_res"
     },
     {
-      "from_node": 4,
-      "from_socket": "output_res",
-      "to_node": 5,
-      "to_socket": "input_res"
-    },
-    {
       "from_node": 5,
       "from_socket": "output_res",
       "to_node": 3,
@@ -134,16 +153,34 @@
       "from_socket": "fbo",
       "to_node": 5,
       "to_socket": "output_res_target"
+    },
+    {
+      "from_node": 4,
+      "from_socket": "output_res",
+      "to_node": 8,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 8,
+      "from_socket": "output_res",
+      "to_node": 5,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 9,
+      "from_socket": "fbo",
+      "to_node": 8,
+      "to_socket": "output_res_target"
     }
   ],
   "viewport_frames": [
     {
       "title": "Main Viewport",
-      "viewport_name": "main",
-      "x": -763.5732133630395,
-      "y": -448.02222072463906,
-      "width": 1527.0095220060189,
-      "height": 673.7104182319558
+      "viewport_name": "chronosquad",
+      "x": -759.6862547650344,
+      "y": -450.6135264566425,
+      "width": 1757.6357321543198,
+      "height": 675.0060710979576
     }
   ]
 }

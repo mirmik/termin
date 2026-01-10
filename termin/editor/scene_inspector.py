@@ -11,9 +11,12 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,
     QPushButton,
     QGroupBox,
     QComboBox,
+    QListWidget,
+    QListWidgetItem,
 )
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -170,6 +173,24 @@ class SceneInspector(QWidget):
 
         layout.addWidget(skybox_group)
 
+        # Scene Pipelines group
+        pipelines_group = QGroupBox("Scene Pipelines")
+        pipelines_layout = QVBoxLayout(pipelines_group)
+
+        self._pipelines_list = QListWidget()
+        self._pipelines_list.setMaximumHeight(100)
+        pipelines_layout.addWidget(self._pipelines_list)
+
+        pipelines_buttons = QHBoxLayout()
+        self._add_pipeline_btn = QPushButton("Add...")
+        self._remove_pipeline_btn = QPushButton("Remove")
+        self._remove_pipeline_btn.setEnabled(False)
+        pipelines_buttons.addWidget(self._add_pipeline_btn)
+        pipelines_buttons.addWidget(self._remove_pipeline_btn)
+        pipelines_layout.addLayout(pipelines_buttons)
+
+        layout.addWidget(pipelines_group)
+
         layout.addStretch()
 
         # Connect signals
@@ -180,6 +201,9 @@ class SceneInspector(QWidget):
         self._skybox_color_btn.clicked.connect(self._on_skybox_color_clicked)
         self._skybox_top_color_btn.clicked.connect(self._on_skybox_top_color_clicked)
         self._skybox_bottom_color_btn.clicked.connect(self._on_skybox_bottom_color_clicked)
+        self._add_pipeline_btn.clicked.connect(self._on_add_pipeline_clicked)
+        self._remove_pipeline_btn.clicked.connect(self._on_remove_pipeline_clicked)
+        self._pipelines_list.itemSelectionChanged.connect(self._on_pipeline_selection_changed)
 
     def _create_color_button(self) -> QPushButton:
         """Create a color picker button."""
@@ -265,8 +289,31 @@ class SceneInspector(QWidget):
             bottom_color = self._scene.skybox_bottom_color
             qcolor = _to_qcolor(bottom_color)
             self._skybox_bottom_color_btn._set_color(qcolor)
+
+            # Scene pipelines
+            self._refresh_pipelines_list()
         finally:
             self._updating_from_model = False
+
+    def _refresh_pipelines_list(self) -> None:
+        """Refresh the pipelines list widget."""
+        self._pipelines_list.clear()
+        if self._scene is None:
+            return
+
+        for handle in self._scene.scene_pipelines:
+            asset = handle.get_asset()
+            if asset is not None:
+                name = asset.name
+                uuid_short = asset.uuid[:8] if asset.uuid else ""
+                item = QListWidgetItem(f"{name} ({uuid_short}...)")
+                item.setData(Qt.ItemDataRole.UserRole, handle)
+                self._pipelines_list.addItem(item)
+            else:
+                # Handle without asset (orphan reference)
+                item = QListWidgetItem("(missing pipeline)")
+                item.setData(Qt.ItemDataRole.UserRole, handle)
+                self._pipelines_list.addItem(item)
 
     def _on_bg_color_clicked(self) -> None:
         """Handle background color button click."""
@@ -444,6 +491,95 @@ class SceneInspector(QWidget):
 
         self._refresh_from_scene()
         self.scene_changed.emit()
+
+    def _on_pipeline_selection_changed(self) -> None:
+        """Handle pipeline list selection change."""
+        has_selection = len(self._pipelines_list.selectedItems()) > 0
+        self._remove_pipeline_btn.setEnabled(has_selection)
+
+    def _on_add_pipeline_clicked(self) -> None:
+        """Handle add pipeline button click."""
+        if self._scene is None:
+            return
+
+        from termin.assets.resources import ResourceManager
+        from termin.assets.scene_pipeline_handle import ScenePipelineHandle
+        from PyQt6.QtWidgets import QInputDialog
+
+        rm = ResourceManager.instance()
+        if rm is None:
+            return
+
+        # Get list of available pipelines
+        pipeline_names = rm.list_scene_pipeline_names()
+        if not pipeline_names:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "No Pipelines",
+                "No scene pipelines are registered. Load a .scene_pipeline file first.",
+            )
+            return
+
+        # Filter out already added pipelines
+        existing_uuids = set()
+        for handle in self._scene.scene_pipelines:
+            asset = handle.get_asset()
+            if asset is not None:
+                existing_uuids.add(asset.uuid)
+
+        available = []
+        for name in pipeline_names:
+            asset = rm.get_scene_pipeline_asset(name)
+            if asset is not None and asset.uuid not in existing_uuids:
+                available.append(name)
+
+        if not available:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "No Pipelines",
+                "All available pipelines are already added to the scene.",
+            )
+            return
+
+        # Show selection dialog
+        name, ok = QInputDialog.getItem(
+            self,
+            "Add Scene Pipeline",
+            "Select pipeline:",
+            available,
+            0,
+            False,
+        )
+        if not ok or not name:
+            return
+
+        # Get asset and create handle
+        asset = rm.get_scene_pipeline_asset(name)
+        if asset is None:
+            return
+
+        handle = ScenePipelineHandle.from_uuid(asset.uuid)
+        self._scene.add_scene_pipeline(handle)
+        self._refresh_pipelines_list()
+        self.scene_changed.emit()
+
+    def _on_remove_pipeline_clicked(self) -> None:
+        """Handle remove pipeline button click."""
+        if self._scene is None:
+            return
+
+        selected = self._pipelines_list.selectedItems()
+        if not selected:
+            return
+
+        item = selected[0]
+        handle = item.data(Qt.ItemDataRole.UserRole)
+        if handle is not None:
+            self._scene.remove_scene_pipeline(handle)
+            self._refresh_pipelines_list()
+            self.scene_changed.emit()
 
 
 class SkyboxTypeEditCommand(UndoCommand):

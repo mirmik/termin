@@ -120,6 +120,17 @@ public:
     int get_samples() const override { return samples_; }
     bool is_msaa() const override { return samples_ > 1; }
 
+    std::string get_format() const override {
+        switch (format_) {
+            case FBOFormat::R8: return "r8";
+            case FBOFormat::R16F: return "r16f";
+            case FBOFormat::R32F: return "r32f";
+            case FBOFormat::RGBA16F: return "rgba16f";
+            case FBOFormat::RGBA32F: return "rgba32f";
+            default: return "rgba8";
+        }
+    }
+
     GPUTextureHandle* color_texture() override {
         color_ref_.set_tex_id(color_tex_);
         color_ref_.set_target(samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D);
@@ -281,6 +292,7 @@ public:
     int get_height() const override { return height_; }
     int get_samples() const override { return 1; }
     bool is_msaa() const override { return false; }
+    std::string get_format() const override { return "depth24"; }
 
     GPUTextureHandle* color_texture() override {
         // Shadow FBO has no color, return depth texture

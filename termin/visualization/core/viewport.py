@@ -40,6 +40,7 @@ class Viewport(Identifiable):
     pipeline: Optional["RenderPipeline"] = None  # None = don't render
     input_mode: str = "simple"  # "none", "simple", "editor"
     block_input_in_editor: bool = False  # Block input when running in editor
+    managed_by_scene_pipeline: Optional[str] = None  # Name of scene pipeline managing this viewport
     _init_uuid: str | None = field(default=None, repr=False)
 
     def __post_init__(self):

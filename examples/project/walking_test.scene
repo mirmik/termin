@@ -4478,7 +4478,7 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "d274ab35-90a0-4376-b01f-b21ed58d4f91",
+                              "uuid": "f831ce58-0233-4da8-aca4-3d07083ac3f1",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4587,13 +4587,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
-                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.15655755996704102,
                               0.31000229716300964,
                               0.20257876813411713,
                               1
-                            ]
+                            ],
+                            "u_diffuse_mul": 1
                           },
                           {
                             "u_emission_intensity": 0,
@@ -4620,13 +4620,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "fde3e619-b98e-4c8a-a577-2789eed8c680",
+                              "uuid": "d017d038-728b-491b-b549-e322c4644088",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "d274ab35-90a0-4376-b01f-b21ed58d4f91",
+                              "uuid": "f831ce58-0233-4da8-aca4-3d07083ac3f1",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4895,15 +4895,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            2.911374568939209,
-            -1.3202931880950928,
-            2.602083921432495
+            3.278020143508911,
+            -4.444492340087891,
+            5.455391883850098
           ],
           "rotation": [
-            -0.2375490665435791,
-            -0.08537184447050095,
-            0.3272557258605957,
-            0.9105964303016663
+            -0.4565909802913666,
+            -0.26175209879875183,
+            0.14342626929283142,
+            0.8381166458129883
           ]
         },
         "scale": [
@@ -4926,7 +4926,7 @@
               "fov_deg": 59.99999999999999,
               "ortho_size": 5.0,
               "near": 0.1,
-              "far": 50.0
+              "far": 100.0
             }
           },
           {
@@ -9538,13 +9538,13 @@
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
+                    "u_emission_intensity": 2,
                     "u_color": [
                       0.34726482629776,
                       0.7852292656898499,
                       0.15172044932842255,
                       1
                     ],
-                    "u_emission_intensity": 2,
                     "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
                       0.7799344062805176,
@@ -9578,13 +9578,13 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "fde3e619-b98e-4c8a-a577-2789eed8c680",
+                      "uuid": "d017d038-728b-491b-b549-e322c4644088",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "d274ab35-90a0-4376-b01f-b21ed58d4f91",
+                      "uuid": "f831ce58-0233-4da8-aca4-3d07083ac3f1",
                       "name": "__normal_1x1__",
                       "type": "path",
                       "path": "__normal_1x1__"
@@ -12698,6 +12698,7 @@
     "flag_names": {},
     "viewport_configs": [
       {
+        "name": "chronosquad",
         "display_name": "Display 0",
         "camera_uuid": "0000000000000077",
         "region": [
@@ -12708,8 +12709,13 @@
         ],
         "depth": 0,
         "input_mode": "simple",
-        "block_input_in_editor": false,
-        "pipeline_uuid": "5baa602e-b819-4020-a428-c5a1f06a69a4"
+        "block_input_in_editor": false
+      }
+    ],
+    "scene_pipelines": [
+      {
+        "type": "uuid",
+        "uuid": "40446995-249d-41cf-b4f1-84f21895063c"
       }
     ],
     "light_direction": [
@@ -12753,17 +12759,17 @@
   "editor": {
     "camera": {
       "position": [
-        -1.750483751296997,
-        -2.3938469886779785,
-        3.187063455581665
+        -5.183774948120117,
+        -10.016563415527344,
+        8.061203956604004
       ],
       "rotation": [
-        -0.2963990594831833,
-        0.2014325892735757,
-        -0.5247500624372536,
-        0.7721462824414335
+        -0.2400766783299606,
+        0.10538628736827858,
+        -0.3878862321143981,
+        0.8836295546737211
       ],
-      "radius": 3.5,
+      "radius": 14.0,
       "editor_entities": {
         "camera": [
           {
@@ -12781,7 +12787,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 3.5,
+              "radius": 14.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12807,7 +12813,7 @@
             "type": "EditorCameraUIController",
             "data": {
               "enabled": true,
-              "colliders_enabled": true,
+              "colliders_enabled": false,
               "wireframe_enabled": false,
               "ortho_enabled": false
             }
@@ -12815,13 +12821,13 @@
         ]
       }
     },
-    "selected_entity": "0000000000000130",
+    "selected_entity": "0000000000000077",
     "expanded_entities": [
-      "0000000000000131",
-      "0000000000000007",
-      "0000000000000130",
+      "0000000000000077",
       "00000000000000dd",
-      "0000000000000077"
+      "0000000000000130",
+      "0000000000000131",
+      "0000000000000007"
     ]
   },
   "resources": {

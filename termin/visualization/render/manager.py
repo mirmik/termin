@@ -298,6 +298,9 @@ class RenderingManager:
         Reads scene.viewport_configs and creates viewports on appropriate
         displays. Displays are created via factory if not already present.
 
+        Also processes scene.scene_pipelines - compiles them and assigns
+        to matching viewports by name.
+
         Args:
             scene: Scene with viewport_configs to attach.
 
@@ -369,12 +372,84 @@ class RenderingManager:
                 region=config.region,
                 pipeline=pipeline,
             )
+            viewport.name = config.name
             viewport.depth = config.depth
             viewport.input_mode = config.input_mode
             viewport.block_input_in_editor = config.block_input_in_editor
             viewports.append(viewport)
 
+        # Process scene pipelines - compile and assign to viewports
+        self._apply_scene_pipelines(scene, viewports)
+
         return viewports
+
+    def _apply_scene_pipelines(self, scene: "Scene", viewports: List["Viewport"]) -> None:
+        """
+        Apply scene pipelines to matching viewports.
+
+        For each scene pipeline:
+        1. Get compiled RenderPipeline from asset
+        2. Find viewports matching target viewport names
+        3. Assign compiled pipeline and mark as managed
+
+        Args:
+            scene: Scene with scene_pipelines handles
+            viewports: List of viewports to potentially manage
+        """
+        from termin._native import log
+
+        # Build viewport lookup by name
+        viewport_by_name: Dict[str, "Viewport"] = {}
+        for vp in viewports:
+            if vp.name:
+                viewport_by_name[vp.name] = vp
+
+        # Also check all displays for viewports (scene might reference existing viewports)
+        for display in self._displays:
+            for vp in display.viewports:
+                if vp.name and vp.name not in viewport_by_name:
+                    viewport_by_name[vp.name] = vp
+
+        log.info(f"[_apply_scene_pipelines] Available viewports: {list(viewport_by_name.keys())}")
+        log.info(f"[_apply_scene_pipelines] Scene pipelines count: {len(scene.scene_pipelines)}")
+
+        # Process each scene pipeline
+        for handle in scene.scene_pipelines:
+            asset = handle.get_asset()
+            if asset is None:
+                log.warn(f"[attach_scene] Scene pipeline asset not found for handle")
+                continue
+
+            # Get compiled pipeline
+            pipeline = asset.pipeline
+            if pipeline is None:
+                log.warn(f"[attach_scene] Scene pipeline '{asset.name}' has no compiled pipeline")
+                continue
+
+            # Get target viewport names
+            target_viewports = asset.target_viewports
+            log.info(f"[_apply_scene_pipelines] Pipeline '{asset.name}' targets: {target_viewports}")
+            if not target_viewports:
+                log.warn(f"[attach_scene] Scene pipeline '{asset.name}' has no target viewports")
+                continue
+
+            # Assign pipeline to matching viewports
+            for viewport_name in target_viewports:
+                viewport = viewport_by_name.get(viewport_name)
+                if viewport is None:
+                    log.error(
+                        f"[attach_scene] Scene pipeline '{asset.name}' targets viewport "
+                        f"'{viewport_name}' but no such viewport found"
+                    )
+                    continue
+
+                # Make a copy of the pipeline for this viewport
+                viewport.pipeline = pipeline.copy()
+                viewport.managed_by_scene_pipeline = asset.name
+                log.info(
+                    f"[attach_scene] Viewport '{viewport_name}' now managed by "
+                    f"scene pipeline '{asset.name}'"
+                )
 
     def detach_scene(self, scene: "Scene") -> None:
         """

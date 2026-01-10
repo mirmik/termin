@@ -100,7 +100,7 @@ def generate_resource_name(node: "GraphNode", socket: "NodeSocket", node_index: 
 def resolve_resource_names(
     nodes: List["GraphNode"],
     connections: List["NodeConnection"],
-) -> Tuple[Dict["NodeSocket", str], Dict[str, str]]:
+) -> Tuple[Dict["NodeSocket", str], Dict[str, str], Dict[str, str]]:
     """
     Assign resource names to all sockets based on connections.
 
@@ -108,12 +108,13 @@ def resolve_resource_names(
     - Connected sockets share the same resource name (from output socket)
     - Unconnected output sockets get auto-generated names
     - Unconnected input sockets get "empty" or special defaults
-    - Target sockets (X_target) override corresponding output socket (X) name
+    - Target sockets (X_target) create aliases between output and FBO
 
     Returns:
         Tuple of:
         - Dict mapping each socket to its resource name
         - Dict mapping resource name to socket type ("fbo", "shadow", etc.)
+        - Dict mapping output_res name to FBO name (aliases from _target connections)
     """
     # Build node index map
     node_to_index = {node: i for i, node in enumerate(nodes)}
@@ -122,6 +123,8 @@ def resolve_resource_names(
     socket_names: Dict["NodeSocket", str] = {}
     # Track resource types: resource_name -> socket_type
     resource_types: Dict[str, str] = {}
+    # Track target aliases: output_res_name -> fbo_name
+    target_aliases: Dict[str, str] = {}
 
     # First pass: assign names to all output sockets
     for node in nodes:
@@ -143,8 +146,8 @@ def resolve_resource_names(
             # Input socket gets the same name as connected output
             socket_names[input_socket] = socket_names[output_socket]
 
-    # Third pass: handle _target sockets - override output socket names
-    # If X_target input is connected, X output should use that name
+    # Third pass: collect _target aliases (output_res -> FBO)
+    # These create aliases between the pass output and the FBO resource
     for node in nodes:
         # Build map of output socket names
         output_socket_map: Dict[str, "NodeSocket"] = {}
@@ -166,10 +169,11 @@ def resolve_resource_names(
             if output_socket is None:
                 continue
 
-            # Override output socket's name with target's connected name
-            target_resource_name = socket_names[socket]
-            socket_names[output_socket] = target_resource_name
-            resource_types[target_resource_name] = socket.socket_type
+            # Create alias: output_res_name -> fbo_name
+            output_res_name = socket_names.get(output_socket)
+            fbo_name = socket_names[socket]
+            if output_res_name and fbo_name:
+                target_aliases[output_res_name] = fbo_name
 
     # Fourth pass: assign default names to unconnected input sockets
     for node in nodes:
@@ -181,7 +185,7 @@ def resolve_resource_names(
                 socket_names[socket] = name
                 resource_types[name] = socket.socket_type
 
-    return socket_names, resource_types
+    return socket_names, resource_types, target_aliases
 
 
 def get_socket_resource_params(node: "GraphNode", socket_names: Dict["NodeSocket", str]) -> Dict[str, str]:
@@ -284,9 +288,15 @@ def infer_resource_spec(
     return None
 
 
-def collect_fbo_nodes(nodes: List["GraphNode"]) -> Dict[str, "GraphNode"]:
+def collect_fbo_nodes(
+    nodes: List["GraphNode"],
+    socket_names: Dict["NodeSocket", str],
+) -> Dict[str, "GraphNode"]:
     """
-    Collect FBO resource nodes and map their output resource names.
+    Collect FBO resource nodes and map by their socket names.
+
+    Uses socket_names to get the actual resource name used in the pipeline,
+    not the user-defined "name" parameter.
     """
     fbo_nodes = {}
 
@@ -296,12 +306,10 @@ def collect_fbo_nodes(nodes: List["GraphNode"]) -> Dict[str, "GraphNode"]:
         if node.data.get("resource_type") != "fbo":
             continue
 
-        # Get resource name from param or generate
-        name = node.get_param("name")
-        if not name:
-            name = node.data.get("resource_name", "fbo")
-
-        fbo_nodes[name] = node
+        # Get resource name from output socket (same as used in pipeline)
+        for socket in node.output_sockets:
+            if socket in socket_names:
+                fbo_nodes[socket_names[socket]] = node
 
     return fbo_nodes
 
@@ -436,7 +444,6 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
 
     # Separate node types
     pass_nodes = [n for n in nodes if n.node_type in ("pass", "effect")]
-    fbo_nodes_map = collect_fbo_nodes(nodes)
 
     if not pass_nodes:
         return RenderPipeline(name="empty", passes=[], pipeline_specs=[])
@@ -444,8 +451,11 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
     # Build node to viewport mapping
     node_viewport_map = build_node_viewport_map(nodes, viewport_frames, debug=debug)
 
-    # Resolve resource names and their types
-    socket_names, resource_types = resolve_resource_names(nodes, connections)
+    # Resolve resource names, types, and target aliases
+    socket_names, resource_types, target_aliases = resolve_resource_names(nodes, connections)
+
+    # Collect FBO nodes mapped by their socket names
+    fbo_nodes_map = collect_fbo_nodes(nodes, socket_names)
 
     # Build resource to viewport mapping from FBO nodes positions
     # (viewport_name is determined by which ViewportFrame contains the FBO node)
@@ -510,10 +520,22 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
             continue
         seen_canonical.add(canon_name)
 
-        spec_params = infer_resource_spec(canon_name, fbo_nodes_map, pass_classes)
+        # Check if this resource has a _target alias to an FBO
+        # If so, use the FBO's name for ResourceSpec (input name of the resource)
+        # The output_res name is the "output name" used by downstream passes
+        fbo_name = target_aliases.get(res_name)
+        if fbo_name:
+            # Resource has FBO via _target - use FBO name for spec
+            spec_params = infer_resource_spec(fbo_name, fbo_nodes_map, pass_classes)
+        else:
+            # No _target connection - use auto-generated name
+            spec_params = infer_resource_spec(canon_name, fbo_nodes_map, pass_classes)
+
         if spec_params:
-            # Add viewport_name to spec
+            # Add viewport_name to spec - check both the resource and its FBO alias
             viewport_name = resource_to_viewport.get(res_name, "")
+            if not viewport_name and fbo_name and fbo_name in resource_to_viewport:
+                viewport_name = resource_to_viewport[fbo_name]
             if viewport_name:
                 spec_params["viewport_name"] = viewport_name
 

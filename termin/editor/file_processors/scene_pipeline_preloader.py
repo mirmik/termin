@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Set
 
 from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
@@ -28,7 +27,7 @@ class ScenePipelinePreLoader(FilePreLoader):
         """
         Pre-load scene pipeline file.
 
-        UUID is stored inside the JSON file, so we read content eagerly.
+        UUID is stored in .meta file.
         """
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -36,19 +35,9 @@ class ScenePipelinePreLoader(FilePreLoader):
         except Exception:
             return None
 
-        # Extract UUID from JSON content
-        uuid = None
-        try:
-            data = json.loads(content)
-            uuid = data.get("uuid")
-        except json.JSONDecodeError:
-            pass
-
-        # Also check .meta file for UUID (fallback)
-        spec_data = None
-        if uuid is None:
-            spec_data = self.read_spec_file(path)
-            uuid = spec_data.get("uuid") if spec_data else None
+        # UUID is stored in .meta file only
+        spec_data = self.read_spec_file(path)
+        uuid = spec_data.get("uuid") if spec_data else None
 
         return PreLoadResult(
             resource_type=self.resource_type,

@@ -212,20 +212,23 @@ class GraphNode(QGraphicsItem):
     def _update_param_visibility(self) -> None:
         """Update visibility of param widgets based on conditions."""
         visible_params = self._get_visible_params()
+        visible_names = {p.name for p in visible_params}
 
-        # Hide all widgets first
-        for name, proxy in self._param_widgets.items():
-            proxy.setVisible(False)
-
-        # Position and show visible widgets
+        # Update visibility without hiding focused widget
         socket_section = self._get_socket_section_height()
         widget_width = 100  # Same as in _create_param_widget
+
+        for name, proxy in self._param_widgets.items():
+            should_be_visible = name in visible_names
+            if proxy.isVisible() != should_be_visible:
+                proxy.setVisible(should_be_visible)
+
+        # Position visible widgets
         for i, param in enumerate(visible_params):
             if param.name in self._param_widgets:
                 proxy = self._param_widgets[param.name]
                 y = self.TITLE_HEIGHT + socket_section + i * self.PARAM_HEIGHT + 3
                 proxy.setPos(self._width - widget_width - 8, y)
-                proxy.setVisible(True)
 
         # Update node height
         self._update_height()

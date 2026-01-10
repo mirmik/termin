@@ -90,9 +90,9 @@ class PipelineGraphEditor(QMainWindow):
 
         toolbar.addSeparator()
 
-        # Fit view
+        # Fit view (Ctrl+F to avoid conflict with text input)
         fit_action = QAction("Fit View", self)
-        fit_action.setShortcut(QKeySequence("F"))
+        fit_action.setShortcut(QKeySequence("Ctrl+F"))
         fit_action.triggered.connect(self._graph_view.fit_in_view)
         toolbar.addAction(fit_action)
 

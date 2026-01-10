@@ -243,6 +243,7 @@ void bind_gpu_handles(nb::module_& m) {
         .def("get_size", &FramebufferHandle::get_size)
         .def("get_samples", &FramebufferHandle::get_samples)
         .def("is_msaa", &FramebufferHandle::is_msaa)
+        .def("get_format", &FramebufferHandle::get_format)
         .def("color_texture", &FramebufferHandle::color_texture, nb::rv_policy::reference)
         .def("depth_texture", &FramebufferHandle::depth_texture, nb::rv_policy::reference)
         .def("set_external_target", static_cast<void (FramebufferHandle::*)(uint32_t, int, int)>(&FramebufferHandle::set_external_target))
