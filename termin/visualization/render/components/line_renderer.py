@@ -334,7 +334,7 @@ class LineRenderer(PythonComponent):
 
         # Layout: position only (vec3)
         layout = TcVertexLayout()
-        layout.add("position", 3, TcAttribType.FLOAT32)
+        layout.add("position", 3, TcAttribType.FLOAT32, 0)
 
         # Vertices: just positions
         vertices = np.array(self._points, dtype=np.float32).flatten()

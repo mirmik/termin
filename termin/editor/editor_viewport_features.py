@@ -443,6 +443,7 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
         from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
         from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
+        from termin.visualization.render.framegraph.passes.grayscale import GrayscalePass
 
         def get_gizmo_manager():
             return self._gizmo_manager
@@ -523,7 +524,7 @@ class EditorViewportFeatures:
             output_res="color_tonemapped",
             pass_name="Tonemap",
         )
-        
+
         passes: list = [
             shadow_pass,
             skybox_pass,
@@ -539,8 +540,7 @@ class EditorViewportFeatures:
             postprocess,
             tonemap_pass,  # HDR → LDR (after bloom)
             UIWidgetPass(
-                #input_res="color_tonemapped",
-                input_res="color_pp",
+                input_res="color_tonemapped",
                 output_res="color+widgets",
             ),
             PresentToScreenPass(

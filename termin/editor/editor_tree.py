@@ -26,7 +26,7 @@ class NodeWrapper:
     @property
     def name(self) -> str:
         if isinstance(self.obj, Entity):
-            return f"Entity: {self.obj.name}"
+            return f"{self.obj.name}"
         return "Scene"
 
 
@@ -441,17 +441,12 @@ class SceneTreeModel(QAbstractItemModel):
         if entity_data is None:
             return False
 
-        entity_name = entity_data.get("entity_name")
-        if entity_name is None:
+        entity_uuid = entity_data.get("entity_uuid")
+        if entity_uuid is None:
             return False
 
-        # Find the dragged entity
-        dragged_entity = None
-        for ent in self.scene.entities:
-            if ent.name == entity_name:
-                dragged_entity = ent
-                break
-
+        # Find the dragged entity by UUID
+        dragged_entity = self.scene.get_entity(entity_uuid)
         if dragged_entity is None:
             return False
 
@@ -514,15 +509,12 @@ class SceneTreeModel(QAbstractItemModel):
         if entity_data is None:
             return False
 
-        entity_name = entity_data.get("entity_name")
+        entity_uuid = entity_data.get("entity_uuid")
+        if entity_uuid is None:
+            return False
 
-        # Find the dragged entity
-        dragged_entity = None
-        for ent in self.scene.entities:
-            if ent.name == entity_name:
-                dragged_entity = ent
-                break
-
+        # Find the dragged entity by UUID
+        dragged_entity = self.scene.get_entity(entity_uuid)
         if dragged_entity is None:
             return False
 

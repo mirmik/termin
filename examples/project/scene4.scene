@@ -772,7 +772,11 @@
               ],
               "intensity": 1.0,
               "shadows_enabled": true,
-              "shadows_map_resolution": 4096.0
+              "shadows_map_resolution": 4096.0,
+              "cascade_count": 4.0,
+              "max_distance": 100.0,
+              "split_lambda": 0.5,
+              "cascade_blend": true
             }
           }
         ],
@@ -7977,22 +7981,69 @@
   "editor": {
     "camera": {
       "position": [
-        8.485311508178711,
-        -2.923116445541382,
-        1.209011435508728
+        9.707778930664062,
+        13.067630767822266,
+        4.4524335861206055
       ],
       "rotation": [
-        -0.33347818831668186,
-        -0.19098474640951374,
-        0.45881142056869445,
-        0.8011299550707452
+        -0.09027471747131556,
+        -0.2990042867582684,
+        0.9094267729219935,
+        0.2745721336522375
       ],
-      "radius": 6.5
+      "radius": 12.5,
+      "editor_entities": {
+        "camera": [
+          {
+            "type": "PerspectiveCameraComponent",
+            "data": {
+              "enabled": true,
+              "projection_type": "perspective",
+              "fov_deg": 59.99999999999999,
+              "ortho_size": 5.0,
+              "near": 0.1,
+              "far": 100.0
+            }
+          },
+          {
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "radius": 12.5,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "type": "ViewportHintComponent",
+            "data": {
+              "enabled": true,
+              "pipeline_name": "(Editor)",
+              "layer_mask": "0x2"
+            }
+          }
+        ],
+        "editor_ui": [
+          {
+            "type": "UIComponent",
+            "data": {
+              "enabled": true,
+              "ui_layout": null
+            }
+          },
+          {
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "ortho_enabled": false
+            }
+          }
+        ]
+      }
     },
-    "expanded_entities": [
-      "EditorEntities",
-      "VoxelPlatform"
-    ]
+    "selected_entity": "000000000000000a"
   },
   "resources": {
     "textures": {
@@ -8027,6 +8078,22 @@
       "young_lightskinned_male_diffuse2_png.001": {
         "type": "file",
         "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+      },
+      "Ground_Dirt_009_BaseColor": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
+      },
+      "Ground_Dirt_009_Height": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Height.png"
+      },
+      "Ground_Dirt_009_Normal": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
+      },
+      "Ground_Dirt_009_Roughness": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Roughness.jpg"
       }
     }
   }

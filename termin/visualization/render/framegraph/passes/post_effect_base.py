@@ -58,10 +58,10 @@ class PostEffectPass(RenderFramePass):
         return {self.output_res}
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
-        """Post effects are typically inplace (read and write same FBO)."""
-        if self.input_res == self.output_res:
-            return []
-        return [(self.input_res, self.output_res)]
+        """Return inplace aliases only when input and output are the same resource."""
+        # When input == output, it's truly inplace (same FBO)
+        # When different, they should be separate FBOs (no aliasing)
+        return []
 
     def execute(
         self,

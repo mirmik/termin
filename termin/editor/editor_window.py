@@ -93,8 +93,8 @@ class EditorWindow(QMainWindow):
             on_before_scene_close=self._on_before_scene_close,
             get_editor_camera_data=self._get_editor_camera_data,
             set_editor_camera_data=self._set_editor_camera_data,
-            get_selected_entity_name=self._get_selected_entity_name,
-            select_entity_by_name=self._select_entity_by_name,
+            get_selected_entity_uuid=self._get_selected_entity_uuid,
+            select_entity_by_uuid=self._select_entity_by_uuid,
             get_displays_data=self._get_displays_data,
             set_displays_data=self._set_displays_data,
             get_expanded_entities=self._get_expanded_entities,
@@ -663,31 +663,27 @@ class EditorWindow(QMainWindow):
         if self._editor_attachment is not None:
             self._editor_attachment.set_camera_data(data)
 
-    def _get_selected_entity_name(self) -> str | None:
+    def _get_selected_entity_uuid(self) -> str | None:
         """
-        Возвращает имя выделенной сущности.
+        Возвращает UUID выделенной сущности.
         """
         if self.selection_manager is None:
             return None
         selected = self.selection_manager.selected
         if selected is None:
             return None
-        return selected.name
+        return selected.uuid
 
-    def _select_entity_by_name(self, name: str) -> None:
+    def _select_entity_by_uuid(self, uuid: str) -> None:
         """
-        Выделяет сущность по имени.
+        Выделяет сущность по UUID.
         """
         if self.scene is None:
             return
-        # Ищем сущность в сцене
-        entity = None
-        for ent in self.scene.entities:
-            if ent.name == name and ent.selectable:
-                entity = ent
-                break
 
-        if entity is None:
+        # Ищем сущность по UUID
+        entity = self.scene.get_entity(uuid)
+        if entity is None or not entity.selectable:
             return
 
         # Выделяем через SelectionManager
@@ -737,20 +733,20 @@ class EditorWindow(QMainWindow):
         self._rendering_controller._viewport_list.refresh()
 
     def _get_expanded_entities(self) -> list[str] | None:
-        """Get expanded entity names for serialization."""
+        """Get expanded entity UUIDs for serialization."""
         if self.scene_tree_controller is None:
             return None
-        return self.scene_tree_controller.get_expanded_entity_names()
+        return self.scene_tree_controller.get_expanded_entity_uuids()
 
-    def _set_expanded_entities(self, names: list[str]) -> None:
-        """Restore expanded entities from saved names."""
+    def _set_expanded_entities(self, uuids: list[str]) -> None:
+        """Restore expanded entities from saved UUIDs."""
         if self.scene_tree_controller is None:
             return
         # Update scene reference (may have changed during load)
         self.scene_tree_controller.set_scene(self.scene)
         # Rebuild tree - entities were added after initial rebuild
         self.scene_tree_controller.rebuild()
-        self.scene_tree_controller.set_expanded_entity_names(names)
+        self.scene_tree_controller.set_expanded_entity_uuids(uuids)
 
     def _get_project_path(self) -> str | None:
         """Get current project path from project browser."""

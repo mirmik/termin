@@ -60,6 +60,11 @@ vec3 reinhard_tonemap(vec3 x) {
 void main() {
     vec3 color = texture(u_input, v_uv).rgb;
 
+    // DEBUG
+    FragColor = vec4(color, 1.0);
+    return;
+    // DEBUG
+
     // Apply exposure
     color *= u_exposure;
 
@@ -114,8 +119,8 @@ class TonemapPass(PostEffectPass):
 
     def __init__(
         self,
-        input_res: str = "color",
-        output_res: str = "color",
+        input_res: str,
+        output_res: str,
         pass_name: str = "Tonemap",
         exposure: float = 1.0,
         method: int = 0,  # ACES

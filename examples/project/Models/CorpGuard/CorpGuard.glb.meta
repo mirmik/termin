@@ -1,0 +1,28 @@
+{
+  "uuid": "53957ca8-68d8-47fd-ba90-85cbe6a76d48",
+  "resources": {
+    "meshes": {
+      "corpguard.001": "67036e16-24cd-4bfb-ac54-d44adf5143b4",
+      "eyebrow004.001": "7621e4b3-43d6-4074-8e9e-844ef2d9f020",
+      "low-poly.002": "f03b45cb-da6d-4489-944e-58e4bee36f6e",
+      "m_trousers_02.001": "884dc1a9-5cac-430d-bb14-ef5e22764fb1",
+      "shoes03.001": "3cd4ac37-37e5-4fe3-95e8-812377ea1a3a",
+      "short02.001": "b64efbd6-2d9b-4991-8bd0-42e14b5d3dee",
+      "uniform_jacket.001": "d692788f-efba-4710-8556-216fc9c00fa3"
+    },
+    "skeletons": {
+      "skeleton": "9a358a86-c955-4b88-aba1-ded136579b83"
+    },
+    "animations": {
+      "A": "79d2d965-5629-4d1f-8b19-bdc387b43fa1",
+      "Death": "1be563f8-4449-4f2a-ba94-cc4f23e6e73a",
+      "Dragged": "968a3f5f-6855-4c63-a7e8-cc6af302a55f",
+      "Grabbed": "7f7ee388-ecd9-4755-bb9d-f7f65f15d8a1",
+      "Idle": "6aabb1ba-dc21-4f2f-9c72-b9ea8dbd7c1c",
+      "LowGravityWalk": "2d661d36-fe58-4c39-a8a4-7fe22de43a78",
+      "Run": "6cbc3260-251c-497d-97c6-8ea364fd0565",
+      "Shoot": "0bbe0aa5-c64e-4673-bf23-dd36b140df8d",
+      "Walk": "c27f1c75-81bf-429f-a4d6-66758d3a404c"
+    }
+  }
+}

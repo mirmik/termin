@@ -105,50 +105,51 @@ class SceneTreeController:
             return
 
         # Save expanded state before rebuilding
-        expanded_names = self._get_expanded_entity_names()
+        expanded_uuids = self._get_expanded_entity_uuids()
 
         self._model = SceneTreeModel(self._scene)
         self._apply_model(expand_all=False)
 
         # Restore expanded state
-        self._restore_expanded_state(expanded_names)
+        self._restore_expanded_state(expanded_uuids)
 
         if select_obj is not None:
             self.select_object(select_obj)
 
-    def _get_expanded_entity_names(self) -> set[str]:
-        """Collect names of expanded entities."""
+    def _get_expanded_entity_uuids(self) -> set[str]:
+        """Collect UUIDs of expanded entities."""
         expanded = set()
         if self._model is not None:
             self._collect_expanded_recursive(self._model.root, expanded)
         return expanded
 
     def _collect_expanded_recursive(self, node, expanded: set[str]) -> None:
-        """Recursively collect expanded entity names."""
+        """Recursively collect expanded entity UUIDs."""
         from termin.editor.editor_tree import NodeWrapper
 
         for child in node.children:
             if isinstance(child, NodeWrapper) and isinstance(child.obj, Entity):
                 index = self._model.index_for_object(child.obj)
                 if index.isValid() and self._tree.isExpanded(index):
-                    expanded.add(child.obj.name)
+                    if child.obj.uuid:
+                        expanded.add(child.obj.uuid)
             self._collect_expanded_recursive(child, expanded)
 
-    def _restore_expanded_state(self, expanded_names: set[str]) -> None:
-        """Restore expanded state for entities by name."""
-        self._expand_by_names_recursive(self._model.root, expanded_names)
+    def _restore_expanded_state(self, expanded_uuids: set[str]) -> None:
+        """Restore expanded state for entities by UUID."""
+        self._expand_by_uuids_recursive(self._model.root, expanded_uuids)
 
-    def _expand_by_names_recursive(self, node, expanded_names: set[str]) -> None:
+    def _expand_by_uuids_recursive(self, node, expanded_uuids: set[str]) -> None:
         """Recursively expand entities that were previously expanded."""
         from termin.editor.editor_tree import NodeWrapper
 
         for child in node.children:
             if isinstance(child, NodeWrapper) and isinstance(child.obj, Entity):
-                if child.obj.name in expanded_names:
+                if child.obj.uuid and child.obj.uuid in expanded_uuids:
                     index = self._model.index_for_object(child.obj)
                     if index.isValid():
                         self._tree.setExpanded(index, True)
-            self._expand_by_names_recursive(child, expanded_names)
+            self._expand_by_uuids_recursive(child, expanded_uuids)
 
     # ---------- инкрементальные обновления ----------
 
@@ -184,13 +185,13 @@ class SceneTreeController:
         """Update entity display (e.g., after rename)."""
         self._model.update_entity(entity)
 
-    def get_expanded_entity_names(self) -> list[str]:
-        """Get list of expanded entity names for saving."""
-        return list(self._get_expanded_entity_names())
+    def get_expanded_entity_uuids(self) -> list[str]:
+        """Get list of expanded entity UUIDs for saving."""
+        return list(self._get_expanded_entity_uuids())
 
-    def set_expanded_entity_names(self, names: list[str]) -> None:
-        """Restore expanded state from saved names."""
-        self._restore_expanded_state(set(names))
+    def set_expanded_entity_uuids(self, uuids: list[str]) -> None:
+        """Restore expanded state from saved UUIDs."""
+        self._restore_expanded_state(set(uuids))
 
     def select_object(self, obj: object | None) -> None:
         """

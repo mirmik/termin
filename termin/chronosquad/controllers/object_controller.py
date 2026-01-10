@@ -32,7 +32,12 @@ class ObjectController(PythonComponent):
             path="selectable",
             label="Selectable",
             kind="bool",
-        )
+        ),
+        "fov_target": InspectField(
+            path="fov_target",
+            label="FOV Target",
+            kind="bool",
+        ),
     }
 
     def __init__(
@@ -41,6 +46,7 @@ class ObjectController(PythonComponent):
     ):
         super().__init__(enabled=enabled)
         self.selectable: bool = False
+        self.fov_target: bool = False
 
         # Runtime binding
         self._timeline: Timeline | None = None

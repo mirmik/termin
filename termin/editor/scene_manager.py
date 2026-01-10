@@ -84,8 +84,8 @@ class SceneManager:
         # Editor state callbacks
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
-        get_selected_entity_name: Optional[Callable[[], str | None]] = None,
-        select_entity_by_name: Optional[Callable[[str], None]] = None,
+        get_selected_entity_uuid: Optional[Callable[[], str | None]] = None,
+        select_entity_by_uuid: Optional[Callable[[str], None]] = None,
         get_displays_data: Optional[Callable[[], list]] = None,
         set_displays_data: Optional[Callable[[list], None]] = None,
         get_expanded_entities: Optional[Callable[[], list[str]]] = None,
@@ -100,8 +100,8 @@ class SceneManager:
             on_before_scene_close: Callback(scene) called before scene is destroyed.
             get_editor_camera_data: Callback to get editor camera state.
             set_editor_camera_data: Callback to set editor camera state.
-            get_selected_entity_name: Callback to get selected entity name.
-            select_entity_by_name: Callback to select entity by name.
+            get_selected_entity_uuid: Callback to get selected entity UUID.
+            select_entity_by_uuid: Callback to select entity by UUID.
             get_displays_data: Callback to get displays/viewports data.
             set_displays_data: Callback to set displays/viewports data.
             get_expanded_entities: Callback to get expanded entity names in tree.
@@ -121,8 +121,8 @@ class SceneManager:
         # Editor state callbacks
         self._get_editor_camera_data = get_editor_camera_data
         self._set_editor_camera_data = set_editor_camera_data
-        self._get_selected_entity_name = get_selected_entity_name
-        self._select_entity_by_name = select_entity_by_name
+        self._get_selected_entity_uuid = get_selected_entity_uuid
+        self._select_entity_by_uuid = select_entity_by_uuid
         self._get_displays_data = get_displays_data
         self._set_displays_data = set_displays_data
         self._get_expanded_entities = get_expanded_entities
@@ -334,9 +334,9 @@ class SceneManager:
             self._set_editor_camera_data(camera_data)
 
         # Selection
-        selected_name = data.get("selected_entity")
-        if selected_name and self._select_entity_by_name is not None:
-            self._select_entity_by_name(selected_name)
+        selected_uuid = data.get("selected_entity")
+        if selected_uuid and self._select_entity_by_uuid is not None:
+            self._select_entity_by_uuid(selected_uuid)
 
         # Displays - always call to attach viewport_configs from scene
         if self._set_displays_data is not None:
@@ -420,10 +420,10 @@ class SceneManager:
             if camera_data is not None:
                 editor_data["camera"] = camera_data
 
-        if self._get_selected_entity_name is not None:
-            selected_name = self._get_selected_entity_name()
-            if selected_name is not None:
-                editor_data["selected_entity"] = selected_name
+        if self._get_selected_entity_uuid is not None:
+            selected_uuid = self._get_selected_entity_uuid()
+            if selected_uuid is not None:
+                editor_data["selected_entity"] = selected_uuid
 
         if self._get_displays_data is not None:
             displays_data = self._get_displays_data()
