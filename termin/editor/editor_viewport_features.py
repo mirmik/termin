@@ -471,6 +471,7 @@ class EditorViewportFeatures:
             shadow_res="shadow_maps",
             pass_name="Color",
             phase_mark="opaque",
+            sort_mode="near_to_far",
         )
 
         transparent_pass = ColorPass(
@@ -479,7 +480,7 @@ class EditorViewportFeatures:
             shadow_res=None,
             pass_name="Transparent",
             phase_mark="transparent",
-            sort_by_distance=True,
+            sort_mode="far_to_near",
         )
 
         editor_color_pass = ColorPass(

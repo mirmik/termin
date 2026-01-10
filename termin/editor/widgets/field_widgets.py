@@ -629,6 +629,10 @@ class FieldWidgetFactory:
         """Create a widget for the given field."""
         kind = field.kind
 
+        # If field has choices, use combo widget regardless of kind
+        if field.choices:
+            return ComboFieldWidget(choices=field.choices)
+
         if kind in ("float", "int"):
             return FloatFieldWidget(
                 is_int=(kind == "int"),

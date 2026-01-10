@@ -102,6 +102,43 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
         choices=["1", "2", "4", "8"],
     ))
 
+    # Size mode: viewport (use viewport size * scale) or fixed
+    node.add_param(NodeParam(
+        name="size_mode",
+        label="Size",
+        param_type="choice",
+        default="viewport",
+        choices=["viewport", "fixed"],
+    ))
+
+    # Scale for viewport mode (0.25, 0.5, 1.0, 2.0)
+    node.add_param(NodeParam(
+        name="scale",
+        label="Scale",
+        param_type="choice",
+        default="1.0",
+        choices=["0.25", "0.5", "1.0", "2.0"],
+        visible_when={"size_mode": "viewport"},
+    ))
+
+    # Fixed width (for fixed mode)
+    node.add_param(NodeParam(
+        name="width",
+        label="Width",
+        param_type="int",
+        default=1024,
+        visible_when={"size_mode": "fixed"},
+    ))
+
+    # Fixed height (for fixed mode)
+    node.add_param(NodeParam(
+        name="height",
+        label="Height",
+        param_type="int",
+        default=1024,
+        visible_when={"size_mode": "fixed"},
+    ))
+
     # Color buffer
     node.add_param(NodeParam(
         name="has_color",

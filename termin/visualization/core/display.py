@@ -128,6 +128,7 @@ class Display(Identifiable):
         rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
         canvas: Optional["Canvas"] = None,
         pipeline: Optional["RenderPipeline"] = None,
+        name: str = "main",
     ) -> "Viewport":
         """
         Создаёт и добавляет новый viewport.
@@ -138,6 +139,7 @@ class Display(Identifiable):
             rect: Нормализованный прямоугольник (x, y, w, h) в [0..1].
             canvas: Опциональная 2D канва для UI.
             pipeline: Конвейер рендеринга (None = default pipeline).
+            name: Имя viewport для идентификации в пайплайне.
 
         Возвращает:
             Созданный Viewport.
@@ -148,6 +150,7 @@ class Display(Identifiable):
             pipeline = make_default_pipeline()
 
         viewport = Viewport(
+            name=name,
             scene=scene,
             camera=camera,
             display=self,

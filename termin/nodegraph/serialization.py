@@ -114,6 +114,7 @@ def _serialize_viewport_frame(frame: "ViewportFrame") -> dict:
     rect = frame.rect()
     return {
         "title": frame.title,
+        "viewport_name": frame.viewport_name,
         "x": pos.x() + rect.x(),
         "y": pos.y() + rect.y(),
         "width": rect.width(),
@@ -145,6 +146,7 @@ def deserialize_graph(data: dict, scene: "NodeGraphScene") -> None:
     for frame_data in data.get("viewport_frames", []):
         frame = ViewportFrame(
             title=frame_data.get("title", "Viewport"),
+            viewport_name=frame_data.get("viewport_name", "main"),
             x=frame_data.get("x", 0),
             y=frame_data.get("y", 0),
             width=frame_data.get("width", 600),

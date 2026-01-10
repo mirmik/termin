@@ -69,7 +69,16 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
                 nb::tuple t = nb::cast<nb::tuple>(c);
                 if (t.size() >= 2) {
                     EnumChoice choice;
-                    choice.value = nb::borrow<nb::object>(t[0]);
+                    // Convert value to string (handles ints, enums, strings)
+                    nb::object val_obj = nb::borrow<nb::object>(t[0]);
+                    if (nb::isinstance<nb::str>(val_obj)) {
+                        choice.value = nb::cast<std::string>(val_obj);
+                    } else if (nb::isinstance<nb::int_>(val_obj)) {
+                        choice.value = std::to_string(nb::cast<int64_t>(val_obj));
+                    } else {
+                        // Fallback: use Python str()
+                        choice.value = nb::cast<std::string>(nb::str(val_obj));
+                    }
                     choice.label = nb::cast<std::string>(t[1]);
                     info.choices.push_back(choice);
                 }

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, List, Any, Callable
+from typing import TYPE_CHECKING, Optional, List, Dict, Any, Callable
 
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QFont, QFontMetrics
@@ -37,6 +37,8 @@ class NodeParam:
     choices: List[str] = field(default_factory=list)  # For "choice" type
     min_val: float = 0.0
     max_val: float = 100.0
+    # Conditional visibility: {"param_name": "value"} - show when param_name == value
+    visible_when: Dict[str, Any] = field(default_factory=dict)
 
 
 class _NodeComboBox(QComboBox):
@@ -142,10 +144,11 @@ class GraphNode(QGraphicsItem):
         self._update_height()
 
     def _update_height(self) -> None:
-        """Recalculate node height based on sockets and parameters."""
+        """Recalculate node height based on sockets and visible parameters."""
         socket_count = max(len(self.input_sockets), len(self.output_sockets), 1)
         socket_height = socket_count * self.SOCKET_SPACING
-        param_height = len(self._params) * self.PARAM_HEIGHT
+        visible_param_count = len(self._get_visible_params())
+        param_height = visible_param_count * self.PARAM_HEIGHT
         content_height = self.TITLE_HEIGHT + socket_height + param_height + self.PADDING
 
         if self._height_override is not None:
@@ -189,6 +192,44 @@ class GraphNode(QGraphicsItem):
         self._param_values[name] = value
         # Update data dict for pipeline compilation
         self.data[name] = value
+        # Update visibility of dependent params
+        self._update_param_visibility()
+
+    def _is_param_visible(self, param: NodeParam) -> bool:
+        """Check if param should be visible based on visible_when condition."""
+        if not param.visible_when:
+            return True
+        for cond_param, cond_value in param.visible_when.items():
+            actual_value = self._param_values.get(cond_param)
+            if actual_value != cond_value:
+                return False
+        return True
+
+    def _get_visible_params(self) -> List[NodeParam]:
+        """Get list of currently visible parameters."""
+        return [p for p in self._params if self._is_param_visible(p)]
+
+    def _update_param_visibility(self) -> None:
+        """Update visibility of param widgets based on conditions."""
+        visible_params = self._get_visible_params()
+
+        # Hide all widgets first
+        for name, proxy in self._param_widgets.items():
+            proxy.setVisible(False)
+
+        # Position and show visible widgets
+        socket_section = self._get_socket_section_height()
+        widget_width = 100  # Same as in _create_param_widget
+        for i, param in enumerate(visible_params):
+            if param.name in self._param_widgets:
+                proxy = self._param_widgets[param.name]
+                y = self.TITLE_HEIGHT + socket_section + i * self.PARAM_HEIGHT + 3
+                proxy.setPos(self._width - widget_width - 8, y)
+                proxy.setVisible(True)
+
+        # Update node height
+        self._update_height()
+        self.update()
 
     def _get_socket_section_height(self) -> float:
         """Get height of the socket section."""
@@ -314,6 +355,7 @@ class GraphNode(QGraphicsItem):
 
         socket_section = self._get_socket_section_height()
 
+        # Create widgets for ALL params (visibility handled separately)
         for i, param in enumerate(self._params):
             if param.name in self._param_widgets:
                 continue
@@ -321,6 +363,9 @@ class GraphNode(QGraphicsItem):
             y = self.TITLE_HEIGHT + socket_section + i * self.PARAM_HEIGHT + 3
             proxy = self._create_param_widget(param, y)
             self._param_widgets[param.name] = proxy
+
+        # Apply correct visibility and positions
+        self._update_param_visibility()
 
     def get_socket_pos(self, socket: "NodeSocket") -> QPointF:
         """Get socket position in scene coordinates."""
@@ -461,8 +506,9 @@ class GraphNode(QGraphicsItem):
             )
 
     def _draw_params(self, painter: QPainter) -> None:
-        """Draw parameter labels."""
-        if not self._params:
+        """Draw parameter labels for visible params only."""
+        visible_params = self._get_visible_params()
+        if not visible_params:
             return
 
         socket_section = self._get_socket_section_height()
@@ -474,7 +520,7 @@ class GraphNode(QGraphicsItem):
         # Label goes from 8px to (width - 100 - 8 - 4) with some padding
         label_width = int(self._width) - 100 - 8 - 12
 
-        for i, param in enumerate(self._params):
+        for i, param in enumerate(visible_params):
             y = self.TITLE_HEIGHT + socket_section + i * self.PARAM_HEIGHT
             painter.drawText(
                 QRectF(8, y, label_width, self.PARAM_HEIGHT),

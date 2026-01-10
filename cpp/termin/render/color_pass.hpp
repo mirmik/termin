@@ -38,7 +38,7 @@ public:
     std::string output_res = "color";
     std::string shadow_res = "shadow_maps";  // Shadow map resource name (empty = no shadows)
     std::string phase_mark = "opaque";
-    bool sort_by_distance = false;
+    std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
     bool clear_depth = false;
     bool wireframe = false;  // Render as wireframe (override polygon mode)
 
@@ -50,7 +50,8 @@ public:
     INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(ColorPass, shadow_res, "Shadow Resource", "string")
     INSPECT_FIELD(ColorPass, phase_mark, "Phase Mark", "string")
-    INSPECT_FIELD(ColorPass, sort_by_distance, "Sort by Distance", "bool")
+    INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",
+        {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
     INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
 
     ColorPass(
@@ -59,7 +60,7 @@ public:
         const std::string& shadow_res = "shadow_maps",
         const std::string& phase_mark = "opaque",
         const std::string& pass_name = "Color",
-        bool sort_by_distance = false,
+        const std::string& sort_mode = "none",
         bool clear_depth = false
     );
 

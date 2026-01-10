@@ -6,6 +6,7 @@ from termin.editor.file_processors.shader_processor import ShaderFileProcessor
 from termin.editor.file_processors.texture_processor import TextureFileProcessor
 from termin.editor.file_processors.component_processor import ComponentFileProcessor
 from termin.editor.file_processors.pipeline_preloader import PipelinePreLoader
+from termin.editor.file_processors.scene_pipeline_preloader import ScenePipelinePreLoader
 from termin.editor.file_processors.voxel_grid_processor import VoxelGridProcessor
 from termin.editor.file_processors.navmesh_processor import NavMeshProcessor
 from termin.editor.file_processors.glb_processor import GLBPreLoader
@@ -21,6 +22,7 @@ __all__ = [
     "TextureFileProcessor",
     "ComponentFileProcessor",
     "PipelinePreLoader",
+    "ScenePipelinePreLoader",
     "VoxelGridProcessor",
     "NavMeshProcessor",
     "GLBPreLoader",

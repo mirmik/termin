@@ -17,6 +17,7 @@ class Viewport(Identifiable):
     Viewport — "что рендерим и куда" в рамках дисплея.
 
     Содержит данные:
+    - name: имя viewport для идентификации в пайплайне
     - scene: сцена с объектами
     - camera: камера для рендеринга
     - display: родительский дисплей
@@ -29,6 +30,7 @@ class Viewport(Identifiable):
 
     Для рендеринга используйте RenderEngine с RenderView и ViewportRenderState.
     """
+    name: str
     scene: "Scene"
     camera: "CameraComponent"
     rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
@@ -92,6 +94,7 @@ class Viewport(Identifiable):
 
         return {
             "uuid": self._uuid,
+            "name": self.name,
             "camera_entity": camera_entity_name,
             "rect": list(self.rect),
             "depth": self.depth,
@@ -139,7 +142,7 @@ def make_default_pipeline() -> "RenderPipeline":
         shadow_res=None,
         pass_name="Transparent",
         phase_mark="transparent",
-        sort_by_distance=True,
+        sort_mode="far_to_near",
     )
 
     passes: List = [

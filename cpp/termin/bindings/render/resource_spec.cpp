@@ -18,12 +18,16 @@ void bind_resource_spec(nb::module_& m) {
             nb::object clear_color,
             nb::object clear_depth,
             nb::object format,
-            int samples
+            int samples,
+            const std::string& viewport_name,
+            float scale
         ) {
             new (self) ResourceSpec();
             self->resource = resource;
             self->resource_type = resource_type;
             self->samples = samples;
+            self->viewport_name = viewport_name;
+            self->scale = scale;
 
             if (!size.is_none()) {
                 nb::tuple t = nb::cast<nb::tuple>(size);
@@ -49,11 +53,15 @@ void bind_resource_spec(nb::module_& m) {
             nb::arg("clear_color") = nb::none(),
             nb::arg("clear_depth") = nb::none(),
             nb::arg("format") = nb::none(),
-            nb::arg("samples") = 1
+            nb::arg("samples") = 1,
+            nb::arg("viewport_name") = "",
+            nb::arg("scale") = 1.0f
         )
         .def_rw("resource", &ResourceSpec::resource)
         .def_rw("resource_type", &ResourceSpec::resource_type)
         .def_rw("samples", &ResourceSpec::samples)
+        .def_rw("viewport_name", &ResourceSpec::viewport_name)
+        .def_rw("scale", &ResourceSpec::scale)
         // size property: optional<pair<int,int>> <-> tuple or None
         .def_prop_rw("size",
             [](const ResourceSpec& self) -> nb::object {
@@ -153,6 +161,12 @@ void bind_resource_spec(nb::module_& m) {
             if (self.samples != 1) {
                 data["samples"] = self.samples;
             }
+            if (!self.viewport_name.empty()) {
+                data["viewport_name"] = self.viewport_name;
+            }
+            if (self.scale != 1.0f) {
+                data["scale"] = self.scale;
+            }
             return data;
         })
         // deserialize() classmethod - handles both list and tuple
@@ -164,6 +178,8 @@ void bind_resource_spec(nb::module_& m) {
                 nb::cast<std::string>(data["resource_type"]) : "fbo";
             spec.samples = data.contains("samples") ?
                 nb::cast<int>(data["samples"]) : 1;
+            spec.viewport_name = data.contains("viewport_name") ?
+                nb::cast<std::string>(data["viewport_name"]) : "";
 
             if (data.contains("size")) {
                 nb::object size_obj = data["size"];
@@ -186,6 +202,9 @@ void bind_resource_spec(nb::module_& m) {
             }
             if (data.contains("format")) {
                 spec.format = nb::cast<std::string>(data["format"]);
+            }
+            if (data.contains("scale")) {
+                spec.scale = nb::cast<float>(data["scale"]);
             }
             return spec;
         }, nb::arg("data"));

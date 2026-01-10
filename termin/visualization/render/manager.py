@@ -219,6 +219,7 @@ class RenderingManager:
         camera: Optional["CameraComponent"] = None,
         region: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
         pipeline: Optional["RenderPipeline"] = None,
+        name: str = "main",
     ) -> "Viewport":
         """
         Mount a scene to a display region.
@@ -231,6 +232,7 @@ class RenderingManager:
             camera: Camera to use (if None, finds first camera in scene).
             region: Normalized rect (x, y, w, h) on display.
             pipeline: Render pipeline (uses default if None).
+            name: Viewport name for identification in pipeline.
 
         Returns:
             Created viewport.
@@ -256,6 +258,7 @@ class RenderingManager:
 
         # Create viewport
         viewport = Viewport(
+            name=name,
             scene=scene,
             camera=camera,
             rect=region,

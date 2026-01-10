@@ -32,6 +32,7 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("reads", &FramePass::reads)
         .def_rw("writes", &FramePass::writes)
         .def_rw("enabled", &FramePass::enabled)
+        .def_rw("viewport_name", &FramePass::viewport_name)
         .def("get_inplace_aliases", &FramePass::get_inplace_aliases)
         .def("is_inplace", &FramePass::is_inplace)
         .def_prop_ro("inplace", &FramePass::is_inplace)
@@ -230,21 +231,21 @@ void bind_frame_pass(nb::module_& m) {
     nb::class_<ColorPass, FramePass>(m, "ColorPass")
         .def("__init__", [](ColorPass* self, const std::string& input_res, const std::string& output_res,
                             const std::string& shadow_res, const std::string& phase_mark,
-                            const std::string& pass_name, bool sort_by_distance, bool clear_depth) {
-            new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_by_distance, clear_depth);
+                            const std::string& pass_name, const std::string& sort_mode, bool clear_depth) {
+            new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_mode, clear_depth);
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "color",
              nb::arg("shadow_res") = "shadow_maps",
              nb::arg("phase_mark") = "opaque",
              nb::arg("pass_name") = "Color",
-             nb::arg("sort_by_distance") = false,
+             nb::arg("sort_mode") = "none",
              nb::arg("clear_depth") = false)
         .def_rw("input_res", &ColorPass::input_res)
         .def_rw("output_res", &ColorPass::output_res)
         .def_rw("shadow_res", &ColorPass::shadow_res)
         .def_rw("phase_mark", &ColorPass::phase_mark)
-        .def_rw("sort_by_distance", &ColorPass::sort_by_distance)
+        .def_rw("sort_mode", &ColorPass::sort_mode)
         .def_rw("clear_depth", &ColorPass::clear_depth)
         .def_rw("wireframe", &ColorPass::wireframe)
         .def("get_resource_specs", &ColorPass::get_resource_specs)

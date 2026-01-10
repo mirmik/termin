@@ -85,12 +85,15 @@ class ShadowPass(_ShadowPassNative):
 
     def serialize(self) -> dict:
         """Serialize ShadowPass to dict."""
-        return {
+        result = {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
             "data": self.serialize_data(),
         }
+        if self.viewport_name:
+            result["viewport_name"] = self.viewport_name
+        return result
 
     def get_resource_specs(self) -> list[ResourceSpec]:
         """Объявляет требования к ресурсу shadow_maps."""

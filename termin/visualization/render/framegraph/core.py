@@ -44,10 +44,14 @@ class FramePass:
     # Для этих пар input и output используют один и тот же FBO
     node_inplace_pairs: list = []
 
-    def __init__(self, pass_name: str = "FramePass"):
+    def __init__(self, pass_name: str = "FramePass", viewport_name: str | None = None):
         self.pass_name = pass_name
         self.enabled = True
         self.passthrough = False
+
+        # Viewport name for resolution and camera context
+        # None = offscreen pass (uses explicit resolution from ResourceSpec)
+        self.viewport_name = viewport_name
 
         # Конфигурация внутренней точки дебага.
         self.debug_internal_symbol: str | None = None
@@ -221,13 +225,16 @@ class FramePass:
 
         Использует InspectRegistry для сериализации полей.
         """
-        return {
+        result = {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
             "passthrough": self.passthrough,
             "data": self.serialize_data(),
         }
+        if self.viewport_name is not None:
+            result["viewport_name"] = self.viewport_name
+        return result
 
     @classmethod
     def deserialize(cls, data: dict, resource_manager=None) -> "FramePass":
@@ -266,6 +273,7 @@ class FramePass:
         # Восстанавливаем базовые поля
         instance.enabled = data.get("enabled", True)
         instance.passthrough = data.get("passthrough", False)
+        instance.viewport_name = data.get("viewport_name", "")
 
         # Десериализуем данные через InspectRegistry
         instance.deserialize_data(data.get("data", {}))

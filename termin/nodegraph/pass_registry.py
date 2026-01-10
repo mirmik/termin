@@ -85,6 +85,18 @@ def inspect_field_info_to_node_param(info) -> NodeParam | None:
         )
 
     elif kind == "string":
+        # Check if string field has choices (INSPECT_FIELD_CHOICES)
+        if info.choices:
+            # Use values as choices (they get passed directly to pass constructor)
+            choice_values = [c.value for c in info.choices]
+            default = choice_values[0] if choice_values else ""
+            return NodeParam(
+                name=name,
+                label=label,
+                param_type="choice",
+                default=default,
+                choices=choice_values,
+            )
         return NodeParam(
             name=name,
             label=label,

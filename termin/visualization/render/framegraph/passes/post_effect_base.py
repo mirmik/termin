@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Set, Tuple
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
@@ -37,7 +38,20 @@ class PostEffectPass(RenderFramePass):
 
     node_inputs = [("input_res", "fbo")]
     node_outputs = [("output_res", "fbo")]
-    node_inplace_pairs = [("input_res", "output_res")]
+    node_inplace_pairs = []
+
+    inspect_fields = {
+        "input_res": InspectField(
+            path="input_res",
+            label="Input",
+            kind="string",
+        ),
+        "output_res": InspectField(
+            path="output_res",
+            label="Output",
+            kind="string",
+        ),
+    }
 
     def __init__(
         self,

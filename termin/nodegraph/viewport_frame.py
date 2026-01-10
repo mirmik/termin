@@ -32,9 +32,9 @@ class ViewportFrame(QGraphicsRectItem):
     """
     Visual frame that groups nodes belonging to a viewport.
 
-    Nodes inside the frame automatically inherit:
-    - Viewport resolution for FBO sizing
-    - Camera reference
+    Nodes inside the frame automatically inherit the viewport context:
+    - Passes get viewport_name for resolution and camera
+    - Resources get viewport_name for size mode
 
     The frame can be resized by dragging edges/corners.
     """
@@ -42,6 +42,7 @@ class ViewportFrame(QGraphicsRectItem):
     def __init__(
         self,
         title: str = "Viewport",
+        viewport_name: str = "main",
         x: float = 0,
         y: float = 0,
         width: float = 600,
@@ -50,28 +51,19 @@ class ViewportFrame(QGraphicsRectItem):
         super().__init__(x, y, width, height)
 
         self.title = title
+        self.viewport_name = viewport_name
         self._min_width = 300
-        self._min_height = 200
+        self._min_height = 150
 
         # Visual settings
         self._title_height = 30
-        self._params_height = PARAM_ROW_HEIGHT * 2  # Two rows of params
+        self._params_height = PARAM_ROW_HEIGHT  # One row for viewport selector
         self._header_height = self._title_height + self._params_height
         self._corner_radius = 8
         self._border_color = QColor(100, 150, 200, 200)
         self._fill_color = QColor(60, 80, 100, 40)
         self._title_color = QColor(80, 120, 160, 180)
         self._params_bg_color = QColor(50, 60, 75, 150)
-
-        # Parameters
-        self._params: dict[str, Any] = {
-            "display": "0",
-            "camera": "Main Camera",
-            "ndc_x": "0.0",
-            "ndc_y": "0.0",
-            "ndc_w": "1.0",
-            "ndc_h": "1.0",
-        }
 
         # Resize state
         self._resize_edge: Optional[str] = None
@@ -80,6 +72,7 @@ class ViewportFrame(QGraphicsRectItem):
 
         # Parameter widgets
         self._param_widgets_created = False
+        self._viewport_input: Optional[QLineEdit] = None
 
         # Make selectable and movable
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
@@ -162,17 +155,10 @@ class ViewportFrame(QGraphicsRectItem):
         painter.setPen(QPen(QColor(180, 190, 200)))
 
         y1 = rect.y() + self._title_height + 4
-        y2 = y1 + PARAM_ROW_HEIGHT
 
-        # Row 1: Display and Camera
-        painter.drawText(QRectF(rect.x() + 8, y1, 50, 20),
-                        Qt.AlignmentFlag.AlignVCenter, "Display")
-        painter.drawText(QRectF(rect.x() + 120, y1, 50, 20),
-                        Qt.AlignmentFlag.AlignVCenter, "Camera")
-
-        # Row 2: NDC rect
-        painter.drawText(QRectF(rect.x() + 8, y2, 30, 20),
-                        Qt.AlignmentFlag.AlignVCenter, "NDC")
+        # Viewport name label
+        painter.drawText(QRectF(rect.x() + 8, y1, 60, 20),
+                        Qt.AlignmentFlag.AlignVCenter, "Viewport")
 
     def _ensure_param_widgets(self) -> None:
         """Create parameter edit widgets."""
@@ -182,10 +168,9 @@ class ViewportFrame(QGraphicsRectItem):
 
         rect = self.rect()
         y1 = rect.y() + self._title_height + 2
-        y2 = y1 + PARAM_ROW_HEIGHT
 
         style = """
-            QComboBox, QLineEdit {
+            QLineEdit {
                 background: #3a3a4a;
                 border: 1px solid #555;
                 border-radius: 3px;
@@ -193,61 +178,25 @@ class ViewportFrame(QGraphicsRectItem):
                 padding: 2px 4px;
                 font-size: 10px;
             }
-            QComboBox::drop-down {
-                border: none;
-                width: 14px;
-            }
-            QComboBox::down-arrow {
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid #aaa;
-            }
         """
 
-        # Display selector
-        display_combo = QComboBox()
-        display_combo.addItems(["0", "1", "2", "3"])
-        display_combo.setCurrentText(self._params["display"])
-        display_combo.setFixedSize(50, 20)
-        display_combo.setStyleSheet(style)
-        display_combo.currentTextChanged.connect(
-            lambda v: self._params.__setitem__("display", v)
-        )
-        proxy1 = QGraphicsProxyWidget(self)
-        proxy1.setWidget(display_combo)
-        proxy1.setPos(rect.x() + 55, y1)
+        # Viewport name input
+        viewport_input = QLineEdit()
+        viewport_input.setText(self.viewport_name)
+        viewport_input.setFixedSize(150, 20)
+        viewport_input.setStyleSheet(style)
+        viewport_input.setPlaceholderText("viewport name")
+        viewport_input.textChanged.connect(self._on_viewport_name_changed)
 
-        # Camera selector
-        camera_combo = QComboBox()
-        camera_combo.addItems(["Main Camera", "Debug Camera", "Game Camera"])
-        camera_combo.setCurrentText(self._params["camera"])
-        camera_combo.setFixedSize(120, 20)
-        camera_combo.setStyleSheet(style)
-        camera_combo.currentTextChanged.connect(
-            lambda v: self._params.__setitem__("camera", v)
-        )
-        proxy2 = QGraphicsProxyWidget(self)
-        proxy2.setWidget(camera_combo)
-        proxy2.setPos(rect.x() + 170, y1)
+        self._viewport_input = viewport_input
 
-        # NDC inputs (x, y, w, h)
-        ndc_labels = ["x", "y", "w", "h"]
-        ndc_keys = ["ndc_x", "ndc_y", "ndc_w", "ndc_h"]
-        x_offset = 40
+        proxy = QGraphicsProxyWidget(self)
+        proxy.setWidget(viewport_input)
+        proxy.setPos(rect.x() + 70, y1)
 
-        for i, (label, key) in enumerate(zip(ndc_labels, ndc_keys)):
-            # Small label
-            line_edit = QLineEdit()
-            line_edit.setText(self._params[key])
-            line_edit.setFixedSize(45, 20)
-            line_edit.setStyleSheet(style)
-            line_edit.setPlaceholderText(label)
-            line_edit.textChanged.connect(
-                lambda v, k=key: self._params.__setitem__(k, v)
-            )
-            proxy = QGraphicsProxyWidget(self)
-            proxy.setWidget(line_edit)
-            proxy.setPos(rect.x() + x_offset + i * 55, y2)
+    def _on_viewport_name_changed(self, value: str) -> None:
+        """Handle viewport name change."""
+        self.viewport_name = value
 
     def get_resize_edge(self, pos: QPointF) -> Optional[str]:
         """Determine which edge/corner is under the cursor."""

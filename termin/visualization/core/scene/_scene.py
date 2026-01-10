@@ -83,6 +83,10 @@ class Scene:
         # Viewport configuration (display_name -> camera/region mapping)
         self._viewport_configs: List[ViewportConfig] = []
 
+        # Scene pipelines (list of handles referencing ScenePipelineAsset)
+        from termin.assets.scene_pipeline_handle import ScenePipelineHandle
+        self._scene_pipelines: List[ScenePipelineHandle] = []
+
         # Editor viewport state (runtime only, not serialized)
         # Stores camera name used in editor viewport for restore after game mode
         self.editor_viewport_camera_name: str | None = None
@@ -330,6 +334,26 @@ class Scene:
     def clear_viewport_configs(self) -> None:
         """Clear all viewport configurations."""
         self._viewport_configs.clear()
+
+    # --- Scene pipelines ---
+
+    @property
+    def scene_pipelines(self) -> List:
+        """Get scene pipeline handles."""
+        return self._scene_pipelines
+
+    def add_scene_pipeline(self, handle) -> None:
+        """Add a scene pipeline handle."""
+        self._scene_pipelines.append(handle)
+
+    def remove_scene_pipeline(self, handle) -> None:
+        """Remove a scene pipeline handle."""
+        if handle in self._scene_pipelines:
+            self._scene_pipelines.remove(handle)
+
+    def clear_scene_pipelines(self) -> None:
+        """Clear all scene pipeline handles."""
+        self._scene_pipelines.clear()
 
     # --- Editor entities data (runtime only) ---
 
@@ -682,6 +706,7 @@ class Scene:
             "layer_names": {str(k): v for k, v in self.layer_names.items()},
             "flag_names": {str(k): v for k, v in self.flag_names.items()},
             "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
+            "scene_pipelines": [h.serialize() for h in self._scene_pipelines],
         }
         result.update(self._lighting.serialize())
         result.update(self._skybox.serialize())
@@ -723,6 +748,12 @@ class Scene:
             self._viewport_configs = [
                 ViewportConfig.deserialize(vc_data)
                 for vc_data in data.get("viewport_configs", [])
+            ]
+            # Load scene pipelines
+            from termin.assets.scene_pipeline_handle import ScenePipelineHandle
+            self._scene_pipelines = [
+                ScenePipelineHandle.deserialize(sp_data)
+                for sp_data in data.get("scene_pipelines", [])
             ]
 
         entities_data = data.get("entities", [])

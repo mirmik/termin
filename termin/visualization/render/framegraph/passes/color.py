@@ -51,7 +51,7 @@ class ColorPass(_ColorPassNative):
         shadow_res: str | None = "shadow_maps",
         pass_name: str = "Color",
         phase_mark: str | None = None,
-        sort_by_distance: bool = False,
+        sort_mode: str = "none",  # "none", "near_to_far", "far_to_near"
         clear_depth: bool = False,
     ):
         if phase_mark is None:
@@ -64,7 +64,7 @@ class ColorPass(_ColorPassNative):
             shadow_res=shadow_res if shadow_res is not None else "",
             phase_mark=phase_mark,
             pass_name=pass_name,
-            sort_by_distance=sort_by_distance,
+            sort_mode=sort_mode,
             clear_depth=clear_depth,
         )
 
@@ -102,12 +102,15 @@ class ColorPass(_ColorPassNative):
 
     def serialize(self) -> dict:
         """Serialize ColorPass to dict."""
-        return {
+        result = {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
             "data": self.serialize_data(),
         }
+        if self.viewport_name:
+            result["viewport_name"] = self.viewport_name
+        return result
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """ColorPass reads input_res and writes output_res inplace."""

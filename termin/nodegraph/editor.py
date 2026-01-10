@@ -21,6 +21,7 @@ from termin.nodegraph.scene import NodeGraphScene
 from termin.nodegraph.view import NodeGraphView
 from termin.nodegraph.nodes import create_node
 from termin.nodegraph.serialization import serialize_graph, deserialize_graph
+from termin.nodegraph.compiler import compile_graph_to_dict, CompileError
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -197,52 +198,43 @@ class PipelineGraphEditor(QMainWindow):
         self._status_bar.showMessage("Demo graph created. Nodes inside blue frame use viewport resolution.")
 
     def _compile_pipeline(self) -> None:
-        """Compile the graph into a RenderPipeline."""
+        """Compile the graph into a RenderPipeline and print serialization."""
         nodes = self._graph_scene.get_nodes()
         connections = self._graph_scene.get_connections()
-        viewport_frames = self._graph_scene.get_viewport_frames()
 
-        pass_count = sum(1 for n in nodes if n.node_type == "pass")
-        effect_count = sum(1 for n in nodes if n.node_type == "effect")
+        pass_count = sum(1 for n in nodes if n.node_type in ("pass", "effect"))
         conn_count = len(connections)
-        frame_count = len(viewport_frames)
 
-        self._status_bar.showMessage(
-            f"Compiled: {pass_count} passes, {effect_count} effects, "
-            f"{conn_count} connections, {frame_count} viewports"
-        )
+        try:
+            pipeline_dict = compile_graph_to_dict(self._graph_scene)
 
-        # Debug output
-        print("\n=== Pipeline Graph ===")
+            self._status_bar.showMessage(
+                f"Compiled: {pass_count} passes, {conn_count} connections → "
+                f"{len(pipeline_dict.get('passes', []))} passes in pipeline"
+            )
 
-        # Show viewport frames and their contained nodes
-        for frame in viewport_frames:
-            contained = frame.get_contained_nodes()
-            print(f"\nViewport Frame: {frame.title}")
-            print(f"  Nodes inside ({len(contained)}):")
-            for node in contained:
-                print(f"    - {node.title} ({node.node_type})")
+            # Pretty print the serialized pipeline
+            print("\n" + "=" * 60)
+            print("COMPILED PIPELINE")
+            print("=" * 60)
+            print(json.dumps(pipeline_dict, indent=2, default=str))
+            print("=" * 60 + "\n")
 
-        # Show all nodes and connections
-        print("\nAll nodes:")
-        for node in nodes:
-            print(f"  {node.title} ({node.node_type})")
-            for socket in node.input_sockets:
-                conns = [c.start_socket.node.title for c in socket.connections if c.start_socket]
-                if conns:
-                    print(f"    <- {socket.name}: {conns}")
-            for socket in node.output_sockets:
-                conns = [c.end_socket.node.title for c in socket.connections if c.end_socket]
-                if conns:
-                    print(f"    -> {socket.name}: {conns}")
-        print("======================\n")
+        except CompileError as e:
+            self._status_bar.showMessage(f"Compilation error: {e}")
+            print(f"\nCompilation error: {e}\n")
+        except Exception as e:
+            self._status_bar.showMessage(f"Unexpected error: {e}")
+            print(f"\nUnexpected error during compilation: {e}\n")
+            import traceback
+            traceback.print_exc()
 
     def _save_graph(self) -> None:
         """Save the graph to a JSON file."""
         dialog = QFileDialog(self, "Save Pipeline Graph")
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
-        dialog.setNameFilter("Pipeline (*.pipeline);;All Files (*)")
-        dialog.setDefaultSuffix("pipeline")
+        dialog.setNameFilter("Scene Pipeline (*.scene_pipeline);;All Files (*)")
+        dialog.setDefaultSuffix("scene_pipeline")
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
 
         if dialog.exec() != QFileDialog.DialogCode.Accepted:
@@ -264,7 +256,7 @@ class PipelineGraphEditor(QMainWindow):
         """Load a graph from a JSON file."""
         dialog = QFileDialog(self, "Load Pipeline Graph")
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
-        dialog.setNameFilter("Pipeline (*.pipeline);;All Files (*)")
+        dialog.setNameFilter("Scene Pipeline (*.scene_pipeline);;Pipeline (*.pipeline);;All Files (*)")
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
 
         if dialog.exec() != QFileDialog.DialogCode.Accepted:

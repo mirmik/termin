@@ -175,8 +175,13 @@ enum class TypeBackend {
 // ============================================================================
 
 struct EnumChoice {
-    nb::object value;
+    std::string value;  // Stored as string, converted to nb::object when needed
     std::string label;
+
+    // Get value as nb::object (for Python interop)
+    nb::object get_value() const {
+        return nb::str(value.c_str());
+    }
 };
 
 // ============================================================================
@@ -443,6 +448,12 @@ public:
     // Add a serializable-only field (for SERIALIZABLE_FIELD macro)
     void add_serializable_field(const std::string& type_name, InspectFieldInfo&& info) {
         _py_fields[type_name].push_back(std::move(info));
+    }
+
+    // Add a field with choices (for INSPECT_FIELD_CHOICES macro)
+    void add_field_with_choices(const std::string& type_name, InspectFieldInfo&& info) {
+        _py_fields[type_name].push_back(std::move(info));
+        _type_backends[type_name] = TypeBackend::Cpp;
     }
 
     // ========================================================================
@@ -747,6 +758,44 @@ struct InspectFieldCallbackRegistrar {
     }
 };
 
+// Registrar for INSPECT_FIELD_CHOICES (fields with enum-like choices)
+template<typename C, typename T>
+struct InspectFieldChoicesRegistrar {
+    InspectFieldChoicesRegistrar(
+        T C::*member,
+        const char* type_name,
+        const char* path,
+        const char* label,
+        const char* kind,
+        std::initializer_list<std::pair<const char*, const char*>> choices_list
+    ) {
+        InspectFieldInfo info;
+        info.type_name = type_name;
+        info.path = path;
+        info.label = label;
+        info.kind = kind;
+        info.backend = TypeBackend::Cpp;
+
+        // Convert choices to EnumChoice vector (store as strings, not nb::object)
+        for (const auto& [value, choice_label] : choices_list) {
+            EnumChoice choice;
+            choice.value = value;
+            choice.label = choice_label;
+            info.choices.push_back(std::move(choice));
+        }
+
+        info.cpp_getter = [member](void* obj) -> std::any {
+            return static_cast<C*>(obj)->*member;
+        };
+
+        info.cpp_setter = [member](void* obj, const std::any& val) {
+            static_cast<C*>(obj)->*member = std::any_cast<T>(val);
+        };
+
+        InspectRegistry::instance().add_field_with_choices(type_name, std::move(info));
+    }
+};
+
 // Registrar for SERIALIZABLE_FIELD (serialize-only fields with trent getter/setter)
 template<typename C>
 struct SerializableFieldRegistrar {
@@ -906,3 +955,10 @@ inline nb::object trent_to_nb_compat(const nos::trent& t) {
         _serialize_reg_##cls##_##name{#cls, #name, \
             [](cls* self) -> nos::trent { return self->getter_expr; }, \
             [](cls* self, const nos::trent& val) { self->setter_expr; }};
+
+// INSPECT_FIELD_CHOICES - field with enum-like choices (variadic)
+// Usage: INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",
+//            {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
+#define INSPECT_FIELD_CHOICES(cls, field, label, kind, ...) \
+    inline static ::tc::InspectFieldChoicesRegistrar<cls, decltype(cls::field)> \
+        _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, {__VA_ARGS__}};

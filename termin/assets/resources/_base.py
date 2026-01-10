@@ -56,6 +56,7 @@ class ResourceManagerBase:
         self._audio_clip_registry = self._create_audio_clip_registry()
         self._ui_registry = self._create_ui_registry()
         self._pipeline_registry = self._create_pipeline_registry()
+        self._scene_pipeline_registry = self._create_scene_pipeline_registry()
 
         # Legacy dicts (for types without registry)
         self._material_assets: Dict[str, "MaterialAsset"] = {}
@@ -302,6 +303,32 @@ class ResourceManagerBase:
         def get_asset_class():
             from termin.assets.pipeline_asset import PipelineAsset
             return PipelineAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
+    def _create_scene_pipeline_registry(self):
+        """Create AssetRegistry for scene pipelines (.scene_pipeline files)."""
+        from termin.assets.asset_registry import AssetRegistry
+
+        def data_from_asset(asset):
+            if asset.pipeline is None:
+                asset.ensure_loaded()
+            return asset.pipeline
+
+        def data_to_asset(data):
+            for asset in self._scene_pipeline_registry.assets.values():
+                if asset.pipeline is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.assets.scene_pipeline_asset import ScenePipelineAsset
+            return ScenePipelineAsset
 
         return AssetRegistry(
             asset_class=get_asset_class,

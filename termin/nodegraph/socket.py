@@ -75,8 +75,10 @@ class NodeSocket:
 
     def add_connection(self, connection: "NodeConnection") -> None:
         """Add a connection to this socket."""
-        if not self.multi:
-            # Remove existing connections for single-connection sockets
+        # Output sockets always allow multiple connections (fan-out)
+        # Input sockets respect the multi flag (fan-in)
+        if self.is_input and not self.multi:
+            # Remove existing connections for single-connection input sockets
             for conn in self.connections[:]:
                 conn.remove()
         self.connections.append(connection)

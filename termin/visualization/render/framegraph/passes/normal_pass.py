@@ -67,12 +67,15 @@ class NormalPass(_NormalPassNative):
 
     def serialize(self) -> dict:
         """Serialize NormalPass to dict."""
-        return {
+        result = {
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
             "data": self.serialize_data(),
         }
+        if self.viewport_name:
+            result["viewport_name"] = self.viewport_name
+        return result
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """NormalPass reads input_res and writes output_res inplace."""

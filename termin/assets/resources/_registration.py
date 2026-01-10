@@ -55,6 +55,8 @@ class RegistrationMixin:
             self._register_ui_file(name, result)
         elif result.resource_type == "pipeline":
             self._register_pipeline_file(name, result)
+        elif result.resource_type == "scene_pipeline":
+            self._register_scene_pipeline_file(name, result)
         else:
             log.warn(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -96,6 +98,8 @@ class RegistrationMixin:
             self._reload_ui_file(name, result)
         elif result.resource_type == "pipeline":
             self._reload_pipeline_file(name, result)
+        elif result.resource_type == "scene_pipeline":
+            self._reload_scene_pipeline_file(name, result)
         else:
             log.warn(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -595,3 +599,42 @@ class RegistrationMixin:
 
         asset.parse_spec(result.spec_data)
         asset.reload()
+
+    def _register_scene_pipeline_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register scene pipeline from PreLoadResult."""
+        from termin.assets.scene_pipeline_asset import ScenePipelineAsset
+
+        # UUID may be in the JSON content (already extracted by preloader)
+        uuid = result.uuid
+        if uuid and uuid in self._assets_by_uuid:
+            asset = self._assets_by_uuid[uuid]
+            if isinstance(asset, ScenePipelineAsset):
+                self._scene_pipeline_registry.assets[name] = asset
+                if result.content:
+                    asset.load_from_content(result.content, result.spec_data)
+                return
+
+        asset = self._scene_pipeline_registry.get_or_create_asset(
+            name=name,
+            source_path=result.path,
+            uuid=uuid,
+        )
+        if result.content:
+            asset.load_from_content(result.content, result.spec_data)
+
+    def _reload_scene_pipeline_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload scene pipeline from PreLoadResult."""
+        asset = self._scene_pipeline_registry.get_asset(name)
+        if asset is None:
+            return
+
+        if not asset.is_loaded:
+            return
+
+        if not asset.should_reload_from_file():
+            return
+
+        if result.content:
+            asset.load_from_content(result.content, result.spec_data)
+        else:
+            asset.reload()

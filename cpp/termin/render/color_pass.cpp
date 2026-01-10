@@ -36,14 +36,14 @@ ColorPass::ColorPass(
     const std::string& shadow_res,
     const std::string& phase_mark,
     const std::string& pass_name,
-    bool sort_by_distance,
+    const std::string& sort_mode,
     bool clear_depth
 ) : RenderFramePass(pass_name, {input_res}, {output_res}),
     input_res(input_res),
     output_res(output_res),
     shadow_res(shadow_res),
     phase_mark(phase_mark),
-    sort_by_distance(sort_by_distance),
+    sort_mode(sort_mode),
     clear_depth(clear_depth)
 {
     // Add shadow_res to reads if not empty
@@ -168,15 +168,26 @@ void ColorPass::execute_with_data(
     // Collect draw calls
     std::vector<PhaseDrawCall> draw_calls = collect_draw_calls(entities, phase_mark);
 
-    // Sort by distance if requested (back-to-front for transparency)
-    if (sort_by_distance) {
+    // Sort by distance if requested
+    if (sort_mode == "far_to_near") {
+        // Back-to-front for transparent objects
         std::sort(draw_calls.begin(), draw_calls.end(),
             [&camera_position](const PhaseDrawCall& a, const PhaseDrawCall& b) {
                 Vec3 pos_a = get_global_position(a.entity);
                 Vec3 pos_b = get_global_position(b.entity);
                 double dist_a = (pos_a - camera_position).norm();
                 double dist_b = (pos_b - camera_position).norm();
-                return dist_a > dist_b;  // back-to-front
+                return dist_a > dist_b;
+            });
+    } else if (sort_mode == "near_to_far") {
+        // Front-to-back for opaque objects (early-z optimization)
+        std::sort(draw_calls.begin(), draw_calls.end(),
+            [&camera_position](const PhaseDrawCall& a, const PhaseDrawCall& b) {
+                Vec3 pos_a = get_global_position(a.entity);
+                Vec3 pos_b = get_global_position(b.entity);
+                double dist_a = (pos_a - camera_position).norm();
+                double dist_b = (pos_b - camera_position).norm();
+                return dist_a < dist_b;
             });
     }
 

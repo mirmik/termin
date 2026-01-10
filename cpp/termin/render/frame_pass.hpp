@@ -26,6 +26,10 @@ public:
     std::set<std::string> writes;
     bool enabled = true;
 
+    // Viewport context for resolution/camera
+    // Empty string means offscreen (explicit size in ResourceSpec)
+    std::string viewport_name;
+
     // Debug configuration
     std::string debug_internal_symbol;
 
