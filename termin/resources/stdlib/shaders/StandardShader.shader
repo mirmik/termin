@@ -67,25 +67,7 @@ uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
 uniform float u_shininess;
 
-// Camera
-uniform vec3 u_camera_position;
-
-// Ambient lighting (scene-level)
-uniform vec3  u_ambient_color;
-uniform float u_ambient_intensity;
-
-// Lights
-uniform int   u_light_count;
-uniform int   u_light_type[MAX_LIGHTS];
-uniform vec3  u_light_color[MAX_LIGHTS];
-uniform float u_light_intensity[MAX_LIGHTS];
-uniform vec3  u_light_direction[MAX_LIGHTS];
-uniform vec3  u_light_position[MAX_LIGHTS];
-uniform float u_light_range[MAX_LIGHTS];
-uniform vec3  u_light_attenuation[MAX_LIGHTS];
-uniform float u_light_inner_angle[MAX_LIGHTS];
-uniform float u_light_outer_angle[MAX_LIGHTS];
-
+// Light uniforms are declared in lighting.glsl
 // Shadow uniforms are declared in shadows.glsl
 
 out vec4 FragColor;

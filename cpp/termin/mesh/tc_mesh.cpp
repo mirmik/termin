@@ -13,8 +13,15 @@ bool TcMesh::set_from_mesh3(const Mesh3& mesh, const tc_vertex_layout* custom_la
         return false;
     }
 
-    // Default layout: position(3) + normal(3) + uv(2) = 32 bytes
-    tc_vertex_layout layout = custom_layout ? *custom_layout : tc_vertex_layout_pos_normal_uv();
+    // Choose layout based on mesh data (tangents require larger layout)
+    tc_vertex_layout layout;
+    if (custom_layout) {
+        layout = *custom_layout;
+    } else if (mesh.has_tangents()) {
+        layout = tc_vertex_layout_pos_normal_uv_tangent();
+    } else {
+        layout = tc_vertex_layout_pos_normal_uv();
+    }
 
     // Build interleaved vertex buffer
     size_t num_verts = mesh.vertices.size();
@@ -24,6 +31,7 @@ bool TcMesh::set_from_mesh3(const Mesh3& mesh, const tc_vertex_layout* custom_la
     const tc_vertex_attrib* pos_attr = tc_vertex_layout_find(&layout, "position");
     const tc_vertex_attrib* norm_attr = tc_vertex_layout_find(&layout, "normal");
     const tc_vertex_attrib* uv_attr = tc_vertex_layout_find(&layout, "uv");
+    const tc_vertex_attrib* tan_attr = tc_vertex_layout_find(&layout, "tangent");
 
     for (size_t i = 0; i < num_verts; i++) {
         uint8_t* dst = buffer.data() + i * stride;
@@ -46,6 +54,14 @@ bool TcMesh::set_from_mesh3(const Mesh3& mesh, const tc_vertex_layout* custom_la
             float* u = reinterpret_cast<float*>(dst + uv_attr->offset);
             u[0] = mesh.uvs[i].x;
             u[1] = mesh.uvs[i].y;
+        }
+
+        if (tan_attr && i < mesh.tangents.size()) {
+            float* t = reinterpret_cast<float*>(dst + tan_attr->offset);
+            t[0] = mesh.tangents[i].x;
+            t[1] = mesh.tangents[i].y;
+            t[2] = mesh.tangents[i].z;
+            t[3] = mesh.tangents[i].w;
         }
     }
 
@@ -74,8 +90,15 @@ TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
         }
     }
 
-    // Default layout: position(3) + normal(3) + uv(2) = 32 bytes
-    tc_vertex_layout layout = custom_layout ? *custom_layout : tc_vertex_layout_pos_normal_uv();
+    // Choose layout based on mesh data (tangents require larger layout)
+    tc_vertex_layout layout;
+    if (custom_layout) {
+        layout = *custom_layout;
+    } else if (mesh.has_tangents()) {
+        layout = tc_vertex_layout_pos_normal_uv_tangent();
+    } else {
+        layout = tc_vertex_layout_pos_normal_uv();
+    }
 
     // Build interleaved vertex buffer
     size_t num_verts = mesh.vertices.size();
@@ -85,6 +108,7 @@ TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
     const tc_vertex_attrib* pos_attr = tc_vertex_layout_find(&layout, "position");
     const tc_vertex_attrib* norm_attr = tc_vertex_layout_find(&layout, "normal");
     const tc_vertex_attrib* uv_attr = tc_vertex_layout_find(&layout, "uv");
+    const tc_vertex_attrib* tan_attr = tc_vertex_layout_find(&layout, "tangent");
 
     for (size_t i = 0; i < num_verts; i++) {
         uint8_t* dst = buffer.data() + i * stride;
@@ -110,6 +134,15 @@ TcMesh TcMesh::from_mesh3(const Mesh3& mesh,
             float* u = reinterpret_cast<float*>(dst + uv_attr->offset);
             u[0] = mesh.uvs[i].x;
             u[1] = mesh.uvs[i].y;
+        }
+
+        // Tangent
+        if (tan_attr && i < mesh.tangents.size()) {
+            float* t = reinterpret_cast<float*>(dst + tan_attr->offset);
+            t[0] = mesh.tangents[i].x;
+            t[1] = mesh.tangents[i].y;
+            t[2] = mesh.tangents[i].z;
+            t[3] = mesh.tangents[i].w;
         }
     }
 

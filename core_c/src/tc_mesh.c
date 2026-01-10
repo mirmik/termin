@@ -98,6 +98,16 @@ tc_vertex_layout tc_vertex_layout_pos_normal_uv(void) {
     return layout;
 }
 
+tc_vertex_layout tc_vertex_layout_pos_normal_uv_tangent(void) {
+    tc_vertex_layout layout;
+    tc_vertex_layout_init(&layout);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "tangent", 4, TC_ATTRIB_FLOAT32);
+    return layout;
+}
+
 tc_vertex_layout tc_vertex_layout_pos_normal_uv_color(void) {
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);

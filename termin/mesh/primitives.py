@@ -66,6 +66,7 @@ def CubeMesh(size: float = 1.0, y: float = None, z: float = None) -> Mesh3:
     ], dtype=np.float32)
     mesh = Mesh3(vertices=vertices, triangles=triangles, uvs=uvs, name="Cube", uuid=uuid)
     mesh.compute_normals()
+    mesh.compute_tangents()
     return mesh
 
 
@@ -137,27 +138,31 @@ def TexturedCubeMesh(size: float = 1.0, y: float = None, z: float = None) -> Mes
 
     mesh = Mesh3(vertices=vertices, triangles=triangles, uvs=uvs, name="TexturedCube", uuid=uuid)
     mesh.compute_normals()
+    mesh.compute_tangents()
     return mesh
 
 
 def UVSphereMesh(radius: float = 1.0, n_meridians: int = 16, n_parallels: int = 16) -> Mesh3:
-    """Create a UV sphere mesh."""
+    """Create a UV sphere mesh with UV coordinates."""
     uuid = _primitive_uuid("UVSphereMesh", radius, n_meridians, n_parallels)
     rings = n_parallels
     segments = n_meridians
 
     vertices = []
+    uvs = []
     triangles = []
     for r in range(rings + 1):
         theta = r * np.pi / rings
         sin_theta = np.sin(theta)
         cos_theta = np.cos(theta)
+        v_coord = r / rings
         for s in range(segments):
             phi = s * 2 * np.pi / segments
             x = radius * sin_theta * np.cos(phi)
             y = radius * sin_theta * np.sin(phi)
             z = radius * cos_theta
             vertices.append([x, y, z])
+            uvs.append([s / segments, v_coord])
     for r in range(rings):
         for s in range(segments):
             next_r = r + 1
@@ -168,10 +173,12 @@ def UVSphereMesh(radius: float = 1.0, n_meridians: int = 16, n_parallels: int = 
     mesh = Mesh3(
         vertices=np.array(vertices, dtype=np.float32),
         triangles=np.array(triangles, dtype=np.uint32),
+        uvs=np.array(uvs, dtype=np.float32),
         name="UVSphere",
         uuid=uuid
     )
     mesh.compute_normals()
+    mesh.compute_tangents()
     return mesh
 
 
@@ -240,15 +247,19 @@ def _subdivide_icosphere(vertices, triangles, radius):
 
 
 def PlaneMesh(width: float = 1.0, depth: float = 1.0, segments_w: int = 1, segments_d: int = 1) -> Mesh3:
-    """Create a plane mesh in XZ plane."""
+    """Create a plane mesh in XZ plane with UV coordinates."""
     uuid = _primitive_uuid("PlaneMesh", width, depth, segments_w, segments_d)
     vertices = []
+    uvs = []
     triangles = []
     for d in range(segments_d + 1):
         z = (d / segments_d - 0.5) * depth
+        v_coord = d / segments_d
         for w in range(segments_w + 1):
             x = (w / segments_w - 0.5) * width
+            u_coord = w / segments_w
             vertices.append([x, 0.0, z])
+            uvs.append([u_coord, v_coord])
     for d in range(segments_d):
         for w in range(segments_w):
             v0 = d * (segments_w + 1) + w
@@ -261,10 +272,12 @@ def PlaneMesh(width: float = 1.0, depth: float = 1.0, segments_w: int = 1, segme
     mesh = Mesh3(
         vertices=np.array(vertices, dtype=np.float32),
         triangles=np.array(triangles, dtype=np.uint32),
+        uvs=np.array(uvs, dtype=np.float32),
         name="Plane",
         uuid=uuid
     )
     mesh.compute_normals()
+    mesh.compute_tangents()
     return mesh
 
 
@@ -360,7 +373,7 @@ def TorusMesh(
     major_segments: int = 32,
     minor_segments: int = 16,
 ) -> Mesh3:
-    """Create a torus mesh in XZ plane."""
+    """Create a torus mesh in XZ plane with UV coordinates."""
     if major_segments < 3:
         raise ValueError("TorusMesh: major_segments must be >= 3")
     if minor_segments < 3:
@@ -368,15 +381,18 @@ def TorusMesh(
 
     uuid = _primitive_uuid("TorusMesh", major_radius, minor_radius, major_segments, minor_segments)
     vertices = []
+    uvs = []
     triangles = []
 
     for i in range(major_segments):
         u = 2.0 * np.pi * i / major_segments
+        u_coord = i / major_segments
         cos_u = np.cos(u)
         sin_u = np.sin(u)
 
         for j in range(minor_segments):
             v = 2.0 * np.pi * j / minor_segments
+            v_coord = j / minor_segments
             cos_v = np.cos(v)
             sin_v = np.sin(v)
 
@@ -384,6 +400,7 @@ def TorusMesh(
             y = minor_radius * sin_v
             z = (major_radius + minor_radius * cos_v) * sin_u
             vertices.append([x, y, z])
+            uvs.append([u_coord, v_coord])
 
     for i in range(major_segments):
         next_i = (i + 1) % major_segments
@@ -399,10 +416,12 @@ def TorusMesh(
     mesh = Mesh3(
         vertices=np.array(vertices, dtype=np.float32),
         triangles=np.array(triangles, dtype=np.uint32),
+        uvs=np.array(uvs, dtype=np.float32),
         name="Torus",
         uuid=uuid
     )
     mesh.compute_normals()
+    mesh.compute_tangents()
     return mesh
 
 

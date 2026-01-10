@@ -22,12 +22,14 @@ class GLBMeshData:
     """Mesh data extracted from GLB."""
     def __init__(self, name: str, vertices: np.ndarray, normals: Optional[np.ndarray],
                  uvs: Optional[np.ndarray], indices: np.ndarray, material_index: int,
+                 tangents: Optional[np.ndarray] = None,
                  joint_indices: Optional[np.ndarray] = None,
                  joint_weights: Optional[np.ndarray] = None):
         self.name = name
         self.vertices = vertices
         self.normals = normals
         self.uvs = uvs
+        self.tangents = tangents  # Per-vertex tangents (N, 4) with w = handedness
         self.indices = indices
         self.material_index = material_index
         # Skinning data (N, 4) arrays
@@ -230,6 +232,11 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             if "TEXCOORD_0" in attributes:
                 uvs = _read_accessor(gltf, bin_data, attributes["TEXCOORD_0"])
 
+            # Tangents (optional) - vec4 with w = handedness
+            tangents = None
+            if "TANGENT" in attributes:
+                tangents = _read_accessor(gltf, bin_data, attributes["TANGENT"])
+
             # Skinning data (optional)
             joint_indices = None
             joint_weights = None
@@ -254,6 +261,7 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             expanded_verts = vertices[indices]
             expanded_normals = normals[indices] if normals is not None else None
             expanded_uvs = uvs[indices] if uvs is not None else None
+            expanded_tangents = tangents[indices] if tangents is not None else None
             expanded_joints = joint_indices[indices] if joint_indices is not None else None
             expanded_weights = joint_weights[indices] if joint_weights is not None else None
 
@@ -269,6 +277,7 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
                 uvs=expanded_uvs.astype(np.float32) if expanded_uvs is not None else None,
                 indices=np.arange(len(expanded_verts), dtype=np.uint32),
                 material_index=material_index,
+                tangents=expanded_tangents.astype(np.float32) if expanded_tangents is not None else None,
                 joint_indices=expanded_joints.astype(np.float32) if expanded_joints is not None else None,
                 joint_weights=expanded_weights.astype(np.float32) if expanded_weights is not None else None,
             ))
@@ -608,11 +617,22 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
 
         return c @ m @ c_inv
 
-    # 1. Convert vertex positions and normals in all meshes
+    def convert_tangents_batch(tangents: np.ndarray) -> np.ndarray:
+        """Convert array of tangents: (..., 4) shape, preserving w (handedness)."""
+        result = np.empty_like(tangents)
+        result[..., 0] = tangents[..., 0]
+        result[..., 1] = -tangents[..., 2]
+        result[..., 2] = tangents[..., 1]
+        result[..., 3] = tangents[..., 3]  # Keep w (handedness)
+        return result
+
+    # 1. Convert vertex positions, normals, and tangents in all meshes
     for mesh in scene_data.meshes:
         mesh.vertices = convert_positions_batch(mesh.vertices)
         if mesh.normals is not None:
             mesh.normals = convert_positions_batch(mesh.normals)
+        if mesh.tangents is not None:
+            mesh.tangents = convert_tangents_batch(mesh.tangents)
 
     # 2. Convert node transforms
     for node in scene_data.nodes:

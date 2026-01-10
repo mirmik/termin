@@ -935,7 +935,10 @@ class MaterialInspector(QWidget):
 
     def _on_texture_changed(self, uniform_name: str, texture_name: str) -> None:
         """Обработчик изменения текстуры."""
+        from termin._native import log
+
         if self._material is None:
+            log.warning("[MaterialInspector] _on_texture_changed: material is None")
             return
 
         from termin.visualization.core.resources import ResourceManager
@@ -946,14 +949,20 @@ class MaterialInspector(QWidget):
         if texture_name:
             # Получаем текстуру по имени
             texture_handle = rm.get_texture_handle(texture_name)
+            log.info(f"[MaterialInspector] _on_texture_changed: name={texture_name}, handle={texture_handle}")
         else:
             # None - используем белую текстуру
             texture_handle = get_white_texture_handle()
+            log.info(f"[MaterialInspector] _on_texture_changed: using white texture, handle={texture_handle}")
 
         if texture_handle is not None:
             # Обновляем текстуру во всех фазах материала
-            for phase in self._material.phases:
-                phase.textures[uniform_name] = texture_handle
+            for i, phase in enumerate(self._material.phases):
+                log.info(f"[MaterialInspector] phase[{i}].textures BEFORE: {dict(phase.textures)}")
+                phase.set_texture(uniform_name, texture_handle)
+                log.info(f"[MaterialInspector] phase[{i}].textures AFTER: {dict(phase.textures)}")
+        else:
+            log.warning(f"[MaterialInspector] _on_texture_changed: texture_handle is None for '{texture_name}'")
 
         self.material_changed.emit()
         self.save_material_file()

@@ -69,12 +69,17 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData", uuid: str = "") -> "TcMesh":
     else:
         uvs = np.zeros((num_verts, 2), dtype=np.float32)
 
+    # Tangents (optional, vec4 with w = handedness)
+    has_tangents = glb_mesh.tangents is not None
+    if has_tangents:
+        tangents = glb_mesh.tangents.astype(np.float32)
+
     is_skinned = glb_mesh.is_skinned
 
     if is_skinned:
         # Skinned layout: pos(3) + normal(3) + uv(2) + joints(4) + weights(4) = 16 floats = 64 bytes
+        # Note: skinned meshes don't include tangents in current layout
         layout = TcVertexLayout.skinned()
-        stride = 64
 
         # Joint indices and weights
         joint_indices = glb_mesh.joint_indices.astype(np.float32)  # stored as float for GPU
@@ -87,10 +92,19 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData", uuid: str = "") -> "TcMesh":
         buffer[:, 6:8] = uvs
         buffer[:, 8:12] = joint_indices
         buffer[:, 12:16] = joint_weights
+    elif has_tangents:
+        # Layout with tangents: pos(3) + normal(3) + uv(2) + tangent(4) = 12 floats = 48 bytes
+        layout = TcVertexLayout.pos_normal_uv_tangent()
+
+        # Build interleaved buffer
+        buffer = np.zeros((num_verts, 12), dtype=np.float32)
+        buffer[:, 0:3] = vertices
+        buffer[:, 3:6] = normals
+        buffer[:, 6:8] = uvs
+        buffer[:, 8:12] = tangents
     else:
         # Standard layout: pos(3) + normal(3) + uv(2) = 8 floats = 32 bytes
         layout = TcVertexLayout.pos_normal_uv()
-        stride = 32
 
         # Build interleaved buffer
         buffer = np.zeros((num_verts, 8), dtype=np.float32)
@@ -129,9 +143,16 @@ def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool
     else:
         uvs = np.zeros((num_verts, 2), dtype=np.float32)
 
+    # Tangents (optional, vec4 with w = handedness)
+    has_tangents = glb_mesh.tangents is not None
+    if has_tangents:
+        tangents = glb_mesh.tangents.astype(np.float32)
+
     is_skinned = glb_mesh.is_skinned
 
     if is_skinned:
+        # Skinned layout: pos(3) + normal(3) + uv(2) + joints(4) + weights(4) = 16 floats
+        # Note: skinned meshes don't include tangents in current layout
         layout = TcVertexLayout.skinned()
 
         joint_indices = glb_mesh.joint_indices.astype(np.float32)
@@ -143,7 +164,17 @@ def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool
         buffer[:, 6:8] = uvs
         buffer[:, 8:12] = joint_indices
         buffer[:, 12:16] = joint_weights
+    elif has_tangents:
+        # Layout with tangents: pos(3) + normal(3) + uv(2) + tangent(4) = 12 floats
+        layout = TcVertexLayout.pos_normal_uv_tangent()
+
+        buffer = np.zeros((num_verts, 12), dtype=np.float32)
+        buffer[:, 0:3] = vertices
+        buffer[:, 3:6] = normals
+        buffer[:, 6:8] = uvs
+        buffer[:, 8:12] = tangents
     else:
+        # Standard layout: pos(3) + normal(3) + uv(2) = 8 floats
         layout = TcVertexLayout.pos_normal_uv()
 
         buffer = np.zeros((num_verts, 8), dtype=np.float32)

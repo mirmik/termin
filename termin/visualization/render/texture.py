@@ -228,6 +228,30 @@ def get_white_texture() -> Texture:
     return _white_texture
 
 
+# --- Normal 1x1 Texture (flat normal) ---
+
+_normal_texture: Texture | None = None
+
+
+def get_normal_texture() -> Texture:
+    """
+    Returns a 1x1 normal map texture representing a flat surface (pointing up).
+
+    RGB(128, 128, 255) = tangent space normal (0, 0, 1) after [0,255]->[-1,1] conversion.
+    Used as default for normal map slots when no texture is set.
+    Singleton — created once.
+    """
+    global _normal_texture
+
+    if _normal_texture is None:
+        # Create 1x1 flat normal (pointing up in tangent space)
+        # RGB = (128, 128, 255) → normalized = (0, 0, 1)
+        data = np.array([[[128, 128, 255, 255]]], dtype=np.uint8)
+        _normal_texture = Texture.from_data(data, width=1, height=1, source_path="__normal_1x1__")
+
+    return _normal_texture
+
+
 # --- Dummy Shadow Texture (for sampler2DShadow) ---
 
 class _DummyShadowTexture:

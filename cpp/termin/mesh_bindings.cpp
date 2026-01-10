@@ -175,6 +175,19 @@ void bind_mesh(nb::module_& m) {
             return make_array_2d(flat.data(), n, 2);
         })
 
+        .def_prop_ro("tangents", [](const Mesh3& m) -> nb::object {
+            if (m.tangents.empty()) return nb::none();
+            size_t n = m.tangents.size();
+            std::vector<float> flat(n * 4);
+            for (size_t i = 0; i < n; ++i) {
+                flat[i * 4] = m.tangents[i].x;
+                flat[i * 4 + 1] = m.tangents[i].y;
+                flat[i * 4 + 2] = m.tangents[i].z;
+                flat[i * 4 + 3] = m.tangents[i].w;
+            }
+            return make_array_2d(flat.data(), n, 4);
+        })
+
         .def_prop_rw("name",
             [](const Mesh3& m) { return m.name; },
             [](Mesh3& m, const std::string& n) { m.name = n; })
@@ -190,7 +203,9 @@ void bind_mesh(nb::module_& m) {
         .def("is_valid", &Mesh3::is_valid)
         .def("has_normals", &Mesh3::has_normals)
         .def("has_uvs", &Mesh3::has_uvs)
+        .def("has_tangents", &Mesh3::has_tangents)
         .def("compute_normals", &Mesh3::compute_normals)
+        .def("compute_tangents", &Mesh3::compute_tangents)
 
         .def("translate", [](Mesh3& m, float x, float y, float z) {
             m.translate(x, y, z);
@@ -246,6 +261,7 @@ void bind_mesh(nb::module_& m) {
             return d;
         }, nb::arg("name"))
         .def_static("pos_normal_uv", []() { return tc_vertex_layout_pos_normal_uv(); })
+        .def_static("pos_normal_uv_tangent", []() { return tc_vertex_layout_pos_normal_uv_tangent(); })
         .def_static("pos_normal_uv_color", []() { return tc_vertex_layout_pos_normal_uv_color(); })
         .def_static("skinned", []() { return tc_vertex_layout_skinned(); });
 

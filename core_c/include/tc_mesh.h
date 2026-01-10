@@ -143,6 +143,9 @@ TC_API tc_vertex_layout tc_vertex_layout_pos_normal(void);
 // Position + Normal + UV (Mesh3 compatible): vec3 position, vec3 normal, vec2 uv
 TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv(void);
 
+// Position + Normal + UV + Tangent: vec3 position, vec3 normal, vec2 uv, vec4 tangent
+TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv_tangent(void);
+
 // Position + Normal + UV + Color: vec3 position, vec3 normal, vec2 uv, vec4 color
 TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv_color(void);
 

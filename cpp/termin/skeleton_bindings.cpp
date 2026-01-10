@@ -116,7 +116,7 @@ void bind_skeleton(nb::module_& m) {
             const double* s_ptr = nullptr;
 
             if (!translation.is_none()) {
-                t_arr = numpy_to_vec3(translation);
+                t_arr = ::numpy_to_vec3(translation);
                 t_ptr = t_arr.data();
             }
             if (!rotation.is_none()) {
@@ -128,7 +128,7 @@ void bind_skeleton(nb::module_& m) {
                     double s = nb::cast<double>(scale);
                     s_arr = {s, s, s};
                 } else {
-                    s_arr = numpy_to_vec3(scale);
+                    s_arr = ::numpy_to_vec3(scale);
                 }
                 s_ptr = s_arr.data();
             }
@@ -150,7 +150,7 @@ void bind_skeleton(nb::module_& m) {
             const double* s_ptr = nullptr;
 
             if (!translation.is_none()) {
-                t_arr = numpy_to_vec3(translation);
+                t_arr = ::numpy_to_vec3(translation);
                 t_ptr = t_arr.data();
             }
             if (!rotation.is_none()) {
@@ -162,7 +162,7 @@ void bind_skeleton(nb::module_& m) {
                     double s = nb::cast<double>(scale);
                     s_arr = {s, s, s};
                 } else {
-                    s_arr = numpy_to_vec3(scale);
+                    s_arr = ::numpy_to_vec3(scale);
                 }
                 s_ptr = s_arr.data();
             }

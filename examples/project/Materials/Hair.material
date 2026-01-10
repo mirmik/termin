@@ -1,6 +1,6 @@
 {
   "uuid": "e4dee1c0-cbfb-4092-a3b1-592371eac13d",
-  "shader": "StandardShader",
+  "shader": "CookTorrancePBR",
   "uniforms": {
     "u_color": [
       0.32394903898239136,
@@ -8,9 +8,15 @@
       0.0076905470341444016,
       1.0
     ],
-    "u_shininess": 32.0
-  },
-  "textures": {
-    "u_albedo_texture": "6830-1745580165"
+    "u_metallic": 0.0,
+    "u_emission_intensity": 0.0,
+    "u_roughness": 0.5,
+    "u_subsurface": 0.0,
+    "u_emission_color": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
   }
 }

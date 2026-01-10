@@ -1,17 +1,26 @@
 {
   "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b",
-  "shader": "AdvancedPBRShader",
+  "shader": "CookTorrancePBR",
   "uniforms": {
-    "u_metallic": 0.0,
+    "u_diffuse_mul": 3.140000104904175,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_roughness": 0.4000000059604645,
-    "u_subsurface": 0.699999988079071,
-    "u_shininess": 32.0,
-    "u_ambient": 0.10000000149011612
+    "u_metallic": 0.0,
+    "u_emission_intensity": 0.0,
+    "u_roughness": 0.5,
+    "u_subsurface": 0.0,
+    "u_emission_color": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "textures": {
+    "u_albedo_texture": "young_lightskinned_male_diffuse2_png.001"
   }
 }

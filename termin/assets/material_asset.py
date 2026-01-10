@@ -190,9 +190,11 @@ def _parse_material_content(
 
     Returns:
         Tuple of (Material, uuid or None)
+        Returns UnknownMaterial if shader is not found.
     """
     from termin.visualization.core.material import Material
     from termin.assets.resources import ResourceManager
+    from termin.visualization.render.materials.unknown_material import UnknownMaterial
 
     data = json.loads(content)
 
@@ -204,7 +206,13 @@ def _parse_material_content(
     program = rm.get_shader(shader_name)
 
     if program is None:
-        raise ValueError(f"Shader '{shader_name}' not found in ResourceManager")
+        log.error(f"[MaterialAsset] Shader '{shader_name}' not found, using UnknownMaterial")
+        unknown = UnknownMaterial.for_missing_shader(shader_name)
+        unknown.name = name or "unknown"
+        unknown.source_path = source_path or ""
+        # Preserve original data for re-serialization
+        unknown.original_data = data
+        return unknown, file_uuid
 
     # Get shader asset UUID for hot-reload support
     shader_asset = rm._shader_assets.get(shader_name)
@@ -322,7 +330,9 @@ def _save_material_file(material: "Material", path: str | Path, uuid: str) -> No
                 uniforms[name] = serialize_value(value)
         for name, tex in phase.textures.items():
             if name not in textures:
+                log.info(f"[_save_material_file] texture uniform={name}, tex={tex}, type={type(tex)}")
                 tex_name = rm.find_texture_name(tex)
+                log.info(f"[_save_material_file] find_texture_name returned: {tex_name}")
                 # Don't save white texture - it's the default
                 if tex_name and tex_name != "__white_1x1__":
                     textures[name] = tex_name

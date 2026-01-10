@@ -10,6 +10,7 @@
 
 #include "termin/skeleton/skeleton_data.hpp"
 #include "termin/animation/animation_clip.hpp"
+#include "termin/bindings/trent_helpers.hpp"
 #include "tc_log.hpp"
 
 namespace termin {
@@ -181,6 +182,19 @@ inline MaterialHandle MaterialHandle::from_name(const std::string& name) {
 }
 
 inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
+    // Helper to create UnknownMaterial preserving original data for re-serialization
+    auto create_unknown_material = [&data](const std::string& material_ref) -> MaterialHandle {
+        try {
+            nb::object unknown_mod = nb::module_::import_("termin.visualization.render.materials.unknown_material");
+            nb::object UnknownMaterial = unknown_mod.attr("UnknownMaterial");
+            nb::object unknown = UnknownMaterial.attr("for_missing_material")(material_ref, data);
+            return MaterialHandle(unknown);
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "MaterialHandle::deserialize create_unknown_material");
+            return MaterialHandle();
+        }
+    };
+
     if (data.contains("uuid")) {
         try {
             std::string uuid = nb::cast<std::string>(data["uuid"]);
@@ -190,8 +204,12 @@ inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
             if (!asset.is_none()) {
                 return MaterialHandle(asset);
             }
+            // UUID not found - create UnknownMaterial with preserved data
+            tc::Log::warn("MaterialHandle::deserialize: material with uuid '%s' not found", uuid.c_str());
+            return create_unknown_material(uuid);
         } catch (const nb::python_error& e) {
             tc::Log::warn(e, "MaterialHandle::deserialize uuid lookup");
+            return create_unknown_material("unknown");
         }
     }
 
@@ -199,7 +217,12 @@ inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
 
     if (type == "named") {
         std::string name = nb::cast<std::string>(data["name"]);
-        return from_name(name);
+        MaterialHandle result = from_name(name);
+        if (!result.is_valid()) {
+            tc::Log::warn("MaterialHandle::deserialize: material '%s' not found", name.c_str());
+            return create_unknown_material(name);
+        }
+        return result;
     } else if (type == "path") {
         try {
             std::string path = nb::cast<std::string>(data["path"]);
@@ -209,21 +232,43 @@ inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
             size_t last_dot = filename.find_last_of('.');
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
-            return from_name(name);
+            MaterialHandle result = from_name(name);
+            if (!result.is_valid()) {
+                tc::Log::warn("MaterialHandle::deserialize: material at path '%s' not found", path.c_str());
+                return create_unknown_material(name);
+            }
+            return result;
         } catch (const nb::python_error& e) {
             tc::Log::warn(e, "MaterialHandle::deserialize path lookup");
-            return MaterialHandle();
+            return create_unknown_material("unknown");
         }
     }
 
-    return MaterialHandle();
+    return create_unknown_material("unknown");
 }
 
 inline void MaterialHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     _direct = nullptr;
 
+    // Helper to create UnknownMaterial preserving original data for re-serialization
+    // We set asset to the UnknownMaterial object and leave _direct = nullptr
+    // get_material() will resolve it through the asset later
+    auto create_unknown_material = [this, &data](const std::string& material_ref) {
+        try {
+            // Convert trent to Python dict to preserve original data
+            nb::object py_data = trent_to_py(data);
+            nb::object unknown_mod = nb::module_::import_("termin.visualization.render.materials.unknown_material");
+            nb::object UnknownMaterial = unknown_mod.attr("UnknownMaterial");
+            nb::object unknown = UnknownMaterial.attr("for_missing_material")(material_ref, py_data);
+            asset = unknown;
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "MaterialHandle::deserialize_from create_unknown_material");
+            asset = nb::none();
+        }
+    };
+
     if (!data.is_dict()) {
-        asset = nb::none();
+        create_unknown_material("unknown");
         return;
     }
 
@@ -237,8 +282,14 @@ inline void MaterialHandle::deserialize_from(const nos::trent& data, tc_scene*) 
                 asset = found;
                 return;
             }
+            // UUID not found - create UnknownMaterial with preserved data
+            tc::Log::warn("MaterialHandle::deserialize_from: material with uuid '%s' not found", uuid.c_str());
+            create_unknown_material(uuid);
+            return;
         } catch (const std::exception& e) {
             tc::Log::warn(e, "MaterialHandle::deserialize_from uuid lookup");
+            create_unknown_material("unknown");
+            return;
         }
     }
 
@@ -246,7 +297,14 @@ inline void MaterialHandle::deserialize_from(const nos::trent& data, tc_scene*) 
 
     if (type == "named") {
         std::string name = data["name"].as_string();
-        asset = from_name(name).asset;
+        MaterialHandle result = from_name(name);
+        if (result.is_valid()) {
+            asset = result.asset;
+            _direct = result._direct;
+        } else {
+            tc::Log::warn("MaterialHandle::deserialize_from: material '%s' not found", name.c_str());
+            create_unknown_material(name);
+        }
     } else if (type == "path") {
         std::string path = data["path"].as_string();
         size_t last_slash = path.find_last_of("/\\");
@@ -255,9 +313,16 @@ inline void MaterialHandle::deserialize_from(const nos::trent& data, tc_scene*) 
         size_t last_dot = filename.find_last_of('.');
         std::string name = (last_dot != std::string::npos)
             ? filename.substr(0, last_dot) : filename;
-        asset = from_name(name).asset;
+        MaterialHandle result = from_name(name);
+        if (result.is_valid()) {
+            asset = result.asset;
+            _direct = result._direct;
+        } else {
+            tc::Log::warn("MaterialHandle::deserialize_from: material at path '%s' not found", path.c_str());
+            create_unknown_material(name);
+        }
     } else {
-        asset = nb::none();
+        create_unknown_material("unknown");
     }
 }
 

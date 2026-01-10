@@ -1,7 +1,7 @@
 """
 Entity inspector widget.
 
-Shows entity properties: name, layer, flags.
+Shows entity properties: name, layer.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QComboBox,
-    QCheckBox,
     QScrollArea,
     QFrame,
     QPushButton,
@@ -103,7 +102,6 @@ class EntityInspector(QWidget):
         self._scene: Optional["Scene"] = None
         self._updating_from_model = False
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
-        self._flag_checkboxes: list[QCheckBox] = []
 
         self._init_ui()
         self._set_enabled(False)
@@ -155,26 +153,6 @@ class EntityInspector(QWidget):
         form.addRow("Layer:", layer_widget)
 
         layout.addLayout(form)
-
-        # Flags section
-        flags_label = QLabel("Flags:")
-        layout.addWidget(flags_label)
-
-        # Flags in a collapsible/scrollable area
-        self._flags_container = QWidget()
-        flags_layout = QVBoxLayout(self._flags_container)
-        flags_layout.setContentsMargins(0, 0, 0, 0)
-        flags_layout.setSpacing(2)
-
-        # Create 64 checkboxes for flags (we'll show only named ones initially)
-        for i in range(64):
-            cb = QCheckBox(f"Flag {i}")
-            cb.stateChanged.connect(lambda state, idx=i: self._on_flag_changed(idx, state))
-            self._flag_checkboxes.append(cb)
-            flags_layout.addWidget(cb)
-            cb.setVisible(False)  # Hidden by default
-
-        layout.addWidget(self._flags_container)
         layout.addStretch()
 
     def _set_enabled(self, enabled: bool) -> None:
@@ -182,8 +160,6 @@ class EntityInspector(QWidget):
         self._name_edit.setEnabled(enabled)
         self._layer_combo.setEnabled(enabled)
         self._apply_layer_btn.setEnabled(enabled)
-        for cb in self._flag_checkboxes:
-            cb.setEnabled(enabled)
 
     def set_undo_command_handler(
         self, handler: Optional[Callable[[UndoCommand, bool], None]]
@@ -192,10 +168,9 @@ class EntityInspector(QWidget):
         self._push_undo_command = handler
 
     def set_scene(self, scene: Optional["Scene"]) -> None:
-        """Set the scene for layer/flag names."""
+        """Set the scene for layer names."""
         self._scene = scene
         self._update_layer_combo()
-        self._update_flag_labels()
 
     def set_entity(self, entity: Optional["Entity"]) -> None:
         """Set the entity to inspect."""
@@ -217,21 +192,6 @@ class EntityInspector(QWidget):
         finally:
             self._updating_from_model = False
 
-    def _update_flag_labels(self) -> None:
-        """Update flag checkbox labels and visibility from scene."""
-        for i, cb in enumerate(self._flag_checkboxes):
-            if self._scene is not None:
-                name = self._scene.get_flag_name(i)
-                # Show if it has a custom name or is used
-                has_custom_name = i in self._scene.flag_names
-            else:
-                name = f"Flag {i}"
-                has_custom_name = False
-
-            cb.setText(name)
-            # Show first 8 flags always, others only if named
-            cb.setVisible(i < 8 or has_custom_name)
-
     def _refresh_from_entity(self) -> None:
         """Refresh all widgets from entity values."""
         if self._entity is None:
@@ -248,11 +208,6 @@ class EntityInspector(QWidget):
 
             # Layer
             self._layer_combo.setCurrentIndex(self._entity.layer)
-
-            # Flags
-            flags = self._entity.flags
-            for i, cb in enumerate(self._flag_checkboxes):
-                cb.setChecked(bool(flags & (1 << i)))
         finally:
             self._updating_from_model = False
 
@@ -295,28 +250,6 @@ class EntityInspector(QWidget):
             self._push_undo_command(cmd, False)
         else:
             self._entity.layer = new_layer
-
-        self.entity_changed.emit()
-
-    def _on_flag_changed(self, flag_index: int, state: int) -> None:
-        """Handle flag checkbox change."""
-        if self._updating_from_model or self._entity is None:
-            return
-
-        old_flags = self._entity.flags
-        if state:
-            new_flags = old_flags | (1 << flag_index)
-        else:
-            new_flags = old_flags & ~(1 << flag_index)
-
-        if new_flags == old_flags:
-            return
-
-        if self._push_undo_command is not None:
-            cmd = EntityPropertyEditCommand(self._entity, "flags", old_flags, new_flags)
-            self._push_undo_command(cmd, False)
-        else:
-            self._entity.flags = new_flags
 
         self.entity_changed.emit()
 

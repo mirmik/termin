@@ -93,48 +93,6 @@ def register_pbr_shader(rm: "ResourceManager") -> None:
     rm.register_shader("PBRShader", program, uuid=BUILTIN_UUIDS["PBRShader"])
 
 
-def register_advanced_pbr_shader(rm: "ResourceManager") -> None:
-    """Register built-in Advanced PBR shader with SSS and ACES."""
-    if "AdvancedPBRShader" in rm.shaders:
-        return
-
-    from termin.visualization.render.materials.advanced_pbr_material import (
-        ADVANCED_PBR_VERT,
-        ADVANCED_PBR_FRAG,
-    )
-    from termin.visualization.render.shader_parser import (
-        ShaderMultyPhaseProgramm,
-        ShaderPhase,
-        ShasderStage,
-        MaterialProperty,
-    )
-
-    vertex_stage = ShasderStage("vertex", ADVANCED_PBR_VERT)
-    fragment_stage = ShasderStage("fragment", ADVANCED_PBR_FRAG)
-
-    phase = ShaderPhase(
-        phase_mark="opaque",
-        priority=0,
-        gl_depth_mask=True,
-        gl_depth_test=True,
-        gl_blend=False,
-        gl_cull=True,
-        stages={"vertex": vertex_stage, "fragment": fragment_stage},
-        uniforms=[
-            MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-            MaterialProperty("u_albedo_texture", "Texture", None),
-            MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
-            MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
-            MaterialProperty("u_subsurface", "Float", 0.0, 0.0, 1.0),
-            MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
-            MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
-        ],
-    )
-
-    program = ShaderMultyPhaseProgramm(program="AdvancedPBRShader", phases=[phase])
-    rm.register_shader("AdvancedPBRShader", program, uuid=BUILTIN_UUIDS["AdvancedPBRShader"])
-
-
 def register_skinned_shader(rm: "ResourceManager") -> None:
     """Register built-in SkinnedShader for skeletal animation."""
     if "SkinnedShader" in rm.shaders:
@@ -179,7 +137,6 @@ def register_builtin_shaders(rm: "ResourceManager") -> None:
     """Register all built-in shaders."""
     register_default_shader(rm)
     register_pbr_shader(rm)
-    register_advanced_pbr_shader(rm)
     register_skinned_shader(rm)
 
 
@@ -210,15 +167,6 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
             mat.name = "PBRMaterial"
             mat.color = (0.8, 0.8, 0.8, 1.0)
             rm.register_material("PBRMaterial", mat, uuid=BUILTIN_UUIDS["PBRMaterial"])
-
-    # AdvancedPBRMaterial (SSS + ACES)
-    if "AdvancedPBRMaterial" not in rm.materials:
-        shader = rm.shaders.get("AdvancedPBRShader")
-        if shader is not None:
-            mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
-            mat.name = "AdvancedPBRMaterial"
-            mat.color = (0.8, 0.8, 0.8, 1.0)
-            rm.register_material("AdvancedPBRMaterial", mat, uuid=BUILTIN_UUIDS["AdvancedPBRMaterial"])
 
     # GridMaterial (calibration grid)
     if "GridMaterial" not in rm.materials:

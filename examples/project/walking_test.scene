@@ -171,11 +171,74 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "12b74b1a-cc4f-42d1-903f-280e7c92db52",
-                    "name": "PBR_N"
+                    "uuid": "00000000-0001-0000-0001-000000000003",
+                    "name": "NormalizedPBR"
                   },
                   "cast_shadow": true,
-                  "_override_material": false
+                  "_override_material": true,
+                  "_overridden_material_data": {
+                    "phases_uniforms": [
+                      {
+                        "u_color": [
+                          0.34300756454467773,
+                          0.19903868436813354,
+                          0.07306019961833954,
+                          1
+                        ],
+                        "u_diffuse_mul": 3.1414999961853027
+                      },
+                      {
+                        "u_emission_intensity": 0,
+                        "u_diffuse_mul": 3.1414999961853027,
+                        "u_metallic": 0,
+                        "u_color": [
+                          0.34300756454467773,
+                          0.19903868436813354,
+                          0.07306019961833954,
+                          1
+                        ],
+                        "u_roughness": 0.5,
+                        "u_subsurface": 0,
+                        "u_normal_strength": 1,
+                        "u_emission_color": [
+                          0,
+                          0,
+                          0,
+                          1
+                        ]
+                      }
+                    ],
+                    "phases_textures": [
+                      {
+                        "u_albedo_texture": {
+                          "uuid": "471b29f1-7031-4136-8926-55ab90d2ed75",
+                          "name": "Ground_Dirt_009_BaseColor",
+                          "type": "path",
+                          "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_BaseColor.jpg"
+                        },
+                        "u_normal_texture": {
+                          "uuid": "26027ca3-c5d4-477b-bdcd-48e18619df6b",
+                          "name": "Ground_Dirt_009_Normal",
+                          "type": "path",
+                          "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_Normal.jpg"
+                        }
+                      },
+                      {
+                        "u_albedo_texture": {
+                          "uuid": "471b29f1-7031-4136-8926-55ab90d2ed75",
+                          "name": "Ground_Dirt_009_BaseColor",
+                          "type": "path",
+                          "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_BaseColor.jpg"
+                        },
+                        "u_normal_texture": {
+                          "uuid": "26027ca3-c5d4-477b-bdcd-48e18619df6b",
+                          "name": "Ground_Dirt_009_Normal",
+                          "type": "path",
+                          "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Materials/Ground/Ground_Dirt_009_Normal.jpg"
+                        }
+                      }
+                    ]
+                  }
                 }
               },
               {
@@ -235,8 +298,8 @@
                   },
                   "material": {
                     "type": "uuid",
-                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
-                    "name": "Kairon"
+                    "uuid": "00000000-0001-0000-0001-000000000003",
+                    "name": "NormalizedPBR"
                   },
                   "cast_shadow": true,
                   "_override_material": false
@@ -4044,7 +4107,7 @@
                 "name": "jammers3Mesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -4372,24 +4435,29 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": true,
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
+                            "u_diffuse_mul": 3.1414999961853027
+                          },
+                          {
                             "u_emission_intensity": 0,
+                            "u_diffuse_mul": 3.1414999961853027,
                             "u_metallic": 0,
                             "u_color": [
-                              0.800000011920929,
-                              0.800000011920929,
-                              0.800000011920929,
+                              1,
+                              1,
+                              1,
                               1
                             ],
                             "u_roughness": 0.5,
                             "u_subsurface": 0,
+                            "u_normal_strength": 1,
                             "u_emission_color": [
                               0,
                               0,
@@ -4405,6 +4473,20 @@
                               "name": "6830-1745580165",
                               "type": "path",
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
+                            }
+                          },
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "3deafdca-0c04-4e23-97eb-2e1bd76f98e9",
+                              "name": "6830-1745580165",
+                              "type": "path",
+                              "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
                             }
                           }
                         ]
@@ -4502,11 +4584,61 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_diffuse_mul": 1,
+                            "u_color": [
+                              0.15655755996704102,
+                              0.31000229716300964,
+                              0.20257876813411713,
+                              1
+                            ]
+                          },
+                          {
+                            "u_emission_intensity": 0,
+                            "u_diffuse_mul": 1,
+                            "u_metallic": 0,
+                            "u_color": [
+                              0.15655755996704102,
+                              0.31000229716300964,
+                              0.20257876813411713,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0,
+                            "u_normal_strength": 1,
+                            "u_emission_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ]
+                          }
+                        ],
+                        "phases_textures": [
+                          {},
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -4649,8 +4781,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -4698,8 +4830,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000001",
-                        "name": "DefaultMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -5572,8 +5704,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -5621,8 +5753,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -5866,15 +5998,24 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": true,
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
+                            "u_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ]
+                          },
+                          {
                             "u_emission_intensity": 0,
+                            "u_diffuse_mul": 1,
                             "u_metallic": 0,
                             "u_color": [
                               0,
@@ -5884,6 +6025,7 @@
                             ],
                             "u_roughness": 0.5,
                             "u_subsurface": 0,
+                            "u_normal_strength": 1,
                             "u_emission_color": [
                               0,
                               0,
@@ -5893,9 +6035,16 @@
                           }
                         ],
                         "phases_textures": [
+                          {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "dad7a84c-01a5-4ae4-b632-f891ce62be57",
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -6192,31 +6341,35 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": true,
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
+                            "u_diffuse_mul": 1
+                          },
+                          {
                             "u_emission_intensity": 0,
+                            "u_diffuse_mul": 1,
                             "u_metallic": 0,
                             "u_color": [
-                              0.19502556324005127,
-                              0.5998169183731079,
-                              0.6056305766105652,
+                              1,
+                              1,
+                              1,
                               1
                             ],
                             "u_roughness": 0.5,
                             "u_subsurface": 0,
+                            "u_normal_strength": 1,
                             "u_emission_color": [
                               0,
                               0,
                               0,
                               1
-                            ],
-                            "u_shininess": 32
+                            ]
                           }
                         ],
                         "phases_textures": [
@@ -6226,6 +6379,20 @@
                               "name": "6830-1745580165",
                               "type": "path",
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
+                            }
+                          },
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "3deafdca-0c04-4e23-97eb-2e1bd76f98e9",
+                              "name": "6830-1745580165",
+                              "type": "path",
+                              "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
                             }
                           }
                         ]
@@ -6274,43 +6441,11 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
-                      "_override_material": true,
-                      "_overridden_material_data": {
-                        "phases_uniforms": [
-                          {
-                            "u_emission_intensity": 0,
-                            "u_metallic": 0,
-                            "u_color": [
-                              0.7699549794197083,
-                              0.03654535859823227,
-                              0.03654535859823227,
-                              1
-                            ],
-                            "u_roughness": 0.5,
-                            "u_subsurface": 0,
-                            "u_emission_color": [
-                              0,
-                              0,
-                              0,
-                              1
-                            ]
-                          }
-                        ],
-                        "phases_textures": [
-                          {
-                            "u_albedo_texture": {
-                              "uuid": "dad7a84c-01a5-4ae4-b632-f891ce62be57",
-                              "name": "__white_1x1__",
-                              "type": "path",
-                              "path": "__white_1x1__"
-                            }
-                          }
-                        ]
-                      }
+                      "_override_material": false
                     }
                   }
                 ],
@@ -6502,24 +6637,35 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000001",
+                        "name": "CookTorrancePBR"
                       },
                       "cast_shadow": true,
                       "_override_material": true,
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
+                            "u_color": [
+                              0.5704737901687622,
+                              0.26240938901901245,
+                              0.01739528588950634,
+                              1
+                            ],
+                            "u_diffuse_mul": 1
+                          },
+                          {
                             "u_emission_intensity": 0,
+                            "u_diffuse_mul": 1,
                             "u_metallic": 0,
                             "u_color": [
-                              0.2722972333431244,
-                              0.11631952226161957,
-                              0.014770733192563057,
+                              0.5704737901687622,
+                              0.26240938901901245,
+                              0.01739528588950634,
                               1
                             ],
                             "u_roughness": 0.5,
                             "u_subsurface": 0,
+                            "u_normal_strength": 1,
                             "u_emission_color": [
                               0,
                               0,
@@ -6529,9 +6675,16 @@
                           }
                         ],
                         "phases_textures": [
+                          {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "dad7a84c-01a5-4ae4-b632-f891ce62be57",
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
@@ -9482,8 +9635,8 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "997249bf-9de4-40fc-829c-08146e5bed0e",
-                "name": "BlindEffectMaterial"
+                "uuid": "00000000-0001-0000-0001-000000000003",
+                "name": "NormalizedPBR"
               },
               "cast_shadow": true,
               "_override_material": false
@@ -9531,34 +9684,61 @@
               },
               "material": {
                 "type": "uuid",
-                "uuid": "0ac62d42-1e3c-4bb3-90f9-2418c0f53ec2",
-                "name": "SomeMaterial"
+                "uuid": "00000000-0001-0000-0001-000000000003",
+                "name": "NormalizedPBR"
               },
               "cast_shadow": true,
               "_override_material": true,
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
-                    "u_emission_intensity": 1.5,
                     "u_color": [
-                      0.07643244415521622,
-                      0.6442969441413879,
-                      0.08410772681236267,
+                      0.34726482629776,
+                      0.7852292656898499,
+                      0.15172044932842255,
                       1
                     ],
-                    "u_shininess": 32,
+                    "u_emission_intensity": 2,
+                    "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
-                      0.1889066845178604,
-                      0.8590676784515381,
-                      0.07280079275369644,
+                      0.7799344062805176,
+                      0.8389257788658142,
+                      0.16209658980369568,
+                      1
+                    ]
+                  },
+                  {
+                    "u_emission_intensity": 2,
+                    "u_diffuse_mul": 1,
+                    "u_metallic": 0,
+                    "u_color": [
+                      0.34726482629776,
+                      0.7852292656898499,
+                      0.15172044932842255,
+                      1
+                    ],
+                    "u_roughness": 0.5,
+                    "u_subsurface": 0,
+                    "u_normal_strength": 1,
+                    "u_emission_color": [
+                      0.7799344062805176,
+                      0.8389257788658142,
+                      0.16209658980369568,
                       1
                     ]
                   }
                 ],
                 "phases_textures": [
+                  {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "dad7a84c-01a5-4ae4-b632-f891ce62be57",
+                      "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
+                      "name": "__white_1x1__",
+                      "type": "path",
+                      "path": "__white_1x1__"
+                    },
+                    "u_normal_texture": {
+                      "uuid": "b115abec-6a05-4ab4-820f-2bf686635618",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
@@ -9697,17 +9877,17 @@
   "editor": {
     "camera": {
       "position": [
-        1.5107266902923584,
-        3.8746416568756104,
-        3.214184284210205
+        1.520235538482666,
+        4.215132713317871,
+        2.7141072750091553
       ],
       "rotation": [
-        -0.008341319098105492,
-        -0.26542509419504406,
-        0.9636196779384241,
-        0.030282966451512405
+        -0.04534309077058211,
+        -0.22899935226633192,
+        0.9538513074256497,
+        0.18886763646360963
       ],
-      "radius": 4.0,
+      "radius": 4.5,
       "editor_entities": {
         "camera": [
           {
@@ -9725,7 +9905,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 4.0,
+              "radius": 4.5,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -9759,13 +9939,12 @@
         ]
       }
     },
-    "selected_entity": "camera",
+    "selected_entity": "Platform",
     "expanded_entities": [
+      "Arthur",
       "PlatformBase",
-      "camera",
-      "Model",
       "Glitch",
-      "EditorEntities"
+      "Model"
     ]
   },
   "resources": {
@@ -9801,6 +9980,22 @@
       "young_lightskinned_male_diffuse2_png.001": {
         "type": "file",
         "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+      },
+      "Ground_Dirt_009_BaseColor": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
+      },
+      "Ground_Dirt_009_Height": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Height.png"
+      },
+      "Ground_Dirt_009_Normal": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
+      },
+      "Ground_Dirt_009_Roughness": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Roughness.jpg"
       }
     }
   }

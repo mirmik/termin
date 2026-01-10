@@ -128,20 +128,27 @@ class AssetsMixin:
         self._assets_by_uuid[asset.uuid] = asset
         self.materials[name] = mat
 
-    def get_material(self, name: str) -> Optional["Material"]:
-        """Get material by name (lazy loading)."""
+    def get_material(self, name: str) -> "Material":
+        """
+        Get material by name (lazy loading).
+
+        Returns UnknownMaterial if material is not found or failed to load.
+        """
+        from termin.visualization.render.materials.unknown_material import UnknownMaterial
+
         mat = self.materials.get(name)
         if mat is not None:
             return mat
         asset = self._material_assets.get(name)
         if asset is None:
-            return None
+            return UnknownMaterial.for_missing_material(name)
         if asset.material is None:
             if not asset.ensure_loaded():
-                return None
+                return UnknownMaterial.for_missing_material(name)
         if asset.material is not None:
             self.materials[name] = asset.material
-        return asset.material
+            return asset.material
+        return UnknownMaterial.for_missing_material(name)
 
     def list_material_names(self) -> list[str]:
         names = set(self._material_assets.keys()) | set(self.materials.keys())
@@ -162,18 +169,26 @@ class AssetsMixin:
                 return asset.uuid
         return None
 
-    def get_material_by_uuid(self, uuid: str) -> Optional["Material"]:
-        """Get Material by UUID (lazy loading)."""
+    def get_material_by_uuid(self, uuid: str) -> "Material":
+        """
+        Get Material by UUID (lazy loading).
+
+        Returns UnknownMaterial if material is not found or failed to load.
+        """
         from termin.assets.material_asset import MaterialAsset
+        from termin.visualization.render.materials.unknown_material import UnknownMaterial
+
         asset = self._assets_by_uuid.get(uuid)
         if asset is None or not isinstance(asset, MaterialAsset):
-            return None
+            return UnknownMaterial.for_missing_material(f"uuid:{uuid}")
         if asset.material is None:
             if not asset.ensure_loaded():
-                return None
-        if asset.material is not None and asset.name:
-            self.materials[asset.name] = asset.material
-        return asset.material
+                return UnknownMaterial.for_missing_material(asset.name or f"uuid:{uuid}")
+        if asset.material is not None:
+            if asset.name:
+                self.materials[asset.name] = asset.material
+            return asset.material
+        return UnknownMaterial.for_missing_material(asset.name or f"uuid:{uuid}")
 
     def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
         """Get MaterialAsset by UUID."""
@@ -598,6 +613,17 @@ class AssetsMixin:
     def find_texture_name(self, texture) -> Optional[str]:
         from termin.assets.texture_handle import TextureHandle
         if isinstance(texture, TextureHandle):
+            # Get asset from handle and compare by uuid
+            asset = texture.asset
+            if asset is not None and not isinstance(asset, type(None)):
+                try:
+                    asset_uuid = asset.uuid
+                    for name, a in self._texture_registry.assets.items():
+                        if a.uuid == asset_uuid:
+                            return name
+                except (AttributeError, TypeError):
+                    pass
+            # Fallback to registry method
             return self._texture_registry.find_name(texture)
         else:
             for n, a in self._texture_assets.items():

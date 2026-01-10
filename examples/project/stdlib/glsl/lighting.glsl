@@ -20,6 +20,27 @@ const int LIGHT_TYPE_SPOT        = 2;
 
 const int MAX_LIGHTS = 8;
 
+// ============== Light Uniforms ==============
+// These are set by upload_lights_to_shader() in C++
+
+uniform int   u_light_count;
+uniform int   u_light_type[MAX_LIGHTS];
+uniform vec3  u_light_color[MAX_LIGHTS];
+uniform float u_light_intensity[MAX_LIGHTS];
+uniform vec3  u_light_direction[MAX_LIGHTS];
+uniform vec3  u_light_position[MAX_LIGHTS];
+uniform float u_light_range[MAX_LIGHTS];
+uniform vec3  u_light_attenuation[MAX_LIGHTS];
+uniform float u_light_inner_angle[MAX_LIGHTS];
+uniform float u_light_outer_angle[MAX_LIGHTS];
+
+// Ambient lighting (scene-level)
+uniform vec3  u_ambient_color;
+uniform float u_ambient_intensity;
+
+// Camera position
+uniform vec3 u_camera_position;
+
 /**
  * Compute distance attenuation for point/spot lights.
  *

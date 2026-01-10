@@ -147,7 +147,32 @@ void bind_material(nb::module_& m) {
             }
         }, nb::arg("mark"), "Set phase mark and apply corresponding render state")
         .def_rw("priority", &MaterialPhase::priority)
-        .def_rw("textures", &MaterialPhase::textures)
+        .def("set_texture", [](MaterialPhase& self, const std::string& name, TextureHandle handle) {
+            self.textures[name] = handle;
+        }, nb::arg("name"), nb::arg("handle"), "Set texture by uniform name")
+        .def("get_texture", [](MaterialPhase& self, const std::string& name) -> nb::object {
+            auto it = self.textures.find(name);
+            if (it != self.textures.end()) {
+                return nb::cast(it->second);
+            }
+            return nb::none();
+        }, nb::arg("name"), "Get texture by uniform name")
+        .def_prop_rw("textures",
+            [](MaterialPhase& self) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, handle] : self.textures) {
+                    result[key.c_str()] = handle;
+                }
+                return result;
+            },
+            [](MaterialPhase& self, nb::dict textures) {
+                self.textures.clear();
+                for (auto item : textures) {
+                    std::string key = nb::cast<std::string>(item.first);
+                    TextureHandle handle = nb::cast<TextureHandle>(nb::borrow<nb::object>(item.second));
+                    self.textures[key] = handle;
+                }
+            })
         .def_prop_rw("uniforms",
             [](MaterialPhase& self) -> nb::dict {
                 nb::dict result;
