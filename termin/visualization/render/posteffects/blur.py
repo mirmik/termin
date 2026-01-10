@@ -68,7 +68,7 @@ class GaussianBlurPass(PostEffect):
         self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)
         self.direction = np.array(direction, dtype=np.float32)
 
-    def draw(self, gfx, key, color_tex, extra_textures, size):
+    def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
         texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)
 

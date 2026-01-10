@@ -110,7 +110,7 @@ class HighlightEffect(PostEffect):
             self._shader = ShaderProgram(HIGHLIGHT_VERT, HIGHLIGHT_FRAG)
         return self._shader
 
-    def draw(self, gfx, key, color_tex, extra_textures, size):
+    def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
         tex_id = extra_textures.get("id")
 

@@ -22,6 +22,12 @@ class DepthPass(_DepthPassNative):
     Output format: R16F for high precision (65536 levels vs 256 for RGBA8).
     """
 
+    category = "Render"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = [("output_res", "fbo")]
+    node_inplace_pairs = [("input_res", "output_res")]
+
     def __init__(
         self,
         input_res: str = "empty_depth",

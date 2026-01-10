@@ -46,6 +46,7 @@ class MenuBarController:
         on_scene_properties: Callable,
         on_layers_settings: Callable,
         on_shadow_settings: Callable,
+        on_pipeline_editor: Callable,
         on_toggle_game_mode: Callable,
         on_run_standalone: Callable,
         on_show_undo_stack_viewer: Callable,
@@ -94,6 +95,7 @@ class MenuBarController:
             on_scene_properties=on_scene_properties,
             on_layers_settings=on_layers_settings,
             on_shadow_settings=on_shadow_settings,
+            on_pipeline_editor=on_pipeline_editor,
             on_toggle_game_mode=on_toggle_game_mode,
             on_run_standalone=on_run_standalone,
             on_show_undo_stack_viewer=on_show_undo_stack_viewer,
@@ -128,6 +130,7 @@ class MenuBarController:
         on_scene_properties: Callable,
         on_layers_settings: Callable,
         on_shadow_settings: Callable,
+        on_pipeline_editor: Callable,
         on_toggle_game_mode: Callable,
         on_run_standalone: Callable,
         on_show_undo_stack_viewer: Callable,
@@ -230,6 +233,11 @@ class MenuBarController:
 
         shadow_settings_action = scene_menu.addAction("Shadow Settings...")
         shadow_settings_action.triggered.connect(on_shadow_settings)
+
+        scene_menu.addSeparator()
+
+        pipeline_editor_action = scene_menu.addAction("Pipeline Editor...")
+        pipeline_editor_action.triggered.connect(on_pipeline_editor)
 
         # Game menu
         self._action_play = game_menu.addAction("Play")

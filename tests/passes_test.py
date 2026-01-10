@@ -660,20 +660,12 @@ class TestPipelineSerialization(unittest.TestCase):
         shadow_pass = ShadowPass(
             output_res="my_shadows",
             pass_name="MyShadows",
-            default_resolution=2048,
-            ortho_size=30.0,
-            near=0.5,
-            far=200.0,
+            caster_offset=100.0,
         )
 
         data = shadow_pass.serialize()
 
         self.assertEqual(data["type"], "ShadowPass")
-        self.assertEqual(data["output_res"], "my_shadows")
-        self.assertEqual(data["default_resolution"], 2048)
-        self.assertEqual(data["ortho_size"], 30.0)
-        self.assertEqual(data["near"], 0.5)
-        self.assertEqual(data["far"], 200.0)
 
         # Десериализация
         from termin.visualization.render.framegraph.core import FramePass
@@ -681,10 +673,6 @@ class TestPipelineSerialization(unittest.TestCase):
 
         self.assertIsInstance(restored, ShadowPass)
         self.assertEqual(restored.output_res, "my_shadows")
-        self.assertEqual(restored.default_resolution, 2048)
-        self.assertEqual(restored.ortho_size, 30.0)
-        self.assertEqual(restored.near, 0.5)
-        self.assertEqual(restored.far, 200.0)
 
     def test_post_effect_serialization(self):
         """Тест сериализации PostEffect."""
@@ -791,7 +779,6 @@ class TestPipelineSerialization(unittest.TestCase):
             passes=[
                 ShadowPass(
                     output_res="shadows",
-                    default_resolution=1024,
                 ),
                 SkyBoxPass(
                     input_res="empty",

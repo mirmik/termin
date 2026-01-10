@@ -83,14 +83,17 @@ class SingleFBO(FrameGraphResource):
 @dataclass
 class ShadowMapArrayEntry:
     """
-    Данные одного shadow map для одного источника света.
-    
+    Данные одного shadow map для одного источника света (или каскада).
+
     Атрибуты:
         fbo: FBO, в который рендерится shadow map
         light_space_matrix: матрица P * V для преобразования мировых координат
                            в clip-пространство источника света
         light_index: индекс источника в scene.lights
-    
+        cascade_index: индекс каскада (0-3), 0 для не-каскадных теней
+        cascade_split_near: начало каскада (view-space Z)
+        cascade_split_far: конец каскада (view-space Z)
+
     Формула преобразования точки p в shadow map координаты:
         p_light_clip = light_space_matrix @ [p.x, p.y, p.z, 1]^T
         uv = (p_light_clip.xy / p_light_clip.w) * 0.5 + 0.5
@@ -99,6 +102,9 @@ class ShadowMapArrayEntry:
     fbo: "FramebufferHandle"
     light_space_matrix: np.ndarray
     light_index: int
+    cascade_index: int = 0
+    cascade_split_near: float = 0.0
+    cascade_split_far: float = 0.0
 
     def texture(self) -> "GPUTextureHandle":
         """Возвращает color-текстуру FBO."""
@@ -138,12 +144,18 @@ class ShadowMapArrayResource(FrameGraphResource):
         fbo: "FramebufferHandle",
         light_space_matrix: np.ndarray,
         light_index: int,
+        cascade_index: int = 0,
+        cascade_split_near: float = 0.0,
+        cascade_split_far: float = 0.0,
     ) -> None:
-        """Добавляет запись для нового источника света."""
+        """Добавляет запись для нового источника света (или каскада)."""
         self.entries.append(ShadowMapArrayEntry(
             fbo=fbo,
             light_space_matrix=light_space_matrix,
             light_index=light_index,
+            cascade_index=cascade_index,
+            cascade_split_near=cascade_split_near,
+            cascade_split_far=cascade_split_far,
         ))
 
     def clear(self) -> None:

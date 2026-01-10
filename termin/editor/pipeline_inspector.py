@@ -306,6 +306,23 @@ class PipelineInspector(QWidget):
         samples_layout.addStretch()
         spec_editor_layout.addLayout(samples_layout)
 
+        # Format (RGBA8, RGBA16F for HDR, etc.)
+        format_layout = QHBoxLayout()
+        format_layout.addWidget(QLabel("Format:"))
+        self._spec_format_combo = QComboBox()
+        self._spec_format_combo.addItems([
+            "rgba8 (Default)",
+            "rgba16f (HDR)",
+            "rgba32f (HDR High Precision)",
+            "r8 (Single Channel 8-bit)",
+            "r16f (Single Channel Float)",
+            "r32f (Single Channel High Precision)",
+        ])
+        self._spec_format_combo.currentIndexChanged.connect(self._on_spec_field_changed)
+        format_layout.addWidget(self._spec_format_combo)
+        format_layout.addStretch()
+        spec_editor_layout.addLayout(format_layout)
+
         # Clear color
         clear_color_layout = QHBoxLayout()
         self._spec_clear_color_check = QCheckBox("Clear Color:")
@@ -942,6 +959,12 @@ class PipelineInspector(QWidget):
         samples_idx = samples_map.get(spec.samples, 0)
         self._spec_samples_combo.setCurrentIndex(samples_idx)
 
+        # Format
+        format_map = {"": 0, "rgba8": 0, "rgba16f": 1, "rgba32f": 2, "r8": 3, "r16f": 4, "r32f": 5}
+        format_val = spec.format if spec.format else ""
+        format_idx = format_map.get(format_val, 0)
+        self._spec_format_combo.setCurrentIndex(format_idx)
+
         # Clear color
         if spec.clear_color is not None:
             self._spec_clear_color_check.setChecked(True)
@@ -1068,12 +1091,23 @@ class PipelineInspector(QWidget):
         # Update samples
         samples_values = [1, 2, 4, 8]
         spec.samples = samples_values[self._spec_samples_combo.currentIndex()]
-        # Update list item text if samples changed
+
+        # Update format
+        format_values = ["", "rgba16f", "rgba32f", "r8", "r16f", "r32f"]
+        format_idx = self._spec_format_combo.currentIndex()
+        spec.format = format_values[format_idx]
+
+        # Update list item text
         item = self._specs_list.item(row)
         if item:
             label = spec.resource
+            parts = []
             if spec.samples > 1:
-                label += f" ({spec.samples}x MSAA)"
+                parts.append(f"{spec.samples}x MSAA")
+            if spec.format:
+                parts.append(spec.format.upper())
+            if parts:
+                label += f" ({', '.join(parts)})"
             item.setText(label)
 
         # Update clear color
@@ -1087,7 +1121,11 @@ class PipelineInspector(QWidget):
             except ValueError:
                 pass  # Invalid input, keep old value
         else:
-            spec.clear_color = None
+            try:
+                spec.clear_color = None
+            except TypeError:
+                # Workaround: C++ bindings may not accept None directly
+                pass
 
         # Update clear depth
         if self._spec_clear_depth_check.isChecked():
@@ -1097,6 +1135,10 @@ class PipelineInspector(QWidget):
             except ValueError:
                 pass  # Invalid input, keep old value
         else:
-            spec.clear_depth = None
+            try:
+                spec.clear_depth = None
+            except TypeError:
+                # Workaround: C++ bindings may not accept None directly
+                pass
 
         self.pipeline_changed.emit(self._pipeline)

@@ -81,6 +81,7 @@ class CameraComponent(PythonComponent):
             label="Near clip",
             kind="float",
             min=0.001,
+            max=10000.0,
             step=0.01,
         ),
         "far": InspectField(
@@ -88,7 +89,8 @@ class CameraComponent(PythonComponent):
             label="Far clip",
             kind="float",
             min=0.01,
-            step=0.1,
+            max=100000.0,
+            step=1.0,
         ),
     }
 

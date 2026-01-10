@@ -21,6 +21,12 @@ class IdPass(_IdPassNative):
     Uses C++ implementation for core rendering with skinning support.
     """
 
+    category = "ID/Picking"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = [("output_res", "fbo")]
+    node_inplace_pairs = [("input_res", "output_res")]
+
     def __init__(
         self,
         input_res: str = "empty",

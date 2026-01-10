@@ -50,6 +50,35 @@ class LightComponent(PythonComponent):
             max=4096,
             step=256,
         ),
+        "cascade_count": InspectField(
+            path="cascade_count",
+            label="Cascade Count",
+            kind="int",
+            min=1,
+            max=4,
+            step=1,
+        ),
+        "max_distance": InspectField(
+            path="max_distance",
+            label="Max Distance",
+            kind="float",
+            min=1.0,
+            max=1000.0,
+            step=10.0,
+        ),
+        "split_lambda": InspectField(
+            path="split_lambda",
+            label="Split Lambda",
+            kind="float",
+            min=0.0,
+            max=1.0,
+            step=0.1,
+        ),
+        "cascade_blend": InspectField(
+            path="cascade_blend",
+            label="Cascade Blend",
+            kind="bool",
+        ),
     }
 
     def __init__(
@@ -86,6 +115,38 @@ class LightComponent(PythonComponent):
     @property
     def shadows(self) -> LightShadowParams:
         return self._shadows
+
+    @property
+    def cascade_count(self) -> int:
+        return self._shadows.cascade_count
+
+    @cascade_count.setter
+    def cascade_count(self, value: int):
+        self._shadows.cascade_count = int(value)
+
+    @property
+    def max_distance(self) -> float:
+        return self._shadows.max_distance
+
+    @max_distance.setter
+    def max_distance(self, value: float):
+        self._shadows.max_distance = float(value)
+
+    @property
+    def split_lambda(self) -> float:
+        return self._shadows.split_lambda
+
+    @split_lambda.setter
+    def split_lambda(self, value: float):
+        self._shadows.split_lambda = float(value)
+
+    @property
+    def cascade_blend(self) -> bool:
+        return self._shadows.cascade_blend
+
+    @cascade_blend.setter
+    def cascade_blend(self, value: bool):
+        self._shadows.cascade_blend = bool(value)
 
     def to_light(self) -> Light:
         """Преобразовать в объект Light для рендеринга."""

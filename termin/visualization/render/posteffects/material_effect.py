@@ -158,6 +158,7 @@ class MaterialPostEffect(PostEffect):
         color_tex: "GPUTextureHandle",
         extra_textures: dict[str, "GPUTextureHandle"],
         size: tuple[int, int],
+        target_fbo=None,
     ):
         """Draw the post effect using the material's shader."""
         import numpy as np

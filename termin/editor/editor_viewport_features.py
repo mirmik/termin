@@ -437,6 +437,7 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
+        from termin.visualization.render.posteffects.bloom import BloomEffect
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
@@ -457,6 +458,7 @@ class EditorViewportFeatures:
             input_res="color_resolved",  # читаем из resolved (не MSAA)
             output_res="color_pp",
             pass_name="PostFX",
+            internal_format="rgba16f",  # HDR for bloom
         )
 
         depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
@@ -513,10 +515,6 @@ class EditorViewportFeatures:
         shadow_pass = ShadowPass(
             output_res="shadow_maps",
             pass_name="Shadow",
-            default_resolution=1024,
-            ortho_size=20.0,
-            near=0.1,
-            far=100.0,
         )
 
         passes: list = [
@@ -542,6 +540,7 @@ class EditorViewportFeatures:
             ),
         ]
 
+        postprocess.add_effect(BloomEffect())
         postprocess.add_effect(
             HighlightEffect(
                 lambda: self.hover_entity_id,
@@ -555,22 +554,32 @@ class EditorViewportFeatures:
             )
         )
 
-        # MSAA 4x для всех FBO где рисуется геометрия
+        # MSAA 4x + HDR (rgba16f) для всех FBO где рисуется геометрия
         # TODO: После редизайна системы алиасов framegraph эти спеки нужно упростить.
         #       Сейчас приходится указывать canonical name ('empty') и дублировать
         #       clear_color/clear_depth из pass specs, т.к. pipeline_specs перезаписывают их.
         msaa_samples = 4
-        msaa_specs = [
+        hdr_format = "rgba16f"
+        pipeline_specs = [
             ResourceSpec(
                 resource="empty",
                 samples=msaa_samples,
+                format=hdr_format,
                 clear_color=(0.2, 0.2, 0.2, 1.0),
                 clear_depth=1.0,
             ),
+            ResourceSpec(
+                resource="color_resolved",
+                format=hdr_format,
+            ),
+            ResourceSpec(
+                resource="color_pp",
+                format=hdr_format,
+            )
         ]
 
         return RenderPipeline(
             name="editor",
             passes=passes,
-            pipeline_specs=msaa_specs,
+            pipeline_specs=pipeline_specs,
         )

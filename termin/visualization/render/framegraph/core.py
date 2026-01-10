@@ -32,6 +32,18 @@ class FramePass:
     # Поля для редактирования в инспекторе (подклассы переопределяют)
     inspect_fields: dict = {}
 
+    # Категория пасса для организации в меню редактора пайплайна
+    category: str = "Other"
+
+    # Входы и выходы для node editor: список кортежей (name, socket_type)
+    # socket_type: "fbo", "texture", "shadow"
+    node_inputs: list = []
+    node_outputs: list = []
+
+    # Inplace пары: список кортежей (input_name, output_name)
+    # Для этих пар input и output используют один и тот же FBO
+    node_inplace_pairs: list = []
+
     def __init__(self, pass_name: str = "FramePass"):
         self.pass_name = pass_name
         self.enabled = True

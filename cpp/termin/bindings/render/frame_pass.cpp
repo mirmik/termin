@@ -362,7 +362,10 @@ void bind_frame_pass(nb::module_& m) {
                     }
 
                     int light_index = nb::cast<int>(entry.attr("light_index"));
-                    shadow_maps.emplace_back(matrix, light_index);
+                    int cascade_index = nb::cast<int>(entry.attr("cascade_index"));
+                    float cascade_split_near = nb::cast<float>(entry.attr("cascade_split_near"));
+                    float cascade_split_far = nb::cast<float>(entry.attr("cascade_split_far"));
+                    shadow_maps.emplace_back(matrix, light_index, cascade_index, cascade_split_near, cascade_split_far);
                 }
             }
 
@@ -759,31 +762,22 @@ void bind_frame_pass(nb::module_& m) {
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
             return nb::ndarray<nb::numpy, float, nb::ndim<2>>(data, 2, shape, owner);
         }, nb::rv_policy::move)
-        .def_ro("light_index", &ShadowMapResult::light_index);
+        .def_ro("light_index", &ShadowMapResult::light_index)
+        // Cascade parameters
+        .def_ro("cascade_index", &ShadowMapResult::cascade_index)
+        .def_ro("cascade_split_near", &ShadowMapResult::cascade_split_near)
+        .def_ro("cascade_split_far", &ShadowMapResult::cascade_split_far);
 
     // ShadowPass - shadow map rendering pass
     nb::class_<ShadowPass, FramePass>(m, "ShadowPass")
         .def("__init__", [](ShadowPass* self, const std::string& output_res,
-                            const std::string& pass_name, int default_resolution,
-                            float max_shadow_distance, float ortho_size,
-                            float near, float far, float caster_offset) {
-            new (self) ShadowPass(output_res, pass_name, default_resolution,
-                                  max_shadow_distance, ortho_size, near, far, caster_offset);
+                            const std::string& pass_name, float caster_offset) {
+            new (self) ShadowPass(output_res, pass_name, caster_offset);
         },
              nb::arg("output_res") = "shadow_maps",
              nb::arg("pass_name") = "Shadow",
-             nb::arg("default_resolution") = 1024,
-             nb::arg("max_shadow_distance") = 50.0f,
-             nb::arg("ortho_size") = 20.0f,
-             nb::arg("near") = 0.1f,
-             nb::arg("far") = 100.0f,
              nb::arg("caster_offset") = 50.0f)
         .def_rw("output_res", &ShadowPass::output_res)
-        .def_rw("default_resolution", &ShadowPass::default_resolution)
-        .def_rw("max_shadow_distance", &ShadowPass::max_shadow_distance)
-        .def_rw("ortho_size", &ShadowPass::ortho_size)
-        .def_rw("near", &ShadowPass::near)
-        .def_rw("far", &ShadowPass::far)
         .def_rw("caster_offset", &ShadowPass::caster_offset)
         .def_prop_rw("shadow_shader_program",
             [](ShadowPass& self) -> ShaderProgram* { return self.shadow_shader_program; },

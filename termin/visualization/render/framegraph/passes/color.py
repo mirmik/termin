@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 
-# Maximum shadow maps in shader
-MAX_SHADOW_MAPS = 4
+# Maximum shadow maps in shader (4 lights * 4 cascades)
+MAX_SHADOW_MAPS = 16
 
 # Starting texture unit for shadow maps
 SHADOW_MAP_TEXTURE_UNIT_START = 8
@@ -32,6 +32,17 @@ class ColorPass(_ColorPassNative):
 
     Fields are registered via INSPECT_FIELD macros in C++ (color_pass.hpp).
     """
+
+    category = "Render"
+
+    node_inputs = [
+        ("input_res", "fbo"),
+        ("shadow_res", "shadow"),
+    ]
+    node_outputs = [
+        ("output_res", "fbo"),
+    ]
+    node_inplace_pairs = [("input_res", "output_res")]
 
     def __init__(
         self,

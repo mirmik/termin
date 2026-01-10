@@ -5,6 +5,7 @@
 
 #include <array>
 #include <optional>
+#include <vector>
 
 namespace termin {
 
@@ -125,5 +126,53 @@ ShadowCameraParams fit_shadow_frustum_to_camera(
  * Used for transforming frustum corners to light space before AABB computation.
  */
 Mat44f build_light_rotation_matrix(const Vec3& light_direction);
+
+
+/**
+ * Compute cascade split distances using Practical Split Scheme (PSSM).
+ *
+ * Uses a blend of logarithmic and linear distribution controlled by lambda.
+ * - lambda = 0: uniform (linear) distribution
+ * - lambda = 1: logarithmic distribution (more resolution near camera)
+ * - lambda = 0.5: practical blend (recommended)
+ *
+ * @param near Camera near plane
+ * @param far Maximum shadow distance
+ * @param cascade_count Number of cascades (1-4)
+ * @param lambda Blend factor (0=linear, 1=log)
+ * @return Vector of split distances [near, split1, split2, ..., far]
+ */
+std::vector<float> compute_cascade_splits(
+    float near,
+    float far,
+    int cascade_count,
+    float lambda = 0.5f
+);
+
+
+/**
+ * Fit shadow frustum for a specific cascade.
+ *
+ * Creates a tight-fitting orthographic frustum for the cascade's portion
+ * of the camera frustum.
+ *
+ * @param view_matrix Camera view matrix
+ * @param projection_matrix Camera projection matrix
+ * @param light_direction Normalized light direction
+ * @param cascade_near Near split distance (view-space Z)
+ * @param cascade_far Far split distance (view-space Z)
+ * @param shadow_map_resolution Resolution for texel snapping
+ * @param caster_offset Distance behind cascade for shadow casters
+ * @return Fitted shadow camera parameters for this cascade
+ */
+ShadowCameraParams fit_shadow_frustum_for_cascade(
+    const Mat44f& view_matrix,
+    const Mat44f& projection_matrix,
+    const Vec3& light_direction,
+    float cascade_near,
+    float cascade_far,
+    int shadow_map_resolution = 1024,
+    float caster_offset = 50.0f
+);
 
 } // namespace termin

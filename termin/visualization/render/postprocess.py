@@ -155,11 +155,14 @@ class PostEffect:
         color_tex: "GPUTextureHandle",
         extra_textures: dict[str, "GPUTextureHandle"],
         size: tuple[int, int],
+        target_fbo: "FramebufferHandle | None" = None,
     ):
         """
         color_tex      – текущая цветовая текстура (что пришло с предыдущего шага).
         extra_textures – карта имя_ресурса -> GPUTextureHandle (id, depth, normals...).
         size           – (width, height) целевого буфера.
+        target_fbo     – целевой FBO (уже привязан, но передаётся для эффектов
+                         с внутренними проходами, которым нужно восстановить его).
 
         Эффект внутри сам:
         - биндит нужные текстуры по юнитам;
@@ -174,9 +177,20 @@ class PostEffect:
 
 
 class PostProcessPass(RenderFramePass):
+    category = "Effects"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = [("output_res", "fbo")]
+
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+        "internal_format": InspectField(
+            path="internal_format",
+            label="Internal Format",
+            kind="enum",
+            choices=[("", "Default (RGBA8)"), ("rgba8", "RGBA8"), ("rgba16f", "RGBA16F (HDR)"), ("rgba32f", "RGBA32F")],
+        ),
     }
 
     def __init__(
@@ -185,6 +199,7 @@ class PostProcessPass(RenderFramePass):
         input_res: str,
         output_res: str,
         pass_name: str = "PostProcess",
+        internal_format: str = "",
     ):
         super().__init__(pass_name=pass_name)
 
@@ -195,8 +210,23 @@ class PostProcessPass(RenderFramePass):
 
         self.input_res = input_res
         self.output_res = output_res
+        self._internal_format = internal_format  # FBO format for temp buffers ("rgba16f" for HDR)
 
         self._temp_fbos: list["FramebufferHandle"] = []
+
+    @property
+    def internal_format(self) -> str:
+        return self._internal_format
+
+    @internal_format.setter
+    def internal_format(self, value: str) -> None:
+        if value != self._internal_format:
+            # Clear temp FBOs so they get recreated with new format
+            for fbo in self._temp_fbos:
+                if fbo is not None:
+                    fbo.delete()
+            self._temp_fbos.clear()
+            self._internal_format = value
 
     def compute_reads(self) -> Set[str]:
         """Динамически собираем reads на основе эффектов."""
@@ -213,6 +243,7 @@ class PostProcessPass(RenderFramePass):
         return {
             "input_res": self.input_res,
             "output_res": self.output_res,
+            "internal_format": self.internal_format,
             "effects": [eff.serialize() for eff in self.effects],
         }
 
@@ -224,6 +255,8 @@ class PostProcessPass(RenderFramePass):
             self.input_res = data["input_res"]
         if "output_res" in data:
             self.output_res = data["output_res"]
+        if "internal_format" in data:
+            self.internal_format = data["internal_format"]
         # Effects уже десериализованы в _deserialize_instance
 
     @classmethod
@@ -246,6 +279,7 @@ class PostProcessPass(RenderFramePass):
             input_res=inner_data.get("input_res", "color"),
             output_res=inner_data.get("output_res", "color_pp"),
             pass_name=data.get("pass_name", "PostProcess"),
+            internal_format=inner_data.get("internal_format", ""),
         )
 
     def _effect_symbol(self, index: int, effect: "PostEffect") -> str:
@@ -273,7 +307,7 @@ class PostProcessPass(RenderFramePass):
 
     def _get_temp_fbo(self, graphics: "GraphicsBackend", index: int, size: tuple[int, int]):
         while len(self._temp_fbos) <= index:
-            self._temp_fbos.append(graphics.create_framebuffer(size))
+            self._temp_fbos.append(graphics.create_framebuffer(size, 1, self.internal_format))
         fb = self._temp_fbos[index]
         fb.resize(size)
         return fb
@@ -383,7 +417,7 @@ class PostProcessPass(RenderFramePass):
                 graphics.bind_framebuffer(fb_target)
                 graphics.set_viewport(0, 0, pw, ph)
 
-                effect.draw(graphics, key, current_tex, extra_textures, size)
+                effect.draw(graphics, key, current_tex, extra_textures, size, fb_target)
                 graphics.check_gl_error(f"PostFX: {effect.name if hasattr(effect, 'name') else effect.__class__.__name__}")
 
                 # Debugger: блит после применения эффекта если выбран его символ

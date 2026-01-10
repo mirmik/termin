@@ -222,15 +222,28 @@ void ColorPass::execute_with_data(
                 static_cast<float>(camera_position.y),
                 static_cast<float>(camera_position.z));
 
+            // Upload view matrix (needed for cascade depth calculation in shader)
+            shader_to_use->set_uniform_matrix4("u_view", view, false);
+
             // Upload lights with entity name for debugging
             upload_lights_to_shader(shader_to_use, lights, ename);
 
             // Upload ambient
             upload_ambient_to_shader(shader_to_use, ambient_color, ambient_intensity);
 
-            // Upload shadow maps
+            // Upload shadow maps and cascade settings
             upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
             upload_shadow_settings_to_shader(shader_to_use, shadow_settings);
+            upload_cascade_settings_to_shader(shader_to_use, lights);
+
+            // Debug: log shadow settings (once per frame, first entity only)
+            static bool logged_shadow_settings = false;
+            if (!logged_shadow_settings && !shadow_maps.empty()) {
+                tc::Log::info("Shadow settings: method=%d, softness=%.3f, bias=%.5f, maps=%zu",
+                    shadow_settings.method, shadow_settings.softness, shadow_settings.bias,
+                    shadow_maps.size());
+                logged_shadow_settings = true;
+            }
 
             context.current_shader = shader_to_use;
         }

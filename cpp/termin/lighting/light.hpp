@@ -48,6 +48,13 @@ struct LightShadowParams {
     double normal_bias = 0.0;
     int map_resolution = 1024;
 
+    // Cascaded Shadow Maps (CSM) parameters
+    int cascade_count = 1;           // Number of cascades (1-4)
+    float max_distance = 100.0f;     // Maximum shadow distance
+    float split_lambda = 0.5f;       // PSSM split parameter (0=linear, 1=log, 0.5=mixed)
+    bool cascade_blend = true;       // Blend between cascades
+    float blend_distance = 2.0f;     // Blend zone size in world units
+
     LightShadowParams() = default;
     LightShadowParams(bool en, double b, double nb, int res)
         : enabled(en), bias(b), normal_bias(nb), map_resolution(res) {}

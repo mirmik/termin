@@ -3,6 +3,7 @@ ViewportRenderState — контейнер GPU ресурсов для viewport.
 
 Хранит:
 - fbos: пул FBO для ресурсов framegraph
+- shadow_map_arrays: пул ShadowMapArrayResource
 
 Pipeline теперь хранится в Viewport напрямую.
 """
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING, Dict, Optional
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import FramebufferHandle
+    from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 
 @dataclass
@@ -25,8 +27,10 @@ class ViewportRenderState:
 
     Атрибуты:
         fbos: Словарь {resource_name -> FramebufferHandle} для framegraph.
+        shadow_map_arrays: Словарь {resource_name -> ShadowMapArrayResource}.
     """
     fbos: Dict[str, "FramebufferHandle"] = field(default_factory=dict)
+    shadow_map_arrays: Dict[str, "ShadowMapArrayResource"] = field(default_factory=dict)
 
     def get_fbo(self, name: str) -> Optional["FramebufferHandle"]:
         """
@@ -60,3 +64,11 @@ class ViewportRenderState:
             if resource is not None:
                 resource.delete()
         self.fbos.clear()
+
+    def get_shadow_map_array(self, name: str) -> Optional["ShadowMapArrayResource"]:
+        """Возвращает ShadowMapArrayResource по имени ресурса."""
+        return self.shadow_map_arrays.get(name)
+
+    def set_shadow_map_array(self, name: str, resource: "ShadowMapArrayResource") -> None:
+        """Устанавливает ShadowMapArrayResource для ресурса."""
+        self.shadow_map_arrays[name] = resource

@@ -34,6 +34,12 @@ void main() {
 from typing import Callable
 
 class GizmoPass(RenderFramePass):
+    category = "ID/Picking"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = [("output_res", "fbo")]
+    node_inplace_pairs = [("input_res", "output_res")]
+
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),

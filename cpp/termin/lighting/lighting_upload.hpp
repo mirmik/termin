@@ -11,7 +11,8 @@
 namespace termin {
 
 constexpr int MAX_LIGHTS = 8;
-constexpr int MAX_SHADOW_MAPS = 4;
+constexpr int MAX_SHADOW_MAPS = 16;  // 4 lights * 4 cascades
+constexpr int MAX_CASCADES = 4;
 constexpr int SHADOW_MAP_TEXTURE_UNIT_START = 8;
 
 /**
@@ -105,6 +106,9 @@ inline void upload_shadow_settings_to_shader(ShaderProgram* shader, const Shadow
  *   u_shadow_map[i]: int (texture unit)
  *   u_light_space_matrix[i]: mat4
  *   u_shadow_light_index[i]: int
+ *   u_shadow_cascade_index[i]: int
+ *   u_shadow_split_near[i]: float
+ *   u_shadow_split_far[i]: float
  *
  * Note: Shadow map textures must be bound by the caller before rendering.
  * This function only sets the uniform values.
@@ -125,12 +129,38 @@ inline void upload_shadow_maps_to_shader(ShaderProgram* shader, const std::vecto
 
         // Light index (for matching with u_light_* arrays)
         shader->set_uniform_int(("u_shadow_light_index" + idx).c_str(), entry.light_index);
+
+        // Cascade parameters
+        shader->set_uniform_int(("u_shadow_cascade_index" + idx).c_str(), entry.cascade_index);
+        shader->set_uniform_float(("u_shadow_split_near" + idx).c_str(), entry.cascade_split_near);
+        shader->set_uniform_float(("u_shadow_split_far" + idx).c_str(), entry.cascade_split_far);
     }
 
     // Set remaining samplers to their units (for AMD drivers)
     for (int i = count; i < MAX_SHADOW_MAPS; ++i) {
         std::string idx = "[" + std::to_string(i) + "]";
         shader->set_uniform_int(("u_shadow_map" + idx).c_str(), SHADOW_MAP_TEXTURE_UNIT_START + i);
+    }
+}
+
+/**
+ * Upload per-light cascade settings.
+ *
+ * Uniforms:
+ *   u_light_cascade_count[i]: int
+ *   u_light_cascade_blend[i]: int (bool as int)
+ *   u_light_blend_distance[i]: float
+ */
+inline void upload_cascade_settings_to_shader(ShaderProgram* shader, const std::vector<Light>& lights) {
+    int count = static_cast<int>(std::min(lights.size(), static_cast<size_t>(MAX_LIGHTS)));
+
+    for (int i = 0; i < count; ++i) {
+        const Light& light = lights[i];
+        std::string idx = "[" + std::to_string(i) + "]";
+
+        shader->set_uniform_int(("u_light_cascade_count" + idx).c_str(), light.shadows.cascade_count);
+        shader->set_uniform_int(("u_light_cascade_blend" + idx).c_str(), light.shadows.cascade_blend ? 1 : 0);
+        shader->set_uniform_float(("u_light_blend_distance" + idx).c_str(), light.shadows.blend_distance);
     }
 }
 

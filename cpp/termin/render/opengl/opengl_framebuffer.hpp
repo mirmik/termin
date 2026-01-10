@@ -12,13 +12,15 @@ namespace termin {
 // Texture formats for framebuffer color attachment
 enum class FBOFormat {
     RGBA8,     // Default: 8-bit per channel
-    R16F,      // Single channel 16-bit float (for depth maps)
+    R8,        // Single channel 8-bit (masks, IDs)
+    R16F,      // Single channel 16-bit float (depth maps)
     R32F,      // Single channel 32-bit float
     RGBA16F,   // 4 channels 16-bit float (HDR)
     RGBA32F    // 4 channels 32-bit float
 };
 
 inline FBOFormat parse_fbo_format(const std::string& format_str) {
+    if (format_str == "r8") return FBOFormat::R8;
     if (format_str == "r16f") return FBOFormat::R16F;
     if (format_str == "r32f") return FBOFormat::R32F;
     if (format_str == "rgba16f") return FBOFormat::RGBA16F;
@@ -131,6 +133,11 @@ public:
 private:
     void get_format_params(GLenum& internal_format, GLenum& pixel_format, GLenum& pixel_type) const {
         switch (format_) {
+            case FBOFormat::R8:
+                internal_format = GL_R8;
+                pixel_format = GL_RED;
+                pixel_type = GL_UNSIGNED_BYTE;
+                break;
             case FBOFormat::R16F:
                 internal_format = GL_R16F;
                 pixel_format = GL_RED;

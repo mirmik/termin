@@ -52,6 +52,7 @@ class Scene:
         self,
         background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
         uuid: str | None = None,
+        name: str = "",
     ):
         self._destroyed = False
 
@@ -61,6 +62,7 @@ class Scene:
 
         # Identifiable fields
         self.uuid = uuid or ""
+        self.name = name
         self.runtime_id = 0
 
         # Background color with alpha

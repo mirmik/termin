@@ -43,6 +43,10 @@ uniform float u_metallic;
 uniform float u_roughness;
 uniform float u_subsurface;  // SSS intensity (0 = off, 1 = full)
 
+// Emission (for bloom/glow effects)
+uniform vec4 u_emission_color;      // RGB = color, A unused
+uniform float u_emission_intensity; // 0 = no emission, >1 = HDR bloom
+
 // Camera
 uniform vec3 u_camera_position;
 
@@ -262,6 +266,10 @@ void main() {
     }
 
     vec3 color = ambient + Lo;
+
+    // Add emission (before tone mapping for HDR bloom)
+    vec3 emission = u_emission_color.rgb * u_emission_intensity;
+    color += emission;
 
     // ACES tone mapping
     color = aces_tonemap(color);

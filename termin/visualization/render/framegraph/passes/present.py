@@ -105,6 +105,11 @@ class BlitPass(RenderFramePass):
     При десериализации нужно задать его отдельно.
     """
 
+    category = "Output"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = [("output_res", "fbo")]
+
     def __init__(
         self,
         get_source_res=None,
@@ -199,6 +204,11 @@ class ResolvePass(RenderFramePass):
     если источник — MSAA FBO.
     """
 
+    category = "Output"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = [("output_res", "fbo")]
+
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
@@ -258,6 +268,11 @@ class PresentToScreenPass(RenderFramePass):
     Берёт текстуру из ресурса input_res и выводит её на экран
     фуллскрин-квадом.
     """
+
+    category = "Output"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = []  # Output is screen, not a resource
 
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),

@@ -5,19 +5,19 @@
     "opaque"
   ],
   "uniforms": {
-    "u_metallic": 0.10000000149011612,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_ambient": 0.10000000149011612,
+    "u_emission_intensity": 0.0,
     "u_shininess": 32.0,
-    "u_roughness": 0.30000001192092896,
-    "u_subsurface": 0.0
-  },
-  "textures": {
-    "u_albedo_texture": "6830-1745580165"
+    "u_emission_color": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
   }
 }

@@ -55,6 +55,7 @@
       "data": {
         "input_res": "resolved",
         "output_res": "color_pp",
+        "internal_format": "rgba16f",
         "effects": [
           {
             "type": "MaterialPostEffect",
@@ -67,6 +68,16 @@
               },
               "_required_depth": false,
               "extra_resources_str": "depth:u_depth_texture, normal:u_normal_texture"
+            }
+          },
+          {
+            "type": "BloomEffect",
+            "name": "bloom",
+            "data": {
+              "threshold": 1.0,
+              "soft_threshold": 0.5,
+              "intensity": 1.0,
+              "mip_levels": 5.0
             }
           }
         ]
@@ -126,7 +137,18 @@
         1.0
       ],
       "clear_depth": 1.0,
+      "format": "rgba16f",
       "samples": 8
+    },
+    {
+      "resource": "color_pp",
+      "resource_type": "fbo",
+      "format": "rgba16f"
+    },
+    {
+      "resource": "resolved",
+      "resource_type": "fbo",
+      "format": "rgba16f"
     }
   ]
 }

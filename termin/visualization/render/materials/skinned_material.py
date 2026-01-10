@@ -70,6 +70,10 @@ uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
 uniform float u_shininess;
 
+// Emission (for bloom/glow effects)
+uniform vec4 u_emission_color;      // RGB = color, A unused
+uniform float u_emission_intensity; // 0 = no emission, >1 = HDR bloom
+
 // Lighting
 const int LIGHT_TYPE_DIRECTIONAL = 0;
 const int LIGHT_TYPE_POINT       = 1;
@@ -212,6 +216,10 @@ void main() {
 
         result += (diffuse + specular) * radiance * weight * shadow;
     }
+
+    // Add emission (for HDR bloom)
+    vec3 emission = u_emission_color.rgb * u_emission_intensity;
+    result += emission;
 
     FragColor = vec4(result, u_color.a);
 }

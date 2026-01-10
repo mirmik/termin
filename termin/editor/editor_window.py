@@ -470,6 +470,7 @@ class EditorWindow(QMainWindow):
             on_scene_properties=self._show_scene_properties,
             on_layers_settings=self._show_layers_dialog,
             on_shadow_settings=self._show_shadow_settings_dialog,
+            on_pipeline_editor=self._show_pipeline_editor,
             on_toggle_game_mode=self._toggle_game_mode,
             on_run_standalone=self._run_standalone,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
@@ -553,6 +554,14 @@ class EditorWindow(QMainWindow):
     def _show_shadow_settings_dialog(self) -> None:
         """Opens shadow settings dialog."""
         self._dialog_manager.show_shadow_settings_dialog()
+
+    def _show_pipeline_editor(self) -> None:
+        """Opens the visual pipeline graph editor."""
+        from termin.nodegraph import PipelineGraphEditor
+
+        editor = PipelineGraphEditor(parent=self)
+        editor.set_scene(self.scene)
+        editor.show()
 
     def _show_undo_stack_viewer(self) -> None:
         """Opens undo/redo stack viewer window."""

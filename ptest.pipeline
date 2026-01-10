@@ -1,0 +1,97 @@
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    {
+      "type": "ShadowPass",
+      "x": -474.76076479202396,
+      "y": -189.35406424947777,
+      "params": {
+        "default_resolution": 512,
+        "max_shadow_distance": 1.0,
+        "ortho_size": 1.0,
+        "near": 0.01,
+        "far": 1.0,
+        "caster_offset": 0.0
+      }
+    },
+    {
+      "type": "SkyboxPass",
+      "x": -475.78810720268,
+      "y": -334.7587939698492
+    },
+    {
+      "type": "ColorPass",
+      "x": -214.2814070351759,
+      "y": -278.4087102177554,
+      "params": {
+        "phase_mark": "opaque",
+        "sort_by_distance": false,
+        "clear_depth": false
+      }
+    },
+    {
+      "type": "PostProcess",
+      "x": 265.4748743718592,
+      "y": -280.392797319933,
+      "params": {
+        "internal_format": "Default (RGBA8)"
+      }
+    },
+    {
+      "type": "Present",
+      "x": 485.3157453936348,
+      "y": -251.62353433835844
+    },
+    {
+      "type": "ColorPass",
+      "x": 38.6896984924623,
+      "y": -249.9949748743718,
+      "params": {
+        "phase_mark": "transparent",
+        "sort_by_distance": false,
+        "clear_depth": false
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 0,
+      "from_socket": "output_res",
+      "to_node": 2,
+      "to_socket": "shadow_res"
+    },
+    {
+      "from_node": 1,
+      "from_socket": "output_res",
+      "to_node": 2,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 3,
+      "from_socket": "output_res",
+      "to_node": 4,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 2,
+      "from_socket": "output_res",
+      "to_node": 5,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 5,
+      "from_socket": "output_res",
+      "to_node": 3,
+      "to_socket": "input_res"
+    }
+  ],
+  "viewport_frames": [
+    {
+      "title": "Main Viewport",
+      "x": -511.6593454789696,
+      "y": -439.40978079697857,
+      "width": 1265.406659203331,
+      "height": 667.2510882862105
+    }
+  ]
+}

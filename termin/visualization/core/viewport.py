@@ -121,10 +121,6 @@ def make_default_pipeline() -> "RenderPipeline":
     shadow_pass = ShadowPass(
         output_res="shadow_maps",
         pass_name="Shadow",
-        default_resolution=1024,
-        ortho_size=20.0,
-        near=0.1,
-        far=100.0,
     )
 
     # Opaque pass — читает shadow maps

@@ -124,9 +124,16 @@ NB_MODULE(_lighting_native, m) {
         .def_rw("bias", &LightShadowParams::bias)
         .def_rw("normal_bias", &LightShadowParams::normal_bias)
         .def_rw("map_resolution", &LightShadowParams::map_resolution)
+        // Cascade Shadow Maps (CSM) parameters
+        .def_rw("cascade_count", &LightShadowParams::cascade_count)
+        .def_rw("max_distance", &LightShadowParams::max_distance)
+        .def_rw("split_lambda", &LightShadowParams::split_lambda)
+        .def_rw("cascade_blend", &LightShadowParams::cascade_blend)
+        .def_rw("blend_distance", &LightShadowParams::blend_distance)
         .def("__repr__", [](const LightShadowParams& s) {
             return "LightShadowParams(enabled=" + std::string(s.enabled ? "True" : "False") +
-                   ", bias=" + std::to_string(s.bias) + ")";
+                   ", bias=" + std::to_string(s.bias) +
+                   ", cascades=" + std::to_string(s.cascade_count) + ")";
         });
 
     // LightSample
@@ -240,6 +247,11 @@ NB_MODULE(_lighting_native, m) {
             shad["bias"] = l.shadows.bias;
             shad["normal_bias"] = l.shadows.normal_bias;
             shad["map_resolution"] = l.shadows.map_resolution;
+            shad["cascade_count"] = l.shadows.cascade_count;
+            shad["max_distance"] = l.shadows.max_distance;
+            shad["split_lambda"] = l.shadows.split_lambda;
+            shad["cascade_blend"] = l.shadows.cascade_blend;
+            shad["blend_distance"] = l.shadows.blend_distance;
             d["shadows"] = shad;
             d["name"] = l.name;
             return d;

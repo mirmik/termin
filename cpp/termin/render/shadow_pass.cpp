@@ -31,19 +31,9 @@ Mat44f get_model_matrix(const Entity& entity) {
 ShadowPass::ShadowPass(
     const std::string& output_res,
     const std::string& pass_name,
-    int default_resolution,
-    float max_shadow_distance,
-    float ortho_size,
-    float near,
-    float far,
     float caster_offset
 ) : RenderFramePass(pass_name, {}, {output_res}),
     output_res(output_res),
-    default_resolution(default_resolution),
-    max_shadow_distance(max_shadow_distance),
-    ortho_size(ortho_size),
-    near(near),
-    far(far),
     caster_offset(caster_offset)
 {
 }
@@ -215,27 +205,17 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
         }
     }
 
-    if (draw_calls.empty()) {
-        // No shadow casters, return empty FBOs
-        for (size_t i = 0; i < shadow_lights.size(); ++i) {
-            auto [light_index, light] = shadow_lights[i];
-            int resolution = light->shadows.map_resolution;
-            FramebufferHandle* fbo = get_or_create_fbo(graphics, resolution, static_cast<int>(i));
-
-            // Clear to white (max depth)
-            if (fbo) {
-                graphics->bind_framebuffer(fbo);
-                graphics->set_viewport(0, 0, resolution, resolution);
-                graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
-            }
-
-            ShadowCameraParams params = build_shadow_params(*light, camera_view, camera_projection);
-            Mat44f light_space_matrix = compute_light_space_matrix(params);
-            results.emplace_back(fbo, light_space_matrix, light_index);
-        }
-        graphics->bind_framebuffer(nullptr);
-        graphics->reset_gl_state();
-        return results;
+    // Extract camera near plane from projection matrix
+    // Our Y-forward convention: proj[2,3] = -2*far*near/(far-near)
+    // proj[2,1] = (far+near)/(far-near)
+    // From these we can derive near
+    float camera_near = 0.1f;  // Default fallback
+    float proj_23 = camera_projection(2, 3);
+    float proj_21 = camera_projection(2, 1);
+    if (std::abs(proj_21 - 1.0f) > 0.001f && std::abs(proj_23) > 0.001f) {
+        // near = -proj_23 / (proj_21 + 1)
+        camera_near = -proj_23 / (proj_21 + 1.0f);
+        if (camera_near < 0.01f) camera_near = 0.1f;
     }
 
     // Render state: depth test/write, no blending, cull back faces
@@ -251,70 +231,102 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     context.graphics = graphics;
     context.phase = "shadow";
 
-    // Render shadow map for each light
-    for (size_t array_index = 0; array_index < shadow_lights.size(); ++array_index) {
-        auto [light_index, light] = shadow_lights[array_index];
+    int fbo_index = 0;
+
+    // Render shadow maps for each light (with cascades)
+    for (size_t light_array_index = 0; light_array_index < shadow_lights.size(); ++light_array_index) {
+        auto [light_index, light] = shadow_lights[light_array_index];
         int resolution = light->shadows.map_resolution;
+        int cascade_count = std::max(1, std::min(4, light->shadows.cascade_count));
+        float max_distance = light->shadows.max_distance;
+        float split_lambda = light->shadows.split_lambda;
 
-        // Get/create FBO
-        FramebufferHandle* fbo = get_or_create_fbo(graphics, resolution, static_cast<int>(array_index));
-        if (!fbo) {
-            tc::Log::error("ShadowPass: FBO is null");
-            continue;
-        }
+        // Compute cascade splits
+        std::vector<float> splits = compute_cascade_splits(
+            camera_near, max_distance, cascade_count, split_lambda
+        );
 
-        // Compute shadow camera params
-        ShadowCameraParams params = build_shadow_params(*light, camera_view, camera_projection);
-        Mat44f view_matrix = build_shadow_view_matrix(params);
-        Mat44f proj_matrix = build_shadow_projection_matrix(params);
-        Mat44f light_space_matrix = compute_light_space_matrix(params);
+        Vec3 light_dir = light->direction.normalized();
 
-        // Bind and clear FBO
-        graphics->bind_framebuffer(fbo);
-        graphics->set_viewport(0, 0, resolution, resolution);
-        graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
-        graphics->apply_render_state(render_state);
+        // Render each cascade
+        for (int c = 0; c < cascade_count; ++c) {
+            float cascade_near = splits[c];
+            float cascade_far = splits[c + 1];
 
-        // Setup shader
-        shadow_shader_program->use();
-        shadow_shader_program->set_uniform_matrix4("u_view", view_matrix, false);
-        shadow_shader_program->set_uniform_matrix4("u_projection", proj_matrix, false);
+            // Get/create FBO for this cascade
+            FramebufferHandle* fbo = get_or_create_fbo(graphics, resolution, fbo_index);
+            fbo_index++;
 
-        context.view = view_matrix;
-        context.projection = proj_matrix;
-        context.current_shader = shadow_shader_program;
-
-        // Render all shadow casters
-        for (const auto& dc : draw_calls) {
-            Mat44f model = get_model_matrix(*dc.entity);
-            context.model = model;
-
-            // Allow drawable to override shader (for skinning injection)
-            ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-                tc_component_override_shader(dc.component, "shadow", dc.geometry_id.c_str(), shadow_shader_program)
-            );
-            if (shader_to_use == nullptr) {
-                shader_to_use = shadow_shader_program;
+            if (!fbo) {
+                tc::Log::error("ShadowPass: FBO is null for cascade %d", c);
+                continue;
             }
 
-            // Ensure shader is ready and bind
-            shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-                return graphics->create_shader(v, f, g);
-            });
-            shader_to_use->use();
+            // Compute shadow camera params for this cascade
+            ShadowCameraParams params = fit_shadow_frustum_for_cascade(
+                camera_view, camera_projection, light_dir,
+                cascade_near, cascade_far, resolution, caster_offset
+            );
+            Mat44f view_matrix = build_shadow_view_matrix(params);
+            Mat44f proj_matrix = build_shadow_projection_matrix(params);
+            Mat44f light_space_matrix = compute_light_space_matrix(params);
 
-            // Apply uniforms to (possibly overridden) shader
-            shader_to_use->set_uniform_matrix4("u_model", model, false);
-            shader_to_use->set_uniform_matrix4("u_view", view_matrix, false);
-            shader_to_use->set_uniform_matrix4("u_projection", proj_matrix, false);
+            // Handle empty draw calls case
+            if (draw_calls.empty()) {
+                graphics->bind_framebuffer(fbo);
+                graphics->set_viewport(0, 0, resolution, resolution);
+                graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
+                results.emplace_back(fbo, light_space_matrix, light_index, c, cascade_near, cascade_far);
+                continue;
+            }
 
-            context.current_shader = shader_to_use;
+            // Bind and clear FBO
+            graphics->bind_framebuffer(fbo);
+            graphics->set_viewport(0, 0, resolution, resolution);
+            graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
+            graphics->apply_render_state(render_state);
 
-            tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
+            // Setup shader
+            shadow_shader_program->use();
+            shadow_shader_program->set_uniform_matrix4("u_view", view_matrix, false);
+            shadow_shader_program->set_uniform_matrix4("u_projection", proj_matrix, false);
+
+            context.view = view_matrix;
+            context.projection = proj_matrix;
+            context.current_shader = shadow_shader_program;
+
+            // Render all shadow casters
+            for (const auto& dc : draw_calls) {
+                Mat44f model = get_model_matrix(*dc.entity);
+                context.model = model;
+
+                // Allow drawable to override shader (for skinning injection)
+                ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
+                    tc_component_override_shader(dc.component, "shadow", dc.geometry_id.c_str(), shadow_shader_program)
+                );
+                if (shader_to_use == nullptr) {
+                    shader_to_use = shadow_shader_program;
+                }
+
+                // Ensure shader is ready and bind
+                shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+                    return graphics->create_shader(v, f, g);
+                });
+                shader_to_use->use();
+
+                // Apply uniforms to (possibly overridden) shader
+                shader_to_use->set_uniform_matrix4("u_model", model, false);
+                shader_to_use->set_uniform_matrix4("u_view", view_matrix, false);
+                shader_to_use->set_uniform_matrix4("u_projection", proj_matrix, false);
+
+                context.current_shader = shader_to_use;
+
+                tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
+            }
+
+            // Add result with cascade info
+            results.emplace_back(fbo, light_space_matrix, light_index, c, cascade_near, cascade_far);
         }
-
-        // Add result
-        results.emplace_back(fbo, light_space_matrix, light_index);
     }
 
     // Reset state: stop shader, unbind framebuffer, reset GL state

@@ -1,0 +1,15 @@
+{
+  "uuid": "12b74b1a-cc4f-42d1-903f-280e7c92db52",
+  "shader": "AdvancedPBR",
+  "uniforms": {
+    "u_color": [
+      0.4563820958137512,
+      0.32143130898475647,
+      0.14695963263511658,
+      1.0
+    ],
+    "u_metallic": 0.0,
+    "u_roughness": 0.5,
+    "u_subsurface": 0.0
+  }
+}

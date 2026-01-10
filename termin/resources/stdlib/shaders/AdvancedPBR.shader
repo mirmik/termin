@@ -44,6 +44,9 @@ in vec3 v_world_pos;
 in vec3 v_normal;
 in vec2 v_uv;
 
+#include "lighting.glsl"
+#include "shadows.glsl"
+
 // Material parameters
 uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
@@ -54,15 +57,11 @@ uniform float u_subsurface;
 // Camera
 uniform vec3 u_camera_position;
 
-// Lighting
-const int MAX_LIGHTS = 8;
-const int LIGHT_TYPE_DIRECTIONAL = 0;
-const int LIGHT_TYPE_POINT = 1;
-const int LIGHT_TYPE_SPOT = 2;
-
+// Ambient lighting (scene-level)
 uniform vec3  u_ambient_color;
 uniform float u_ambient_intensity;
 
+// Lights
 uniform int   u_light_count;
 uniform int   u_light_type[MAX_LIGHTS];
 uniform vec3  u_light_color[MAX_LIGHTS];
@@ -74,24 +73,9 @@ uniform vec3  u_light_attenuation[MAX_LIGHTS];
 uniform float u_light_inner_angle[MAX_LIGHTS];
 uniform float u_light_outer_angle[MAX_LIGHTS];
 
-// Shadow Mapping (hardware PCF)
-const int MAX_SHADOW_MAPS = 4;
-const float SHADOW_BIAS = 0.005;
-uniform int u_shadow_map_count;
-uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
-uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
-uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
+// Shadow uniforms are declared in shadows.glsl
 
 out vec4 FragColor;
-
-// GLSL 1.30+ forbids dynamic indexing of sampler arrays
-float sample_shadow_map(int idx, vec3 coords) {
-    if (idx == 0) return texture(u_shadow_map[0], coords);
-    if (idx == 1) return texture(u_shadow_map[1], coords);
-    if (idx == 2) return texture(u_shadow_map[2], coords);
-    if (idx == 3) return texture(u_shadow_map[3], coords);
-    return 1.0;
-}
 
 const float PI = 3.14159265359;
 
@@ -137,45 +121,7 @@ vec3 subsurface_color(vec3 albedo) {
     return albedo * vec3(1.0, 0.4, 0.25);
 }
 
-// Attenuation
-float compute_distance_attenuation(int idx, float dist) {
-    vec3 att = u_light_attenuation[idx];
-    float denom = att.x + att.y * dist + att.z * dist * dist;
-    if (denom <= 0.0) return 1.0;
-    float w = 1.0 / denom;
-    float range = u_light_range[idx];
-    if (range > 0.0 && dist > range) w = 0.0;
-    return w;
-}
-
-float compute_spot_weight(int idx, vec3 L) {
-    float cos_theta = dot(u_light_direction[idx], -L);
-    float cos_outer = cos(u_light_outer_angle[idx]);
-    float cos_inner = cos(u_light_inner_angle[idx]);
-    if (cos_theta <= cos_outer) return 0.0;
-    if (cos_theta >= cos_inner) return 1.0;
-    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);
-    return t * t * (3.0 - 2.0 * t);
-}
-
-float compute_shadow(int light_index) {
-    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
-        if (u_shadow_light_index[sm] != light_index) continue;
-
-        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
-        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
-
-        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
-            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
-            proj_coords.z < 0.0 || proj_coords.z > 1.0) {
-            return 1.0;
-        }
-
-        return sample_shadow_map(sm, vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
-    }
-    return 1.0;
-}
+// Attenuation and shadow functions are provided by lighting.glsl and shadows.glsl
 
 void main() {
     vec3 N = normalize(v_normal);
@@ -208,10 +154,10 @@ void main() {
             vec3 to_light = u_light_position[i] - v_world_pos;
             float dist = length(to_light);
             L = to_light / max(dist, 0.0001);
-            attenuation = compute_distance_attenuation(i, dist);
+            attenuation = compute_distance_attenuation(u_light_attenuation[i], u_light_range[i], dist);
 
             if (u_light_type[i] == LIGHT_TYPE_SPOT) {
-                attenuation *= compute_spot_weight(i, L);
+                attenuation *= compute_spot_weight(u_light_direction[i], L, u_light_inner_angle[i], u_light_outer_angle[i]);
             }
         }
 
@@ -254,7 +200,7 @@ void main() {
         // Shadow (for directional lights)
         float shadow = 1.0;
         if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {
-            shadow = compute_shadow(i);
+            shadow = compute_shadow_auto(i);
         }
 
         // Combine

@@ -47,7 +47,7 @@ class GrayscaleEffect(PostEffect):
             self._shader = ShaderProgram(GRAY_VERT, GRAY_FRAG)
         return self._shader
 
-    def draw(self, gfx, key, color_tex, extra_textures, size):
+    def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
 
         shader = self._get_shader()

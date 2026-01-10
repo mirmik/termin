@@ -45,6 +45,8 @@ def register_default_shader(rm: "ResourceManager") -> None:
             MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
             MaterialProperty("u_albedo_texture", "Texture", None),
             MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
+            MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
+            MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
         ],
     )
 
@@ -124,6 +126,8 @@ def register_advanced_pbr_shader(rm: "ResourceManager") -> None:
             MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
             MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
             MaterialProperty("u_subsurface", "Float", 0.0, 0.0, 1.0),
+            MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
+            MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
         ],
     )
 
@@ -162,6 +166,8 @@ def register_skinned_shader(rm: "ResourceManager") -> None:
             MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
             MaterialProperty("u_albedo_texture", "Texture", None),
             MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
+            MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
+            MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
         ],
     )
 

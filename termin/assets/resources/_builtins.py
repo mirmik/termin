@@ -58,8 +58,12 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     # ID/Picking
     ("termin.visualization.render.framegraph.passes.id_pass", "IdPass"),
     ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
-    # Post-processing
+    # Post-processing (legacy)
     ("termin.visualization.render.postprocess", "PostProcessPass"),
+    # Post-effect passes (new architecture)
+    ("termin.visualization.render.framegraph.passes.bloom_pass", "BloomPass"),
+    ("termin.visualization.render.framegraph.passes.grayscale", "GrayscalePass"),
+    ("termin.visualization.render.framegraph.passes.material_pass", "MaterialPass"),
     # Debug
     ("termin.visualization.render.framegraph.passes.frame_debugger", "FrameDebuggerPass"),
 ]
@@ -68,6 +72,7 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
 # Формат: (имя_модуля, имя_класса)
 BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
     ("termin.visualization.render.posteffects.blur", "GaussianBlurPass"),
+    ("termin.visualization.render.posteffects.bloom", "BloomEffect"),
     ("termin.visualization.render.posteffects.highlight", "HighlightEffect"),
     ("termin.visualization.render.posteffects.fog", "FogEffect"),
     ("termin.visualization.render.posteffects.gray", "GrayscaleEffect"),

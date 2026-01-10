@@ -95,7 +95,7 @@ class FogEffect(PostEffect):
             self._shader = ShaderProgram(FOG_VERT, FOG_FRAG)
         return self._shader
 
-    def draw(self, gfx, context_key, color_tex, extra_textures, size):
+    def draw(self, gfx, context_key, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
         depth_tex = extra_textures.get("depth")
 

@@ -16,7 +16,6 @@ import numpy as np
 
 from termin._native.render import ShadowPass as _ShadowPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 from termin.visualization.render.system_shaders import get_system_shader
 
 if TYPE_CHECKING:
@@ -35,41 +34,28 @@ class ShadowPass(_ShadowPassNative):
 
     Атрибуты:
         output_res: имя выходного ресурса (ShadowMapArray)
-        default_resolution: разрешение shadow map по умолчанию
-        max_shadow_distance: максимальная дистанция теней
-        ortho_size: размер ортографического бокса (fallback)
-        near: ближняя плоскость (fallback)
-        far: дальняя плоскость (fallback)
         caster_offset: смещение за камеру для shadow casters
 
     Выходные данные:
         ShadowMapArray с текстурами и матрицами для всех источников.
     """
 
+    category = "Render"
+
+    node_inputs = []
+    node_outputs = [("output_res", "shadow")]
+
     def __init__(
         self,
         output_res: str = "shadow_maps",
         pass_name: str = "Shadow",
-        default_resolution: int = 1024,
-        max_shadow_distance: float = 50.0,
-        ortho_size: float = 20.0,
-        near: float = 0.1,
-        far: float = 100.0,
         caster_offset: float = 50.0,
     ):
         super().__init__(
             output_res=output_res,
             pass_name=pass_name,
-            default_resolution=default_resolution,
-            max_shadow_distance=max_shadow_distance,
-            ortho_size=ortho_size,
-            near=near,
-            far=far,
             caster_offset=caster_offset,
         )
-
-        # Текущий ShadowMapArrayResource (обновляется в execute)
-        self._shadow_map_array: ShadowMapArrayResource | None = None
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":
@@ -107,21 +93,13 @@ class ShadowPass(_ShadowPassNative):
         }
 
     def get_resource_specs(self) -> list[ResourceSpec]:
-        """
-        Объявляет требования к ресурсу shadow_maps.
-
-        Тип ресурса — shadow_map_array, создаётся динамически в execute().
-        """
+        """Объявляет требования к ресурсу shadow_maps."""
         return [
             ResourceSpec(
                 resource=self.output_res,
                 resource_type="shadow_map_array",
             )
         ]
-
-    def get_shadow_map_array(self) -> ShadowMapArrayResource | None:
-        """Возвращает текущий ShadowMapArrayResource (после execute)."""
-        return self._shadow_map_array
 
     def execute(
         self,
@@ -140,15 +118,14 @@ class ShadowPass(_ShadowPassNative):
 
         Uses C++ implementation for rendering.
         """
-        if lights is None:
-            lights = []
+        shadow_array = writes_fbos.get(self.output_res)
+        if shadow_array is None:
+            return
 
-        # Создаём ShadowMapArrayResource
-        shadow_array = ShadowMapArrayResource(resolution=self.default_resolution)
-        self._shadow_map_array = shadow_array
+        # Clear previous frame's entries
+        shadow_array.clear()
 
         if not lights:
-            writes_fbos[self.output_res] = shadow_array
             return
 
         # Set shadow shader for C++ (enables skinning injection)
@@ -174,7 +151,7 @@ class ShadowPass(_ShadowPassNative):
                 fbo=result.fbo,
                 light_space_matrix=result.light_space_matrix,
                 light_index=result.light_index,
+                cascade_index=result.cascade_index,
+                cascade_split_near=result.cascade_split_near,
+                cascade_split_far=result.cascade_split_far,
             )
-
-        # Put result in writes
-        writes_fbos[self.output_res] = shadow_array

@@ -21,6 +21,11 @@ class FrameDebuggerPass(RenderFramePass):
     и читает depth buffer через callback.
     """
 
+    category = "Debug"
+
+    node_inputs = [("input_res", "fbo")]
+    node_outputs = []  # Output is debug window
+
     def __init__(
         self,
         get_source_res: Callable[[], str | None] | None = None,

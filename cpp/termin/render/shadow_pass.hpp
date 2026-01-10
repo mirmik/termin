@@ -32,15 +32,26 @@ struct ShadowDrawCall {
     std::string geometry_id;
 };
 
-// Result of shadow map rendering for one light
+// Result of shadow map rendering for one light (or cascade)
 struct ShadowMapResult {
     FramebufferHandle* fbo = nullptr;
     Mat44f light_space_matrix;
     int light_index = 0;
 
+    // Cascade parameters
+    int cascade_index = 0;
+    float cascade_split_near = 0.0f;
+    float cascade_split_far = 0.0f;
+
     ShadowMapResult() = default;
     ShadowMapResult(FramebufferHandle* f, const Mat44f& m, int idx)
         : fbo(f), light_space_matrix(m), light_index(idx) {}
+
+    ShadowMapResult(FramebufferHandle* f, const Mat44f& m, int light_idx,
+                    int cascade_idx, float split_near, float split_far)
+        : fbo(f), light_space_matrix(m), light_index(light_idx),
+          cascade_index(cascade_idx), cascade_split_near(split_near),
+          cascade_split_far(split_far) {}
 };
 
 /**
@@ -57,11 +68,6 @@ class ShadowPass : public RenderFramePass {
 public:
     // Pass configuration
     std::string output_res = "shadow_maps";
-    int default_resolution = 1024;
-    float max_shadow_distance = 50.0f;
-    float ortho_size = 20.0f;  // Fallback
-    float near = 0.1f;         // Fallback
-    float far = 100.0f;        // Fallback
     float caster_offset = 50.0f;
 
     // Entity names cache (for get_internal_symbols)
@@ -69,21 +75,11 @@ public:
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(ShadowPass, output_res, "Output Resource", "string")
-    INSPECT_FIELD(ShadowPass, default_resolution, "Resolution", "int", 128, 4096, 128)
-    INSPECT_FIELD(ShadowPass, max_shadow_distance, "Max Shadow Distance", "float", 1.0, 500.0, 5.0)
-    INSPECT_FIELD(ShadowPass, ortho_size, "Ortho Size (fallback)", "float", 1.0, 200.0, 1.0)
-    INSPECT_FIELD(ShadowPass, near, "Near (fallback)", "float", 0.01, 1000.0, 0.1)
-    INSPECT_FIELD(ShadowPass, far, "Far (fallback)", "float", 1.0, 1000.0, 1.0)
     INSPECT_FIELD(ShadowPass, caster_offset, "Caster Offset", "float", 0.0, 200.0, 5.0)
 
     ShadowPass(
         const std::string& output_res = "shadow_maps",
         const std::string& pass_name = "Shadow",
-        int default_resolution = 1024,
-        float max_shadow_distance = 50.0f,
-        float ortho_size = 20.0f,
-        float near = 0.1f,
-        float far = 100.0f,
         float caster_offset = 50.0f
     );
 

@@ -30,12 +30,14 @@ RenderEngine — центральный класс для выполнения �
 - Пассы могут объявлять спецификации ресурсов через get_resource_specs()
 - Тип ресурса определяется полем resource_type в ResourceSpec:
   - "fbo" (по умолчанию) — стандартный framebuffer
-  - "shadow_map_array" — массив shadow maps, создаётся пассом динамически
+  - "shadow_map_array" — массив shadow maps
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Iterable, List, Tuple
+
+from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
@@ -231,8 +233,22 @@ class RenderEngine:
             if spec is not None:
                 resource_type = spec.resource_type
 
-            # Для не-FBO ресурсов пропускаем автоматическое создание
-            # Пасс сам создаст и положит ресурс в словарь
+            # Для shadow_map_array создаём ShadowMapArrayResource
+            if resource_type == "shadow_map_array":
+                # Берём resolution из spec.size (квадратная текстура)
+                resolution = 1024
+                if spec is not None and spec.size is not None:
+                    resolution = spec.size[0]  # width = height для shadow map
+
+                shadow_array = state.get_shadow_map_array(canon)
+                if shadow_array is None or shadow_array.resolution != resolution:
+                    shadow_array = ShadowMapArrayResource(resolution=resolution)
+                    state.set_shadow_map_array(canon, shadow_array)
+                for name in names:
+                    resources[name] = shadow_array
+                continue
+
+            # Для других не-FBO ресурсов пропускаем
             if resource_type != "fbo":
                 for name in names:
                     if name not in resources:
