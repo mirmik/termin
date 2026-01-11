@@ -157,14 +157,10 @@
       }
     },
     {
-      "type": "ColorPass",
-      "x": 0.9078675760748354,
-      "y": 413.07974711404256,
-      "name": "FOVColor",
+      "type": "DepthPass",
+      "x": 3.947250330760056,
+      "y": 418.4085350605688,
       "params": {
-        "phase_mark": "opaque",
-        "sort_mode": "none",
-        "clear_depth": false,
         "camera_name": "FOVCamera"
       }
     }
@@ -230,6 +226,7 @@
       "to_node": 8,
       "to_socket": "output_res_target"
     },
+    null,
     {
       "from_node": 10,
       "from_socket": "fbo",

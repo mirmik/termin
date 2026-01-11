@@ -331,8 +331,6 @@ bool tc_shader_set_sources(
 
     // Check if sources are the same (by hash)
     if (shader->source_hash[0] != '\0' && strcmp(shader->source_hash, new_hash) == 0) {
-        tc_log(TC_LOG_INFO, "[tc_shader_set_sources] uuid=%s name=%s UNCHANGED (hash=%s)",
-            shader->uuid, shader->name ? shader->name : "?", new_hash);
         return false;  // No change
     }
 
@@ -377,9 +375,6 @@ bool tc_shader_set_sources(
     }
 
     shader->version++;
-
-    tc_log(TC_LOG_INFO, "[tc_shader_set_sources] uuid=%s name=%s CHANGED ver %u -> %u",
-        shader->uuid, shader->name ? shader->name : "?", old_version, shader->version);
     return true;
 }
 

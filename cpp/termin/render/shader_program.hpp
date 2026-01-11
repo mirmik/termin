@@ -155,11 +155,6 @@ public:
         bool version_mismatch = (compiled_version_ != tc_shader_.version());
         bool needs_compile = !has_handle || version_mismatch;
 
-        if (needs_compile) {
-            tc::Log::info("[ShaderProgram] ensure_ready RECOMPILE uuid=%s name=%s has_handle=%d compiled_ver=%u tc_ver=%u",
-                uuid_.c_str(), name_.c_str(), has_handle ? 1 : 0, compiled_version_, tc_shader_.version());
-        }
-
         if (!needs_compile) {
             // Already compiled for this context, just set as current
             current_handle_ = it->second.get();
@@ -173,8 +168,6 @@ public:
         std::string fs = tc_shader_.is_valid() ? tc_shader_.fragment_source() : fragment_source_;
         std::string gs = tc_shader_.is_valid() ? tc_shader_.geometry_source() : geometry_source_;
         std::string src_path = tc_shader_.is_valid() ? tc_shader_.source_path() : source_path_;
-
-        tc::Log::info("[ShaderProgram] using sources from tc_shader=%d", tc_shader_.is_valid() ? 1 : 0);
 
         // Preprocess if needed
         if (preprocess) {
