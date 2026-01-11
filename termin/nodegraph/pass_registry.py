@@ -121,11 +121,17 @@ def inspect_field_info_to_node_param(info) -> NodeParam | None:
         )
 
     elif kind == "material_handle":
+        # Get material names from ResourceManager
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        material_names = rm.list_material_names()
+        choices = ["(None)"] + material_names
         return NodeParam(
             name=name,
             label=label,
-            param_type="text",
-            default="",
+            param_type="choice",
+            default="(None)",
+            choices=choices,
         )
 
     # Unsupported types (vec3, color, etc.) - skip for now

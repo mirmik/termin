@@ -176,6 +176,82 @@ class GraphNode(QGraphicsItem):
         self._update_height()
         self.update()
 
+    def remove_input(self, socket_name: str) -> bool:
+        """
+        Remove an input socket by name.
+
+        Disconnects any connections before removing.
+
+        Returns:
+            True if socket was found and removed.
+        """
+        for i, socket in enumerate(self.input_sockets):
+            if socket.name == socket_name:
+                # Disconnect any connections
+                if self.scene() is not None:
+                    from termin.nodegraph.scene import NodeGraphScene
+                    if isinstance(self.scene(), NodeGraphScene):
+                        self.scene().disconnect_socket(socket)
+                self.input_sockets.pop(i)
+                # Update indices
+                for j in range(i, len(self.input_sockets)):
+                    self.input_sockets[j].index = j
+                self._update_height()
+                self.update()
+                return True
+        return False
+
+    def get_input_socket(self, name: str) -> "NodeSocket | None":
+        """Get input socket by name."""
+        for socket in self.input_sockets:
+            if socket.name == name:
+                return socket
+        return None
+
+    def has_input_socket(self, name: str) -> bool:
+        """Check if node has an input socket with given name."""
+        return self.get_input_socket(name) is not None
+
+    def update_dynamic_inputs(
+        self,
+        new_inputs: list[tuple[str, str]],
+        keep_sockets: set[str] | None = None,
+    ) -> None:
+        """
+        Update dynamic input sockets.
+
+        Removes old dynamic sockets and adds new ones based on the provided list.
+        Preserves connections for sockets that exist in both old and new lists.
+
+        Args:
+            new_inputs: List of (socket_name, socket_type) for new inputs.
+            keep_sockets: Set of socket names to never remove (e.g., "output_res_target").
+        """
+        from termin.nodegraph.socket import NodeSocket
+
+        if keep_sockets is None:
+            keep_sockets = {"output_res_target"}
+
+        # Build set of new socket names
+        new_socket_names = {name for name, _ in new_inputs}
+
+        # Remove sockets not in new list (except keep_sockets)
+        sockets_to_remove = []
+        for socket in self.input_sockets:
+            if socket.name not in keep_sockets and socket.name not in new_socket_names:
+                sockets_to_remove.append(socket.name)
+
+        for name in sockets_to_remove:
+            self.remove_input(name)
+
+        # Add new sockets that don't exist yet
+        for socket_name, socket_type in new_inputs:
+            if not self.has_input_socket(socket_name):
+                self.add_input(NodeSocket(socket_name, socket_type))
+
+        self._update_height()
+        self.update()
+
     def add_param(self, param: NodeParam) -> None:
         """Add a parameter to the node."""
         self._params.append(param)
@@ -196,6 +272,42 @@ class GraphNode(QGraphicsItem):
         self._update_widget_value(name, value)
         # Update visibility of dependent params
         self._update_param_visibility()
+        # Trigger dynamic input update for MaterialPass
+        self._on_param_changed(name, value)
+
+    def _on_param_changed(self, name: str, value: Any) -> None:
+        """
+        Called when a parameter value changes.
+
+        Handles dynamic socket updates for special nodes like MaterialPass.
+        """
+        # MaterialPass: update sockets when material changes
+        # Skip if we just restored sockets from serialization (to avoid overwriting)
+        if name == "material_name" and self.data.get("pass_class") == "MaterialPass":
+            if not getattr(self, "_dynamic_inputs_restored", False):
+                self._update_material_pass_inputs(value)
+
+    def _update_material_pass_inputs(self, material_name: str) -> None:
+        """
+        Update MaterialPass node inputs based on material's shader textures.
+
+        Args:
+            material_name: Name of the selected material.
+        """
+        try:
+            from termin.visualization.render.framegraph.passes.material_pass import MaterialPass
+
+            # Get texture inputs for this material
+            texture_inputs = MaterialPass.get_texture_inputs_for_material(material_name)
+
+            # Update dynamic inputs (only keep output_res_target for FBO connection)
+            self.update_dynamic_inputs(
+                texture_inputs,
+                keep_sockets={"output_res_target"},
+            )
+        except Exception as e:
+            from termin._native import log
+            log.warn(f"[GraphNode] Failed to update MaterialPass inputs: {e}")
 
     def _update_widget_value(self, name: str, value: Any) -> None:
         """Update widget to reflect new parameter value."""

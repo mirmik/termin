@@ -356,6 +356,12 @@ class EditorViewportFeatures:
 
     def set_framegraph_debugger(self, debugger) -> None:
         self._framegraph_debugger = debugger
+        # Clear reference when dialog is destroyed
+        if debugger is not None:
+            debugger.destroyed.connect(self._on_framegraph_debugger_destroyed)
+
+    def _on_framegraph_debugger_destroyed(self) -> None:
+        self._framegraph_debugger = None
 
     def set_debug_source_resource(self, name: str) -> None:
         self._debug_source_res = name

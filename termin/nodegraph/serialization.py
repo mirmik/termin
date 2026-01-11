@@ -82,6 +82,18 @@ def _serialize_node(node: "GraphNode") -> dict:
     if node._height_override is not None:
         result["height"] = node._height_override
 
+    # Save dynamic input sockets for nodes with has_dynamic_inputs
+    # This ensures we can restore sockets before materials are loaded
+    if node.data.get("pass_class") == "MaterialPass":
+        # Get dynamic sockets (exclude static ones like output_res_target)
+        static_sockets = {"output_res_target"}
+        dynamic_inputs = []
+        for sock in node.input_sockets:
+            if sock.name not in static_sockets:
+                dynamic_inputs.append((sock.name, sock.socket_type))
+        if dynamic_inputs:
+            result["dynamic_inputs"] = dynamic_inputs
+
     return result
 
 
@@ -178,10 +190,26 @@ def deserialize_graph(data: dict, scene: "NodeGraphScene") -> None:
             node._height_override = height
             node._update_height()
 
+        # Restore dynamic inputs BEFORE setting params (to avoid material lookup)
+        # This ensures sockets exist for connection restoration
+        dynamic_inputs = node_data.get("dynamic_inputs")
+        if dynamic_inputs:
+            # Use update_dynamic_inputs to create sockets
+            node.update_dynamic_inputs(
+                dynamic_inputs,
+                keep_sockets={"output_res_target"},
+            )
+            # Mark that we restored from serialization (skip material lookup)
+            node._dynamic_inputs_restored = True
+
         # Set parameters
         params = node_data.get("params", {})
         for name, value in params.items():
             node.set_param(name, value)
+
+        # Clear the flag after params are set
+        if hasattr(node, "_dynamic_inputs_restored"):
+            del node._dynamic_inputs_restored
 
         scene.add_node(node)
         nodes_list.append(node)

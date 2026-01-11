@@ -318,16 +318,6 @@ def get_available_passes_by_category() -> dict[str, list[str]]:
     Falls back to hardcoded list if registry is unavailable.
     """
     categories = get_pass_categories()
-
-    if not categories:
-        # Fallback to hardcoded
-        return {
-            "Render": ["ColorPass", "SkyBoxPass", "DepthPass", "ShadowPass"],
-            "ID/Picking": ["IdPass", "GizmoPass"],
-            "Effects": ["BloomPass", "GrayscalePass", "MaterialPass"],
-            "Output": ["PresentToScreenPass", "BlitPass"],
-        }
-
     return categories
 
 

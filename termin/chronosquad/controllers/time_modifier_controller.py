@@ -29,6 +29,7 @@ class TimeModifierController(PythonComponent):
         self._chronosphere_controller: ChronosphereController | None = None
         self._camera: CameraComponent | None = None
         self._time_effect: MaterialPostEffect | None = None
+        self._time_effect_pass: MaterialPass | None = None
         self._initialized = False
 
     def start(self) -> None:

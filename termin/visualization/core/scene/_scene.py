@@ -87,6 +87,13 @@ class Scene:
         from termin.assets.scene_pipeline_handle import ScenePipelineHandle
         self._scene_pipelines: List[ScenePipelineHandle] = []
 
+        # Compiled scene pipelines (name -> RenderPipeline)
+        # Populated by compile_scene_pipelines(), runtime only
+        from termin.visualization.render.framegraph.pipeline import RenderPipeline
+        self._compiled_pipelines: dict[str, RenderPipeline] = {}
+        # Target viewports for each compiled pipeline (name -> list of viewport names)
+        self._pipeline_targets: dict[str, list[str]] = {}
+
         # Editor viewport state (runtime only, not serialized)
         # Stores camera name used in editor viewport for restore after game mode
         self.editor_viewport_camera_name: str | None = None
@@ -354,6 +361,74 @@ class Scene:
     def clear_scene_pipelines(self) -> None:
         """Clear all scene pipeline handles."""
         self._scene_pipelines.clear()
+
+    # --- Compiled pipelines (runtime) ---
+
+    @property
+    def compiled_pipelines(self) -> dict:
+        """Get compiled scene pipelines (name -> RenderPipeline)."""
+        return self._compiled_pipelines
+
+    def compile_scene_pipelines(self) -> None:
+        """
+        Compile all scene pipeline assets into RenderPipelines.
+
+        Clears existing compiled pipelines and recompiles from scene_pipelines handles.
+        """
+        from termin._native import log
+
+        # Destroy old pipelines
+        for pipeline in self._compiled_pipelines.values():
+            pipeline.destroy()
+        self._compiled_pipelines.clear()
+        self._pipeline_targets.clear()
+
+        # Compile from handles
+        for handle in self._scene_pipelines:
+            asset = handle.get_asset()
+            if asset is None:
+                log.warn(f"[Scene] Scene pipeline asset not found for handle")
+                continue
+
+            pipeline = asset.compile()
+            if pipeline is None:
+                log.warn(f"[Scene] Failed to compile scene pipeline '{asset.name}'")
+                continue
+
+            self._compiled_pipelines[asset.name] = pipeline
+            self._pipeline_targets[asset.name] = list(asset.target_viewports)
+            log.info(f"[Scene] Compiled scene pipeline '{asset.name}'")
+
+    def get_compiled_pipeline(self, name: str):
+        """
+        Get compiled scene pipeline by name.
+
+        Args:
+            name: Pipeline asset name.
+
+        Returns:
+            RenderPipeline or None if not found.
+        """
+        return self._compiled_pipelines.get(name)
+
+    def get_pipeline_targets(self, name: str) -> list[str]:
+        """
+        Get target viewport names for a compiled pipeline.
+
+        Args:
+            name: Pipeline name.
+
+        Returns:
+            List of viewport names or empty list.
+        """
+        return self._pipeline_targets.get(name, [])
+
+    def destroy_compiled_pipelines(self) -> None:
+        """Destroy all compiled pipelines and clear the dicts."""
+        for pipeline in self._compiled_pipelines.values():
+            pipeline.destroy()
+        self._compiled_pipelines.clear()
+        self._pipeline_targets.clear()
 
     # --- Editor entities data (runtime only) ---
 

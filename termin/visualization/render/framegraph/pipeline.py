@@ -92,3 +92,30 @@ class RenderPipeline:
         """
         for render_pass in self.passes:
             render_pass.destroy()
+
+    def get_pass(self, name: str) -> "FramePass | None":
+        """
+        Find a pass by name.
+
+        Args:
+            name: Pass name to find (matches pass_name attribute).
+
+        Returns:
+            FramePass with matching name or None.
+        """
+        for render_pass in self.passes:
+            if render_pass.pass_name == name:
+                return render_pass
+        return None
+
+    def get_passes_by_type(self, pass_type: type) -> List["FramePass"]:
+        """
+        Find all passes of a given type.
+
+        Args:
+            pass_type: Type of passes to find.
+
+        Returns:
+            List of passes matching the type.
+        """
+        return [p for p in self.passes if isinstance(p, pass_type)]

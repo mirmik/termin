@@ -28,6 +28,10 @@
 @property Float u_grid_line_width = 0.03 range(0.01, 0.1)
 @property Color u_grid_color = Color(0.0, 0.9, 0.4, 1.0)
 
+@property Texture2D u_input_tex = "white"
+@property Texture2D u_depth_texture = "depth_default"
+@property Texture2D u_normal_texture = "normal_default"
+
 @stage vertex
 #version 330 core
 

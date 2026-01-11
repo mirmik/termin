@@ -164,3 +164,40 @@ class TonemapPass(PostEffectPass):
     def destroy(self) -> None:
         """Clean up shader."""
         self._shader = None
+
+    def serialize_data(self) -> dict:
+        """Serialize TonemapPass-specific fields."""
+        return {
+            "exposure": self.exposure,
+            "method": self.method,
+        }
+
+    def deserialize_data(self, data: dict) -> None:
+        """Deserialize TonemapPass-specific fields."""
+        if not data:
+            return
+        self.exposure = data.get("exposure", 1.0)
+        self.method = data.get("method", 0)
+
+    def serialize(self) -> dict:
+        """Serialize TonemapPass to dict."""
+        result = {
+            "type": self.__class__.__name__,
+            "pass_name": self.pass_name,
+            "enabled": self.enabled,
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+            "data": self.serialize_data(),
+        }
+        if self.viewport_name:
+            result["viewport_name"] = self.viewport_name
+        return result
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "TonemapPass":
+        """Create instance from serialized data."""
+        return cls(
+            input_res=data.get("input_res", "color"),
+            output_res=data.get("output_res", "color"),
+            pass_name=data.get("pass_name", "Tonemap"),
+        )

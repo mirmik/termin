@@ -113,9 +113,6 @@ class RenderingController:
         # Editor display ID (not serialized, created before scene)
         self._editor_display_id: Optional[int] = None
 
-        # RenderEngine (created lazily when graphics is available)
-        self._render_engine: Optional["RenderEngine"] = None
-
         # Register display factory with RenderingManager
         self._manager.set_display_factory(self._create_display_for_name)
 
@@ -1230,7 +1227,10 @@ class RenderingController:
         self._render_displays()
 
     def _render_displays(self) -> None:
-        """Internal method to render displays."""
+        """Internal method to render displays.
+
+        Delegates actual rendering to RenderingManager, handles SDL window management.
+        """
         if self._get_graphics is None:
             return
 
@@ -1245,14 +1245,8 @@ class RenderingController:
         frame_started_here = profiler._current_frame is None
         profiler.begin_frame()
 
-        # Lazy creation of RenderEngine
-        if self._render_engine is None:
-            from termin.visualization.render import RenderEngine
-            self._render_engine = RenderEngine(graphics)
-
-        render_engine = self._render_engine
-
-        from termin.visualization.render import RenderView
+        # Ensure RenderingManager has graphics backend
+        self._manager.set_graphics(graphics)
 
         for display in self._manager.displays:
             display_id = id(display)
@@ -1274,50 +1268,8 @@ class RenderingController:
 
             graphics.ensure_ready()
 
-            # Get surface from display
-            surface = display.surface
-            if surface is None:
-                continue
-
-            # Collect views and states
-            views_and_states = []
-            sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
-
-            from termin._native import log
-            for viewport in sorted_viewports:
-                # Skip viewports without pipeline or scene
-                if viewport.pipeline is None:
-                    log.warn(f"[_render_displays] viewport has no pipeline, skipping")
-                    continue
-                if viewport.scene is None:
-                    log.warn(f"[_render_displays] viewport has no scene, skipping")
-                    continue
-
-                state = self._get_or_create_viewport_state(display_id, viewport)
-                if state is None:
-                    log.warn(f"[_render_displays] viewport state is None, skipping")
-                    continue
-                view = RenderView(
-                    scene=viewport.scene,
-                    camera=viewport.camera,
-                    rect=viewport.rect,
-                    canvas=viewport.canvas,
-                    pipeline=viewport.pipeline,
-                )
-                views_and_states.append((view, state))
-
-            # Render
-            if views_and_states:
-                render_engine.render_views(
-                    surface=surface,
-                    views=views_and_states,
-                    present=False,
-                )
-            else:
-                # No viewports - just clear the screen
-                from OpenGL import GL as gl
-                gl.glClearColor(0.1, 0.1, 0.1, 1.0)
-                gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            # Delegate rendering to RenderingManager (present=False, we handle swap)
+            self._manager.render_display(display, present=False)
 
             backend_window.swap_buffers()
             backend_window.clear_render_flag()

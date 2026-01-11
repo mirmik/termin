@@ -261,6 +261,10 @@ class BloomEffect(PostEffect):
             mip_levels: Number of downsample levels (more = wider bloom).
                         5 levels = 1/32 resolution at lowest = very wide bloom.
         """
+
+        print("[BloomEffect] Initialized with threshold=%.2f, soft_knee=%.2f, intensity=%.2f, mip_levels=%d" %
+              (threshold, soft_threshold, intensity, mip_levels))
+
         self.threshold = threshold
         self.soft_threshold = soft_threshold
         self.intensity = intensity

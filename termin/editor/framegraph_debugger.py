@@ -771,6 +771,16 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         symbol_row.addWidget(self._symbol_combo, 1)
         inside_layout.addLayout(symbol_row)
 
+        # Pass serialization view
+        self._pass_serialization = QtWidgets.QTextEdit()
+        self._pass_serialization.setReadOnly(True)
+        self._pass_serialization.setMaximumHeight(150)
+        self._pass_serialization.setStyleSheet(
+            "QTextEdit { font-family: monospace; font-size: 10px; "
+            "background-color: #1e1e1e; color: #d4d4d4; }"
+        )
+        inside_layout.addWidget(self._pass_serialization)
+
         settings_layout.addWidget(self._inside_panel)
         self._inside_panel.hide()
 
@@ -981,9 +991,21 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         return state.fbos
 
     def _get_current_pipeline(self):
-        """Get pipeline from current viewport."""
+        """Get pipeline from current viewport.
+
+        For viewports managed by scene pipeline, returns the compiled pipeline
+        from the scene. For regular viewports, returns viewport.pipeline.
+        """
         if self._current_viewport is None:
             return None
+
+        # Check if viewport is managed by a scene pipeline
+        managed_by = self._current_viewport.managed_by_scene_pipeline
+        if managed_by and self._current_viewport.scene is not None:
+            # Get compiled pipeline from scene
+            return self._current_viewport.scene.get_compiled_pipeline(managed_by)
+
+        # Regular viewport - use viewport's own pipeline
         return self._current_viewport.pipeline
 
     def _update_fbo_info(self) -> None:
@@ -1065,6 +1087,32 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         else:
             self._writer_pass_label.setText("(read-only)")
 
+    def _update_pass_serialization(self) -> None:
+        """Обновляет отображение сериализации выбранного пасса."""
+        import json
+
+        if self._selected_pass is None:
+            self._pass_serialization.clear()
+            return
+
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            self._pass_serialization.setText("<no pipeline>")
+            return
+
+        # Find pass by name
+        for p in pipeline.passes:
+            if p.pass_name == self._selected_pass:
+                try:
+                    data = p.serialize()
+                    text = json.dumps(data, indent=2, ensure_ascii=False)
+                    self._pass_serialization.setText(text)
+                except Exception as e:
+                    self._pass_serialization.setText(f"<error: {e}>")
+                return
+
+        self._pass_serialization.setText(f"<pass '{self._selected_pass}' not found>")
+
     def _on_depth_image_updated(self, image: QtGui.QImage) -> None:
         if image is None or image.isNull():
             return
@@ -1113,6 +1161,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             # В режиме "Внутри пасса" скрываем UI обработчиков ресурсов
             self._resource_ui_container.hide()
             self._update_passes_list()
+            # Обновляем сериализацию для выбранного пасса
+            self._update_pass_serialization()
             # Очищаем окно дебаггера до выбора символа
             self._gl_widget.clear_to_background()
 
@@ -1211,14 +1261,13 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # чтобы не тянуть его между разными пассами.
         self._selected_symbol = None
         self._update_symbols_list()
-        # Если есть символы - автоматически выбираем первый
+        # Обновляем сериализацию пасса
+        self._update_pass_serialization()
+        # Выбираем "(Output)" по умолчанию (последний элемент)
         if self._symbol_combo.count() > 0:
-            self._symbol_combo.setCurrentIndex(0)
-            first_symbol = self._symbol_combo.itemText(0)
-            self._on_symbol_selected(first_symbol)
-        else:
-            # Очищаем окно дебаггера если нет символов
-            self._gl_widget.clear_to_background()
+            last_index = self._symbol_combo.count() - 1
+            self._symbol_combo.setCurrentIndex(last_index)
+            self._on_symbol_selected("(Output)")
 
     def _on_symbol_selected(self, name: str) -> None:
         """Обработчик выбора символа (режим «Внутри пасса»)."""
@@ -1226,12 +1275,61 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             return
         if self._selected_pass is None:
             return
-        # Запоминаем выбранный внутренний символ для последующих обновлений списка.
+
+        # Запоминаем выбранный символ
         self._selected_symbol = name
-        self._set_pass_internal_symbol(self._selected_pass, name)
+
+        # Специальный случай: "(Output)" - показываем выходную текстуру пасса
+        if name == "(Output)":
+            self._show_pass_output()
+        else:
+            # Обычный внутренний символ
+            self._detach_frame_debugger_pass()  # Убираем debugger pass если был
+            self._set_pass_internal_symbol(self._selected_pass, name)
 
         # Запрашиваем обновление depth для новой текстуры
         self._request_depth_refresh()
+
+    def _show_pass_output(self) -> None:
+        """Показывает выходную текстуру выбранного пасса."""
+        from termin._native import log
+
+        if self._selected_pass is None:
+            return
+
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            return
+
+        # Находим пасс и его выходной ресурс
+        output_res = None
+        for p in pipeline.passes:
+            if p.pass_name == self._selected_pass:
+                # Пробуем получить output_res напрямую
+                if hasattr(p, 'output_res') and p.output_res:
+                    output_res = p.output_res
+                # Или берём первый из writes (кроме DISPLAY)
+                elif hasattr(p, 'writes') and p.writes:
+                    for w in p.writes:
+                        if w != "DISPLAY":
+                            output_res = w
+                            break
+                break
+
+        if output_res is None:
+            log.warn(f"[FrameDebugger] Pass '{self._selected_pass}' has no output resource")
+            self._gl_widget.clear_to_background()
+            return
+
+        log.info(f"[FrameDebugger] Showing output '{output_res}' of pass '{self._selected_pass}'")
+
+        # Очищаем внутренние символы у всех пассов
+        self._clear_internal_symbol()
+
+        # Показываем выходной ресурс через FrameDebuggerPass (как в режиме "между пассами")
+        self._debug_source_res = output_res
+        self._gl_widget.set_resource_name(output_res)
+        self._attach_frame_debugger_pass()
 
     def _on_pause_toggled(self, checked: bool) -> None:
         """Обработчик переключения паузы."""
@@ -1501,8 +1599,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             if pipeline is not None:
                 for p in pipeline.passes:
                     if p.pass_name == self._selected_pass:
-                        symbols = p.get_internal_symbols()
+                        symbols = list(p.get_internal_symbols())
                         break
+
+        # Always add "(Output)" at the end to show pass output texture
+        symbols.append("(Output)")
 
         # Check if list changed - avoid clearing ComboBox while user interacts with it
         current_items = [self._symbol_combo.itemText(i) for i in range(self._symbol_combo.count())]

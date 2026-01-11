@@ -78,6 +78,9 @@ class RenderingManager:
         # Pipeline factory callback (creates pipelines by special names)
         self._pipeline_factory: Optional[PipelineFactory] = None
 
+        # Attached scenes (for scene pipeline execution)
+        self._attached_scenes: List["Scene"] = []
+
     # --- Configuration ---
 
     def set_graphics(self, graphics: "GraphicsBackend") -> None:
@@ -123,6 +126,11 @@ class RenderingManager:
     def render_engine(self) -> Optional["RenderEngine"]:
         """Render engine (created lazily on first render)."""
         return self._render_engine
+
+    @property
+    def attached_scenes(self) -> List["Scene"]:
+        """List of attached scenes (copy)."""
+        return list(self._attached_scenes)
 
     # --- Display management ---
 
@@ -388,16 +396,21 @@ class RenderingManager:
         # Process scene pipelines - compile and assign to viewports
         self._apply_scene_pipelines(scene, viewports)
 
+        # Track attached scene
+        if scene not in self._attached_scenes:
+            self._attached_scenes.append(scene)
+
         return viewports
 
     def _apply_scene_pipelines(self, scene: "Scene", viewports: List["Viewport"]) -> None:
         """
-        Apply scene pipelines to matching viewports.
+        Compile scene pipelines and mark managed viewports.
 
-        For each scene pipeline:
-        1. Get compiled RenderPipeline from asset
-        2. Find viewports matching target viewport names
-        3. Assign compiled pipeline and mark as managed
+        1. Compile scene pipeline assets into scene._compiled_pipelines
+        2. Mark viewports as managed by scene pipeline (by name)
+
+        Managed viewports are rendered by executing scene pipelines in render loop,
+        not by iterating viewports directly.
 
         Args:
             scene: Scene with scene_pipelines handles
@@ -405,43 +418,30 @@ class RenderingManager:
         """
         from termin._native import log
 
+        # Compile scene pipelines into scene
+        scene.compile_scene_pipelines()
+
         # Build viewport lookup by name
         viewport_by_name: Dict[str, "Viewport"] = {}
         for vp in viewports:
             if vp.name:
                 viewport_by_name[vp.name] = vp
 
-        # Also check all displays for viewports (scene might reference existing viewports)
+        # Also check all displays for viewports
         for display in self._displays:
             for vp in display.viewports:
                 if vp.name and vp.name not in viewport_by_name:
                     viewport_by_name[vp.name] = vp
 
         log.info(f"[_apply_scene_pipelines] Available viewports: {list(viewport_by_name.keys())}")
-        log.info(f"[_apply_scene_pipelines] Scene pipelines count: {len(scene.scene_pipelines)}")
 
-        # Process each scene pipeline
+        # Mark viewports as managed by their scene pipeline
         for handle in scene.scene_pipelines:
             asset = handle.get_asset()
             if asset is None:
-                log.warn(f"[attach_scene] Scene pipeline asset not found for handle")
                 continue
 
-            # Get compiled pipeline
-            pipeline = asset.pipeline
-            if pipeline is None:
-                log.warn(f"[attach_scene] Scene pipeline '{asset.name}' has no compiled pipeline")
-                continue
-
-            # Get target viewport names
-            target_viewports = asset.target_viewports
-            log.info(f"[_apply_scene_pipelines] Pipeline '{asset.name}' targets: {target_viewports}")
-            if not target_viewports:
-                log.warn(f"[attach_scene] Scene pipeline '{asset.name}' has no target viewports")
-                continue
-
-            # Assign pipeline to matching viewports
-            for viewport_name in target_viewports:
+            for viewport_name in asset.target_viewports:
                 viewport = viewport_by_name.get(viewport_name)
                 if viewport is None:
                     log.error(
@@ -450,25 +450,45 @@ class RenderingManager:
                     )
                     continue
 
-                # Make a copy of the pipeline for this viewport
-                viewport.pipeline = pipeline.copy()
                 viewport.managed_by_scene_pipeline = asset.name
-                log.info(
-                    f"[attach_scene] Viewport '{viewport_name}' now managed by "
-                    f"scene pipeline '{asset.name}'"
-                )
+                log.info(f"[attach_scene] Viewport '{viewport_name}' managed by '{asset.name}'")
 
     def detach_scene(self, scene: "Scene") -> None:
         """
         Detach scene from all displays.
 
-        Removes all viewports showing this scene.
+        Removes all viewports showing this scene and cleans up compiled pipelines.
 
         Args:
             scene: Scene to detach.
         """
         for display in list(self._displays):
             self.unmount_scene(scene, display)
+
+        # Remove from attached scenes
+        if scene in self._attached_scenes:
+            self._attached_scenes.remove(scene)
+
+        # Destroy compiled pipelines
+        scene.destroy_compiled_pipelines()
+
+    def get_scene_pipeline(self, name: str) -> Optional["RenderPipeline"]:
+        """
+        Get compiled scene pipeline by name.
+
+        Searches through attached scenes for a compiled pipeline with the given name.
+
+        Args:
+            name: Scene pipeline asset name.
+
+        Returns:
+            Compiled RenderPipeline or None if not found.
+        """
+        for scene in self._attached_scenes:
+            pipeline = scene.get_compiled_pipeline(name)
+            if pipeline is not None:
+                return pipeline
+        return None
 
     # --- Viewport state management ---
 
@@ -526,6 +546,10 @@ class RenderingManager:
         """
         Render a single display.
 
+        Rendering order:
+        1. Execute scene pipelines for attached scenes (renders managed viewports)
+        2. Render unmanaged viewports with their own pipelines
+
         Args:
             display: Display to render.
             present: Whether to present (swap buffers) after rendering.
@@ -548,18 +572,42 @@ class RenderingManager:
             log.warn(f"[render_display] surface is None for display={display.name}")
             return
 
-        # Collect views and states, sorted by depth
+        # Build viewport lookup by name (for scene pipeline target resolution)
+        viewport_by_name: Dict[str, "Viewport"] = {}
+        for vp in display.viewports:
+            if vp.name:
+                viewport_by_name[vp.name] = vp
+
         views_and_states = []
         sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 
-        log.info(f"[render_display] display={display.name}, viewports={len(sorted_viewports)}")
+        # 1. Execute scene pipelines (renders managed viewports)
+        for scene in self._attached_scenes:
+            for pipeline_name, pipeline in scene.compiled_pipelines.items():
+                for viewport_name in scene.get_pipeline_targets(pipeline_name):
+                    viewport = viewport_by_name.get(viewport_name)
+                    if viewport is None:
+                        continue
+                    if viewport.scene is None or viewport.camera is None:
+                        continue
+
+                    state = self.get_or_create_viewport_state(viewport)
+                    view = RenderView(
+                        scene=viewport.scene,
+                        camera=viewport.camera,
+                        rect=viewport.rect,
+                        canvas=viewport.canvas,
+                        pipeline=pipeline,
+                    )
+                    views_and_states.append((view, state))
+
+        # 2. Render unmanaged viewports (those without managed_by_scene_pipeline)
         for viewport in sorted_viewports:
-            camera_name = viewport.camera.entity.name if viewport.camera and viewport.camera.entity else "None"
-            scene_id = id(viewport.scene) if viewport.scene else "None"
-            pipeline_name = viewport.pipeline.name if viewport.pipeline else "None"
-            log.info(f"  viewport: camera={camera_name}, scene_id={scene_id}, pipeline={pipeline_name}")
+            # Skip managed viewports - already rendered by scene pipeline
+            if viewport.managed_by_scene_pipeline:
+                continue
+
             if viewport.pipeline is None or viewport.scene is None:
-                log.warn(f"  SKIPPED: pipeline={viewport.pipeline}, scene={viewport.scene}")
                 continue
 
             state = self.get_or_create_viewport_state(viewport)
@@ -572,7 +620,7 @@ class RenderingManager:
             )
             views_and_states.append((view, state))
 
-        # Render
+        # Render all views
         if views_and_states:
             self._render_engine.render_views(
                 surface=surface,
@@ -582,7 +630,7 @@ class RenderingManager:
         else:
             # No viewports - clear screen
             from OpenGL import GL as gl
-            gl.glClearColor(0.1, 0.1, 0.1, 1.0)
+            gl.glClearColor(0.1, 0.7, 0.7, 1.0)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             if present:
                 surface.present()

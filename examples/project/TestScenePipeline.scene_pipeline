@@ -3,11 +3,13 @@
   "nodes": [
     {
       "type": "ShadowPass",
-      "x": -513.3224777426832,
-      "y": -90.36479432728525,
+      "x": -440.83917758502446,
+      "y": -108.52384275230956,
       "params": {
         "caster_offset": 50.0
-      }
+      },
+      "width": 212.7449714427669,
+      "height": 103.59284354417471
     },
     {
       "type": "SkyboxPass",
@@ -16,8 +18,8 @@
     },
     {
       "type": "ColorPass",
-      "x": -237.60315862320635,
-      "y": -335.41743632182977,
+      "x": -237.87366258290555,
+      "y": -428.47079845835344,
       "name": "Opaque",
       "params": {
         "phase_mark": "opaque",
@@ -28,13 +30,13 @@
     },
     {
       "type": "Present",
-      "x": 717.2376084079374,
-      "y": -258.1017986683669
+      "x": 1284.3778210935805,
+      "y": -296.96020952532126
     },
     {
       "type": "ColorPass",
-      "x": -11.610127871296669,
-      "y": -314.69048708137,
+      "x": -13.413487602624649,
+      "y": -334.52744412597775,
       "name": "Transparent",
       "params": {
         "phase_mark": "transparent",
@@ -45,14 +47,14 @@
     },
     {
       "type": "BloomPass",
-      "x": 484.65531924575964,
-      "y": -274.7974237220121,
+      "x": 738.486065340652,
+      "y": -303.8956751475823,
       "node_type": "effect",
       "params": {
-        "threshold": 0.0,
-        "soft_threshold": 0.0,
-        "intensity": 0.0,
-        "mip_levels": 1
+        "threshold": 1.0,
+        "soft_threshold": 0.5,
+        "intensity": 1.1,
+        "mip_levels": 5
       }
     },
     {
@@ -60,7 +62,7 @@
       "x": -729.9042838692282,
       "y": -334.8086021878023,
       "node_type": "resource",
-      "name": "color",
+      "name": "\u0421olorFBO",
       "params": {
         "format": "rgba16f",
         "samples": "4",
@@ -81,8 +83,8 @@
     },
     {
       "type": "FBO",
-      "x": 270.8139788412739,
-      "y": -80.76201914652071,
+      "x": 512.1456075824225,
+      "y": -59.150231498059654,
       "node_type": "resource",
       "name": "bloom",
       "params": {
@@ -105,13 +107,13 @@
     },
     {
       "type": "ResolvePass",
-      "x": 235.78012074886357,
-      "y": -212.83456589386873
+      "x": 237.88007361946535,
+      "y": -292.6327749767346
     },
     {
       "type": "FBO",
-      "x": 3.915659461449195,
-      "y": -94.37496741994555,
+      "x": -103.18193693923915,
+      "y": -62.875674360919575,
       "node_type": "resource",
       "name": "resolve",
       "params": {
@@ -134,8 +136,8 @@
     },
     {
       "type": "FBO",
-      "x": -276.4490233487413,
-      "y": 412.51502618223515,
+      "x": -100.72643598924816,
+      "y": 844.8355960549179,
       "node_type": "resource",
       "name": "FOV_FBO",
       "params": {
@@ -158,10 +160,154 @@
     },
     {
       "type": "DepthPass",
-      "x": 3.947250330760056,
-      "y": 418.4085350605688,
+      "x": 171.27002620784629,
+      "y": 846.5291991920476,
+      "name": "FOVDepth",
       "params": {
         "camera_name": "FOVCamera"
+      }
+    },
+    {
+      "type": "MaterialPass",
+      "x": 495.92266343086953,
+      "y": -304.78623858676895,
+      "node_type": "effect",
+      "name": "TimeSpection",
+      "params": {
+        "material_name": "TimeSpection"
+      },
+      "width": 197.74881111226273,
+      "height": 113.04404771248602,
+      "dynamic_inputs": [
+        [
+          "input_tex",
+          "fbo"
+        ],
+        [
+          "depth_texture",
+          "fbo"
+        ],
+        [
+          "normal_texture",
+          "fbo"
+        ]
+      ]
+    },
+    {
+      "type": "FBO",
+      "x": 125.84376606426468,
+      "y": -42.34336770810214,
+      "node_type": "resource",
+      "params": {
+        "format": "rgba16f",
+        "samples": "1",
+        "size_mode": "viewport",
+        "scale": "1.0",
+        "width": 1024,
+        "height": 1024,
+        "has_color": true,
+        "has_depth": false,
+        "clear_color": false,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": false,
+        "clear_depth_value": 1.0
+      }
+    },
+    {
+      "type": "FBO",
+      "x": -331.3370766849503,
+      "y": 195.52822308245038,
+      "node_type": "resource",
+      "params": {
+        "format": "rgba16f",
+        "samples": "1",
+        "size_mode": "viewport",
+        "scale": "1.0",
+        "width": 1024,
+        "height": 1024,
+        "has_color": true,
+        "has_depth": true,
+        "clear_color": false,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": false,
+        "clear_depth_value": 1.0
+      }
+    },
+    {
+      "type": "DepthPass",
+      "x": 53.19061425485501,
+      "y": 335.01106143945793,
+      "params": {
+        "camera_name": ""
+      }
+    },
+    {
+      "type": "FBO",
+      "x": -329.1080732102745,
+      "y": 497.73463517916935,
+      "node_type": "resource",
+      "params": {
+        "format": "rgba16f",
+        "samples": "1",
+        "size_mode": "viewport",
+        "scale": "1.0",
+        "width": 1024,
+        "height": 1024,
+        "has_color": true,
+        "has_depth": true,
+        "clear_color": false,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": false,
+        "clear_depth_value": 1.0
+      }
+    },
+    {
+      "type": "NormalPass",
+      "x": 50.2550930925745,
+      "y": 577.1578839078925,
+      "params": {
+        "camera_name": ""
+      }
+    },
+    {
+      "type": "TonemapPass",
+      "x": 1042.0855334637165,
+      "y": -299.76877472699096,
+      "params": {
+        "exposure": 0.1,
+        "method": 0
+      }
+    },
+    {
+      "type": "FBO",
+      "x": 786.4267894911429,
+      "y": -81.44947964795446,
+      "node_type": "resource",
+      "params": {
+        "format": "rgba8",
+        "samples": "1",
+        "size_mode": "viewport",
+        "scale": "1.0",
+        "width": 1024,
+        "height": 1024,
+        "has_color": true,
+        "has_depth": true,
+        "clear_color": false,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": false,
+        "clear_depth_value": 1.0
       }
     }
   ],
@@ -182,12 +328,6 @@
       "from_node": 2,
       "from_socket": "output_res",
       "to_node": 4,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 5,
-      "from_socket": "output_res",
-      "to_node": 3,
       "to_socket": "input_res"
     },
     {
@@ -215,12 +355,6 @@
       "to_socket": "input_res"
     },
     {
-      "from_node": 8,
-      "from_socket": "output_res",
-      "to_node": 5,
-      "to_socket": "input_res"
-    },
-    {
       "from_node": 9,
       "from_socket": "fbo",
       "to_node": 8,
@@ -231,16 +365,76 @@
       "from_socket": "fbo",
       "to_node": 11,
       "to_socket": "input_res"
+    },
+    {
+      "from_node": 12,
+      "from_socket": "output_res",
+      "to_node": 5,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 13,
+      "from_socket": "fbo",
+      "to_node": 12,
+      "to_socket": "output_res_target"
+    },
+    {
+      "from_node": 14,
+      "from_socket": "fbo",
+      "to_node": 15,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 16,
+      "from_socket": "fbo",
+      "to_node": 17,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 5,
+      "from_socket": "output_res",
+      "to_node": 18,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 18,
+      "from_socket": "output_res",
+      "to_node": 3,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 19,
+      "from_socket": "fbo",
+      "to_node": 18,
+      "to_socket": "output_res_target"
+    },
+    {
+      "from_node": 8,
+      "from_socket": "output_res",
+      "to_node": 12,
+      "to_socket": "input_tex"
+    },
+    {
+      "from_node": 15,
+      "from_socket": "output_res",
+      "to_node": 12,
+      "to_socket": "depth_texture"
+    },
+    {
+      "from_node": 17,
+      "from_socket": "output_res",
+      "to_node": 12,
+      "to_socket": "normal_texture"
     }
   ],
   "viewport_frames": [
     {
       "title": "Main Viewport",
       "viewport_name": "chronosquad",
-      "x": -784.4558257900267,
-      "y": -502.58504087505537,
-      "width": 1936.0158551102472,
-      "height": 876.3848034845322
+      "x": -795.7277257906921,
+      "y": -492.7585030986637,
+      "width": 2296.1915095792856,
+      "height": 1285.3079770195639
     }
   ]
 }

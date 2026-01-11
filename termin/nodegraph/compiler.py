@@ -369,12 +369,14 @@ def create_pass_instance(
     # Pass name
     kwargs["pass_name"] = node.name if node.name else node.title
 
-    # Viewport name - assign from containing frame
+    # Resource parameters (filter out viewport_name if present)
+    for key, value in resource_params.items():
+        if key != "viewport_name":
+            kwargs[key] = value
+
+    # Viewport name - assign from containing frame (as separate param, not resource)
     if viewport_name:
         kwargs["viewport_name"] = viewport_name
-
-    # Resource parameters
-    kwargs.update(resource_params)
 
     # UI parameters from node
     for param in node._params:
@@ -387,15 +389,21 @@ def create_pass_instance(
         return pass_cls(**kwargs)
     except TypeError as e:
         # Some parameters might not be accepted - try with just basics
-        basic_kwargs = {"pass_name": kwargs.get("pass_name", node.title)}
-
-        # Add resource params that the class accepts
         import inspect
         sig = inspect.signature(pass_cls.__init__)
         valid_params = set(sig.parameters.keys())
 
+        # Check if class accepts **kwargs (VAR_KEYWORD)
+        has_var_keyword = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in sig.parameters.values()
+        )
+
+        basic_kwargs = {"pass_name": kwargs.get("pass_name", node.title)}
+
         for key, value in kwargs.items():
-            if key in valid_params:
+            # Include param if it's in signature OR class accepts **kwargs
+            if key in valid_params or has_var_keyword:
                 basic_kwargs[key] = value
 
         try:
