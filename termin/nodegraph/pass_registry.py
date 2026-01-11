@@ -28,7 +28,9 @@ def get_pass_class(class_name: str) -> Type["FramePass"] | None:
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
         return rm.get_frame_pass(class_name)
-    except Exception:
+    except Exception as e:
+        from termin._native import log
+        log.warn(f"[pass_registry] get_pass_class('{class_name}') failed: {e}")
         return None
 
 
@@ -38,7 +40,9 @@ def get_all_pass_names() -> List[str]:
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
         return list(rm.frame_passes.keys())
-    except Exception:
+    except Exception as e:
+        from termin._native import log
+        log.warn(f"[pass_registry] get_all_pass_names() failed: {e}")
         return []
 
 
@@ -181,8 +185,9 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
                     param.visible_when = visibility_conditions[param.name]
                 params.append(param)
                 seen_names.add(param.name)
-    except Exception:
-        pass
+    except Exception as e:
+        from termin._native import log
+        log.warn(f"[pass_registry] create_params_from_pass('{class_name}') C++ fields failed: {e}")
 
     # 2. Get Python-only inspect_fields from class
     if cls is not None:

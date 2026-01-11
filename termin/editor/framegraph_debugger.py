@@ -1121,8 +1121,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _attach_frame_debugger_pass(self) -> None:
         """Создаёт и добавляет FrameDebuggerPass в пайплайн текущего viewport."""
+        from termin._native import log
+
         pipeline = self._get_current_pipeline()
         if pipeline is None:
+            log.warn("[FrameDebugger] _attach: no pipeline")
             return
 
         # Если уже есть — сначала удаляем
@@ -1150,18 +1153,24 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         # Добавляем в конец пайплайна (после всех пассов)
         pipeline.passes.append(self._frame_debugger_pass)
+        log.info(f"[FrameDebugger] Attached FrameDebuggerPass, pipeline has {len(pipeline.passes)} passes")
 
         if self._on_request_update is not None:
             self._on_request_update()
 
     def _detach_frame_debugger_pass(self) -> None:
         """Удаляет FrameDebuggerPass из пайплайна."""
+        from termin._native import log
+
         if self._frame_debugger_pass is None:
             return
 
         pipeline = self._get_current_pipeline()
         if pipeline is not None and self._frame_debugger_pass in pipeline.passes:
             pipeline.passes.remove(self._frame_debugger_pass)
+            log.info(f"[FrameDebugger] Detached FrameDebuggerPass, pipeline has {len(pipeline.passes)} passes")
+        else:
+            log.warn(f"[FrameDebugger] _detach: pass not in pipeline (pipeline={pipeline is not None})")
 
         self._frame_debugger_pass = None
 
@@ -1202,8 +1211,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # чтобы не тянуть его между разными пассами.
         self._selected_symbol = None
         self._update_symbols_list()
-        # Очищаем окно дебаггера до выбора нового символа
-        self._gl_widget.clear_to_background()
+        # Если есть символы - автоматически выбираем первый
+        if self._symbol_combo.count() > 0:
+            self._symbol_combo.setCurrentIndex(0)
+            first_symbol = self._symbol_combo.itemText(0)
+            self._on_symbol_selected(first_symbol)
+        else:
+            # Очищаем окно дебаггера если нет символов
+            self._gl_widget.clear_to_background()
 
     def _on_symbol_selected(self, name: str) -> None:
         """Обработчик выбора символа (режим «Внутри пасса»)."""
@@ -1249,22 +1264,41 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._request_depth_refresh()
 
     def _clear_internal_symbol(self) -> None:
-        """Сбрасывает внутренний символ при переключении режима."""
-        if self._selected_pass:
-            self._set_pass_internal_symbol(self._selected_pass, None)
+        """Сбрасывает внутренний символ у ВСЕХ пассов."""
+        from termin._native import log
 
-    def _set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
-        """Set internal debug symbol for a pass."""
         pipeline = self._get_current_pipeline()
         if pipeline is None:
             return
 
+        cleared_count = 0
+        for p in pipeline.passes:
+            try:
+                p.set_debug_internal_point("")
+                p.set_debugger_window(None)
+                cleared_count += 1
+            except AttributeError:
+                log.warn(f"[FrameDebugger] Pass '{p.pass_name}' does not support debug symbols")
+
+        log.info(f"[FrameDebugger] _clear_internal_symbol: cleared {cleared_count} passes")
+
+    def _set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
+        """Set internal debug symbol for a pass."""
+        from termin._native import log
+
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            log.warn(f"[FrameDebugger] _set_pass_internal_symbol: no pipeline")
+            return
+
         for p in pipeline.passes:
             if p.pass_name == pass_name:
+                pass_type = type(p).__name__
                 if symbol is None or symbol == "":
                     # Отключаем внутреннюю точку дебага
                     p.set_debug_internal_point("")
                     p.set_debugger_window(None)
+                    log.info(f"[FrameDebugger] Cleared debug symbol for pass '{pass_name}' ({pass_type})")
                 else:
                     # Устанавливаем символ и передаём SDL окно для блита
                     p.set_debug_internal_point(symbol)
@@ -1273,10 +1307,13 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                     depth_callback = self._gl_widget.on_depth_captured
                     depth_error_callback = self._gl_widget.on_depth_error
                     p.set_debugger_window(sdl_window, depth_callback, depth_error_callback)
+                    log.info(f"[FrameDebugger] Set debug symbol '{symbol}' for pass '{pass_name}' ({pass_type})")
 
                 if self._on_request_update is not None:
                     self._on_request_update()
                 return
+
+        log.warn(f"[FrameDebugger] Pass '{pass_name}' not found in pipeline")
 
     def _build_schedule(self, exclude_debugger: bool = False) -> list:
         """Строит schedule из текущего pipeline через FrameGraph.
@@ -1574,10 +1611,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_ui_for_resource_type()
         self._update_fbo_info()
         # В режиме "между пассами" FrameDebuggerPass уже отрендерил в окно.
-        # В режиме "внутри пасса" пасс с debug_internal_symbol рендерит в окно,
-        # поэтому _gl_widget.update() не вызываем если выбран символ.
+        # В режиме "внутри пасса" пасс с debug_internal_symbol рендерит в окно.
+        # Если символ не выбран - очищаем до фона, чтобы не показывать старую текстуру.
         if self._mode == "inside" and not self._selected_symbol:
-            self._gl_widget.update()
+            self._gl_widget.clear_to_background()
 
     def showEvent(self, event) -> None:
         """При показе диалога подключаем FrameDebuggerPass если нужно."""

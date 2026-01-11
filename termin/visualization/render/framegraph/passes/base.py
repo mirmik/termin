@@ -109,8 +109,9 @@ class RenderFramePass(FramePass):
 
             self._debugger_window.swap_buffers()
 
-        except Exception:
-            pass
+        except Exception as e:
+            from termin._native import log
+            log.error(f"[RenderFramePass] blit_to_debugger failed: {e}")
 
         finally:
             if saved_window and saved_context:

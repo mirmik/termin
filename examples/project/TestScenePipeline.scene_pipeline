@@ -18,6 +18,7 @@
       "type": "ColorPass",
       "x": -237.60315862320635,
       "y": -335.41743632182977,
+      "name": "Opaque",
       "params": {
         "phase_mark": "opaque",
         "sort_mode": "none",
@@ -33,6 +34,7 @@
       "type": "ColorPass",
       "x": -11.610127871296669,
       "y": -314.69048708137,
+      "name": "Transparent",
       "params": {
         "phase_mark": "transparent",
         "sort_mode": "far_to_near",
@@ -58,7 +60,6 @@
       "node_type": "resource",
       "name": "color",
       "params": {
-        "name": "fbo",
         "format": "rgba16f",
         "samples": "4",
         "size_mode": "viewport",
@@ -83,7 +84,6 @@
       "node_type": "resource",
       "name": "bloom",
       "params": {
-        "name": "fbo",
         "format": "rgba16f",
         "samples": "1",
         "size_mode": "viewport",
@@ -113,7 +113,6 @@
       "node_type": "resource",
       "name": "resolve",
       "params": {
-        "name": "fbo",
         "format": "rgba16f",
         "samples": "1",
         "size_mode": "viewport",
@@ -138,7 +137,6 @@
       "node_type": "resource",
       "name": "FOV_FBO",
       "params": {
-        "name": "fbo",
         "format": "r16f",
         "samples": "1",
         "size_mode": "fixed",

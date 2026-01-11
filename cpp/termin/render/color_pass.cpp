@@ -263,8 +263,8 @@ void ColorPass::execute_with_data(
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
         graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
 
-        // Check for debug blit
-        if (!debug_symbol.empty() && ename && ename == debug_symbol) {
+        // Check for debug blit (use std::string comparison to avoid pointer issues)
+        if (!debug_symbol.empty() && ename && debug_symbol == ename) {
             maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
         }
     }

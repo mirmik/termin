@@ -19,6 +19,7 @@ from termin.graphics import OpenGLGraphicsBackend
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
+    from termin.graphics import FramebufferHandle
 
 
 def _translate_qt_key(qt_key: int) -> Key:
@@ -218,7 +219,9 @@ def _get_qt_keyboard_mods() -> int:
         if qt_mods & Qt.KeyboardModifier.AltModifier:
             result |= 0x0004  # MOD_ALT
         return result
-    except Exception:
+    except Exception as e:
+        from termin._native import log
+        log.warn(f"[sdl_embedded] _get_qt_keyboard_mods failed: {e}")
         return 0
 
 
@@ -533,6 +536,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             return 0
         return video.SDL_GetWindowID(self._window)
 
+    # Cached resolve FBO for MSAA blit
+    _resolve_fbo: "FramebufferHandle | None" = None
+    _resolve_fbo_size: tuple[int, int] = (0, 0)
+
     def blit_from_pass(
         self,
         fb,
@@ -554,20 +561,44 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             height: Source framebuffer height
             depth_callback: Optional callback to receive depth buffer
         """
+        from termin._native import log
         from termin.visualization.render.framegraph.passes.present import (
             PresentToScreenPass,
             _get_texture_from_resource,
         )
 
-        # Capture depth buffer before switching context
+        # Handle MSAA: resolve to non-MSAA FBO first
+        texture_fb = fb
+        if fb.is_msaa():
+            w, h = fb.get_size()
+            # Get or create resolve FBO
+            if (
+                SDLEmbeddedWindowHandle._resolve_fbo is None
+                or SDLEmbeddedWindowHandle._resolve_fbo_size != (w, h)
+            ):
+                SDLEmbeddedWindowHandle._resolve_fbo = graphics.create_framebuffer(w, h, samples=1)
+                SDLEmbeddedWindowHandle._resolve_fbo_size = (w, h)
+
+            # Blit MSAA -> non-MSAA
+            graphics.blit_framebuffer(
+                fb, SDLEmbeddedWindowHandle._resolve_fbo,
+                (0, 0, w, h),
+                (0, 0, w, h),
+                blit_color=True,
+                blit_depth=True,
+            )
+            texture_fb = SDLEmbeddedWindowHandle._resolve_fbo
+
+        # Capture depth buffer before switching context (from resolved FBO if MSAA)
         if depth_callback is not None:
-            depth = graphics.read_depth_buffer(fb)
+            depth = graphics.read_depth_buffer(texture_fb)
             if depth is not None:
                 depth_callback(depth)
 
-        # Get texture from FBO
-        tex = _get_texture_from_resource(fb)
+        # Get texture from (possibly resolved) FBO
+        tex = _get_texture_from_resource(texture_fb)
         if tex is None:
+            log.warn("[blit_from_pass] tex is None, aborting")
             return
 
         # Save current context

@@ -282,8 +282,9 @@ class FrameDebuggerPass(RenderFramePass):
             # Показываем результат
             self._debugger_window.swap_buffers()
 
-        except Exception:
-            pass
+        except Exception as e:
+            from termin._native import log
+            log.error(f"[FrameDebuggerPass] blit failed: {e}")
 
         finally:
             # Восстанавливаем исходный контекст
