@@ -21,7 +21,7 @@
       "name": "Opaque",
       "params": {
         "phase_mark": "opaque",
-        "sort_mode": "none",
+        "sort_mode": "near_to_far",
         "clear_depth": false
       }
     },
