@@ -7,6 +7,7 @@ import numpy as np
 
 from termin._native.render import ColorPass as _ColorPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
@@ -44,6 +45,21 @@ class ColorPass(_ColorPassNative):
     ]
     node_inplace_pairs = [("input_res", "output_res")]
 
+    # Additional inspect fields for node graph (Python-only)
+    inspect_fields = {
+        "camera_name": InspectField(
+            path="camera_name",
+            label="Camera",
+            kind="string",
+            is_inspectable=True,
+        ),
+    }
+
+    # Node parameter visibility conditions
+    node_param_visibility = {
+        "camera_name": {"_outside_viewport": True},
+    }
+
     def __init__(
         self,
         input_res: str = "empty",
@@ -53,6 +69,7 @@ class ColorPass(_ColorPassNative):
         phase_mark: str | None = None,
         sort_mode: str = "none",  # "none", "near_to_far", "far_to_near"
         clear_depth: bool = False,
+        camera_name: str = "",
     ):
         if phase_mark is None:
             phase_mark = "opaque"
@@ -67,10 +84,14 @@ class ColorPass(_ColorPassNative):
             sort_mode=sort_mode,
             clear_depth=clear_depth,
         )
+        self.camera_name = camera_name
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
-        return cls(pass_name=data.get("pass_name", "Color"))
+        return cls(
+            pass_name=data.get("pass_name", "Color"),
+            camera_name=data.get("data", {}).get("camera_name", ""),
+        )
 
     @property
     def reads(self) -> Set[str]:
@@ -86,16 +107,22 @@ class ColorPass(_ColorPassNative):
         return {self.output_res}
 
     def serialize_data(self) -> dict:
-        """Serialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        """Serialize fields via InspectRegistry (C++ INSPECT_FIELD) + Python fields."""
         from termin._native.inspect import InspectRegistry
-        return InspectRegistry.instance().serialize_all(self)
+        result = InspectRegistry.instance().serialize_all(self)
+        # Add Python-only fields
+        if self.camera_name:
+            result["camera_name"] = self.camera_name
+        return result
 
     def deserialize_data(self, data: dict) -> None:
-        """Deserialize fields via InspectRegistry (C++ INSPECT_FIELD)."""
+        """Deserialize fields via InspectRegistry (C++ INSPECT_FIELD) + Python fields."""
         if not data:
             return
         from termin._native.inspect import InspectRegistry
         InspectRegistry.instance().deserialize_all(self, data)
+        # Restore Python-only fields
+        self.camera_name = data.get("camera_name", "")
 
     def serialize(self) -> dict:
         """Serialize ColorPass to dict."""
@@ -126,6 +153,17 @@ class ColorPass(_ColorPassNative):
     def get_internal_symbols(self) -> List[str]:
         """Return list of entity names (from C++ implementation)."""
         return super().get_internal_symbols()
+
+    def _find_camera_by_name(self, scene, name: str):
+        """Find camera component from entity by name."""
+        from termin.visualization.core.camera import CameraComponent
+
+        for entity in scene.entities:
+            if entity.name == name:
+                camera = entity.get_component(CameraComponent)
+                if camera is not None:
+                    return camera
+        return None
 
     def _bind_shadow_maps(
         self,
@@ -164,6 +202,23 @@ class ColorPass(_ColorPassNative):
         canvas=None,
     ):
         """Execute color pass using C++ implementation."""
+        # If camera_name is set, use it (overrides passed camera)
+        if self.camera_name:
+            camera = self._find_camera_by_name(scene, self.camera_name)
+            if camera is None:
+                return  # Camera not found, skip pass
+
+        if camera is None:
+            return  # No camera available
+
+        # Get output FBO and use its size for rendering
+        output_fbo = writes_fbos.get(self.output_res)
+        if output_fbo is not None:
+            fbo_size = output_fbo.get_size()
+            rect = (0, 0, fbo_size.width, fbo_size.height)
+            # Update camera aspect ratio to match FBO
+            camera.set_aspect(fbo_size.width / max(1, fbo_size.height))
+
         if lights is not None:
             scene.lights = lights
 

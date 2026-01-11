@@ -119,9 +119,11 @@ class DepthPass(_DepthPassNative):
 
     def _find_camera_by_name(self, scene, name: str):
         """Find camera component from entity by name."""
+        from termin.visualization.core.camera import CameraComponent
+
         for entity in scene.entities:
             if entity.name == name:
-                camera = entity.get_component("Camera")
+                camera = entity.get_component(CameraComponent)
                 if camera is not None:
                     return camera
         return None
@@ -139,14 +141,22 @@ class DepthPass(_DepthPassNative):
         canvas=None,
     ):
         """Execute depth pass using C++ implementation."""
-        # If no camera provided and camera_name is set, find by name
-        if camera is None and self.camera_name:
+        # If camera_name is set, use it (overrides passed camera)
+        if self.camera_name:
             camera = self._find_camera_by_name(scene, self.camera_name)
             if camera is None:
-                return  # No camera found, skip pass
+                return  # Camera not found, skip pass
 
         if camera is None:
             return  # No camera available
+
+        # Get output FBO and use its size for rendering
+        output_fbo = writes_fbos.get(self.output_res)
+        if output_fbo is not None:
+            fbo_size = output_fbo.get_size()
+            rect = (0, 0, fbo_size.width, fbo_size.height)
+            # Update camera aspect ratio to match FBO
+            camera.set_aspect(fbo_size.width / max(1, fbo_size.height))
 
         # Get camera matrices
         view = camera.get_view_matrix()
