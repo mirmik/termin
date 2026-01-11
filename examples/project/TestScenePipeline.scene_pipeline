@@ -136,6 +136,7 @@
       "x": -276.4490233487413,
       "y": 412.51502618223515,
       "node_type": "resource",
+      "name": "FOV_FBO",
       "params": {
         "name": "fbo",
         "format": "r16f",

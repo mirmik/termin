@@ -86,13 +86,22 @@ def generate_resource_name(node: "GraphNode", socket: "NodeSocket", node_index: 
     """
     Generate unique resource name for a socket.
 
-    Format: "{node_name}_{socket_name}" if node has a name,
-            "{node_type}_{index}_{socket_name}" otherwise.
+    For FBO resource nodes: use the configured name directly.
+    For other nodes: "{node_name}_{socket_name}" or "{node_type}_{index}_{socket_name}".
     """
+    # FBO resource nodes use their instance name (from header)
+    if node.node_type == "resource" and node.data.get("resource_type") == "fbo":
+        # Use node.name (instance name shown in header), not the "name" parameter
+        name = node.name
+        # If no instance name, fall back to indexed name
+        if not name:
+            return f"fbo_{node_index}"
+        return name
+
     if node.name:
-        base = node.name.lower().replace(" ", "_")
+        base = node.name.replace(" ", "_")
     else:
-        base = f"{node.title.lower()}_{node_index}"
+        base = f"{node.title}_{node_index}"
 
     return f"{base}_{socket.name}"
 
@@ -181,7 +190,7 @@ def resolve_resource_names(
         for socket in node.input_sockets:
             if socket not in socket_names:
                 # Unconnected input - use "empty" prefix for auto-creation
-                name = f"empty_{node.title.lower()}_{idx}_{socket.name}"
+                name = f"empty_{node.title}_{idx}_{socket.name}"
                 socket_names[socket] = name
                 resource_types[name] = socket.socket_type
 

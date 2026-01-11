@@ -333,11 +333,18 @@ class RenderingManager:
 
             if camera is None:
                 # Fallback: find first camera in scene
+                fallback_entity = None
                 for entity in scene.entities:
                     cam = entity.get_component(CameraComponent)
                     if cam is not None:
                         camera = cam
+                        fallback_entity = entity
                         break
+                if camera is not None:
+                    log.warn(
+                        f"[attach_scene] Camera uuid={config.camera_uuid} not found, "
+                        f"using fallback '{fallback_entity.name}'"
+                    )
 
             if camera is None:
                 log.warn(

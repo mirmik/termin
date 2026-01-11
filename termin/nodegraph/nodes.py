@@ -74,15 +74,6 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
     node.add_output(NodeSocket("fbo", "fbo"))
 
     node.data["resource_type"] = "fbo"
-    node.data["resource_name"] = title.lower().replace(" ", "_")
-
-    # Resource name parameter
-    node.add_param(NodeParam(
-        name="name",
-        label="Name",
-        param_type="text",
-        default=title.lower().replace(" ", "_"),
-    ))
 
     # Format parameter
     node.add_param(NodeParam(

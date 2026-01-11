@@ -192,8 +192,38 @@ class GraphNode(QGraphicsItem):
         self._param_values[name] = value
         # Update data dict for pipeline compilation
         self.data[name] = value
+        # Update widget if it exists
+        self._update_widget_value(name, value)
         # Update visibility of dependent params
         self._update_param_visibility()
+
+    def _update_widget_value(self, name: str, value: Any) -> None:
+        """Update widget to reflect new parameter value."""
+        proxy = self._param_widgets.get(name)
+        if proxy is None:
+            return
+        widget = proxy.widget()
+        if widget is None:
+            return
+
+        # Block signals to prevent recursive updates
+        widget.blockSignals(True)
+        try:
+            from PyQt6.QtWidgets import QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox
+            if isinstance(widget, QComboBox):
+                idx = widget.findText(str(value))
+                if idx >= 0:
+                    widget.setCurrentIndex(idx)
+            elif isinstance(widget, QLineEdit):
+                widget.setText(str(value) if value is not None else "")
+            elif isinstance(widget, QSpinBox):
+                widget.setValue(int(value) if value is not None else 0)
+            elif isinstance(widget, QDoubleSpinBox):
+                widget.setValue(float(value) if value is not None else 0.0)
+            elif isinstance(widget, QCheckBox):
+                widget.setChecked(bool(value) if value is not None else False)
+        finally:
+            widget.blockSignals(False)
 
     def is_inside_viewport_frame(self) -> bool:
         """Check if this node is inside a ViewportFrame."""

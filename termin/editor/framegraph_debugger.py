@@ -483,8 +483,30 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         if resource is None:
             return
 
+        # Extract FBO from resource
+        from termin.visualization.render.framegraph.resource import (
+            SingleFBO,
+            ShadowMapArrayResource,
+        )
+        from termin.graphics import FramebufferHandle
+
+        fbo = None
+        if isinstance(resource, ShadowMapArrayResource):
+            if len(resource) > 0:
+                index = self._handler_context.get('shadow_map_index', 0)
+                index = min(index, len(resource) - 1)
+                entry = resource[index]
+                fbo = entry.fbo
+        elif isinstance(resource, SingleFBO):
+            fbo = resource._fbo
+        elif isinstance(resource, FramebufferHandle):
+            fbo = resource
+
+        if fbo is None:
+            return
+
         # Read depth directly from FBO
-        depth = self._graphics.read_depth_buffer(resource)
+        depth = self._graphics.read_depth_buffer(fbo)
         if depth is None:
             return
 

@@ -68,9 +68,6 @@ class ColorPass(_ColorPassNative):
             clear_depth=clear_depth,
         )
 
-        # Cache of entity names with MeshRenderer
-        self._entity_names: List[str] = []
-
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
         return cls(pass_name=data.get("pass_name", "Color"))
@@ -127,8 +124,8 @@ class ColorPass(_ColorPassNative):
         ]
 
     def get_internal_symbols(self) -> List[str]:
-        """Return list of entity names with MeshRenderer."""
-        return list(self._entity_names)
+        """Return list of entity names (from C++ implementation)."""
+        return super().get_internal_symbols()
 
     def _bind_shadow_maps(
         self,

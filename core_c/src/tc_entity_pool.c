@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 // For Py_INCREF/Py_DECREF on Python components
 #define PY_SSIZE_T_CLEAN
@@ -218,6 +219,13 @@ static char* str_dup(const char* s) {
 
 tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = 64;
+
+    // Seed random number generator once for UUID generation
+    static bool rand_seeded = false;
+    if (!rand_seeded) {
+        srand((unsigned int)time(NULL) ^ (unsigned int)clock());
+        rand_seeded = true;
+    }
 
     tc_entity_pool* pool = calloc(1, sizeof(tc_entity_pool));
     pool->capacity = initial_capacity;
@@ -467,13 +475,26 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     free(pool->names[idx]);
     pool->names[idx] = str_dup(name ? name : "entity");
 
-    // Set UUID - use provided or generate auto
+    // Set UUID - use provided or generate random
     free(pool->uuids[idx]);
     if (uuid && uuid[0]) {
         pool->uuids[idx] = str_dup(uuid);
     } else {
-        char uuid_buf[64];
-        snprintf(uuid_buf, sizeof(uuid_buf), "%016llx", (unsigned long long)pool->next_runtime_id);
+        // Generate random UUID4-style identifier
+        char uuid_buf[37];  // 32 hex chars + 4 dashes + null
+        unsigned char bytes[16];
+        for (int i = 0; i < 16; i++) {
+            bytes[i] = (unsigned char)(rand() & 0xFF);
+        }
+        // Set version (4) and variant (RFC 4122)
+        bytes[6] = (bytes[6] & 0x0F) | 0x40;  // Version 4
+        bytes[8] = (bytes[8] & 0x3F) | 0x80;  // Variant 1
+        snprintf(uuid_buf, sizeof(uuid_buf),
+            "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]);
         pool->uuids[idx] = str_dup(uuid_buf);
     }
 

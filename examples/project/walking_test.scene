@@ -4478,7 +4478,7 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "06755c9d-9760-4eb9-b1af-28213d330f2d",
+                              "uuid": "de4f3d7c-c444-4c48-aed2-ae3a26107d49",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4587,13 +4587,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
-                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.15655755996704102,
                               0.31000229716300964,
                               0.20257876813411713,
                               1
-                            ]
+                            ],
+                            "u_diffuse_mul": 1
                           },
                           {
                             "u_emission_intensity": 0,
@@ -4620,13 +4620,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "9ffdc818-161a-4839-884f-939c1c587410",
+                              "uuid": "71d387e8-85fb-4d88-a32d-b568703d1303",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "06755c9d-9760-4eb9-b1af-28213d330f2d",
+                              "uuid": "de4f3d7c-c444-4c48-aed2-ae3a26107d49",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -9538,13 +9538,13 @@
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
+                    "u_emission_intensity": 2,
                     "u_color": [
                       0.34726482629776,
                       0.7852292656898499,
                       0.15172044932842255,
                       1
                     ],
-                    "u_emission_intensity": 2,
                     "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
                       0.7799344062805176,
@@ -9578,13 +9578,13 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "9ffdc818-161a-4839-884f-939c1c587410",
+                      "uuid": "71d387e8-85fb-4d88-a32d-b568703d1303",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "06755c9d-9760-4eb9-b1af-28213d330f2d",
+                      "uuid": "de4f3d7c-c444-4c48-aed2-ae3a26107d49",
                       "name": "__normal_1x1__",
                       "type": "path",
                       "path": "__normal_1x1__"
@@ -12881,13 +12881,13 @@
     },
     "selected_entity": "000000000000012e",
     "expanded_entities": [
-      "0000000000000130",
-      "000000000000012d",
-      "000000000000012c",
-      "00000000000000dd",
-      "0000000000000131",
       "0000000000000007",
-      "0000000000000077"
+      "0000000000000077",
+      "0000000000000131",
+      "00000000000000dd",
+      "000000000000012c",
+      "0000000000000130",
+      "000000000000012d"
     ]
   },
   "resources": {
