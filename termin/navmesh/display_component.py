@@ -238,21 +238,21 @@ void main() {
         return marks
 
     # Константы для geometry_id
-    GEOMETRY_MESH = "mesh"
-    GEOMETRY_CONTOURS = "contours"
+    GEOMETRY_MESH = 1
+    GEOMETRY_CONTOURS = 2
 
-    def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
+    def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
         """Рисует геометрию NavMesh."""
         self._check_hot_reload()
 
-        if geometry_id == "" or geometry_id == self.GEOMETRY_MESH:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_MESH:
             if self._mesh is not None and self._mesh.is_valid:
                 if self._mesh_gpu is None:
                     from termin._native.render import MeshGPU
                     self._mesh_gpu = MeshGPU()
                 self._mesh_gpu.draw(context, self._mesh.mesh, self._mesh.version)
 
-        if geometry_id == self.GEOMETRY_CONTOURS:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_CONTOURS:
             if self._contour_mesh is not None and self._contour_mesh.is_valid:
                 if self._contour_gpu is None:
                     from termin._native.render import MeshGPU

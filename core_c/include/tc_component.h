@@ -39,7 +39,8 @@ struct tc_drawable_vtable {
 
     // Draw geometry (shader already bound by pass)
     // render_context is opaque (RenderContext* in C++)
-    void (*draw_geometry)(tc_component* self, void* render_context, const char* geometry_id);
+    // geometry_id: 0 = default/all, >0 = specific geometry slot
+    void (*draw_geometry)(tc_component* self, void* render_context, int geometry_id);
 
     // Get geometry draw calls for a phase
     // Returns opaque pointer to be interpreted by caller (std::vector<GeometryDrawCall>* in C++)
@@ -50,7 +51,8 @@ struct tc_drawable_vtable {
     // Pass calls this before applying uniforms to let drawable modify the shader.
     // Returns original_shader if no override needed, or a different shader.
     // original_shader is opaque (ShaderProgram* in C++)
-    void* (*override_shader)(tc_component* self, const char* phase_mark, const char* geometry_id, void* original_shader);
+    // geometry_id: 0 = default, >0 = specific geometry slot
+    void* (*override_shader)(tc_component* self, const char* phase_mark, int geometry_id, void* original_shader);
 };
 
 // ============================================================================
@@ -267,7 +269,7 @@ static inline bool tc_component_has_phase(tc_component* c, const char* phase_mar
     return false;
 }
 
-static inline void tc_component_draw_geometry(tc_component* c, void* render_context, const char* geometry_id) {
+static inline void tc_component_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
     if (c && c->drawable_vtable && c->drawable_vtable->draw_geometry) {
         c->drawable_vtable->draw_geometry(c, render_context, geometry_id);
     }
@@ -280,7 +282,7 @@ static inline void* tc_component_get_geometry_draws(tc_component* c, const char*
     return NULL;
 }
 
-static inline void* tc_component_override_shader(tc_component* c, const char* phase_mark, const char* geometry_id, void* original_shader) {
+static inline void* tc_component_override_shader(tc_component* c, const char* phase_mark, int geometry_id, void* original_shader) {
     if (c && c->drawable_vtable && c->drawable_vtable->override_shader) {
         return c->drawable_vtable->override_shader(c, phase_mark, geometry_id, original_shader);
     }

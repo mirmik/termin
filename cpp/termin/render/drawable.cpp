@@ -18,7 +18,7 @@ bool Drawable::_cb_has_phase(tc_component* c, const char* phase_mark) {
     return drawable->has_phase(phase_mark ? phase_mark : "");
 }
 
-void Drawable::_cb_draw_geometry(tc_component* c, void* render_context, const char* geometry_id) {
+void Drawable::_cb_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
     if (!c || c->kind != TC_CXX_COMPONENT) return;
 
     CxxComponent* comp = CxxComponent::from_tc(c);
@@ -30,7 +30,7 @@ void Drawable::_cb_draw_geometry(tc_component* c, void* render_context, const ch
     RenderContext* ctx = static_cast<RenderContext*>(render_context);
     if (!ctx) return;
 
-    drawable->draw_geometry(*ctx, geometry_id ? geometry_id : "");
+    drawable->draw_geometry(*ctx, geometry_id);
 }
 
 void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) {
@@ -50,7 +50,7 @@ void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) 
     return &drawable->_cached_geometry_draws;
 }
 
-void* Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, const char* geometry_id, void* original_shader) {
+void* Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, void* original_shader) {
     if (!c || c->kind != TC_CXX_COMPONENT) return original_shader;
 
     CxxComponent* comp = CxxComponent::from_tc(c);
@@ -62,7 +62,7 @@ void* Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, con
     ShaderProgram* shader = static_cast<ShaderProgram*>(original_shader);
     return drawable->override_shader(
         phase_mark ? phase_mark : "",
-        geometry_id ? geometry_id : "",
+        geometry_id,
         shader
     );
 }

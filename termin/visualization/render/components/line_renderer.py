@@ -410,7 +410,7 @@ class LineRenderer(PythonComponent):
 
     # --- Drawable protocol ---
 
-    def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
+    def draw_geometry(self, context: RenderContext, geometry_id: int = 0) -> None:
         """
         Рисует геометрию линий (шейдер уже привязан пассом).
 

@@ -29,7 +29,7 @@ class ShaderProgram;
 struct ShadowDrawCall {
     const Entity* entity = nullptr;
     tc_component* component = nullptr;
-    std::string geometry_id;
+    int geometry_id = 0;
 };
 
 // Result of shadow map rendering for one light (or cascade)

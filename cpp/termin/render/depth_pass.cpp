@@ -220,7 +220,7 @@ void DepthPass::execute_with_data(
 
         // Allow drawable to override shader (for skinning injection)
         ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-            tc_component_override_shader(dc.component, "depth", "", shader)
+            tc_component_override_shader(dc.component, "depth", 0, shader)
         );
         if (shader_to_use == nullptr) {
             shader_to_use = shader;
@@ -242,7 +242,7 @@ void DepthPass::execute_with_data(
         context.current_shader = shader_to_use;
 
         // Draw geometry (handles bone matrix upload for skinned meshes)
-        tc_component_draw_geometry(dc.component, &context, "");
+        tc_component_draw_geometry(dc.component, &context, 0);
 
         // Check for debug blit
         const std::string& debug_symbol = get_debug_internal_point();

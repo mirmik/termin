@@ -220,7 +220,7 @@ void bind_renderers(nb::module_& m) {
             return marks;
         })
         .def("draw_geometry", &MeshRenderer::draw_geometry,
-            nb::arg("context"), nb::arg("geometry_id") = "")
+            nb::arg("context"), nb::arg("geometry_id") = 0)
         .def("get_phases_for_mark", &MeshRenderer::get_phases_for_mark,
             nb::arg("phase_mark"))
         .def("get_geometry_draws", &MeshRenderer::get_geometry_draws,

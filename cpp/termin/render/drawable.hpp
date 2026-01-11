@@ -19,13 +19,14 @@ class GraphicsBackend;
  * Geometry draw call - links a MaterialPhase to a geometry ID.
  *
  * Used by Drawable to specify which geometry to draw with which material phase.
+ * geometry_id: 0 = default/all geometry, >0 = specific geometry slot
  */
 struct GeometryDrawCall {
     MaterialPhase* phase = nullptr;
-    std::string geometry_id;
+    int geometry_id = 0;
 
     GeometryDrawCall() = default;
-    GeometryDrawCall(MaterialPhase* p, const std::string& gid = "")
+    GeometryDrawCall(MaterialPhase* p, int gid = 0)
         : phase(p), geometry_id(gid) {}
 };
 
@@ -69,9 +70,9 @@ public:
      * Drawable should just draw its geometry (mesh, lines, etc.)
      *
      * @param context Render context with view/projection matrices
-     * @param geometry_id Identifier for which geometry to draw (empty = default)
+     * @param geometry_id Geometry slot to draw (0 = default/all)
      */
-    virtual void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") = 0;
+    virtual void draw_geometry(const RenderContext& context, int geometry_id = 0) = 0;
 
     /**
      * Get geometry draw calls for this drawable.
@@ -91,13 +92,13 @@ public:
      * a different shader (e.g., with skinning injected).
      *
      * @param phase_mark Current phase mark
-     * @param geometry_id Geometry being drawn
+     * @param geometry_id Geometry slot being drawn (0 = default)
      * @param original_shader Shader the pass intends to use
      * @return Shader to use (original or modified)
      */
     virtual ShaderProgram* override_shader(
         const std::string& phase_mark,
-        const std::string& geometry_id,
+        int geometry_id,
         ShaderProgram* original_shader
     ) {
         return original_shader;  // Default: no override
@@ -125,9 +126,9 @@ protected:
 private:
     // Static callbacks for drawable vtable
     static bool _cb_has_phase(tc_component* c, const char* phase_mark);
-    static void _cb_draw_geometry(tc_component* c, void* render_context, const char* geometry_id);
+    static void _cb_draw_geometry(tc_component* c, void* render_context, int geometry_id);
     static void* _cb_get_geometry_draws(tc_component* c, const char* phase_mark);
-    static void* _cb_override_shader(tc_component* c, const char* phase_mark, const char* geometry_id, void* original_shader);
+    static void* _cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, void* original_shader);
 };
 
 // Draw call for passes - combines entity, component, phase, and geometry.
@@ -136,7 +137,7 @@ struct PhaseDrawCall {
     tc_component* component = nullptr;  // Component with drawable_vtable
     MaterialPhase* phase = nullptr;
     int priority = 0;
-    std::string geometry_id;
+    int geometry_id = 0;
 };
 
 } // namespace termin

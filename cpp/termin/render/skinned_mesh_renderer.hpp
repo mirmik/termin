@@ -67,7 +67,7 @@ public:
      * Draw skinned geometry with bone matrices.
      * Overrides MeshRenderer::draw_geometry.
      */
-    void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") override;
+    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
 
     /**
      * Get geometry draw calls.
@@ -81,7 +81,7 @@ public:
      */
     ShaderProgram* override_shader(
         const std::string& phase_mark,
-        const std::string& geometry_id,
+        int geometry_id,
         ShaderProgram* original_shader
     ) override;
 

@@ -62,7 +62,7 @@ TC_API void tc_component_set_python_callbacks(const tc_python_callbacks* callbac
 // ============================================================================
 
 typedef bool (*tc_py_drawable_has_phase_fn)(void* py_self, const char* phase_mark);
-typedef void (*tc_py_drawable_draw_geometry_fn)(void* py_self, void* render_context, const char* geometry_id);
+typedef void (*tc_py_drawable_draw_geometry_fn)(void* py_self, void* render_context, int geometry_id);
 typedef void* (*tc_py_drawable_get_geometry_draws_fn)(void* py_self, const char* phase_mark);
 
 typedef struct {

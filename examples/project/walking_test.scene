@@ -4283,8 +4283,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "00000000-0000-0000-0002-000000000003",
-                        "name": "AdvancedPBRMaterial"
+                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
+                        "name": "StandartMaterial"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -4478,7 +4478,7 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "de4f3d7c-c444-4c48-aed2-ae3a26107d49",
+                              "uuid": "34d13101-8221-4679-b212-01858dbbaae0",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4620,13 +4620,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "71d387e8-85fb-4d88-a32d-b568703d1303",
+                              "uuid": "f1e36d87-cabb-491f-ad49-adaca394f872",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "de4f3d7c-c444-4c48-aed2-ae3a26107d49",
+                              "uuid": "34d13101-8221-4679-b212-01858dbbaae0",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -9578,13 +9578,13 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "71d387e8-85fb-4d88-a32d-b568703d1303",
+                      "uuid": "f1e36d87-cabb-491f-ad49-adaca394f872",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "de4f3d7c-c444-4c48-aed2-ae3a26107d49",
+                      "uuid": "34d13101-8221-4679-b212-01858dbbaae0",
                       "name": "__normal_1x1__",
                       "type": "path",
                       "path": "__normal_1x1__"
@@ -12753,21 +12753,6 @@
         "depth": 0,
         "input_mode": "simple",
         "block_input_in_editor": false
-      },
-      {
-        "name": "fovcamera",
-        "display_name": "Display 1",
-        "camera_uuid": "000000000000012e",
-        "region": [
-          0.0,
-          0.0,
-          1.0,
-          1.0
-        ],
-        "depth": 0,
-        "input_mode": "simple",
-        "block_input_in_editor": false,
-        "pipeline_uuid": "00000000-0000-0000-0004-000000000001"
       }
     ],
     "scene_pipelines": [
@@ -12817,17 +12802,17 @@
   "editor": {
     "camera": {
       "position": [
-        -4.003704071044922,
-        -5.010627746582031,
-        5.30532169342041
+        -0.475008487701416,
+        -0.9920372366905212,
+        2.200249671936035
       ],
       "rotation": [
-        -0.3019180006084287,
-        0.23250814576719023,
-        -0.5641073058721077,
-        0.7325083143024551
+        -0.19178592860627014,
+        0.047817599697919794,
+        -0.23714905471068126,
+        0.9511529638273701
       ],
-      "radius": 7.0,
+      "radius": 1.5,
       "editor_entities": {
         "camera": [
           {
@@ -12845,7 +12830,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 7.0,
+              "radius": 1.5,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12879,15 +12864,16 @@
         ]
       }
     },
-    "selected_entity": "000000000000012e",
+    "selected_entity": "000000000000000c",
     "expanded_entities": [
-      "0000000000000007",
-      "0000000000000077",
-      "0000000000000131",
       "00000000000000dd",
-      "000000000000012c",
+      "000000000000012d",
       "0000000000000130",
-      "000000000000012d"
+      "0000000000000077",
+      "0000000000000007",
+      "000000000000000a",
+      "000000000000012c",
+      "0000000000000131"
     ]
   },
   "resources": {

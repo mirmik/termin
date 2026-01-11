@@ -155,7 +155,7 @@ static bool py_drawable_has_phase(tc_component* c, const char* phase_mark) {
     return false;
 }
 
-static void py_drawable_draw_geometry(tc_component* c, void* render_context, const char* geometry_id) {
+static void py_drawable_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
     if (g_py_drawable_callbacks.draw_geometry && c->py_wrap) {
         g_py_drawable_callbacks.draw_geometry(c->py_wrap, render_context, geometry_id);
     }

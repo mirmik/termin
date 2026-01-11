@@ -138,7 +138,7 @@ public:
      * Draw geometry with current shader (Drawable interface).
      * Shader is already bound by the pass.
      */
-    void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") override;
+    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
 
     /**
      * Get material phases for given phase mark.

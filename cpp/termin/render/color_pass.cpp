@@ -2,6 +2,9 @@
 #include "tc_log.hpp"
 
 #include <cmath>
+#include <cstring>
+#include <algorithm>
+#include <numeric>
 
 namespace termin {
 
@@ -24,8 +27,18 @@ Mat44f get_model_matrix(const Entity& entity) {
 }
 
 // Get global position from Entity.
-Vec3 get_global_position(const Entity& entity) {
+inline Vec3 get_global_position(const Entity& entity) {
     return entity.transform().global_pose().lin;
+}
+
+// Convert float distance to uint32 for radix-friendly sorting.
+// Preserves order: smaller distance -> smaller uint value.
+inline uint32_t float_to_sortable_uint(float f) {
+    uint32_t bits;
+    std::memcpy(&bits, &f, sizeof(bits));
+    // If negative, flip all bits; if positive, flip sign bit only
+    uint32_t mask = -int32_t(bits >> 31) | 0x80000000;
+    return bits ^ mask;
 }
 
 } // anonymous namespace
@@ -64,11 +77,15 @@ std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
     };
 }
 
-std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
+void ColorPass::collect_draw_calls(
     const std::vector<Entity>& entities,
     const std::string& phase_mark
 ) {
-    std::vector<PhaseDrawCall> draw_calls;
+    // Clear but keep capacity
+    cached_draw_calls_.clear();
+
+    // Estimate capacity: ~2 draw calls per entity on average
+    cached_draw_calls_.reserve(entities.size() * 2);
 
     for (const Entity& ent : entities) {
         if (!ent.visible() || !ent.enabled()) {
@@ -102,7 +119,7 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
             auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
             for (const auto& gd : *geometry_draws) {
                 if (gd.phase) {
-                    draw_calls.push_back(PhaseDrawCall{
+                    cached_draw_calls_.push_back(PhaseDrawCall{
                         ent,
                         tc,
                         gd.phase,
@@ -113,14 +130,61 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
             }
         }
     }
+}
 
-    // Sort by priority
-    std::sort(draw_calls.begin(), draw_calls.end(),
-        [](const PhaseDrawCall& a, const PhaseDrawCall& b) {
-            return a.priority < b.priority;
+void ColorPass::compute_sort_keys(const Vec3& camera_position) {
+    const size_t n = cached_draw_calls_.size();
+    sort_keys_.resize(n);
+
+    // Determine sort direction from sort_mode
+    // sort_key format: [priority:32][distance:32]
+    // For near_to_far: lower distance = lower key
+    // For far_to_near: lower distance = higher key (invert distance bits)
+    bool invert_distance = (sort_mode == "far_to_near");
+
+    for (size_t i = 0; i < n; ++i) {
+        const PhaseDrawCall& dc = cached_draw_calls_[i];
+
+        // Priority in upper 32 bits
+        uint64_t priority_bits = static_cast<uint32_t>(dc.priority + 0x80000000); // offset to handle negative
+
+        // Distance in lower 32 bits
+        Vec3 pos = get_global_position(dc.entity);
+        double dx = pos.x - camera_position.x;
+        double dy = pos.y - camera_position.y;
+        double dz = pos.z - camera_position.z;
+        float dist = static_cast<float>(std::sqrt(dx*dx + dy*dy + dz*dz));
+
+        uint32_t dist_bits = float_to_sortable_uint(dist);
+        if (invert_distance) {
+            dist_bits = ~dist_bits;  // Invert for far-to-near
+        }
+
+        sort_keys_[i] = (priority_bits << 32) | dist_bits;
+    }
+}
+
+void ColorPass::sort_draw_calls() {
+    const size_t n = cached_draw_calls_.size();
+    if (n <= 1) return;
+
+    // Resize index array (reuses capacity)
+    sort_indices_.resize(n);
+    std::iota(sort_indices_.begin(), sort_indices_.end(), size_t(0));
+
+    // Sort indices by sort_keys
+    std::sort(sort_indices_.begin(), sort_indices_.end(),
+        [this](size_t a, size_t b) {
+            return sort_keys_[a] < sort_keys_[b];
         });
 
-    return draw_calls;
+    // Reorder using temp buffer (reuses capacity)
+    sorted_draw_calls_.clear();
+    sorted_draw_calls_.reserve(n);
+    for (size_t i : sort_indices_) {
+        sorted_draw_calls_.push_back(std::move(cached_draw_calls_[i]));
+    }
+    std::swap(cached_draw_calls_, sorted_draw_calls_);
 }
 
 void ColorPass::execute_with_data(
@@ -165,40 +229,30 @@ void ColorPass::execute_with_data(
     context.graphics = graphics;
     context.phase = phase_mark;
 
-    // Collect draw calls
-    std::vector<PhaseDrawCall> draw_calls = collect_draw_calls(entities, phase_mark);
+    // Collect draw calls into cached vector
+    collect_draw_calls(entities, phase_mark);
 
-    // Sort by distance if requested
-    if (sort_mode == "far_to_near") {
-        // Back-to-front for transparent objects
-        std::sort(draw_calls.begin(), draw_calls.end(),
-            [&camera_position](const PhaseDrawCall& a, const PhaseDrawCall& b) {
-                Vec3 pos_a = get_global_position(a.entity);
-                Vec3 pos_b = get_global_position(b.entity);
-                double dist_a = (pos_a - camera_position).norm();
-                double dist_b = (pos_b - camera_position).norm();
-                return dist_a > dist_b;
-            });
-    } else if (sort_mode == "near_to_far") {
-        // Front-to-back for opaque objects (early-z optimization)
-        std::sort(draw_calls.begin(), draw_calls.end(),
-            [&camera_position](const PhaseDrawCall& a, const PhaseDrawCall& b) {
-                Vec3 pos_a = get_global_position(a.entity);
-                Vec3 pos_b = get_global_position(b.entity);
-                double dist_a = (pos_a - camera_position).norm();
-                double dist_b = (pos_b - camera_position).norm();
-                return dist_a < dist_b;
+    // Compute sort keys and sort (single pass with combined priority+distance key)
+    if (sort_mode != "none" && !cached_draw_calls_.empty()) {
+        compute_sort_keys(camera_position);
+        sort_draw_calls();
+    } else if (!cached_draw_calls_.empty()) {
+        // Sort by priority only
+        std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
+            [](const PhaseDrawCall& a, const PhaseDrawCall& b) {
+                return a.priority < b.priority;
             });
     }
 
-    // Clear entity names cache
+    // Clear entity names cache but keep capacity
     entity_names.clear();
+    entity_names.reserve(cached_draw_calls_.size());
 
     // Get debug symbol
     const std::string& debug_symbol = get_debug_internal_point();
 
     // Render each draw call
-    for (const auto& dc : draw_calls) {
+    for (const auto& dc : cached_draw_calls_) {
         // Cache entity name
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
@@ -217,7 +271,7 @@ void ColorPass::execute_with_data(
         // Get shader (allow drawable to override for skinning etc.)
         ShaderProgram* shader_to_use = dc.phase->shader.get();
         ShaderProgram* overridden = static_cast<ShaderProgram*>(
-            tc_component_override_shader(dc.component, phase_mark.c_str(), dc.geometry_id.c_str(), shader_to_use)
+            tc_component_override_shader(dc.component, phase_mark.c_str(), dc.geometry_id, shader_to_use)
         );
         if (overridden != nullptr) {
             shader_to_use = overridden;
@@ -260,7 +314,7 @@ void ColorPass::execute_with_data(
         }
 
         // Draw geometry via vtable
-        tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
+        tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
         graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
 
         // Check for debug blit (use std::string comparison to avoid pointer issues)

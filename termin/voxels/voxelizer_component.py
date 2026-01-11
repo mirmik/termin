@@ -312,12 +312,12 @@ class VoxelizerComponent(PythonComponent):
     # --- Drawable protocol ---
 
     # Константы для geometry_id
-    GEOMETRY_REGIONS = "regions"
-    GEOMETRY_SPARSE_BOUNDARY = "sparse_boundary"
-    GEOMETRY_INNER_CONTOUR = "inner_contour"
-    GEOMETRY_SIMPLIFIED_CONTOURS = "simplified_contours"
-    GEOMETRY_BRIDGED_CONTOURS = "bridged_contours"
-    GEOMETRY_TRIANGULATED = "triangulated"
+    GEOMETRY_REGIONS = 1
+    GEOMETRY_SPARSE_BOUNDARY = 2
+    GEOMETRY_INNER_CONTOUR = 3
+    GEOMETRY_SIMPLIFIED_CONTOURS = 4
+    GEOMETRY_BRIDGED_CONTOURS = 5
+    GEOMETRY_TRIANGULATED = 6
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -343,39 +343,39 @@ class VoxelizerComponent(PythonComponent):
             marks.update(p.phase_mark for p in mat.phases)
         return marks
 
-    def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
+    def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
         """Рисует отладочную геометрию."""
-        if geometry_id == "" or geometry_id == self.GEOMETRY_REGIONS:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_REGIONS:
             if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
                 if self._debug_region_voxels_gpu is None:
                     from termin._native.render import MeshGPU
                     self._debug_region_voxels_gpu = MeshGPU()
                 self._debug_region_voxels_gpu.draw(context, self._debug_region_voxels_mesh.mesh, self._debug_region_voxels_mesh.version)
-        if geometry_id == "" or geometry_id == self.GEOMETRY_SPARSE_BOUNDARY:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_SPARSE_BOUNDARY:
             if self.show_sparse_boundary and self._debug_sparse_boundary_mesh is not None and self._debug_sparse_boundary_mesh.is_valid:
                 if self._debug_sparse_boundary_gpu is None:
                     from termin._native.render import MeshGPU
                     self._debug_sparse_boundary_gpu = MeshGPU()
                 self._debug_sparse_boundary_gpu.draw(context, self._debug_sparse_boundary_mesh.mesh, self._debug_sparse_boundary_mesh.version)
-        if geometry_id == "" or geometry_id == self.GEOMETRY_INNER_CONTOUR:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_INNER_CONTOUR:
             if self.show_sparse_boundary and self._debug_inner_contour_mesh is not None and self._debug_inner_contour_mesh.is_valid:
                 if self._debug_inner_contour_gpu is None:
                     from termin._native.render import MeshGPU
                     self._debug_inner_contour_gpu = MeshGPU()
                 self._debug_inner_contour_gpu.draw(context, self._debug_inner_contour_mesh.mesh, self._debug_inner_contour_mesh.version)
-        if geometry_id == "" or geometry_id == self.GEOMETRY_SIMPLIFIED_CONTOURS:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_SIMPLIFIED_CONTOURS:
             if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
                 if self._debug_simplified_contours_gpu is None:
                     from termin._native.render import MeshGPU
                     self._debug_simplified_contours_gpu = MeshGPU()
                 self._debug_simplified_contours_gpu.draw(context, self._debug_simplified_contours_mesh.mesh, self._debug_simplified_contours_mesh.version)
-        if geometry_id == "" or geometry_id == self.GEOMETRY_BRIDGED_CONTOURS:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_BRIDGED_CONTOURS:
             if self.show_bridged_contours and self._debug_bridged_contours_mesh is not None and self._debug_bridged_contours_mesh.is_valid:
                 if self._debug_bridged_contours_gpu is None:
                     from termin._native.render import MeshGPU
                     self._debug_bridged_contours_gpu = MeshGPU()
                 self._debug_bridged_contours_gpu.draw(context, self._debug_bridged_contours_mesh.mesh, self._debug_bridged_contours_mesh.version)
-        if geometry_id == "" or geometry_id == self.GEOMETRY_TRIANGULATED:
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_TRIANGULATED:
             if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
                 if self._debug_triangulated_gpu is None:
                     from termin._native.render import MeshGPU

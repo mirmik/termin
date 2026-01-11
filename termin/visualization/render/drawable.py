@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 
 # Идентификатор геометрии по умолчанию
-DEFAULT_GEOMETRY_ID = ""
+DEFAULT_GEOMETRY_ID = 0
 
 
 @dataclass
@@ -56,10 +56,10 @@ class GeometryDrawCall:
     Атрибуты:
         phase: Фаза материала (шейдер, render state, uniforms).
         geometry_id: Идентификатор геометрии для draw_geometry.
-                     Пустая строка = основная геометрия.
+                     0 = основная геометрия.
     """
     phase: "MaterialPhase"
-    geometry_id: str = DEFAULT_GEOMETRY_ID
+    geometry_id: int = DEFAULT_GEOMETRY_ID
 
 
 @runtime_checkable
@@ -80,7 +80,7 @@ class Drawable(Protocol):
 
     phase_marks: Set[str]
 
-    def draw_geometry(self, context: "RenderContext", geometry_id: str = DEFAULT_GEOMETRY_ID) -> None:
+    def draw_geometry(self, context: "RenderContext", geometry_id: int = DEFAULT_GEOMETRY_ID) -> None:
         """
         Рисует геометрию.
 
@@ -91,7 +91,7 @@ class Drawable(Protocol):
             context: Контекст рендеринга.
                      context.model содержит матрицу модели (для VAO binding).
             geometry_id: Идентификатор геометрии для отрисовки.
-                         Пустая строка = основная/единственная геометрия.
+                         0 = основная/единственная геометрия.
         """
         ...
 

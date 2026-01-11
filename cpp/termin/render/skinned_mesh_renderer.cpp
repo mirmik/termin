@@ -64,7 +64,7 @@ void SkinnedMeshRenderer::upload_bone_matrices(ShaderProgram& shader) {
 
 ShaderProgram* SkinnedMeshRenderer::override_shader(
     const std::string& phase_mark,
-    const std::string& geometry_id,
+    int geometry_id,
     ShaderProgram* original_shader
 ) {
     if (_skeleton_controller == nullptr || original_shader == nullptr) {
@@ -92,7 +92,7 @@ ShaderProgram* SkinnedMeshRenderer::override_shader(
     return original_shader;
 }
 
-void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
+void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     if (!mesh.is_valid()) {
         return;
     }

@@ -190,6 +190,9 @@ class EditorSceneAttachment:
             if self._camera_manager is not None and self._camera_manager.camera is not None:
                 self._camera_manager.camera.remove_viewport(self._viewport)
 
+            # Make GL context current before destroying GPU resources
+            self._display.surface.make_current()
+
             # Destroy pipeline
             if self._pipeline is not None:
                 self._pipeline.destroy()

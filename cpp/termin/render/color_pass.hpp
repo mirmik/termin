@@ -121,11 +121,29 @@ public:
     }
 
 private:
-    // Collect draw calls from entities.
-    std::vector<PhaseDrawCall> collect_draw_calls(
+    // Cached draw calls vector (reused between frames to avoid allocations)
+    std::vector<PhaseDrawCall> cached_draw_calls_;
+
+    // Sort keys for distance sorting (parallel array to cached_draw_calls_)
+    std::vector<uint64_t> sort_keys_;
+
+    // Indices for sorting (reused between frames)
+    std::vector<size_t> sort_indices_;
+
+    // Temp buffer for sorted draw calls
+    std::vector<PhaseDrawCall> sorted_draw_calls_;
+
+    // Collect draw calls from entities into cached_draw_calls_.
+    void collect_draw_calls(
         const std::vector<Entity>& entities,
         const std::string& phase_mark
     );
+
+    // Compute sort keys for all draw calls (priority + distance)
+    void compute_sort_keys(const Vec3& camera_position);
+
+    // Sort draw calls by sort_keys_
+    void sort_draw_calls();
 
     /**
      * Call debugger blit if debug point matches entity name.

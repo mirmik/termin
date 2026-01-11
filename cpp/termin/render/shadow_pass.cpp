@@ -302,7 +302,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
                 // Allow drawable to override shader (for skinning injection)
                 ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-                    tc_component_override_shader(dc.component, "shadow", dc.geometry_id.c_str(), shadow_shader_program)
+                    tc_component_override_shader(dc.component, "shadow", dc.geometry_id, shadow_shader_program)
                 );
                 if (shader_to_use == nullptr) {
                     shader_to_use = shadow_shader_program;
@@ -321,7 +321,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
                 context.current_shader = shader_to_use;
 
-                tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
+                tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
             }
 
             // Add result with cascade info

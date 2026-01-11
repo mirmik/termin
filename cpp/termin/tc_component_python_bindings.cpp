@@ -202,7 +202,7 @@ static bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
     return result;
 }
 
-static void py_drawable_cb_draw_geometry(void* py_self, void* render_context, const char* geometry_id) {
+static void py_drawable_cb_draw_geometry(void* py_self, void* render_context, int geometry_id) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
@@ -211,8 +211,7 @@ static void py_drawable_cb_draw_geometry(void* py_self, void* render_context, co
             RenderContext* ctx = static_cast<RenderContext*>(render_context);
             nb::object py_ctx = nb::cast(ctx, nb::rv_policy::reference);
 
-            std::string gid = geometry_id ? geometry_id : "";
-            self.attr("draw_geometry")(py_ctx, gid);
+            self.attr("draw_geometry")(py_ctx, geometry_id);
         }
     } catch (const std::exception& e) {
         tc::Log::warn(e, "Drawable::draw_geometry");
@@ -248,7 +247,7 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
                     // Get geometry_id
                     nb::object gid_obj = item.attr("geometry_id");
                     if (!gid_obj.is_none()) {
-                        dc.geometry_id = nb::cast<std::string>(gid_obj);
+                        dc.geometry_id = nb::cast<int>(gid_obj);
                     }
                     cached.push_back(dc);
                 }
