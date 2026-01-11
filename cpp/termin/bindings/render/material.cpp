@@ -277,6 +277,13 @@ void bind_material(nb::module_& m) {
             self.apply(m_mat, v_mat, p_mat, graphics, context_key);
         }, nb::arg("model"), nb::arg("view"), nb::arg("projection"),
            nb::arg("graphics"), nb::arg("context_key") = 0)
+        // Mat44 overload (column-major, no conversion needed)
+        .def("apply", [](MaterialPhase& self,
+                         const Mat44& model, const Mat44& view, const Mat44& proj,
+                         GraphicsBackend* graphics, int64_t context_key) {
+            self.apply(model.to_float(), view.to_float(), proj.to_float(), graphics, context_key);
+        }, nb::arg("model"), nb::arg("view"), nb::arg("projection"),
+           nb::arg("graphics"), nb::arg("context_key") = 0)
         .def("apply_state", &MaterialPhase::apply_state)
         .def("copy", &MaterialPhase::copy)
         // serialize - serialize MaterialPhase to dict
@@ -886,6 +893,13 @@ void bind_material(nb::module_& m) {
                 }
             }
             self.apply(m_mat, v_mat, p_mat, graphics, context_key);
+        }, nb::arg("model"), nb::arg("view"), nb::arg("projection"),
+           nb::arg("graphics"), nb::arg("context_key") = 0)
+        // Mat44 overload (column-major, no conversion needed)
+        .def("apply", [](Material& self,
+                         const Mat44& model, const Mat44& view, const Mat44& proj,
+                         GraphicsBackend* graphics, int64_t context_key) {
+            self.apply(model.to_float(), view.to_float(), proj.to_float(), graphics, context_key);
         }, nb::arg("model"), nb::arg("view"), nb::arg("projection"),
            nb::arg("graphics"), nb::arg("context_key") = 0)
         .def("copy", &Material::copy)

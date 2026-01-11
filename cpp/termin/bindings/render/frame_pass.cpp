@@ -114,26 +114,41 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
             if (kwargs.contains("view")) {
-                nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(kwargs["view"]);
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        self->view.data[col * 4 + row] = arr(row, col);
+                nb::object v = nb::borrow<nb::object>(kwargs["view"]);
+                if (nb::isinstance<Mat44>(v)) {
+                    self->view = nb::cast<Mat44>(v).to_float();
+                } else {
+                    nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(v);
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            self->view.data[col * 4 + row] = arr(row, col);
+                        }
                     }
                 }
             }
             if (kwargs.contains("projection")) {
-                nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(kwargs["projection"]);
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        self->projection.data[col * 4 + row] = arr(row, col);
+                nb::object p = nb::borrow<nb::object>(kwargs["projection"]);
+                if (nb::isinstance<Mat44>(p)) {
+                    self->projection = nb::cast<Mat44>(p).to_float();
+                } else {
+                    nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(p);
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            self->projection.data[col * 4 + row] = arr(row, col);
+                        }
                     }
                 }
             }
             if (kwargs.contains("model")) {
-                nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(kwargs["model"]);
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        self->model.data[col * 4 + row] = arr(row, col);
+                nb::object m = nb::borrow<nb::object>(kwargs["model"]);
+                if (nb::isinstance<Mat44>(m)) {
+                    self->model = nb::cast<Mat44>(m).to_float();
+                } else {
+                    nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(m);
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            self->model.data[col * 4 + row] = arr(row, col);
+                        }
                     }
                 }
             }
@@ -157,60 +172,54 @@ void bind_frame_pass(nb::module_& m) {
             nb::rv_policy::reference)
         // view matrix
         .def_prop_rw("view",
-            [](const RenderContext& self) {
-                float* data = new float[16];
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        data[row * 4 + col] = self.view.data[col * 4 + row];
-                    }
-                }
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
-            },
-            [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        self.view.data[col * 4 + row] = arr(row, col);
+            [](const RenderContext& self) { return self.view; },
+            [](RenderContext& self, nb::object v) {
+                if (nb::isinstance<Mat44>(v)) {
+                    self.view = nb::cast<Mat44>(v).to_float();
+                } else if (nb::isinstance<Mat44f>(v)) {
+                    self.view = nb::cast<Mat44f>(v);
+                } else {
+                    nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(v);
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            self.view.data[col * 4 + row] = arr(row, col);
+                        }
                     }
                 }
             }
         )
         // projection matrix
         .def_prop_rw("projection",
-            [](const RenderContext& self) {
-                float* data = new float[16];
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        data[row * 4 + col] = self.projection.data[col * 4 + row];
-                    }
-                }
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
-            },
-            [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        self.projection.data[col * 4 + row] = arr(row, col);
+            [](const RenderContext& self) { return self.projection; },
+            [](RenderContext& self, nb::object p) {
+                if (nb::isinstance<Mat44>(p)) {
+                    self.projection = nb::cast<Mat44>(p).to_float();
+                } else if (nb::isinstance<Mat44f>(p)) {
+                    self.projection = nb::cast<Mat44f>(p);
+                } else {
+                    nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(p);
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            self.projection.data[col * 4 + row] = arr(row, col);
+                        }
                     }
                 }
             }
         )
         // model matrix
         .def_prop_rw("model",
-            [](const RenderContext& self) {
-                float* data = new float[16];
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        data[row * 4 + col] = self.model.data[col * 4 + row];
-                    }
-                }
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
-                return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
-            },
-            [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        self.model.data[col * 4 + row] = arr(row, col);
+            [](const RenderContext& self) { return self.model; },
+            [](RenderContext& self, nb::object m) {
+                if (nb::isinstance<Mat44>(m)) {
+                    self.model = nb::cast<Mat44>(m).to_float();
+                } else if (nb::isinstance<Mat44f>(m)) {
+                    self.model = nb::cast<Mat44f>(m);
+                } else {
+                    nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(m);
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            self.model.data[col * 4 + row] = arr(row, col);
+                        }
                     }
                 }
             }

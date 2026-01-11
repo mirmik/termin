@@ -142,8 +142,6 @@ class TimeModifierController(PythonComponent):
 
     def _before_draw(self, shader: "ShaderProgram") -> None:
         """Callback to set uniforms for the post-effect shader."""
-        import numpy as np
-
         # Set time modifier
         if self._chronosphere_controller is not None:
             time_mult = self._chronosphere_controller.chronosphere.time_multiplier
@@ -157,11 +155,9 @@ class TimeModifierController(PythonComponent):
             # Compute inverse view and projection matrices
             view = self._camera.view_matrix()
             proj = self._camera.projection_matrix()
-            inv_view = np.linalg.inv(view).astype(np.float32)
-            inv_proj = np.linalg.inv(proj).astype(np.float32)
 
-            shader.set_uniform_matrix4("u_inv_view", inv_view, True)
-            shader.set_uniform_matrix4("u_inv_proj", inv_proj, True)
+            shader.set_uniform_matrix4("u_inv_view", view.inverse(), True)
+            shader.set_uniform_matrix4("u_inv_proj", proj.inverse(), True)
 
             shader.set_uniform_float("u_grid_scale", 1.0)
             shader.set_uniform_float("u_grid_line_width", 0.03)

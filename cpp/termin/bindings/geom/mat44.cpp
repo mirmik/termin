@@ -86,6 +86,59 @@ void bind_mat44(nb::module_& m) {
         })
         .def("__repr__", [](const Mat44& m) {
             return "<Mat44>";
+        })
+        .def("to_float", &Mat44::to_float);
+
+    // Mat44f (float version)
+    nb::class_<Mat44f>(m, "Mat44f")
+        .def(nb::init<>())
+        .def("__call__", [](const Mat44f& m, int col, int row) { return m(col, row); })
+        .def("__getitem__", [](const Mat44f& m, std::pair<int, int> idx) {
+            return m(idx.first, idx.second);
+        })
+        .def("__setitem__", [](Mat44f& m, std::pair<int, int> idx, float val) {
+            m(idx.first, idx.second) = val;
+        })
+        .def(nb::self * nb::self)
+        .def("__matmul__", [](const Mat44f& a, const Mat44f& b) { return a * b; })
+        .def("__matmul__", [](const Mat44f& m, const Vec3& v) { return m.transform_point(v); })
+        .def("transform_point", &Mat44f::transform_point)
+        .def("transform_direction", &Mat44f::transform_direction)
+        .def("transposed", &Mat44f::transposed)
+        .def("inverse", &Mat44f::inverse)
+        .def("get_translation", &Mat44f::get_translation)
+        .def("get_scale", &Mat44f::get_scale)
+        .def("with_translation", nb::overload_cast<const Vec3&>(&Mat44f::with_translation, nb::const_))
+        .def("with_translation", nb::overload_cast<float, float, float>(&Mat44f::with_translation, nb::const_))
+        .def_static("identity", &Mat44f::identity)
+        .def_static("zero", &Mat44f::zero)
+        .def_static("translation", nb::overload_cast<const Vec3&>(&Mat44f::translation))
+        .def_static("translation", nb::overload_cast<float, float, float>(&Mat44f::translation))
+        .def_static("scale", nb::overload_cast<const Vec3&>(&Mat44f::scale))
+        .def_static("scale", nb::overload_cast<float>(&Mat44f::scale))
+        .def_static("rotation", &Mat44f::rotation)
+        .def_static("rotation_axis_angle", &Mat44f::rotation_axis_angle)
+        .def_static("perspective", &Mat44f::perspective,
+            nb::arg("fov_y"), nb::arg("aspect"), nb::arg("near"), nb::arg("far"))
+        .def_static("orthographic", &Mat44f::orthographic,
+            nb::arg("left"), nb::arg("right"), nb::arg("bottom"), nb::arg("top"),
+            nb::arg("near"), nb::arg("far"))
+        .def_static("look_at", &Mat44f::look_at,
+            nb::arg("eye"), nb::arg("target"), nb::arg("up") = Vec3::unit_z())
+        .def_static("compose", &Mat44f::compose,
+            nb::arg("translation"), nb::arg("rotation"), nb::arg("scale"))
+        .def("to_numpy", [](const Mat44f& mat) {
+            float* data = new float[16];
+            // Column-major to row-major for numpy
+            for (int row = 0; row < 4; ++row)
+                for (int col = 0; col < 4; ++col)
+                    data[row * 4 + col] = mat(col, row);
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, 2, shape, owner);
+        })
+        .def("__repr__", [](const Mat44f& m) {
+            return "<Mat44f>";
         });
 }
 
