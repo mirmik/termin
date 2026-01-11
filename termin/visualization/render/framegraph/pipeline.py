@@ -119,3 +119,18 @@ class RenderPipeline:
             List of passes matching the type.
         """
         return [p for p in self.passes if isinstance(p, pass_type)]
+
+    def get_pass_by_name(self, name: str) -> "FramePass | None":
+        """
+        Find a pass by its name.
+
+        Args:
+            name: Name of the pass to find.
+
+        Returns:
+            FramePass with the specified name, or None if not found.
+        """
+        for render_pass in self.passes:
+            if render_pass.pass_name == name:
+                return render_pass
+        return None

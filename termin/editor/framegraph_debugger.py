@@ -218,6 +218,10 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._vbo: Optional[int] = None
         self._initialized = False
         self._channel_mode: int = 0  # 0=RGB, 1=R, 2=G, 3=B, 4=A
+        self._highlight_hdr: bool = False  # Highlight HDR pixels (>1.0)
+
+        # HDR statistics (updated on render)
+        self._hdr_stats: dict = {}
 
         # Captured depth для режима "внутри пасса" (передаётся через callback)
         self._captured_depth: Optional[np.ndarray] = None
@@ -285,21 +289,35 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
             in vec2 v_uv;
             uniform sampler2D u_tex;
             uniform int u_channel;  // 0=RGB, 1=R, 2=G, 3=B, 4=A
+            uniform int u_highlight_hdr;  // 1=highlight pixels > 1.0
             out vec4 FragColor;
             void main()
             {
                 vec4 c = texture(u_tex, v_uv);
+                vec3 result;
+
                 if (u_channel == 1) {
-                    FragColor = vec4(c.r, c.r, c.r, 1.0);
+                    result = vec3(c.r);
                 } else if (u_channel == 2) {
-                    FragColor = vec4(c.g, c.g, c.g, 1.0);
+                    result = vec3(c.g);
                 } else if (u_channel == 3) {
-                    FragColor = vec4(c.b, c.b, c.b, 1.0);
+                    result = vec3(c.b);
                 } else if (u_channel == 4) {
-                    FragColor = vec4(c.a, c.a, c.a, 1.0);
+                    result = vec3(c.a);
                 } else {
-                    FragColor = vec4(c.rgb, 1.0);
+                    result = c.rgb;
                 }
+
+                // HDR highlight: show pixels > 1.0 with magenta overlay
+                if (u_highlight_hdr == 1) {
+                    float maxVal = max(max(c.r, c.g), c.b);
+                    if (maxVal > 1.0) {
+                        float intensity = clamp((maxVal - 1.0) / 2.0, 0.0, 1.0);
+                        result = mix(result, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
+                    }
+                }
+
+                FragColor = vec4(result, 1.0);
             }
             """
             self._shader = ShaderProgram(vert_src, frag_src)
@@ -450,6 +468,26 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._channel_mode = mode
         self.render()
 
+    def set_highlight_hdr(self, enabled: bool) -> None:
+        """
+        Включает/выключает подсветку HDR пикселей.
+
+        Args:
+            enabled: True для подсветки пикселей > 1.0
+        """
+        self._highlight_hdr = enabled
+        self.render()
+
+    def get_hdr_stats(self) -> dict:
+        """
+        Возвращает последние вычисленные HDR статистики.
+
+        Returns:
+            dict с ключами: min_r, max_r, min_g, max_g, min_b, max_b,
+                           hdr_pixel_count, total_pixels, hdr_percent
+        """
+        return self._hdr_stats
+
     def request_depth_update(self) -> None:
         """Запросить обновление depth buffer на следующем рендере."""
         self._depth_update_requested = True
@@ -534,6 +572,85 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         qimage = qimage.copy()
         self.depthImageUpdated.emit(qimage)
 
+    def compute_hdr_stats(self) -> dict:
+        """
+        Вычисляет HDR статистику для текущей текстуры.
+
+        Читает пиксели из FBO и вычисляет:
+        - min/max/avg для каждого канала RGB
+        - количество и процент HDR пикселей (>1.0)
+
+        Returns:
+            dict со статистикой или пустой dict при ошибке
+        """
+        resource = self._current_resource()
+        if resource is None:
+            return {}
+
+        from termin.visualization.render.framegraph.resource import (
+            SingleFBO,
+            ShadowMapArrayResource,
+        )
+        from termin.graphics import FramebufferHandle
+
+        fbo = None
+        if isinstance(resource, ShadowMapArrayResource):
+            if len(resource) > 0:
+                index = self._handler_context.get('shadow_map_index', 0)
+                index = min(index, len(resource) - 1)
+                entry = resource[index]
+                fbo = entry.fbo
+        elif isinstance(resource, SingleFBO):
+            fbo = resource._fbo
+        elif isinstance(resource, FramebufferHandle):
+            fbo = resource
+
+        if fbo is None:
+            return {}
+
+        # Read color buffer from FBO as float
+        pixels = self._graphics.read_color_buffer_float(fbo)
+        if pixels is None:
+            return {}
+
+        # pixels shape: (height, width, 4) for RGBA
+        if len(pixels.shape) != 3 or pixels.shape[2] < 3:
+            return {}
+
+        r = pixels[:, :, 0]
+        g = pixels[:, :, 1]
+        b = pixels[:, :, 2]
+
+        total_pixels = r.size
+
+        # Compute stats
+        stats = {
+            "min_r": float(np.min(r)),
+            "max_r": float(np.max(r)),
+            "avg_r": float(np.mean(r)),
+            "min_g": float(np.min(g)),
+            "max_g": float(np.max(g)),
+            "avg_g": float(np.mean(g)),
+            "min_b": float(np.min(b)),
+            "max_b": float(np.max(b)),
+            "avg_b": float(np.mean(b)),
+            "total_pixels": total_pixels,
+        }
+
+        # Count HDR pixels (any channel > 1.0)
+        max_rgb = np.maximum(np.maximum(r, g), b)
+        hdr_mask = max_rgb > 1.0
+        hdr_count = int(np.sum(hdr_mask))
+
+        stats["hdr_pixel_count"] = hdr_count
+        stats["hdr_percent"] = (hdr_count / total_pixels * 100.0) if total_pixels > 0 else 0.0
+
+        # Max value overall
+        stats["max_value"] = float(np.max(max_rgb))
+
+        self._hdr_stats = stats
+        return stats
+
     def render(self) -> None:
         """Рендерит текстуру в SDL окно."""
         from sdl2 import video as sdl_video
@@ -569,6 +686,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         shader.set_uniform_int("u_channel", self._channel_mode)
+        shader.set_uniform_int("u_highlight_hdr", 1 if self._highlight_hdr else 0)
 
         tex.bind(0)
 
@@ -717,6 +835,21 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         viewport_row.addWidget(self._viewport_combo, 1)
         settings_layout.addLayout(viewport_row)
 
+        # Render stats status line
+        render_stats_row = QtWidgets.QHBoxLayout()
+        self._render_stats_label = QtWidgets.QLabel()
+        self._render_stats_label.setStyleSheet(
+            "QLabel { background-color: #1a1a2e; padding: 3px 6px; border-radius: 3px; "
+            "font-family: monospace; font-size: 10px; color: #b8b8b8; }"
+        )
+        render_stats_row.addWidget(self._render_stats_label, 1)
+        self._refresh_stats_btn = QtWidgets.QPushButton("↻")
+        self._refresh_stats_btn.setFixedWidth(24)
+        self._refresh_stats_btn.setToolTip("Refresh render stats")
+        self._refresh_stats_btn.clicked.connect(self._on_refresh_render_stats_clicked)
+        render_stats_row.addWidget(self._refresh_stats_btn)
+        settings_layout.addLayout(render_stats_row)
+
         # Группа выбора режима
         mode_group = QtWidgets.QGroupBox("Режим")
         mode_layout = QtWidgets.QHBoxLayout(mode_group)
@@ -747,6 +880,27 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             "QLabel { color: #8be9fd; font-weight: bold; }"
         )
         between_layout.addWidget(self._writer_pass_label)
+
+        # HDR Analysis controls
+        hdr_row = QtWidgets.QHBoxLayout()
+        self._hdr_highlight_check = QtWidgets.QCheckBox("Highlight HDR")
+        self._hdr_highlight_check.toggled.connect(self._on_hdr_highlight_toggled)
+        hdr_row.addWidget(self._hdr_highlight_check)
+        self._hdr_analyze_btn = QtWidgets.QPushButton("Analyze")
+        self._hdr_analyze_btn.setFixedWidth(60)
+        self._hdr_analyze_btn.clicked.connect(self._on_analyze_hdr_clicked)
+        hdr_row.addWidget(self._hdr_analyze_btn)
+        hdr_row.addStretch()
+        between_layout.addLayout(hdr_row)
+
+        # HDR statistics label
+        self._hdr_stats_label = QtWidgets.QLabel()
+        self._hdr_stats_label.setStyleSheet(
+            "QLabel { background-color: #1a1a2e; padding: 4px; border-radius: 3px; "
+            "font-family: monospace; font-size: 10px; }"
+        )
+        self._hdr_stats_label.setWordWrap(True)
+        between_layout.addWidget(self._hdr_stats_label)
 
         settings_layout.addWidget(self._between_panel)
         self._between_panel.hide()  # Скрыт по умолчанию (режим "Фреймпассы")
@@ -893,6 +1047,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_resource_list()
         self._update_passes_list()
         self._sync_pause_state()
+        self._update_render_stats()
 
         # Синхронизируем выбранный ресурс с первым в списке
         self._sync_initial_resource()
@@ -975,6 +1130,39 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._viewport_combo.setCurrentIndex(0)
             self._current_viewport = self._viewports_list[0][0]
         self._viewport_combo.blockSignals(False)
+
+    def _update_render_stats(self) -> None:
+        """Update render statistics label from RenderingManager."""
+        from termin.visualization.render.manager import RenderingManager
+
+        rm = RenderingManager.instance()
+        stats = rm.get_render_stats()
+
+        scenes = stats["attached_scenes"]
+        pipelines = stats["scene_pipelines"]
+        unmanaged = stats["unmanaged_viewports"]
+
+        parts = []
+        parts.append(f"Scenes: {scenes}")
+        parts.append(f"Pipelines: {pipelines}")
+        parts.append(f"Unmanaged: {unmanaged}")
+
+        # Add details if there's something to show
+        details = []
+        if stats["scene_names"]:
+            details.append(f"[{', '.join(stats['scene_names'])}]")
+        if stats["pipeline_names"]:
+            details.append(f"({', '.join(stats['pipeline_names'])})")
+
+        text = " | ".join(parts)
+        if details:
+            text += "  " + " ".join(details)
+
+        self._render_stats_label.setText(text)
+
+    def _on_refresh_render_stats_clicked(self) -> None:
+        """Handle refresh button click for render stats."""
+        self._update_render_stats()
 
     # ============ Data access helpers ============
 
@@ -1245,8 +1433,44 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_writer_pass_label()
         self._update_pipeline_info()
 
+        # Сбрасываем HDR статистику при смене ресурса
+        self._hdr_stats_label.setText("")
+
         # Запрашиваем обновление depth для новой текстуры
         self._request_depth_refresh()
+
+    def _on_hdr_highlight_toggled(self, checked: bool) -> None:
+        """Обработчик переключения подсветки HDR."""
+        self._gl_widget.set_highlight_hdr(checked)
+        # Также передаём в FrameDebuggerPass для режима "между пассами"
+        if self._frame_debugger_pass is not None:
+            self._frame_debugger_pass.set_highlight_hdr(checked)
+
+    def _on_analyze_hdr_clicked(self) -> None:
+        """Обработчик кнопки анализа HDR."""
+        stats = self._gl_widget.compute_hdr_stats()
+        if not stats:
+            self._hdr_stats_label.setText("Unable to read texture")
+            return
+
+        # Format statistics
+        lines = []
+        lines.append(f"<b>R:</b> {stats['min_r']:.3f} - {stats['max_r']:.3f} (avg: {stats['avg_r']:.3f})")
+        lines.append(f"<b>G:</b> {stats['min_g']:.3f} - {stats['max_g']:.3f} (avg: {stats['avg_g']:.3f})")
+        lines.append(f"<b>B:</b> {stats['min_b']:.3f} - {stats['max_b']:.3f} (avg: {stats['avg_b']:.3f})")
+        lines.append(f"<b>Max:</b> {stats['max_value']:.3f}")
+
+        hdr_percent = stats.get('hdr_percent', 0)
+        hdr_count = stats.get('hdr_pixel_count', 0)
+        total = stats.get('total_pixels', 0)
+
+        if hdr_percent > 0:
+            hdr_color = "#ff69b4"  # Pink for HDR
+            lines.append(f"<span style='color: {hdr_color};'><b>HDR pixels:</b> {hdr_count:,} ({hdr_percent:.2f}%)</span>")
+        else:
+            lines.append(f"<b>HDR pixels:</b> 0 (0%)")
+
+        self._hdr_stats_label.setText("<br>".join(lines))
 
     def _on_pass_selected(self, name: str) -> None:
         """Обработчик выбора пасса (режим «Внутри пасса»)."""
@@ -1341,6 +1565,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     def _on_channel_changed(self, index: int) -> None:
         """Обработчик выбора канала для отображения."""
         self._gl_widget.set_channel_mode(index)
+        # Также передаём в FrameDebuggerPass для режима "между пассами"
+        if self._frame_debugger_pass is not None:
+            self._frame_debugger_pass.set_channel_mode(index)
 
     def _request_depth_refresh(self) -> None:
         """Запрашивает обновление depth buffer и перерисовку."""

@@ -143,22 +143,21 @@ def resolve_resource_names(
             socket_names[socket] = name
             resource_types[name] = socket.socket_type
 
-    # Second pass: propagate names through connections (output -> input)
+    # Second pass: initial propagation to get _target input names
+    # (We need to know what FBO is connected to _target before we can override output)
     for conn in connections:
         if conn.start_socket is None or conn.end_socket is None:
             continue
-
         output_socket = conn.start_socket
         input_socket = conn.end_socket
-
         if output_socket in socket_names:
-            # Input socket gets the same name as connected output
             socket_names[input_socket] = socket_names[output_socket]
 
-    # Third pass: collect _target aliases (output_res -> FBO)
-    # These create aliases between the pass output and the FBO resource
+    # Third pass: handle _target connections
+    # When output_res_target is connected to an FBO, the output_res socket
+    # should use the FBO's name instead of the auto-generated name.
     for node in nodes:
-        # Build map of output socket names
+        # Build map of output sockets by name
         output_socket_map: Dict[str, "NodeSocket"] = {}
         for socket in node.output_sockets:
             output_socket_map[socket.name] = socket
@@ -178,13 +177,29 @@ def resolve_resource_names(
             if output_socket is None:
                 continue
 
-            # Create alias: output_res_name -> fbo_name
-            output_res_name = socket_names.get(output_socket)
+            # Get FBO name from the target connection
             fbo_name = socket_names[socket]
-            if output_res_name and fbo_name:
-                target_aliases[output_res_name] = fbo_name
 
-    # Fourth pass: assign default names to unconnected input sockets
+            # Store the old output name for the alias
+            old_output_name = socket_names.get(output_socket)
+            if old_output_name and fbo_name:
+                target_aliases[old_output_name] = fbo_name
+
+            # Update output socket to use the FBO name
+            # This makes the pass output to the connected FBO resource
+            socket_names[output_socket] = fbo_name
+
+    # Fourth pass: re-propagate names through connections
+    # Now that _target overrides are applied, downstream sockets get the correct names
+    for conn in connections:
+        if conn.start_socket is None or conn.end_socket is None:
+            continue
+        output_socket = conn.start_socket
+        input_socket = conn.end_socket
+        if output_socket in socket_names:
+            socket_names[input_socket] = socket_names[output_socket]
+
+    # Fifth pass: assign default names to unconnected input sockets
     for node in nodes:
         idx = node_to_index[node]
         for socket in node.input_sockets:

@@ -140,6 +140,14 @@ public:
      */
     virtual bool read_depth_buffer(FramebufferHandle* fbo, float* out_data) = 0;
 
+    /**
+     * Read entire color buffer as RGBA floats into external buffer.
+     * Buffer must be pre-allocated with size width * height * 4.
+     * Output is flipped vertically (top-left origin).
+     * Returns true on success.
+     */
+    virtual bool read_color_buffer_float(FramebufferHandle* fbo, float* out_data) = 0;
+
     // --- UI drawing (for immediate mode) ---
     virtual void draw_ui_vertices(int64_t context_key, const float* vertices, int vertex_count) = 0;
     virtual void draw_ui_textured_quad(int64_t context_key) = 0;

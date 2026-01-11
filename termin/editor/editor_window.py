@@ -2028,6 +2028,10 @@ class EditorWindow(QMainWindow):
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
         self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
 
+        # Detach editor scene from RenderingManager before attaching game scene
+        if self._rendering_controller is not None:
+            self._rendering_controller.detach_scene(editor_scene)
+
         self._on_game_mode_changed(True, game_scene, self._saved_tree_expanded_uuids)
 
     def _stop_game_mode(self) -> None:
@@ -2037,6 +2041,11 @@ class EditorWindow(QMainWindow):
 
         # Detach from game_scene (don't save state - we discard game changes)
         self._editor_attachment.detach(save_state=False)
+
+        # Detach game scene from RenderingManager before closing
+        game_scene = self.scene_manager.get_scene(self._game_scene_name)
+        if game_scene is not None and self._rendering_controller is not None:
+            self._rendering_controller.detach_scene(game_scene)
 
         # Закрываем game сцену (теперь is_game_mode станет False)
         self.scene_manager.close_scene(self._game_scene_name)

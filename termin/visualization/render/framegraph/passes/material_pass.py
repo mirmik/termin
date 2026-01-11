@@ -465,8 +465,8 @@ class MaterialPass(PostEffectPass):
         # Set standard uniforms
         shader.set_uniform_vec2("u_resolution", np.array([w, h], dtype=np.float32))
 
-        if scene is not None:
-            shader.set_uniform_float("u_time", getattr(scene, "time", 0.0))
+        # if scene is not None:
+        #     shader.set_uniform_float("u_time", getattr(scene, "time", 0.0))
 
         # Bind material textures (skip those already bound from framegraph)
         for tex_name, tex_handle in phase.textures.items():
@@ -484,7 +484,7 @@ class MaterialPass(PostEffectPass):
 
         # Call before_draw callback for custom uniform setup
         if self._before_draw is not None:
-            self._before_draw(phase, scene, camera)
+            self._before_draw(shader)
 
         # Draw
         self.draw_fullscreen_quad(graphics, context_key)

@@ -35,8 +35,8 @@
     },
     {
       "type": "ColorPass",
-      "x": -13.413487602624649,
-      "y": -334.52744412597775,
+      "x": -9.810186173525011,
+      "y": -344.4365230560018,
       "name": "Transparent",
       "params": {
         "phase_mark": "transparent",
@@ -107,8 +107,8 @@
     },
     {
       "type": "ResolvePass",
-      "x": 237.88007361946535,
-      "y": -292.6327749767346
+      "x": 239.44672641472607,
+      "y": -281.66620540990965
     },
     {
       "type": "FBO",
@@ -169,8 +169,8 @@
     },
     {
       "type": "MaterialPass",
-      "x": 495.92266343086953,
-      "y": -304.78623858676895,
+      "x": 478.8328950868024,
+      "y": -296.3008442786763,
       "node_type": "effect",
       "name": "TimeSpection",
       "params": {
@@ -349,12 +349,6 @@
       "to_socket": "output_res_target"
     },
     {
-      "from_node": 4,
-      "from_socket": "output_res",
-      "to_node": 8,
-      "to_socket": "input_res"
-    },
-    {
       "from_node": 9,
       "from_socket": "fbo",
       "to_node": 8,
@@ -364,12 +358,6 @@
       "from_node": 10,
       "from_socket": "fbo",
       "to_node": 11,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 12,
-      "from_socket": "output_res",
-      "to_node": 5,
       "to_socket": "input_res"
     },
     {
@@ -409,12 +397,6 @@
       "to_socket": "output_res_target"
     },
     {
-      "from_node": 8,
-      "from_socket": "output_res",
-      "to_node": 12,
-      "to_socket": "input_tex"
-    },
-    {
       "from_node": 15,
       "from_socket": "output_res",
       "to_node": 12,
@@ -425,6 +407,24 @@
       "from_socket": "output_res",
       "to_node": 12,
       "to_socket": "normal_texture"
+    },
+    {
+      "from_node": 4,
+      "from_socket": "output_res",
+      "to_node": 8,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 8,
+      "from_socket": "output_res",
+      "to_node": 12,
+      "to_socket": "input_tex"
+    },
+    {
+      "from_node": 12,
+      "from_socket": "output_res",
+      "to_node": 5,
+      "to_socket": "input_res"
     }
   ],
   "viewport_frames": [

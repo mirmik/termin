@@ -26,6 +26,64 @@ class FrameDebuggerPass(RenderFramePass):
     node_inputs = [("input_res", "fbo")]
     node_outputs = []  # Output is debug window
 
+    _shader = None
+
+    @staticmethod
+    def _get_shader():
+        """Возвращает шейдер с поддержкой HDR highlight и channel modes."""
+        if FrameDebuggerPass._shader is not None:
+            return FrameDebuggerPass._shader
+
+        from termin.visualization.render.shader import ShaderProgram
+
+        vert_src = """
+        #version 330 core
+        layout(location = 0) in vec2 a_pos;
+        layout(location = 1) in vec2 a_uv;
+        out vec2 v_uv;
+        void main() {
+            v_uv = a_uv;
+            gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+        """
+        frag_src = """
+        #version 330 core
+        in vec2 v_uv;
+        uniform sampler2D u_tex;
+        uniform int u_channel;  // 0=RGB, 1=R, 2=G, 3=B, 4=A
+        uniform int u_highlight_hdr;  // 1=highlight pixels > 1.0
+        out vec4 FragColor;
+        void main() {
+            vec4 c = texture(u_tex, v_uv);
+            vec3 result;
+
+            if (u_channel == 1) {
+                result = vec3(c.r);
+            } else if (u_channel == 2) {
+                result = vec3(c.g);
+            } else if (u_channel == 3) {
+                result = vec3(c.b);
+            } else if (u_channel == 4) {
+                result = vec3(c.a);
+            } else {
+                result = c.rgb;
+            }
+
+            // HDR highlight: show pixels > 1.0 with magenta overlay
+            if (u_highlight_hdr == 1) {
+                float maxVal = max(max(c.r, c.g), c.b);
+                if (maxVal > 1.0) {
+                    float intensity = clamp((maxVal - 1.0) / 2.0, 0.0, 1.0);
+                    result = mix(result, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
+                }
+            }
+
+            FragColor = vec4(result, 1.0);
+        }
+        """
+        FrameDebuggerPass._shader = ShaderProgram(vert_src, frag_src)
+        return FrameDebuggerPass._shader
+
     def __init__(
         self,
         get_source_res: Callable[[], str | None] | None = None,
@@ -47,6 +105,10 @@ class FrameDebuggerPass(RenderFramePass):
         self._resolve_fbo: "FramebufferHandle | None" = None
         self._resolve_fbo_size: tuple[int, int] = (0, 0)
 
+        # HDR highlight mode
+        self._highlight_hdr: bool = False
+        self._channel_mode: int = 0  # 0=RGB, 1=R, 2=G, 3=B, 4=A
+
     def compute_reads(self) -> Set[str]:
         if self._get_source_res is None:
             return set()
@@ -63,6 +125,14 @@ class FrameDebuggerPass(RenderFramePass):
     def request_depth_update(self) -> None:
         """Запросить обновление depth buffer на следующем кадре."""
         self._depth_update_requested = True
+
+    def set_highlight_hdr(self, enabled: bool) -> None:
+        """Включает/выключает подсветку HDR пикселей."""
+        self._highlight_hdr = enabled
+
+    def set_channel_mode(self, mode: int) -> None:
+        """Устанавливает режим отображения каналов (0=RGB, 1=R, 2=G, 3=B, 4=A)."""
+        self._channel_mode = mode
 
     def set_debugger_window(
         self,
@@ -121,8 +191,8 @@ class FrameDebuggerPass(RenderFramePass):
         ):
             return self._resolve_fbo
 
-        # Создаём новый FBO нужного размера
-        self._resolve_fbo = graphics.create_framebuffer(width, height, samples=1)
+        # Создаём новый FBO нужного размера с float форматом для сохранения HDR
+        self._resolve_fbo = graphics.create_framebuffer(width, height, samples=1, format="rgba16f")
         self._resolve_fbo_size = (width, height)
         return self._resolve_fbo
 
@@ -214,9 +284,6 @@ class FrameDebuggerPass(RenderFramePass):
         if src_fb is None:
             return
 
-        from termin.visualization.render.framegraph.passes.present import (
-            PresentToScreenPass,
-        )
         from sdl2 import video as sdl_video
 
         # Получаем FBO из ресурса
@@ -265,14 +332,19 @@ class FrameDebuggerPass(RenderFramePass):
             graphics.bind_framebuffer(None)
             graphics.set_viewport(0, 0, dst_w, dst_h)
 
+            # Clear для debug
+            graphics.clear_color(0.2, 0.0, 0.0, 1.0)
+
             graphics.set_depth_test(False)
             graphics.set_depth_mask(False)
 
-            # Рендерим fullscreen quad
-            shader = PresentToScreenPass._get_shader()
+            # Рендерим fullscreen quad с нашим шейдером
+            shader = FrameDebuggerPass._get_shader()
             shader.ensure_ready(graphics, 0)  # debugger has its own context
             shader.use()
             shader.set_uniform_int("u_tex", 0)
+            shader.set_uniform_int("u_channel", self._channel_mode)
+            shader.set_uniform_int("u_highlight_hdr", 1 if self._highlight_hdr else 0)
             tex.bind(0)
             graphics.draw_ui_textured_quad(0)
 

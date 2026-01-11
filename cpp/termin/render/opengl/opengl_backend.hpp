@@ -343,6 +343,69 @@ public:
         return true;
     }
 
+    bool read_color_buffer_float(FramebufferHandle* fbo, float* out_data) override {
+        if (fbo == nullptr || out_data == nullptr) return false;
+
+        int width = fbo->get_width();
+        int height = fbo->get_height();
+        if (width <= 0 || height <= 0) return false;
+
+        GLuint read_fbo = fbo->get_fbo_id();
+        GLuint temp_fbo = 0;
+        GLuint temp_tex = 0;
+
+        // If MSAA, resolve to temporary non-MSAA FBO first
+        if (fbo->is_msaa()) {
+            // Create temporary texture
+            glGenTextures(1, &temp_tex);
+            glBindTexture(GL_TEXTURE_2D, temp_tex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+            // Create temporary FBO
+            glGenFramebuffers(1, &temp_fbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, temp_fbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temp_tex, 0);
+
+            // Blit from MSAA to non-MSAA (resolve)
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo->get_fbo_id());
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, temp_fbo);
+            glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+            read_fbo = temp_fbo;
+        }
+
+        // Bind the FBO to read from
+        glBindFramebuffer(GL_FRAMEBUFFER, read_fbo);
+
+        // Read into temporary buffer (OpenGL origin is bottom-left)
+        // RGBA = 4 floats per pixel
+        std::vector<float> temp(width * height * 4);
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, temp.data());
+
+        // Flip vertically to top-left origin
+        size_t row_size = width * 4 * sizeof(float);
+        for (int y = 0; y < height; ++y) {
+            int src_row = height - 1 - y;
+            std::memcpy(
+                out_data + y * width * 4,
+                temp.data() + src_row * width * 4,
+                row_size
+            );
+        }
+
+        // Cleanup temporary resources
+        if (temp_fbo != 0) {
+            glDeleteFramebuffers(1, &temp_fbo);
+        }
+        if (temp_tex != 0) {
+            glDeleteTextures(1, &temp_tex);
+        }
+
+        return true;
+    }
+
     // --- UI drawing ---
 
     void draw_ui_vertices(int64_t context_key, const float* vertices, int vertex_count) override {

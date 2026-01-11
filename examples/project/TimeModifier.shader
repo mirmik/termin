@@ -190,6 +190,9 @@ vec4 doit()
 }
 
 void main() {
+    // FragColor = vec4(u_time_modifier, , 0.0, 1.0); // DEBUG: visualize red channel only
+    // return;
+
     FragColor = doit();
 }
 @endstage

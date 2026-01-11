@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from termin._native import log
 from termin.visualization.core.python_component import PythonComponent
+from termin.visualization.render.manager import RenderingManager
 
 if TYPE_CHECKING:
     from .chronosphere_controller import ChronosphereController
@@ -37,17 +38,22 @@ class TimeModifierController(PythonComponent):
         if self._initialized:
             return
 
-        print("Starting TimeModifierController initialization...")
-
         self._find_camera()
         self._find_chronosphere_controller()
         self._find_time_effect()
+        self._find_time_effect_pass()
 
         if self._time_effect is not None:
             self._time_effect.set_before_draw(self._before_draw)
             log.info("[TimeModifierController] Connected to TimeModifier effect")
         else:
             log.warning("[TimeModifierController] TimeModifier effect not found; cannot connect")
+
+        if self._time_effect_pass is not None:
+            self._time_effect_pass.before_draw = self._before_draw
+            log.info("[TimeModifierController] Found MaterialPass for TimeModifier effect")
+        else:
+            log.warning("[TimeModifierController] MaterialPass for TimeModifier effect not found")
 
         self._initialized = True
 
@@ -115,6 +121,24 @@ class TimeModifierController(PythonComponent):
                     return
 
         log.warning("[TimeModifierController] TimeSpection effect not found in PostFX pass")
+
+    def _find_time_effect_pass(self) -> None:
+        rm = RenderingManager.instance()
+        if rm is None:
+            log.error("[TimeModifierController] No RenderingManager instance")
+            return
+        
+        pipeline = rm.get_scene_pipeline("TestScenePipeline")
+        if pipeline is None:
+            log.error("[TimeModifierController] No TestScenePipeline found")
+            return
+
+        render_pass = pipeline.get_pass_by_name("TimeSpection")
+        if render_pass is None:
+            log.warning("[TimeModifierController] No TimeSpection pass found in pipeline")
+            return
+
+        self._time_effect_pass = render_pass 
 
     def _before_draw(self, shader: "ShaderProgram") -> None:
         """Callback to set uniforms for the post-effect shader."""

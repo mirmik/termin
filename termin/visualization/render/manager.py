@@ -490,6 +490,42 @@ class RenderingManager:
                 return pipeline
         return None
 
+    def get_render_stats(self) -> dict:
+        """
+        Get render statistics for debugging.
+
+        Returns:
+            dict with keys:
+            - attached_scenes: number of attached scenes
+            - scene_pipelines: total number of compiled scene pipelines
+            - unmanaged_viewports: number of viewports not managed by scene pipelines
+            - scene_names: list of attached scene names
+            - pipeline_names: list of scene pipeline names
+        """
+        stats = {
+            "attached_scenes": len(self._attached_scenes),
+            "scene_pipelines": 0,
+            "unmanaged_viewports": 0,
+            "scene_names": [],
+            "pipeline_names": [],
+        }
+
+        # Count scene pipelines
+        for scene in self._attached_scenes:
+            stats["scene_names"].append(scene.name or "<unnamed>")
+            for pipeline_name in scene.compiled_pipelines.keys():
+                stats["scene_pipelines"] += 1
+                stats["pipeline_names"].append(pipeline_name)
+
+        # Count unmanaged viewports across all displays
+        for display in self._displays:
+            for viewport in display.viewports:
+                if not viewport.managed_by_scene_pipeline:
+                    if viewport.pipeline is not None and viewport.scene is not None:
+                        stats["unmanaged_viewports"] += 1
+
+        return stats
+
     # --- Viewport state management ---
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
@@ -566,6 +602,7 @@ class RenderingManager:
             self._render_engine = RenderEngine(self._graphics)
 
         from termin.visualization.render.view import RenderView
+        from termin.visualization.render.engine import ViewportContext
 
         surface = display.surface
         if surface is None:
@@ -578,30 +615,63 @@ class RenderingManager:
             if vp.name:
                 viewport_by_name[vp.name] = vp
 
-        views_and_states = []
+        width, height = surface.get_size()
         sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
+        rendered_something = False
 
         # 1. Execute scene pipelines (renders managed viewports)
         for scene in self._attached_scenes:
             for pipeline_name, pipeline in scene.compiled_pipelines.items():
-                for viewport_name in scene.get_pipeline_targets(pipeline_name):
+                target_viewports = scene.get_pipeline_targets(pipeline_name)
+
+                # Collect viewport contexts for this pipeline
+                viewport_contexts: Dict[str, ViewportContext] = {}
+                first_viewport = None
+
+                for viewport_name in target_viewports:
                     viewport = viewport_by_name.get(viewport_name)
                     if viewport is None:
                         continue
                     if viewport.scene is None or viewport.camera is None:
                         continue
 
-                    state = self.get_or_create_viewport_state(viewport)
-                    view = RenderView(
-                        scene=viewport.scene,
+                    if first_viewport is None:
+                        first_viewport = viewport
+
+                    # Compute pixel rect for viewport
+                    vx, vy, vw, vh = viewport.rect
+                    px = int(vx * width)
+                    py = int(vy * height)
+                    pw = max(1, int(vw * width))
+                    ph = max(1, int(vh * height))
+
+                    viewport_contexts[viewport_name] = ViewportContext(
+                        name=viewport_name,
                         camera=viewport.camera,
-                        rect=viewport.rect,
+                        rect=(px, py, pw, ph),
                         canvas=viewport.canvas,
-                        pipeline=pipeline,
                     )
-                    views_and_states.append((view, state))
+
+                if not viewport_contexts or first_viewport is None:
+                    continue
+
+                # Use first viewport's state for the scene pipeline
+                state = self.get_or_create_viewport_state(first_viewport)
+
+                self._render_engine.render_scene_pipeline(
+                    surface=surface,
+                    pipeline=pipeline,
+                    scene=scene,
+                    viewport_contexts=viewport_contexts,
+                    state=state,
+                    default_viewport=target_viewports[0] if target_viewports else "",
+                    present=False,
+                )
+                rendered_something = True
 
         # 2. Render unmanaged viewports (those without managed_by_scene_pipeline)
+        views_and_states = []
+        unmanaged_count = 0
         for viewport in sorted_viewports:
             # Skip managed viewports - already rendered by scene pipeline
             if viewport.managed_by_scene_pipeline:
@@ -610,6 +680,7 @@ class RenderingManager:
             if viewport.pipeline is None or viewport.scene is None:
                 continue
 
+            unmanaged_count += 1
             state = self.get_or_create_viewport_state(viewport)
             view = RenderView(
                 scene=viewport.scene,
@@ -620,13 +691,19 @@ class RenderingManager:
             )
             views_and_states.append((view, state))
 
-        # Render all views
+        # Render unmanaged viewports
         if views_and_states:
             self._render_engine.render_views(
                 surface=surface,
                 views=views_and_states,
-                present=present,
+                present=False,
             )
+            rendered_something = True
+
+        # Present if needed
+        if rendered_something:
+            if present:
+                surface.present()
         else:
             # No viewports - clear screen
             from OpenGL import GL as gl

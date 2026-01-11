@@ -161,6 +161,30 @@ void bind_graphics_backend(nb::module_& m) {
 
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
             return nb::ndarray<nb::numpy, float>(data, {static_cast<size_t>(height), static_cast<size_t>(width)}, owner);
+        })
+        // read_color_buffer_float - returns numpy array (H, W, 4) or None
+        // Supports both regular and MSAA FBOs (MSAA is resolved internally)
+        .def("read_color_buffer_float", [](GraphicsBackend& self, FramebufferHandle* fbo) -> nb::object {
+            if (fbo == nullptr) return nb::none();
+
+            int width = fbo->get_width();
+            int height = fbo->get_height();
+            if (width <= 0 || height <= 0) return nb::none();
+
+            // Allocate buffer and read (RGBA = 4 floats per pixel)
+            float* data = new float[width * height * 4];
+            bool success = self.read_color_buffer_float(fbo, data);
+            if (!success) {
+                delete[] data;
+                return nb::none();
+            }
+
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            return nb::ndarray<nb::numpy, float>(
+                data,
+                {static_cast<size_t>(height), static_cast<size_t>(width), 4},
+                owner
+            );
         });
 
     // --- OpenGLGraphicsBackend ---
