@@ -5,6 +5,7 @@
 #include "termin/render/opengl/opengl_mesh.hpp"
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
+#include "termin/geom/mat44.hpp"
 
 namespace termin {
 
@@ -41,6 +42,9 @@ void bind_graphics_backend(nb::module_& m) {
         .def("set_uniform_matrix4", [](ShaderHandle& self, const char* name, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> matrix, bool transpose) {
             self.set_uniform_matrix4(name, matrix.data(), transpose);
         }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
+        .def("set_uniform_matrix4", [](ShaderHandle& self, const char* name, const Mat44& m, bool transpose) {
+            self.set_uniform_matrix4(name, m.to_float().data, transpose);
+        }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = false)  // Mat44 is already column-major
         .def("set_uniform_matrix4_array", [](ShaderHandle& self, const char* name, nb::ndarray<nb::numpy, float> matrices, int count, bool transpose) {
             self.set_uniform_matrix4_array(name, matrices.data(), count, transpose);
         }, nb::arg("name"), nb::arg("matrices"), nb::arg("count"), nb::arg("transpose") = true);

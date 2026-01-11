@@ -143,7 +143,7 @@ void bind_shader(nb::module_& m) {
         }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
         .def("set_uniform_matrix4", [](ShaderProgram& self, const char* name, const Mat44& m, bool transpose) {
             self.set_uniform_matrix4(name, m, transpose);
-        }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
+        }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = false)  // Mat44 is already column-major
         .def("set_uniform_matrix4_array", [](ShaderProgram& self, const char* name, nb::ndarray<nb::numpy, float> matrices, int count, bool transpose) {
             self.set_uniform_matrix4_array(name, matrices.data(), count, transpose);
         }, nb::arg("name"), nb::arg("matrices"), nb::arg("count"), nb::arg("transpose") = true)

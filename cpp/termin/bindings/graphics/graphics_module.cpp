@@ -13,6 +13,7 @@
 #include "termin/render/types.hpp"
 #include "termin/render/opengl/opengl_backend.hpp"
 #include "termin/render/opengl/opengl_mesh.hpp"
+#include "termin/geom/mat44.hpp"
 
 namespace nb = nanobind;
 
@@ -212,6 +213,9 @@ void bind_gpu_handles(nb::module_& m) {
             }
             self.set_uniform_matrix4(name, const_cast<float*>(matrix.data()), transpose);
         }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
+        .def("set_uniform_matrix4", [](ShaderHandle& self, const char* name, const Mat44& m, bool transpose) {
+            self.set_uniform_matrix4(name, m.to_float().data, transpose);
+        }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = false)  // Mat44 is already column-major
         .def("set_uniform_matrix4_array", [](ShaderHandle& self, const char* name, nb::ndarray<float, nb::c_contig, nb::device::cpu> matrices, int count, bool transpose) {
             self.set_uniform_matrix4_array(name, const_cast<float*>(matrices.data()), count, transpose);
         }, nb::arg("name"), nb::arg("matrices"), nb::arg("count"), nb::arg("transpose") = true);

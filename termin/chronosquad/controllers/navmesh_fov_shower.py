@@ -60,31 +60,28 @@ class NavMeshFovShowerComponent(PythonComponent):
 
     def start(self) -> None:
         self._fov_camera = self._find_camera_component()
-        print("FOV Camera Component:", self._fov_camera)
 
     def _find_camera_component(self):
         from termin.visualization.core.camera import CameraComponent
 
         fov_camera_entity = self._scene.find_entity_by_name("FOVCamera")
         if fov_camera_entity is None:
-            print("FOVCamera entity not found in scene.")
             return None
 
-        print(fov_camera_entity.components)
-
         fov_camera_component = fov_camera_entity.get_component_by_type("CameraComponent")
-        if fov_camera_component is None:
-            print("CameraComponent not found on FOVCamera entity.")
-            return None        
-
         return fov_camera_component
 
     def update(self, delta_time: float) -> None:
         """Update component (no-op)."""
+        if self._fov_camera is None:
+            return
+
         view_matrix = self._fov_camera.get_view_matrix()
         projection_matrix = self._fov_camera.get_projection_matrix()
 
         material = self.material.get()
+        if material is None:
+            return
 
         material.set_param("u_fov_view", view_matrix)
         material.set_param("u_fov_projection", projection_matrix)

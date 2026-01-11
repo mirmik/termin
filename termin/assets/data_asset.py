@@ -183,7 +183,7 @@ class DataAsset(Asset, Generic[T]):
                     self.save_spec_file()
                 return True
         except Exception:
-            log.error(f"[{self.__class__.__name__}] Failed to parse content", exc_info=True)
+            log.error(f"[{self.__class__.__name__}] Failed to parse content: " + str(self.name), exc_info=True)
         return False
 
     @abstractmethod
