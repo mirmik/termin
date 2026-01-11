@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include <nanobind/stl/set.h>
+#include <nanobind/stl/unordered_map.h>
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
@@ -14,6 +15,8 @@
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
+#include "tc_scene.h"
+#include <cstdint>
 
 namespace termin {
 
@@ -92,6 +95,9 @@ void bind_frame_pass(nb::module_& m) {
             if (kwargs.contains("extra_uniforms")) {
                 self->extra_uniforms = nb::borrow<nb::object>(kwargs["extra_uniforms"]);
             }
+            if (kwargs.contains("layer_mask")) {
+                self->layer_mask = nb::cast<uint64_t>(kwargs["layer_mask"]);
+            }
             if (kwargs.contains("camera")) {
                 self->camera = nb::borrow<nb::object>(kwargs["camera"]);
             }
@@ -137,6 +143,7 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("scene", &RenderContext::scene)
         .def_rw("shadow_data", &RenderContext::shadow_data)
         .def_rw("extra_uniforms", &RenderContext::extra_uniforms)
+        .def_rw("layer_mask", &RenderContext::layer_mask)
         .def_rw("camera", &RenderContext::camera)
         // graphics
         .def_prop_rw("graphics",
@@ -269,7 +276,7 @@ void bind_frame_pass(nb::module_& m) {
             nb::dict reads_fbos_py,
             nb::dict writes_fbos_py,
             nb::tuple rect_py,
-            nb::list entities_py,
+            nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
             nb::ndarray<nb::numpy, double, nb::shape<3>> camera_position_py,
@@ -278,7 +285,8 @@ void bind_frame_pass(nb::module_& m) {
             nb::ndarray<nb::numpy, double, nb::shape<3>> ambient_color_py,
             float ambient_intensity,
             nb::object shadow_array_py,
-            nb::object shadow_settings_py
+            nb::object shadow_settings_py,
+            uint64_t layer_mask
         ) {
             // Convert FBO maps (skip non-FBO resources like ShadowMapArrayResource)
             FBOMap reads_fbos, writes_fbos;
@@ -312,10 +320,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Convert entities
-            std::vector<Entity> entities;
-            for (auto item : entities_py) {
-                entities.push_back(nb::cast<Entity>(item));
+            // Get tc_scene* from Python Scene object
+            tc_scene* scene = nullptr;
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
+                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
+                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                }
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -384,7 +396,7 @@ void bind_frame_pass(nb::module_& m) {
                 reads_fbos,
                 writes_fbos,
                 rect,
-                entities,
+                scene,
                 view,
                 projection,
                 camera_position,
@@ -393,14 +405,15 @@ void bind_frame_pass(nb::module_& m) {
                 ambient_color,
                 ambient_intensity,
                 shadow_maps,
-                shadow_settings
+                shadow_settings,
+                layer_mask
             );
         },
         nb::arg("graphics"),
         nb::arg("reads_fbos"),
         nb::arg("writes_fbos"),
         nb::arg("rect"),
-        nb::arg("entities"),
+        nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("camera_position"),
@@ -409,7 +422,11 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("ambient_color"),
         nb::arg("ambient_intensity"),
         nb::arg("shadow_array") = nb::none(),
-        nb::arg("shadow_settings") = nb::none())
+        nb::arg("shadow_settings") = nb::none(),
+        nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
+        .def_rw("extra_texture_uniforms", &ColorPass::extra_texture_uniforms)
+        .def("clear_extra_textures", &ColorPass::clear_extra_textures)
+        .def("set_extra_texture_uniform", &ColorPass::set_extra_texture_uniform)
         .def("destroy", &ColorPass::destroy)
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.pass_name + "' phase='" + p.phase_mark + "'>";
@@ -443,12 +460,13 @@ void bind_frame_pass(nb::module_& m) {
             nb::dict reads_fbos_py,
             nb::dict writes_fbos_py,
             nb::tuple rect_py,
-            nb::list entities_py,
+            nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
             int64_t context_key,
             float near_plane,
-            float far_plane
+            float far_plane,
+            uint64_t layer_mask
         ) {
             // Convert FBO maps
             FBOMap reads_fbos, writes_fbos;
@@ -482,10 +500,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Convert entities
-            std::vector<Entity> entities;
-            for (auto item : entities_py) {
-                entities.push_back(nb::cast<Entity>(item));
+            // Get tc_scene* from Python Scene object
+            tc_scene* scene = nullptr;
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
+                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
+                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                }
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -510,24 +532,26 @@ void bind_frame_pass(nb::module_& m) {
                 reads_fbos,
                 writes_fbos,
                 rect,
-                entities,
+                scene,
                 view,
                 projection,
                 context_key,
                 near_plane,
-                far_plane
+                far_plane,
+                layer_mask
             );
         },
         nb::arg("graphics"),
         nb::arg("reads_fbos"),
         nb::arg("writes_fbos"),
         nb::arg("rect"),
-        nb::arg("entities"),
+        nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("context_key"),
         nb::arg("near_plane"),
-        nb::arg("far_plane"))
+        nb::arg("far_plane"),
+        nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &DepthPass::destroy)
         .def("__repr__", [](const DepthPass& p) {
             return "<DepthPass '" + p.pass_name + "'>";
@@ -552,10 +576,11 @@ void bind_frame_pass(nb::module_& m) {
             nb::dict reads_fbos_py,
             nb::dict writes_fbos_py,
             nb::tuple rect_py,
-            nb::list entities_py,
+            nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
-            int64_t context_key
+            int64_t context_key,
+            uint64_t layer_mask
         ) {
             // Convert FBO maps
             FBOMap reads_fbos, writes_fbos;
@@ -587,10 +612,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Convert entities
-            std::vector<Entity> entities;
-            for (auto item : entities_py) {
-                entities.push_back(nb::cast<Entity>(item));
+            // Get tc_scene* from Python Scene object
+            tc_scene* scene = nullptr;
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
+                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
+                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                }
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -615,20 +644,22 @@ void bind_frame_pass(nb::module_& m) {
                 reads_fbos,
                 writes_fbos,
                 rect,
-                entities,
+                scene,
                 view,
                 projection,
-                context_key
+                context_key,
+                layer_mask
             );
         },
         nb::arg("graphics"),
         nb::arg("reads_fbos"),
         nb::arg("writes_fbos"),
         nb::arg("rect"),
-        nb::arg("entities"),
+        nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
-        nb::arg("context_key"))
+        nb::arg("context_key"),
+        nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &NormalPass::destroy)
         .def("__repr__", [](const NormalPass& p) {
             return "<NormalPass '" + p.pass_name + "'>";
@@ -662,10 +693,11 @@ void bind_frame_pass(nb::module_& m) {
             nb::dict reads_fbos_py,
             nb::dict writes_fbos_py,
             nb::tuple rect_py,
-            nb::list entities_py,
+            nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
-            int64_t context_key
+            int64_t context_key,
+            uint64_t layer_mask
         ) {
             // Convert FBO maps
             FBOMap reads_fbos, writes_fbos;
@@ -699,10 +731,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Convert entities
-            std::vector<Entity> entities;
-            for (auto item : entities_py) {
-                entities.push_back(nb::cast<Entity>(item));
+            // Get tc_scene* from Python Scene object
+            tc_scene* scene = nullptr;
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
+                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
+                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                }
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -727,20 +763,22 @@ void bind_frame_pass(nb::module_& m) {
                 reads_fbos,
                 writes_fbos,
                 rect,
-                entities,
+                scene,
                 view,
                 projection,
-                context_key
+                context_key,
+                layer_mask
             );
         },
         nb::arg("graphics"),
         nb::arg("reads_fbos"),
         nb::arg("writes_fbos"),
         nb::arg("rect"),
-        nb::arg("entities"),
+        nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
-        nb::arg("context_key"))
+        nb::arg("context_key"),
+        nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &IdPass::destroy)
         .def("__repr__", [](const IdPass& p) {
             return "<IdPass '" + p.pass_name + "'>";

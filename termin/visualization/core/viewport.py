@@ -25,6 +25,7 @@ class Viewport(Identifiable):
     - canvas: опциональная 2D канва для UI
     - depth: приоритет рендеринга (меньше = раньше, как Camera.depth в Unity)
     - pipeline: конвейер рендеринга (None = default)
+    - layer_mask: маска слоёв (какие entity рендерить)
 
     fbos управляются снаружи через ViewportRenderState.
 
@@ -41,10 +42,26 @@ class Viewport(Identifiable):
     input_mode: str = "simple"  # "none", "simple", "editor"
     block_input_in_editor: bool = False  # Block input when running in editor
     managed_by_scene_pipeline: Optional[str] = None  # Name of scene pipeline managing this viewport
+    layer_mask: int = 0xFFFFFFFFFFFFFFFF  # All layers enabled by default
     _init_uuid: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
         Identifiable.__init__(self, uuid=self._init_uuid)
+
+    @property
+    def effective_layer_mask(self) -> int:
+        """
+        Get effective layer mask, checking ViewportHintComponent on camera first.
+
+        If camera has ViewportHintComponent attached, use its layer_mask.
+        Otherwise use viewport's own layer_mask.
+        """
+        if self.camera is not None and self.camera.entity is not None:
+            from termin.visualization.core.viewport_hint import ViewportHintComponent
+            hint = self.camera.entity.get_component(ViewportHintComponent)
+            if hint is not None:
+                return hint.layer_mask
+        return self.layer_mask
 
     def screen_point_to_ray(self, x: float, y: float):
         """
@@ -93,7 +110,7 @@ class Viewport(Identifiable):
         if self.pipeline is not None:
             pipeline_name = self.pipeline.name
 
-        return {
+        result = {
             "uuid": self._uuid,
             "name": self.name,
             "camera_entity": camera_entity_name,
@@ -103,6 +120,10 @@ class Viewport(Identifiable):
             "input_mode": self.input_mode,
             "block_input_in_editor": self.block_input_in_editor,
         }
+        # Only serialize layer_mask if not all layers (to keep files clean)
+        if self.layer_mask != 0xFFFFFFFFFFFFFFFF:
+            result["layer_mask"] = hex(self.layer_mask)
+        return result
 
 
 def make_default_pipeline() -> "RenderPipeline":

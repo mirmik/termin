@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
+#include <unordered_map>
 #include <nanobind/nanobind.h>
 
 #include "termin/render/render_frame_pass.hpp"
@@ -20,6 +21,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 #include "tc_inspect.hpp"
+#include "tc_scene.h"
 
 namespace nb = nanobind;
 
@@ -45,6 +47,10 @@ public:
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
 
+    // Extra texture uniforms: uniform_name -> texture_unit
+    // Set from Python before execute_with_data
+    std::unordered_map<std::string, int> extra_texture_uniforms;
+
     // INSPECT_FIELD registrations
     INSPECT_FIELD(ColorPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
@@ -66,6 +72,14 @@ public:
 
     virtual ~ColorPass() = default;
 
+    // Clear extra texture uniforms (call after execute)
+    void clear_extra_textures() { extra_texture_uniforms.clear(); }
+
+    // Set extra texture uniform
+    void set_extra_texture_uniform(const std::string& name, int unit) {
+        extra_texture_uniforms[name] = unit;
+    }
+
     /**
      * Execute the color pass.
      *
@@ -73,7 +87,7 @@ public:
      * @param reads_fbos Input FBOs
      * @param writes_fbos Output FBOs
      * @param rect Viewport rectangle
-     * @param entities List of entities to render
+     * @param scene Scene containing entities to render
      * @param view View matrix
      * @param projection Projection matrix
      * @param camera_position Camera world position (for distance sorting)
@@ -81,13 +95,14 @@ public:
      * @param lights Light sources
      * @param ambient_color Ambient light color
      * @param ambient_intensity Ambient light intensity
+     * @param layer_mask Layer mask for filtering entities
      */
     void execute_with_data(
         GraphicsBackend* graphics,
         const FBOMap& reads_fbos,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        const std::vector<Entity>& entities,
+        tc_scene* scene,
         const Mat44f& view,
         const Mat44f& projection,
         const Vec3& camera_position,
@@ -96,7 +111,8 @@ public:
         const Vec3& ambient_color,
         float ambient_intensity,
         const std::vector<ShadowMapEntry>& shadow_maps,
-        const ShadowSettings& shadow_settings
+        const ShadowSettings& shadow_settings,
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
     // Legacy execute (required by base class) - does nothing
@@ -133,10 +149,11 @@ private:
     // Temp buffer for sorted draw calls
     std::vector<PhaseDrawCall> sorted_draw_calls_;
 
-    // Collect draw calls from entities into cached_draw_calls_.
+    // Collect draw calls from scene entities into cached_draw_calls_.
     void collect_draw_calls(
-        const std::vector<Entity>& entities,
-        const std::string& phase_mark
+        tc_scene* scene,
+        const std::string& phase_mark,
+        uint64_t layer_mask
     );
 
     // Compute sort keys for all draw calls (priority + distance)

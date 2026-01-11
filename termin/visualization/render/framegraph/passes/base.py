@@ -6,33 +6,24 @@ from termin.visualization.render.framegraph.core import FramePass
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class RenderFramePass(FramePass):
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene: "Scene",
-        camera: "Camera",
-        context_key: int,
-        lights: list["Light"] | None = None,
-        canvas=None,
-    ) -> None:
+    def execute(self, ctx: "ExecuteContext") -> None:
         """
-        Абстрактное выполнение прохода кадра.
+        Execute the render pass.
 
-        Все зависимости прокидываются явно:
-        - graphics: графический бэкенд;
-        - reads_fbos: карта FBO, из которых пасс читает;
-        - writes_fbos: карта FBO, в которые пасс пишет;
-        - rect: (px, py, pw, ph) – целевой прямоугольник вывода в пикселях;
-        - scene, camera, renderer: объекты текущего вьюпорта;
-        - context_key: ключ для кэшей VAO/шейдеров;
-        - lights: предвычисленные источники света (может быть None);
-        - canvas: 2D-канва вьюпорта (legacy, не используется).
+        Args:
+            ctx: ExecuteContext containing all render data:
+                - graphics: graphics backend
+                - reads_fbos/writes_fbos: FBO maps
+                - rect: pixel rectangle (px, py, pw, ph)
+                - scene, camera: what to render
+                - context_key: for VAO/shader caching
+                - lights: pre-computed lights
+                - canvas: optional 2D canvas
+                - layer_mask: which entity layers to render
         """
         raise NotImplementedError
 

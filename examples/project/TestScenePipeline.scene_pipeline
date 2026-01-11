@@ -3,8 +3,8 @@
   "nodes": [
     {
       "type": "ShadowPass",
-      "x": -440.83917758502446,
-      "y": -108.52384275230956,
+      "x": -520.7676286813971,
+      "y": -89.87387082982262,
       "params": {
         "caster_offset": 50.0
       },
@@ -26,7 +26,13 @@
         "sort_mode": "near_to_far",
         "clear_depth": false,
         "camera_name": ""
-      }
+      },
+      "dynamic_inputs": [
+        [
+          "u_fov",
+          "fbo"
+        ]
+      ]
     },
     {
       "type": "Present",
@@ -35,15 +41,21 @@
     },
     {
       "type": "ColorPass",
-      "x": -9.810186173525011,
-      "y": -344.4365230560018,
+      "x": 9.727879650032747,
+      "y": -309.80086091424033,
       "name": "Transparent",
       "params": {
         "phase_mark": "transparent",
         "sort_mode": "far_to_near",
         "clear_depth": false,
         "camera_name": ""
-      }
+      },
+      "dynamic_inputs": [
+        [
+          "u_fov",
+          "fbo"
+        ]
+      ]
     },
     {
       "type": "BloomPass",
@@ -218,8 +230,8 @@
     },
     {
       "type": "FBO",
-      "x": -331.3370766849503,
-      "y": 195.52822308245038,
+      "x": -667.3519720149004,
+      "y": 146.40390040332315,
       "node_type": "resource",
       "params": {
         "format": "rgba16f",
@@ -241,16 +253,16 @@
     },
     {
       "type": "DepthPass",
-      "x": 89.140651333953,
-      "y": 101.181218775038,
+      "x": -434.3265127705372,
+      "y": 84.65729066539589,
       "params": {
         "camera_name": ""
       }
     },
     {
       "type": "FBO",
-      "x": -329.1080732102745,
-      "y": 497.73463517916935,
+      "x": -665.1229685402247,
+      "y": 448.61031250004214,
       "node_type": "resource",
       "params": {
         "format": "rgba16f",
@@ -272,8 +284,8 @@
     },
     {
       "type": "NormalPass",
-      "x": 50.2550930925745,
-      "y": 577.1578839078925,
+      "x": -427.02817870514497,
+      "y": 538.9003594185936,
       "params": {
         "camera_name": ""
       }
@@ -420,25 +432,31 @@
       "to_node": 12,
       "to_socket": "input_tex"
     },
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
     {
       "from_node": 12,
       "from_socket": "output_res",
       "to_node": 5,
       "to_socket": "input_res"
+    },
+    {
+      "from_node": 11,
+      "from_socket": "output_res",
+      "to_node": 2,
+      "to_socket": "u_fov"
+    },
+    {
+      "from_node": 11,
+      "from_socket": "output_res",
+      "to_node": 4,
+      "to_socket": "u_fov"
     }
   ],
   "viewport_frames": [
     {
       "title": "Main Viewport",
       "viewport_name": "chronosquad",
-      "x": -787.5900602067517,
-      "y": -730.2387686107945,
+      "x": -784.0175121045643,
+      "y": -714.1623021509514,
       "width": 2595.1519664904145,
       "height": 1533.246065041475
     }

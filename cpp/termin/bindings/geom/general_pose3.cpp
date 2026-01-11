@@ -119,21 +119,50 @@ void bind_general_pose3(nb::module_& m) {
         .def("as_matrix", [](const GeneralPose3& p) {
             double* data = new double[16];
             double m_arr[16];
-            p.matrix4(m_arr);
-            for (int i = 0; i < 4; i++)
-                for (int j = 0; j < 4; j++)
-                    data[i * 4 + j] = m_arr[i * 4 + j];
+            p.matrix4(m_arr);  // Column-major
+            // Column-major to row-major for numpy
+            for (int row = 0; row < 4; row++)
+                for (int col = 0; col < 4; col++)
+                    data[row * 4 + col] = m_arr[col * 4 + row];
             nb::capsule owner(data, [](void* ptr) noexcept { delete[] static_cast<double*>(ptr); });
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner);
         })
+        .def("as_mat44", [](const GeneralPose3& p) {
+            // Build column-major 4x4 TRS matrix (same convention as Pose3::as_matrix)
+            double rot[9];
+            p.rotation_matrix(rot);
+            Mat44 m;
+            // Column 0
+            m(0, 0) = rot[0] * p.scale.x;
+            m(0, 1) = rot[3] * p.scale.x;
+            m(0, 2) = rot[6] * p.scale.x;
+            m(0, 3) = 0;
+            // Column 1
+            m(1, 0) = rot[1] * p.scale.y;
+            m(1, 1) = rot[4] * p.scale.y;
+            m(1, 2) = rot[7] * p.scale.y;
+            m(1, 3) = 0;
+            // Column 2
+            m(2, 0) = rot[2] * p.scale.z;
+            m(2, 1) = rot[5] * p.scale.z;
+            m(2, 2) = rot[8] * p.scale.z;
+            m(2, 3) = 0;
+            // Column 3
+            m(3, 0) = p.lin.x;
+            m(3, 1) = p.lin.y;
+            m(3, 2) = p.lin.z;
+            m(3, 3) = 1;
+            return m;
+        })
         .def("as_matrix34", [](const GeneralPose3& p) {
             double* data = new double[12];
             double m_arr[12];
-            p.matrix34(m_arr);
-            for (int i = 0; i < 3; i++)
-                for (int j = 0; j < 4; j++)
-                    data[i * 4 + j] = m_arr[i * 4 + j];
+            p.matrix34(m_arr);  // Column-major (4 cols x 3 rows)
+            // Column-major to row-major for numpy (3 rows x 4 cols)
+            for (int row = 0; row < 3; row++)
+                for (int col = 0; col < 4; col++)
+                    data[row * 4 + col] = m_arr[col * 3 + row];
             nb::capsule owner(data, [](void* ptr) noexcept { delete[] static_cast<double*>(ptr); });
             size_t shape[2] = {3, 4};
             return nb::ndarray<nb::numpy, double, nb::shape<3, 4>>(data, 2, shape, owner);
@@ -141,10 +170,11 @@ void bind_general_pose3(nb::module_& m) {
         .def("inverse_matrix", [](const GeneralPose3& p) {
             double* data = new double[16];
             double m_arr[16];
-            p.inverse_matrix4(m_arr);
-            for (int i = 0; i < 4; i++)
-                for (int j = 0; j < 4; j++)
-                    data[i * 4 + j] = m_arr[i * 4 + j];
+            p.inverse_matrix4(m_arr);  // Column-major
+            // Column-major to row-major for numpy
+            for (int row = 0; row < 4; row++)
+                for (int col = 0; col < 4; col++)
+                    data[row * 4 + col] = m_arr[col * 4 + row];
             nb::capsule owner(data, [](void* ptr) noexcept { delete[] static_cast<double*>(ptr); });
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner);

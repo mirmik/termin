@@ -1,0 +1,13 @@
+{
+  "uuid": "b62e01e0-b3f6-4443-a367-b0edf8bffa60",
+  "shader": "NavMeshFOV",
+  "uniforms": {
+    "u_time": 0.0,
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

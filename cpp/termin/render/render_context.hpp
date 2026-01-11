@@ -52,6 +52,9 @@ struct RenderContext {
     // Extra uniforms to copy when switching shader variants (nb::dict in Python)
     nb::object extra_uniforms;
 
+    // Layer mask for filtering entities (which layers to render)
+    uint64_t layer_mask = 0xFFFFFFFFFFFFFFFF;
+
     // Helper to set model matrix
     void set_model(const Mat44f& m) { model = m; }
 

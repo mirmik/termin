@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from typing import List, Optional, Set, Tuple
 
+from typing import TYPE_CHECKING
+
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
+
+if TYPE_CHECKING:
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 GIZMO_MASK_VERT = """
 #version 330 core
@@ -78,39 +83,28 @@ class GizmoPass(RenderFramePass):
         self._shader.ensure_ready(gfx, context_key)
         return self._shader
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
-        px, py, pw, ph = rect
-        key = context_key
+    def execute(self, ctx: "ExecuteContext") -> None:
+        px, py, pw, ph = ctx.rect
+        key = ctx.context_key
 
-        fb = writes_fbos.get(self.output_res)
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, pw, ph)
+        fb = ctx.writes_fbos.get(self.output_res)
+        ctx.graphics.bind_framebuffer(fb)
+        ctx.graphics.set_viewport(0, 0, pw, ph)
 
         # очищаем depth чтобы гизмо был кликабелен поверх сцены
-        graphics.clear_depth()
+        ctx.graphics.clear_depth()
 
         # глубину тестируем, но не пишем
-        graphics.set_depth_test(True)
-        graphics.set_depth_mask(False)
+        ctx.graphics.set_depth_test(True)
+        ctx.graphics.set_depth_mask(False)
 
         # главное отличие: пишем только в альфу
-        graphics.set_color_mask(False, False, False, True)
+        ctx.graphics.set_color_mask(False, False, False, True)
 
-        view = camera.get_view_matrix()
-        proj = camera.get_projection_matrix()
+        view = ctx.camera.get_view_matrix()
+        proj = ctx.camera.get_projection_matrix()
 
-        shader = self._ensure_shader(graphics, key)
+        shader = self._ensure_shader(ctx.graphics, key)
         shader.use()
         shader.set_uniform_matrix4("u_view", view)
         shader.set_uniform_matrix4("u_projection", proj)
@@ -119,10 +113,10 @@ class GizmoPass(RenderFramePass):
         ctx_render = RenderContext(
             view=view,
             projection=proj,
-            camera=camera,
-            scene=scene,
+            camera=ctx.camera,
+            scene=ctx.scene,
             context_key=key,
-            graphics=graphics,
+            graphics=ctx.graphics,
             phase="gizmo_mask",
         )
 
@@ -151,6 +145,6 @@ class GizmoPass(RenderFramePass):
             index += 1
 
         # возвращаем нормальное состояние
-        graphics.set_color_mask(True, True, True, True)
-        graphics.set_depth_mask(True)
-        graphics.set_cull_face(True)
+        ctx.graphics.set_color_mask(True, True, True, True)
+        ctx.graphics.set_depth_mask(True)
+        ctx.graphics.set_cull_face(True)

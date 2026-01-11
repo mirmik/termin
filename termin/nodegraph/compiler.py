@@ -389,31 +389,32 @@ def create_pass_instance(
         if key != "viewport_name":
             kwargs[key] = value
 
-    # Viewport name - assign from containing frame (as separate param, not resource)
-    if viewport_name:
-        kwargs["viewport_name"] = viewport_name
-
     # UI parameters from node
     for param in node._params:
         value = node._param_values.get(param.name)
         if value is not None and param.name not in resource_params:
             kwargs[param.name] = value
 
+    # Check if class accepts **kwargs (VAR_KEYWORD)
+    # If so, don't pass viewport_name to constructor (it would end up in **kwargs)
+    import inspect
+    sig = inspect.signature(pass_cls.__init__)
+    valid_params = set(sig.parameters.keys())
+    has_var_keyword = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD
+        for p in sig.parameters.values()
+    )
+
+    # Only add viewport_name to kwargs if it's explicitly in signature
+    # Otherwise set it as attribute after creation
+    if viewport_name and "viewport_name" in valid_params:
+        kwargs["viewport_name"] = viewport_name
+
     # Try to create instance, handling optional parameters
     try:
-        return pass_cls(**kwargs)
+        instance = pass_cls(**kwargs)
     except TypeError as e:
         # Some parameters might not be accepted - try with just basics
-        import inspect
-        sig = inspect.signature(pass_cls.__init__)
-        valid_params = set(sig.parameters.keys())
-
-        # Check if class accepts **kwargs (VAR_KEYWORD)
-        has_var_keyword = any(
-            p.kind == inspect.Parameter.VAR_KEYWORD
-            for p in sig.parameters.values()
-        )
-
         basic_kwargs = {"pass_name": kwargs.get("pass_name", node.title)}
 
         for key, value in kwargs.items():
@@ -423,15 +424,14 @@ def create_pass_instance(
 
         try:
             instance = pass_cls(**basic_kwargs)
-            # Set remaining params as attributes if possible
-            for key, value in kwargs.items():
-                if key not in basic_kwargs:
-                    # Always set viewport_name if not in constructor
-                    if key == "viewport_name":
-                        instance.viewport_name = value
-            return instance
         except TypeError:
             raise CompileError(f"Failed to create {class_name}: {e}")
+
+    # Set viewport_name as attribute (works for all passes via FramePass base class)
+    if viewport_name:
+        instance.viewport_name = viewport_name
+
+    return instance
 
 
 def build_canonical_resource_map(passes: List[Any]) -> Dict[str, str]:

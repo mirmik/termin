@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 import numpy as np
 
 from termin._native import log
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Mat44
 
 from termin.editor.inspect_field import InspectField, inspect
 from termin.visualization.core.python_component import PythonComponent, InputComponent
@@ -95,44 +95,35 @@ class CameraComponent(PythonComponent):
     }
 
     def screen_point_to_ray(self, x: float, y: float, viewport_rect):
-        import numpy as np
         from termin.geombase import Ray3, Vec3
 
         px, py, pw, ph = viewport_rect
 
-        # Используем реальный aspect из viewport_rect, а не сохранённый в камере
-        # (камера.aspect может быть устаревшим если размер окна изменился)
+        # Use actual aspect from viewport_rect (camera.aspect may be outdated)
         viewport_aspect = pw / float(max(1, ph))
         old_aspect = self.aspect
         if old_aspect is not None:
             self.aspect = viewport_aspect
 
-        nx = ( (x - px) / pw ) * 2.0 - 1.0
-        ny = ( (y - py) / ph ) * -2.0 + 1.0
+        nx = ((x - px) / pw) * 2.0 - 1.0
+        ny = ((y - py) / ph) * -2.0 + 1.0
 
+        # Mat44 multiplication: P @ V
         PV = self.get_projection_matrix() @ self.get_view_matrix()
 
-        # Восстанавливаем старый aspect
+        # Restore old aspect
         if old_aspect is not None:
             self.aspect = old_aspect
 
-        inv_PV = np.linalg.inv(PV)
+        inv_PV = PV.inverse()
 
-        near = np.array([nx, ny, -1.0, 1.0], dtype=np.float32)
-        far  = np.array([nx, ny,  1.0, 1.0], dtype=np.float32)
+        # Transform near and far clip points
+        p_near = inv_PV.transform_point(Vec3(nx, ny, -1.0))
+        p_far = inv_PV.transform_point(Vec3(nx, ny, 1.0))
 
-        p_near = inv_PV @ near
-        p_far  = inv_PV @ far
+        direction = (p_far - p_near).normalized()
 
-        p_near /= p_near[3]
-        p_far  /= p_far[3]
-
-        origin = p_near[:3]
-        direction = p_far[:3] - p_near[:3]
-        direction /= np.linalg.norm(direction)
-
-        return Ray3(Vec3(float(origin[0]), float(origin[1]), float(origin[2])),
-                    Vec3(float(direction[0]), float(direction[1]), float(direction[2])))
+        return Ray3(p_near, direction)
 
     def __init__(
         self,
@@ -194,16 +185,15 @@ class CameraComponent(PythonComponent):
     #         raise RuntimeError("CameraComponent must be attached to an entity.")
     #     super().on_added(scene)
 
-    def get_view_matrix(self) -> np.ndarray:
+    def get_view_matrix(self) -> Mat44:
+        """Get view matrix in column-major format (Mat44)."""
         if self.entity is None:
             raise RuntimeError("CameraComponent has no entity.")
-    # Entity.pose не существует — берём позу из Transform3
-        return self.entity.transform.global_pose().inverse().as_matrix()
-        #return self.entity.pose.inverse().as_matrix()
+        return self.entity.transform.global_pose().inverse().as_mat44()
 
-    def get_projection_matrix(self) -> np.ndarray:
+    def get_projection_matrix(self) -> Mat44:
         """
-        Projection matrix for Y-forward convention.
+        Projection matrix for Y-forward convention (Mat44, column-major).
 
         Camera looks along +Y axis:
         - View X → Screen X (right)
@@ -211,49 +201,18 @@ class CameraComponent(PythonComponent):
         - View Y → Depth (forward)
         """
         if self.projection_type == "orthographic":
-            return self._ortho_projection_matrix()
+            top = self.ortho_size
+            bottom = -self.ortho_size
+            right = self.ortho_size * self.aspect
+            left = -right
+            return Mat44.orthographic(left, right, bottom, top, self.near, self.far)
         else:
-            return self._perspective_projection_matrix()
+            return Mat44.perspective(self.fov_y, max(1e-6, self.aspect), self.near, self.far)
 
-    def _perspective_projection_matrix(self) -> np.ndarray:
-        """Perspective projection matrix."""
-        f = 1.0 / math.tan(self.fov_y * 0.5)
-        near, far = self.near, self.far
-        proj = np.zeros((4, 4), dtype=np.float32)
-        proj[0, 0] = f / max(1e-6, self.aspect)  # X → screen X
-        proj[1, 2] = f                            # Z → screen Y (up)
-        proj[2, 1] = (far + near) / (far - near)  # Y → depth
-        proj[2, 3] = (-2 * far * near) / (far - near)
-        proj[3, 1] = 1.0                          # w = y
-        return proj
-
-    def _ortho_projection_matrix(self) -> np.ndarray:
-        """Orthographic projection matrix."""
-        # Compute bounds from ortho_size and aspect
-        top = self.ortho_size
-        bottom = -self.ortho_size
-        right = self.ortho_size * self.aspect
-        left = -right
-        near, far = self.near, self.far
-
-        lr = right - left
-        tb = top - bottom
-        fn = far - near
-
-        proj = np.zeros((4, 4), dtype=np.float32)
-        proj[0, 0] = 2.0 / lr                     # X → screen X
-        proj[1, 2] = 2.0 / tb                     # Z → screen Y (up)
-        proj[2, 1] = 2.0 / fn                     # Y → depth
-        proj[0, 3] = -(right + left) / lr
-        proj[1, 3] = -(top + bottom) / tb
-        proj[2, 3] = -(far + near) / fn
-        proj[3, 3] = 1.0
-        return proj
-
-    def projection_matrix(self) -> np.ndarray:
+    def projection_matrix(self) -> Mat44:
         return self.get_projection_matrix()
 
-    def view_matrix(self) -> np.ndarray:
+    def view_matrix(self) -> Mat44:
         return self.get_view_matrix()
 
     def set_aspect(self, aspect: float):

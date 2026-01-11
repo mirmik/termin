@@ -123,6 +123,9 @@ public:
 
     CxxComponent* get_component_by_type(const std::string& type_name);
 
+    // Get any component (C++ or Python) by type name - returns tc_component*
+    tc_component* get_component_by_type_name(const std::string& type_name);
+
     // Get Python component by type name (returns nb::object, or nb::none() if not found)
     nb::object get_python_component(const std::string& type_name);
 

@@ -268,8 +268,13 @@ void bind_entity_class(nb::module_& m) {
 
             throw std::runtime_error("remove_component requires Component or PythonComponent");
         }, nb::arg("component"))
-        .def("get_component_by_type", &Entity::get_component_by_type,
-             nb::arg("type_name"), nb::rv_policy::reference)
+        .def("get_component_by_type", [](Entity& e, const std::string& type_name) -> nb::object {
+            tc_component* tc = e.get_component_by_type_name(type_name);
+            if (!tc) {
+                return nb::none();
+            }
+            return CxxComponent::tc_to_python(tc);
+        }, nb::arg("type_name"))
         .def("get_python_component", &Entity::get_python_component,
              nb::arg("type_name"))
         .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Set
+from typing import Set, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
+
+if TYPE_CHECKING:
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 def _get_texture_from_resource(resource, shadow_map_index: int = 0):
@@ -137,20 +140,9 @@ class BlitPass(RenderFramePass):
     def required_resources(self) -> set[str]:
         return set(self.reads) | set(self.writes)
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene=None,
-        camera=None,
-        context_key: int = 0,
-        lights=None,
-        canvas=None,
-    ):
-        px, py, pw, ph = rect
-        key = context_key
+    def execute(self, ctx: "ExecuteContext") -> None:
+        px, py, pw, ph = ctx.rect
+        key = ctx.context_key
 
         if self._get_source_res is None:
             return
@@ -159,15 +151,15 @@ class BlitPass(RenderFramePass):
         if not src_name:
             return
 
-        fb_in = reads_fbos.get(src_name)
+        fb_in = ctx.reads_fbos.get(src_name)
         if fb_in is None:
             return
 
-        fb_out = writes_fbos.get(self.output_res)
+        fb_out = ctx.writes_fbos.get(self.output_res)
         if fb_out is None:
             return
-        
-        blit_fbo_to_fbo(graphics, fb_in, fb_out, (pw, ph), key)
+
+        blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out, (pw, ph), key)
 
 
 FSQ_VERT = """
@@ -230,32 +222,21 @@ class ResolvePass(RenderFramePass):
     def compute_writes(self) -> Set[str]:
         return {self.output_res}
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene=None,
-        camera=None,
-        context_key: int = 0,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 
-        if isinstance(graphics, NOPGraphicsBackend):
+        if isinstance(ctx.graphics, NOPGraphicsBackend):
             return
 
-        px, py, pw, ph = rect
+        px, py, pw, ph = ctx.rect
 
-        fb_in = reads_fbos.get(self.input_res)
-        fb_out = writes_fbos.get(self.output_res)
+        fb_in = ctx.reads_fbos.get(self.input_res)
+        fb_out = ctx.writes_fbos.get(self.output_res)
         if fb_in is None or fb_out is None:
             return
 
         src_size = fb_in.get_size()
-        graphics.blit_framebuffer(
+        ctx.graphics.blit_framebuffer(
             fb_in,
             fb_out,
             (0, 0, src_size[0], src_size[1]),
@@ -298,34 +279,23 @@ class PresentToScreenPass(RenderFramePass):
             cls._shader = ShaderProgram(FSQ_VERT, FSQ_FRAG)
         return cls._shader
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene=None,
-        camera=None,
-        context_key: int = 0,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 
         # Для NOP бэкенда пропускаем реальные OpenGL операции
-        if isinstance(graphics, NOPGraphicsBackend):
+        if isinstance(ctx.graphics, NOPGraphicsBackend):
             return
 
-        px, py, pw, ph = rect
+        px, py, pw, ph = ctx.rect
 
-        fb_in = reads_fbos.get(self.input_res)
-        fb_out = writes_fbos.get("DISPLAY")
+        fb_in = ctx.reads_fbos.get(self.input_res)
+        fb_out = ctx.writes_fbos.get("DISPLAY")
         if fb_in is None or fb_out is None:
             return
 
         # Используем glBlitFramebuffer — работает и для обычных FBO, и для MSAA (resolve)
         src_size = fb_in.get_size()
-        graphics.blit_framebuffer(
+        ctx.graphics.blit_framebuffer(
             fb_in,
             fb_out,
             (0, 0, src_size[0], src_size[1]),

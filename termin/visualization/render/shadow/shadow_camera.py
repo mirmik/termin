@@ -109,8 +109,8 @@ def fit_shadow_frustum_to_camera(
     if norm > 1e-6:
         light_direction = light_direction / norm
 
-    view = camera.get_view_matrix().astype(np.float64)
-    proj = camera.get_projection_matrix().astype(np.float64)
+    view = camera.get_view_matrix().to_numpy()
+    proj = camera.get_projection_matrix().to_numpy()
 
     if max_shadow_distance is not None:
         proj = _limit_projection_far(proj, camera, max_shadow_distance)

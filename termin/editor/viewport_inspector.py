@@ -147,6 +147,12 @@ class ViewportInspector(QWidget):
         self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
         form.addRow("Pipeline:", self._pipeline_combo)
 
+        # Layer mask
+        from termin.editor.widgets.layer_mask_widget import LayerMaskFieldWidget
+        self._layer_mask_widget = LayerMaskFieldWidget()
+        self._layer_mask_widget.value_changed.connect(self._on_layer_mask_changed)
+        form.addRow("Layers:", self._layer_mask_widget)
+
         # Hint warning label (shown when ViewportHint controls the viewport)
         self._hint_label = QLabel("Controlled by ViewportHint on camera")
         self._hint_label.setStyleSheet("color: #888; font-style: italic;")
@@ -239,6 +245,9 @@ class ViewportInspector(QWidget):
             # Update depth
             self._depth_spin.setValue(viewport.depth)
 
+            # Update layer mask
+            self._layer_mask_widget.set_value(viewport.layer_mask)
+
             # Update pipeline list and select current pipeline
             self.update_pipeline_list()
             self._select_viewport_pipeline(viewport)
@@ -323,6 +332,7 @@ class ViewportInspector(QWidget):
             self._w_spin.setValue(1.0)
             self._h_spin.setValue(1.0)
             self._depth_spin.setValue(0)
+            self._layer_mask_widget.set_value(0xFFFFFFFFFFFFFFFF)
             self._pipeline_combo.setCurrentIndex(0)
             self._pipeline_combo.setEnabled(True)
             self._hint_label.hide()
@@ -428,6 +438,14 @@ class ViewportInspector(QWidget):
             return
 
         self.depth_changed.emit(value)
+        self.viewport_changed.emit()
+
+    def _on_layer_mask_changed(self) -> None:
+        """Handle layer mask value change."""
+        if self._updating or self._viewport is None:
+            return
+
+        self._viewport.layer_mask = self._layer_mask_widget.get_value()
         self.viewport_changed.emit()
 
     def _on_pipeline_changed(self, index: int) -> None:

@@ -84,9 +84,19 @@ def _serialize_node(node: "GraphNode") -> dict:
 
     # Save dynamic input sockets for nodes with has_dynamic_inputs
     # This ensures we can restore sockets before materials are loaded
-    if node.data.get("pass_class") == "MaterialPass":
+    pass_class = node.data.get("pass_class")
+    if pass_class == "MaterialPass":
         # Get dynamic sockets (exclude static ones like output_res_target)
         static_sockets = {"output_res_target"}
+        dynamic_inputs = []
+        for sock in node.input_sockets:
+            if sock.name not in static_sockets:
+                dynamic_inputs.append((sock.name, sock.socket_type))
+        if dynamic_inputs:
+            result["dynamic_inputs"] = dynamic_inputs
+    elif pass_class == "ColorPass":
+        # Get dynamic sockets (exclude static ones)
+        static_sockets = {"input_res", "shadow_res", "output_res_target"}
         dynamic_inputs = []
         for sock in node.input_sockets:
             if sock.name not in static_sockets:
@@ -194,10 +204,17 @@ def deserialize_graph(data: dict, scene: "NodeGraphScene") -> None:
         # This ensures sockets exist for connection restoration
         dynamic_inputs = node_data.get("dynamic_inputs")
         if dynamic_inputs:
+            # Determine static sockets based on node type
+            pass_class = node.data.get("pass_class")
+            if pass_class == "ColorPass":
+                keep_sockets = {"input_res", "shadow_res", "output_res_target"}
+            else:
+                keep_sockets = {"output_res_target"}
+
             # Use update_dynamic_inputs to create sockets
             node.update_dynamic_inputs(
                 dynamic_inputs,
-                keep_sockets={"output_res_target"},
+                keep_sockets=keep_sockets,
             )
             # Mark that we restored from serialization (skip material lookup)
             node._dynamic_inputs_restored = True

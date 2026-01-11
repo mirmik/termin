@@ -17,6 +17,7 @@ from termin.editor.inspect_field import InspectField
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.visualization.render.framebuffer import FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class ImmediateDepthPass(RenderFramePass):
@@ -57,18 +58,7 @@ class ImmediateDepthPass(RenderFramePass):
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         renderer = ImmediateRenderer.instance()
         if renderer is None:
             return
@@ -77,18 +67,18 @@ class ImmediateDepthPass(RenderFramePass):
         if renderer.line_count_depth == 0 and renderer.triangle_count_depth == 0:
             return
 
-        px, py, pw, ph = rect
+        px, py, pw, ph = ctx.rect
 
-        fb = writes_fbos.get(self.output_res)
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, pw, ph)
+        fb = ctx.writes_fbos.get(self.output_res)
+        ctx.graphics.bind_framebuffer(fb)
+        ctx.graphics.set_viewport(0, 0, pw, ph)
 
-        view = camera.get_view_matrix()
-        proj = camera.get_projection_matrix()
+        view = ctx.camera.get_view_matrix()
+        proj = ctx.camera.get_projection_matrix()
 
         # Flush depth-tested geometry with depth test enabled
         renderer.flush_depth(
-            graphics=graphics,
+            graphics=ctx.graphics,
             view_matrix=view,
             proj_matrix=proj,
             blend=True,

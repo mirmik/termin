@@ -219,6 +219,39 @@ void bind_material(nb::module_& m) {
                 self.set_param(name, nb::cast<Vec3>(value));
             } else if (nb::isinstance<Vec4>(value)) {
                 self.set_param(name, nb::cast<Vec4>(value));
+            } else if (nb::isinstance<Mat44>(value)) {
+                // Mat44 is already column-major, convert to Mat44f
+                self.set_param(name, nb::cast<Mat44>(value).to_float());
+            } else if (nb::isinstance<Mat44f>(value)) {
+                // Mat44f is already in the right format
+                self.set_param(name, nb::cast<Mat44f>(value));
+            } else if (nb::ndarray_check(value)) {
+                // Try to cast as 4x4 matrix (float32 or float64)
+                try {
+                    auto arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(value);
+                    Mat44f mat;
+                    // Convert row-major numpy to column-major Mat44f
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            mat.data[col * 4 + row] = arr(row, col);
+                        }
+                    }
+                    self.set_param(name, mat);
+                } catch (const nb::cast_error&) {
+                    try {
+                        auto arr = nb::cast<nb::ndarray<nb::numpy, double, nb::shape<4, 4>>>(value);
+                        Mat44f mat;
+                        // Convert row-major numpy to column-major Mat44f
+                        for (int row = 0; row < 4; ++row) {
+                            for (int col = 0; col < 4; ++col) {
+                                mat.data[col * 4 + row] = static_cast<float>(arr(row, col));
+                            }
+                        }
+                        self.set_param(name, mat);
+                    } catch (const nb::cast_error&) {
+                        // Unsupported array type
+                    }
+                }
             }
         })
         .def("set_color", [](MaterialPhase& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {
@@ -797,6 +830,39 @@ void bind_material(nb::module_& m) {
                 self.set_param(name, nb::cast<Vec3>(value));
             } else if (nb::isinstance<Vec4>(value)) {
                 self.set_param(name, nb::cast<Vec4>(value));
+            } else if (nb::isinstance<Mat44>(value)) {
+                // Mat44 is already column-major, convert to Mat44f
+                self.set_param(name, nb::cast<Mat44>(value).to_float());
+            } else if (nb::isinstance<Mat44f>(value)) {
+                // Mat44f is already in the right format
+                self.set_param(name, nb::cast<Mat44f>(value));
+            } else if (nb::ndarray_check(value)) {
+                // Try to cast as 4x4 matrix (float32 or float64)
+                try {
+                    auto arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(value);
+                    Mat44f mat;
+                    // Convert row-major numpy to column-major Mat44f
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            mat.data[col * 4 + row] = arr(row, col);
+                        }
+                    }
+                    self.set_param(name, mat);
+                } catch (const nb::cast_error&) {
+                    try {
+                        auto arr = nb::cast<nb::ndarray<nb::numpy, double, nb::shape<4, 4>>>(value);
+                        Mat44f mat;
+                        // Convert row-major numpy to column-major Mat44f
+                        for (int row = 0; row < 4; ++row) {
+                            for (int col = 0; col < 4; ++col) {
+                                mat.data[col * 4 + row] = static_cast<float>(arr(row, col));
+                            }
+                        }
+                        self.set_param(name, mat);
+                    } catch (const nb::cast_error&) {
+                        // Unsupported array type
+                    }
+                }
             }
         })
         .def("set_color", [](Material& self, nb::ndarray<nb::numpy, float, nb::shape<4>> rgba) {

@@ -104,6 +104,22 @@ CxxComponent* Entity::get_component_by_type(const std::string& type_name) {
     return nullptr;
 }
 
+tc_component* Entity::get_component_by_type_name(const std::string& type_name) {
+    size_t count = component_count();
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = component_at(i);
+        if (!tc) continue;
+
+        // Get type name from tc_component
+        const char* comp_type = tc->type_name ? tc->type_name :
+                                (tc->vtable ? tc->vtable->type_name : nullptr);
+        if (comp_type && type_name == comp_type) {
+            return tc;
+        }
+    }
+    return nullptr;
+}
+
 nb::object Entity::get_python_component(const std::string& type_name) {
     size_t count = component_count();
     for (size_t i = 0; i < count; i++) {

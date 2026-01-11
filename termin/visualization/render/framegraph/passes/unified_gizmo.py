@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from termin.editor.gizmo import GizmoManager
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.visualization.render.framebuffer import FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class UnifiedGizmoPass(RenderFramePass):
@@ -67,41 +68,30 @@ class UnifiedGizmoPass(RenderFramePass):
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         manager = self._get_gizmo_manager()
         if manager is None:
             return
 
-        px, py, pw, ph = rect
+        px, py, pw, ph = ctx.rect
 
-        fb = writes_fbos.get(self.output_res)
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, pw, ph)
+        fb = ctx.writes_fbos.get(self.output_res)
+        ctx.graphics.bind_framebuffer(fb)
+        ctx.graphics.set_viewport(0, 0, pw, ph)
 
         # Clear depth so gizmo renders on top of scene
-        graphics.clear_depth()
+        ctx.graphics.clear_depth()
 
-        view = camera.get_view_matrix()
-        proj = camera.get_projection_matrix()
+        view = ctx.camera.get_view_matrix()
+        proj = ctx.camera.get_projection_matrix()
 
         # Render all gizmos
-        manager.render(self._renderer, graphics, view, proj, context_key)
+        manager.render(self._renderer, ctx.graphics, view, proj, ctx.context_key)
 
         # Flush debug lines added by components via ImmediateRenderer.instance()
         # Components add lines during update(), we flush them here
         self._renderer.flush(
-            graphics=graphics,
+            graphics=ctx.graphics,
             view_matrix=view,
             proj_matrix=proj,
             depth_test=False,

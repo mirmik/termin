@@ -310,6 +310,19 @@ struct Mat44f {
         float sz = std::sqrt((*this)(2, 0) * (*this)(2, 0) + (*this)(2, 1) * (*this)(2, 1) + (*this)(2, 2) * (*this)(2, 2));
         return {sx, sy, sz};
     }
+
+    // Return copy with modified translation
+    Mat44f with_translation(const Vec3& t) const {
+        Mat44f result = *this;
+        result(3, 0) = static_cast<float>(t.x);
+        result(3, 1) = static_cast<float>(t.y);
+        result(3, 2) = static_cast<float>(t.z);
+        return result;
+    }
+
+    Mat44f with_translation(float x, float y, float z) const {
+        return with_translation(Vec3{x, y, z});
+    }
 };
 
 
@@ -553,6 +566,19 @@ struct Mat44 {
         double sy = std::sqrt((*this)(1, 0) * (*this)(1, 0) + (*this)(1, 1) * (*this)(1, 1) + (*this)(1, 2) * (*this)(1, 2));
         double sz = std::sqrt((*this)(2, 0) * (*this)(2, 0) + (*this)(2, 1) * (*this)(2, 1) + (*this)(2, 2) * (*this)(2, 2));
         return {sx, sy, sz};
+    }
+
+    // Return copy with modified translation
+    Mat44 with_translation(const Vec3& t) const {
+        Mat44 result = *this;
+        result(3, 0) = t.x;
+        result(3, 1) = t.y;
+        result(3, 2) = t.z;
+        return result;
+    }
+
+    Mat44 with_translation(double x, double y, double z) const {
+        return with_translation(Vec3{x, y, z});
     }
 };
 

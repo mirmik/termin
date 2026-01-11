@@ -73,6 +73,12 @@ except ImportError as e:
     print("[Project InitScript] ChronoSquad BlindEffect not found, skipping initialization: ", e)
     traceback.print_exc()
 
+try:
+    import termin.chronosquad.controllers.navmesh_fov_shower
+except ImportError as e:
+    print("[Project InitScript] ChronoSquad NavMeshFovShowerComponent not found, skipping initialization: ", e)
+    traceback.print_exc()
+
 # Install ChronoSquad menu
 from termin.chronosquad.editor import install_menu
 install_menu()

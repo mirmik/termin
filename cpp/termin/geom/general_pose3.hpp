@@ -133,33 +133,42 @@ struct GeneralPose3 {
         return {ang, lin};
     }
 
-    // --- Matrices (row-major) -----------------------------------------------
+    // --- Matrices (column-major, OpenGL convention) ---------------------------
 
     // 3x3 rotation matrix
     void rotation_matrix(double* m) const {
         ang.to_matrix(m);
     }
 
-    // 4x4 TRS matrix (row-major)
+    // 4x4 TRS matrix (column-major)
     void matrix4(double* m) const {
         double r[9];
         rotation_matrix(r);
-        m[0] = r[0] * scale.x; m[1] = r[1] * scale.y; m[2] = r[2] * scale.z; m[3] = lin.x;
-        m[4] = r[3] * scale.x; m[5] = r[4] * scale.y; m[6] = r[5] * scale.z; m[7] = lin.y;
-        m[8] = r[6] * scale.x; m[9] = r[7] * scale.y; m[10] = r[8] * scale.z; m[11] = lin.z;
-        m[12] = 0.0;           m[13] = 0.0;           m[14] = 0.0;           m[15] = 1.0;
+        // Column 0
+        m[0] = r[0] * scale.x; m[1] = r[3] * scale.x; m[2] = r[6] * scale.x; m[3] = 0.0;
+        // Column 1
+        m[4] = r[1] * scale.y; m[5] = r[4] * scale.y; m[6] = r[7] * scale.y; m[7] = 0.0;
+        // Column 2
+        m[8] = r[2] * scale.z; m[9] = r[5] * scale.z; m[10] = r[8] * scale.z; m[11] = 0.0;
+        // Column 3
+        m[12] = lin.x; m[13] = lin.y; m[14] = lin.z; m[15] = 1.0;
     }
 
-    // 3x4 TRS matrix (row-major)
+    // 3x4 TRS matrix (column-major, columns 0-2 are rotation*scale, column 3 is translation)
     void matrix34(double* m) const {
         double r[9];
         rotation_matrix(r);
-        m[0] = r[0] * scale.x; m[1] = r[1] * scale.y; m[2] = r[2] * scale.z; m[3] = lin.x;
-        m[4] = r[3] * scale.x; m[5] = r[4] * scale.y; m[6] = r[5] * scale.z; m[7] = lin.y;
-        m[8] = r[6] * scale.x; m[9] = r[7] * scale.y; m[10] = r[8] * scale.z; m[11] = lin.z;
+        // Column 0
+        m[0] = r[0] * scale.x; m[1] = r[3] * scale.x; m[2] = r[6] * scale.x;
+        // Column 1
+        m[3] = r[1] * scale.y; m[4] = r[4] * scale.y; m[5] = r[7] * scale.y;
+        // Column 2
+        m[6] = r[2] * scale.z; m[7] = r[5] * scale.z; m[8] = r[8] * scale.z;
+        // Column 3
+        m[9] = lin.x; m[10] = lin.y; m[11] = lin.z;
     }
 
-    // Inverse 4x4 matrix: S^-1 @ R^T @ T^-1
+    // Inverse 4x4 matrix: S^-1 @ R^T @ T^-1 (column-major)
     void inverse_matrix4(double* m) const {
         double r[9];
         rotation_matrix(r);
@@ -186,10 +195,14 @@ struct GeneralPose3 {
         double ty = -(m10 * lin.x + m11 * lin.y + m12 * lin.z);
         double tz = -(m20 * lin.x + m21 * lin.y + m22 * lin.z);
 
-        m[0] = m00; m[1] = m01; m[2] = m02; m[3] = tx;
-        m[4] = m10; m[5] = m11; m[6] = m12; m[7] = ty;
-        m[8] = m20; m[9] = m21; m[10] = m22; m[11] = tz;
-        m[12] = 0.0; m[13] = 0.0; m[14] = 0.0; m[15] = 1.0;
+        // Column 0
+        m[0] = m00; m[1] = m10; m[2] = m20; m[3] = 0.0;
+        // Column 1
+        m[4] = m01; m[5] = m11; m[6] = m21; m[7] = 0.0;
+        // Column 2
+        m[8] = m02; m[9] = m12; m[10] = m22; m[11] = 0.0;
+        // Column 3
+        m[12] = tx; m[13] = ty; m[14] = tz; m[15] = 1.0;
     }
 
     // --- Helpers ------------------------------------------------------------

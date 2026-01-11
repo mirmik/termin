@@ -4,6 +4,7 @@ from typing import Iterable, Tuple
 
 from termin.visualization.core.viewport import Viewport
 from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
+from termin.visualization.render.framegraph.execute_context import ExecuteContext
 from termin.visualization.platform.backends.base import GraphicsBackend
 
 
@@ -80,8 +81,8 @@ class PipelineRunner:
                 pass_reads = {name: fbos.get(name) for name in render_pass.reads}
                 pass_writes = {name: fbos.get(name) for name in render_pass.writes}
 
-                render_pass.execute(
-                    self.graphics,
+                ctx = ExecuteContext(
+                    graphics=self.graphics,
                     reads_fbos=pass_reads,
                     writes_fbos=pass_writes,
                     rect=(px, py, pw, ph),
@@ -90,7 +91,9 @@ class PipelineRunner:
                     context_key=context_key,
                     lights=lights,
                     canvas=viewport.canvas,
+                    layer_mask=viewport.effective_layer_mask,
                 )
+                render_pass.execute(ctx)
 
     def _get_viewport_fbo(self, viewport: Viewport, key: str, size: Tuple[int, int]):
         framebuffer = viewport.fbos.get(key)

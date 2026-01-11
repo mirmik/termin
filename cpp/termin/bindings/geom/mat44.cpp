@@ -14,12 +14,35 @@ void bind_mat44(nb::module_& m) {
             m(idx.first, idx.second) = val;
         })
         .def(nb::self * nb::self)
+        .def("__matmul__", [](const Mat44& a, const Mat44& b) { return a * b; })
+        .def("__matmul__", [](const Mat44& m, const Vec3& v) { return m.transform_point(v); })
+        // Mat44 @ numpy 4-vector -> numpy 4-vector (homogeneous transform)
+        .def("__matmul__", [](const Mat44& m, nb::ndarray<nb::numpy, double, nb::shape<4>> v) {
+            double x = m(0, 0) * v(0) + m(1, 0) * v(1) + m(2, 0) * v(2) + m(3, 0) * v(3);
+            double y = m(0, 1) * v(0) + m(1, 1) * v(1) + m(2, 1) * v(2) + m(3, 1) * v(3);
+            double z = m(0, 2) * v(0) + m(1, 2) * v(1) + m(2, 2) * v(2) + m(3, 2) * v(3);
+            double w = m(0, 3) * v(0) + m(1, 3) * v(1) + m(2, 3) * v(2) + m(3, 3) * v(3);
+            double* data = new double[4]{x, y, z, w};
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            return nb::ndarray<nb::numpy, double, nb::shape<4>>(data, {4}, owner);
+        })
+        .def("__matmul__", [](const Mat44& m, nb::ndarray<nb::numpy, float, nb::shape<4>> v) {
+            float x = static_cast<float>(m(0, 0) * v(0) + m(1, 0) * v(1) + m(2, 0) * v(2) + m(3, 0) * v(3));
+            float y = static_cast<float>(m(0, 1) * v(0) + m(1, 1) * v(1) + m(2, 1) * v(2) + m(3, 1) * v(3));
+            float z = static_cast<float>(m(0, 2) * v(0) + m(1, 2) * v(1) + m(2, 2) * v(2) + m(3, 2) * v(3));
+            float w = static_cast<float>(m(0, 3) * v(0) + m(1, 3) * v(1) + m(2, 3) * v(2) + m(3, 3) * v(3));
+            float* data = new float[4]{x, y, z, w};
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            return nb::ndarray<nb::numpy, float, nb::shape<4>>(data, {4}, owner);
+        })
         .def("transform_point", &Mat44::transform_point)
         .def("transform_direction", &Mat44::transform_direction)
         .def("transposed", &Mat44::transposed)
         .def("inverse", &Mat44::inverse)
         .def("get_translation", &Mat44::get_translation)
         .def("get_scale", &Mat44::get_scale)
+        .def("with_translation", nb::overload_cast<const Vec3&>(&Mat44::with_translation, nb::const_))
+        .def("with_translation", nb::overload_cast<double, double, double>(&Mat44::with_translation, nb::const_))
         .def_static("identity", &Mat44::identity)
         .def_static("zero", &Mat44::zero)
         .def_static("translation", nb::overload_cast<const Vec3&>(&Mat44::translation))
@@ -43,22 +66,20 @@ void bind_mat44(nb::module_& m) {
             "Compose TRS matrix")
         .def("to_numpy", [](const Mat44& mat) {
             double* data = new double[16];
-            for (int col = 0; col < 4; ++col) {
-                for (int row = 0; row < 4; ++row) {
+            // Column-major to row-major for numpy
+            for (int row = 0; row < 4; ++row)
+                for (int col = 0; col < 4; ++col)
                     data[row * 4 + col] = mat(col, row);
-                }
-            }
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner);
         })
         .def("to_numpy_f32", [](const Mat44& mat) {
             float* data = new float[16];
-            for (int col = 0; col < 4; ++col) {
-                for (int row = 0; row < 4; ++row) {
+            // Column-major to row-major for numpy
+            for (int row = 0; row < 4; ++row)
+                for (int col = 0; col < 4; ++col)
                     data[row * 4 + col] = static_cast<float>(mat(col, row));
-                }
-            }
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, 2, shape, owner);

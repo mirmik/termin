@@ -12,6 +12,7 @@ from termin.editor.inspect_field import InspectField
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 # Maximum shadow maps in shader (4 lights * 4 cascades)
@@ -19,6 +20,9 @@ MAX_SHADOW_MAPS = 16
 
 # Starting texture unit for shadow maps
 SHADOW_MAP_TEXTURE_UNIT_START = 8
+
+# Starting texture unit for extra textures (after shadow maps)
+EXTRA_TEXTURE_UNIT_START = 24
 
 
 class ColorPass(_ColorPassNative):
@@ -36,6 +40,10 @@ class ColorPass(_ColorPassNative):
 
     category = "Render"
 
+    # Mark as having dynamic inputs (for extra texture inputs)
+    has_dynamic_inputs = True
+
+    # Static inputs (always present)
     node_inputs = [
         ("input_res", "fbo"),
         ("shadow_res", "shadow"),
@@ -70,6 +78,7 @@ class ColorPass(_ColorPassNative):
         sort_mode: str = "none",  # "none", "near_to_far", "far_to_near"
         clear_depth: bool = False,
         camera_name: str = "",
+        **extra_textures,
     ):
         if phase_mark is None:
             phase_mark = "opaque"
@@ -86,6 +95,16 @@ class ColorPass(_ColorPassNative):
         )
         self.camera_name = camera_name
 
+        # Extra texture resources: uniform_name -> resource_name
+        # These will be bound before rendering and passed to shaders
+        self._extra_textures: dict[str, str] = {}
+        for key, value in extra_textures.items():
+            if value and not value.startswith("empty_"):
+                # Ensure u_ prefix for uniform name
+                uniform_name = f"u_{key}" if not key.startswith("u_") else key
+                self._extra_textures[uniform_name] = value
+
+
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
         return cls(
@@ -99,6 +118,9 @@ class ColorPass(_ColorPassNative):
         result = {self.input_res}
         if self.shadow_res:
             result.add(self.shadow_res)
+        # Add extra texture resources
+        for resource_name in self._extra_textures.values():
+            result.add(resource_name)
         return result
 
     @property
@@ -113,6 +135,9 @@ class ColorPass(_ColorPassNative):
         # Add Python-only fields
         if self.camera_name:
             result["camera_name"] = self.camera_name
+        # Add extra textures
+        if self._extra_textures:
+            result["extra_textures"] = self._extra_textures.copy()
         return result
 
     def deserialize_data(self, data: dict) -> None:
@@ -123,6 +148,8 @@ class ColorPass(_ColorPassNative):
         InspectRegistry.instance().deserialize_all(self, data)
         # Restore Python-only fields
         self.camera_name = data.get("camera_name", "")
+        # Restore extra textures
+        self._extra_textures = data.get("extra_textures", {})
 
     def serialize(self) -> dict:
         """Serialize ColorPass to dict."""
@@ -189,19 +216,42 @@ class ColorPass(_ColorPassNative):
             unit = SHADOW_MAP_TEXTURE_UNIT_START + i
             dummy.bind(unit)
 
-    def execute(
+    def _bind_extra_textures(
         self,
-        graphics: "GraphicsBackend",
         reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    ) -> None:
+        """Bind extra textures to texture units and set C++ uniforms map."""
+        from termin._native import log
+
+        # Clear previous frame's uniforms
+        self.clear_extra_textures()
+
+        for i, (uniform_name, resource_name) in enumerate(self._extra_textures.items()):
+            fbo = reads_fbos.get(resource_name)
+            if fbo is None:
+                log.warn(f"[ColorPass:{self.pass_name}] FBO not found for resource: {resource_name}")
+                continue
+
+            # Get color texture from FBO
+            try:
+                tex = fbo.color_texture()
+            except AttributeError as e:
+                log.warn(f"[ColorPass:{self.pass_name}] No color_texture on FBO {resource_name}: {e}")
+                continue
+
+            # Bind to texture unit
+            unit = EXTRA_TEXTURE_UNIT_START + i
+            tex.bind(unit)
+
+            # Register uniform->unit mapping for C++ to use
+            self.set_extra_texture_uniform(uniform_name, unit)
+
+    def execute(self, ctx: "ExecuteContext") -> None:
         """Execute color pass using C++ implementation."""
+        scene = ctx.scene
+        camera = ctx.camera
+        rect = ctx.rect
+
         # If camera_name is set, use it (overrides passed camera)
         if self.camera_name:
             camera = self._find_camera_by_name(scene, self.camera_name)
@@ -212,26 +262,30 @@ class ColorPass(_ColorPassNative):
             return  # No camera available
 
         # Get output FBO and use its size for rendering
-        output_fbo = writes_fbos.get(self.output_res)
+        output_fbo = ctx.writes_fbos.get(self.output_res)
         if output_fbo is not None:
             fbo_size = output_fbo.get_size()
             rect = (0, 0, fbo_size.width, fbo_size.height)
             # Update camera aspect ratio to match FBO
             camera.set_aspect(fbo_size.width / max(1, fbo_size.height))
 
-        if lights is not None:
-            scene.lights = lights
+        if ctx.lights is not None:
+            scene.lights = ctx.lights
 
         # Get ShadowMapArrayResource (shadow_res is "" if disabled)
         shadow_array = None
         if self.shadow_res:
-            shadow_array = reads_fbos.get(self.shadow_res)
+            shadow_array = ctx.reads_fbos.get(self.shadow_res)
             from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
             if not isinstance(shadow_array, ShadowMapArrayResource):
                 shadow_array = None
 
         # Bind shadow maps to texture units
-        self._bind_shadow_maps(graphics, shadow_array)
+        self._bind_shadow_maps(ctx.graphics, shadow_array)
+
+        # Bind extra textures (if any)
+        if self._extra_textures:
+            self._bind_extra_textures(ctx.reads_fbos)
 
         # Get camera matrices
         view = camera.get_view_matrix()
@@ -257,18 +311,19 @@ class ColorPass(_ColorPassNative):
         # Call C++ execute_with_data
         # Debugger window and depth callback are already set on C++ object
         self.execute_with_data(
-            graphics=graphics,
-            reads_fbos=reads_fbos,
-            writes_fbos=writes_fbos,
+            graphics=ctx.graphics,
+            reads_fbos=ctx.reads_fbos,
+            writes_fbos=ctx.writes_fbos,
             rect=rect,
-            entities=list(scene.entities),
-            view=view.astype(np.float32),
-            projection=projection.astype(np.float32),
+            scene=scene,
+            view=view.to_numpy_f32(),
+            projection=projection.to_numpy_f32(),
             camera_position=cam_pos_arr,
-            context_key=context_key,
+            context_key=ctx.context_key,
             lights=list(scene.lights) if scene.lights else [],
             ambient_color=ambient_color,
             ambient_intensity=ambient_intensity,
             shadow_array=shadow_array,
             shadow_settings=scene.shadow_settings,
+            layer_mask=ctx.layer_mask,
         )

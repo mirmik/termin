@@ -21,6 +21,7 @@ from termin.visualization.render.system_shaders import get_system_shader
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.lighting import Light
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class ShadowPass(_ShadowPassNative):
@@ -104,48 +105,37 @@ class ShadowPass(_ShadowPassNative):
             )
         ]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict,
-        writes_fbos: dict,
-        rect: tuple,
-        scene,
-        camera,
-        context_key: int,
-        lights: List["Light"] | None = None,
-        canvas=None,
-    ) -> None:
+    def execute(self, ctx: "ExecuteContext") -> None:
         """
         Выполняет shadow pass для всех источников света с тенями.
 
         Uses C++ implementation for rendering.
         """
-        shadow_array = writes_fbos.get(self.output_res)
+        shadow_array = ctx.writes_fbos.get(self.output_res)
         if shadow_array is None:
             return
 
         # Clear previous frame's entries
         shadow_array.clear()
 
-        if not lights:
+        if not ctx.lights:
             return
 
         # Set shadow shader for C++ (enables skinning injection)
-        self.shadow_shader_program = get_system_shader("shadow", graphics)
+        self.shadow_shader_program = get_system_shader("shadow", ctx.graphics)
 
         # Get camera matrices
-        camera_view = camera.get_view_matrix().astype(np.float32)
-        camera_projection = camera.get_projection_matrix().astype(np.float32)
+        camera_view = ctx.camera.get_view_matrix().to_numpy_f32()
+        camera_projection = ctx.camera.get_projection_matrix().to_numpy_f32()
 
         # Call C++ execute_shadow_pass
         results = self.execute_shadow_pass(
-            graphics=graphics,
-            entities=list(scene.entities),
-            lights=list(lights),
+            graphics=ctx.graphics,
+            entities=list(ctx.scene.entities),
+            lights=list(ctx.lights),
             camera_view=camera_view,
             camera_projection=camera_projection,
-            context_key=context_key,
+            context_key=ctx.context_key,
         )
 
         # Convert C++ results to ShadowMapArrayResource

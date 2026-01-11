@@ -909,6 +909,23 @@ class GraphNode(QGraphicsItem):
         rename_action = menu.addAction("Rename")
         rename_action.triggered.connect(self._rename_node)
 
+        # ColorPass specific actions
+        if self.data.get("pass_class") == "ColorPass":
+            menu.addSeparator()
+            add_action = menu.addAction("Add Texture Input...")
+            add_action.triggered.connect(self._add_color_pass_texture_input)
+
+            # Show remove submenu if there are removable inputs
+            static = {"input_res", "shadow_res", "output_res_target"}
+            removable = [s for s in self.input_sockets if s.name not in static]
+            if removable:
+                remove_menu = menu.addMenu("Remove Texture Input")
+                for sock in removable:
+                    action = remove_menu.addAction(sock.name)
+                    action.triggered.connect(
+                        lambda checked, n=sock.name: self._remove_texture_input(n)
+                    )
+
         menu.addSeparator()
 
         # Delete action
@@ -938,3 +955,32 @@ class GraphNode(QGraphicsItem):
             from termin.nodegraph.scene import NodeGraphScene
             if isinstance(scene, NodeGraphScene):
                 scene.remove_node(self)
+
+    def _add_color_pass_texture_input(self) -> None:
+        """Show dialog to add texture input for ColorPass."""
+        name, ok = QInputDialog.getText(
+            None,
+            "Add Texture Input",
+            "Uniform name (e.g. depth_texture):",
+        )
+        if ok and name:
+            socket_name = name.strip()
+            if not socket_name:
+                return
+
+            # Collect current dynamic inputs
+            static = {"input_res", "shadow_res", "output_res_target"}
+            current = [(s.name, s.socket_type) for s in self.input_sockets if s.name not in static]
+            current.append((socket_name, "fbo"))
+
+            self.update_dynamic_inputs(current, keep_sockets=static)
+
+    def _remove_texture_input(self, name: str) -> None:
+        """Remove a texture input socket from ColorPass."""
+        static = {"input_res", "shadow_res", "output_res_target"}
+        current = [
+            (s.name, s.socket_type)
+            for s in self.input_sockets
+            if s.name not in static and s.name != name
+        ]
+        self.update_dynamic_inputs(current, keep_sockets=static)

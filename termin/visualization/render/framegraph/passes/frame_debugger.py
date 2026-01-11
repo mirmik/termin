@@ -11,6 +11,7 @@ from termin.visualization.render.framegraph.passes.base import RenderFramePass
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class FrameDebuggerPass(RenderFramePass):
@@ -257,18 +258,7 @@ class FrameDebuggerPass(RenderFramePass):
 
         return None
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene=None,
-        camera=None,
-        context_key: int = 0,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         # Если нет окна дебаггера — ничего не делаем
         if self._debugger_window is None:
             return
@@ -280,7 +270,7 @@ class FrameDebuggerPass(RenderFramePass):
         if not src_name:
             return
 
-        src_fb = reads_fbos.get(src_name)
+        src_fb = ctx.reads_fbos.get(src_name)
         if src_fb is None:
             return
 
@@ -296,9 +286,9 @@ class FrameDebuggerPass(RenderFramePass):
         if fbo.is_msaa():
             # Создаём или переиспользуем resolve FBO
             w, h = fbo.get_size()
-            resolve_fbo = self._get_or_create_resolve_fbo(graphics, w, h)
+            resolve_fbo = self._get_or_create_resolve_fbo(ctx.graphics, w, h)
             # Blit MSAA -> non-MSAA (color + depth)
-            graphics.blit_framebuffer(
+            ctx.graphics.blit_framebuffer(
                 fbo, resolve_fbo,
                 (0, 0, w, h),
                 (0, 0, w, h),
@@ -310,7 +300,7 @@ class FrameDebuggerPass(RenderFramePass):
         # Читаем depth buffer только по запросу (после резолва, если был MSAA)
         if self._depth_update_requested:
             self._depth_update_requested = False
-            self._read_depth_buffer(graphics, texture_fbo)
+            self._read_depth_buffer(ctx.graphics, texture_fbo)
 
         # Извлекаем текстуру из (возможно resolved) FBO
         tex = texture_fbo.color_texture()
@@ -329,27 +319,27 @@ class FrameDebuggerPass(RenderFramePass):
             dst_w, dst_h = self._debugger_window.framebuffer_size()
 
             # Биндим framebuffer 0 (окно)
-            graphics.bind_framebuffer(None)
-            graphics.set_viewport(0, 0, dst_w, dst_h)
+            ctx.graphics.bind_framebuffer(None)
+            ctx.graphics.set_viewport(0, 0, dst_w, dst_h)
 
             # Clear для debug
-            graphics.clear_color(0.2, 0.0, 0.0, 1.0)
+            ctx.graphics.clear_color(0.2, 0.0, 0.0, 1.0)
 
-            graphics.set_depth_test(False)
-            graphics.set_depth_mask(False)
+            ctx.graphics.set_depth_test(False)
+            ctx.graphics.set_depth_mask(False)
 
             # Рендерим fullscreen quad с нашим шейдером
             shader = FrameDebuggerPass._get_shader()
-            shader.ensure_ready(graphics, 0)  # debugger has its own context
+            shader.ensure_ready(ctx.graphics, 0)  # debugger has its own context
             shader.use()
             shader.set_uniform_int("u_tex", 0)
             shader.set_uniform_int("u_channel", self._channel_mode)
             shader.set_uniform_int("u_highlight_hdr", 1 if self._highlight_hdr else 0)
             tex.bind(0)
-            graphics.draw_ui_textured_quad(0)
+            ctx.graphics.draw_ui_textured_quad(0)
 
-            graphics.set_depth_test(True)
-            graphics.set_depth_mask(True)
+            ctx.graphics.set_depth_test(True)
+            ctx.graphics.set_depth_mask(True)
 
             # Показываем результат
             self._debugger_window.swap_buffers()

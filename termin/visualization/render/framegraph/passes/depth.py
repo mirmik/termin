@@ -10,6 +10,7 @@ from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class DepthPass(_DepthPassNative):
@@ -128,19 +129,12 @@ class DepthPass(_DepthPassNative):
                     return camera
         return None
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         """Execute depth pass using C++ implementation."""
+        scene = ctx.scene
+        camera = ctx.camera
+        rect = ctx.rect
+
         # If camera_name is set, use it (overrides passed camera)
         if self.camera_name:
             camera = self._find_camera_by_name(scene, self.camera_name)
@@ -151,7 +145,7 @@ class DepthPass(_DepthPassNative):
             return  # No camera available
 
         # Get output FBO and use its size for rendering
-        output_fbo = writes_fbos.get(self.output_res)
+        output_fbo = ctx.writes_fbos.get(self.output_res)
         if output_fbo is not None:
             fbo_size = output_fbo.get_size()
             rect = (0, 0, fbo_size.width, fbo_size.height)
@@ -175,14 +169,15 @@ class DepthPass(_DepthPassNative):
 
         # Call C++ execute_with_data
         self.execute_with_data(
-            graphics=graphics,
-            reads_fbos=reads_fbos,
-            writes_fbos=writes_fbos,
+            graphics=ctx.graphics,
+            reads_fbos=ctx.reads_fbos,
+            writes_fbos=ctx.writes_fbos,
             rect=rect,
-            entities=list(scene.entities),
-            view=view.astype(np.float32),
-            projection=projection.astype(np.float32),
-            context_key=context_key,
+            scene=scene,
+            view=view.to_numpy_f32(),
+            projection=projection.to_numpy_f32(),
+            context_key=ctx.context_key,
             near_plane=near_plane,
             far_plane=far_plane,
+            layer_mask=ctx.layer_mask,
         )

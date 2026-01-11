@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         FramebufferHandle,
         GPUTextureHandle,
     )
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class PostEffectPass(RenderFramePass):
@@ -77,25 +78,14 @@ class PostEffectPass(RenderFramePass):
         # When different, they should be separate FBOs (no aliasing)
         return []
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ) -> None:
+    def execute(self, ctx: "ExecuteContext") -> None:
         """Execute the post effect pass."""
         if not self.enabled:
             return
 
         # Get FBOs
-        input_fbo = reads_fbos.get(self.input_res)
-        output_fbo = writes_fbos.get(self.output_res)
+        input_fbo = ctx.reads_fbos.get(self.input_res)
+        output_fbo = ctx.writes_fbos.get(self.output_res)
 
         if input_fbo is None:
             return
@@ -109,32 +99,32 @@ class PostEffectPass(RenderFramePass):
         if output_fbo is not None:
             w, h = output_fbo.get_size()
         else:
-            _, _, w, h = rect
+            _, _, w, h = ctx.rect
 
         # Bind output FBO
-        graphics.bind_framebuffer(output_fbo)
-        graphics.set_viewport(0, 0, w, h)
+        ctx.graphics.bind_framebuffer(output_fbo)
+        ctx.graphics.set_viewport(0, 0, w, h)
 
         # Standard post-effect state
-        graphics.set_depth_test(False)
-        graphics.set_depth_mask(False)
-        graphics.set_blend(False)
+        ctx.graphics.set_depth_test(False)
+        ctx.graphics.set_depth_mask(False)
+        ctx.graphics.set_blend(False)
 
         # Apply the effect
         self.apply(
-            graphics=graphics,
+            graphics=ctx.graphics,
             input_tex=input_tex,
             output_fbo=output_fbo,
             size=(w, h),
-            context_key=context_key,
-            reads_fbos=reads_fbos,
-            scene=scene,
-            camera=camera,
+            context_key=ctx.context_key,
+            reads_fbos=ctx.reads_fbos,
+            scene=ctx.scene,
+            camera=ctx.camera,
         )
 
         # Restore state
-        graphics.set_depth_test(True)
-        graphics.set_depth_mask(True)
+        ctx.graphics.set_depth_test(True)
+        ctx.graphics.set_depth_mask(True)
 
     def apply(
         self,

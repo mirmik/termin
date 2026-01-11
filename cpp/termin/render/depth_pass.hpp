@@ -18,6 +18,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 #include "tc_inspect.hpp"
+#include "tc_scene.h"
 
 namespace nb = nanobind;
 
@@ -64,12 +65,13 @@ public:
         const FBOMap& reads_fbos,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        const std::vector<Entity>& entities,
+        tc_scene* scene,
         const Mat44f& view,
         const Mat44f& projection,
         int64_t context_key,
         float near_plane,
-        float far_plane
+        float far_plane,
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
     // Legacy execute (required by base class) - does nothing
@@ -93,20 +95,20 @@ public:
         return entity_names;
     }
 
-private:
-    // Depth shader (lazily compiled)
-    std::unique_ptr<ShaderProgram> _depth_shader;
-
-    // Get or compile depth shader
-    ShaderProgram* get_depth_shader(GraphicsBackend* graphics);
-
     // Collect drawable components from entities
     struct DepthDrawCall {
         Entity entity;
         tc_component* component;
     };
 
-    std::vector<DepthDrawCall> collect_draw_calls(const std::vector<Entity>& entities);
+    std::vector<DepthDrawCall> collect_draw_calls(tc_scene* scene, uint64_t layer_mask);
+
+private:
+    // Depth shader (lazily compiled)
+    std::unique_ptr<ShaderProgram> _depth_shader;
+
+    // Get or compile depth shader
+    ShaderProgram* get_depth_shader(GraphicsBackend* graphics);
 
     // Call debugger blit if debug point matches entity name
     void maybe_blit_to_debugger(

@@ -12,6 +12,7 @@ from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 from termin.navmesh.polygon_builder import PolygonBuilder
 from termin.navmesh.persistence import NavMeshPersistence
 from termin.navmesh.display_component import NavMeshDisplayComponent
+from termin.navmesh.material_component import NavMeshMaterialComponent
 from termin.navmesh.pathfinding import RegionGraph, NavMeshGraph, Portal
 from termin.navmesh.pathfinding_world_component import PathfindingWorldComponent
 from termin.navmesh.agent_component import NavMeshAgentComponent
@@ -23,6 +24,7 @@ __all__ = [
     "PolygonBuilder",
     "NavMeshPersistence",
     "NavMeshDisplayComponent",
+    "NavMeshMaterialComponent",
     "RegionGraph",
     "NavMeshGraph",
     "Portal",

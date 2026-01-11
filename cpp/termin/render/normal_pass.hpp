@@ -18,6 +18,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 #include "tc_inspect.hpp"
+#include "tc_scene.h"
 
 namespace nb = nanobind;
 
@@ -63,10 +64,11 @@ public:
         const FBOMap& reads_fbos,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        const std::vector<Entity>& entities,
+        tc_scene* scene,
         const Mat44f& view,
         const Mat44f& projection,
-        int64_t context_key
+        int64_t context_key,
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
     // Legacy execute (required by base class) - does nothing
@@ -90,20 +92,20 @@ public:
         return entity_names;
     }
 
-private:
-    // Normal shader (lazily compiled)
-    std::unique_ptr<ShaderProgram> _normal_shader;
-
-    // Get or compile normal shader
-    ShaderProgram* get_normal_shader(GraphicsBackend* graphics);
-
     // Collect drawable components from entities
     struct NormalDrawCall {
         Entity entity;
         tc_component* component;
     };
 
-    std::vector<NormalDrawCall> collect_draw_calls(const std::vector<Entity>& entities);
+    std::vector<NormalDrawCall> collect_draw_calls(tc_scene* scene, uint64_t layer_mask);
+
+private:
+    // Normal shader (lazily compiled)
+    std::unique_ptr<ShaderProgram> _normal_shader;
+
+    // Get or compile normal shader
+    ShaderProgram* get_normal_shader(GraphicsBackend* graphics);
 
     // Call debugger blit if debug point matches entity name
     void maybe_blit_to_debugger(

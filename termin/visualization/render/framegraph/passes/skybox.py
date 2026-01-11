@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -8,6 +8,9 @@ from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.render_context import RenderContext
 from termin.editor.inspect_field import InspectField
+
+if TYPE_CHECKING:
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class SkyBoxPass(RenderFramePass):
@@ -67,18 +70,7 @@ class SkyBoxPass(RenderFramePass):
             )
         ]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: Dict[str, "FramebufferHandle | None"],
-        writes_fbos: Dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         """
         Рисует skybox до основной геометрии.
 
@@ -90,79 +82,79 @@ class SkyBoxPass(RenderFramePass):
           - V берётся без трансляции, чтобы куб всегда оставался вокруг камеры
             при движении.
         """
-        if scene is None:
+        if ctx.scene is None:
             return
 
-        mesh = scene.skybox_mesh()
-        material = scene.skybox_material()
-        
+        mesh = ctx.scene.skybox_mesh()
+        material = ctx.scene.skybox_material()
+
         if mesh is None or material is None:
             return
 
-        _, _, width, height = rect
+        _, _, width, height = ctx.rect
 
-        fb = writes_fbos.get(self.output_res)
+        fb = ctx.writes_fbos.get(self.output_res)
         if fb is None:
             return
 
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, width, height)
+        ctx.graphics.bind_framebuffer(fb)
+        ctx.graphics.set_viewport(0, 0, width, height)
 
         # Матрицы камеры
-        view = camera.view_matrix()
-        projection = camera.projection_matrix()
+        view = ctx.camera.view_matrix()
+        projection = ctx.camera.projection_matrix()
 
         # Убираем трансляцию камеры — skybox не должен двигаться при перемещении
-        view_no_translation = np.array(view, copy=True)
-        view_no_translation[:3, 3] = 0.0
+        view_no_translation = view.with_translation(0.0, 0.0, 0.0)
 
         # Модельная матрица — единичная, куб "вокруг камеры"
-        model = np.identity(4, dtype=np.float32)
+        from termin.geombase import Mat44
+        model = Mat44.identity()
 
         # Skybox должен нарисоваться поверх содержимого color-буфера,
         # но не портить depth-буфер для последующей геометрии.
-        graphics.set_depth_mask(False)
-        graphics.set_depth_func("lequal")
+        ctx.graphics.set_depth_mask(False)
+        ctx.graphics.set_depth_func("lequal")
 
         material.apply(
             model,
             view_no_translation,
             projection,
-            graphics=graphics,
-            context_key=context_key,
+            graphics=ctx.graphics,
+            context_key=ctx.context_key,
         )
 
         # Upload skybox colors based on type
-        if scene.skybox_type == "solid":
+        if ctx.scene.skybox_type == "solid":
             material.shader.set_uniform_vec3(
                 "u_skybox_color",
-                np.asarray(scene.skybox_color, dtype=np.float32),
+                np.asarray(ctx.scene.skybox_color, dtype=np.float32),
             )
-        elif scene.skybox_type == "gradient":
+        elif ctx.scene.skybox_type == "gradient":
             material.shader.set_uniform_vec3(
                 "u_skybox_top_color",
-                np.asarray(scene.skybox_top_color, dtype=np.float32),
+                np.asarray(ctx.scene.skybox_top_color, dtype=np.float32),
             )
             material.shader.set_uniform_vec3(
                 "u_skybox_bottom_color",
-                np.asarray(scene.skybox_bottom_color, dtype=np.float32),
+                np.asarray(ctx.scene.skybox_bottom_color, dtype=np.float32),
             )
 
         render_context = RenderContext(
             view=view_no_translation,
             projection=projection,
-            camera=camera,
-            scene=scene,
-            context_key=context_key,
-            graphics=graphics,
+            camera=ctx.camera,
+            scene=ctx.scene,
+            context_key=ctx.context_key,
+            graphics=ctx.graphics,
             phase="skybox",
         )
 
         # Draw skybox mesh
         if mesh.is_valid:
-            gpu = scene.skybox_gpu()
+            gpu = ctx.scene.skybox_gpu()
             gpu.draw(render_context, mesh.mesh, mesh.version)
 
         # Возвращаем стандартные настройки глубины
-        graphics.set_depth_func("less")
-        graphics.set_depth_mask(True)
+        ctx.graphics.set_depth_func("less")
+        ctx.graphics.set_depth_mask(True)

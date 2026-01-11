@@ -148,6 +148,11 @@ void bind_pose3(nb::module_& m) {
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner);
         })
+        .def("as_mat44", [](const Pose3& p) {
+            Mat44 mat;
+            p.as_matrix(mat.data);
+            return mat;
+        })
         .def("as_matrix34", [](const Pose3& p) {
             double* data = new double[12];
             double rot[9];

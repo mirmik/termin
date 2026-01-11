@@ -391,6 +391,7 @@ class RenderingManager:
             viewport.depth = config.depth
             viewport.input_mode = config.input_mode
             viewport.block_input_in_editor = config.block_input_in_editor
+            viewport.layer_mask = config.layer_mask
             viewports.append(viewport)
 
         # Process scene pipelines - compile and assign to viewports
@@ -650,6 +651,7 @@ class RenderingManager:
                         camera=viewport.camera,
                         rect=(px, py, pw, ph),
                         canvas=viewport.canvas,
+                        layer_mask=viewport.effective_layer_mask,
                     )
 
                 if not viewport_contexts or first_viewport is None:
@@ -688,6 +690,7 @@ class RenderingManager:
                 rect=viewport.rect,
                 canvas=viewport.canvas,
                 pipeline=viewport.pipeline,
+                layer_mask=viewport.effective_layer_mask,
             )
             views_and_states.append((view, state))
 

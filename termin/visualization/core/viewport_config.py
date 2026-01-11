@@ -43,6 +43,9 @@ class ViewportConfig:
     # Block input when running in editor mode
     block_input_in_editor: bool = False
 
+    # Layer mask (which entity layers to render)
+    layer_mask: int = 0xFFFFFFFFFFFFFFFF
+
     def serialize(self) -> dict:
         """Serialize to dict."""
         result = {
@@ -58,6 +61,9 @@ class ViewportConfig:
             result["pipeline_uuid"] = self.pipeline_uuid
         if self.pipeline_name is not None:
             result["pipeline_name"] = self.pipeline_name
+        # Only serialize layer_mask if not all layers
+        if self.layer_mask != 0xFFFFFFFFFFFFFFFF:
+            result["layer_mask"] = hex(self.layer_mask)
         return result
 
     @classmethod
@@ -74,6 +80,13 @@ class ViewportConfig:
             pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name)
             pipeline_name = None  # Clear old-style name after conversion
 
+        # Parse layer_mask (may be hex string or int)
+        layer_mask_raw = data.get("layer_mask", 0xFFFFFFFFFFFFFFFF)
+        if isinstance(layer_mask_raw, str):
+            layer_mask = int(layer_mask_raw, 16) if layer_mask_raw.startswith("0x") else int(layer_mask_raw)
+        else:
+            layer_mask = int(layer_mask_raw)
+
         return cls(
             name=data.get("name", ""),
             display_name=data.get("display_name", "Main"),
@@ -84,6 +97,7 @@ class ViewportConfig:
             depth=data.get("depth", 0),
             input_mode=data.get("input_mode", "simple"),
             block_input_in_editor=data.get("block_input_in_editor", False),
+            layer_mask=layer_mask,
         )
 
 

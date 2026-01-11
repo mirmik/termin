@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
@@ -65,6 +66,7 @@ class ViewportContext:
     camera: "CameraComponent"
     rect: Tuple[int, int, int, int]  # (px, py, pw, ph) in pixels
     canvas: Optional["Canvas"] = None
+    layer_mask: int = 0xFFFFFFFFFFFFFFFF
 
 
 class RenderEngine:
@@ -331,18 +333,21 @@ class RenderEngine:
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
 
+            ctx = ExecuteContext(
+                graphics=self.graphics,
+                reads_fbos=pass_reads,
+                writes_fbos=pass_writes,
+                rect=(px, py, pw, ph),
+                scene=scene,
+                camera=view.camera,
+                context_key=context_key,
+                lights=lights,
+                canvas=view.canvas,
+                layer_mask=view.layer_mask,
+            )
+
             with profiler.section(render_pass.pass_name):
-                render_pass.execute(
-                    self.graphics,
-                    reads_fbos=pass_reads,
-                    writes_fbos=pass_writes,
-                    rect=(px, py, pw, ph),
-                    scene=scene,
-                    camera=view.camera,
-                    context_key=context_key,
-                    lights=lights,
-                    canvas=view.canvas,
-                )
+                render_pass.execute(ctx)
 
             # Проверяем GL ошибки после пасса
             self._check_gl_errors(render_pass.pass_name)
@@ -578,18 +583,21 @@ class RenderEngine:
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
 
+            exec_ctx = ExecuteContext(
+                graphics=self.graphics,
+                reads_fbos=pass_reads,
+                writes_fbos=pass_writes,
+                rect=(px, py, pw, ph),
+                scene=scene,
+                camera=ctx.camera,
+                context_key=context_key,
+                lights=lights,
+                canvas=ctx.canvas,
+                layer_mask=ctx.layer_mask,
+            )
+
             with profiler.section(render_pass.pass_name):
-                render_pass.execute(
-                    self.graphics,
-                    reads_fbos=pass_reads,
-                    writes_fbos=pass_writes,
-                    rect=(px, py, pw, ph),
-                    scene=scene,
-                    camera=ctx.camera,
-                    context_key=context_key,
-                    lights=lights,
-                    canvas=ctx.canvas,
-                )
+                render_pass.execute(exec_ctx)
 
             self._check_gl_errors(render_pass.pass_name)
 

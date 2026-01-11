@@ -570,19 +570,24 @@ class Scene:
             Entity with matching UUID or None if not found
         """
         for entity in self.entities:
-            result = self._find_entity_by_uuid_recursive(entity, uuid)
-            if result is not None:
-                return result
+            if entity.uuid == uuid:
+                return entity
         return None
 
-    def _find_entity_by_uuid_recursive(self, entity: Entity, uuid: str) -> Entity | None:
-        """Recursive helper for find_entity_by_uuid."""
-        if entity.uuid == uuid:
-            return entity
-        for child in entity.children():
-            result = self._find_entity_by_uuid_recursive(child, uuid)
-            if result is not None:
-                return result
+    def find_entity_by_name(self, name: str) -> Entity | None:
+        """
+        Find entity by name in the scene hierarchy.
+
+        Searches through all entities and their children recursively.
+
+        Args:
+            name: The name to search for
+        Returns:
+            Entity with matching name or None if not found
+        """
+        for entity in self.entities:
+            if entity.name == name:
+                return entity
         return None
 
     # --- Component search ---

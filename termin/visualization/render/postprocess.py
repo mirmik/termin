@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Set, Tuple, List
+from typing import Dict, Set, Tuple, List, TYPE_CHECKING
 
 import numpy as np
 
@@ -14,6 +14,9 @@ from termin.visualization.platform.backends.base import (
 from termin.visualization.render.framegraph import RenderFramePass, blit_fbo_to_fbo
 from termin.visualization.render.framegraph.passes.present import _get_texture_from_resource
 from termin.editor.inspect_field import InspectField
+
+if TYPE_CHECKING:
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class PostEffect:
@@ -333,30 +336,19 @@ class PostProcessPass(RenderFramePass):
         """
         self.effects.append(effect)
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene=None,
-        camera=None,
-        context_key: int = 0,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 
         # Для NOP бэкенда пропускаем реальные OpenGL операции
-        if isinstance(graphics, NOPGraphicsBackend):
+        if isinstance(ctx.graphics, NOPGraphicsBackend):
             return
 
-        px, py, pw, ph = rect
-        key = context_key
+        px, py, pw, ph = ctx.rect
+        key = ctx.context_key
 
         size = (pw, ph)
 
-        fb_in = reads_fbos.get(self.input_res)
+        fb_in = ctx.reads_fbos.get(self.input_res)
         if fb_in is None:
             return
 
@@ -378,7 +370,7 @@ class PostProcessPass(RenderFramePass):
 
         extra_textures: dict[str, "GPUTextureHandle"] = {}
         for res_name in required_resources:
-            fb = reads_fbos.get(res_name)
+            fb = ctx.reads_fbos.get(res_name)
             if fb is None:
                 continue
             # Извлекаем текстуру с учетом типа ресурса
@@ -386,24 +378,24 @@ class PostProcessPass(RenderFramePass):
             if tex is not None:
                 extra_textures[res_name] = tex
 
-        fb_out_final = writes_fbos.get(self.output_res)
+        fb_out_final = ctx.writes_fbos.get(self.output_res)
         if fb_out_final is None:
             return
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
-            blit_fbo_to_fbo(graphics, fb_in, fb_out_final, size, key)
+            blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out_final, size, key)
             return
 
         current_tex = color_tex
 
         # <<< ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину >>>
-        graphics.set_depth_test(False)
-        graphics.set_depth_mask(False)
+        ctx.graphics.set_depth_test(False)
+        ctx.graphics.set_depth_mask(False)
 
         # Debugger: блит входной текстуры если выбран символ "input"
         if debug_symbol == "input":
-            self._blit_to_debugger(graphics, fb_in)
+            self._blit_to_debugger(ctx.graphics, fb_in)
 
         try:
             for i, effect in enumerate(self.effects):
@@ -412,17 +404,17 @@ class PostProcessPass(RenderFramePass):
                 if is_last:
                     fb_target = fb_out_final
                 else:
-                    fb_target = self._get_temp_fbo(graphics, i % 2, size)
+                    fb_target = self._get_temp_fbo(ctx.graphics, i % 2, size)
 
-                graphics.bind_framebuffer(fb_target)
-                graphics.set_viewport(0, 0, pw, ph)
+                ctx.graphics.bind_framebuffer(fb_target)
+                ctx.graphics.set_viewport(0, 0, pw, ph)
 
-                effect.draw(graphics, key, current_tex, extra_textures, size, fb_target)
-                graphics.check_gl_error(f"PostFX: {effect.name if hasattr(effect, 'name') else effect.__class__.__name__}")
+                effect.draw(ctx.graphics, key, current_tex, extra_textures, size, fb_target)
+                ctx.graphics.check_gl_error(f"PostFX: {effect.name if hasattr(effect, 'name') else effect.__class__.__name__}")
 
                 # Debugger: блит после применения эффекта если выбран его символ
                 if debug_symbol == self._effect_symbol(i, effect):
-                    self._blit_to_debugger(graphics, fb_target)
+                    self._blit_to_debugger(ctx.graphics, fb_target)
 
                 # Извлекаем текстуру с учетом типа ресурса
                 current_tex = _get_texture_from_resource(fb_target)
@@ -430,8 +422,8 @@ class PostProcessPass(RenderFramePass):
                     break
         finally:
             # восстанавливаем "нормальное" состояние для последующих пассов
-            graphics.set_depth_test(True)
-            graphics.set_depth_mask(True)
+            ctx.graphics.set_depth_test(True)
+            ctx.graphics.set_depth_mask(True)
 
     def _blit_to_debug(
         self,

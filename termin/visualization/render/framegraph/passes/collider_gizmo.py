@@ -27,6 +27,7 @@ from termin.geombase import Vec3
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.visualization.render.framebuffer import FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 # Collider wireframe color (green)
@@ -74,35 +75,24 @@ class ColliderGizmoPass(RenderFramePass):
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         if self.passthrough:
             return
 
-        if scene is None or not scene.colliders:
+        if ctx.scene is None or not ctx.scene.colliders:
             return
 
-        px, py, pw, ph = rect
+        px, py, pw, ph = ctx.rect
 
-        fb = writes_fbos.get(self.output_res)
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, pw, ph)
+        fb = ctx.writes_fbos.get(self.output_res)
+        ctx.graphics.bind_framebuffer(fb)
+        ctx.graphics.set_viewport(0, 0, pw, ph)
 
-        view = camera.get_view_matrix().astype(np.float32)
-        proj = camera.get_projection_matrix().astype(np.float32)
+        view = ctx.camera.get_view_matrix().to_numpy_f32()
+        proj = ctx.camera.get_projection_matrix().to_numpy_f32()
 
-        self._renderer.begin(graphics, view, proj, depth_test=False)
-        self._draw_colliders(scene)
+        self._renderer.begin(ctx.graphics, view, proj, depth_test=False)
+        self._draw_colliders(ctx.scene)
         self._renderer.end()
 
     def _draw_colliders(self, scene):

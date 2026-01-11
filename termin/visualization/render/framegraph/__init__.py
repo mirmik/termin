@@ -7,6 +7,7 @@ from termin.visualization.render.framegraph.core import (
 )
 from termin.visualization.render.framegraph.pipeline import RenderPipeline
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+from termin.visualization.render.framegraph.execute_context import ExecuteContext
 from termin.visualization.render.framegraph.resource import (
     FrameGraphResource,
     SingleFBO,
@@ -36,6 +37,7 @@ __all__ = [
     "ResourceSpec",
     "RenderPipeline",
     "RenderFramePass",
+    "ExecuteContext",
     "FrameGraphResource",
     "SingleFBO",
     "ShadowMapArrayResource",

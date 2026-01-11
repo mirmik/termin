@@ -9,6 +9,7 @@ from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class UIWidgetPass(RenderFramePass):
@@ -57,39 +58,20 @@ class UIWidgetPass(RenderFramePass):
         """UIWidgetPass reads input_res and writes output_res inplace."""
         return [(self.input_res, self.output_res)]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
-        rect: tuple[int, int, int, int],
-        scene=None,
-        camera=None,
-        canvas=None,
-        context_key: int = 0,
-        lights=None,
-    ):
-        px, py, pw, ph = rect
+    def execute(self, ctx: "ExecuteContext") -> None:
+        px, py, pw, ph = ctx.rect
 
-        fb_out = writes_fbos.get(self.output_res)
-        graphics.bind_framebuffer(fb_out)
-        graphics.set_viewport(0, 0, pw, ph)
+        fb_out = ctx.writes_fbos.get(self.output_res)
+        ctx.graphics.bind_framebuffer(fb_out)
+        ctx.graphics.set_viewport(0, 0, pw, ph)
 
-        if scene is None:
+        if ctx.scene is None:
             return
-
-        # Get layer_mask from ViewportHintComponent on camera
-        layer_mask = 0xFFFFFFFFFFFFFFFF  # All layers by default
-        if camera is not None and camera.entity is not None:
-            from termin.visualization.core.viewport_hint import ViewportHintComponent
-            hint = camera.entity.get_component(ViewportHintComponent)
-            if hint is not None:
-                layer_mask = hint.layer_mask
 
         # Find all UIComponent instances in the scene
         from termin.visualization.ui.widgets.component import UIComponent
 
-        ui_components = scene.find_components(UIComponent)
+        ui_components = ctx.scene.find_components(UIComponent)
         if not ui_components:
             return
 
@@ -104,7 +86,7 @@ class UIWidgetPass(RenderFramePass):
             entity = ui_comp.entity
             if entity is not None:
                 entity_layer = entity.layer
-                if not (layer_mask & (1 << entity_layer)):
+                if not (ctx.layer_mask & (1 << entity_layer)):
                     continue
-            ui_comp.render(graphics, pw, ph, context_key)
-            graphics.check_gl_error(f"UIWidgets: {entity.name if entity else 'ui_component'}")
+            ui_comp.render(ctx.graphics, pw, ph, ctx.context_key)
+            ctx.graphics.check_gl_error(f"UIWidgets: {entity.name if entity else 'ui_component'}")

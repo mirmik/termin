@@ -48,12 +48,14 @@ class RenderView:
               (0,0) — левый нижний угол, (1,1) — правый верхний.
         canvas: Опциональная 2D канва для overlay UI.
         pipeline: Конвейер рендеринга.
+        layer_mask: Маска слоёв (какие entity рендерить).
     """
     scene: "Scene"
     camera: "CameraComponent"
     rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
     canvas: Optional["Canvas"] = None
     pipeline: Optional["RenderPipeline"] = None
+    layer_mask: int = 0xFFFFFFFFFFFFFFFF
 
     def compute_pixel_rect(
         self, 

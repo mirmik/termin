@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from termin.editor.gizmo_immediate import ImmediateGizmoRenderer
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.visualization.render.framebuffer import FramebufferHandle
+    from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
 class ImmediateGizmoPass(RenderFramePass):
@@ -65,36 +66,25 @@ class ImmediateGizmoPass(RenderFramePass):
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]
 
-    def execute(
-        self,
-        graphics: "GraphicsBackend",
-        reads_fbos: dict[str, "FramebufferHandle | None"],
-        writes_fbos: dict[str, "FramebufferHandle | None"],
-        rect: tuple[int, int, int, int],
-        scene,
-        camera,
-        context_key: int,
-        lights=None,
-        canvas=None,
-    ):
+    def execute(self, ctx: "ExecuteContext") -> None:
         gizmo = self._get_gizmo_renderer()
         if gizmo is None or not gizmo.visible:
             return
 
-        px, py, pw, ph = rect
+        px, py, pw, ph = ctx.rect
 
-        fb = writes_fbos.get(self.output_res)
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, pw, ph)
+        fb = ctx.writes_fbos.get(self.output_res)
+        ctx.graphics.bind_framebuffer(fb)
+        ctx.graphics.set_viewport(0, 0, pw, ph)
 
         # Clear depth so gizmo renders on top of scene
         # Depth test is enabled in gizmo.flush() for proper triangle occlusion
-        graphics.clear_depth()
+        ctx.graphics.clear_depth()
 
-        view = camera.get_view_matrix()
-        proj = camera.get_projection_matrix()
+        view = ctx.camera.get_view_matrix()
+        proj = ctx.camera.get_projection_matrix()
 
         # Draw and flush gizmo (scale is set once in set_target)
         gizmo.begin()
         gizmo.draw()
-        gizmo.flush(graphics, view, proj)
+        gizmo.flush(ctx.graphics, view, proj)

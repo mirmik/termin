@@ -24,6 +24,49 @@ Mat44f get_model_matrix(const Entity& entity) {
     return result;
 }
 
+// User data for entity iteration callback
+struct CollectDrawCallsData {
+    std::vector<DepthPass::DepthDrawCall>* draw_calls;
+    uint64_t layer_mask;
+};
+
+// Callback for tc_entity_pool_foreach
+bool collect_depth_draw_calls(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    auto* data = static_cast<CollectDrawCallsData*>(user_data);
+
+    // Filter by visibility and enabled
+    if (!tc_entity_pool_visible(pool, id) || !tc_entity_pool_enabled(pool, id)) {
+        return true; // continue iteration
+    }
+
+    // Filter by layer mask
+    uint64_t entity_layer = tc_entity_pool_layer(pool, id);
+    if (!(data->layer_mask & (1ULL << entity_layer))) {
+        return true; // continue iteration
+    }
+
+    // Create Entity wrapper for component access
+    Entity ent(pool, id);
+
+    // Get drawable components from entity
+    size_t comp_count = ent.component_count();
+    for (size_t ci = 0; ci < comp_count; ci++) {
+        tc_component* tc = ent.component_at(ci);
+        if (!tc || !tc->enabled) {
+            continue;
+        }
+
+        // Check if component is drawable via vtable
+        if (!tc_component_is_drawable(tc)) {
+            continue;
+        }
+
+        data->draw_calls->push_back(DepthPass::DepthDrawCall{ent, tc});
+    }
+
+    return true; // continue iteration
+}
+
 } // anonymous namespace
 
 // Depth shader - regular version
@@ -113,31 +156,30 @@ ShaderProgram* DepthPass::get_depth_shader(GraphicsBackend* graphics) {
 }
 
 std::vector<DepthPass::DepthDrawCall> DepthPass::collect_draw_calls(
-    const std::vector<Entity>& entities
+    tc_scene* scene,
+    uint64_t layer_mask
 ) {
     std::vector<DepthDrawCall> draw_calls;
 
-    for (const Entity& ent : entities) {
-        if (!ent.visible() || !ent.enabled()) {
-            continue;
-        }
-
-        // Get drawable components from entity
-        size_t comp_count = ent.component_count();
-        for (size_t ci = 0; ci < comp_count; ci++) {
-            tc_component* tc = ent.component_at(ci);
-            if (!tc || !tc->enabled) {
-                continue;
-            }
-
-            // Check if component is drawable via vtable
-            if (!tc_component_is_drawable(tc)) {
-                continue;
-            }
-
-            draw_calls.push_back(DepthDrawCall{ent, tc});
-        }
+    if (!scene) {
+        return draw_calls;
     }
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    if (!pool) {
+        return draw_calls;
+    }
+
+    // Estimate capacity
+    size_t entity_count = tc_entity_pool_count(pool);
+    draw_calls.reserve(entity_count);
+
+    // Collect draw calls via callback iteration
+    CollectDrawCallsData data;
+    data.draw_calls = &draw_calls;
+    data.layer_mask = layer_mask;
+
+    tc_entity_pool_foreach(pool, collect_depth_draw_calls, &data);
 
     return draw_calls;
 }
@@ -147,12 +189,13 @@ void DepthPass::execute_with_data(
     const FBOMap& reads_fbos,
     const FBOMap& writes_fbos,
     const Rect4i& rect,
-    const std::vector<Entity>& entities,
+    tc_scene* scene,
     const Mat44f& view,
     const Mat44f& projection,
     int64_t context_key,
     float near_plane,
-    float far_plane
+    float far_plane,
+    uint64_t layer_mask
 ) {
     // Find output FBO
     auto it = writes_fbos.find(output_res);
@@ -200,7 +243,7 @@ void DepthPass::execute_with_data(
     context.extra_uniforms = extra_uniforms;
 
     // Collect draw calls
-    auto draw_calls = collect_draw_calls(entities);
+    auto draw_calls = collect_draw_calls(scene, layer_mask);
 
     // Update entity names for debugging
     entity_names.clear();

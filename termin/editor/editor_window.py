@@ -1530,8 +1530,8 @@ class EditorWindow(QMainWindow):
         if self.camera is None:
             return fallback_pos
 
-        proj = self.camera.get_projection_matrix()
-        view = self.camera.get_view_matrix()
+        proj = self.camera.get_projection_matrix().to_numpy()
+        view = self.camera.get_view_matrix().to_numpy()
         pv = proj @ view
 
         # Inverse projection-view matrix

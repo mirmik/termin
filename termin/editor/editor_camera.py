@@ -100,11 +100,10 @@ class EditorCameraManager:
         camera_entity.add_component(camera)
         camera_entity.add_component(OrbitCameraController())
 
-        # Add ViewportHintComponent for layer mask control
+        # Add ViewportHintComponent for pipeline and layer mask control
         hint = ViewportHintComponent()
         hint.pipeline_name = "(Editor)"
-        # Layer mask: only layer 1 (editor UI layer)
-        hint.layer_mask = 1 << 1  # Layer 1
+        # All layers enabled by default (inherited from ViewportHintComponent.__init__)
         camera_entity.add_component(hint)
 
         # Create child entity for editor UI with layer=1
