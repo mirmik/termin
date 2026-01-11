@@ -138,3 +138,22 @@ class LayerMaskKind:
         if isinstance(data, str):
             return int(data, 16) if data.startswith("0x") else int(data)
         return int(data)
+
+
+@register_kind("navmesh_handle")
+class NavMeshHandleKind:
+    """Handler for navmesh_handle kind."""
+
+    @staticmethod
+    def serialize(obj):
+        from termin.assets.navmesh_handle import NavMeshHandle
+        if isinstance(obj, NavMeshHandle):
+            return obj.serialize()
+        return None
+
+    @staticmethod
+    def deserialize(data):
+        from termin.assets.navmesh_handle import NavMeshHandle
+        if isinstance(data, dict):
+            return NavMeshHandle.deserialize(data)
+        return NavMeshHandle()

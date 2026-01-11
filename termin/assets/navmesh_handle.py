@@ -30,6 +30,16 @@ class NavMeshHandle(ResourceHandle["NavMesh", "NavMeshAsset"]):
     _asset_getter = "get_navmesh_asset"
 
     @classmethod
+    def from_uuid(cls, uuid: str) -> "NavMeshHandle":
+        """Создать handle по UUID asset'а."""
+        from termin.assets.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_navmesh_asset_by_uuid(uuid)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
+
+    @classmethod
     def from_direct(cls, navmesh: "NavMesh") -> "NavMeshHandle":
         """Создать handle с raw NavMesh."""
         handle = cls()
@@ -68,11 +78,16 @@ class NavMeshHandle(ResourceHandle["NavMesh", "NavMeshAsset"]):
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "NavMeshHandle":
         """Десериализация."""
-        handle_type = data.get("type", "none")
+        # Сначала пробуем uuid (более надёжный способ)
+        uuid = data.get("uuid")
+        if uuid:
+            handle = cls.from_uuid(uuid)
+            if handle.get_navmesh() is not None:
+                return handle
 
-        if handle_type in ("named", "direct"):
-            name = data.get("name")
-            if name:
-                return cls.from_name(name)
+        # Затем пробуем по имени (UI и сцены передают name)
+        name = data.get("name")
+        if name:
+            return cls.from_name(name)
 
         return cls()
