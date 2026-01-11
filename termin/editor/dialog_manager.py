@@ -133,16 +133,18 @@ class DialogManager:
         Returns:
             The FramegraphDebugDialog instance.
         """
-        if self._framegraph_debugger is None:
-            from termin.editor.framegraph_debugger import FramegraphDebugDialog
+        # Always create new dialog (old one is destroyed on close)
+        from termin.editor.framegraph_debugger import FramegraphDebugDialog
 
-            self._framegraph_debugger = FramegraphDebugDialog(
-                window_backend=window_backend,
-                graphics=graphics,
-                rendering_controller=rendering_controller,
-                on_request_update=on_request_update,
-                parent=self._parent,
-            )
+        self._framegraph_debugger = FramegraphDebugDialog(
+            window_backend=window_backend,
+            graphics=graphics,
+            rendering_controller=rendering_controller,
+            on_request_update=on_request_update,
+            parent=self._parent,
+        )
+        # Clear reference when dialog is destroyed
+        self._framegraph_debugger.destroyed.connect(self._on_framegraph_debugger_destroyed)
 
         if initial_resource:
             self._framegraph_debugger.set_initial_resource(initial_resource)
@@ -152,6 +154,10 @@ class DialogManager:
         self._framegraph_debugger.raise_()
         self._framegraph_debugger.activateWindow()
         return self._framegraph_debugger
+
+    def _on_framegraph_debugger_destroyed(self) -> None:
+        """Called when framegraph debugger is destroyed."""
+        self._framegraph_debugger = None
 
     def show_resource_manager_viewer(self) -> None:
         """Opens resource manager viewer dialog."""

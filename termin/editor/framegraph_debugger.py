@@ -693,7 +693,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _build_ui(self) -> None:
         self.setWindowTitle("Framegraph Debugger")
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setModal(False)
         self.setMinimumSize(800, 600)
         self.resize(900, 700)
@@ -1615,6 +1615,64 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # Если символ не выбран - очищаем до фона, чтобы не показывать старую текстуру.
         if self._mode == "inside" and not self._selected_symbol:
             self._gl_widget.clear_to_background()
+
+    def refresh_for_new_scene(self) -> None:
+        """
+        Refresh debugger for a new scene while preserving selection.
+
+        Called when editor attaches to a different scene (e.g., game mode switch).
+        Preserves selected pass, symbol, and resource if they exist in the new scene.
+        """
+        # Save current selection
+        saved_mode = self._mode
+        saved_resource = self._debug_source_res
+        saved_pass = self._selected_pass
+        saved_symbol = self._selected_symbol
+
+        # Detach from old pipeline
+        self._detach_frame_debugger_pass()
+        self._clear_internal_symbol()
+
+        # Update viewport list (gets new viewports from rendering controller)
+        self._update_viewport_list()
+        self._update_resource_list()
+        self._update_passes_list()
+
+        # Try to restore resource selection
+        if saved_resource:
+            index = self._resource_combo.findText(saved_resource)
+            if index >= 0:
+                self._resource_combo.setCurrentIndex(index)
+                self._debug_source_res = saved_resource
+                self._gl_widget.set_resource_name(saved_resource)
+
+        # Try to restore pass selection
+        if saved_pass:
+            for i in range(self._pass_combo.count()):
+                if self._pass_combo.itemData(i) == saved_pass:
+                    self._pass_combo.setCurrentIndex(i)
+                    self._selected_pass = saved_pass
+                    self._update_symbols_list()
+                    break
+
+        # Try to restore symbol selection
+        if saved_symbol and self._selected_pass:
+            index = self._symbol_combo.findText(saved_symbol)
+            if index >= 0:
+                self._symbol_combo.setCurrentIndex(index)
+                self._selected_symbol = saved_symbol
+                if saved_mode == "inside":
+                    self._set_pass_internal_symbol(self._selected_pass, saved_symbol)
+
+        # Reattach to new pipeline if in "between" mode
+        if saved_mode == "between":
+            self._attach_frame_debugger_pass()
+
+        # Update UI
+        self._update_fbo_info()
+        self._update_writer_pass_label()
+        self._update_pipeline_info()
+        self._update_ui_for_resource_type()
 
     def showEvent(self, event) -> None:
         """При показе диалога подключаем FrameDebuggerPass если нужно."""

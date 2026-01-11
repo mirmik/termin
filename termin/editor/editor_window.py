@@ -595,6 +595,13 @@ class EditorWindow(QMainWindow):
         if self.editor_viewport is not None:
             self.editor_viewport.set_framegraph_debugger(debugger)
 
+    def _refresh_framegraph_debugger(self) -> None:
+        """Refresh framegraph debugger if it's open (e.g., after scene change)."""
+        debugger = self._dialog_manager.framegraph_debugger
+        if debugger is not None and debugger.isVisible():
+            # Refresh in place, preserving selection
+            debugger.refresh_for_new_scene()
+
     def _show_resource_manager_viewer(self) -> None:
         """Opens resource manager viewer dialog."""
         self._dialog_manager.show_resource_manager_viewer()
@@ -2108,6 +2115,9 @@ class EditorWindow(QMainWindow):
             editor_features = self._editor_features.get(editor_display_id)
             if editor_features is not None:
                 editor_features.set_world_mode("game" if is_playing else "editor")
+
+        # Обновляем framegraph debugger если открыт
+        self._refresh_framegraph_debugger()
 
         # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None

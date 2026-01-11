@@ -139,7 +139,7 @@
       "node_type": "resource",
       "name": "FOV_FBO",
       "params": {
-        "format": "rgba16f",
+        "format": "r16f",
         "samples": "1",
         "size_mode": "fixed",
         "scale": "1.0",
@@ -148,7 +148,7 @@
         "has_color": true,
         "has_depth": true,
         "clear_color": true,
-        "clear_color_r": 0.0,
+        "clear_color_r": 1.0,
         "clear_color_g": 0.0,
         "clear_color_b": 0.0,
         "clear_color_a": 1.0,
@@ -226,7 +226,6 @@
       "to_node": 8,
       "to_socket": "output_res_target"
     },
-    null,
     {
       "from_node": 10,
       "from_socket": "fbo",
