@@ -148,6 +148,7 @@ class RenderingController:
         if self._center_tabs is not None:
             self._center_tabs.currentChanged.connect(self._on_center_tab_changed)
         self._inspector.viewport_inspector.depth_changed.connect(self._on_viewport_depth_changed)
+        self._inspector.viewport_inspector.enabled_changed.connect(self._on_viewport_enabled_changed)
 
     def set_editor_pipeline_maker(self, maker: Callable[[], "RenderPipeline"]) -> None:
         """Set callback for creating editor pipeline."""
@@ -405,6 +406,8 @@ class RenderingController:
                     block_input_in_editor=viewport.block_input_in_editor,
                     pipeline_uuid=pipeline_uuid,
                     pipeline_name=pipeline_name,
+                    layer_mask=viewport.layer_mask,
+                    enabled=viewport.enabled,
                 )
                 scene.add_viewport_config(config)
 
@@ -1057,6 +1060,14 @@ class RenderingController:
             return
 
         self._selected_viewport.depth = new_depth
+        self._request_update()
+
+    def _on_viewport_enabled_changed(self, enabled: bool) -> None:
+        """Handle viewport enabled change from inspector."""
+        if self._selected_viewport is None:
+            return
+
+        self._selected_viewport.enabled = enabled
         self._request_update()
 
     def _on_viewport_pipeline_changed(self, pipeline: "RenderPipeline") -> None:

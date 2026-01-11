@@ -392,6 +392,7 @@ class RenderingManager:
             viewport.input_mode = config.input_mode
             viewport.block_input_in_editor = config.block_input_in_editor
             viewport.layer_mask = config.layer_mask
+            viewport.enabled = config.enabled
             viewports.append(viewport)
 
         # Process scene pipelines - compile and assign to viewports
@@ -633,6 +634,8 @@ class RenderingManager:
                     viewport = viewport_by_name.get(viewport_name)
                     if viewport is None:
                         continue
+                    if not viewport.enabled:
+                        continue
                     if viewport.scene is None or viewport.camera is None:
                         continue
 
@@ -675,6 +678,10 @@ class RenderingManager:
         views_and_states = []
         unmanaged_count = 0
         for viewport in sorted_viewports:
+            # Skip disabled viewports
+            if not viewport.enabled:
+                continue
+
             # Skip managed viewports - already rendered by scene pipeline
             if viewport.managed_by_scene_pipeline:
                 continue

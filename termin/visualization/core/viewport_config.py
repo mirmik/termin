@@ -46,6 +46,9 @@ class ViewportConfig:
     # Layer mask (which entity layers to render)
     layer_mask: int = 0xFFFFFFFFFFFFFFFF
 
+    # Whether this viewport is enabled for rendering
+    enabled: bool = True
+
     def serialize(self) -> dict:
         """Serialize to dict."""
         result = {
@@ -64,6 +67,9 @@ class ViewportConfig:
         # Only serialize layer_mask if not all layers
         if self.layer_mask != 0xFFFFFFFFFFFFFFFF:
             result["layer_mask"] = hex(self.layer_mask)
+        # Only serialize enabled if False (to keep files clean)
+        if not self.enabled:
+            result["enabled"] = self.enabled
         return result
 
     @classmethod
@@ -98,6 +104,7 @@ class ViewportConfig:
             input_mode=data.get("input_mode", "simple"),
             block_input_in_editor=data.get("block_input_in_editor", False),
             layer_mask=layer_mask,
+            enabled=data.get("enabled", True),
         )
 
 

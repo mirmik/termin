@@ -4495,7 +4495,7 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "ad8c58ad-f37c-4b97-b956-5410e6b35043",
+                              "uuid": "26caf2d3-0470-43ca-9858-a0d5b2771d4b",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4637,13 +4637,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "9139d7c4-2164-4481-932d-24711693f8e1",
+                              "uuid": "8df75ab8-287c-43db-95e7-02faacab89f3",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "ad8c58ad-f37c-4b97-b956-5410e6b35043",
+                              "uuid": "26caf2d3-0470-43ca-9858-a0d5b2771d4b",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -5766,8 +5766,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -6011,8 +6011,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -6305,8 +6305,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -6354,11 +6354,61 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_color": [
+                              0.5503318905830383,
+                              0.018661784008145332,
+                              0.018661784008145332,
+                              1
+                            ],
+                            "u_diffuse_mul": 3.1414999961853027
+                          },
+                          {
+                            "u_emission_intensity": 0,
+                            "u_diffuse_mul": 3.1414999961853027,
+                            "u_metallic": 0,
+                            "u_color": [
+                              0.5503318905830383,
+                              0.018661784008145332,
+                              0.018661784008145332,
+                              1
+                            ],
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0,
+                            "u_normal_strength": 1,
+                            "u_emission_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ]
+                          }
+                        ],
+                        "phases_textures": [
+                          {},
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "8df75ab8-287c-43db-95e7-02faacab89f3",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "26caf2d3-0470-43ca-9858-a0d5b2771d4b",
+                              "name": "__normal_1x1__",
+                              "type": "path",
+                              "path": "__normal_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -6403,8 +6453,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "00000000-0001-0000-0001-000000000003",
+                        "name": "NormalizedPBR"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -6467,7 +6517,7 @@
                 "name": "sneakersMesh",
                 "priority": 0,
                 "visible": true,
-                "enabled": true,
+                "enabled": false,
                 "pickable": true,
                 "selectable": true,
                 "layer": 1,
@@ -6550,8 +6600,8 @@
                       },
                       "material": {
                         "type": "uuid",
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial"
+                        "uuid": "e4dee1c0-cbfb-4092-a3b1-592371eac13d",
+                        "name": "Hair"
                       },
                       "cast_shadow": true,
                       "_override_material": false
@@ -9595,13 +9645,13 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "9139d7c4-2164-4481-932d-24711693f8e1",
+                      "uuid": "8df75ab8-287c-43db-95e7-02faacab89f3",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "ad8c58ad-f37c-4b97-b956-5410e6b35043",
+                      "uuid": "26caf2d3-0470-43ca-9858-a0d5b2771d4b",
                       "name": "__normal_1x1__",
                       "type": "path",
                       "path": "__normal_1x1__"
@@ -12742,7 +12792,7 @@
             "data": {
               "enabled": true,
               "projection_type": "perspective",
-              "fov_deg": 59.99999999999999,
+              "fov_deg": 119.99999999999999,
               "ortho_size": 5.0,
               "near": 0.1,
               "far": 100.0
@@ -12820,17 +12870,17 @@
   "editor": {
     "camera": {
       "position": [
-        3.7622666358947754,
-        -2.1343460083007812,
-        5.288642883300781
+        2.501528739929199,
+        -0.4542801082134247,
+        4.905394554138184
       ],
       "rotation": [
-        -0.32590621627147626,
-        -0.18139707686993312,
-        0.4512396376472495,
-        0.8107176007184205
+        -0.37172690657318036,
+        -0.2791004698165669,
+        0.5316083118370828,
+        0.7080357600174108
       ],
-      "radius": 6.5,
+      "radius": 5.0,
       "editor_entities": {
         "camera": [
           {
@@ -12848,7 +12898,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 6.5,
+              "radius": 5.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12882,14 +12932,15 @@
         ]
       }
     },
-    "selected_entity": "0000000000000007",
     "expanded_entities": [
-      "0000000000000130",
       "000000000000012d",
-      "000000000000000a",
+      "0000000000000007",
+      "00000000000000dd",
+      "000000000000012c",
       "0000000000000131",
       "0000000000000077",
-      "000000000000012c"
+      "0000000000000130",
+      "000000000000000a"
     ]
   },
   "resources": {

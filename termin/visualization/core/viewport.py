@@ -43,6 +43,7 @@ class Viewport(Identifiable):
     block_input_in_editor: bool = False  # Block input when running in editor
     managed_by_scene_pipeline: Optional[str] = None  # Name of scene pipeline managing this viewport
     layer_mask: int = 0xFFFFFFFFFFFFFFFF  # All layers enabled by default
+    enabled: bool = True  # Whether this viewport is rendered
     _init_uuid: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
@@ -119,6 +120,7 @@ class Viewport(Identifiable):
             "pipeline": pipeline_name,
             "input_mode": self.input_mode,
             "block_input_in_editor": self.block_input_in_editor,
+            "enabled": self.enabled,
         }
         # Only serialize layer_mask if not all layers (to keep files clean)
         if self.layer_mask != 0xFFFFFFFFFFFFFFFF:

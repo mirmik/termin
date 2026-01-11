@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -53,6 +54,7 @@ class ViewportInspector(QWidget):
     rect_changed = pyqtSignal(tuple)  # new rect (x, y, w, h)
     depth_changed = pyqtSignal(int)  # new depth value
     pipeline_changed = pyqtSignal(object)  # new RenderPipeline
+    enabled_changed = pyqtSignal(bool)  # new enabled state
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -79,6 +81,13 @@ class ViewportInspector(QWidget):
         header = QLabel("Viewport")
         header.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(header)
+
+        # Enabled checkbox
+        self._enabled_checkbox = QCheckBox("Enabled")
+        self._enabled_checkbox.setChecked(True)
+        self._enabled_checkbox.setToolTip("Whether this viewport is rendered")
+        self._enabled_checkbox.stateChanged.connect(self._on_enabled_changed)
+        layout.addWidget(self._enabled_checkbox)
 
         # Form
         form = QFormLayout()
@@ -218,6 +227,9 @@ class ViewportInspector(QWidget):
 
         self._updating = True
         try:
+            # Update enabled checkbox
+            self._enabled_checkbox.setChecked(viewport.enabled)
+
             # Update display selection
             self._update_display_combo()
             if viewport.display is not None and viewport.display in self._displays:
@@ -325,6 +337,7 @@ class ViewportInspector(QWidget):
         """Clear all fields."""
         self._updating = True
         try:
+            self._enabled_checkbox.setChecked(True)
             self._display_combo.setCurrentIndex(-1)
             self._camera_combo.setCurrentIndex(-1)
             self._x_spin.setValue(0.0)
@@ -438,6 +451,15 @@ class ViewportInspector(QWidget):
             return
 
         self.depth_changed.emit(value)
+        self.viewport_changed.emit()
+
+    def _on_enabled_changed(self, state: int) -> None:
+        """Handle enabled checkbox change."""
+        if self._updating or self._viewport is None:
+            return
+
+        enabled = state != 0
+        self.enabled_changed.emit(enabled)
         self.viewport_changed.emit()
 
     def _on_layer_mask_changed(self) -> None:

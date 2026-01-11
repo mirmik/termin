@@ -24,6 +24,9 @@ class PipelineRunner:
         width, height = framebuffer_size
 
         for viewport in viewports:
+            if not viewport.enabled:
+                continue
+
             vx, vy, vw, vh = viewport.rect
             px = int(vx * width)
             py = int(vy * height)
