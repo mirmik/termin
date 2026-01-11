@@ -180,8 +180,5 @@ class ShadowMapArrayResource(FrameGraphResource):
         pass
 
     def delete(self) -> None:
-        """Удаляет все FBO из entries."""
-        for entry in self.entries:
-            if entry.fbo is not None:
-                entry.fbo.delete()
+        """Очищает entries. FBO не удаляются — они принадлежат C++ ShadowPass::fbo_pool_."""
         self.entries.clear()

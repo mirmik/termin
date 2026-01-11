@@ -191,18 +191,22 @@ class EditorSceneAttachment:
                 self._camera_manager.camera.remove_viewport(self._viewport)
 
             # Make GL context current before destroying GPU resources
-            self._display.surface.make_current()
+            if self._display.surface is not None:
+                try:
+                    self._display.surface.make_current()
+                except Exception:
+                    pass  # Context may be invalid during shutdown
 
-            # Destroy pipeline
-            if self._pipeline is not None:
-                self._pipeline.destroy()
-                self._pipeline = None
-
-            # Clear viewport state FBOs
+            # Clear viewport state FIRST (removes Python refs to C++ FBOs)
             state = self._rendering_controller.get_viewport_state(self._viewport)
             if state is not None:
                 state.clear_fbos()
                 self._rendering_controller._manager.remove_viewport_state(self._viewport)
+
+            # Destroy pipeline AFTER (C++ ShadowPass::fbo_pool_ is deleted here)
+            if self._pipeline is not None:
+                self._pipeline.destroy()
+                self._pipeline = None
 
             self._display.remove_viewport(self._viewport)
             self._viewport = None

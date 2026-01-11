@@ -60,10 +60,18 @@ class ViewportRenderState:
 
         Вызывает delete() для каждого ресурса.
         """
-        for resource in self.fbos.values():
+        from termin._native import log
+
+        for name, resource in self.fbos.items():
             if resource is not None:
-                resource.delete()
+                try:
+                    resource.delete()
+                except Exception as e:
+                    log.warn(f"[ViewportRenderState] Failed to delete FBO '{name}': {e}")
         self.fbos.clear()
+
+        # Очищаем shadow_map_arrays (FBO принадлежат C++ ShadowPass, не удаляем)
+        self.shadow_map_arrays.clear()
 
     def get_shadow_map_array(self, name: str) -> Optional["ShadowMapArrayResource"]:
         """Возвращает ShadowMapArrayResource по имени ресурса."""
