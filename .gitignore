@@ -149,6 +149,8 @@ cpp/**/*.exe
 cpp/**/*.dll
 cpp/**/*.out
 
+*.dll
+
 entity_lib.dll
 entity_lib.lib
 
