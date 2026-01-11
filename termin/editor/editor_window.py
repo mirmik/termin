@@ -119,6 +119,7 @@ class EditorWindow(QMainWindow):
         self.selection_manager: SelectionManager | None = None
         # Game mode scene name (editor scene name set above)
         self._game_scene_name: str | None = None    # e.g. "walking_test(game)"
+        self._saved_tree_expanded_uuids: list[str] | None = None  # Saved from editor scene
         self.prefab_edit_controller: PrefabEditController | None = None
         self.project_browser = None
         self._project_name: str | None = None
@@ -1997,6 +1998,11 @@ class EditorWindow(QMainWindow):
         if editor_scene is None:
             return
 
+        # Сохраняем раскрытые ноды дерева (для переноса в game scene и обратно)
+        self._saved_tree_expanded_uuids = None
+        if self.scene_tree_controller is not None:
+            self._saved_tree_expanded_uuids = self.scene_tree_controller.get_expanded_entity_uuids()
+
         # Сохраняем камеру editor viewport в editor сцену
         self._save_editor_viewport_camera_to_scene(editor_scene)
 
@@ -2022,7 +2028,7 @@ class EditorWindow(QMainWindow):
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
         self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
 
-        self._on_game_mode_changed(True, game_scene)
+        self._on_game_mode_changed(True, game_scene, self._saved_tree_expanded_uuids)
 
     def _stop_game_mode(self) -> None:
         """Выходит из игрового режима."""
@@ -2045,7 +2051,9 @@ class EditorWindow(QMainWindow):
         self._sync_attachment_refs()
 
         # Создаём viewports для editor сцены (камера читается из scene.editor_viewport_camera_name)
-        self._on_game_mode_changed(False, editor_scene)
+        # Передаём сохранённые expanded_uuids для восстановления состояния дерева
+        self._on_game_mode_changed(False, editor_scene, self._saved_tree_expanded_uuids)
+        self._saved_tree_expanded_uuids = None  # Очищаем после использования
 
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""
@@ -2099,8 +2107,20 @@ class EditorWindow(QMainWindow):
             camera_name = viewport.camera.entity.name
         scene.editor_viewport_camera_name = camera_name
 
-    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
-        """Колбэк при изменении игрового режима."""
+    def _on_game_mode_changed(
+        self,
+        is_playing: bool,
+        scene,
+        expanded_uuids: list[str] | None = None,
+    ) -> None:
+        """Колбэк при изменении игрового режима.
+
+        Args:
+            is_playing: True если входим в game mode, False если выходим.
+            scene: Новая сцена (game или editor).
+            expanded_uuids: Раскрытые entity UUIDs для восстановления в дереве.
+                            Сохраняются из editor scene и применяются в обе стороны.
+        """
         if self._rendering_controller is None:
             return
 
@@ -2115,6 +2135,17 @@ class EditorWindow(QMainWindow):
             editor_features = self._editor_features.get(editor_display_id)
             if editor_features is not None:
                 editor_features.set_world_mode("game" if is_playing else "editor")
+
+        # Обновляем scene tree на новую сцену
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(scene)
+            self.scene_tree_controller.rebuild()
+            # Восстанавливаем раскрытые ноды (сохранённые из editor scene)
+            if expanded_uuids:
+                self.scene_tree_controller.set_expanded_entity_uuids(expanded_uuids)
+
+        # Очищаем инспектор (выбранный entity мог измениться)
+        self.show_entity_inspector(None)
 
         # Обновляем framegraph debugger если открыт
         self._refresh_framegraph_debugger()
