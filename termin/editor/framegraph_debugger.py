@@ -670,11 +670,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._current_viewport = None
         self._viewports_list: List[Tuple[object, str]] = []
 
-        # Текущий режим: "between" или "inside"
-        self._mode = "between"
-        # Текущий выбранный пасс (для режима «Внутри пасса»)
+        # Текущий режим: "inside" (Фреймпассы) или "between" (Ресурсы)
+        self._mode = "inside"
+        # Текущий выбранный пасс (для режима «Фреймпассы»)
         self._selected_pass: str | None = None
-        # Текущий выбранный внутренний символ (для режима «Внутри пасса»)
+        # Текущий выбранный внутренний символ (для режима «Фреймпассы»)
         self._selected_symbol: str | None = None
 
         # Debug source resource name (for "between passes" mode)
@@ -720,15 +720,15 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # Группа выбора режима
         mode_group = QtWidgets.QGroupBox("Режим")
         mode_layout = QtWidgets.QHBoxLayout(mode_group)
-        self._radio_between = QtWidgets.QRadioButton("Между пассами")
-        self._radio_inside = QtWidgets.QRadioButton("Внутри пасса")
-        self._radio_between.setChecked(True)
-        self._radio_between.toggled.connect(self._on_mode_changed)
-        mode_layout.addWidget(self._radio_between)
+        self._radio_inside = QtWidgets.QRadioButton("Фреймпассы")
+        self._radio_between = QtWidgets.QRadioButton("Ресурсы")
+        self._radio_inside.setChecked(True)
+        self._radio_inside.toggled.connect(self._on_mode_changed)
         mode_layout.addWidget(self._radio_inside)
+        mode_layout.addWidget(self._radio_between)
         settings_layout.addWidget(mode_group)
 
-        # Панель «Между пассами»
+        # Панель «Ресурсы»
         self._between_panel = QtWidgets.QWidget()
         between_layout = QtWidgets.QVBoxLayout(self._between_panel)
         between_layout.setContentsMargins(0, 0, 0, 0)
@@ -749,8 +749,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         between_layout.addWidget(self._writer_pass_label)
 
         settings_layout.addWidget(self._between_panel)
+        self._between_panel.hide()  # Скрыт по умолчанию (режим "Фреймпассы")
 
-        # Панель «Внутри пасса»
+        # Панель «Фреймпассы»
         self._inside_panel = QtWidgets.QWidget()
         inside_layout = QtWidgets.QVBoxLayout(self._inside_panel)
         inside_layout.setContentsMargins(0, 0, 0, 0)
@@ -782,7 +783,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         inside_layout.addWidget(self._pass_serialization)
 
         settings_layout.addWidget(self._inside_panel)
-        self._inside_panel.hide()
+        # inside_panel показан по умолчанию (режим "Фреймпассы")
 
         # Контейнер для UI обработчиков ресурсов
         self._resource_ui_container = QtWidgets.QWidget()
@@ -1140,7 +1141,22 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _on_mode_changed(self, checked: bool) -> None:
         """Обработчик переключения режима."""
-        if self._radio_between.isChecked():
+        if self._radio_inside.isChecked():
+            self._mode = "inside"
+            self._between_panel.hide()
+            self._inside_panel.show()
+            # Сбрасываем внутренний символ предыдущего пасса
+            self._clear_internal_symbol()
+            # Отключаем FrameDebuggerPass от пайплайна
+            self._detach_frame_debugger_pass()
+            # В режиме "Фреймпассы" скрываем UI обработчиков ресурсов
+            self._resource_ui_container.hide()
+            self._update_passes_list()
+            # Обновляем сериализацию для выбранного пасса
+            self._update_pass_serialization()
+            # Очищаем окно дебаггера до выбора символа
+            self._gl_widget.clear_to_background()
+        else:
             self._mode = "between"
             self._between_panel.show()
             self._inside_panel.hide()
@@ -1150,21 +1166,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._attach_frame_debugger_pass()
             # Обновляем UI для типа ресурса (может показать UI обработчика)
             self._update_ui_for_resource_type()
-        else:
-            self._mode = "inside"
-            self._between_panel.hide()
-            self._inside_panel.show()
-            # Сбрасываем внутренний символ предыдущего пасса
-            self._clear_internal_symbol()
-            # Отключаем FrameDebuggerPass от пайплайна
-            self._detach_frame_debugger_pass()
-            # В режиме "Внутри пасса" скрываем UI обработчиков ресурсов
-            self._resource_ui_container.hide()
-            self._update_passes_list()
-            # Обновляем сериализацию для выбранного пасса
-            self._update_pass_serialization()
-            # Очищаем окно дебаггера до выбора символа
-            self._gl_widget.clear_to_background()
 
         # Запрашиваем обновление depth для новой текстуры
         self._request_depth_refresh()
@@ -1776,14 +1777,18 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_ui_for_resource_type()
 
     def showEvent(self, event) -> None:
-        """При показе диалога подключаем FrameDebuggerPass если нужно."""
+        """При показе диалога инициализируем текущий режим."""
         super().showEvent(event)
         if self._mode == "between":
             self._attach_frame_debugger_pass()
+        else:
+            # Режим "Фреймпассы" - обновляем список пассов
+            self._update_passes_list()
+            self._update_pass_serialization()
 
     def hideEvent(self, event) -> None:
         """При скрытии диалога отключаем FrameDebuggerPass."""
         self._detach_frame_debugger_pass()
-        # Также сбрасываем внутренний символ для режима "внутри пасса"
+        # Также сбрасываем внутренний символ для режима "Фреймпассы"
         self._clear_internal_symbol()
         super().hideEvent(event)
