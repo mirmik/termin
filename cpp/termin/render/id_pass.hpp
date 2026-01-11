@@ -108,6 +108,15 @@ private:
 
     // Convert pick ID to RGB color
     static void id_to_rgb(int id, float& r, float& g, float& b);
+
+    // Call debugger blit if debug point matches entity name
+    void maybe_blit_to_debugger(
+        GraphicsBackend* graphics,
+        FramebufferHandle* fb,
+        const std::string& entity_name,
+        int width,
+        int height
+    );
 };
 
 } // namespace termin

@@ -195,14 +195,39 @@ class GraphNode(QGraphicsItem):
         # Update visibility of dependent params
         self._update_param_visibility()
 
+    def is_inside_viewport_frame(self) -> bool:
+        """Check if this node is inside a ViewportFrame."""
+        from termin.nodegraph.viewport_frame import ViewportFrame
+
+        if self.scene() is None:
+            return False
+
+        node_center = self.sceneBoundingRect().center()
+
+        for item in self.scene().items():
+            if isinstance(item, ViewportFrame):
+                frame_rect = item.sceneBoundingRect()
+                if frame_rect.contains(node_center):
+                    return True
+
+        return False
+
     def _is_param_visible(self, param: NodeParam) -> bool:
         """Check if param should be visible based on visible_when condition."""
         if not param.visible_when:
             return True
+
         for cond_param, cond_value in param.visible_when.items():
+            # Special condition: outside viewport frame
+            if cond_param == "_outside_viewport":
+                if cond_value and self.is_inside_viewport_frame():
+                    return False
+                continue
+
             actual_value = self._param_values.get(cond_param)
             if actual_value != cond_value:
                 return False
+
         return True
 
     def _get_visible_params(self) -> List[NodeParam]:
@@ -538,6 +563,8 @@ class GraphNode(QGraphicsItem):
             for socket in self.input_sockets + self.output_sockets:
                 for connection in socket.connections:
                     connection.update_path()
+            # Update param visibility (may depend on viewport frame position)
+            self._update_param_visibility()
         return super().itemChange(change, value)
 
     def get_socket_at(self, pos: QPointF) -> Optional["NodeSocket"]:

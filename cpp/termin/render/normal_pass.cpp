@@ -228,6 +228,38 @@ void NormalPass::execute_with_data(
 
         // Draw geometry (handles bone matrix upload for skinned meshes)
         tc_component_draw_geometry(dc.component, &context, "");
+
+        // Check for debug blit
+        const std::string& debug_symbol = get_debug_internal_point();
+        if (!debug_symbol.empty() && name && name == debug_symbol) {
+            maybe_blit_to_debugger(graphics, fb, name, rect.width, rect.height);
+        }
+    }
+}
+
+void NormalPass::maybe_blit_to_debugger(
+    GraphicsBackend* graphics,
+    FramebufferHandle* fb,
+    const std::string& entity_name,
+    int width,
+    int height
+) {
+    // Check if debugger window is set
+    if (debugger_window.is_none()) {
+        return;
+    }
+
+    try {
+        // Call Python debugger_window.blit_from_pass(fb, graphics, width, height, depth_callback)
+        debugger_window.attr("blit_from_pass")(
+            nb::cast(fb, nb::rv_policy::reference),
+            nb::cast(graphics, nb::rv_policy::reference),
+            width,
+            height,
+            depth_capture_callback
+        );
+    } catch (const nb::python_error& e) {
+        tc::Log::error(e, "NormalPass::blit_to_debugger_window");
     }
 }
 

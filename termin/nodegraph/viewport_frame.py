@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 # Resize handle size
-HANDLE_SIZE = 10
+HANDLE_SIZE = 12
 PARAM_ROW_HEIGHT = 28
 
 
@@ -73,6 +73,7 @@ class ViewportFrame(QGraphicsRectItem):
         # Parameter widgets
         self._param_widgets_created = False
         self._viewport_input: Optional[QLineEdit] = None
+        self._viewport_proxy: Optional[QGraphicsProxyWidget] = None
 
         # Make selectable and movable
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
@@ -193,10 +194,19 @@ class ViewportFrame(QGraphicsRectItem):
         proxy = QGraphicsProxyWidget(self)
         proxy.setWidget(viewport_input)
         proxy.setPos(rect.x() + 70, y1)
+        self._viewport_proxy = proxy
 
     def _on_viewport_name_changed(self, value: str) -> None:
         """Handle viewport name change."""
         self.viewport_name = value
+
+    def _update_param_widget_positions(self) -> None:
+        """Update parameter widget positions after rect change."""
+        if self._viewport_proxy is None:
+            return
+        rect = self.rect()
+        y1 = rect.y() + self._title_height + 2
+        self._viewport_proxy.setPos(rect.x() + 70, y1)
 
     def get_resize_edge(self, pos: QPointF) -> Optional[str]:
         """Determine which edge/corner is under the cursor."""
@@ -232,7 +242,8 @@ class ViewportFrame(QGraphicsRectItem):
 
     def hoverMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """Update cursor based on position."""
-        edge = self.get_resize_edge(event.pos())
+        pos = event.pos()
+        edge = self.get_resize_edge(pos)
 
         cursor_map = {
             'left': Qt.CursorShape.SizeHorCursor,
@@ -247,21 +258,44 @@ class ViewportFrame(QGraphicsRectItem):
 
         if edge in cursor_map:
             self.setCursor(cursor_map[edge])
+        elif self._is_in_header(pos):
+            # Show open hand in header to indicate draggable
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
         else:
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            # Body area - default cursor
+            self.unsetCursor()
 
         super().hoverMoveEvent(event)
 
+    def _is_in_header(self, pos: QPointF) -> bool:
+        """Check if position is in the header area (title + params)."""
+        rect = self.rect()
+        header_bottom = rect.top() + self._header_height
+        return (rect.left() <= pos.x() <= rect.right() and
+                rect.top() <= pos.y() <= header_bottom)
+
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        """Start resize if on edge."""
+        """Handle mouse press - drag only from header, resize from edges."""
         if event.button() == Qt.MouseButton.LeftButton:
-            edge = self.get_resize_edge(event.pos())
+            pos = event.pos()
+
+            # Check resize edge first
+            edge = self.get_resize_edge(pos)
             if edge:
                 self._resize_edge = edge
                 self._resize_start_rect = QRectF(self.rect())
                 self._resize_start_pos = event.scenePos()
                 event.accept()
                 return
+
+            # Only handle if clicking on header - allow drag/selection
+            if self._is_in_header(pos):
+                super().mousePressEvent(event)
+                return
+
+            # Clicking on body area - ignore to allow rubber band selection
+            event.ignore()
+            return
 
         super().mousePressEvent(event)
 
@@ -274,27 +308,36 @@ class ViewportFrame(QGraphicsRectItem):
             edge = self._resize_edge
 
             # Adjust rect based on which edge is being dragged
-            if 'l' in edge:  # left
+            # Use explicit edge names to avoid substring matching bugs
+            # (e.g., 't' in 'bottom' was True!)
+            adjust_left = edge in ('left', 'tl', 'bl')
+            adjust_right = edge in ('right', 'tr', 'br')
+            adjust_top = edge in ('top', 'tl', 'tr')
+            adjust_bottom = edge in ('bottom', 'bl', 'br')
+
+            if adjust_left:
                 new_left = new_rect.left() + delta.x()
                 if new_rect.right() - new_left >= self._min_width:
                     new_rect.setLeft(new_left)
 
-            if 'r' in edge:  # right
+            if adjust_right:
                 new_right = new_rect.right() + delta.x()
                 if new_right - new_rect.left() >= self._min_width:
                     new_rect.setRight(new_right)
 
-            if 't' in edge:  # top
+            if adjust_top:
                 new_top = new_rect.top() + delta.y()
                 if new_rect.bottom() - new_top >= self._min_height:
                     new_rect.setTop(new_top)
 
-            if 'b' in edge:  # bottom
+            if adjust_bottom:
                 new_bottom = new_rect.bottom() + delta.y()
                 if new_bottom - new_rect.top() >= self._min_height:
                     new_rect.setBottom(new_bottom)
 
+            self.prepareGeometryChange()
             self.setRect(new_rect)
+            self._update_param_widget_positions()
             event.accept()
             return
 

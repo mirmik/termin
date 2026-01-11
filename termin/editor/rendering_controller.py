@@ -1132,15 +1132,43 @@ class RenderingController:
         """
         Get list of all viewports with display names for UI selection.
 
+        Viewports managed by scene pipelines are shown under the pipeline name.
+        Unmanaged viewports are shown under the display name.
+
         Returns:
-            List of (viewport, label) tuples where label is "display_name / Viewport N".
+            List of (viewport, label) tuples.
         """
         result: list[tuple["Viewport", str]] = []
+
+        # Group viewports by scene pipeline
+        scene_pipeline_viewports: dict[str, list[tuple["Viewport", str, int]]] = {}
+        unmanaged_viewports: list[tuple["Viewport", str, int]] = []
+
         for display in self._manager.displays:
             display_name = self._manager.get_display_name(display)
             for i, viewport in enumerate(display.viewports):
-                label = f"{display_name} / Viewport {i}"
+                if viewport.managed_by_scene_pipeline:
+                    # Group by scene pipeline
+                    pipeline_name = viewport.managed_by_scene_pipeline
+                    if pipeline_name not in scene_pipeline_viewports:
+                        scene_pipeline_viewports[pipeline_name] = []
+                    scene_pipeline_viewports[pipeline_name].append((viewport, display_name, i))
+                else:
+                    unmanaged_viewports.append((viewport, display_name, i))
+
+        # Add scene pipeline viewports first
+        for pipeline_name, viewports in sorted(scene_pipeline_viewports.items()):
+            for viewport, display_name, i in viewports:
+                vp_name = viewport.name or f"Viewport {i}"
+                label = f"[{pipeline_name}] {vp_name}"
                 result.append((viewport, label))
+
+        # Add unmanaged viewports
+        for viewport, display_name, i in unmanaged_viewports:
+            vp_name = viewport.name or f"Viewport {i}"
+            label = f"{display_name} / {vp_name}"
+            result.append((viewport, label))
+
         return result
 
     def _update_center_tabs(self) -> None:

@@ -268,6 +268,22 @@ def infer_resource_spec(
                 except ValueError:
                     pass
 
+        # Clear color
+        if node.get_param("clear_color"):
+            r = node.get_param("clear_color_r") or 0.0
+            g = node.get_param("clear_color_g") or 0.0
+            b = node.get_param("clear_color_b") or 0.0
+            a = node.get_param("clear_color_a") or 1.0
+            spec["clear_color"] = (float(r), float(g), float(b), float(a))
+
+        # Clear depth
+        if node.get_param("clear_depth"):
+            depth_value = node.get_param("clear_depth_value")
+            if depth_value is not None:
+                spec["clear_depth"] = float(depth_value)
+            else:
+                spec["clear_depth"] = 1.0
+
         return spec
 
     # Heuristics based on pass types

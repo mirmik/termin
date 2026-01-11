@@ -144,6 +144,7 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
     Create NodeParam list from a pass class's inspect fields.
 
     Uses InspectRegistry to get fields (works for both C++ and Python classes).
+    Also reads Python-only inspect_fields from the class.
     Filters out fields that are represented as graph connections (sockets).
 
     Args:
@@ -152,31 +153,117 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
     Returns:
         List of NodeParam for the node editor.
     """
+    params = []
+    seen_names = set()
+
+    # Get visibility conditions from class
+    cls = get_pass_class(class_name)
+    visibility_conditions = {}
+    if cls is not None:
+        visibility_conditions = getattr(cls, "node_param_visibility", {})
+
+    # 1. Get fields from C++ InspectRegistry
     try:
         from termin._native.inspect import InspectRegistry
         registry = InspectRegistry.instance()
-
-        # Get all fields from registry (includes inherited fields)
         all_fields = registry.all_fields(class_name)
+
+        for info in all_fields:
+            if not info.is_inspectable:
+                continue
+            if info.path in SOCKET_FIELDS:
+                continue
+
+            param = inspect_field_info_to_node_param(info)
+            if param is not None:
+                # Apply visibility conditions
+                if param.name in visibility_conditions:
+                    param.visible_when = visibility_conditions[param.name]
+                params.append(param)
+                seen_names.add(param.name)
     except Exception:
-        return []
+        pass
 
-    params = []
+    # 2. Get Python-only inspect_fields from class
+    if cls is not None:
+        py_fields = getattr(cls, "inspect_fields", {})
+        for name, field in py_fields.items():
+            if name in seen_names:
+                continue
+            if name in SOCKET_FIELDS:
+                continue
+            if not field.is_inspectable:
+                continue
 
-    for info in all_fields:
-        # Skip non-inspectable fields
-        if not info.is_inspectable:
-            continue
-
-        # Skip fields that are graph connections
-        if info.path in SOCKET_FIELDS:
-            continue
-
-        param = inspect_field_info_to_node_param(info)
-        if param is not None:
-            params.append(param)
+            param = _python_field_to_node_param(name, field)
+            if param is not None:
+                # Apply visibility conditions
+                if name in visibility_conditions:
+                    param.visible_when = visibility_conditions[name]
+                params.append(param)
 
     return params
+
+
+def _python_field_to_node_param(name: str, field) -> NodeParam | None:
+    """Convert a Python InspectField to NodeParam."""
+    kind = field.kind
+    label = field.label or name
+
+    if kind == "float":
+        return NodeParam(
+            name=name,
+            label=label,
+            param_type="float",
+            default=0.0,
+            min_val=field.min if field.min is not None else 0.0,
+            max_val=field.max if field.max is not None else 100.0,
+        )
+    elif kind == "int":
+        return NodeParam(
+            name=name,
+            label=label,
+            param_type="int",
+            default=0,
+            min_val=field.min if field.min is not None else 0,
+            max_val=field.max if field.max is not None else 100,
+        )
+    elif kind == "bool":
+        return NodeParam(
+            name=name,
+            label=label,
+            param_type="bool",
+            default=False,
+        )
+    elif kind == "string":
+        if field.choices:
+            choice_values = [c[0] for c in field.choices]
+            default = choice_values[0] if choice_values else ""
+            return NodeParam(
+                name=name,
+                label=label,
+                param_type="choice",
+                default=default,
+                choices=choice_values,
+            )
+        return NodeParam(
+            name=name,
+            label=label,
+            param_type="text",
+            default="",
+        )
+    elif kind == "enum" and field.choices:
+        choice_labels = [c[1] for c in field.choices]
+        default = choice_labels[0] if choice_labels else ""
+        return NodeParam(
+            name=name,
+            label=label,
+            param_type="choice",
+            default=default,
+            choices=choice_labels,
+        )
+
+    return None
 
 
 def get_pass_sockets(class_name: str) -> tuple[list, list]:

@@ -66,7 +66,14 @@
         "width": 100,
         "height": 100,
         "has_color": true,
-        "has_depth": true
+        "has_depth": true,
+        "clear_color": true,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": true,
+        "clear_depth_value": 1.0
       }
     },
     {
@@ -84,7 +91,14 @@
         "width": 100,
         "height": 100,
         "has_color": true,
-        "has_depth": true
+        "has_depth": false,
+        "clear_color": false,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": false,
+        "clear_depth_value": 1.0
       }
     },
     {
@@ -95,7 +109,7 @@
     {
       "type": "FBO",
       "x": 3.915659461449195,
-      "y": -112.57520951666463,
+      "y": -94.37496741994555,
       "node_type": "resource",
       "name": "resolve",
       "params": {
@@ -107,7 +121,47 @@
         "width": 100,
         "height": 100,
         "has_color": true,
-        "has_depth": true
+        "has_depth": false,
+        "clear_color": false,
+        "clear_color_r": 0.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": false,
+        "clear_depth_value": 1.0
+      }
+    },
+    {
+      "type": "FBO",
+      "x": -276.4490233487413,
+      "y": 412.51502618223515,
+      "node_type": "resource",
+      "params": {
+        "name": "fbo",
+        "format": "r16f",
+        "samples": "1",
+        "size_mode": "fixed",
+        "scale": "1.0",
+        "width": 2048,
+        "height": 2048,
+        "has_color": true,
+        "has_depth": true,
+        "clear_color": true,
+        "clear_color_r": 1.0,
+        "clear_color_g": 0.0,
+        "clear_color_b": 0.0,
+        "clear_color_a": 1.0,
+        "clear_depth": true,
+        "clear_depth_value": 1.0
+      }
+    },
+    {
+      "type": "DepthPass",
+      "x": -13.115558277354808,
+      "y": 408.9148917838331,
+      "name": "FOVDepthPass",
+      "params": {
+        "camera_name": "FOVCamera"
       }
     }
   ],
@@ -171,16 +225,22 @@
       "from_socket": "fbo",
       "to_node": 8,
       "to_socket": "output_res_target"
+    },
+    {
+      "from_node": 10,
+      "from_socket": "fbo",
+      "to_node": 11,
+      "to_socket": "input_res"
     }
   ],
   "viewport_frames": [
     {
       "title": "Main Viewport",
       "viewport_name": "chronosquad",
-      "x": -759.6862547650344,
-      "y": -450.6135264566425,
-      "width": 1757.6357321543198,
-      "height": 675.0060710979576
+      "x": -784.4558257900267,
+      "y": -502.58504087505537,
+      "width": 1936.0158551102472,
+      "height": 876.3848034845322
     }
   ]
 }

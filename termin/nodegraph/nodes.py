@@ -127,6 +127,8 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
         label="Width",
         param_type="int",
         default=1024,
+        min_val=1,
+        max_val=65536,
         visible_when={"size_mode": "fixed"},
     ))
 
@@ -136,6 +138,8 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
         label="Height",
         param_type="int",
         default=1024,
+        min_val=1,
+        max_val=65536,
         visible_when={"size_mode": "fixed"},
     ))
 
@@ -153,6 +157,71 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
         label="Depth",
         param_type="bool",
         default=True,
+    ))
+
+    # Clear color flag
+    node.add_param(NodeParam(
+        name="clear_color",
+        label="Clear Color",
+        param_type="bool",
+        default=False,
+    ))
+
+    # Clear color RGBA values
+    node.add_param(NodeParam(
+        name="clear_color_r",
+        label="R",
+        param_type="float",
+        default=0.0,
+        min_val=0.0,
+        max_val=1.0,
+        visible_when={"clear_color": True},
+    ))
+    node.add_param(NodeParam(
+        name="clear_color_g",
+        label="G",
+        param_type="float",
+        default=0.0,
+        min_val=0.0,
+        max_val=1.0,
+        visible_when={"clear_color": True},
+    ))
+    node.add_param(NodeParam(
+        name="clear_color_b",
+        label="B",
+        param_type="float",
+        default=0.0,
+        min_val=0.0,
+        max_val=1.0,
+        visible_when={"clear_color": True},
+    ))
+    node.add_param(NodeParam(
+        name="clear_color_a",
+        label="A",
+        param_type="float",
+        default=1.0,
+        min_val=0.0,
+        max_val=1.0,
+        visible_when={"clear_color": True},
+    ))
+
+    # Clear depth flag
+    node.add_param(NodeParam(
+        name="clear_depth",
+        label="Clear Depth",
+        param_type="bool",
+        default=False,
+    ))
+
+    # Clear depth value
+    node.add_param(NodeParam(
+        name="clear_depth_value",
+        label="Depth",
+        param_type="float",
+        default=1.0,
+        min_val=0.0,
+        max_val=1.0,
+        visible_when={"clear_depth": True},
     ))
 
     return node

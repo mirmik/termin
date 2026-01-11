@@ -438,6 +438,78 @@ class SDLEmbeddedWindowHandle(BackendWindow):
     def needs_render(self) -> bool:
         return self._needs_render
 
+    def blit_from_pass(
+        self,
+        fbo,
+        graphics,
+        width: int,
+        height: int,
+        depth_callback=None,
+    ) -> None:
+        """
+        Blit from a pass's FBO to this debugger window.
+
+        Called by C++ passes (ColorPass, DepthPass, etc.) in "inside pass" debug mode.
+
+        Args:
+            fbo: FramebufferHandle to blit from.
+            graphics: GraphicsBackend for rendering.
+            width: Source FBO width.
+            height: Source FBO height.
+            depth_callback: Optional callback to receive depth buffer as numpy array.
+        """
+        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
+
+        # Save current context
+        saved_context = video.SDL_GL_GetCurrentContext()
+        saved_window = video.SDL_GL_GetCurrentWindow()
+
+        try:
+            # Switch to debugger window context
+            self.make_current()
+
+            # Get destination size
+            dst_w, dst_h = self.framebuffer_size()
+
+            # Bind window framebuffer (0)
+            graphics.bind_framebuffer(None)
+            graphics.set_viewport(0, 0, dst_w, dst_h)
+
+            graphics.set_depth_test(False)
+            graphics.set_depth_mask(False)
+
+            # Get color texture from source FBO
+            tex = fbo.color_texture()
+            if tex is not None:
+                # Render fullscreen quad with texture
+                shader = PresentToScreenPass._get_shader()
+                shader.ensure_ready(graphics, 0)  # debugger has its own context
+                shader.use()
+                shader.set_uniform_int("u_tex", 0)
+                tex.bind(0)
+                graphics.draw_ui_textured_quad(0)
+
+            graphics.set_depth_test(True)
+            graphics.set_depth_mask(True)
+
+            # Read depth buffer if callback provided
+            if depth_callback is not None:
+                depth = graphics.read_depth_buffer(fbo)
+                if depth is not None:
+                    depth_callback(depth)
+
+            # Show result
+            self.swap_buffers()
+
+        except Exception as e:
+            from termin import log
+            log.error(f"blit_from_pass failed: {e}")
+
+        finally:
+            # Restore original context
+            if saved_window and saved_context:
+                video.SDL_GL_MakeCurrent(saved_window, saved_context)
+
     def clear_render_flag(self) -> None:
         self._needs_render = False
 

@@ -4478,7 +4478,7 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "f831ce58-0233-4da8-aca4-3d07083ac3f1",
+                              "uuid": "06755c9d-9760-4eb9-b1af-28213d330f2d",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4587,13 +4587,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
+                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.15655755996704102,
                               0.31000229716300964,
                               0.20257876813411713,
                               1
-                            ],
-                            "u_diffuse_mul": 1
+                            ]
                           },
                           {
                             "u_emission_intensity": 0,
@@ -4620,13 +4620,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "d017d038-728b-491b-b549-e322c4644088",
+                              "uuid": "9ffdc818-161a-4839-884f-939c1c587410",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "f831ce58-0233-4da8-aca4-3d07083ac3f1",
+                              "uuid": "06755c9d-9760-4eb9-b1af-28213d330f2d",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -9538,13 +9538,13 @@
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
-                    "u_emission_intensity": 2,
                     "u_color": [
                       0.34726482629776,
                       0.7852292656898499,
                       0.15172044932842255,
                       1
                     ],
+                    "u_emission_intensity": 2,
                     "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
                       0.7799344062805176,
@@ -9578,13 +9578,13 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "d017d038-728b-491b-b549-e322c4644088",
+                      "uuid": "9ffdc818-161a-4839-884f-939c1c587410",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "f831ce58-0233-4da8-aca4-3d07083ac3f1",
+                      "uuid": "06755c9d-9760-4eb9-b1af-28213d330f2d",
                       "name": "__normal_1x1__",
                       "type": "path",
                       "path": "__normal_1x1__"
@@ -12690,6 +12690,49 @@
             ]
           }
         ]
+      },
+      {
+        "uuid": "000000000000012e",
+        "name": "FOVCamera",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            -6.8555145263671875,
+            1.3606195449829102
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "projection_type": "perspective",
+              "fov_deg": 59.99999999999999,
+              "ortho_size": 5.0,
+              "near": 0.1,
+              "far": 100.0
+            }
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -12710,6 +12753,21 @@
         "depth": 0,
         "input_mode": "simple",
         "block_input_in_editor": false
+      },
+      {
+        "name": "fovcamera",
+        "display_name": "Display 1",
+        "camera_uuid": "000000000000012e",
+        "region": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "depth": 0,
+        "input_mode": "simple",
+        "block_input_in_editor": false,
+        "pipeline_uuid": "00000000-0000-0000-0004-000000000001"
       }
     ],
     "scene_pipelines": [
@@ -12759,17 +12817,17 @@
   "editor": {
     "camera": {
       "position": [
-        -5.183774948120117,
-        -10.016563415527344,
-        8.061203956604004
+        -4.003704071044922,
+        -5.010627746582031,
+        5.30532169342041
       ],
       "rotation": [
-        -0.2400766783299606,
-        0.10538628736827858,
-        -0.3878862321143981,
-        0.8836295546737211
+        -0.3019180006084287,
+        0.23250814576719023,
+        -0.5641073058721077,
+        0.7325083143024551
       ],
-      "radius": 14.0,
+      "radius": 7.0,
       "editor_entities": {
         "camera": [
           {
@@ -12787,7 +12845,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 14.0,
+              "radius": 7.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12821,13 +12879,15 @@
         ]
       }
     },
-    "selected_entity": "0000000000000077",
+    "selected_entity": "000000000000012e",
     "expanded_entities": [
-      "0000000000000077",
-      "00000000000000dd",
       "0000000000000130",
+      "000000000000012d",
+      "000000000000012c",
+      "00000000000000dd",
       "0000000000000131",
-      "0000000000000007"
+      "0000000000000007",
+      "0000000000000077"
     ]
   },
   "resources": {

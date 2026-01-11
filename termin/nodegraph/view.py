@@ -47,6 +47,9 @@ class NodeGraphView(QGraphicsView):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
+        # Enable rubber band selection
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+
         # State
         self._zoom = 1.0
         self._panning = False
@@ -160,6 +163,17 @@ class NodeGraphView(QGraphicsView):
 
         if event.key() == Qt.Key.Key_Delete:
             self._scene.delete_selected()
+            return
+
+        # Ctrl+A - select all
+        if event.key() == Qt.Key.Key_A and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            for item in self._scene.items():
+                if isinstance(item, GraphNode):
+                    item.setSelected(True)
+                # Also select viewport frames
+                from termin.nodegraph.viewport_frame import ViewportFrame
+                if isinstance(item, ViewportFrame):
+                    item.setSelected(True)
             return
 
         super().keyPressEvent(event)
