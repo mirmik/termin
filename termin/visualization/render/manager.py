@@ -4,15 +4,24 @@ RenderingManager - global singleton for managing displays and rendering.
 Core responsibilities:
 - Display/Viewport lifecycle
 - ViewportRenderState management
-- Unified render loop
+- Unified render loop (offscreen-first model)
 - Scene mounting to displays
+
+Offscreen-first rendering model:
+1. render_all() - рендерит все viewports в их output_fbos (один GL контекст)
+2. present_all() - блитает output_fbos на дисплеи (swap buffers)
+
+Преимущества:
+- Scene pipelines могут охватывать viewports на разных дисплеях
+- Все GPU ресурсы живут в одном контексте
+- Дисплеи независимы и равноправны
 
 No Qt dependencies - can be used in standalone player or editor.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple  # Dict still needed for viewport_states
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
 # Type alias for display factory callback
 # Takes display name, returns Display or None
@@ -31,6 +40,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.engine import RenderEngine
     from termin.visualization.render.state import ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
+    from termin.visualization.render.offscreen_context import OffscreenContext
 
 
 class RenderingManager:
@@ -60,10 +70,19 @@ class RenderingManager:
 
         self._displays: List["Display"] = []
 
-        # Map display id -> dict of viewport id -> ViewportRenderState
-        self._viewport_states: Dict[int, Dict[int, "ViewportRenderState"]] = {}
+        # Dedicated offscreen GL context for rendering
+        # All GPU resources live in this context
+        self._offscreen_context: Optional["OffscreenContext"] = None
 
-        # Graphics backend (set externally)
+        # Viewport states - flat dict, not tied to displays
+        # viewport_id -> ViewportRenderState
+        self._viewport_states: Dict[int, "ViewportRenderState"] = {}
+
+        # Legacy: display-based viewport states (for backwards compatibility)
+        # Will be removed after migration
+        self._legacy_viewport_states: Dict[int, Dict[int, "ViewportRenderState"]] = {}
+
+        # Graphics backend (set via initialize() or set_graphics())
         self._graphics: Optional["GraphicsBackend"] = None
 
         # RenderEngine (created lazily)
@@ -81,10 +100,54 @@ class RenderingManager:
         # Attached scenes (for scene pipeline execution)
         self._attached_scenes: List["Scene"] = []
 
+        # Flag to use new offscreen-first rendering
+        self._use_offscreen_rendering: bool = False
+
     # --- Configuration ---
 
+    def initialize(self) -> None:
+        """
+        Initialize the rendering manager with dedicated offscreen context.
+
+        Creates OffscreenContext which provides:
+        - Dedicated GL context for all rendering
+        - GraphicsBackend instance
+        - Single context_key for all resources
+
+        Call this before creating displays. Displays should share context
+        with offscreen_context.gl_context.
+        """
+        from termin.visualization.render.offscreen_context import OffscreenContext
+
+        if self._offscreen_context is not None:
+            return  # Already initialized
+
+        self._offscreen_context = OffscreenContext()
+        self._graphics = self._offscreen_context.graphics
+        self._use_offscreen_rendering = True
+
+    @property
+    def offscreen_context(self) -> Optional["OffscreenContext"]:
+        """
+        Dedicated offscreen GL context.
+
+        Use offscreen_context.gl_context when creating displays
+        to share GL context with the rendering system.
+        """
+        return self._offscreen_context
+
+    @property
+    def is_initialized(self) -> bool:
+        """Check if rendering manager is initialized with offscreen context."""
+        return self._offscreen_context is not None
+
     def set_graphics(self, graphics: "GraphicsBackend") -> None:
-        """Set graphics backend for rendering."""
+        """
+        Set graphics backend for rendering.
+
+        Note: prefer using initialize() which creates both
+        offscreen context and graphics backend.
+        """
         self._graphics = graphics
 
     def set_default_pipeline(self, pipeline: "RenderPipeline") -> None:
@@ -151,22 +214,31 @@ class RenderingManager:
             return
 
         self._displays.append(display)
-        display_id = id(display)
 
         if name is not None:
             display.name = name
 
-        # Initialize viewport states for this display
-        self._viewport_states[display_id] = {}
+        # Legacy: Initialize viewport states for this display
+        display_id = id(display)
+        self._legacy_viewport_states[display_id] = {}
 
     def remove_display(self, display: "Display") -> None:
         """Remove display from management."""
         if display not in self._displays:
             return
 
+        # Clean up viewport states for viewports on this display
+        for viewport in display.viewports:
+            viewport_id = id(viewport)
+            state = self._viewport_states.pop(viewport_id, None)
+            if state is not None:
+                state.clear_all()
+
         display_id = id(display)
         self._displays.remove(display)
-        self._viewport_states.pop(display_id, None)
+
+        # Legacy cleanup
+        self._legacy_viewport_states.pop(display_id, None)
 
     def get_display_name(self, display: "Display") -> str:
         """Get display name."""
@@ -532,46 +604,64 @@ class RenderingManager:
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get render state for a viewport."""
+        viewport_id = id(viewport)
+
+        # New flat structure
+        state = self._viewport_states.get(viewport_id)
+        if state is not None:
+            return state
+
+        # Legacy fallback
         display = viewport.display
         if display is None:
             return None
 
         display_id = id(display)
-        states = self._viewport_states.get(display_id)
+        states = self._legacy_viewport_states.get(display_id)
         if states is None:
             return None
 
-        return states.get(id(viewport))
+        return states.get(viewport_id)
 
     def remove_viewport_state(self, viewport: "Viewport") -> None:
         """Remove render state for a viewport (call after clearing FBOs)."""
-        display = viewport.display
-        if display is None:
-            return
-
-        display_id = id(display)
-        states = self._viewport_states.get(display_id)
-        if states is None:
-            return
-
         viewport_id = id(viewport)
-        if viewport_id in states:
-            del states[viewport_id]
+
+        # Remove from new structure
+        state = self._viewport_states.pop(viewport_id, None)
+        if state is not None:
+            state.clear_all()
+
+        # Legacy cleanup
+        display = viewport.display
+        if display is not None:
+            display_id = id(display)
+            states = self._legacy_viewport_states.get(display_id)
+            if states is not None and viewport_id in states:
+                del states[viewport_id]
 
     def get_or_create_viewport_state(self, viewport: "Viewport") -> "ViewportRenderState":
         """Get or create render state for a viewport."""
         from termin.visualization.render.state import ViewportRenderState
 
+        viewport_id = id(viewport)
+
+        # New flat structure (preferred)
+        if self._use_offscreen_rendering:
+            if viewport_id not in self._viewport_states:
+                self._viewport_states[viewport_id] = ViewportRenderState()
+            return self._viewport_states[viewport_id]
+
+        # Legacy: display-based structure
         display = viewport.display
         if display is None:
             raise ValueError("Viewport has no display")
 
         display_id = id(display)
-        if display_id not in self._viewport_states:
-            self._viewport_states[display_id] = {}
+        if display_id not in self._legacy_viewport_states:
+            self._legacy_viewport_states[display_id] = {}
 
-        viewport_id = id(viewport)
-        states = self._viewport_states[display_id]
+        states = self._legacy_viewport_states[display_id]
 
         if viewport_id not in states:
             states[viewport_id] = ViewportRenderState()
@@ -724,10 +814,281 @@ class RenderingManager:
 
     def render_all(self, present: bool = True) -> None:
         """
-        Render all managed displays.
+        Render all viewports.
+
+        If offscreen rendering is enabled (via initialize()):
+        - Phase 1: render_all_offscreen() - renders to output_fbos
+        - Phase 2: present_all() - blits to displays
+
+        Otherwise falls back to legacy per-display rendering.
 
         Args:
-            present: Whether to present after rendering each display.
+            present: Whether to present after rendering.
+        """
+        if self._use_offscreen_rendering:
+            self.render_all_offscreen()
+            if present:
+                self.present_all()
+        else:
+            # Legacy: render each display separately
+            for display in self._displays:
+                self.render_display(display, present=present)
+
+    def render_all_offscreen(self) -> None:
+        """
+        Phase 1: Render all viewports to their output_fbos.
+
+        Executes in dedicated offscreen context. All viewports (from all displays)
+        are rendered in a single pass. Scene pipelines can span multiple displays.
+        """
+        from termin._native import log
+
+        if self._offscreen_context is None:
+            log.warn("[render_all_offscreen] OffscreenContext not initialized, call initialize() first")
+            return
+
+        if self._graphics is None:
+            log.warn("[render_all_offscreen] Graphics backend not set")
+            return
+
+        # Activate offscreen context
+        self._offscreen_context.make_current()
+        context_key = self._offscreen_context.context_key
+
+        # Lazy create render engine
+        if self._render_engine is None:
+            from termin.visualization.render.engine import RenderEngine
+            self._render_engine = RenderEngine(self._graphics)
+
+        # Collect ALL viewports from all displays
+        all_viewports_by_name: Dict[str, "Viewport"] = {}
+        for display in self._displays:
+            for vp in display.viewports:
+                if vp.name:
+                    all_viewports_by_name[vp.name] = vp
+
+        # 1. Execute scene pipelines (can span multiple displays)
+        for scene in self._attached_scenes:
+            for pipeline_name, pipeline in scene.compiled_pipelines.items():
+                self._render_scene_pipeline_offscreen(
+                    scene=scene,
+                    pipeline_name=pipeline_name,
+                    pipeline=pipeline,
+                    all_viewports=all_viewports_by_name,
+                    context_key=context_key,
+                )
+
+        # 2. Render unmanaged viewports
+        for display in self._displays:
+            for viewport in display.viewports:
+                if not viewport.enabled:
+                    continue
+                if viewport.managed_by_scene_pipeline:
+                    continue
+                if viewport.pipeline is None or viewport.scene is None:
+                    continue
+
+                self._render_viewport_offscreen(viewport, context_key)
+
+    def _render_scene_pipeline_offscreen(
+        self,
+        scene: "Scene",
+        pipeline_name: str,
+        pipeline: "RenderPipeline",
+        all_viewports: Dict[str, "Viewport"],
+        context_key: int,
+    ) -> None:
+        """Render a scene pipeline to viewport output_fbos."""
+        from termin.visualization.render.engine import ViewportContext
+
+        target_names = scene.get_pipeline_targets(pipeline_name)
+        if not target_names:
+            return
+
+        # Collect viewport contexts from ALL displays
+        viewport_contexts: Dict[str, ViewportContext] = {}
+        first_viewport: Optional["Viewport"] = None
+
+        for viewport_name in target_names:
+            viewport = all_viewports.get(viewport_name)
+            if viewport is None:
+                continue
+            if not viewport.enabled:
+                continue
+            if viewport.camera is None:
+                continue
+
+            display = viewport.display
+            if display is None or display.surface is None:
+                continue
+
+            if first_viewport is None:
+                first_viewport = viewport
+
+            # Compute output size
+            width, height = display.surface.get_size()
+            vx, vy, vw, vh = viewport.rect
+            pw = max(1, int(vw * width))
+            ph = max(1, int(vh * height))
+
+            # Ensure output FBO exists
+            state = self.get_or_create_viewport_state(viewport)
+            output_fbo = state.ensure_output_fbo(self._graphics, (pw, ph))
+
+            viewport_contexts[viewport_name] = ViewportContext(
+                name=viewport_name,
+                camera=viewport.camera,
+                rect=(0, 0, pw, ph),  # Full FBO, offset at blit time
+                canvas=viewport.canvas,
+                layer_mask=viewport.effective_layer_mask,
+                output_fbo=output_fbo,
+            )
+
+        if not viewport_contexts or first_viewport is None:
+            return
+
+        # Use first viewport's state for shared resources
+        state = self.get_or_create_viewport_state(first_viewport)
+
+        self._render_engine.render_scene_pipeline_offscreen(
+            pipeline=pipeline,
+            scene=scene,
+            viewport_contexts=viewport_contexts,
+            shared_state=state,
+            context_key=context_key,
+            default_viewport=target_names[0] if target_names else "",
+        )
+
+    def _render_viewport_offscreen(
+        self,
+        viewport: "Viewport",
+        context_key: int,
+    ) -> None:
+        """Render a single unmanaged viewport to its output_fbo."""
+        from termin.visualization.render.view import RenderView
+
+        display = viewport.display
+        if display is None or display.surface is None:
+            return
+
+        # Compute output size
+        width, height = display.surface.get_size()
+        vx, vy, vw, vh = viewport.rect
+        pw = max(1, int(vw * width))
+        ph = max(1, int(vh * height))
+
+        # Ensure output FBO
+        state = self.get_or_create_viewport_state(viewport)
+        output_fbo = state.ensure_output_fbo(self._graphics, (pw, ph))
+
+        # Create RenderView
+        view = RenderView(
+            scene=viewport.scene,
+            camera=viewport.camera,
+            rect=(0.0, 0.0, 1.0, 1.0),  # Full output FBO
+            canvas=viewport.canvas,
+            pipeline=viewport.pipeline,
+            layer_mask=viewport.effective_layer_mask,
+        )
+
+        self._render_engine.render_view_to_fbo(
+            view=view,
+            state=state,
+            target_fbo=output_fbo,
+            size=(pw, ph),
+            context_key=context_key,
+        )
+
+    def present_all(self) -> None:
+        """
+        Phase 2: Blit viewport output_fbos to displays.
+
+        For each display:
+        1. make_current() (shared context)
+        2. Clear display
+        3. Blit viewports in depth order
+        4. swap_buffers()
         """
         for display in self._displays:
-            self.render_display(display, present=present)
+            self._present_display(display)
+
+    def _present_display(self, display: "Display") -> None:
+        """Blit viewport output_fbos to a single display."""
+        surface = display.surface
+        if surface is None:
+            return
+
+        surface.make_current()
+
+        width, height = surface.get_size()
+        if width <= 0 or height <= 0:
+            return
+
+        display_fbo = surface.get_framebuffer()
+
+        # Clear display
+        self._graphics.bind_framebuffer(display_fbo)
+        self._graphics.set_viewport(0, 0, width, height)
+        self._graphics.clear_color_depth((0.1, 0.1, 0.1, 1.0))
+
+        # Blit viewports in depth order
+        sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
+
+        for viewport in sorted_viewports:
+            if not viewport.enabled:
+                continue
+
+            state = self.get_viewport_state(viewport)
+            if state is None or state.output_fbo is None:
+                continue
+
+            # Compute destination rect on display
+            vx, vy, vw, vh = viewport.rect
+            dx = int(vx * width)
+            dy = int(vy * height)
+            dw = max(1, int(vw * width))
+            dh = max(1, int(vh * height))
+
+            # Blit output_fbo -> display_fbo
+            self._graphics.blit_framebuffer(
+                state.output_fbo,
+                display_fbo,
+                (0, 0, dw, dh),  # src rect (full output_fbo)
+                (dx, dy, dx + dw, dy + dh),  # dst rect on display
+            )
+
+        surface.present()
+
+    def _collect_all_viewports(self) -> Dict[str, "Viewport"]:
+        """Collect all viewports from all displays by name."""
+        result: Dict[str, "Viewport"] = {}
+        for display in self._displays:
+            for vp in display.viewports:
+                if vp.name:
+                    result[vp.name] = vp
+        return result
+
+    def shutdown(self) -> None:
+        """
+        Shutdown the rendering manager.
+
+        Cleans up all viewport states and destroys offscreen context.
+        """
+        # Clear all viewport states
+        for state in self._viewport_states.values():
+            state.clear_all()
+        self._viewport_states.clear()
+
+        # Legacy cleanup
+        for states_dict in self._legacy_viewport_states.values():
+            for state in states_dict.values():
+                state.clear_all()
+        self._legacy_viewport_states.clear()
+
+        # Destroy offscreen context
+        if self._offscreen_context is not None:
+            self._offscreen_context.destroy()
+            self._offscreen_context = None
+
+        self._graphics = None
+        self._render_engine = None

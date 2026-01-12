@@ -3,6 +3,7 @@
 from termin.visualization.render.engine import RenderEngine
 from termin.visualization.render.headless import HeadlessContext
 from termin.visualization.render.manager import RenderingManager
+from termin.visualization.render.offscreen_context import OffscreenContext
 from termin.visualization.render.surface import (
     RenderSurface,
     OffscreenRenderSurface,
@@ -15,6 +16,7 @@ __all__ = [
     "RenderEngine",
     "HeadlessContext",
     "RenderingManager",
+    "OffscreenContext",
     "RenderSurface",
     "OffscreenRenderSurface",
     "WindowRenderSurface",

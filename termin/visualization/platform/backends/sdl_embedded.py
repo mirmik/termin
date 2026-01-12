@@ -720,15 +720,48 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 class SDLEmbeddedWindowBackend(WindowBackend):
     """SDL2 backend for creating windows embeddable in Qt."""
 
-    def __init__(self, graphics: Optional[OpenGLGraphicsBackend] = None):
+    def __init__(
+        self,
+        graphics: Optional[OpenGLGraphicsBackend] = None,
+        share_context: Optional[Any] = None,
+    ):
+        """
+        Initialize SDL embedded window backend.
+
+        Args:
+            graphics: Graphics backend for new windows.
+            share_context: External GL context to share with (e.g., from OffscreenContext).
+                          If provided, all windows will share this context instead of
+                          sharing with the first window.
+        """
         _ensure_sdl()
         self._windows: dict[int, SDLEmbeddedWindowHandle] = {}
         self._primary_window: Optional[SDLEmbeddedWindowHandle] = None
         self._graphics = graphics
+        self._external_share_context = share_context
+        self._external_make_current: Optional[Callable[[], None]] = None
 
     def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
         """Set graphics backend for new windows."""
         self._graphics = graphics
+
+    def set_share_context(
+        self,
+        share_context: Any,
+        make_current_fn: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """
+        Set external GL context to share with.
+
+        All subsequently created windows will share this context.
+        Use this to share context with OffscreenContext.
+
+        Args:
+            share_context: GL context (e.g., OffscreenContext.gl_context)
+            make_current_fn: Function to make the context current (e.g., OffscreenContext.make_current)
+        """
+        self._external_share_context = share_context
+        self._external_make_current = make_current_fn
 
     def create_embedded_window(
         self, width: int = 800, height: int = 600, title: str = "SDL Viewport"
@@ -737,13 +770,24 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         Create SDL window with OpenGL context.
 
         Returns window that can be embedded into Qt via its native_handle property.
-        First window becomes the primary; subsequent windows share its GL context.
+
+        Context sharing priority:
+        1. External share_context (from OffscreenContext) if set
+        2. Primary window's context (first window created)
         """
-        # Share context with primary window if it exists
+        # Determine share context
         share_context = None
-        if self._primary_window is not None:
+
+        if self._external_share_context is not None:
+            # Use external context (e.g., from OffscreenContext)
+            share_context = self._external_share_context
+            # Make external context current before creating shared context
+            # SDL requires the share context to be current when creating a new shared context
+            if self._external_make_current is not None:
+                self._external_make_current()
+        elif self._primary_window is not None:
+            # Share with primary window
             share_context = self._primary_window._gl_context
-            # Make primary context current before creating shared context
             self._primary_window.make_current()
 
         window = SDLEmbeddedWindowHandle(
@@ -753,7 +797,7 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         )
         self._windows[window.get_window_id()] = window
 
-        # First window becomes the primary
+        # First window becomes the primary (only if no external context)
         if self._primary_window is None:
             self._primary_window = window
 
