@@ -7926,6 +7926,7 @@
     "flag_names": {},
     "viewport_configs": [
       {
+        "name": "",
         "display_name": "Display 0",
         "camera_uuid": "0000000000000004",
         "region": [
@@ -7940,6 +7941,7 @@
         "pipeline_uuid": "00000000-0000-0000-0004-000000000001"
       }
     ],
+    "scene_pipelines": [],
     "light_direction": [
       -0.5,
       -1.0,
@@ -7981,17 +7983,17 @@
   "editor": {
     "camera": {
       "position": [
-        9.707778930664062,
-        13.067630767822266,
-        4.4524335861206055
+        13.03373908996582,
+        13.276040077209473,
+        7.190385818481445
       ],
       "rotation": [
-        -0.09027471747131556,
-        -0.2990042867582684,
-        0.9094267729219935,
-        0.2745721336522375
+        -0.13171360353184453,
+        -0.3102978123012496,
+        0.8666282129160983,
+        0.36786184214126433
       ],
-      "radius": 12.5,
+      "radius": 16.0,
       "editor_entities": {
         "camera": [
           {
@@ -8009,7 +8011,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 12.5,
+              "radius": 16.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -8019,7 +8021,7 @@
             "data": {
               "enabled": true,
               "pipeline_name": "(Editor)",
-              "layer_mask": "0x2"
+              "layer_mask": "0x3"
             }
           }
         ],
@@ -8043,7 +8045,9 @@
         ]
       }
     },
-    "selected_entity": "000000000000000a"
+    "expanded_entities": [
+      "b89933e0-da9a-42c1-8d39-b6b0e29c7018"
+    ]
   },
   "resources": {
     "textures": {

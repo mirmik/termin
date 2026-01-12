@@ -6,7 +6,7 @@ from termin._native import log
 
 from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QTreeView, QListView, QLabel, QMenu, QTabWidget, QPlainTextEdit
-from PyQt6.QtWidgets import QStatusBar, QPushButton
+from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
@@ -26,6 +26,7 @@ from termin.editor.viewport_list_widget import ViewportListWidget
 from termin.editor.rendering_controller import RenderingController
 from termin.editor.scene_file_controller import SceneFileController
 from termin.editor.project_file_watcher import ProjectFileWatcher
+from termin.editor.editor_mode_controller import EditorModeController
 from termin.editor.file_processors import (
     MaterialPreLoader,
     MeshFileProcessor,
@@ -70,9 +71,7 @@ class EditorWindow(QMainWindow):
         EditorWindow._instance = self
         self.undo_stack = UndoStack()
         self._menu_bar_controller: MenuBarController | None = None
-        self._status_bar_label: QLabel | None = None
-        self._fps_smooth: float | None = None
-        self._fps_alpha: float = 0.1  # экспоненциальное сглаживание: f_new = f_prev*(1-α) + f_curr*α
+        self._mode_controller = EditorModeController(self)
         self._should_close = False
 
         self.world = world
@@ -115,9 +114,6 @@ class EditorWindow(QMainWindow):
         self.editor_viewport: EditorViewportFeatures | None = None
         self.gizmo_manager: GizmoManager | None = None
         self.selection_manager: SelectionManager | None = None
-        # Game mode scene name (editor scene name set above)
-        self._game_scene_name: str | None = None    # e.g. "walking_test(game)"
-        self._saved_tree_expanded_uuids: list[str] | None = None  # Saved from editor scene
         self.prefab_edit_controller: PrefabEditController | None = None
         self.project_browser = None
         self._project_controller: EditorProjectController | None = None
@@ -128,14 +124,12 @@ class EditorWindow(QMainWindow):
         self._viewport_list_widget: ViewportListWidget | None = None
         self._rendering_controller: RenderingController | None = None
         self._viewport_toolbar: QWidget | None = None
-        self._is_fullscreen: bool = False
-        self._pre_fullscreen_state: dict | None = None  # Store widget visibility before fullscreen
         self._profiler_panel: "ProfilerPanel | None" = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
 
-        self._init_status_bar()
+        self._mode_controller.init_status_bar()
 
         # --- ResourceLoader ---
         self._resource_loader = ResourceLoader(
@@ -440,8 +434,9 @@ class EditorWindow(QMainWindow):
     @property
     def scene(self):
         """Текущая сцена редактора (или game сцена в game mode)."""
-        if self.is_game_mode and self._game_scene_name:
-            return self.scene_manager.get_scene(self._game_scene_name)
+        game_scene_name = self._mode_controller.game_scene_name
+        if self.is_game_mode and game_scene_name:
+            return self.scene_manager.get_scene(game_scene_name)
         if self._editor_scene_name:
             return self.scene_manager.get_scene(self._editor_scene_name)
         return None
@@ -449,14 +444,12 @@ class EditorWindow(QMainWindow):
     @property
     def is_game_mode(self) -> bool:
         """True if currently in game mode (including paused)."""
-        return self._game_scene_name is not None
+        return self._mode_controller.is_game_mode
 
     @property
     def is_game_paused(self) -> bool:
         """True if game mode is paused (game scene in STOP mode)."""
-        if not self.is_game_mode:
-            return False
-        return self.scene_manager.get_mode(self._game_scene_name) == SceneMode.STOP
+        return self._mode_controller.is_game_paused
 
     def _set_editor_scene_name(self, name: str | None) -> None:
         """Set editor scene name."""
@@ -489,7 +482,7 @@ class EditorWindow(QMainWindow):
             on_layers_settings=self._show_layers_dialog,
             on_shadow_settings=self._show_shadow_settings_dialog,
             on_pipeline_editor=self._show_pipeline_editor,
-            on_toggle_game_mode=self._toggle_game_mode,
+            on_toggle_game_mode=self._mode_controller.toggle_game_mode,
             on_run_standalone=self._run_standalone,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
@@ -499,10 +492,10 @@ class EditorWindow(QMainWindow):
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_profiler=self._toggle_profiler,
-            on_toggle_fullscreen=self._toggle_fullscreen,
+            on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
-            is_fullscreen=lambda: self._is_fullscreen,
+            is_fullscreen=lambda: self._mode_controller.is_fullscreen,
             is_profiler_visible=self._is_profiler_visible,
         )
 
@@ -1007,23 +1000,12 @@ class EditorWindow(QMainWindow):
         else:
             self._project_file_watcher.rescan()
 
-    def _init_status_bar(self) -> None:
-        """
-        Создаёт полосу статуса внизу окна. FPS будем писать сюда в игровом режиме.
-        """
-        status_bar: QStatusBar = self.statusBar()
-        status_bar.setSizeGripEnabled(False)
-
-        label = QLabel("Editor mode")
-        status_bar.addPermanentWidget(label, 1)
-        self._status_bar_label = label
-
     def _init_viewport_toolbar(self) -> None:
         handles = EditorUIBuilder.build_viewport_toolbar(
             center_tab_widget=self._center_tab_widget,
             top_splitter=self.topSplitter,
-            on_toggle_game_mode=self._toggle_game_mode,
-            on_toggle_pause=self._toggle_pause,
+            on_toggle_game_mode=self._mode_controller.toggle_game_mode,
+            on_toggle_pause=self._mode_controller.toggle_pause,
             on_save_prefab=self._save_prefab,
             on_exit_prefab=self._exit_prefab_editing,
         )
@@ -1304,130 +1286,18 @@ class EditorWindow(QMainWindow):
         """Load components from Python file."""
         self._resource_loader.load_components_from_file()
 
-    def _toggle_fullscreen(self) -> None:
-        """Toggle fullscreen mode - expand viewport to fill entire screen."""
-        if self._is_fullscreen:
-            self._exit_fullscreen()
-        else:
-            self._enter_fullscreen()
-
-    def _enter_fullscreen(self) -> None:
-        """Enter fullscreen mode."""
-        # Save current state - which widgets were visible
-        self._pre_fullscreen_state = {
-            "left_visible": self.leftTabWidget.isVisible() if self.leftTabWidget else True,
-            "inspector_visible": self.inspectorContainer.isVisible() if self.inspectorContainer else True,
-            "bottom_visible": self._get_bottom_widget_visible(),
-            "toolbar_visible": self._viewport_toolbar.isVisible() if self._viewport_toolbar else True,
-            "tabbar_visible": self._center_tab_widget.tabBar().isVisible() if self._center_tab_widget else True,
-            "menubar_visible": self.menuBar().isVisible(),
-            "statusbar_visible": self.statusBar().isVisible(),
-            "window_state": self.windowState(),
-        }
-
-        # Hide side panels directly
-        if self.leftTabWidget:
-            self.leftTabWidget.hide()
-        if self.inspectorContainer:
-            self.inspectorContainer.hide()
-
-        # Hide bottom panel (project browser area)
-        self._set_bottom_widget_visible(False)
-
-        # Hide viewport toolbar (with Play button)
-        if self._viewport_toolbar:
-            self._viewport_toolbar.hide()
-
-        # Hide tab bar of center tab widget
-        if self._center_tab_widget:
-            self._center_tab_widget.tabBar().hide()
-
-        # Hide menu and status bars
-        self.menuBar().hide()
-        self.statusBar().hide()
-
-        # Enter fullscreen
-        self.showFullScreen()
-        self._is_fullscreen = True
-
-        # Update menu checkbox
-        if self._menu_bar_controller:
-            self._menu_bar_controller.update_fullscreen_action()
-
-    def _get_bottom_widget_visible(self) -> bool:
-        """Get visibility of bottom area in vertical splitter."""
-        if self.verticalSplitter and self.verticalSplitter.count() > 1:
-            widget = self.verticalSplitter.widget(1)
-            return widget.isVisible() if widget else True
-        return True
-
-    def _set_bottom_widget_visible(self, visible: bool) -> None:
-        """Set visibility of bottom area in vertical splitter."""
-        if self.verticalSplitter and self.verticalSplitter.count() > 1:
-            widget = self.verticalSplitter.widget(1)
-            if widget:
-                if visible:
-                    widget.show()
-                else:
-                    widget.hide()
-
-    def _exit_fullscreen(self) -> None:
-        """Exit fullscreen mode."""
-        # Exit fullscreen first
-        self.showNormal()
-
-        # Restore saved state
-        if self._pre_fullscreen_state:
-            state = self._pre_fullscreen_state
-
-            # Restore window state
-            if state.get("window_state"):
-                self.setWindowState(state["window_state"])
-
-            # Restore menu and status bars
-            if state.get("menubar_visible", True):
-                self.menuBar().show()
-            if state.get("statusbar_visible", True):
-                self.statusBar().show()
-
-            # Restore side panels
-            if self.leftTabWidget and state.get("left_visible", True):
-                self.leftTabWidget.show()
-            if self.inspectorContainer and state.get("inspector_visible", True):
-                self.inspectorContainer.show()
-
-            # Restore bottom panel
-            if state.get("bottom_visible", True):
-                self._set_bottom_widget_visible(True)
-
-            # Restore viewport toolbar
-            if self._viewport_toolbar and state.get("toolbar_visible", True):
-                self._viewport_toolbar.show()
-
-            # Restore tab bar
-            if self._center_tab_widget and state.get("tabbar_visible", True):
-                self._center_tab_widget.tabBar().show()
-
-            self._pre_fullscreen_state = None
-
-        self._is_fullscreen = False
-
-        # Update menu checkbox
-        if self._menu_bar_controller:
-            self._menu_bar_controller.update_fullscreen_action()
-
     def keyPressEvent(self, event) -> None:
         """Handle key press events."""
         from PyQt6.QtCore import Qt
 
         # F11 to toggle fullscreen (backup if menu shortcut doesn't work)
         if event.key() == Qt.Key.Key_F11:
-            self._toggle_fullscreen()
+            self._mode_controller.toggle_fullscreen()
             return
 
         # Escape to exit fullscreen
-        if event.key() == Qt.Key.Key_Escape and self._is_fullscreen:
-            self._exit_fullscreen()
+        if event.key() == Qt.Key.Key_Escape and self._mode_controller.is_fullscreen:
+            self._mode_controller.exit_fullscreen()
             return
 
         super().keyPressEvent(event)
@@ -1669,112 +1539,6 @@ class EditorWindow(QMainWindow):
 
             self._request_viewport_update()
 
-    # ----------- game mode -----------
-
-    def _toggle_game_mode(self) -> None:
-        """Переключает режим игры."""
-        if self.is_game_mode:
-            self._stop_game_mode()
-        else:
-            self._start_game_mode()
-
-    def _toggle_pause(self) -> None:
-        """Переключает паузу в игровом режиме."""
-        if not self.is_game_mode or self._game_scene_name is None:
-            return
-
-        current_mode = self.scene_manager.get_mode(self._game_scene_name)
-        if current_mode == SceneMode.PLAY:
-            # Pause: PLAY -> STOP
-            self.scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
-            if self._pause_button is not None:
-                self._pause_button.setChecked(True)
-        else:
-            # Resume: STOP -> PLAY
-            self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-            if self._pause_button is not None:
-                self._pause_button.setChecked(False)
-
-        self._update_status_bar()
-        self._request_viewport_update()
-
-    def _start_game_mode(self) -> None:
-        """Входит в игровой режим."""
-        if self.is_game_mode:
-            return
-        if self._editor_scene_name is None:
-            return
-
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-        if editor_scene is None:
-            return
-
-        # Сохраняем раскрытые ноды дерева (для переноса в game scene и обратно)
-        self._saved_tree_expanded_uuids = None
-        if self.scene_tree_controller is not None:
-            self._saved_tree_expanded_uuids = self.scene_tree_controller.get_expanded_entity_uuids()
-
-        # Сохраняем камеру editor viewport в editor сцену
-        self._save_editor_viewport_camera_to_scene(editor_scene)
-
-        # Сохраняем viewport_configs перед копированием (для восстановления через attach_scene)
-        if self._rendering_controller is not None:
-            self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
-
-        # Сохраняем состояние EditorEntities в editor_scene для восстановления после game mode
-        self._editor_attachment.save_state()
-
-        # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
-        self._game_scene_name = f"{self._editor_scene_name}(game)"
-        game_scene = self.scene_manager.copy_scene(
-            self._editor_scene_name,
-            self._game_scene_name,
-        )
-
-        # Detach from editor_scene, attach to game_scene with same camera state
-        self._editor_attachment.attach(game_scene, transfer_camera_state=True)
-        self._sync_attachment_refs()
-
-        # Устанавливаем режимы (таймер запустится автоматически)
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
-        self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-
-        # Detach editor scene from RenderingManager before attaching game scene
-        if self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(editor_scene)
-
-        self._on_game_mode_changed(True, game_scene, self._saved_tree_expanded_uuids)
-
-    def _stop_game_mode(self) -> None:
-        """Выходит из игрового режима."""
-        if not self.is_game_mode:
-            return
-
-        # Detach from game_scene (don't save state - we discard game changes)
-        self._editor_attachment.detach(save_state=False)
-
-        # Detach game scene from RenderingManager before closing
-        game_scene = self.scene_manager.get_scene(self._game_scene_name)
-        if game_scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(game_scene)
-
-        # Закрываем game сцену (теперь is_game_mode станет False)
-        self.scene_manager.close_scene(self._game_scene_name)
-        self._game_scene_name = None
-
-        # Возвращаемся к editor сцене
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-
-        # Attach to editor_scene, restore state from scene.editor_entities_data
-        self._editor_attachment.attach(editor_scene, restore_state=True)
-        self._sync_attachment_refs()
-
-        # Создаём viewports для editor сцены (камера читается из scene.editor_viewport_camera_name)
-        # Передаём сохранённые expanded_uuids для восстановления состояния дерева
-        self._on_game_mode_changed(False, editor_scene, self._saved_tree_expanded_uuids)
-        self._saved_tree_expanded_uuids = None  # Очищаем после использования
-
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""
         import subprocess
@@ -1813,88 +1577,6 @@ class EditorWindow(QMainWindow):
         ]
 
         subprocess.Popen(cmd, cwd=str(project_root))
-
-    def _save_editor_viewport_camera_to_scene(self, scene) -> None:
-        """Сохраняет имя камеры editor viewport в сцену."""
-        if self._rendering_controller is None:
-            return
-        editor_display = self._rendering_controller.editor_display
-        if editor_display is None or not editor_display.viewports:
-            return
-        viewport = editor_display.viewports[0]
-        camera_name = None
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            camera_name = viewport.camera.entity.name
-        scene.editor_viewport_camera_name = camera_name
-
-    def _on_game_mode_changed(
-        self,
-        is_playing: bool,
-        scene,
-        expanded_uuids: list[str] | None = None,
-    ) -> None:
-        """Колбэк при изменении игрового режима.
-
-        Args:
-            is_playing: True если входим в game mode, False если выходим.
-            scene: Новая сцена (game или editor).
-            expanded_uuids: Раскрытые entity UUIDs для восстановления в дереве.
-                            Сохраняются из editor scene и применяются в обе стороны.
-        """
-        if self._rendering_controller is None:
-            return
-
-        # Обычные дисплеи (не Editor) - через attach_scene (читает scene.viewport_configs)
-        self._rendering_controller.attach_scene(scene)
-
-        # Editor display - viewport уже создан через EditorSceneAttachment.attach()
-        # Только обновляем world_mode
-        editor_display = self._rendering_controller.editor_display
-        if editor_display is not None:
-            editor_display_id = id(editor_display)
-            editor_features = self._editor_features.get(editor_display_id)
-            if editor_features is not None:
-                editor_features.set_world_mode("game" if is_playing else "editor")
-
-        # Обновляем scene tree на новую сцену
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.set_scene(scene)
-            self.scene_tree_controller.rebuild()
-            # Восстанавливаем раскрытые ноды (сохранённые из editor scene)
-            if expanded_uuids:
-                self.scene_tree_controller.set_expanded_entity_uuids(expanded_uuids)
-
-        # Очищаем инспектор (выбранный entity мог измениться)
-        self.show_entity_inspector(None)
-
-        # Обновляем framegraph debugger если открыт
-        self._refresh_framegraph_debugger()
-
-        # Сбрасываем сглаженное значение FPS при входе/выходе
-        self._fps_smooth = None
-        self._update_game_mode_ui()
-        self._request_viewport_update()
-
-    def _update_game_mode_ui(self) -> None:
-        """Update UI elements based on game mode state."""
-        is_playing = self.is_game_mode
-
-        if self._menu_bar_controller is not None:
-            self._menu_bar_controller.update_play_action(is_playing)
-
-        # Обновляем кнопку Play в toolbar
-        if self._play_button is not None:
-            self._play_button.setChecked(is_playing)
-            self._play_button.setText("Stop" if is_playing else "Play")
-
-        # Показываем/скрываем кнопку Pause
-        if self._pause_button is not None:
-            self._pause_button.setVisible(is_playing)
-            if not is_playing:
-                self._pause_button.setChecked(False)
-
-        self._update_window_title()
-        self._update_status_bar()
 
     # ----------- prefab edit mode -----------
 
@@ -2007,25 +1689,6 @@ class EditorWindow(QMainWindow):
             parts.append("- PLAYING")
 
         self.setWindowTitle(" ".join(parts))
-
-    def _update_status_bar(self) -> None:
-        """Заполняет текст статус-бара (FPS в игре, режим редактора вне игры)."""
-        if self._status_bar_label is None:
-            return
-
-        if not self.is_game_mode:
-            self._status_bar_label.setText("Editor mode")
-            return
-
-        if self.is_game_paused:
-            self._status_bar_label.setText("Game mode (PAUSED)")
-            return
-
-        if self._fps_smooth is None:
-            self._status_bar_label.setText("FPS: --")
-            return
-
-        self._status_bar_label.setText(f"FPS: {self._fps_smooth:.1f}")
 
     # ----------- display input mode -----------
 
