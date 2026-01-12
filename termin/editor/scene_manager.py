@@ -637,6 +637,12 @@ class SceneManager:
         self._modes.clear()
         self._paths.clear()
 
+    def reset(self) -> None:
+        """Reset manager state by closing all scenes and clearing editor data."""
+        self.close_all_scenes()
+        self._editor_data.clear()
+        self._update_timer_state()
+
     # --- Debug Info ---
 
     def get_debug_info(self) -> dict:
@@ -655,4 +661,3 @@ class SceneManager:
                 "path": self._paths.get(name),
             }
         return info
-

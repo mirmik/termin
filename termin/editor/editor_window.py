@@ -5,9 +5,8 @@ from pathlib import Path
 from termin._native import log
 
 from PyQt6 import uic
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
-from PyQt6.QtWidgets import QStatusBar, QToolBar, QPushButton, QSizePolicy
-from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QMainWindow, QWidget, QTreeView, QListView, QLabel, QMenu, QTabWidget, QPlainTextEdit
+from PyQt6.QtWidgets import QStatusBar, QPushButton
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
@@ -21,12 +20,10 @@ from termin.editor.selection_manager import SelectionManager
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
-from termin.editor.editor_camera import EditorCameraManager
 from termin.editor.editor_scene_attachment import EditorSceneAttachment
 from termin.editor.resource_loader import ResourceLoader
 from termin.editor.viewport_list_widget import ViewportListWidget
 from termin.editor.rendering_controller import RenderingController
-from termin.editor.external_editor import open_in_text_editor
 from termin.editor.scene_file_controller import SceneFileController
 from termin.editor.project_file_watcher import ProjectFileWatcher
 from termin.editor.file_processors import (
@@ -51,11 +48,12 @@ from termin.editor.profiler import ProfilerPanel
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
-from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, parse_asset_path_mime_data
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
+from termin.editor.project_controller import EditorProjectController
+from termin.editor.editor_ui_builder import EditorUIBuilder
 
 
 class EditorWindow(QMainWindow):
@@ -122,8 +120,7 @@ class EditorWindow(QMainWindow):
         self._saved_tree_expanded_uuids: list[str] | None = None  # Saved from editor scene
         self.prefab_edit_controller: PrefabEditController | None = None
         self.project_browser = None
-        self._project_name: str | None = None
-        self._current_project_file: Path | None = None
+        self._project_controller: EditorProjectController | None = None
         self._play_button: QPushButton | None = None
         self._prefab_toolbar: QWidget | None = None
         self._prefab_toolbar_label: QLabel | None = None
@@ -139,8 +136,6 @@ class EditorWindow(QMainWindow):
         uic.loadUi(ui_path, self)
 
         self._init_status_bar()
-
-        self._setup_menu_bar()
 
         # --- ResourceLoader ---
         self._resource_loader = ResourceLoader(
@@ -261,7 +256,7 @@ class EditorWindow(QMainWindow):
         self.topSplitter: QSplitter = self.findChild(QSplitter, "topSplitter")
         self.verticalSplitter: QSplitter = self.findChild(QSplitter, "verticalSplitter")
 
-        self._fix_splitters()
+        EditorUIBuilder.fix_splitters(self.topSplitter, self.verticalSplitter)
 
         # --- InspectorController ---
         self._inspector_controller = InspectorController(
@@ -318,6 +313,22 @@ class EditorWindow(QMainWindow):
 
         # --- viewport toolbar ---
         self._init_viewport_toolbar()
+
+        # --- Project controller ---
+        self._project_controller = EditorProjectController(
+            parent=self,
+            settings=EditorSettings.instance(),
+            inspector_controller=self._inspector_controller,
+            log_message=self._log_to_console,
+            update_window_title=self._update_window_title,
+            on_project_reset=self.scene_manager.reset,
+            on_load_scene=self._load_scene_from_file,
+            on_open_prefab=self._open_prefab,
+        )
+
+        # --- UI: menu bar and project browser ---
+        self._setup_menu_bar()
+        self._init_project_browser()
 
         # --- ViewportListWidget and RenderingController ---
         # Must be created BEFORE EditorViewportFeatures
@@ -414,9 +425,6 @@ class EditorWindow(QMainWindow):
             on_before_close_scene=self._on_before_close_editor_scene,
         )
 
-        # --- Project Browser ---
-        self._init_project_browser()
-
         # --- SpaceMouse support ---
         self._init_spacemouse()
 
@@ -458,10 +466,12 @@ class EditorWindow(QMainWindow):
 
     def _setup_menu_bar(self) -> None:
         """Create editor menu bar via MenuBarController."""
+        if self._project_controller is None:
+            return
         self._menu_bar_controller = MenuBarController(
             menu_bar=self.menuBar(),
-            on_new_project=self._new_project,
-            on_open_project=self._open_project,
+            on_new_project=self._project_controller.new_project,
+            on_open_project=self._project_controller.open_project,
             on_new_scene=self._new_scene,
             on_save_scene=self._save_scene,
             on_save_scene_as=self._save_scene_as,
@@ -765,9 +775,9 @@ class EditorWindow(QMainWindow):
 
     def _get_project_path(self) -> str | None:
         """Get current project path from project browser."""
-        if self.project_browser is None or self.project_browser.root_path is None:
+        if self._project_controller is None:
             return None
-        return str(self.project_browser.root_path)
+        return self._project_controller.get_project_path()
 
     def _get_graphics(self):
         """Get GraphicsBackend from world."""
@@ -890,20 +900,6 @@ class EditorWindow(QMainWindow):
 
     # ----------- инициализация сплиттеров -----------
 
-    def _fix_splitters(self):
-        self.topSplitter.setOpaqueResize(False)
-        self.verticalSplitter.setOpaqueResize(False)
-
-        self.topSplitter.setCollapsible(0, False)
-        self.topSplitter.setCollapsible(1, False)
-        self.topSplitter.setCollapsible(2, False)
-
-        self.verticalSplitter.setCollapsible(0, False)
-        self.verticalSplitter.setCollapsible(1, False)
-
-        self.topSplitter.setSizes([300, 1000, 300])
-        self.verticalSplitter.setSizes([600, 200])
-
     def _init_viewport_list_widget(self) -> None:
         """Initialize ViewportListWidget and RenderingController."""
         if self.renderingTab is None:
@@ -944,10 +940,8 @@ class EditorWindow(QMainWindow):
         else:
             self._spacemouse = None
 
-    def _init_project_browser(self):
+    def _init_project_browser(self) -> None:
         """Инициализация файлового браузера проекта."""
-        from pathlib import Path
-
         # Находим виджеты из .ui
         self.projectDirTree: QTreeView = self.findChild(QTreeView, "projectDirTree")
         self.projectFileList: QListView = self.findChild(QListView, "projectFileList")
@@ -957,161 +951,18 @@ class EditorWindow(QMainWindow):
         # Connect native logging to console
         self._setup_native_log_callback()
 
-        if self.projectDirTree is None or self.projectFileList is None:
+        if self._project_controller is None:
             return
 
-        # Загружаем последний открытый проект (если есть валидный .terminproj)
-        settings = EditorSettings.instance()
-        project_file = settings.get_last_project_file()
-
-        project_root: Path | None = None
-        if project_file is not None:
-            project_root = project_file.parent
-            self._current_project_file = project_file
-
-        self.project_browser = ProjectBrowser(
-            dir_tree=self.projectDirTree,
-            file_list=self.projectFileList,
-            root_path=project_root,
-            on_file_selected=self._on_project_file_selected,
-            on_file_double_clicked=self._on_project_file_double_clicked,
+        self.project_browser = self._project_controller.init_project_browser(
+            project_dir_tree=self.projectDirTree,
+            project_file_list=self.projectFileList,
         )
 
-        # Обновляем имя проекта и заголовок окна
-        if project_root is not None:
-            self._project_name = project_root.name
-        else:
-            self._project_name = None
-        self._update_window_title()
-
-    def _on_project_file_selected(self, file_path) -> None:
-        """Обработчик выбора файла в Project Browser (одинарный клик)."""
-        from pathlib import Path
-        path = Path(file_path)
-        suffix = path.suffix.lower()
-
-        if suffix == ".material":
-            # Материал — открываем в инспекторе материалов
-            self.show_material_inspector_for_file(str(path))
-        elif suffix == ".pipeline":
-            # Пайплайн — открываем в инспекторе пайплайнов
-            self._inspector_controller.show_pipeline_inspector_for_file(str(path))
-        elif suffix in (".png", ".jpg", ".jpeg", ".tga", ".bmp"):
-            # Текстура — открываем в инспекторе текстур
-            self._inspector_controller.show_texture_inspector_for_file(str(path))
-        elif suffix in (".stl", ".obj"):
-            # Меш — открываем в инспекторе мешей
-            self._inspector_controller.show_mesh_inspector_for_file(str(path))
-        elif suffix in (".glb", ".gltf"):
-            # GLB — открываем в инспекторе GLB
-            self._inspector_controller.show_glb_inspector_for_file(str(path))
-
-    def _on_project_file_double_clicked(self, file_path) -> None:
-        """Обработчик двойного клика на файл в Project Browser."""
-        from pathlib import Path
-        path = Path(file_path)
-
-        # Обработка разных типов файлов
-        if path.suffix == ".scene":
-            # Это файл сцены — загружаем
-            self._load_scene_from_file(str(path))
-
-        elif path.suffix == ".prefab":
-            # Это файл префаба — открываем в режиме изоляции
-            self._open_prefab(str(path))
-
-        elif path.suffix in (".material", ".shader", ".py", ".pipeline"):
-            # Материалы, шейдеры, скрипты, пайплайны — открываем во внешнем текстовом редакторе
-            self._open_in_text_editor(str(path))
-
-        else:
-            # Другие файлы — логируем
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Opened: {file_path}")
-
-    def _new_project(self) -> None:
-        """Создать новый проект (.terminproj файл)."""
-        current_dir = str(Path.cwd())
-        if self._current_project_file is not None:
-            current_dir = str(self._current_project_file.parent)
-
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Create New Project",
-            current_dir,
-            "Termin Project (*.terminproj)",
-            options=QFileDialog.Option.DontUseNativeDialog,
-        )
-
-        if not file_path:
-            return
-
-        # Добавляем расширение если не указано
-        if not file_path.endswith(".terminproj"):
-            file_path += ".terminproj"
-
-        project_file = Path(file_path)
-
-        # Создаём пустой файл проекта (пока просто пустой JSON)
-        import json
-        project_data = {
-            "version": 1,
-            "name": project_file.stem,
-        }
-        project_file.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
-
-        self._load_project_file(project_file)
-
-    def _open_project(self) -> None:
-        """Открыть существующий проект (.terminproj файл)."""
-        current_dir = str(Path.cwd())
-        if self._current_project_file is not None:
-            current_dir = str(self._current_project_file.parent)
-
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open Project",
-            current_dir,
-            "Termin Project (*.terminproj)",
-            options=QFileDialog.Option.DontUseNativeDialog,
-        )
-
-        if not file_path:
-            return
-
-        project_file = Path(file_path)
-        if not project_file.exists() or project_file.suffix != ".terminproj":
-            return
-
-        self._load_project_file(project_file)
-
-    def _load_project_file(self, project_file: Path) -> None:
-        """Загрузить проект из файла .terminproj."""
-        project_root = project_file.parent
-
-        self._current_project_file = project_file
-        self._project_name = project_root.name
-
-        if self.project_browser is not None:
-            self.project_browser.set_root_path(str(project_root))
-
-        self._update_window_title()
-
-        # Сохраняем путь для следующего запуска
-        EditorSettings.instance().set_last_project_file(project_file)
-
-        self._log_to_console(f"Opened project: {project_file}")
-
-        # Сбрасываем сцену и пересканируем ресурсы
-        self.scene_manager.reset()
 
     def _show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
         self._dialog_manager.show_settings_dialog()
-
-    def _open_in_text_editor(self, file_path: str) -> None:
-        """Open file in external text editor."""
-        open_in_text_editor(file_path, parent=self, log_message=self._log_to_console)
 
     def _on_resource_reloaded(self, resource_type: str, resource_name: str) -> None:
         """Callback for resource reload."""
@@ -1168,161 +1019,19 @@ class EditorWindow(QMainWindow):
         self._status_bar_label = label
 
     def _init_viewport_toolbar(self) -> None:
-        """
-        Создаёт панель инструментов над centerTabWidget с кнопкой Play в центре.
-        """
-        toolbar = QWidget()
-        toolbar.setFixedHeight(32)
-        toolbar.setStyleSheet("background-color: #3c3c3c;")
-
-        layout = QHBoxLayout(toolbar)
-        layout.setContentsMargins(4, 2, 4, 2)
-        layout.setSpacing(4)
-
-        # Левый спейсер для центрирования кнопки
-        layout.addStretch(1)
-
-        # Кнопка Play/Stop
-        play_btn = QPushButton("Play")
-        play_btn.setFixedSize(60, 24)
-        play_btn.setCheckable(True)
-        play_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #505050;
-                color: #ffffff;
-                border: 1px solid #606060;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a5a5a;
-            }
-            QPushButton:checked {
-                background-color: #4a90d9;
-                border-color: #5aa0e9;
-            }
-            QPushButton:checked:hover {
-                background-color: #5aa0e9;
-            }
-        """)
-        play_btn.clicked.connect(self._toggle_game_mode)
-        layout.addWidget(play_btn)
-        self._play_button = play_btn
-
-        # Кнопка Pause (видна только в game mode)
-        pause_btn = QPushButton("Pause")
-        pause_btn.setFixedSize(60, 24)
-        pause_btn.setCheckable(True)
-        pause_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #505050;
-                color: #ffffff;
-                border: 1px solid #606060;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a5a5a;
-            }
-            QPushButton:checked {
-                background-color: #d9a04a;
-                border-color: #e9b05a;
-            }
-            QPushButton:checked:hover {
-                background-color: #e9b05a;
-            }
-        """)
-        pause_btn.clicked.connect(self._toggle_pause)
-        pause_btn.setVisible(False)  # Hidden until game mode starts
-        layout.addWidget(pause_btn)
-        self._pause_button = pause_btn
-
-        self._viewport_toolbar = toolbar
-
-        # Правый спейсер для центрирования кнопки
-        layout.addStretch(1)
-
-        # --- Prefab toolbar (скрытый по умолчанию) ---
-        prefab_toolbar = QWidget()
-        prefab_toolbar.setFixedHeight(28)
-        prefab_toolbar.setStyleSheet("background-color: #4a7c59;")  # Зелёный оттенок
-        prefab_toolbar.setVisible(False)
-
-        prefab_layout = QHBoxLayout(prefab_toolbar)
-        prefab_layout.setContentsMargins(8, 2, 8, 2)
-        prefab_layout.setSpacing(8)
-
-        # Иконка и название префаба
-        prefab_label = QLabel("Editing Prefab: ")
-        prefab_label.setStyleSheet("color: white; font-weight: bold;")
-        prefab_layout.addWidget(prefab_label)
-        self._prefab_toolbar_label = prefab_label
-
-        prefab_layout.addStretch(1)
-
-        # Кнопка Save
-        save_btn = QPushButton("Save")
-        save_btn.setFixedSize(70, 22)
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #5a9a6a;
-                color: white;
-                border: 1px solid #6aaa7a;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #6aaa7a;
-            }
-        """)
-        save_btn.clicked.connect(self._save_prefab)
-        prefab_layout.addWidget(save_btn)
-
-        # Кнопка Exit
-        exit_btn = QPushButton("Exit")
-        exit_btn.setFixedSize(70, 22)
-        exit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6a6a6a;
-                color: white;
-                border: 1px solid #7a7a7a;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #7a7a7a;
-            }
-        """)
-        exit_btn.clicked.connect(self._exit_prefab_editing)
-        prefab_layout.addWidget(exit_btn)
-
-        self._prefab_toolbar = prefab_toolbar
-
-        # Создаём контейнер для toolbar + prefab_toolbar + centerTabWidget
-        center_container = QWidget()
-        container_layout = QVBoxLayout(center_container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(0)
-
-        # Добавляем toolbars в контейнер
-        container_layout.addWidget(toolbar)
-        container_layout.addWidget(prefab_toolbar)
-
-        # Перемещаем centerTabWidget в контейнер
-        # Сначала получаем индекс centerTabWidget в topSplitter
-        splitter_index = self.topSplitter.indexOf(self._center_tab_widget)
-
-        # Убираем centerTabWidget из splitter (setParent(None))
-        self._center_tab_widget.setParent(None)
-
-        # Добавляем centerTabWidget в контейнер
-        container_layout.addWidget(self._center_tab_widget)
-
-        # Вставляем контейнер в splitter на место centerTabWidget
-        self.topSplitter.insertWidget(splitter_index, center_container)
-
-        # Переустанавливаем размеры сплиттера после перемещения виджетов
-        self.topSplitter.setSizes([300, 1000, 300])
+        handles = EditorUIBuilder.build_viewport_toolbar(
+            center_tab_widget=self._center_tab_widget,
+            top_splitter=self.topSplitter,
+            on_toggle_game_mode=self._toggle_game_mode,
+            on_toggle_pause=self._toggle_pause,
+            on_save_prefab=self._save_prefab,
+            on_exit_prefab=self._exit_prefab_editing,
+        )
+        self._viewport_toolbar = handles.viewport_toolbar
+        self._play_button = handles.play_button
+        self._pause_button = handles.pause_button
+        self._prefab_toolbar = handles.prefab_toolbar
+        self._prefab_toolbar_label = handles.prefab_toolbar_label
 
     # ----------- связи с контроллерами -----------
 
@@ -1744,8 +1453,10 @@ class EditorWindow(QMainWindow):
 
         # Get current project path
         current_project = ""
-        if self.project_browser is not None and self.project_browser._root_path:
-            current_project = str(self.project_browser._root_path)
+        if self._project_controller is not None:
+            project_root = self._project_controller.get_project_root_path()
+            if project_root is not None:
+                current_project = str(project_root)
 
         # Ask user where to deploy
         target_dir = QFileDialog.getExistingDirectory(
@@ -1795,8 +1506,8 @@ class EditorWindow(QMainWindow):
 
         # Get project path
         project_path = None
-        if self.project_browser is not None and self.project_browser._root_path:
-            project_path = self.project_browser._root_path
+        if self._project_controller is not None:
+            project_path = self._project_controller.get_project_root_path()
 
         if not project_path:
             QMessageBox.warning(
@@ -2271,8 +1982,10 @@ class EditorWindow(QMainWindow):
         parts = ["Termin Editor"]
 
         # Добавляем имя проекта
-        if self._project_name is not None:
-            parts.append(f"- {self._project_name}")
+        if self._project_controller is not None:
+            project_name = self._project_controller.project_name
+            if project_name is not None:
+                parts.append(f"- {project_name}")
 
         # Проверяем режим редактирования префаба
         is_editing_prefab = self.prefab_edit_controller.is_editing if self.prefab_edit_controller else False
