@@ -574,6 +574,9 @@ class SceneManager:
         Args:
             dt: Delta time in seconds.
         """
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         for name, scene in self._scenes.items():
             mode = self._modes.get(name, SceneMode.INACTIVE)
 
@@ -581,10 +584,12 @@ class SceneManager:
                 continue
             elif mode == SceneMode.STOP:
                 # Editor mode: minimal update for gizmos, etc.
-                scene.editor_update(dt)
+                with profiler.section(f"Scene Editor Update: {name}"):
+                    scene.editor_update(dt)
             elif mode == SceneMode.PLAY:
                 # Game mode: full simulation
-                scene.update(dt)
+                with profiler.section(f"Scene Update: {name}"):
+                    scene.update(dt)
 
     def before_render(self) -> None:
         """
