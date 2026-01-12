@@ -24,6 +24,7 @@ from termin.editor.editor_scene_attachment import EditorSceneAttachment
 from termin.editor.resource_loader import ResourceLoader
 from termin.editor.viewport_list_widget import ViewportListWidget
 from termin.editor.rendering_controller import RenderingController
+from termin.visualization.render import RenderingManager
 from termin.editor.scene_file_controller import SceneFileController
 from termin.editor.project_file_watcher import ProjectFileWatcher
 from termin.editor.editor_mode_controller import EditorModeController
@@ -87,7 +88,6 @@ class EditorWindow(QMainWindow):
         # Создаётся ПЕРВЫМ, до всех контроллеров
         self.scene_manager = SceneManager(
             resource_manager=self.resource_manager,
-            on_request_render=self._request_viewport_update,
             on_before_scene_close=self._on_before_scene_close,
             get_editor_camera_data=self._get_editor_camera_data,
             set_editor_camera_data=self._set_editor_camera_data,
@@ -367,6 +367,11 @@ class EditorWindow(QMainWindow):
 
         # Register in editor features dict
         self._editor_features[id(editor_display)] = self.editor_viewport
+
+        RenderingManager.instance().set_graphics(self.world.graphics)
+        self.scene_manager.set_render_callbacks(
+            on_after_render=self._after_render,
+        )
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
         self._rendering_controller.set_editor_pipeline_maker(
@@ -1018,10 +1023,15 @@ class EditorWindow(QMainWindow):
     # ----------- связи с контроллерами -----------
 
     def _request_viewport_update(self) -> None:
+        self.scene_manager.request_render()
         if self._rendering_controller is not None:
             backend = self._rendering_controller.editor_backend_window
             if backend is not None:
                 backend.request_update()
+
+    def _after_render(self) -> None:
+        for editor_features in self._editor_features.values():
+            editor_features.after_render()
 
     def _on_before_scene_close(self, scene) -> None:
         """Called before a scene is destroyed. Removes viewports referencing this scene."""
@@ -1771,48 +1781,3 @@ class EditorWindow(QMainWindow):
         """Handle window close event."""
         self._should_close = True
         super().closeEvent(event)
-
-    def tick(self, dt: float) -> None:
-        """
-        Main tick function called from render loop.
-
-        Handles rendering through unified RenderingController.
-        Note: Game mode updates are handled by SceneManager's internal timer.
-        """
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-
-        # In game mode - always render at target FPS
-        # In editor mode - render only when needed (on-demand)
-        is_playing = self.is_game_mode
-
-        # Poll SpaceMouse input (only in editor mode)
-        if not is_playing and self._spacemouse is not None:
-            if self._editor_attachment is not None and self._editor_attachment.camera_manager is not None:
-                orbit_controller = self._editor_attachment.camera_manager.orbit_controller
-                self._spacemouse.update(orbit_controller, self._request_viewport_update)
-
-        # Update active_in_editor components in editor mode
-        if not is_playing and self.scene is not None:
-            profiler.begin_frame()
-            with profiler.section("Components"):
-                self.scene.editor_update(dt)
-
-        # Check if any display needs render (unified check)
-        needs_render = is_playing
-        if not needs_render and self._rendering_controller is not None:
-            needs_render = self._rendering_controller.any_display_needs_render()
-
-        # Render all displays through RenderingController (unified render path)
-        if needs_render and self._rendering_controller is not None:
-            # Call before_render on all components (e.g. SkeletonController updates bone matrices)
-            self.scene_manager.before_render()
-
-            self._rendering_controller.render_all_displays()
-
-            # Editor-specific post-render (picking, hover, etc.) for ALL displays
-            for editor_features in self._editor_features.values():
-                editor_features.after_render()
-        elif not is_playing:
-            # No render needed - end frame started above
-            profiler.end_frame()

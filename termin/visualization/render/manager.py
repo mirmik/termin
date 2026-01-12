@@ -828,13 +828,11 @@ class RenderingManager:
         from termin._native import log
 
         if self._use_offscreen_rendering:
-            log.debug("[RenderingManager.render_all] Using OFFSCREEN rendering mode")
             self.render_all_offscreen()
             if present:
                 self.present_all()
         else:
             # Legacy: render each display separately
-            log.debug("[RenderingManager.render_all] Using LEGACY per-display rendering mode")
             for display in self._displays:
                 self.render_display(display, present=present)
 

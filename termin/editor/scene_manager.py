@@ -79,7 +79,8 @@ class SceneManager:
         self,
         resource_manager: "ResourceManager",
         scene_factory: Optional[Callable[[], "Scene"]] = None,
-        on_request_render: Optional[Callable[[], None]] = None,
+        on_after_render: Optional[Callable[[], None]] = None,
+        use_internal_timer: bool = False,
         on_before_scene_close: Optional[Callable[["Scene"], None]] = None,
         # Editor state callbacks
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
@@ -96,7 +97,8 @@ class SceneManager:
         Args:
             resource_manager: Resource manager for loading assets.
             scene_factory: Factory for creating new scenes. If None, uses Scene().
-            on_request_render: Callback to request viewport render (called by game loop).
+            on_after_render: Callback to run after render (e.g. editor features).
+            use_internal_timer: If True, use internal QTimer for PLAY scenes.
             on_before_scene_close: Callback(scene) called before scene is destroyed.
             get_editor_camera_data: Callback to get editor camera state.
             set_editor_camera_data: Callback to set editor camera state.
@@ -110,7 +112,8 @@ class SceneManager:
         """
         self._resource_manager = resource_manager
         self._scene_factory = scene_factory
-        self._on_request_render = on_request_render
+        self._on_after_render = on_after_render
+        self._use_internal_timer = use_internal_timer
         self._on_before_scene_close = on_before_scene_close
 
         # Game loop timer (auto-starts when GAME scenes exist)
@@ -137,6 +140,7 @@ class SceneManager:
 
         # Resources initialized flag
         self._resources_initialized: bool = False
+        self._render_requested: bool = False
 
     @property
     def resource_manager(self) -> "ResourceManager":
@@ -577,6 +581,10 @@ class SceneManager:
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
+        profiler.begin_frame()
+
+        has_play_scenes = any(m == SceneMode.PLAY for m in self._modes.values())
+        
         for name, scene in self._scenes.items():
             mode = self._modes.get(name, SceneMode.INACTIVE)
 
@@ -591,6 +599,21 @@ class SceneManager:
                 with profiler.section(f"Scene Update: {name}"):
                     scene.update(dt)
 
+        should_render = has_play_scenes or self._render_requested
+        if should_render:
+            with profiler.section(f"Scene Manager Before Render"):
+                self.before_render()
+            from termin.visualization.render import RenderingManager
+            
+            with profiler.section(f"Scene Manager Render"):
+               RenderingManager.instance().render_all(present=True)
+            if self._on_after_render is not None:            
+                with profiler.section(f"Scene Manager After Render"):
+                    self._on_after_render()
+            self._render_requested = False
+        
+        profiler.end_frame()
+
     def before_render(self) -> None:
         """
         Call before_render on all non-INACTIVE scenes.
@@ -604,6 +627,8 @@ class SceneManager:
 
     def _update_timer_state(self) -> None:
         """Start or stop game timer based on whether GAME scenes exist."""
+        if not self._use_internal_timer:
+            return
         has_game_scenes = any(m == SceneMode.PLAY for m in self._modes.values())
 
         if has_game_scenes and not self._game_timer.isActive():
@@ -619,8 +644,17 @@ class SceneManager:
 
         self.tick(dt)
 
-        if self._on_request_render is not None:
-            self._on_request_render()
+    def request_render(self) -> None:
+        """Request render on the next tick."""
+        self._render_requested = True
+
+    def set_render_callbacks(
+        self,
+        on_after_render: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Configure render callbacks for the editor."""
+        if on_after_render is not None:
+            self._on_after_render = on_after_render
 
     # @property
     # def is_game_mode(self) -> bool:
