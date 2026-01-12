@@ -8,21 +8,6 @@ namespace termin {
 
 namespace {
 
-// Get model matrix from Entity as Mat44f.
-Mat44f get_model_matrix(const Entity& entity) {
-    double m_row[16];
-    entity.transform().world_matrix(m_row);
-
-    // Transpose from row-major to column-major
-    Mat44f result;
-    for (int col = 0; col < 4; ++col) {
-        for (int row = 0; row < 4; ++row) {
-            result(col, row) = static_cast<float>(m_row[row * 4 + col]);
-        }
-    }
-    return result;
-}
-
 // User data for entity iteration callback
 struct CollectDrawCallsData {
     std::vector<NormalPass::NormalDrawCall>* draw_calls;
@@ -112,7 +97,7 @@ NormalPass::NormalPass(
     const std::string& output_res,
     const std::string& pass_name
 )
-    : RenderFramePass(pass_name, {input_res}, {output_res})
+    : GeometryPassBase(pass_name, {input_res}, {output_res})
     , input_res(input_res)
     , output_res(output_res)
 {
@@ -196,88 +181,46 @@ void NormalPass::execute_with_data(
     FramebufferHandle* fb = it->second;
 
     // Bind FBO and set viewport
-    graphics->bind_framebuffer(fb);
-    graphics->set_viewport(0, 0, rect.width, rect.height);
-
-    // Clear: zero normal (no data)
-    graphics->clear_color_depth(0.5f, 0.5f, 0.5f, 1.0f);
-
-    // Apply render state
-    RenderState state;
-    state.depth_test = true;
-    state.depth_write = true;
-    state.blend = false;
-    state.cull = true;
-    graphics->apply_render_state(state);
+    bind_and_clear(graphics, fb, rect, 0.5f, 0.5f, 0.5f, 1.0f);
+    apply_default_render_state(graphics);
 
     // Get normal shader
     ShaderProgram* shader = get_normal_shader(graphics);
-    shader->use();
-    shader->set_uniform_matrix4("u_view", view.data, false);
-    shader->set_uniform_matrix4("u_projection", projection.data, false);
-
     // Empty extra_uniforms (normal pass doesn't need extra uniforms)
     nb::dict extra_uniforms;
-
-    // Create render context
-    RenderContext context;
-    context.view = view;
-    context.projection = projection;
-    context.context_key = context_key;
-    context.graphics = graphics;
-    context.phase = "normal";
-    context.current_shader = shader;
-    context.extra_uniforms = extra_uniforms;
 
     // Collect draw calls
     auto draw_calls = collect_draw_calls(scene, layer_mask);
 
-    // Update entity names for debugging
-    entity_names.clear();
-    std::set<std::string> seen_entities;
-
-    for (const auto& dc : draw_calls) {
-        // Set model matrix
-        Mat44f model = get_model_matrix(dc.entity);
-        context.model = model;
-
-        // Track entity names
-        const char* name = dc.entity.name();
-        if (name && seen_entities.find(name) == seen_entities.end()) {
-            seen_entities.insert(name);
-            entity_names.push_back(name);
-        }
-
-        // Allow drawable to override shader (for skinning injection)
-        ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-            tc_component_override_shader(dc.component, "normal", 0, shader)
-        );
-        if (shader_to_use == nullptr) {
-            shader_to_use = shader;
-        }
-
-        // Ensure shader is ready and bind
-        shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-            return graphics->create_shader(v, f, g);
-        });
-        shader_to_use->use();
-
-        // Apply uniforms to (possibly overridden) shader
+    auto setup_uniforms = [&](const NormalDrawCall& dc,
+                              ShaderProgram* shader_to_use,
+                              const Mat44f& model,
+                              const Mat44f& view_matrix,
+                              const Mat44f& proj_matrix,
+                              RenderContext& context) {
         shader_to_use->set_uniform_matrix4("u_model", model.data, false);
-        shader_to_use->set_uniform_matrix4("u_view", view.data, false);
-        shader_to_use->set_uniform_matrix4("u_projection", projection.data, false);
+        shader_to_use->set_uniform_matrix4("u_view", view_matrix.data, false);
+        shader_to_use->set_uniform_matrix4("u_projection", proj_matrix.data, false);
+        context.extra_uniforms = extra_uniforms;
+    };
 
-        context.current_shader = shader_to_use;
+    auto maybe_blit = [&](const std::string& name, int width, int height) {
+        maybe_blit_to_debugger(graphics, fb, name, width, height);
+    };
 
-        // Draw geometry (handles bone matrix upload for skinned meshes)
-        tc_component_draw_geometry(dc.component, &context, 0);
-
-        // Check for debug blit
-        const std::string& debug_symbol = get_debug_internal_point();
-        if (!debug_symbol.empty() && name && name == debug_symbol) {
-            maybe_blit_to_debugger(graphics, fb, name, rect.width, rect.height);
-        }
-    }
+    render_draw_calls(
+        draw_calls,
+        graphics,
+        shader,
+        view,
+        projection,
+        context_key,
+        "normal",
+        extra_uniforms,
+        rect,
+        setup_uniforms,
+        maybe_blit
+    );
 }
 
 void NormalPass::maybe_blit_to_debugger(

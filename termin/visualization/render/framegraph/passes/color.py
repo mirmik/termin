@@ -103,6 +103,8 @@ class ColorPass(_ColorPassNative):
                 # Ensure u_ prefix for uniform name
                 uniform_name = f"u_{key}" if not key.startswith("u_") else key
                 self._extra_textures[uniform_name] = value
+        self._cached_camera_name: str | None = None
+        self._cached_camera_component = None
 
 
     @classmethod
@@ -185,10 +187,15 @@ class ColorPass(_ColorPassNative):
         """Find camera component from entity by name."""
         from termin.visualization.core.camera import CameraComponent
 
+        if self._cached_camera_name == name and self._cached_camera_component is not None:
+            return self._cached_camera_component
+
         for entity in scene.entities:
             if entity.name == name:
                 camera = entity.get_component(CameraComponent)
                 if camera is not None:
+                    self._cached_camera_name = name
+                    self._cached_camera_component = camera
                     return camera
         return None
 

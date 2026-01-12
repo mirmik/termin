@@ -2,11 +2,10 @@
 
 #include <vector>
 #include <string>
-#include <set>
 #include <memory>
 #include <nanobind/nanobind.h>
 
-#include "termin/render/render_frame_pass.hpp"
+#include "termin/render/geometry_pass_base.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
@@ -32,14 +31,11 @@ namespace termin {
  *
  * Output: RGB texture with normals encoded as (normal * 0.5 + 0.5)
  */
-class NormalPass : public RenderFramePass {
+class NormalPass : public GeometryPassBase {
 public:
     // Pass configuration
     std::string input_res = "empty_normal";
     std::string output_res = "normal";
-
-    // Entity names cache (for get_internal_symbols)
-    std::vector<std::string> entity_names;
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(NormalPass, input_res, "Input Resource", "string")
@@ -88,10 +84,6 @@ public:
     /**
      * Get internal symbols for debugging.
      */
-    std::vector<std::string> get_internal_symbols() const override {
-        return entity_names;
-    }
-
     // Collect drawable components from entities
     struct NormalDrawCall {
         Entity entity;

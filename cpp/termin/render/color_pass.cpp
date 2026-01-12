@@ -198,9 +198,9 @@ void ColorPass::compute_sort_keys(const Vec3& camera_position) {
         double dx = pos.x - camera_position.x;
         double dy = pos.y - camera_position.y;
         double dz = pos.z - camera_position.z;
-        float dist = static_cast<float>(std::sqrt(dx*dx + dy*dy + dz*dz));
+        float dist2 = static_cast<float>(dx*dx + dy*dy + dz*dz);
 
-        uint32_t dist_bits = float_to_sortable_uint(dist);
+        uint32_t dist_bits = float_to_sortable_uint(dist2);
         if (invert_distance) {
             dist_bits = ~dist_bits;  // Invert for far-to-near
         }
