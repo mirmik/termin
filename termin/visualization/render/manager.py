@@ -825,12 +825,16 @@ class RenderingManager:
         Args:
             present: Whether to present after rendering.
         """
+        from termin._native import log
+
         if self._use_offscreen_rendering:
+            log.debug("[RenderingManager.render_all] Using OFFSCREEN rendering mode")
             self.render_all_offscreen()
             if present:
                 self.present_all()
         else:
             # Legacy: render each display separately
+            log.debug("[RenderingManager.render_all] Using LEGACY per-display rendering mode")
             for display in self._displays:
                 self.render_display(display, present=present)
 
@@ -854,6 +858,11 @@ class RenderingManager:
         # Activate offscreen context
         self._offscreen_context.make_current()
         context_key = self._offscreen_context.context_key
+
+        # Ensure graphics is ready (load GL functions)
+        self._graphics.ensure_ready()
+
+        log.info(f"[render_all_offscreen] Offscreen context activated, context_key={context_key}")
 
         # Lazy create render engine
         if self._render_engine is None:
@@ -899,6 +908,7 @@ class RenderingManager:
         context_key: int,
     ) -> None:
         """Render a scene pipeline to viewport output_fbos."""
+        from termin._native import log
         from termin.visualization.render.engine import ViewportContext
 
         target_names = scene.get_pipeline_targets(pipeline_name)
@@ -931,9 +941,13 @@ class RenderingManager:
             pw = max(1, int(vw * width))
             ph = max(1, int(vh * height))
 
+            log.info(f"[_render_scene_pipeline_offscreen] viewport={viewport_name}, size=({pw}, {ph})")
+
             # Ensure output FBO exists
             state = self.get_or_create_viewport_state(viewport)
+            log.info(f"[_render_scene_pipeline_offscreen] Creating output FBO for {viewport_name}")
             output_fbo = state.ensure_output_fbo(self._graphics, (pw, ph))
+            log.info(f"[_render_scene_pipeline_offscreen] Output FBO created: {output_fbo}")
 
             viewport_contexts[viewport_name] = ViewportContext(
                 name=viewport_name,

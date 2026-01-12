@@ -267,10 +267,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
         # Enable context sharing if a context is provided
+        # Note: SDL_GL_SHARE_WITH_CURRENT_CONTEXT means "share with whatever context
+        # is current at the time of SDL_GL_CreateContext". The caller must ensure
+        # the share context is current BEFORE calling this constructor.
         if share_context is not None:
             video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1)
-            # Make the share context current before creating new context
-            # (SDL requires this for context sharing)
 
         # Create SDL window with OpenGL support
         flags = (

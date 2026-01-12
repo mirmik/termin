@@ -93,8 +93,15 @@ class OffscreenContext:
         # Make current and initialize graphics backend
         self.make_current()
 
+        from termin._native import log
+        log.info(f"[OffscreenContext] Created GL context: {self._gl_context}")
+
         from termin.graphics import OpenGLGraphicsBackend
         self._graphics = OpenGLGraphicsBackend()
+
+        # Ensure OpenGL functions are loaded
+        self._graphics.ensure_ready()
+        log.info("[OffscreenContext] Graphics backend initialized and ready")
 
     def _ensure_sdl(self) -> None:
         """Инициализирует SDL если ещё не инициализирован."""
@@ -139,7 +146,11 @@ class OffscreenContext:
         from sdl2 import video
 
         if self._window is not None and self._gl_context is not None:
-            video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+            result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+            if result != 0:
+                import sdl2
+                from termin._native import log
+                log.error(f"[OffscreenContext] SDL_GL_MakeCurrent failed: {sdl2.SDL_GetError()}")
 
     def is_valid(self) -> bool:
         """Проверяет, валиден ли контекст."""

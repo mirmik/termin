@@ -119,6 +119,10 @@ class RenderingController:
         # Register pipeline factory with RenderingManager
         self._manager.set_pipeline_factory(self._create_pipeline_for_name)
 
+        # Initialize offscreen rendering context
+        # This creates dedicated GL context for rendering, shared by all displays
+        self._manager.initialize()
+
         self._connect_signals()
 
     def _connect_signals(self) -> None:
@@ -194,13 +198,21 @@ class RenderingController:
         if sdl_backend is None:
             return None
 
+        # Ensure SDL backend is configured with shared context
+        if self._manager.offscreen_context is not None:
+            sdl_backend.set_share_context(
+                share_context=self._manager.offscreen_context.gl_context,
+                make_current_fn=self._manager.offscreen_context.make_current,
+            )
+            sdl_backend.set_graphics(self._manager.graphics)
+
         # Create tab container widget
         tab_container = QWidget()
         tab_layout = QVBoxLayout(tab_container)
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(0)
 
-        # Create SDL window with OpenGL context
+        # Create SDL window with OpenGL context (shares context with offscreen)
         backend_window = sdl_backend.create_embedded_window(
             width=800,
             height=600,
@@ -583,7 +595,17 @@ class RenderingController:
         from termin.visualization.render.surface import WindowRenderSurface
         from termin.visualization.core.display import Display
 
-        # Create SDL window
+        # Configure SDL backend to share GL context with offscreen rendering context
+        # This ensures all displays use the same GL resources
+        if self._manager.offscreen_context is not None:
+            sdl_backend.set_share_context(
+                share_context=self._manager.offscreen_context.gl_context,
+                make_current_fn=self._manager.offscreen_context.make_current,
+            )
+            # Also set graphics from offscreen context
+            sdl_backend.set_graphics(self._manager.graphics)
+
+        # Create SDL window (will share context with offscreen context)
         backend_window = sdl_backend.create_embedded_window(
             width=width,
             height=height,
