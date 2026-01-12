@@ -35,6 +35,11 @@ class ProfilerPanel(QtWidgets.QDockWidget):
 
         # Кэш для оптимизации обновления таблицы
         self._last_sections: Dict[str, SectionStats] = {}
+        self._update_table_enabled = True
+        self._ema_sections: Dict[str, float] = {}
+        self._ema_calls: Dict[str, int] = {}
+        self._ema_total: float | None = None
+        self._ema_alpha: float = 0.1  # f_new = f_prev*(1-α) + f_curr*α
 
         self._build_ui()
 
@@ -126,6 +131,9 @@ class ProfilerPanel(QtWidgets.QDockWidget):
             self._graph.clear()
             self._fps_label.setText("-- FPS")
             self._last_sections.clear()
+            self._ema_sections.clear()
+            self._ema_calls.clear()
+            self._ema_total = None
 
     def _on_clear_clicked(self) -> None:
         """Обработчик кнопки Clear."""
@@ -133,33 +141,110 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         self._graph.clear()
         self._table.clear()
         self._last_sections.clear()
+        self._ema_sections.clear()
+        self._ema_calls.clear()
+        self._ema_total = None
 
     def _update_display(self) -> None:
         """Обновляет отображение данных профайлера."""
         if not self._profiler.enabled:
             return
 
-        detailed = self._profiler.detailed_average(60)
+        frame = self._get_last_frame()
+        if frame is None:
+            return
+
+        detailed = self._collect_sections_from_frame(frame)
         if not detailed:
             return
 
         # Считаем общее время (только root секции)
         total = sum(stats.cpu_ms for k, stats in detailed.items() if "/" not in k)
+        total_ema = self._update_total_ema(total)
+        detailed_ema = self._update_sections_ema(detailed)
 
         # FPS
-        if total > 0:
-            fps = 1000.0 / total
-            self._fps_label.setText(f"{fps:.0f} FPS ({total:.1f}ms)")
+        if total_ema > 0:
+            fps = 1000.0 / total_ema
+            self._fps_label.setText(f"{fps:.0f} FPS ({total_ema:.1f}ms)")
         else:
             self._fps_label.setText("-- FPS")
 
         # Graph
-        self._graph.add_frame(total)
+        self._graph.add_frame(total_ema)
 
         # Table - обновляем только если данные изменились значительно
-        if self._should_update_table(detailed):
-            self._rebuild_table(detailed, total)
-            self._last_sections = detailed.copy()
+        if self._update_table_enabled and self._should_update_table(detailed_ema):
+            self._rebuild_table(detailed_ema, total_ema)
+            self._last_sections = detailed_ema.copy()
+
+    def _get_last_frame(self):
+        """Возвращает последний кадр профайлера без конвертации всей истории."""
+        tc = self._profiler._tc
+        count = tc.history_count
+        if count <= 0:
+            return None
+        return tc.history_at(count - 1)
+
+    def _collect_sections_from_frame(self, frame) -> Dict[str, SectionStats]:
+        """Собирает секции из одного кадра в формате path -> SectionStats."""
+        sections = frame.sections
+        if not sections:
+            return {}
+
+        names = [s.name for s in sections]
+        parents = [s.parent_index for s in sections]
+        path_cache: Dict[int, str] = {}
+
+        def make_path(idx: int) -> str:
+            cached = path_cache.get(idx)
+            if cached is not None:
+                return cached
+            parent_idx = parents[idx]
+            if parent_idx < 0:
+                path = names[idx]
+            else:
+                path = f"{make_path(parent_idx)}/{names[idx]}"
+            path_cache[idx] = path
+            return path
+
+        result: Dict[str, SectionStats] = {}
+        for i, s in enumerate(sections):
+            path = make_path(i)
+            result[path] = SectionStats(cpu_ms=s.cpu_ms, call_count=s.call_count)
+        return result
+
+    def _update_total_ema(self, total: float) -> float:
+        if self._ema_total is None:
+            self._ema_total = total
+        else:
+            self._ema_total = self._ema_total * (1.0 - self._ema_alpha) + total * self._ema_alpha
+        return self._ema_total
+
+    def _update_sections_ema(self, detailed: Dict[str, SectionStats]) -> Dict[str, SectionStats]:
+        alpha = self._ema_alpha
+
+        for key, stats in detailed.items():
+            prev = self._ema_sections.get(key)
+            if prev is None:
+                self._ema_sections[key] = stats.cpu_ms
+            else:
+                self._ema_sections[key] = prev * (1.0 - alpha) + stats.cpu_ms * alpha
+            self._ema_calls[key] = stats.call_count
+
+        # Плавно затухаем секции, которые пропали
+        for key in list(self._ema_sections.keys()):
+            if key in detailed:
+                continue
+            self._ema_sections[key] *= (1.0 - alpha)
+            if self._ema_sections[key] < 0.01:
+                self._ema_sections.pop(key, None)
+                self._ema_calls.pop(key, None)
+
+        return {
+            key: SectionStats(cpu_ms=self._ema_sections[key], call_count=self._ema_calls.get(key, 0))
+            for key in self._ema_sections
+        }
 
     def _should_update_table(self, detailed: Dict[str, SectionStats]) -> bool:
         """Проверяет, нужно ли обновлять таблицу."""
