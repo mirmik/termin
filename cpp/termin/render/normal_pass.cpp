@@ -6,53 +6,6 @@
 
 namespace termin {
 
-namespace {
-
-// User data for entity iteration callback
-struct CollectDrawCallsData {
-    std::vector<NormalPass::NormalDrawCall>* draw_calls;
-    uint64_t layer_mask;
-};
-
-// Callback for tc_entity_pool_foreach
-bool collect_normal_draw_calls(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
-    auto* data = static_cast<CollectDrawCallsData*>(user_data);
-
-    // Filter by visibility and enabled
-    if (!tc_entity_pool_visible(pool, id) || !tc_entity_pool_enabled(pool, id)) {
-        return true; // continue iteration
-    }
-
-    // Filter by layer mask
-    uint64_t entity_layer = tc_entity_pool_layer(pool, id);
-    if (!(data->layer_mask & (1ULL << entity_layer))) {
-        return true; // continue iteration
-    }
-
-    // Create Entity wrapper for component access
-    Entity ent(pool, id);
-
-    // Get drawable components from entity
-    size_t comp_count = ent.component_count();
-    for (size_t ci = 0; ci < comp_count; ci++) {
-        tc_component* tc = ent.component_at(ci);
-        if (!tc || !tc->enabled) {
-            continue;
-        }
-
-        // Check if component is drawable via vtable
-        if (!tc_component_is_drawable(tc)) {
-            continue;
-        }
-
-        data->draw_calls->push_back(NormalPass::NormalDrawCall{ent, tc});
-    }
-
-    return true; // continue iteration
-}
-
-} // anonymous namespace
-
 // Normal shader - outputs world-space normals
 static const char* NORMAL_VERT = R"(
 #version 330 core
@@ -152,12 +105,13 @@ std::vector<NormalPass::NormalDrawCall> NormalPass::collect_draw_calls(
     size_t entity_count = tc_entity_pool_count(pool);
     draw_calls.reserve(entity_count);
 
-    // Collect draw calls via callback iteration
-    CollectDrawCallsData data;
-    data.draw_calls = &draw_calls;
-    data.layer_mask = layer_mask;
-
-    tc_entity_pool_foreach(pool, collect_normal_draw_calls, &data);
+    auto entity_filter = [](const Entity&) {
+        return true;
+    };
+    auto emit = [&draw_calls](const Entity& ent, tc_component* tc) {
+        draw_calls.push_back(NormalPass::NormalDrawCall{ent, tc});
+    };
+    collect_draw_calls_common(scene, layer_mask, entity_filter, emit);
 
     return draw_calls;
 }
@@ -205,7 +159,7 @@ void NormalPass::execute_with_data(
     };
 
     auto maybe_blit = [&](const std::string& name, int width, int height) {
-        maybe_blit_to_debugger(graphics, fb, name, width, height);
+        this->maybe_blit_to_debugger(graphics, fb, name, width, height);
     };
 
     render_draw_calls(
@@ -221,32 +175,6 @@ void NormalPass::execute_with_data(
         setup_uniforms,
         maybe_blit
     );
-}
-
-void NormalPass::maybe_blit_to_debugger(
-    GraphicsBackend* graphics,
-    FramebufferHandle* fb,
-    const std::string& entity_name,
-    int width,
-    int height
-) {
-    // Check if debugger window is set
-    if (debugger_window.is_none()) {
-        return;
-    }
-
-    try {
-        // Call Python debugger_window.blit_from_pass(fb, graphics, width, height, depth_callback)
-        debugger_window.attr("blit_from_pass")(
-            nb::cast(fb, nb::rv_policy::reference),
-            nb::cast(graphics, nb::rv_policy::reference),
-            width,
-            height,
-            depth_capture_callback
-        );
-    } catch (const nb::python_error& e) {
-        tc::Log::error(e, "NormalPass::blit_to_debugger_window");
-    }
 }
 
 void NormalPass::execute(

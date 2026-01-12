@@ -101,15 +101,6 @@ private:
 
     // Get or compile depth shader
     ShaderProgram* get_depth_shader(GraphicsBackend* graphics);
-
-    // Call debugger blit if debug point matches entity name
-    void maybe_blit_to_debugger(
-        GraphicsBackend* graphics,
-        FramebufferHandle* fb,
-        const std::string& entity_name,
-        int width,
-        int height
-    );
 };
 
 } // namespace termin

@@ -15,6 +15,8 @@
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 #include "termin/geom/mat44.hpp"
+#include "tc_log.hpp"
+#include "tc_scene.h"
 
 namespace nb = nanobind;
 
@@ -66,6 +68,90 @@ protected:
         state.blend = false;
         state.cull = true;
         graphics->apply_render_state(state);
+    }
+
+    void maybe_blit_to_debugger(
+        GraphicsBackend* graphics,
+        FramebufferHandle* fb,
+        const std::string& entity_name,
+        int width,
+        int height
+    ) {
+        if (debugger_window.is_none()) {
+            return;
+        }
+
+        try {
+            debugger_window.attr("blit_from_pass")(
+                nb::cast(fb, nb::rv_policy::reference),
+                nb::cast(graphics, nb::rv_policy::reference),
+                width,
+                height,
+                depth_capture_callback
+            );
+        } catch (const nb::python_error& e) {
+            tc::Log::error(e, "GeometryPassBase::blit_to_debugger_window");
+        }
+    }
+
+    template <typename EntityFilter, typename Emit>
+    void collect_draw_calls_common(
+        tc_scene* scene,
+        uint64_t layer_mask,
+        EntityFilter& entity_filter,
+        Emit& emit
+    ) const {
+        if (!scene) {
+            return;
+        }
+
+        tc_entity_pool* pool = tc_scene_entity_pool(scene);
+        if (!pool) {
+            return;
+        }
+
+        struct CollectContext {
+            EntityFilter* filter;
+            Emit* emit;
+            uint64_t layer_mask;
+        };
+
+        auto callback = [](tc_entity_pool* pool, tc_entity_id id, void* user_data) -> bool {
+            auto* data = static_cast<CollectContext*>(user_data);
+
+            if (!tc_entity_pool_visible(pool, id) || !tc_entity_pool_enabled(pool, id)) {
+                return true;
+            }
+
+            uint64_t entity_layer = tc_entity_pool_layer(pool, id);
+            if (!(data->layer_mask & (1ULL << entity_layer))) {
+                return true;
+            }
+
+            Entity ent(pool, id);
+            if (!(*data->filter)(ent)) {
+                return true;
+            }
+
+            size_t comp_count = ent.component_count();
+            for (size_t ci = 0; ci < comp_count; ci++) {
+                tc_component* tc = ent.component_at(ci);
+                if (!tc || !tc->enabled) {
+                    continue;
+                }
+
+                if (!tc_component_is_drawable(tc)) {
+                    continue;
+                }
+
+                (*data->emit)(ent, tc);
+            }
+
+            return true;
+        };
+
+        CollectContext context{&entity_filter, &emit, layer_mask};
+        tc_entity_pool_foreach(pool, callback, &context);
     }
 
     template <typename DrawCall, typename SetupUniforms, typename MaybeBlit>
