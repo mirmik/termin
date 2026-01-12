@@ -617,10 +617,10 @@ class SceneManager:
         if self._on_request_render is not None:
             self._on_request_render()
 
-    @property
-    def is_game_mode(self) -> bool:
-        """True if any scene is in GAME mode."""
-        return any(m == SceneMode.PLAY for m in self._modes.values())
+    # @property
+    # def is_game_mode(self) -> bool:
+    #     """True if any scene is in GAME mode."""
+    #     return any(m == SceneMode.PLAY for m in self._modes.values())
 
     # --- Reset/New Scene ---
 

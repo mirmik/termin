@@ -862,8 +862,6 @@ class RenderingManager:
         # Ensure graphics is ready (load GL functions)
         self._graphics.ensure_ready()
 
-        log.info(f"[render_all_offscreen] Offscreen context activated, context_key={context_key}")
-
         # Lazy create render engine
         if self._render_engine is None:
             from termin.visualization.render.engine import RenderEngine
@@ -941,13 +939,9 @@ class RenderingManager:
             pw = max(1, int(vw * width))
             ph = max(1, int(vh * height))
 
-            log.info(f"[_render_scene_pipeline_offscreen] viewport={viewport_name}, size=({pw}, {ph})")
-
             # Ensure output FBO exists
             state = self.get_or_create_viewport_state(viewport)
-            log.info(f"[_render_scene_pipeline_offscreen] Creating output FBO for {viewport_name}")
             output_fbo = state.ensure_output_fbo(self._graphics, (pw, ph))
-            log.info(f"[_render_scene_pipeline_offscreen] Output FBO created: {output_fbo}")
 
             viewport_contexts[viewport_name] = ViewportContext(
                 name=viewport_name,
