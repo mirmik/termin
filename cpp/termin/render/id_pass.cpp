@@ -101,36 +101,6 @@ void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
     b = static_cast<float>(b_int) / 255.0f;
 }
 
-std::vector<IdPass::IdDrawCall> IdPass::collect_draw_calls(
-    tc_scene* scene,
-    uint64_t layer_mask
-) {
-    std::vector<IdDrawCall> draw_calls;
-
-    if (!scene) {
-        return draw_calls;
-    }
-
-    tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    if (!pool) {
-        return draw_calls;
-    }
-
-    // Estimate capacity
-    size_t entity_count = tc_entity_pool_count(pool);
-    draw_calls.reserve(entity_count);
-
-    auto entity_filter = [](const Entity& ent) {
-        return ent.pickable();
-    };
-    auto emit = [&draw_calls](const Entity& ent, tc_component* tc) {
-        draw_calls.push_back(IdPass::IdDrawCall{ent, tc, static_cast<int>(ent.pick_id())});
-    };
-    collect_draw_calls_common(scene, layer_mask, entity_filter, emit);
-
-    return draw_calls;
-}
-
 void IdPass::execute_with_data(
     GraphicsBackend* graphics,
     const FBOMap& reads_fbos,
@@ -159,7 +129,7 @@ void IdPass::execute_with_data(
     nb::dict extra_uniforms;
 
     // Collect draw calls
-    auto draw_calls = collect_draw_calls(scene, layer_mask);
+    auto draw_calls = GeometryPassBase::collect_draw_calls(scene, layer_mask);
 
     // Current pick_id for batching
     int current_pick_id = -1;
@@ -176,7 +146,7 @@ void IdPass::execute_with_data(
         return;
     }
 
-    auto setup_uniforms = [&](const IdDrawCall& dc,
+    auto setup_uniforms = [&](const DrawCall& dc,
                               ShaderProgram* shader_to_use,
                               const Mat44f& model,
                               const Mat44f& view_matrix,

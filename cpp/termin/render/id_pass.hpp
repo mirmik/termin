@@ -84,14 +84,13 @@ public:
     /**
      * Get internal symbols for debugging.
      */
-    // Collect drawable components from pickable entities
-    struct IdDrawCall {
-        Entity entity;
-        tc_component* component;
-        int pick_id;
-    };
+    bool entity_filter(const Entity& ent) const override {
+        return ent.pickable();
+    }
 
-    std::vector<IdDrawCall> collect_draw_calls(tc_scene* scene, uint64_t layer_mask);
+    int get_pick_id(const Entity& ent) const override {
+        return static_cast<int>(ent.pick_id());
+    }
 
 private:
     // Pick shader (lazily compiled)

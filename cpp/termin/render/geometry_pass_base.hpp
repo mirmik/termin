@@ -26,6 +26,13 @@ class GeometryPassBase : public RenderFramePass {
 public:
     using RenderFramePass::RenderFramePass;
 
+    struct DrawCall {
+        Entity entity;
+        tc_component* component;
+        int geometry_id = 0;
+        int pick_id = 0;
+    };
+
     std::vector<std::string> entity_names;
 
     std::vector<std::string> get_internal_symbols() const override {
@@ -154,6 +161,40 @@ protected:
         tc_entity_pool_foreach(pool, callback, &context);
     }
 
+    std::vector<DrawCall> collect_draw_calls(
+        tc_scene* scene,
+        uint64_t layer_mask
+    ) const {
+        std::vector<DrawCall> draw_calls;
+
+        if (!scene) {
+            return draw_calls;
+        }
+
+        tc_entity_pool* pool = tc_scene_entity_pool(scene);
+        if (!pool) {
+            return draw_calls;
+        }
+
+        size_t entity_count = tc_entity_pool_count(pool);
+        draw_calls.reserve(entity_count);
+
+        auto entity_filter = [this](const Entity& ent) {
+            return this->entity_filter(ent);
+        };
+        auto emit = [&](const Entity& ent, tc_component* tc) {
+            DrawCall dc;
+            dc.entity = ent;
+            dc.component = tc;
+            dc.geometry_id = 0;
+            dc.pick_id = get_pick_id(ent);
+            draw_calls.push_back(dc);
+        };
+        collect_draw_calls_common(scene, layer_mask, entity_filter, emit);
+
+        return draw_calls;
+    }
+
     template <typename DrawCall, typename SetupUniforms, typename MaybeBlit>
     void render_draw_calls(
         const std::vector<DrawCall>& draw_calls,
@@ -192,7 +233,7 @@ protected:
             }
 
             ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-                tc_component_override_shader(dc.component, phase, 0, base_shader)
+                tc_component_override_shader(dc.component, phase, dc.geometry_id, base_shader)
             );
             if (shader_to_use == nullptr) {
                 shader_to_use = base_shader;
@@ -207,12 +248,22 @@ protected:
 
             context.current_shader = shader_to_use;
 
-            tc_component_draw_geometry(dc.component, &context, 0);
+            tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 
             if (!debug_symbol.empty() && name && debug_symbol == name) {
                 maybe_blit(name, rect.width, rect.height);
             }
         }
+    }
+
+    virtual bool entity_filter(const Entity& ent) const {
+        (void)ent;
+        return true;
+    }
+
+    virtual int get_pick_id(const Entity& ent) const {
+        (void)ent;
+        return 0;
     }
 };
 

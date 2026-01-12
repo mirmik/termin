@@ -87,14 +87,6 @@ public:
     /**
      * Get internal symbols for debugging.
      */
-    // Collect drawable components from entities
-    struct DepthDrawCall {
-        Entity entity;
-        tc_component* component;
-    };
-
-    std::vector<DepthDrawCall> collect_draw_calls(tc_scene* scene, uint64_t layer_mask);
-
 private:
     // Depth shader (lazily compiled)
     std::unique_ptr<ShaderProgram> _depth_shader;

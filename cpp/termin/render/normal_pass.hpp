@@ -84,14 +84,6 @@ public:
     /**
      * Get internal symbols for debugging.
      */
-    // Collect drawable components from entities
-    struct NormalDrawCall {
-        Entity entity;
-        tc_component* component;
-    };
-
-    std::vector<NormalDrawCall> collect_draw_calls(tc_scene* scene, uint64_t layer_mask);
-
 private:
     // Normal shader (lazily compiled)
     std::unique_ptr<ShaderProgram> _normal_shader;

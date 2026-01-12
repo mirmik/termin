@@ -86,36 +86,6 @@ ShaderProgram* NormalPass::get_normal_shader(GraphicsBackend* graphics) {
     return _normal_shader.get();
 }
 
-std::vector<NormalPass::NormalDrawCall> NormalPass::collect_draw_calls(
-    tc_scene* scene,
-    uint64_t layer_mask
-) {
-    std::vector<NormalDrawCall> draw_calls;
-
-    if (!scene) {
-        return draw_calls;
-    }
-
-    tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    if (!pool) {
-        return draw_calls;
-    }
-
-    // Estimate capacity
-    size_t entity_count = tc_entity_pool_count(pool);
-    draw_calls.reserve(entity_count);
-
-    auto entity_filter = [](const Entity&) {
-        return true;
-    };
-    auto emit = [&draw_calls](const Entity& ent, tc_component* tc) {
-        draw_calls.push_back(NormalPass::NormalDrawCall{ent, tc});
-    };
-    collect_draw_calls_common(scene, layer_mask, entity_filter, emit);
-
-    return draw_calls;
-}
-
 void NormalPass::execute_with_data(
     GraphicsBackend* graphics,
     const FBOMap& reads_fbos,
@@ -144,9 +114,9 @@ void NormalPass::execute_with_data(
     nb::dict extra_uniforms;
 
     // Collect draw calls
-    auto draw_calls = collect_draw_calls(scene, layer_mask);
+    auto draw_calls = GeometryPassBase::collect_draw_calls(scene, layer_mask);
 
-    auto setup_uniforms = [&](const NormalDrawCall& dc,
+    auto setup_uniforms = [&](const DrawCall& dc,
                               ShaderProgram* shader_to_use,
                               const Mat44f& model,
                               const Mat44f& view_matrix,
