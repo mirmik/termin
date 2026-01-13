@@ -8,7 +8,6 @@
 #include "../../core_c/include/tc_scene.h"
 #include "termin/render/handles.hpp"
 #include "termin/render/mesh_gpu.hpp"
-#include "termin/render/texture_gpu.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
 
@@ -111,22 +110,6 @@ public:
         return nb::cast<TcTexture>(res);
     }
 
-    /**
-     * Get GPU handle for rendering.
-     * Returns TextureGPU pointer or nullptr.
-     */
-    TextureGPU* gpu() const {
-        if (asset.is_none()) return nullptr;
-        nb::object gpu_obj = asset.attr("gpu");
-        if (gpu_obj.is_none()) return nullptr;
-        return nb::cast<TextureGPU*>(gpu_obj);
-    }
-
-    /**
-     * Convenience method: bind texture to unit.
-     * Delegates to gpu()->bind() with texture data and version.
-     */
-    void bind(GraphicsBackend* graphics, int unit = 0, int64_t context_key = 0) const;
 
     /**
      * Get source path.

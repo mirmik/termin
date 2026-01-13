@@ -153,15 +153,6 @@ inline void TextureHandle::deserialize_from(const nos::trent& data, tc_scene*) {
     }
 }
 
-inline void TextureHandle::bind(GraphicsBackend* graphics, int unit, int64_t context_key) const {
-    TextureGPU* gpu_ptr = gpu();
-    TcTexture data = get();
-    if (gpu_ptr == nullptr || !data.is_valid()) {
-        return;
-    }
-    gpu_ptr->bind(graphics, data, version(), unit, context_key);
-}
-
 // ========== MaterialHandle inline implementations ==========
 // Note: name(), get(), get_material(), serialize() are NOT inline
 // because they need Material definition. See handles.cpp.

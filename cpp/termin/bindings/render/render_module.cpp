@@ -47,7 +47,7 @@ void bind_render(nb::module_& m) {
     // GeometryDrawCall, PhaseDrawCall
     bind_drawable(m);
 
-    // MeshGPU, TextureGPU
+    // MeshGPU
     bind_gpu(m);
 
     // MeshRenderer, SkinnedMeshRenderer

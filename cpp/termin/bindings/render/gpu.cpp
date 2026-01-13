@@ -1,9 +1,7 @@
 #include "common.hpp"
 #include "termin/render/mesh_gpu.hpp"
-#include "termin/render/texture_gpu.hpp"
 #include "termin/render/render.hpp"
 #include "termin/mesh/mesh3.hpp"
-//#include "termin/assets/texture_data.hpp"
 
 extern "C" {
 #include "termin_core.h"
@@ -24,16 +22,6 @@ void bind_gpu(nb::module_& m) {
         }, nb::arg("context"), nb::arg("mesh"), nb::arg("version"))
         .def("invalidate", &MeshGPU::invalidate)
         .def("delete", &MeshGPU::delete_resources);
-
-    nb::class_<TextureGPU>(m, "TextureGPU")
-        .def(nb::init<>())
-        .def_rw("uploaded_version", &TextureGPU::uploaded_version)
-        .def_prop_ro("is_uploaded", &TextureGPU::is_uploaded)
-        .def("bind", &TextureGPU::bind,
-            nb::arg("graphics"), nb::arg("texture_data"), nb::arg("version"),
-            nb::arg("unit") = 0, nb::arg("context_key") = 0)
-        .def("invalidate", &TextureGPU::invalidate)
-        .def("delete", &TextureGPU::delete_resources);
 }
 
 } // namespace termin

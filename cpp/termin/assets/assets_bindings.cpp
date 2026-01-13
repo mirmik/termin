@@ -41,12 +41,9 @@ void bind_assets(nb::module_& m) {
         .def_prop_ro("is_direct", &TextureHandle::is_direct)
         .def_prop_ro("name", &TextureHandle::name)
         .def_prop_ro("version", &TextureHandle::version)
-        .def_prop_ro("gpu", &TextureHandle::gpu, nb::rv_policy::reference)
         .def_prop_ro("source_path", &TextureHandle::source_path)
         .def("get", &TextureHandle::get)
         .def("get_asset", [](const TextureHandle& self) { return self.asset; })
-        .def("bind", &TextureHandle::bind,
-            nb::arg("graphics"), nb::arg("unit") = 0, nb::arg("context_key") = 0)
         .def("serialize", &TextureHandle::serialize);
 
     // ========== MaterialHandle ==========

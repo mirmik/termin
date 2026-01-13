@@ -10,7 +10,6 @@ from termin.texture import TcTexture
 
 if TYPE_CHECKING:
     import numpy as np
-    from termin.visualization.render.texture_gpu import TextureGPU
 
 
 class TextureAsset(DataAsset[TcTexture]):
@@ -21,7 +20,7 @@ class TextureAsset(DataAsset[TcTexture]):
     This ensures proper registration and avoids duplicates.
 
     Stores TcTexture (handle to tc_texture in C registry).
-    GPU resources are created on demand when .gpu property is accessed.
+    GPU resources are managed directly by TcTexture.
     """
 
     _uses_binary = True  # PNG/JPG binary format
@@ -38,8 +37,6 @@ class TextureAsset(DataAsset[TcTexture]):
         self._flip_x: bool = False
         self._flip_y: bool = True  # Default: flip Y for OpenGL
         self._transpose: bool = False
-        # GPU resources (created on demand)
-        self._gpu: "TextureGPU | None" = None
 
     # --- Convenience property ---
 
@@ -73,19 +70,11 @@ class TextureAsset(DataAsset[TcTexture]):
 
     # --- GPU resources ---
 
-    @property
-    def gpu(self) -> "TextureGPU":
-        """Get or create TextureGPU for rendering."""
-        if self._gpu is None:
-            from termin.visualization.render.texture_gpu import TextureGPU
-            self._gpu = TextureGPU()
-        return self._gpu
-
     def delete_gpu(self) -> None:
         """Delete GPU resources."""
-        if self._gpu is not None:
-            self._gpu.delete()
-            self._gpu = None
+        data = self.data
+        if data is not None and data.is_valid:
+            data.delete_gpu()
 
     # --- Spec parsing ---
 

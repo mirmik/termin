@@ -314,7 +314,6 @@ nanobind_add_module(_native
     termin/render/solid_primitive_renderer.cpp
     termin/render/material.cpp
     termin/render/mesh_gpu.cpp
-    termin/render/texture_gpu.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
     termin/render/skeleton_controller.cpp

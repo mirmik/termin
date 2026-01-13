@@ -9,7 +9,6 @@ import numpy as np
 
 from termin.visualization.core.texture_handle import TextureHandle
 from termin.visualization.render.texture_asset import TextureAsset
-from termin.visualization.render.texture_gpu import TextureGPU
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPixmap
@@ -20,12 +19,11 @@ class Texture:
     """
     Loads an image via Pillow and uploads it as ``GL_TEXTURE_2D``.
 
-    This is a wrapper over TextureHandle + TextureGPU.
+    This is a wrapper over TextureHandle with TcTexture GPU binding.
     """
 
     def __init__(self, path: Optional[str | Path] = None):
         self._handle: TextureHandle = TextureHandle()
-        self._gpu: TextureGPU = TextureGPU()
         self._preview_pixmap: Optional["QPixmap"] = None
         if path is not None:
             self.load(path)
@@ -68,7 +66,6 @@ class Texture:
         """Load texture from file."""
         asset = TextureAsset.from_file(path)
         self._handle = TextureHandle.from_asset(asset)
-        self._gpu = TextureGPU()
         self._preview_pixmap = None
 
     def invalidate(self) -> None:
@@ -80,24 +77,17 @@ class Texture:
         asset = self._handle.get_asset()
         if asset is not None:
             asset.reload()
-        self._gpu.delete()
+        texture_data = self._handle.get()
+        if texture_data is not None:
+            texture_data.delete_gpu()
         self._preview_pixmap = None
 
     def bind(self, graphics: "GraphicsBackend", unit: int = 0, context_key: int | None = None) -> None:
         """Bind texture to specified unit."""
         texture_data = self._handle.get()
-        asset = self._handle.get_asset()
         if texture_data is None:
             return
-
-        version = asset.version if asset else 0
-        self._gpu.bind(
-            graphics=graphics,
-            texture_data=texture_data,
-            version=version,
-            unit=unit,
-            context_key=context_key,
-        )
+        texture_data.bind_gpu(unit)
 
     def get_preview_pixmap(self, max_size: int = 200) -> Optional["QPixmap"]:
         """

@@ -57,6 +57,22 @@ void bind_tc_texture(nb::module_& m) {
         // Methods
         .def("bump_version", &termin::TcTexture::bump_version)
 
+        // GPU methods
+        .def("bind_gpu", &termin::TcTexture::bind_gpu, nb::arg("unit") = 0,
+            "Bind texture to GPU texture unit")
+        .def("upload_gpu", &termin::TcTexture::upload_gpu,
+            "Upload texture to GPU if needed")
+        .def("delete_gpu", &termin::TcTexture::delete_gpu,
+            "Delete GPU resources")
+        .def("needs_upload", &termin::TcTexture::needs_upload,
+            "Check if texture needs GPU upload")
+        .def_prop_ro("gpu_id", &termin::TcTexture::gpu_id,
+            "OpenGL texture ID (0 if not uploaded)")
+        .def("set_mipmap", &termin::TcTexture::set_mipmap, nb::arg("enable"),
+            "Enable/disable mipmap generation on upload")
+        .def("set_clamp", &termin::TcTexture::set_clamp, nb::arg("enable"),
+            "Enable/disable clamp wrapping on upload")
+
         .def("set_transforms", &termin::TcTexture::set_transforms,
             nb::arg("flip_x"), nb::arg("flip_y"), nb::arg("transpose"))
 
