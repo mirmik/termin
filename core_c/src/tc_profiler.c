@@ -32,6 +32,7 @@ static double get_time_ms(void) {
 typedef struct {
     bool enabled;
     bool profile_components;
+    bool detailed_rendering;
     int frame_count;
 
     // Current frame being profiled
@@ -81,6 +82,14 @@ bool tc_profiler_profile_components(void) {
 
 void tc_profiler_set_profile_components(bool enabled) {
     g_profiler.profile_components = enabled;
+}
+
+bool tc_profiler_detailed_rendering(void) {
+    return g_profiler.detailed_rendering;
+}
+
+void tc_profiler_set_detailed_rendering(bool enabled) {
+    g_profiler.detailed_rendering = enabled;
 }
 
 // ============================================================================

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -483,6 +484,64 @@ public:
         return true;
     }
 
+    // --- GPU Timer Queries ---
+
+    void begin_gpu_query(const char* name) override {
+        std::string key(name);
+
+        // Get or create query object
+        auto it = gpu_queries_.find(key);
+        if (it == gpu_queries_.end()) {
+            GLuint query;
+            glGenQueries(1, &query);
+            gpu_queries_[key] = {query, 0.0, false};
+            it = gpu_queries_.find(key);
+        }
+
+        // Begin query
+        glBeginQuery(GL_TIME_ELAPSED, it->second.query_id);
+        current_gpu_query_ = key;
+    }
+
+    void end_gpu_query() override {
+        if (current_gpu_query_.empty()) return;
+        glEndQuery(GL_TIME_ELAPSED);
+        gpu_queries_[current_gpu_query_].pending = true;
+        current_gpu_query_.clear();
+    }
+
+    double get_gpu_query_ms(const char* name) override {
+        auto it = gpu_queries_.find(name);
+        if (it == gpu_queries_.end()) return -1.0;
+
+        auto& q = it->second;
+
+        // If pending, try to get result
+        if (q.pending) {
+            GLint available = 0;
+            glGetQueryObjectiv(q.query_id, GL_QUERY_RESULT_AVAILABLE, &available);
+            if (available) {
+                GLuint64 elapsed_ns;
+                glGetQueryObjectui64v(q.query_id, GL_QUERY_RESULT, &elapsed_ns);
+                q.result_ms = elapsed_ns / 1000000.0;
+                q.pending = false;
+            }
+        }
+
+        return q.pending ? -1.0 : q.result_ms;
+    }
+
+    void sync_gpu_queries() override {
+        for (auto& [name, q] : gpu_queries_) {
+            if (q.pending) {
+                GLuint64 elapsed_ns;
+                glGetQueryObjectui64v(q.query_id, GL_QUERY_RESULT, &elapsed_ns);
+                q.result_ms = elapsed_ns / 1000000.0;
+                q.pending = false;
+            }
+        }
+    }
+
 private:
     void draw_ui_textured_quad_impl(int64_t context_key, const float* vertices, int vertex_count) {
         auto& [vao, vbo] = get_ui_buffers(context_key);
@@ -581,6 +640,15 @@ private:
     // Immediate mode rendering resources
     GLuint immediate_vao_ = 0;
     GLuint immediate_vbo_ = 0;
+
+    // GPU timer query data
+    struct GPUQueryData {
+        GLuint query_id;
+        double result_ms;
+        bool pending;
+    };
+    std::unordered_map<std::string, GPUQueryData> gpu_queries_;
+    std::string current_gpu_query_;
 
     // Static flag for GLAD initialization (shared across all backends)
     static inline bool glad_initialized_ = false;

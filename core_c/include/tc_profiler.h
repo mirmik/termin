@@ -52,6 +52,10 @@ TC_API void tc_profiler_set_enabled(bool enabled);
 TC_API bool tc_profiler_profile_components(void);
 TC_API void tc_profiler_set_profile_components(bool enabled);
 
+// Detailed rendering profiling (adds per-pass sections in render code)
+TC_API bool tc_profiler_detailed_rendering(void);
+TC_API void tc_profiler_set_detailed_rendering(bool enabled);
+
 // Frame control
 TC_API void tc_profiler_begin_frame(void);
 TC_API void tc_profiler_end_frame(void);

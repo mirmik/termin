@@ -2,6 +2,7 @@
 #include "tc_log.hpp"
 extern "C" {
 #include "tc_shader.h"
+#include "tc_profiler.h"
 }
 
 #include <cmath>
@@ -246,10 +247,16 @@ void ColorPass::execute_with_data(
     context.graphics = graphics;
     context.phase = phase_mark;
 
+    // Detailed profiling mode
+    bool detailed = tc_profiler_detailed_rendering();
+
     // Collect draw calls into cached vector
+    if (detailed) tc_profiler_begin_section("Collect");
     collect_draw_calls(scene, phase_mark, layer_mask);
+    if (detailed) tc_profiler_end_section();
 
     // Compute sort keys and sort (single pass with combined priority+distance key)
+    if (detailed) tc_profiler_begin_section("Sort");
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
         compute_sort_keys(camera_position);
         sort_draw_calls();
@@ -260,6 +267,7 @@ void ColorPass::execute_with_data(
                 return a.priority < b.priority;
             });
     }
+    if (detailed) tc_profiler_end_section();
 
     // Clear entity names cache but keep capacity
     entity_names.clear();
@@ -272,15 +280,6 @@ void ColorPass::execute_with_data(
     bool any_shader_needs_ubo = false;
     for (const auto& dc : cached_draw_calls_) {
         if (dc.phase && dc.phase->shader) {
-            // DEBUG
-            static int debug_shader = 0;
-            if (debug_shader < 5) {
-                tc::Log::info("ColorPass: shader '%s' features=%u",
-                    dc.phase->shader->name().c_str(),
-                    dc.phase->shader->features());
-                debug_shader++;
-            }
-
             if (dc.phase->shader->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 any_shader_needs_ubo = true;
                 break;
@@ -291,23 +290,26 @@ void ColorPass::execute_with_data(
     // Setup lighting UBO if any shader needs it (or if manually enabled)
     bool ubo_active = use_ubo || any_shader_needs_ubo;
 
-    // DEBUG
-    static int debug_frame = 0;
-    if (debug_frame < 3) {
-        tc::Log::info("ColorPass: any_shader_needs_ubo=%d, ubo_active=%d, lights=%zu",
-            any_shader_needs_ubo, ubo_active, lights.size());
-        debug_frame++;
-    }
-
+    if (detailed) tc_profiler_begin_section("UBO");
     if (ubo_active) {
         lighting_ubo_.create(graphics);
         lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
                                           camera_position, shadow_settings);
         lighting_ubo_.upload_and_bind();
     }
+    if (detailed) tc_profiler_end_section();
 
     // Render each draw call
-    for (const auto& dc : cached_draw_calls_) {
+    if (detailed) {
+        tc_profiler_begin_section("DrawCalls");
+    }
+
+    for (const auto& dc : cached_draw_calls_) 
+    {
+        if (detailed) {
+            tc_profiler_begin_section("DrawCalls.Preparation");
+        }
+
         // Cache entity name
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
@@ -371,14 +373,28 @@ void ColorPass::execute_with_data(
             context.current_shader = shader_to_use;
         }
 
+        if (detailed) {
+            tc_profiler_end_section(); // DrawCalls.Preparation
+            tc_profiler_begin_section("DrawCalls.DrawGeometry");
+        }
+
         // Draw geometry via vtable
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
+
+        if (detailed) {
+            tc_profiler_end_section(); // DrawCalls.DrawGeometry
+        }
+        
         graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
 
         // Check for debug blit (use std::string comparison to avoid pointer issues)
         if (!debug_symbol.empty() && ename && debug_symbol == ename) {
             maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
         }
+    }
+
+    if (detailed) {
+        tc_profiler_end_section();
     }
 
     // Unbind lighting UBO

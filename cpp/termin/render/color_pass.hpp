@@ -49,6 +49,9 @@ public:
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
 
+    // Last GPU time in milliseconds (from detailed profiling)
+    double last_gpu_time_ms() const { return last_gpu_time_ms_; }
+
     // Extra texture uniforms: uniform_name -> texture_unit
     // Set from Python before execute_with_data
     std::unordered_map<std::string, int> extra_texture_uniforms;
@@ -139,6 +142,9 @@ public:
     }
 
 private:
+    // Last GPU time in ms (from detailed profiling mode)
+    double last_gpu_time_ms_ = 0.0;
+
     // Lighting UBO for efficient uniform uploads
     LightingUBO lighting_ubo_;
 

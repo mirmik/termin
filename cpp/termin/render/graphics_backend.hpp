@@ -169,6 +169,17 @@ public:
     // --- Debug ---
     // Check for GL errors and log them. Returns true if error was found.
     virtual bool check_gl_error(const char* location) = 0;
+
+    // --- GPU Timer Queries ---
+    // Begin a GPU timer query section (non-blocking)
+    virtual void begin_gpu_query(const char* name) = 0;
+    // End current GPU timer query section
+    virtual void end_gpu_query() = 0;
+    // Get result of GPU query in milliseconds (may return -1 if not ready yet)
+    // Returns -1.0 if query doesn't exist or isn't ready
+    virtual double get_gpu_query_ms(const char* name) = 0;
+    // Synchronize and get all query results (blocking)
+    virtual void sync_gpu_queries() = 0;
 };
 
 using GraphicsBackendPtr = std::unique_ptr<GraphicsBackend>;
