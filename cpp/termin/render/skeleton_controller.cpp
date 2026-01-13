@@ -7,7 +7,7 @@ namespace termin {
 SkeletonController::SkeletonController()
     : CxxComponent()
 {
-    _type_name = "SkeletonController";
+    set_type_name("SkeletonController");
     _c.has_before_render = true;
 }
 

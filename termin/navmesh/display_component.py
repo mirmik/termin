@@ -44,6 +44,8 @@ class NavMeshDisplayComponent(PythonComponent):
     Использует NavMeshHandle для поддержки hot-reload.
     """
 
+    is_drawable = True
+
     inspect_fields = {
         "navmesh": InspectField(
             path="navmesh",

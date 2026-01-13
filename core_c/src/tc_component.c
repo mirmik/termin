@@ -18,6 +18,7 @@ typedef struct tc_component_type_entry {
     int* descendant_indices;
     size_t descendant_count;
     size_t descendant_capacity;
+    bool is_drawable;  // True if this component type can render geometry
 } tc_component_type_entry;
 
 typedef struct tc_component_registry {
@@ -112,6 +113,7 @@ void tc_component_registry_register_with_parent(
     entry->descendant_indices = NULL;
     entry->descendant_count = 0;
     entry->descendant_capacity = 0;
+    entry->is_drawable = false;
     g_component_registry.count++;
 
     // Add this type to all ancestors' descendant lists
@@ -208,6 +210,36 @@ tc_component_kind tc_component_registry_get_kind(const char* type_name) {
     if (idx < 0) return TC_PYTHON_COMPONENT;
 
     return g_component_registry.entries[idx].kind;
+}
+
+void tc_component_registry_set_drawable(const char* type_name, bool is_drawable) {
+    if (!type_name) return;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return;
+
+    g_component_registry.entries[idx].is_drawable = is_drawable;
+}
+
+bool tc_component_registry_is_drawable(const char* type_name) {
+    if (!type_name) return false;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return false;
+
+    return g_component_registry.entries[idx].is_drawable;
+}
+
+size_t tc_component_registry_get_drawable_types(const char** out_names, size_t max_count) {
+    if (!out_names || max_count == 0) return 0;
+
+    size_t count = 0;
+    for (size_t i = 0; i < g_component_registry.count && count < max_count; i++) {
+        if (g_component_registry.entries[i].is_drawable) {
+            out_names[count++] = g_component_registry.entries[i].type_name;
+        }
+    }
+    return count;
 }
 
 // ============================================================================

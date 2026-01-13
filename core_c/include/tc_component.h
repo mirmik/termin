@@ -329,6 +329,20 @@ TC_API const char* tc_component_registry_get_parent(const char* type_name);
 // Get component kind (TC_CXX_COMPONENT or TC_PYTHON_COMPONENT)
 TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);
 
+// Drawable type management
+// Mark a component type as drawable (can render geometry)
+TC_API void tc_component_registry_set_drawable(const char* type_name, bool is_drawable);
+
+// Check if a component type is drawable
+TC_API bool tc_component_registry_is_drawable(const char* type_name);
+
+// Get all drawable type names
+// Returns count, fills out_names array (caller provides buffer)
+TC_API size_t tc_component_registry_get_drawable_types(
+    const char** out_names,
+    size_t max_count
+);
+
 #ifdef __cplusplus
 }
 #endif

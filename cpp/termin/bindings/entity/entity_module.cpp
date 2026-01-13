@@ -173,7 +173,10 @@ NB_MODULE(_entity_native, m) {
         .def("list_all", &ComponentRegistry::list_all)
         .def("list_native", &ComponentRegistry::list_native)
         .def("list_python", &ComponentRegistry::list_python)
-        .def("clear", &ComponentRegistry::clear);
+        .def("clear", &ComponentRegistry::clear)
+        .def_static("set_drawable", &ComponentRegistry::set_drawable,
+            nb::arg("name"), nb::arg("is_drawable"),
+            "Mark a component type as drawable (can render geometry)");
 
     // --- Entity (in separate file for faster compilation) ---
     bind_entity_class(m);
@@ -291,6 +294,9 @@ NB_MODULE(_entity_native, m) {
                 desc_list.append(descendants[j]);
             }
             info["descendants"] = desc_list;
+
+            // Is drawable
+            info["is_drawable"] = tc_component_registry_is_drawable(type_name);
 
             result.append(info);
         }

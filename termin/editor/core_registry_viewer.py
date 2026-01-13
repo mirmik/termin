@@ -104,7 +104,7 @@ class CoreRegistryViewer(QDialog):
 
         # Components tab
         self._components_tree = QTreeWidget()
-        self._components_tree.setHeaderLabels(["Name", "Kind", "Parent", "Descendants"])
+        self._components_tree.setHeaderLabels(["Name", "Kind", "Drawable", "Parent", "Descendants"])
         self._components_tree.setAlternatingRowColors(True)
         self._components_tree.itemClicked.connect(self._on_component_clicked)
         self._tab_widget.addTab(self._components_tree, "Components")
@@ -431,15 +431,16 @@ class CoreRegistryViewer(QDialog):
         for info in sorted(infos, key=lambda x: x["name"]):
             name = info["name"]
             kind = info["kind"]
+            is_drawable = "Yes" if info.get("is_drawable", False) else "-"
             parent = info["parent"] or "-"
             desc_count = len(info["descendants"])
             descendants = str(desc_count) if desc_count > 0 else "-"
 
-            item = QTreeWidgetItem([name, kind, parent, descendants])
+            item = QTreeWidgetItem([name, kind, is_drawable, parent, descendants])
             item.setData(0, Qt.ItemDataRole.UserRole, ("component", info))
             self._components_tree.addTopLevelItem(item)
 
-        for i in range(4):
+        for i in range(5):
             self._components_tree.resizeColumnToContents(i)
 
     def _on_component_clicked(self, item: QTreeWidgetItem, column: int) -> None:
@@ -453,11 +454,13 @@ class CoreRegistryViewer(QDialog):
 
     def _show_component_details(self, info: dict) -> None:
         """Display component type details in the details panel."""
+        is_drawable = info.get("is_drawable", False)
         lines = [
             "=== COMPONENT TYPE ===",
             "",
             f"Name:           {info['name']}",
             f"Kind:           {info['kind']}",
+            f"Drawable:       {'Yes' if is_drawable else 'No'}",
             f"Parent:         {info['parent'] or '(none)'}",
             "",
             "--- Descendants ---",

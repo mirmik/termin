@@ -30,6 +30,9 @@ class PythonComponent:
         "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
     }
 
+    # Override to True in drawable subclasses (that have phase_marks)
+    is_drawable: bool = False
+
     def __init__(self, enabled: bool = True):
         # Create TcComponent wrapper
         type_name = type(self).__name__
@@ -49,9 +52,8 @@ class PythonComponent:
         if cls.fixed_update is not PythonComponent.fixed_update:
             self._tc.has_fixed_update = True
 
-        # Install drawable vtable if this component implements Drawable protocol
-        # Check for phase_marks attribute (Drawable protocol requirement)
-        if hasattr(type(self), 'phase_marks') or hasattr(self, 'phase_marks'):
+        # Install drawable vtable if this is a drawable component
+        if cls.is_drawable:
             self._tc.install_drawable_vtable()
 
     def __init_subclass__(cls, **kwargs):
@@ -94,6 +96,10 @@ class PythonComponent:
         # Register factory in C++ ComponentRegistry
         from termin.entity import ComponentRegistry
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
+
+        # Mark as drawable if class has is_drawable = True
+        if cls.is_drawable:
+            ComponentRegistry.set_drawable(cls.__name__, True)
 
     # =========================================================================
     # Properties (delegate to TcComponent)

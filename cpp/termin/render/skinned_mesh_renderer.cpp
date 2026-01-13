@@ -11,7 +11,7 @@ namespace termin {
 SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer()
 {
-    _type_name = "SkinnedMeshRenderer";
+    set_type_name("SkinnedMeshRenderer");
 }
 
 void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {

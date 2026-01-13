@@ -218,8 +218,6 @@ def _parse_material_content(
     shader_asset = rm._shader_assets.get(shader_name)
     shader_uuid = shader_asset.uuid if shader_asset else ""
 
-    log.info(f"[MaterialAsset] _parse_material_content shader={shader_name} shader_uuid={shader_uuid} material={name}")
-
     # Convert uniforms
     from termin.geombase import Vec3, Vec4
 

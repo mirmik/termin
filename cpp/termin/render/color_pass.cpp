@@ -79,70 +79,44 @@ std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
 
 namespace {
 
-// User data for entity iteration callback
+// User data for drawable iteration callback
 struct CollectDrawCallsData {
     std::vector<PhaseDrawCall>* draw_calls;
     const char* phase_mark;
-    uint64_t layer_mask;
 };
 
-// Callback for tc_entity_pool_foreach
-bool collect_entity_draw_calls(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+// Callback for tc_scene_foreach_drawable
+bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
     auto* data = static_cast<CollectDrawCallsData*>(user_data);
 
-    // Filter by visibility and enabled
-    if (!tc_entity_pool_visible(pool, id) || !tc_entity_pool_enabled(pool, id)) {
-        return true; // continue iteration
+    // Filter by phase_mark
+    if (data->phase_mark[0] != '\0' && !tc_component_has_phase(tc, data->phase_mark)) {
+        return true;
     }
 
-    // Filter by layer mask
-    uint64_t entity_layer = tc_entity_pool_layer(pool, id);
-    if (!(data->layer_mask & (1ULL << entity_layer))) {
-        return true; // continue iteration
+    // Get geometry draws via vtable
+    void* draws_ptr = tc_component_get_geometry_draws(tc, data->phase_mark);
+    if (!draws_ptr) {
+        return true;
     }
 
-    // Create Entity wrapper for component access
-    Entity ent(pool, id);
+    // Build Entity from component's owner
+    Entity ent(tc->owner_pool, tc->owner_entity_id);
 
-    // Get drawable components from entity
-    size_t comp_count = ent.component_count();
-    for (size_t ci = 0; ci < comp_count; ci++) {
-        tc_component* tc = ent.component_at(ci);
-        if (!tc || !tc->enabled) {
-            continue;
-        }
-
-        // Check if component is drawable via vtable
-        if (!tc_component_is_drawable(tc)) {
-            continue;
-        }
-
-        // Filter by phase_mark
-        if (data->phase_mark[0] != '\0' && !tc_component_has_phase(tc, data->phase_mark)) {
-            continue;
-        }
-
-        // Get geometry draws via vtable
-        void* draws_ptr = tc_component_get_geometry_draws(tc, data->phase_mark);
-        if (!draws_ptr) {
-            continue;
-        }
-
-        auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-        for (const auto& gd : *geometry_draws) {
-            if (gd.phase) {
-                data->draw_calls->push_back(PhaseDrawCall{
-                    ent,
-                    tc,
-                    gd.phase,
-                    gd.phase->priority,
-                    gd.geometry_id
-                });
-            }
+    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+    for (const auto& gd : *geometry_draws) {
+        if (gd.phase) {
+            data->draw_calls->push_back(PhaseDrawCall{
+                ent,
+                tc,
+                gd.phase,
+                gd.phase->priority,
+                gd.geometry_id
+            });
         }
     }
 
-    return true; // continue iteration
+    return true;
 }
 
 } // anonymous namespace
@@ -159,22 +133,16 @@ void ColorPass::collect_draw_calls(
         return;
     }
 
-    tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    if (!pool) {
-        return;
-    }
-
-    // Estimate capacity
-    size_t entity_count = tc_entity_pool_count(pool);
-    cached_draw_calls_.reserve(entity_count * 2);
-
-    // Collect draw calls via callback iteration
+    // Collect draw calls via drawable iteration
     CollectDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
     data.phase_mark = phase_mark.c_str();
-    data.layer_mask = layer_mask;
 
-    tc_entity_pool_foreach(pool, collect_entity_draw_calls, &data);
+    // Use tc_scene_foreach_drawable with filtering
+    int filter_flags = TC_DRAWABLE_FILTER_ENABLED
+                     | TC_DRAWABLE_FILTER_VISIBLE
+                     | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+    tc_scene_foreach_drawable(scene, collect_drawable_draw_calls, &data, filter_flags, layer_mask);
 }
 
 void ColorPass::compute_sort_keys(const Vec3& camera_position) {

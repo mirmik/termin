@@ -36,7 +36,7 @@ CxxComponent::CxxComponent() {
     // Initialize the C component structure
     tc_component_init(&_c, &_cxx_vtable);
     _c.kind = TC_CXX_COMPONENT;
-    _c.type_name = _type_name;
+    set_type_name("CxxComponent");
     // Set default flags
     _c.enabled = true;
     _c.active_in_editor = false;

@@ -32,6 +32,8 @@ class NavMeshFovShowerComponent(PythonComponent):
     Supports hot-reload via NavMeshHandle.
     """
 
+    is_drawable = True
+
     inspect_fields = {
         "navmesh": InspectField(
             path="navmesh",

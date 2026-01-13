@@ -103,6 +103,8 @@ class VoxelDisplayComponent(PythonComponent):
     Отсечка и заливка цветом выполняются в шейдере.
     """
 
+    is_drawable = True
+
     inspect_fields = {
         "voxel_grid": InspectField(
             path="voxel_grid",

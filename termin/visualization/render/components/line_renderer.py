@@ -176,6 +176,8 @@ class LineRenderer(PythonComponent):
         get_phases(phase_mark) возвращает MaterialPhase с совпадающим phase_mark.
     """
 
+    is_drawable = True
+
     inspect_fields = {
         "points": InspectField(
             path="points",

@@ -112,53 +112,34 @@ protected:
             return;
         }
 
-        tc_entity_pool* pool = tc_scene_entity_pool(scene);
-        if (!pool) {
-            return;
-        }
-
         struct CollectContext {
             EntityFilter* filter;
             Emit* emit;
-            uint64_t layer_mask;
+            const GeometryPassBase* pass;
         };
 
-        auto callback = [](tc_entity_pool* pool, tc_entity_id id, void* user_data) -> bool {
-            auto* data = static_cast<CollectContext*>(user_data);
+        auto callback = [](tc_component* c, void* user_data) -> bool {
+            auto* ctx = static_cast<CollectContext*>(user_data);
 
-            if (!tc_entity_pool_visible(pool, id) || !tc_entity_pool_enabled(pool, id)) {
+            // Build Entity from component's owner
+            Entity ent(c->owner_pool, c->owner_entity_id);
+
+            // Apply custom entity filter
+            if (!(*ctx->filter)(ent)) {
                 return true;
             }
 
-            uint64_t entity_layer = tc_entity_pool_layer(pool, id);
-            if (!(data->layer_mask & (1ULL << entity_layer))) {
-                return true;
-            }
-
-            Entity ent(pool, id);
-            if (!(*data->filter)(ent)) {
-                return true;
-            }
-
-            size_t comp_count = ent.component_count();
-            for (size_t ci = 0; ci < comp_count; ci++) {
-                tc_component* tc = ent.component_at(ci);
-                if (!tc || !tc->enabled) {
-                    continue;
-                }
-
-                if (!tc_component_is_drawable(tc)) {
-                    continue;
-                }
-
-                (*data->emit)(ent, tc);
-            }
-
+            (*ctx->emit)(ent, c);
             return true;
         };
 
-        CollectContext context{&entity_filter, &emit, layer_mask};
-        tc_entity_pool_foreach(pool, callback, &context);
+        CollectContext context{&entity_filter, &emit, this};
+
+        // Use tc_scene_foreach_drawable with filtering
+        int filter_flags = TC_DRAWABLE_FILTER_ENABLED
+                         | TC_DRAWABLE_FILTER_VISIBLE
+                         | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+        tc_scene_foreach_drawable(scene, callback, &context, filter_flags, layer_mask);
     }
 
     std::vector<DrawCall> collect_draw_calls(
@@ -170,14 +151,6 @@ protected:
         if (!scene) {
             return draw_calls;
         }
-
-        tc_entity_pool* pool = tc_scene_entity_pool(scene);
-        if (!pool) {
-            return draw_calls;
-        }
-
-        size_t entity_count = tc_entity_pool_count(pool);
-        draw_calls.reserve(entity_count);
 
         auto entity_filter = [this](const Entity& ent) {
             return this->entity_filter(ent);

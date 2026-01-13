@@ -29,11 +29,6 @@ public:
     // Owner entity (set by Entity::add_component)
     Entity entity;
 
-protected:
-    // --- Fields (protected) ---
-
-    const char* _type_name = "CxxComponent";
-
 private:
     // --- Fields (private) ---
 
@@ -54,14 +49,13 @@ public:
     }
 
     // Type identification (for serialization)
-    const char* type_name() const { return _type_name; }
+    const char* type_name() const { return _c.type_name; }
 
     // Set type name with string interning to avoid dangling pointers
     void set_type_name(const char* name) {
         static std::unordered_set<std::string> interned_names;
         auto [it, _] = interned_names.insert(name);
-        _type_name = it->c_str();
-        _c.type_name = _type_name;
+        _c.type_name = it->c_str();
     }
 
     // Accessors for tc_component flags
@@ -109,7 +103,7 @@ public:
     virtual nos::trent serialize_data() const {
         return InspectRegistry::instance().serialize_all(
             const_cast<void*>(static_cast<const void*>(this)),
-            _type_name
+            type_name()
         );
     }
     virtual void deserialize_data(const nos::trent& data) {
@@ -119,14 +113,14 @@ public:
         InspectRegistry::instance().deserialize_component_fields_over_python(
             static_cast<void*>(this),
             nb_self,
-            _type_name,
+            type_name(),
             nb_data
         );
     }
 
     nos::trent serialize() const {
         nos::trent result;
-        result["type"] = _type_name;
+        result["type"] = type_name();
         result["data"] = serialize_data();
         return result;
     }

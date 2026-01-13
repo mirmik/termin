@@ -4495,7 +4495,7 @@
                               "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
-                              "uuid": "003fd92a-ab8f-4d7a-a0bd-1955f5098bad",
+                              "uuid": "a8e1c5a8-ecfe-46ee-859f-ad6ac13b1448",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4604,13 +4604,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
-                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.15655755996704102,
                               0.31000229716300964,
                               0.20257876813411713,
                               1
-                            ]
+                            ],
+                            "u_diffuse_mul": 1
                           },
                           {
                             "u_emission_intensity": 0,
@@ -4637,13 +4637,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "48b6c907-965e-4131-a047-1699a6cfdd26",
+                              "uuid": "02fe0d62-1be2-4d89-8b52-c461cca96af8",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "003fd92a-ab8f-4d7a-a0bd-1955f5098bad",
+                              "uuid": "a8e1c5a8-ecfe-46ee-859f-ad6ac13b1448",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -4912,15 +4912,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            3.278,
-            -4.444,
-            5.455
+            3.724324941635132,
+            -5.209049701690674,
+            3.501373052597046
           ],
           "rotation": [
-            -0.4975109220792667,
-            -0.13451359072807925,
-            0.22366920429796275,
-            0.8272611820761281
+            -0.2039036899805069,
+            -0.055130064487457275,
+            0.2551127076148987,
+            0.9435579180717468
           ]
         },
         "scale": [
@@ -6395,13 +6395,13 @@
                           {},
                           {
                             "u_albedo_texture": {
-                              "uuid": "48b6c907-965e-4131-a047-1699a6cfdd26",
+                              "uuid": "02fe0d62-1be2-4d89-8b52-c461cca96af8",
                               "name": "__white_1x1__",
                               "type": "path",
                               "path": "__white_1x1__"
                             },
                             "u_normal_texture": {
-                              "uuid": "003fd92a-ab8f-4d7a-a0bd-1955f5098bad",
+                              "uuid": "a8e1c5a8-ecfe-46ee-859f-ad6ac13b1448",
                               "name": "__normal_1x1__",
                               "type": "path",
                               "path": "__normal_1x1__"
@@ -9605,13 +9605,13 @@
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
+                    "u_emission_intensity": 2,
                     "u_color": [
                       0.34726482629776,
                       0.7852292656898499,
                       0.15172044932842255,
                       1
                     ],
-                    "u_emission_intensity": 2,
                     "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
                       0.7799344062805176,
@@ -9645,13 +9645,13 @@
                   {},
                   {
                     "u_albedo_texture": {
-                      "uuid": "48b6c907-965e-4131-a047-1699a6cfdd26",
+                      "uuid": "02fe0d62-1be2-4d89-8b52-c461cca96af8",
                       "name": "__white_1x1__",
                       "type": "path",
                       "path": "__white_1x1__"
                     },
                     "u_normal_texture": {
-                      "uuid": "003fd92a-ab8f-4d7a-a0bd-1955f5098bad",
+                      "uuid": "a8e1c5a8-ecfe-46ee-859f-ad6ac13b1448",
                       "name": "__normal_1x1__",
                       "type": "path",
                       "path": "__normal_1x1__"
@@ -12870,15 +12870,15 @@
   "editor": {
     "camera": {
       "position": [
-        2.144541025161743,
-        -9.483153343200684,
-        5.34848165512085
+        0.2698819637298584,
+        -8.839171409606934,
+        6.7572174072265625
       ],
       "rotation": [
-        -0.2627744348764588,
-        -0.038334649163636755,
-        0.139173174965558,
-        0.9539973157293813
+        -0.33997301009222936,
+        -0.016627461303469374,
+        0.045932881256285196,
+        0.9391656139142482
       ],
       "radius": 11.0,
       "editor_entities": {
@@ -12932,15 +12932,15 @@
         ]
       }
     },
-    "selected_entity": "000000000000012e",
+    "selected_entity": "0000000000000077",
     "expanded_entities": [
-      "000000000000012c",
-      "000000000000000a",
-      "00000000000000dd",
-      "0000000000000077",
-      "0000000000000007",
-      "0000000000000131",
       "0000000000000130",
+      "0000000000000077",
+      "00000000000000dd",
+      "000000000000000a",
+      "0000000000000131",
+      "000000000000012c",
+      "0000000000000007",
       "000000000000012d"
     ]
   },

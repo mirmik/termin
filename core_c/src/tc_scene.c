@@ -419,6 +419,56 @@ void tc_scene_foreach_component_of_type(
     }
 }
 
+void tc_scene_foreach_drawable(
+    tc_scene* s,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags,
+    uint64_t layer_mask
+) {
+    if (!s || !callback) return;
+
+    // Get all drawable types from registry
+    const char* drawable_types[64];
+    size_t drawable_count = tc_component_registry_get_drawable_types(drawable_types, 64);
+    if (drawable_count == 0) return;
+
+    bool check_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENABLED) != 0;
+    bool check_visible = (filter_flags & TC_DRAWABLE_FILTER_VISIBLE) != 0;
+    bool check_entity_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENTITY_ENABLED) != 0;
+    bool check_layer = (layer_mask != 0);
+
+    // Iterate over all drawable types
+    for (size_t t = 0; t < drawable_count; t++) {
+        for (tc_component* c = tc_scene_first_component_of_type(s, drawable_types[t]);
+             c != NULL; c = c->type_next) {
+
+            // Apply filters
+            if (check_enabled && !c->enabled) {
+                continue;
+            }
+
+            // Entity-level filters require valid owner
+            if (c->owner_pool && (check_visible || check_entity_enabled || check_layer)) {
+                if (check_visible && !tc_entity_pool_visible(c->owner_pool, c->owner_entity_id)) {
+                    continue;
+                }
+                if (check_entity_enabled && !tc_entity_pool_enabled(c->owner_pool, c->owner_entity_id)) {
+                    continue;
+                }
+                if (check_layer) {
+                    uint64_t entity_layer = tc_entity_pool_layer(c->owner_pool, c->owner_entity_id);
+                    if (!(layer_mask & (1ULL << entity_layer))) {
+                        continue;
+                    }
+                }
+            }
+
+            if (!callback(c, user_data)) return;
+        }
+    }
+}
+
 // ============================================================================
 // Component Type Enumeration
 // ============================================================================

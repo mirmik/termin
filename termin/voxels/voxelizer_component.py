@@ -61,6 +61,8 @@ class VoxelizerComponent(PythonComponent):
     По нажатию кнопки вокселизирует меш, регистрирует в ResourceManager и сохраняет в файл.
     """
 
+    is_drawable = True
+
     inspect_fields = {
         "grid_name": InspectField(
             path="grid_name",

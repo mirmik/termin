@@ -343,8 +343,6 @@ private:
                     name_,
                     source_path_
                 );
-                tc::Log::info("[ShaderProgram] register uuid=%s name=%s old_ver=%u new_ver=%u changed=%d",
-                    uuid_.c_str(), name_.c_str(), old_version, tc_shader_.version(), changed ? 1 : 0);
             }
         } else {
             // No UUID - use hash-based lookup (legacy behavior)

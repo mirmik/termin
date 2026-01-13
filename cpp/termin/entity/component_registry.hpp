@@ -4,11 +4,13 @@
 #include <unordered_map>
 #include <functional>
 #include <vector>
+#include <type_traits>
 #include <nanobind/nanobind.h>
 
 #include "component.hpp"
 #include "vtable_utils.hpp"
 #include "../../../core_c/include/tc_inspect.hpp"
+#include "../render/drawable.hpp"
 
 #include "../export.hpp"
 
@@ -62,6 +64,9 @@ public:
     // Clear all (for testing)
     void clear();
 
+    // Mark a component type as drawable
+    static void set_drawable(const std::string& name, bool is_drawable);
+
 private:
     ComponentRegistry() = default;
     ComponentRegistry(const ComponentRegistry&) = delete;
@@ -75,6 +80,7 @@ private:
  * Used by REGISTER_COMPONENT macro.
  *
  * Detects method overrides via vtable inspection (see vtable_utils.hpp).
+ * Detects drawable components via std::is_base_of<Drawable, T>.
  */
 template<typename T>
 struct ComponentRegistrar {
@@ -95,6 +101,11 @@ struct ComponentRegistrar {
         // Register type parent for field inheritance
         if (parent) {
             tc::InspectRegistry::instance().set_type_parent(name, parent);
+        }
+
+        // Mark as drawable if component inherits from Drawable
+        if constexpr (std::is_base_of_v<Drawable, T>) {
+            ComponentRegistry::set_drawable(name, true);
         }
     }
 };

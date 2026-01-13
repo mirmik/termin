@@ -6,7 +6,7 @@
 namespace termin {
 
 MeshRenderer::MeshRenderer() {
-    _type_name = "MeshRenderer";
+    set_type_name("MeshRenderer");
     install_drawable_vtable(&_c);
 }
 

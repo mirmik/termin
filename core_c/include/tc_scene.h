@@ -104,6 +104,29 @@ TC_API void tc_scene_foreach_component_of_type(
 );
 
 // ============================================================================
+// Drawable Component Iteration
+// ============================================================================
+
+// Filter flags for drawable iteration
+typedef enum tc_drawable_filter_flags {
+    TC_DRAWABLE_FILTER_NONE = 0,
+    TC_DRAWABLE_FILTER_ENABLED = 1 << 0,       // Only enabled components
+    TC_DRAWABLE_FILTER_VISIBLE = 1 << 1,       // Only visible entities
+    TC_DRAWABLE_FILTER_ENTITY_ENABLED = 1 << 2 // Only enabled entities
+} tc_drawable_filter_flags;
+
+// Iterate all drawable components in scene with optional filtering
+// filter_flags: combination of tc_drawable_filter_flags
+// layer_mask: bitmask for layer filtering (0 = all layers)
+TC_API void tc_scene_foreach_drawable(
+    tc_scene* s,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags,
+    uint64_t layer_mask
+);
+
+// ============================================================================
 // Component Type Enumeration
 // ============================================================================
 
