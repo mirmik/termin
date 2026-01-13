@@ -35,6 +35,7 @@
 #include "tc_shader.h"
 #include "tc_shader_registry.h"
 #include "tc_scene_registry.h"
+#include "tc_gpu.h"
 
 #ifdef __cplusplus
 extern "C" {

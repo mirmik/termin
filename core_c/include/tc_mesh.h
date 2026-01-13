@@ -84,7 +84,13 @@ typedef struct tc_mesh {
     size_t index_count;          // total indices
     tc_vertex_layout layout;
     uint8_t draw_mode;           // tc_draw_mode (TC_DRAW_TRIANGLES or TC_DRAW_LINES)
-    uint8_t _pad2[7];            // padding for alignment
+    uint8_t _pad2[3];
+
+    // GPU state (managed by tc_gpu)
+    uint32_t gpu_vao;            // OpenGL VAO ID (0 = not uploaded)
+    uint32_t gpu_vbo;            // OpenGL VBO ID
+    uint32_t gpu_ebo;            // OpenGL EBO ID
+    int32_t gpu_version;         // version at last GPU upload (-1 = never)
 } tc_mesh;
 
 

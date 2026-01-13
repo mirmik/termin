@@ -77,7 +77,14 @@ void bind_material(nb::module_& m) {
                 nb::dict tex_dict = nb::cast<nb::dict>(kwargs["textures"]);
                 for (auto item : tex_dict) {
                     std::string key = nb::cast<std::string>(item.first);
-                    self->textures[key] = nb::cast<TextureHandle>(item.second);
+                    // Accept both TextureHandle and TcTexture
+                    nb::object val = nb::borrow<nb::object>(item.second);
+                    if (nb::isinstance<TcTexture>(val)) {
+                        self->textures[key] = nb::cast<TcTexture>(val);
+                    } else {
+                        TextureHandle handle = nb::cast<TextureHandle>(val);
+                        self->textures[key] = handle.get();
+                    }
                 }
             }
 
@@ -152,20 +159,23 @@ void bind_material(nb::module_& m) {
         }, nb::arg("mark"), "Set phase mark and apply corresponding render state")
         .def_rw("priority", &MaterialPhase::priority)
         .def("set_texture", [](MaterialPhase& self, const std::string& name, TextureHandle handle) {
-            self.textures[name] = handle;
-        }, nb::arg("name"), nb::arg("handle"), "Set texture by uniform name")
+            self.textures[name] = handle.get();
+        }, nb::arg("name"), nb::arg("handle"), "Set texture by uniform name (from TextureHandle)")
+        .def("set_texture", [](MaterialPhase& self, const std::string& name, TcTexture tex) {
+            self.textures[name] = tex;
+        }, nb::arg("name"), nb::arg("tex"), "Set texture by uniform name (from TcTexture)")
         .def("get_texture", [](MaterialPhase& self, const std::string& name) -> nb::object {
             auto it = self.textures.find(name);
             if (it != self.textures.end()) {
                 return nb::cast(it->second);
             }
             return nb::none();
-        }, nb::arg("name"), "Get texture by uniform name")
+        }, nb::arg("name"), "Get texture by uniform name (returns TcTexture)")
         .def_prop_rw("textures",
             [](MaterialPhase& self) -> nb::dict {
                 nb::dict result;
-                for (const auto& [key, handle] : self.textures) {
-                    result[key.c_str()] = handle;
+                for (const auto& [key, tex] : self.textures) {
+                    result[key.c_str()] = tex;
                 }
                 return result;
             },
@@ -173,8 +183,13 @@ void bind_material(nb::module_& m) {
                 self.textures.clear();
                 for (auto item : textures) {
                     std::string key = nb::cast<std::string>(item.first);
-                    TextureHandle handle = nb::cast<TextureHandle>(nb::borrow<nb::object>(item.second));
-                    self.textures[key] = handle;
+                    nb::object val = nb::borrow<nb::object>(item.second);
+                    if (nb::isinstance<TcTexture>(val)) {
+                        self.textures[key] = nb::cast<TcTexture>(val);
+                    } else {
+                        TextureHandle handle = nb::cast<TextureHandle>(val);
+                        self.textures[key] = handle.get();
+                    }
                 }
             })
         .def_prop_rw("uniforms",
@@ -210,7 +225,7 @@ void bind_material(nb::module_& m) {
                 }
             })
         .def("set_texture", [](MaterialPhase& self, const std::string& name, const TextureHandle& tex) {
-            self.textures[name] = tex;
+            self.textures[name] = tex.get();
         })
         .def("set_param", [](MaterialPhase& self, const std::string& name, nb::object value) {
             if (nb::isinstance<nb::bool_>(value)) {
@@ -452,7 +467,8 @@ void bind_material(nb::module_& m) {
                     std::string key = nb::cast<std::string>(item.first);
                     std::string path = nb::cast<std::string>(item.second);
                     if (nb::hasattr(context, "load_texture")) {
-                        phase->textures[key] = nb::cast<TextureHandle>(context.attr("load_texture")(path));
+                        TextureHandle handle = nb::cast<TextureHandle>(context.attr("load_texture")(path));
+                        phase->textures[key] = handle.get();
                     }
                 }
             }
@@ -578,8 +594,8 @@ void bind_material(nb::module_& m) {
             nb::object tex_handle_module = nb::module_::import_("termin.visualization.core.texture_handle");
             nb::object white_tex_fn = tex_handle_module.attr("get_white_texture_handle");
             nb::object normal_tex_fn = tex_handle_module.attr("get_normal_texture_handle");
-            TextureHandle white_tex = nb::cast<TextureHandle>(white_tex_fn());
-            TextureHandle normal_tex = nb::cast<TextureHandle>(normal_tex_fn());
+            TcTexture white_tex = nb::cast<TextureHandle>(white_tex_fn()).get();
+            TcTexture normal_tex = nb::cast<TextureHandle>(normal_tex_fn()).get();
 
             for (const auto& prop : shader_phase.uniforms) {
                 if (prop.property_type == "Texture") {
@@ -602,7 +618,12 @@ void bind_material(nb::module_& m) {
                 nb::dict tex_dict = nb::cast<nb::dict>(textures);
                 for (auto item : tex_dict) {
                     std::string key = nb::cast<std::string>(item.first);
-                    phase.textures[key] = nb::cast<TextureHandle>(item.second);
+                    nb::object val = nb::borrow<nb::object>(item.second);
+                    if (nb::isinstance<TcTexture>(val)) {
+                        phase.textures[key] = nb::cast<TcTexture>(val);
+                    } else {
+                        phase.textures[key] = nb::cast<TextureHandle>(val).get();
+                    }
                 }
             }
 
@@ -702,7 +723,8 @@ void bind_material(nb::module_& m) {
                 nb::dict tex_dict = nb::cast<nb::dict>(kwargs["textures"]);
                 for (auto item : tex_dict) {
                     std::string key = nb::cast<std::string>(item.first);
-                    self->default_phase().textures[key] = nb::cast<TextureHandle>(item.second);
+                    TextureHandle handle = nb::cast<TextureHandle>(item.second);
+                    self->set_texture(key, handle);
                 }
             }
 
@@ -757,7 +779,7 @@ void bind_material(nb::module_& m) {
 
             // Preserve existing color, textures, uniforms from first phase
             std::optional<Vec4> old_color;
-            std::unordered_map<std::string, TextureHandle> old_textures;
+            std::unordered_map<std::string, TcTexture> old_textures;
             std::unordered_map<std::string, MaterialUniformValue> old_uniforms;
 
             if (!self.phases.empty()) {
@@ -809,10 +831,12 @@ void bind_material(nb::module_& m) {
             })
         .def_prop_rw("textures",
             [](Material& self) -> std::unordered_map<std::string, TextureHandle>& {
-                return self.default_phase().textures;
+                return self.texture_handles;
             },
             [](Material& self, const std::unordered_map<std::string, TextureHandle>& textures) {
-                self.default_phase().textures = textures;
+                for (const auto& [name, handle] : textures) {
+                    self.set_texture(name, handle);
+                }
             }, nb::rv_policy::reference)
         .def_prop_rw("uniforms",
             [](Material& self) -> nb::dict {
@@ -1175,7 +1199,8 @@ void bind_material(nb::module_& m) {
                             std::string key = nb::cast<std::string>(item.first);
                             std::string path = nb::cast<std::string>(item.second);
                             if (nb::hasattr(context, "load_texture")) {
-                                phase.textures[key] = nb::cast<TextureHandle>(context.attr("load_texture")(path));
+                                TextureHandle handle = nb::cast<TextureHandle>(context.attr("load_texture")(path));
+                                phase.textures[key] = handle.get();
                             }
                         }
                     }

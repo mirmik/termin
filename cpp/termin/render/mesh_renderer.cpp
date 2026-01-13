@@ -170,12 +170,12 @@ void MeshRenderer::apply_pending_override_data() {
                 for (const auto& [key, val] : phase_textures.as_dict()) {
                     if (!val.is_dict()) continue;
 
-                    // Deserialize TextureHandle using existing method
+                    // Deserialize TextureHandle then convert to TcTexture
                     TextureHandle tex_handle;
                     tex_handle.deserialize_from(val, nullptr);
 
                     if (tex_handle.is_valid()) {
-                        phase.textures[key] = std::move(tex_handle);
+                        phase.textures[key] = tex_handle.get();
                     }
                 }
             }
@@ -313,30 +313,21 @@ nos::trent MeshRenderer::get_override_data() const {
         nos::trent phase_textures;
         phase_textures.init(nos::trent_type::dict);
 
-        for (const auto& [key, tex_handle] : phase.textures) {
-            if (!tex_handle.is_valid()) continue;
+        for (const auto& [key, tex] : phase.textures) {
+            if (!tex.is_valid()) continue;
 
             nos::trent tex_data;
             tex_data.init(nos::trent_type::dict);
 
-            // Serialize TextureHandle (similar to TextureHandle::serialize())
-            if (!tex_handle.asset.is_none()) {
-                try {
-                    tex_data["uuid"] = nb::cast<std::string>(tex_handle.asset.attr("uuid"));
-                    tex_data["name"] = nb::cast<std::string>(tex_handle.asset.attr("name"));
-                    nb::object source_path = tex_handle.asset.attr("source_path");
-                    if (!source_path.is_none()) {
-                        tex_data["type"] = "path";
-                        tex_data["path"] = nb::cast<std::string>(nb::str(source_path.attr("as_posix")()));
-                    } else {
-                        tex_data["type"] = "named";
-                    }
-                } catch (const nb::python_error& e) {
-                    fprintf(stderr, "[MeshRenderer] Error serializing texture '%s': %s\n", key.c_str(), e.what());
-                    continue;
-                }
+            // Serialize TcTexture
+            tex_data["uuid"] = tex.uuid();
+            tex_data["name"] = tex.name();
+            const char* src_path = tex.source_path();
+            if (src_path && src_path[0] != '\0') {
+                tex_data["type"] = "path";
+                tex_data["path"] = src_path;
             } else {
-                tex_data["type"] = "none";
+                tex_data["type"] = "named";
             }
 
             phase_textures[key] = std::move(tex_data);

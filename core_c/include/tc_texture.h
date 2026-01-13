@@ -42,8 +42,14 @@ typedef struct tc_texture {
     uint8_t flip_x;             // transform flag
     uint8_t flip_y;             // transform flag (default true for OpenGL)
     uint8_t transpose;          // transform flag
-    uint8_t _pad[3];
+    uint8_t mipmap;             // generate mipmaps on upload
+    uint8_t clamp;              // use clamp wrapping (vs repeat)
+    uint8_t _pad[1];
     const char* source_path;    // optional source file path (interned string)
+
+    // GPU state (managed by tc_gpu)
+    uint32_t gpu_id;            // OpenGL texture ID (0 = not uploaded)
+    int32_t gpu_version;        // version at last GPU upload (-1 = never)
 } tc_texture;
 
 

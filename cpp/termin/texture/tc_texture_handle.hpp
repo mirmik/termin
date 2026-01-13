@@ -219,6 +219,70 @@ public:
     // Get transformed data for GPU upload
     // Returns new buffer with transforms applied, plus final width and height
     std::tuple<std::vector<uint8_t>, uint32_t, uint32_t> get_upload_data() const;
+
+    // ========== GPU operations ==========
+
+    // Bind texture to unit, uploading if needed
+    // Returns true if bind succeeded
+    bool bind_gpu(int unit = 0) {
+        tc_texture* t = get();
+        return t ? tc_texture_bind_gpu(t, unit) : false;
+    }
+
+    // Force re-upload texture to GPU
+    bool upload_gpu() {
+        tc_texture* t = get();
+        return t ? tc_texture_upload_gpu(t) : false;
+    }
+
+    // Delete texture from GPU (keeps CPU data)
+    void delete_gpu() {
+        if (tc_texture* t = get()) {
+            tc_texture_delete_gpu(t);
+        }
+    }
+
+    // Check if texture needs GPU upload (version mismatch)
+    bool needs_upload() const {
+        tc_texture* t = get();
+        return t ? tc_texture_needs_upload(t) : false;
+    }
+
+    // Get GPU texture ID (0 = not uploaded)
+    uint32_t gpu_id() const {
+        tc_texture* t = get();
+        return t ? t->gpu_id : 0;
+    }
+
+    // Get GPU version (-1 = never uploaded)
+    int32_t gpu_version() const {
+        tc_texture* t = get();
+        return t ? t->gpu_version : -1;
+    }
+
+    // Set mipmap flag (affects next upload)
+    void set_mipmap(bool enable) {
+        if (tc_texture* t = get()) {
+            t->mipmap = enable ? 1 : 0;
+        }
+    }
+
+    // Set clamp flag (affects next upload)
+    void set_clamp(bool enable) {
+        if (tc_texture* t = get()) {
+            t->clamp = enable ? 1 : 0;
+        }
+    }
+
+    bool mipmap() const {
+        tc_texture* t = get();
+        return t && t->mipmap;
+    }
+
+    bool clamp() const {
+        tc_texture* t = get();
+        return t && t->clamp;
+    }
 };
 
 } // namespace termin

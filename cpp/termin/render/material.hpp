@@ -9,7 +9,7 @@
 
 #include "termin/render/shader_program.hpp"
 #include "termin/render/render_state.hpp"
-#include "termin/render/handles.hpp"
+#include "termin/texture/tc_texture_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/vec3.hpp"
@@ -64,8 +64,8 @@ public:
     // Priority within phase (lower = rendered earlier)
     int priority = 0;
 
-    // Texture bindings: uniform_name -> texture handle (asset-based)
-    std::unordered_map<std::string, TextureHandle> textures;
+    // Texture bindings: uniform_name -> texture data (GPU-bound via tc_gpu)
+    std::unordered_map<std::string, TcTexture> textures;
 
     // Uniform values: name -> value
     std::unordered_map<std::string, MaterialUniformValue> uniforms;
@@ -184,6 +184,9 @@ public:
     // wants to force a specific rendering mode.
     std::string active_phase_mark;
 
+    // Texture handles for inspector (asset references)
+    std::unordered_map<std::string, TextureHandle> texture_handles;
+
     // All phases of this material
     std::vector<MaterialPhase> phases;
 
@@ -244,6 +247,28 @@ public:
         for (auto& phase : phases) {
             phase.set_color(rgba);
         }
+    }
+
+    /**
+     * Set texture on all phases and store handle for inspector.
+     */
+    void set_texture(const std::string& name, const TextureHandle& handle) {
+        texture_handles[name] = handle;
+        TcTexture tex = handle.get();
+        for (auto& phase : phases) {
+            phase.textures[name] = tex;
+        }
+    }
+
+    /**
+     * Get texture handle by name.
+     */
+    TextureHandle get_texture(const std::string& name) const {
+        auto it = texture_handles.find(name);
+        if (it != texture_handles.end()) {
+            return it->second;
+        }
+        return TextureHandle();
     }
 
     /**

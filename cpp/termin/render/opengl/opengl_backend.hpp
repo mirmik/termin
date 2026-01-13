@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <vector>
 
+extern "C" {
+#include "tc_gpu.h"
+}
 
 #include "tc_log.hpp"
 #include "termin/render/graphics_backend.hpp"
@@ -28,6 +31,235 @@ namespace termin {
 inline bool init_opengl() {
     return gladLoaderLoadGL() != 0;
 }
+
+// ============================================================================
+// tc_gpu_ops implementation functions
+// ============================================================================
+
+namespace gpu_ops_impl {
+
+inline uint32_t texture_upload(
+    const uint8_t* data,
+    int width,
+    int height,
+    int channels,
+    bool mipmap,
+    bool clamp_wrap
+) {
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    // Determine format
+    GLenum format = GL_RGBA;
+    GLenum internal_format = GL_RGBA8;
+    switch (channels) {
+        case 1: format = GL_RED; internal_format = GL_R8; break;
+        case 2: format = GL_RG; internal_format = GL_RG8; break;
+        case 3: format = GL_RGB; internal_format = GL_RGB8; break;
+        case 4: format = GL_RGBA; internal_format = GL_RGBA8; break;
+    }
+
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+    // Set wrapping mode
+    GLenum wrap_mode = clamp_wrap ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_mode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_mode);
+
+    // Set filtering
+    if (mipmap) {
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    } else {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return texture;
+}
+
+inline void texture_bind(uint32_t gpu_id, int unit) {
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glBindTexture(GL_TEXTURE_2D, gpu_id);
+}
+
+inline void texture_delete(uint32_t gpu_id) {
+    glDeleteTextures(1, &gpu_id);
+}
+
+inline uint32_t shader_compile(
+    const char* vertex_source,
+    const char* fragment_source,
+    const char* geometry_source
+) {
+    auto compile_shader = [](GLenum type, const char* source) -> GLuint {
+        GLuint shader = glCreateShader(type);
+        glShaderSource(shader, 1, &source, nullptr);
+        glCompileShader(shader);
+
+        GLint success;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            char info_log[512];
+            glGetShaderInfoLog(shader, 512, nullptr, info_log);
+            tc::Log::error("Shader compile error: %s", info_log);
+            glDeleteShader(shader);
+            return 0;
+        }
+        return shader;
+    };
+
+    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_source);
+    if (vs == 0) return 0;
+
+    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_source);
+    if (fs == 0) {
+        glDeleteShader(vs);
+        return 0;
+    }
+
+    GLuint gs = 0;
+    if (geometry_source && geometry_source[0] != '\0') {
+        gs = compile_shader(GL_GEOMETRY_SHADER, geometry_source);
+        if (gs == 0) {
+            glDeleteShader(vs);
+            glDeleteShader(fs);
+            return 0;
+        }
+    }
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    if (gs != 0) {
+        glAttachShader(program, gs);
+    }
+    glLinkProgram(program);
+
+    GLint success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char info_log[512];
+        glGetProgramInfoLog(program, 512, nullptr, info_log);
+        tc::Log::error("Shader link error: %s", info_log);
+        glDeleteProgram(program);
+        glDeleteShader(vs);
+        glDeleteShader(fs);
+        if (gs != 0) glDeleteShader(gs);
+        return 0;
+    }
+
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (gs != 0) glDeleteShader(gs);
+
+    return program;
+}
+
+inline void shader_use(uint32_t gpu_id) {
+    glUseProgram(gpu_id);
+}
+
+inline void shader_delete(uint32_t gpu_id) {
+    glDeleteProgram(gpu_id);
+}
+
+inline uint32_t mesh_upload(const tc_mesh* mesh) {
+    if (!mesh || !mesh->vertices || mesh->vertex_count == 0) {
+        return 0;
+    }
+
+    GLuint vao, vbo, ebo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glGenBuffers(1, &ebo);
+
+    glBindVertexArray(vao);
+
+    // Upload vertex data
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 mesh->vertex_count * mesh->layout.stride,
+                 mesh->vertices, GL_STATIC_DRAW);
+
+    // Upload index data
+    if (mesh->indices && mesh->index_count > 0) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                     mesh->index_count * sizeof(uint32_t),
+                     mesh->indices, GL_STATIC_DRAW);
+    }
+
+    // Setup vertex attributes
+    for (uint8_t i = 0; i < mesh->layout.attrib_count; ++i) {
+        const tc_vertex_attrib& attr = mesh->layout.attribs[i];
+
+        GLenum gl_type = GL_FLOAT;
+        switch (attr.type) {
+            case TC_ATTRIB_FLOAT32: gl_type = GL_FLOAT; break;
+            case TC_ATTRIB_INT32: gl_type = GL_INT; break;
+            case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; break;
+            case TC_ATTRIB_INT16: gl_type = GL_SHORT; break;
+            case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; break;
+            case TC_ATTRIB_INT8: gl_type = GL_BYTE; break;
+            case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; break;
+        }
+
+        glEnableVertexAttribArray(attr.location);
+        glVertexAttribPointer(
+            attr.location,
+            attr.size,
+            gl_type,
+            GL_FALSE,
+            mesh->layout.stride,
+            reinterpret_cast<void*>(static_cast<size_t>(attr.offset))
+        );
+    }
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    // Store VBO and EBO in mesh (for later deletion)
+    // Note: This is a bit hacky - we store them in the mesh struct
+    const_cast<tc_mesh*>(mesh)->gpu_vbo = vbo;
+    const_cast<tc_mesh*>(mesh)->gpu_ebo = ebo;
+
+    return vao;
+}
+
+inline void mesh_draw(uint32_t vao_id) {
+    // This is a simplified draw - actual implementation needs mesh info
+    // For now just bind VAO; actual draw happens elsewhere with index count
+    glBindVertexArray(vao_id);
+}
+
+inline void mesh_delete(uint32_t vao_id) {
+    // Note: we need VBO/EBO stored somewhere to delete them
+    // For now just delete VAO
+    glDeleteVertexArrays(1, &vao_id);
+}
+
+inline void register_gpu_ops() {
+    static tc_gpu_ops ops = {
+        texture_upload,
+        texture_bind,
+        texture_delete,
+        shader_compile,
+        shader_use,
+        shader_delete,
+        mesh_upload,
+        mesh_draw,
+        mesh_delete,
+        nullptr  // user_data
+    };
+    tc_gpu_set_ops(&ops);
+}
+
+} // namespace gpu_ops_impl
 
 /**
  * OpenGL 3.3+ graphics backend implementation.
@@ -53,6 +285,9 @@ public:
                 throw std::runtime_error("Failed to initialize GLAD");
             }
             glad_initialized_ = true;
+
+            // Register GPU ops for tc_gpu module
+            gpu_ops_impl::register_gpu_ops();
         }
 
         glEnable(GL_DEPTH_TEST);

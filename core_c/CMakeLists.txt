@@ -28,6 +28,7 @@ set(TC_SOURCES
     src/tc_scene_registry.c
     src/tc_log.c
     src/tc_profiler.c
+    src/tc_gpu.c
 )
 
 # Header files (for IDE integration)
@@ -53,6 +54,7 @@ set(TC_HEADERS
     include/tc_shader.h
     include/tc_shader_registry.h
     include/tc_scene_registry.h
+    include/tc_gpu.h
 )
 
 # Library target

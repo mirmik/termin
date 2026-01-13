@@ -30,8 +30,8 @@ void MaterialPhase::apply(
 
     // Bind textures
     int texture_unit = 0;
-    for (const auto& [name, texture] : textures) {
-        texture.bind(graphics, texture_unit, context_key);
+    for (auto& [name, texture] : textures) {
+        texture.bind_gpu(texture_unit);
         shader->set_uniform_int(name.c_str(), texture_unit);
         ++texture_unit;
     }
@@ -97,8 +97,8 @@ void MaterialPhase::apply_to_shader(
 
     // Bind textures
     int texture_unit = 0;
-    for (const auto& [name, texture] : textures) {
-        texture.bind(graphics, texture_unit, context_key);
+    for (auto& [name, texture] : textures) {
+        texture.bind_gpu(texture_unit);
         target_shader->set_uniform_int(name.c_str(), texture_unit);
         ++texture_unit;
     }
