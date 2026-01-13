@@ -127,6 +127,12 @@ public:
         return tc_shader_.variant_is_stale();
     }
 
+    // Features
+    uint32_t features() const { return tc_shader_.features(); }
+    bool has_feature(tc_shader_feature feature) const { return tc_shader_.has_feature(feature); }
+    void set_feature(tc_shader_feature feature) { tc_shader_.set_feature(feature); }
+    void set_features(uint32_t features) { tc_shader_.set_features(features); }
+
     // Set variant info (mark this shader as variant of original)
     // Note: this modifies the shader in the registry, not the local object
     void set_variant_info(const ShaderProgram& original, tc_shader_variant_op op) {
@@ -300,6 +306,10 @@ public:
 
     void set_uniform_matrix4_array(const char* name, const float* data, int count, bool transpose = true) {
         require_handle()->set_uniform_matrix4_array(name, data, count, transpose);
+    }
+
+    void set_uniform_block_binding(const char* block_name, int binding_point) {
+        require_handle()->set_uniform_block_binding(block_name, binding_point);
     }
 
     // Convenience: set uniform with Vec3

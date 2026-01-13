@@ -19,6 +19,11 @@ void bind_shader(nb::module_& m) {
         .value("INSTANCING", TC_SHADER_VARIANT_INSTANCING)
         .value("MORPHING", TC_SHADER_VARIANT_MORPHING);
 
+    // Shader feature flags enum
+    nb::enum_<tc_shader_feature>(m, "ShaderFeature")
+        .value("NONE", TC_SHADER_FEATURE_NONE)
+        .value("LIGHTING_UBO", TC_SHADER_FEATURE_LIGHTING_UBO);
+
     // TcShader - RAII wrapper for shader in registry
     nb::class_<TcShader>(m, "TcShader")
         .def(nb::init<>())
@@ -71,6 +76,7 @@ void bind_shader(nb::module_& m) {
                 info["source_path"] = infos[i].source_path ? std::string(infos[i].source_path) : "";
                 info["ref_count"] = infos[i].ref_count;
                 info["version"] = infos[i].version;
+                info["features"] = infos[i].features;
                 info["source_size"] = infos[i].source_size;
                 info["is_variant"] = (bool)infos[i].is_variant;
                 info["variant_op"] = (int)infos[i].variant_op;
@@ -99,6 +105,10 @@ void bind_shader(nb::module_& m) {
         .def_prop_ro("is_compiled", &ShaderProgram::is_compiled)
         .def_prop_ro("tc_shader", &ShaderProgram::tc_shader)
         .def_prop_ro("version", &ShaderProgram::version)
+        .def("features", &ShaderProgram::features, "Get shader features bitfield")
+        .def("has_feature", &ShaderProgram::has_feature, nb::arg("feature"), "Check if shader has feature")
+        .def("set_feature", &ShaderProgram::set_feature, nb::arg("feature"), "Set shader feature")
+        .def("set_features", &ShaderProgram::set_features, nb::arg("features"), "Set shader features bitfield")
         .def("needs_recompile", &ShaderProgram::needs_recompile)
         .def("variant_is_stale", &ShaderProgram::variant_is_stale)
         .def("set_variant_info", &ShaderProgram::set_variant_info)

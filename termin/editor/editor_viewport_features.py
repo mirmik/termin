@@ -283,6 +283,10 @@ class EditorViewportFeatures:
         x, y, viewport = pending_hover
         self._pending_hover = None
 
+        # Skip if viewport's scene is destroyed
+        if viewport is not None and viewport.scene is not None and viewport.scene.is_destroyed:
+            return
+
         # Update gizmo hover state (raycast-based)
         if not self._gizmo_manager.is_dragging and viewport is not None:
             ray = viewport.screen_point_to_ray(x, y)

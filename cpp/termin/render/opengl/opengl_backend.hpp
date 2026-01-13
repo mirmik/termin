@@ -15,6 +15,7 @@
 #include "termin/render/opengl/opengl_texture.hpp"
 #include "termin/render/opengl/opengl_mesh.hpp"
 #include "termin/render/opengl/opengl_framebuffer.hpp"
+#include "termin/render/opengl/opengl_uniform_buffer.hpp"
 
 namespace termin {
 
@@ -240,6 +241,10 @@ public:
 
     FramebufferHandlePtr create_shadow_framebuffer(int width, int height) override {
         return std::make_unique<OpenGLShadowFramebufferHandle>(width, height);
+    }
+
+    UniformBufferHandlePtr create_uniform_buffer(size_t size) override {
+        return std::make_unique<OpenGLUniformBufferHandle>(size);
     }
 
     /**

@@ -349,6 +349,15 @@ class CoreRegistryViewer(QDialog):
         for i in range(4):
             self._shaders_tree.resizeColumnToContents(i)
 
+    def _format_shader_features(self, features: int) -> str:
+        """Format shader features bitfield as readable string."""
+        if features == 0:
+            return "(none)"
+        parts = []
+        if features & 1:  # TC_SHADER_FEATURE_LIGHTING_UBO
+            parts.append("LIGHTING_UBO")
+        return ", ".join(parts) if parts else f"0x{features:x}"
+
     def _on_shader_clicked(self, item: QTreeWidgetItem, column: int) -> None:
         """Show shader details in details panel."""
         data = item.data(0, Qt.ItemDataRole.UserRole)
@@ -382,7 +391,13 @@ class CoreRegistryViewer(QDialog):
 
         lines.append(f"Has geometry:   {'Yes' if info['has_geometry'] else 'No'}")
 
+        features = info.get("features", 0)
+        features_str = self._format_shader_features(features)
+
         lines.extend([
+            "",
+            "--- Features ---",
+            f"Features:       {features_str} (raw: {features})",
             "",
             "--- Memory ---",
             f"Source size:    {self._format_bytes(info['source_size'])}",

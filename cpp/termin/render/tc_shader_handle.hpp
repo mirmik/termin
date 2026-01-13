@@ -130,6 +130,32 @@ public:
         return s && tc_shader_has_geometry(s);
     }
 
+    // Features
+    uint32_t features() const {
+        tc_shader* s = get();
+        return s ? s->features : 0;
+    }
+
+    bool has_feature(tc_shader_feature feature) const {
+        tc_shader* s = get();
+        return s && tc_shader_has_feature(s, feature);
+    }
+
+    void set_feature(tc_shader_feature feature) {
+        tc_shader* s = get();
+        if (s) tc_shader_set_feature(s, feature);
+    }
+
+    void clear_feature(tc_shader_feature feature) {
+        tc_shader* s = get();
+        if (s) tc_shader_clear_feature(s, feature);
+    }
+
+    void set_features(uint32_t features) {
+        tc_shader* s = get();
+        if (s) s->features = features;
+    }
+
     // Variant info
     bool is_variant() const {
         tc_shader* s = get();

@@ -907,6 +907,9 @@ class RenderingManager:
         from termin._native import log
         from termin.visualization.render.engine import ViewportContext
 
+        if scene.is_destroyed:
+            return
+
         target_names = scene.get_pipeline_targets(pipeline_name)
         if not target_names:
             return
@@ -975,6 +978,10 @@ class RenderingManager:
 
         display = viewport.display
         if display is None or display.surface is None:
+            return
+
+        scene = viewport.scene
+        if scene is None or scene.is_destroyed:
             return
 
         # Compute output size

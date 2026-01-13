@@ -155,3 +155,5 @@ entity_lib.dll
 entity_lib.lib
 
 .claude/settings.local.json
+
+tmpclaude*

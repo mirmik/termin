@@ -100,6 +100,7 @@ typedef struct tc_shader_info {
     const char* source_path;
     uint32_t ref_count;
     uint32_t version;
+    uint32_t features;      // tc_shader_feature bitflags
     size_t source_size;     // total source bytes
     uint8_t is_variant;
     uint8_t variant_op;

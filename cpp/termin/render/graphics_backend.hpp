@@ -98,6 +98,7 @@ public:
 
     virtual FramebufferHandlePtr create_framebuffer(int width, int height, int samples = 1, const std::string& format = "") = 0;
     virtual FramebufferHandlePtr create_shadow_framebuffer(int width, int height) = 0;
+    virtual UniformBufferHandlePtr create_uniform_buffer(size_t size) = 0;
 
     // Convenience overloads with Size2i
     FramebufferHandlePtr create_framebuffer(Size2i size, int samples = 1, const std::string& format = "") {

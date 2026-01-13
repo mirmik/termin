@@ -27,6 +27,16 @@ typedef enum tc_shader_variant_op {
 } tc_shader_variant_op;
 
 // ============================================================================
+// Shader features (bitflags)
+// ============================================================================
+
+typedef enum tc_shader_feature {
+    TC_SHADER_FEATURE_NONE = 0,
+    TC_SHADER_FEATURE_LIGHTING_UBO = 1 << 0,  // Uses UBO for lighting data
+    // Add more features here as needed
+} tc_shader_feature;
+
+// ============================================================================
 // Shader data
 // ============================================================================
 
@@ -47,6 +57,7 @@ typedef struct tc_shader {
     uint8_t _pad[2];
     tc_shader_handle original_handle;  // handle to original shader (if is_variant)
     uint32_t original_version;   // version of original when variant was created
+    uint32_t features;           // tc_shader_feature bitflags
 } tc_shader;
 
 // ============================================================================
@@ -65,6 +76,21 @@ static inline size_t tc_shader_source_size(const tc_shader* shader) {
 // Check if shader has geometry stage
 static inline bool tc_shader_has_geometry(const tc_shader* shader) {
     return shader->geometry_source != NULL && shader->geometry_source[0] != '\0';
+}
+
+// Check if shader has a specific feature
+static inline bool tc_shader_has_feature(const tc_shader* shader, tc_shader_feature feature) {
+    return (shader->features & feature) != 0;
+}
+
+// Set shader feature
+static inline void tc_shader_set_feature(tc_shader* shader, tc_shader_feature feature) {
+    shader->features |= feature;
+}
+
+// Clear shader feature
+static inline void tc_shader_clear_feature(tc_shader* shader, tc_shader_feature feature) {
+    shader->features &= ~feature;
 }
 
 // ============================================================================

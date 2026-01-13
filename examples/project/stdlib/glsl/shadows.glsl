@@ -44,21 +44,40 @@ uniform int u_shadow_cascade_index[MAX_SHADOW_MAPS];
 uniform float u_shadow_split_near[MAX_SHADOW_MAPS];
 uniform float u_shadow_split_far[MAX_SHADOW_MAPS];
 
-// Per-light cascade settings
+// Per-light cascade settings (only if lighting.glsl not included)
+#ifndef LIGHTING_GLSL
 uniform int u_light_cascade_count[MAX_LIGHTS];
 uniform int u_light_cascade_blend[MAX_LIGHTS];
 uniform float u_light_blend_distance[MAX_LIGHTS];
+#endif
 
 // View matrix for computing view-space depth
 uniform mat4 u_view;
 
-// Shadow settings (set by engine from Scene.shadow_settings)
-// u_shadow_method: 0=hard, 1=pcf, 2=poisson
-// u_shadow_softness: sampling radius multiplier (0=sharp, 1=default, >1=softer)
-// u_shadow_bias: depth bias to prevent shadow acne
+// Shadow settings accessors
+// If lighting.glsl is included, use its accessors; otherwise define our own uniforms
+
+#ifdef LIGHTING_GLSL
+// lighting.glsl is included - use its accessors
+int _get_shadow_method_val() { return get_shadow_method(); }
+float _get_shadow_softness_val() { return get_shadow_softness(); }
+float _get_shadow_bias_val() { return get_shadow_bias(); }
+int _get_cascade_count(int i) { return get_light_cascade_count(i); }
+int _get_cascade_blend(int i) { return get_light_cascade_blend(i); }
+float _get_blend_distance(int i) { return get_light_blend_distance(i); }
+#else
+// lighting.glsl not included - define our own uniforms
 uniform int u_shadow_method;
 uniform float u_shadow_softness;
 uniform float u_shadow_bias;
+
+int _get_shadow_method_val() { return u_shadow_method; }
+float _get_shadow_softness_val() { return u_shadow_softness; }
+float _get_shadow_bias_val() { return u_shadow_bias; }
+int _get_cascade_count(int i) { return u_light_cascade_count[i]; }
+int _get_cascade_blend(int i) { return u_light_cascade_blend[i]; }
+float _get_blend_distance(int i) { return u_light_blend_distance[i]; }
+#endif
 
 // 16-sample Poisson disk for high-quality shadow sampling
 const int POISSON_SAMPLES = 16;
@@ -85,7 +104,8 @@ const vec2 poissonDisk[16] = vec2[](
  * Get effective shadow bias (uniform or fallback to define).
  */
 float _get_shadow_bias() {
-    return u_shadow_bias > 0.0 ? u_shadow_bias : SHADOW_BIAS;
+    float bias = _get_shadow_bias_val();
+    return bias > 0.0 ? bias : SHADOW_BIAS;
 }
 
 /**
@@ -104,14 +124,15 @@ float _sample_shadow_map(int sm, vec3 world_pos, float bias) {
     }
 
     float compare_depth = proj_coords.z - bias;
+    int method = _get_shadow_method_val();
+    float softness = max(_get_shadow_softness_val(), 0.0);
 
     // Use shadow method
-    if (u_shadow_method == 0) {
+    if (method == 0) {
         // Hard shadow
         return texture(u_shadow_map[sm], vec3(proj_coords.xy, compare_depth));
-    } else if (u_shadow_method == 2) {
+    } else if (method == 2) {
         // Poisson
-        float softness = max(u_shadow_softness, 0.0);
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
         float radius = 2.5 * softness;
         float shadow = 0.0;
@@ -122,7 +143,6 @@ float _sample_shadow_map(int sm, vec3 world_pos, float bias) {
         return shadow / float(POISSON_SAMPLES);
     } else {
         // PCF 5x5
-        float softness = max(u_shadow_softness, 0.0);
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
         float shadow = 0.0;
         for (int x = -2; x <= 2; ++x) {
@@ -167,11 +187,11 @@ float compute_shadow(int light_index) {
 /**
  * Compute soft shadow with 5x5 PCF grid.
  * 25 samples using hardware depth comparison.
- * Softness controlled by u_shadow_softness uniform.
+ * Softness controlled by shadow_softness setting.
  */
 float compute_shadow_pcf(int light_index) {
     float bias = _get_shadow_bias();
-    float softness = max(u_shadow_softness, 0.0);
+    float softness = max(_get_shadow_softness_val(), 0.0);
 
     for (int sm = 0; sm < u_shadow_map_count; ++sm) {
         if (u_shadow_light_index[sm] != light_index) {
@@ -208,11 +228,11 @@ float compute_shadow_pcf(int light_index) {
 /**
  * Compute high-quality soft shadow with Poisson disk sampling.
  * 16 samples with better distribution than grid, reduces banding artifacts.
- * Softness controlled by u_shadow_softness uniform.
+ * Softness controlled by shadow_softness setting.
  */
 float compute_shadow_poisson(int light_index) {
     float bias = _get_shadow_bias();
-    float softness = max(u_shadow_softness, 0.0);
+    float softness = max(_get_shadow_softness_val(), 0.0);
 
     for (int sm = 0; sm < u_shadow_map_count; ++sm) {
         if (u_shadow_light_index[sm] != light_index) {
@@ -257,9 +277,9 @@ float compute_shadow_cascaded(int light_index) {
     vec4 view_pos = u_view * vec4(v_world_pos, 1.0);
     float depth = view_pos.y;  // Y is forward in our convention
 
-    int cascade_count = u_light_cascade_count[light_index];
-    bool do_blend = u_light_cascade_blend[light_index] != 0;
-    float blend_dist = u_light_blend_distance[light_index];
+    int cascade_count = _get_cascade_count(light_index);
+    bool do_blend = _get_cascade_blend(light_index) != 0;
+    float blend_dist = _get_blend_distance(light_index);
 
     // Find cascade that contains this depth
     int cascade_sm = -1;
@@ -315,7 +335,7 @@ float compute_shadow_cascaded(int light_index) {
 }
 
 /**
- * Compute shadow using method selected by u_shadow_method uniform.
+ * Compute shadow using method selected by shadow settings.
  * Automatically uses cascaded shadows if cascade_count > 1.
  * 0 = hard (single sample)
  * 1 = PCF 5x5 grid (default)
@@ -323,15 +343,16 @@ float compute_shadow_cascaded(int light_index) {
  */
 float compute_shadow_auto(int light_index) {
     // Check if this light uses cascades
-    int cascade_count = u_light_cascade_count[light_index];
+    int cascade_count = _get_cascade_count(light_index);
     if (cascade_count > 1) {
         return compute_shadow_cascaded(light_index);
     }
 
     // Single cascade - use original methods
-    if (u_shadow_method == 0) {
+    int method = _get_shadow_method_val();
+    if (method == 0) {
         return compute_shadow(light_index);
-    } else if (u_shadow_method == 2) {
+    } else if (method == 2) {
         return compute_shadow_poisson(light_index);
     } else {
         return compute_shadow_pcf(light_index);

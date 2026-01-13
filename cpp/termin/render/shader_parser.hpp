@@ -6,6 +6,7 @@
 #include <optional>
 #include <variant>
 #include <stdexcept>
+#include <algorithm>
 
 namespace termin {
 
@@ -118,15 +119,25 @@ public:
     std::string program;  // Program name
     std::vector<ShaderPhase> phases;
     std::string source_path;
+    std::vector<std::string> features;  // Feature flags (e.g., "lighting_ubo")
 
     ShaderMultyPhaseProgramm() = default;
     ShaderMultyPhaseProgramm(
         std::string program_,
         std::vector<ShaderPhase> phases_,
-        std::string source_path_ = ""
+        std::string source_path_ = "",
+        std::vector<std::string> features_ = {}
     ) : program(std::move(program_)),
         phases(std::move(phases_)),
-        source_path(std::move(source_path_)) {}
+        source_path(std::move(source_path_)),
+        features(std::move(features_)) {}
+
+    /**
+     * Check if shader has a specific feature.
+     */
+    bool has_feature(const std::string& feature) const {
+        return std::find(features.begin(), features.end(), feature) != features.end();
+    }
 
     /**
      * Get phase by mark.

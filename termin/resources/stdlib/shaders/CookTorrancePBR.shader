@@ -1,4 +1,5 @@
 @program CookTorrancePBR
+@features lighting_ubo
 
 // ============================================================
 // Cook-Torrance PBR Shader
@@ -107,6 +108,7 @@ in vec2 v_uv;
 in mat3 v_TBN;
 in vec3 v_tangent;
 
+#define LIGHTING_USE_UBO
 #include "lighting.glsl"
 #include "shadows.glsl"
 
@@ -198,7 +200,7 @@ void main() {
         N = normalize(v_normal);
     }
 
-    vec3 V = normalize(u_camera_position - v_world_pos);
+    vec3 V = normalize(get_camera_position() - v_world_pos);
 
     // // DEBUG
     // vec3 normals_by_map = texture(u_normal_texture, v_uv).rgb;
@@ -224,24 +226,24 @@ void main() {
 
     // Ambient term
     // TODO: Replace with IBL (irradiance map)
-    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);
+    vec3 ambient = get_ambient_color() * get_ambient_intensity() * albedo * (1.0 - metallic * 0.5);
 
     vec3 Lo = vec3(0.0);
 
-    for (int i = 0; i < u_light_count; ++i) {
+    for (int i = 0; i < get_light_count(); ++i) {
         vec3 L;
         float attenuation = 1.0;
 
-        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {
-            L = normalize(-u_light_direction[i]);
+        if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
+            L = normalize(-get_light_direction(i));
         } else {
-            vec3 to_light = u_light_position[i] - v_world_pos;
+            vec3 to_light = get_light_position(i) - v_world_pos;
             float dist = length(to_light);
             L = to_light / max(dist, 0.0001);
-            attenuation = compute_distance_attenuation(u_light_attenuation[i], u_light_range[i], dist);
+            attenuation = compute_distance_attenuation(get_light_attenuation(i), get_light_range(i), dist);
 
-            if (u_light_type[i] == LIGHT_TYPE_SPOT) {
-                attenuation *= compute_spot_weight(u_light_direction[i], L, u_light_inner_angle[i], u_light_outer_angle[i]);
+            if (get_light_type(i) == LIGHT_TYPE_SPOT) {
+                attenuation *= compute_spot_weight(get_light_direction(i), L, get_light_inner_angle(i), get_light_outer_angle(i));
             }
         }
 
@@ -282,12 +284,12 @@ void main() {
 
         // Shadow
         float shadow = 1.0;
-        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {
+        if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
             shadow = compute_shadow_auto(i);
         }
 
         // Combine
-        vec3 radiance = u_light_color[i] * u_light_intensity[i] * attenuation;
+        vec3 radiance = get_light_color(i) * get_light_intensity(i) * attenuation;
         Lo += (diffuse_final + specular * NdotL) * radiance * shadow;
     }
 

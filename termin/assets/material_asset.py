@@ -265,6 +265,7 @@ def _parse_material_content(
             extra_uniforms=uniforms if uniforms else None,
             program_name=shader_name,
             phase_uuid=phase_uuid,
+            features=program.features,
         )
         phases_list.append(phase)
     mat.phases = phases_list

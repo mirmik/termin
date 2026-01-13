@@ -706,6 +706,10 @@ class RenderEngine:
         if not frame_passes:
             return
 
+        scene = view.scene
+        if scene is None or scene.is_destroyed:
+            return
+
         pw, ph = size
 
         # Обновляем aspect ratio камеры
@@ -868,6 +872,9 @@ class RenderEngine:
 
         frame_passes = pipeline.passes
         if not frame_passes:
+            return
+
+        if scene.is_destroyed:
             return
 
         # Выбираем первый доступный viewport как default

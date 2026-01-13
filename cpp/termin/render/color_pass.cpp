@@ -1,5 +1,8 @@
 #include "color_pass.hpp"
 #include "tc_log.hpp"
+extern "C" {
+#include "tc_shader.h"
+}
 
 #include <cmath>
 #include <cstring>
@@ -265,6 +268,44 @@ void ColorPass::execute_with_data(
     // Get debug symbol
     const std::string& debug_symbol = get_debug_internal_point();
 
+    // Check if any shader needs UBO (has lighting_ubo feature)
+    bool any_shader_needs_ubo = false;
+    for (const auto& dc : cached_draw_calls_) {
+        if (dc.phase && dc.phase->shader) {
+            // DEBUG
+            static int debug_shader = 0;
+            if (debug_shader < 5) {
+                tc::Log::info("ColorPass: shader '%s' features=%u",
+                    dc.phase->shader->name().c_str(),
+                    dc.phase->shader->features());
+                debug_shader++;
+            }
+
+            if (dc.phase->shader->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
+                any_shader_needs_ubo = true;
+                break;
+            }
+        }
+    }
+
+    // Setup lighting UBO if any shader needs it (or if manually enabled)
+    bool ubo_active = use_ubo || any_shader_needs_ubo;
+
+    // DEBUG
+    static int debug_frame = 0;
+    if (debug_frame < 3) {
+        tc::Log::info("ColorPass: any_shader_needs_ubo=%d, ubo_active=%d, lights=%zu",
+            any_shader_needs_ubo, ubo_active, lights.size());
+        debug_frame++;
+    }
+
+    if (ubo_active) {
+        lighting_ubo_.create(graphics);
+        lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
+                                          camera_position, shadow_settings);
+        lighting_ubo_.upload_and_bind();
+    }
+
     // Render each draw call
     for (const auto& dc : cached_draw_calls_) {
         // Cache entity name
@@ -301,34 +342,30 @@ void ColorPass::execute_with_data(
             }
         }
 
-        // Upload camera position
+        // Upload shader uniforms
         if (shader_to_use) {
-            shader_to_use->set_uniform_vec3("u_camera_position",
-                static_cast<float>(camera_position.x),
-                static_cast<float>(camera_position.y),
-                static_cast<float>(camera_position.z));
-
             // Upload view matrix (needed for cascade depth calculation in shader)
             shader_to_use->set_uniform_matrix4("u_view", view, false);
 
-            // Upload lights with entity name for debugging
-            upload_lights_to_shader(shader_to_use, lights, ename);
-
-            // Upload ambient
-            upload_ambient_to_shader(shader_to_use, ambient_color, ambient_intensity);
-
-            // Upload shadow maps and cascade settings
+            // Shadow maps are textures, always need to upload sampler uniforms
             upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
-            upload_shadow_settings_to_shader(shader_to_use, shadow_settings);
-            upload_cascade_settings_to_shader(shader_to_use, lights);
 
-            // Debug: log shadow settings (once per frame, first entity only)
-            static bool logged_shadow_settings = false;
-            if (!logged_shadow_settings && !shadow_maps.empty()) {
-                tc::Log::info("Shadow settings: method=%d, softness=%.3f, bias=%.5f, maps=%zu",
-                    shadow_settings.method, shadow_settings.softness, shadow_settings.bias,
-                    shadow_maps.size());
-                logged_shadow_settings = true;
+            // Check if this specific shader uses UBO for lighting
+            bool shader_uses_ubo = shader_to_use->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO);
+            if (shader_uses_ubo && ubo_active) {
+                // UBO mode: bind uniform block to binding point (for GLSL 330 compatibility)
+                shader_to_use->set_uniform_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
+            } else {
+                // Legacy mode: upload all lighting uniforms per-object
+                shader_to_use->set_uniform_vec3("u_camera_position",
+                    static_cast<float>(camera_position.x),
+                    static_cast<float>(camera_position.y),
+                    static_cast<float>(camera_position.z));
+
+                upload_lights_to_shader(shader_to_use, lights, ename);
+                upload_ambient_to_shader(shader_to_use, ambient_color, ambient_intensity);
+                upload_shadow_settings_to_shader(shader_to_use, shadow_settings);
+                upload_cascade_settings_to_shader(shader_to_use, lights);
             }
 
             context.current_shader = shader_to_use;
@@ -342,6 +379,11 @@ void ColorPass::execute_with_data(
         if (!debug_symbol.empty() && ename && debug_symbol == ename) {
             maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
         }
+    }
+
+    // Unbind lighting UBO
+    if (ubo_active) {
+        lighting_ubo_.unbind();
     }
 
     // Reset render state

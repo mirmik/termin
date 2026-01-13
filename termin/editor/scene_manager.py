@@ -666,10 +666,7 @@ class SceneManager:
     def close_all_scenes(self) -> None:
         """Close and destroy all scenes."""
         for name in list(self._scenes.keys()):
-            scene = self._scenes.pop(name)
-            scene.destroy()
-        self._modes.clear()
-        self._paths.clear()
+            self.close_scene(name)
 
     def reset(self) -> None:
         """Reset manager state by closing all scenes and clearing editor data."""

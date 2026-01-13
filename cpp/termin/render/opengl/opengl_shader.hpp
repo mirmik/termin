@@ -155,6 +155,15 @@ public:
         }
     }
 
+    void set_uniform_block_binding(const char* block_name, int binding_point) override {
+        ensure_compiled();
+        GLuint block_index = glGetUniformBlockIndex(program_, block_name);
+        if (block_index != GL_INVALID_INDEX) {
+            glUniformBlockBinding(program_, block_index, binding_point);
+        }
+        // Note: block not found is OK - shader may not use UBO
+    }
+
     GLuint get_program() const { return program_; }
 
 private:

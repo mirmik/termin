@@ -200,6 +200,9 @@ void bind_shader_parser(nb::module_& m) {
         .def_rw("program", &ShaderMultyPhaseProgramm::program)
         .def_rw("phases", &ShaderMultyPhaseProgramm::phases)
         .def_rw("source_path", &ShaderMultyPhaseProgramm::source_path)
+        .def_rw("features", &ShaderMultyPhaseProgramm::features)
+        .def("has_feature", &ShaderMultyPhaseProgramm::has_feature,
+             nb::arg("feature"), "Check if shader has a specific feature")
         .def("get_phase", &ShaderMultyPhaseProgramm::get_phase,
              nb::arg("mark"), nb::rv_policy::reference)
         // Backward compatibility: parse_shader_text now returns ShaderMultyPhaseProgramm directly

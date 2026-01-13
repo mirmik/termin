@@ -535,6 +535,7 @@ static bool collect_shader_info(tc_shader_handle h, tc_shader* shader, void* use
     info->source_path = shader->source_path;
     info->ref_count = shader->ref_count;
     info->version = shader->version;
+    info->features = shader->features;
     info->source_size = tc_shader_source_size(shader);
     info->is_variant = shader->is_variant;
     info->variant_op = shader->variant_op;

@@ -16,6 +16,7 @@
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/lighting_upload.hpp"
+#include "termin/lighting/lighting_ubo.hpp"
 #include "termin/camera/camera.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
@@ -43,6 +44,7 @@ public:
     std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
     bool clear_depth = false;
     bool wireframe = false;  // Render as wireframe (override polygon mode)
+    bool use_ubo = false;    // Use UBO for lighting (faster, requires LIGHTING_USE_UBO in shaders)
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
@@ -137,6 +139,9 @@ public:
     }
 
 private:
+    // Lighting UBO for efficient uniform uploads
+    LightingUBO lighting_ubo_;
+
     // Cached draw calls vector (reused between frames to avoid allocations)
     std::vector<PhaseDrawCall> cached_draw_calls_;
 

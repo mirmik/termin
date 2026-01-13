@@ -106,6 +106,11 @@ class Scene:
         self._on_entity_added: Event[Entity] = Event()
         self._on_entity_removed: Event[Entity] = Event()
 
+    @property
+    def is_destroyed(self) -> bool:
+        """Check if scene has been destroyed."""
+        return self._destroyed
+
     # --- Background color (with alpha, C++ only has RGB) ---
 
     @property
@@ -747,6 +752,9 @@ class Scene:
             filter_fn: Optional filter function. If provided, only components
                        for which filter_fn(component) returns True receive the event.
         """
+        if self._tc_scene is None:
+            return
+
         def dispatch_to_component(component):
             if filter_fn is not None and not filter_fn(component):
                 return True

@@ -220,6 +220,7 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
 
     std::string program_name;
     std::vector<ShaderPhase> phases;
+    std::vector<std::string> features;  // From @features directive
 
     // For @phases mode (shared stages)
     std::vector<std::string> declared_phases;  // From @phases directive
@@ -315,6 +316,26 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
             program_name = parts[1];
             for (size_t i = 2; i < parts.size(); ++i) {
                 program_name += " " + parts[i];
+            }
+        }
+        else if (directive == "@features") {
+            // Parse comma-separated feature names: @features lighting_ubo, instancing
+            std::string rest = line.substr(9);  // len("@features") = 9
+            std::string feature_name;
+            for (char c : rest) {
+                if (c == ',' || c == ' ' || c == '\t') {
+                    std::string trimmed = trim(feature_name);
+                    if (!trimmed.empty()) {
+                        features.push_back(trimmed);
+                        feature_name.clear();
+                    }
+                } else {
+                    feature_name += c;
+                }
+            }
+            std::string trimmed = trim(feature_name);
+            if (!trimmed.empty()) {
+                features.push_back(trimmed);
             }
         }
         else if (directive == "@phases") {
@@ -537,7 +558,8 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
         phases.push_back(std::move(phase));
     }
 
-    return ShaderMultyPhaseProgramm(program_name, std::move(phases));
+    ShaderMultyPhaseProgramm result(program_name, std::move(phases), "", std::move(features));
+    return result;
 }
 
 } // namespace termin

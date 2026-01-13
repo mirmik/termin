@@ -68,6 +68,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
             extra_uniforms=None,
             program_name=shader_name or program.program,
             phase_uuid=phase_uuid,
+            features=program.features,
         )
 
         # Restore old textures and uniforms

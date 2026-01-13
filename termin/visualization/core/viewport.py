@@ -72,10 +72,12 @@ class Viewport(Identifiable):
             x, y: координаты в пикселях окна.
 
         Возвращает:
-            Ray3 из камеры через указанную точку.
+            Ray3 из камеры через указанную точку, или None если камера недоступна.
         """
         if self.display is None:
-            raise ValueError("Viewport has no display")
+            return None
+        if self.camera is None or self.camera.entity is None:
+            return None
         rect = self.display.viewport_rect_to_pixels(self)
         return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
 
