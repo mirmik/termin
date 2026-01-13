@@ -16,6 +16,7 @@
 #include "termin/render/shadow_camera.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
+#include "tc_scene.h"
 #include "tc_inspect.hpp"
 
 namespace nb = nanobind;
@@ -27,7 +28,7 @@ class ShaderProgram;
 
 // Draw call for shadow pass (defined before ShadowPass class)
 struct ShadowDrawCall {
-    const Entity* entity = nullptr;
+    Entity entity;
     tc_component* component = nullptr;
     int geometry_id = 0;
 };
@@ -98,7 +99,7 @@ public:
      * Execute shadow pass, rendering shadow maps for all lights.
      *
      * @param graphics Graphics backend
-     * @param entities Scene entities
+     * @param scene Scene pointer (tc_scene)
      * @param lights Light sources
      * @param camera_view Camera view matrix (for frustum fitting)
      * @param camera_projection Camera projection matrix
@@ -107,7 +108,7 @@ public:
      */
     std::vector<ShadowMapResult> execute_shadow_pass(
         GraphicsBackend* graphics,
-        const std::vector<Entity>& entities,
+        tc_scene* scene,
         const std::vector<Light>& lights,
         const Mat44f& camera_view,
         const Mat44f& camera_projection,
@@ -143,7 +144,7 @@ private:
     FramebufferHandle* get_or_create_fbo(GraphicsBackend* graphics, int resolution, int index);
 
     // Collect shadow caster draw calls
-    std::vector<ShadowDrawCall> collect_shadow_casters(const std::vector<Entity>& entities);
+    std::vector<ShadowDrawCall> collect_shadow_casters(tc_scene* scene);
 
     // Build shadow camera params for a light
     ShadowCameraParams build_shadow_params(

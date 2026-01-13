@@ -85,50 +85,50 @@ FramebufferHandle* ShadowPass::get_or_create_fbo(
 }
 
 
-std::vector<ShadowDrawCall> ShadowPass::collect_shadow_casters(
-    const std::vector<Entity>& entities
-) {
+namespace {
+
+struct CollectShadowDrawCallsData {
+    std::vector<ShadowDrawCall>* draw_calls;
+};
+
+bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
+    auto* data = static_cast<CollectShadowDrawCallsData*>(user_data);
+
+    if (!tc_component_has_phase(tc, "shadow")) {
+        return true;
+    }
+
+    void* draws_ptr = tc_component_get_geometry_draws(tc, "shadow");
+    if (!draws_ptr) {
+        return true;
+    }
+
+    Entity ent(tc->owner_pool, tc->owner_entity_id);
+
+    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+    for (const auto& gd : *geometry_draws) {
+        data->draw_calls->push_back(ShadowDrawCall{ent, tc, gd.geometry_id});
+    }
+
+    return true;
+}
+
+} // anonymous namespace
+
+std::vector<ShadowDrawCall> ShadowPass::collect_shadow_casters(tc_scene* scene) {
     std::vector<ShadowDrawCall> draw_calls;
 
-    for (size_t ei = 0; ei < entities.size(); ++ei) {
-        const Entity& ent = entities[ei];
-        if (!ent.visible() || !ent.enabled()) {
-            continue;
-        }
-
-        size_t comp_count = ent.component_count();
-        for (size_t ci = 0; ci < comp_count; ci++) {
-            tc_component* tc = ent.component_at(ci);
-            if (!tc || !tc->enabled) {
-                continue;
-            }
-
-            // Check if component is drawable
-            if (!tc_component_is_drawable(tc)) {
-                continue;
-            }
-
-            // Filter by "shadow" phase
-            if (!tc_component_has_phase(tc, "shadow")) {
-                continue;
-            }
-
-            // Get geometry draws
-            void* draws_ptr = tc_component_get_geometry_draws(tc, "shadow");
-            if (!draws_ptr) {
-                continue;
-            }
-
-            auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-            for (const auto& gd : *geometry_draws) {
-                draw_calls.push_back(ShadowDrawCall{
-                    &ent,
-                    tc,
-                    gd.geometry_id
-                });
-            }
-        }
+    if (!scene) {
+        return draw_calls;
     }
+
+    CollectShadowDrawCallsData data;
+    data.draw_calls = &draw_calls;
+
+    int filter_flags = TC_DRAWABLE_FILTER_ENABLED
+                     | TC_DRAWABLE_FILTER_VISIBLE
+                     | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+    tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, 0);
 
     return draw_calls;
 }
@@ -156,7 +156,7 @@ ShadowCameraParams ShadowPass::build_shadow_params(
 
 std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     GraphicsBackend* graphics,
-    const std::vector<Entity>& entities,
+    tc_scene* scene,
     const std::vector<Light>& lights,
     const Mat44f& camera_view,
     const Mat44f& camera_projection,
@@ -189,16 +189,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     }
 
     // Collect shadow casters
-    std::vector<ShadowDrawCall> draw_calls = collect_shadow_casters(entities);
+    std::vector<ShadowDrawCall> draw_calls = collect_shadow_casters(scene);
 
     // Update entity names cache
     entity_names.clear();
     std::set<std::string> seen;
     for (const auto& dc : draw_calls) {
-        if (!dc.entity) {
-            continue;
-        }
-        const char* name = dc.entity->name();
+        const char* name = dc.entity.name();
         if (name && seen.find(name) == seen.end()) {
             seen.insert(name);
             entity_names.push_back(name);
@@ -297,7 +294,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
             // Render all shadow casters
             for (const auto& dc : draw_calls) {
-                Mat44f model = get_model_matrix(*dc.entity);
+                Mat44f model = get_model_matrix(dc.entity);
                 context.model = model;
 
                 // Allow drawable to override shader (for skinning injection)

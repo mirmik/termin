@@ -839,16 +839,20 @@ void bind_frame_pass(nb::module_& m) {
         .def("execute_shadow_pass", [](
             ShadowPass& self,
             GraphicsBackend* graphics,
-            nb::list entities_py,
+            nb::object scene_py,
             nb::list lights_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_projection_py,
             int64_t context_key
         ) {
-            // Convert entities
-            std::vector<Entity> entities;
-            for (auto item : entities_py) {
-                entities.push_back(nb::cast<Entity>(item));
+            // Get tc_scene* from Python Scene object
+            tc_scene* scene = nullptr;
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
+                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
+                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
+                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
+                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                }
             }
 
             // Convert lights
@@ -875,7 +879,7 @@ void bind_frame_pass(nb::module_& m) {
 
             // Call C++ execute
             std::vector<ShadowMapResult> results = self.execute_shadow_pass(
-                graphics, entities, lights, camera_view, camera_projection, context_key
+                graphics, scene, lights, camera_view, camera_projection, context_key
             );
 
             // Convert results to Python list
@@ -886,7 +890,7 @@ void bind_frame_pass(nb::module_& m) {
             return result_list;
         },
         nb::arg("graphics"),
-        nb::arg("entities"),
+        nb::arg("scene"),
         nb::arg("lights"),
         nb::arg("camera_view"),
         nb::arg("camera_projection"),

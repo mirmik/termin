@@ -131,7 +131,7 @@ class ShadowPass(_ShadowPassNative):
         # Call C++ execute_shadow_pass
         results = self.execute_shadow_pass(
             graphics=ctx.graphics,
-            entities=list(ctx.scene.entities),
+            scene=ctx.scene,
             lights=list(ctx.lights),
             camera_view=camera_view,
             camera_projection=camera_projection,
