@@ -52,6 +52,9 @@ void bind_render(nb::module_& m) {
 
     // MeshRenderer, SkinnedMeshRenderer
     bind_renderers(m);
+
+    // SolidPrimitiveRenderer
+    bind_solid_primitive(m);
 }
 
 } // namespace termin

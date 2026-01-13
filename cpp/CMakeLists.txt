@@ -296,6 +296,7 @@ nanobind_add_module(_native
     termin/bindings/render/drawable.cpp
     termin/bindings/render/gpu.cpp
     termin/bindings/render/renderers.cpp
+    termin/bindings/render/solid_primitive.cpp
     termin/sdl_bindings.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_component_python_bindings.cpp
@@ -310,6 +311,7 @@ nanobind_add_module(_native
     termin/render/shadow_camera.cpp
     termin/render/immediate_renderer.cpp
     termin/render/wireframe_renderer.cpp
+    termin/render/solid_primitive_renderer.cpp
     termin/render/material.cpp
     termin/render/mesh_gpu.cpp
     termin/render/texture_gpu.cpp
