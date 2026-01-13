@@ -1,25 +1,9 @@
 #include "termin/render/id_pass.hpp"
-
-#include <algorithm>
 #include "tc_log.hpp"
-#include "termin/render/mesh_renderer.hpp"
 
 namespace termin {
 
-namespace {
-
-// Simple integer hash function (same as Python hash_int)
-uint32_t hash_int(uint32_t i) {
-    i = ((i >> 16) ^ i) * 0x45d9f3b;
-    i = ((i >> 16) ^ i) * 0x45d9f3b;
-    i = (i >> 16) ^ i;
-    return i;
-}
-
-} // anonymous namespace
-
-// Pick shader - renders entity ID as color
-static const char* PICK_VERT = R"(
+const char* ID_PASS_VERT = R"(
 #version 330 core
 
 layout(location=0) in vec3 a_position;
@@ -35,7 +19,7 @@ void main() {
 }
 )";
 
-static const char* PICK_FRAG = R"(
+const char* ID_PASS_FRAG = R"(
 #version 330 core
 
 uniform vec3 u_pickColor;
@@ -46,50 +30,18 @@ void main() {
 }
 )";
 
+namespace {
 
-IdPass::IdPass(
-    const std::string& input_res,
-    const std::string& output_res,
-    const std::string& pass_name
-)
-    : GeometryPassBase(pass_name, {input_res}, {output_res})
-    , input_res(input_res)
-    , output_res(output_res)
-{
+uint32_t hash_int(uint32_t i) {
+    i = ((i >> 16) ^ i) * 0x45d9f3b;
+    i = ((i >> 16) ^ i) * 0x45d9f3b;
+    i = (i >> 16) ^ i;
+    return i;
 }
 
-
-void IdPass::destroy() {
-    _pick_shader.reset();
-}
-
-
-std::vector<ResourceSpec> IdPass::get_resource_specs() const {
-    return {
-        ResourceSpec(
-            input_res,                                   // resource
-            "fbo",                                       // resource_type
-            std::nullopt,                                // size
-            std::array<double, 4>{0.0, 0.0, 0.0, 1.0},   // clear_color: black = no entity
-            1.0f,                                        // clear_depth
-            std::nullopt,                                // format (default RGB8)
-            1                                            // samples
-        )
-    };
-}
-
-ShaderProgram* IdPass::get_pick_shader(GraphicsBackend* graphics) {
-    if (!_pick_shader) {
-        _pick_shader = std::make_unique<ShaderProgram>(PICK_VERT, PICK_FRAG);
-        _pick_shader->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-            return graphics->create_shader(v, f, g);
-        });
-    }
-    return _pick_shader.get();
-}
+} // anonymous namespace
 
 void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
-    // Hash the ID for visual variety (same as Python)
     uint32_t pid = hash_int(static_cast<uint32_t>(id));
 
     uint32_t r_int = pid & 0x000000FF;
@@ -119,39 +71,56 @@ void IdPass::execute_with_data(
     }
     FramebufferHandle* fb = it->second;
 
-    // Bind FBO and set viewport
-    bind_and_clear(graphics, fb, rect, 0.0f, 0.0f, 0.0f, 0.0f);
+    // Bind and clear
+    bind_and_clear(graphics, fb, rect);
     apply_default_render_state(graphics);
 
-    // Get pick shader
-    ShaderProgram* shader = get_pick_shader(graphics);
-    // Extra uniforms for SkinnedMeshRenderer (it will inject skinning and copy these)
-    nb::dict extra_uniforms;
+    // Get shader
+    ShaderProgram* shader = get_shader(graphics);
 
-    // Collect draw calls
-    auto draw_calls = GeometryPassBase::collect_draw_calls(scene, layer_mask);
-
-    // Current pick_id for batching
-    int current_pick_id = -1;
-    float pick_r = 0.0f, pick_g = 0.0f, pick_b = 0.0f;
-
-    // Call Python id_to_rgb to update the cache for rgb_to_id lookup
-    nb::object picking_module;
+    // Import Python picking module for id_to_rgb cache
     nb::object py_id_to_rgb;
     try {
-        picking_module = nb::module_::import_("termin.visualization.core.picking");
+        nb::object picking_module = nb::module_::import_("termin.visualization.core.picking");
         py_id_to_rgb = picking_module.attr("id_to_rgb");
     } catch (const nb::python_error& e) {
         tc::Log::error("IdPass: Failed to import picking module: %s", e.what());
         return;
     }
 
-    auto setup_uniforms = [&](const DrawCall& dc,
-                              ShaderProgram* shader_to_use,
-                              const Mat44f& model,
-                              const Mat44f& view_matrix,
-                              const Mat44f& proj_matrix,
-                              RenderContext& context) {
+    // Collect draw calls
+    auto draw_calls = collect_draw_calls(scene, layer_mask);
+
+    // Render
+    entity_names.clear();
+    std::set<std::string> seen_entities;
+
+    nb::dict extra_uniforms;
+
+    RenderContext context;
+    context.view = view;
+    context.projection = projection;
+    context.context_key = context_key;
+    context.graphics = graphics;
+    context.phase = phase_name();
+    context.current_shader = shader;
+    context.extra_uniforms = extra_uniforms;
+
+    const std::string& debug_symbol = get_debug_internal_point();
+
+    int current_pick_id = -1;
+    float pick_r = 0.0f, pick_g = 0.0f, pick_b = 0.0f;
+
+    for (const auto& dc : draw_calls) {
+        Mat44f model = get_model_matrix(dc.entity);
+        context.model = model;
+
+        const char* name = dc.entity.name();
+        if (name && seen_entities.insert(name).second) {
+            entity_names.push_back(name);
+        }
+
+        // Update pick color if pick_id changed
         if (dc.pick_id != current_pick_id) {
             current_pick_id = dc.pick_id;
 
@@ -168,42 +137,31 @@ void IdPass::execute_with_data(
             context.extra_uniforms = extra_uniforms;
         }
 
+        ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
+            tc_component_override_shader(dc.component, phase_name(), dc.geometry_id, shader)
+        );
+        if (shader_to_use == nullptr) {
+            shader_to_use = shader;
+        }
+
+        shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+            return graphics->create_shader(v, f, g);
+        });
+        shader_to_use->use();
+
         shader_to_use->set_uniform_matrix4("u_model", model.data, false);
-        shader_to_use->set_uniform_matrix4("u_view", view_matrix.data, false);
-        shader_to_use->set_uniform_matrix4("u_projection", proj_matrix.data, false);
+        shader_to_use->set_uniform_matrix4("u_view", view.data, false);
+        shader_to_use->set_uniform_matrix4("u_projection", projection.data, false);
         shader_to_use->set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
-    };
 
-    auto maybe_blit = [&](const std::string& name, int width, int height) {
-        this->maybe_blit_to_debugger(graphics, fb, name, width, height);
-    };
+        context.current_shader = shader_to_use;
 
-    render_draw_calls(
-        draw_calls,
-        graphics,
-        shader,
-        view,
-        projection,
-        context_key,
-        "pick",
-        extra_uniforms,
-        rect,
-        setup_uniforms,
-        maybe_blit
-    );
-}
+        tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 
-void IdPass::execute(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    void* scene,
-    void* camera,
-    int64_t context_key,
-    const std::vector<Light*>* lights
-) {
-    // Legacy execute - not used, call execute_with_data instead
+        if (!debug_symbol.empty() && name && debug_symbol == name) {
+            maybe_blit_to_debugger(graphics, fb, name, rect.width, rect.height);
+        }
+    }
 }
 
 } // namespace termin

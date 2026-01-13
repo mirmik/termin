@@ -3,10 +3,14 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <memory>
+#include <optional>
+#include <array>
 
 #include <nanobind/nanobind.h>
 
 #include "termin/render/render_frame_pass.hpp"
+#include "termin/render/resource_spec.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/render_state.hpp"
@@ -17,6 +21,7 @@
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
 #include "tc_scene.h"
+#include "tc_inspect.hpp"
 
 namespace nb = nanobind;
 
@@ -24,7 +29,12 @@ namespace termin {
 
 class GeometryPassBase : public RenderFramePass {
 public:
-    using RenderFramePass::RenderFramePass;
+    // Pass configuration
+    std::string input_res;
+    std::string output_res;
+
+    INSPECT_FIELD(GeometryPassBase, input_res, "Input Resource", "string")
+    INSPECT_FIELD(GeometryPassBase, output_res, "Output Resource", "string")
 
     struct DrawCall {
         Entity entity;
@@ -39,12 +49,89 @@ public:
         return entity_names;
     }
 
+    void destroy() override {
+        _shader.reset();
+    }
+
 protected:
+    // Cached shader
+    std::unique_ptr<ShaderProgram> _shader;
+
+    GeometryPassBase(
+        const std::string& name,
+        const std::string& input,
+        const std::string& output
+    ) : RenderFramePass(name, {input}, {output})
+      , input_res(input)
+      , output_res(output)
+    {}
+
+    // --- Virtual methods for customization ---
+
+    // Return vertex shader source
+    virtual const char* vertex_shader_source() const = 0;
+
+    // Return fragment shader source
+    virtual const char* fragment_shader_source() const = 0;
+
+    // Return clear color (RGBA)
+    virtual std::array<float, 4> clear_color() const = 0;
+
+    // Return phase name for shader override
+    virtual const char* phase_name() const = 0;
+
+    // Return FBO format (nullopt = default RGBA8)
+    virtual std::optional<std::string> fbo_format() const { return std::nullopt; }
+
+    // Setup extra uniforms before rendering (called once per frame)
+    virtual void setup_extra_uniforms(nb::dict& extra_uniforms) {}
+
+    // Setup uniforms for each draw call
+    virtual void setup_draw_uniforms(
+        const DrawCall& dc,
+        ShaderProgram* shader,
+        const Mat44f& model,
+        const Mat44f& view,
+        const Mat44f& projection,
+        RenderContext& context,
+        nb::dict& extra_uniforms
+    ) {
+        shader->set_uniform_matrix4("u_model", model.data, false);
+        shader->set_uniform_matrix4("u_view", view.data, false);
+        shader->set_uniform_matrix4("u_projection", projection.data, false);
+    }
+
+    // Entity filter (return false to skip entity)
+    virtual bool entity_filter(const Entity& ent) const {
+        (void)ent;
+        return true;
+    }
+
+    // Get pick ID for entity
+    virtual int get_pick_id(const Entity& ent) const {
+        (void)ent;
+        return 0;
+    }
+
+    // --- Helper methods ---
+
+    ShaderProgram* get_shader(GraphicsBackend* graphics) {
+        if (!_shader) {
+            _shader = std::make_unique<ShaderProgram>(
+                vertex_shader_source(),
+                fragment_shader_source()
+            );
+            _shader->ensure_ready([graphics](const char* v, const char* f, const char* g) {
+                return graphics->create_shader(v, f, g);
+            });
+        }
+        return _shader.get();
+    }
+
     static Mat44f get_model_matrix(const Entity& entity) {
         double m_row[16];
         entity.transform().world_matrix(m_row);
 
-        // Transpose from row-major to column-major
         Mat44f result;
         for (int col = 0; col < 4; ++col) {
             for (int row = 0; row < 4; ++row) {
@@ -57,15 +144,12 @@ protected:
     void bind_and_clear(
         GraphicsBackend* graphics,
         FramebufferHandle* fb,
-        const Rect4i& rect,
-        float r,
-        float g,
-        float b,
-        float a
+        const Rect4i& rect
     ) const {
+        auto cc = clear_color();
         graphics->bind_framebuffer(fb);
         graphics->set_viewport(0, 0, rect.width, rect.height);
-        graphics->clear_color_depth(r, g, b, a);
+        graphics->clear_color_depth(cc[0], cc[1], cc[2], cc[3]);
     }
 
     void apply_default_render_state(GraphicsBackend* graphics) const {
@@ -101,47 +185,6 @@ protected:
         }
     }
 
-    template <typename EntityFilter, typename Emit>
-    void collect_draw_calls_common(
-        tc_scene* scene,
-        uint64_t layer_mask,
-        EntityFilter& entity_filter,
-        Emit& emit
-    ) const {
-        if (!scene) {
-            return;
-        }
-
-        struct CollectContext {
-            EntityFilter* filter;
-            Emit* emit;
-            const GeometryPassBase* pass;
-        };
-
-        auto callback = [](tc_component* c, void* user_data) -> bool {
-            auto* ctx = static_cast<CollectContext*>(user_data);
-
-            // Build Entity from component's owner
-            Entity ent(c->owner_pool, c->owner_entity_id);
-
-            // Apply custom entity filter
-            if (!(*ctx->filter)(ent)) {
-                return true;
-            }
-
-            (*ctx->emit)(ent, c);
-            return true;
-        };
-
-        CollectContext context{&entity_filter, &emit, this};
-
-        // Use tc_scene_foreach_drawable with filtering
-        int filter_flags = TC_DRAWABLE_FILTER_ENABLED
-                         | TC_DRAWABLE_FILTER_VISIBLE
-                         | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
-        tc_scene_foreach_drawable(scene, callback, &context, filter_flags, layer_mask);
-    }
-
     std::vector<DrawCall> collect_draw_calls(
         tc_scene* scene,
         uint64_t layer_mask
@@ -152,36 +195,71 @@ protected:
             return draw_calls;
         }
 
-        auto entity_filter = [this](const Entity& ent) {
-            return this->entity_filter(ent);
+        struct CollectContext {
+            const GeometryPassBase* pass;
+            std::vector<DrawCall>* draw_calls;
         };
-        auto emit = [&](const Entity& ent, tc_component* tc) {
+
+        auto callback = [](tc_component* c, void* user_data) -> bool {
+            auto* ctx = static_cast<CollectContext*>(user_data);
+            Entity ent(c->owner_pool, c->owner_entity_id);
+
+            if (!ctx->pass->entity_filter(ent)) {
+                return true;
+            }
+
             DrawCall dc;
             dc.entity = ent;
-            dc.component = tc;
+            dc.component = c;
             dc.geometry_id = 0;
-            dc.pick_id = get_pick_id(ent);
-            draw_calls.push_back(dc);
+            dc.pick_id = ctx->pass->get_pick_id(ent);
+            ctx->draw_calls->push_back(dc);
+            return true;
         };
-        collect_draw_calls_common(scene, layer_mask, entity_filter, emit);
+
+        CollectContext context{this, &draw_calls};
+
+        int filter_flags = TC_DRAWABLE_FILTER_ENABLED
+                         | TC_DRAWABLE_FILTER_VISIBLE
+                         | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+        tc_scene_foreach_drawable(scene, callback, &context, filter_flags, layer_mask);
 
         return draw_calls;
     }
 
-    template <typename DrawCall, typename SetupUniforms, typename MaybeBlit>
-    void render_draw_calls(
-        const std::vector<DrawCall>& draw_calls,
+    // Main execution method - call from derived execute_with_data
+    void execute_geometry_pass(
         GraphicsBackend* graphics,
-        ShaderProgram* base_shader,
+        const FBOMap& writes_fbos,
+        const Rect4i& rect,
+        tc_scene* scene,
         const Mat44f& view,
         const Mat44f& projection,
         int64_t context_key,
-        const char* phase,
-        nb::dict& extra_uniforms,
-        const Rect4i& rect,
-        SetupUniforms&& setup_uniforms,
-        MaybeBlit&& maybe_blit
+        uint64_t layer_mask
     ) {
+        // Find output FBO
+        auto it = writes_fbos.find(output_res);
+        if (it == writes_fbos.end() || it->second == nullptr) {
+            return;
+        }
+        FramebufferHandle* fb = it->second;
+
+        // Bind and clear
+        bind_and_clear(graphics, fb, rect);
+        apply_default_render_state(graphics);
+
+        // Get shader
+        ShaderProgram* shader = get_shader(graphics);
+
+        // Setup extra uniforms
+        nb::dict extra_uniforms;
+        setup_extra_uniforms(extra_uniforms);
+
+        // Collect draw calls
+        auto draw_calls = collect_draw_calls(scene, layer_mask);
+
+        // Render
         entity_names.clear();
         std::set<std::string> seen_entities;
 
@@ -190,8 +268,8 @@ protected:
         context.projection = projection;
         context.context_key = context_key;
         context.graphics = graphics;
-        context.phase = phase;
-        context.current_shader = base_shader;
+        context.phase = phase_name();
+        context.current_shader = shader;
         context.extra_uniforms = extra_uniforms;
 
         const std::string& debug_symbol = get_debug_internal_point();
@@ -206,10 +284,10 @@ protected:
             }
 
             ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-                tc_component_override_shader(dc.component, phase, dc.geometry_id, base_shader)
+                tc_component_override_shader(dc.component, phase_name(), dc.geometry_id, shader)
             );
             if (shader_to_use == nullptr) {
-                shader_to_use = base_shader;
+                shader_to_use = shader;
             }
 
             shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
@@ -217,26 +295,38 @@ protected:
             });
             shader_to_use->use();
 
-            setup_uniforms(dc, shader_to_use, model, view, projection, context);
+            setup_draw_uniforms(dc, shader_to_use, model, view, projection, context, extra_uniforms);
 
             context.current_shader = shader_to_use;
+            context.extra_uniforms = extra_uniforms;
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 
             if (!debug_symbol.empty() && name && debug_symbol == name) {
-                maybe_blit(name, rect.width, rect.height);
+                maybe_blit_to_debugger(graphics, fb, name, rect.width, rect.height);
             }
         }
     }
 
-    virtual bool entity_filter(const Entity& ent) const {
-        (void)ent;
-        return true;
-    }
-
-    virtual int get_pick_id(const Entity& ent) const {
-        (void)ent;
-        return 0;
+    // Generate resource spec with pass-specific settings
+    std::vector<ResourceSpec> make_resource_specs() const {
+        auto format = fbo_format();
+        return {
+            ResourceSpec(
+                input_res,
+                "fbo",
+                std::nullopt,
+                std::array<double, 4>{
+                    clear_color()[0],
+                    clear_color()[1],
+                    clear_color()[2],
+                    clear_color()[3]
+                },
+                1.0f,
+                format,
+                1
+            )
+        };
     }
 };
 
