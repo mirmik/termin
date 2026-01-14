@@ -306,6 +306,9 @@ void ColorPass::execute_with_data(
         tc_profiler_begin_section("DrawCalls");
     }
 
+    // Track last shader to avoid redundant shadow map uploads
+    tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
+
     for (const auto& dc : cached_draw_calls_)
     {
         if (detailed) {
@@ -374,9 +377,12 @@ void ColorPass::execute_with_data(
             shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
         }
 
-        // Upload shadow maps uniforms
-        if (!shadow_maps.empty()) {
+        // Upload shadow maps uniforms (only if shader changed)
+        if (!shadow_maps.empty() &&
+            (shader_handle.index != last_shader_handle.index ||
+             shader_handle.generation != last_shader_handle.generation)) {
             upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+            last_shader_handle = shader_handle;
         }
 
         context.current_shader = dc.phase->shader.get();  // Legacy compatibility
