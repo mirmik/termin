@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "termin/render/shader_program.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/render_state.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
 #include "termin/assets/handles.hpp"
@@ -148,6 +149,24 @@ public:
         const Mat44f& projection,
         GraphicsBackend* graphics,
         int64_t context_key = 0
+    );
+
+    /**
+     * Apply uniforms to a TcShader (for shader override with direct tc_gpu access).
+     *
+     * Used when drawable overrides shader and we use TcShader directly
+     * instead of ShaderProgram wrapper. Shader must already be in use.
+     *
+     * @param target_shader TcShader to upload uniforms to (must be active)
+     * @param model Model matrix
+     * @param view View matrix
+     * @param projection Projection matrix
+     */
+    void apply_to_tc_shader(
+        TcShader& target_shader,
+        const Mat44f& model,
+        const Mat44f& view,
+        const Mat44f& projection
     );
 
     /**

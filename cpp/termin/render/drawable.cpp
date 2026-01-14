@@ -1,6 +1,7 @@
 // drawable.cpp - Drawable vtable implementation
 
 #include "drawable.hpp"
+#include "tc_shader_handle.hpp"
 
 namespace termin {
 
@@ -50,7 +51,7 @@ void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) 
     return &drawable->_cached_geometry_draws;
 }
 
-void* Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, void* original_shader) {
+tc_shader_handle Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader) {
     if (!c || c->kind != TC_CXX_COMPONENT) return original_shader;
 
     CxxComponent* comp = CxxComponent::from_tc(c);
@@ -59,12 +60,12 @@ void* Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, int
     Drawable* drawable = dynamic_cast<Drawable*>(comp);
     if (!drawable) return original_shader;
 
-    ShaderProgram* shader = static_cast<ShaderProgram*>(original_shader);
-    return drawable->override_shader(
+    TcShader result = drawable->override_shader(
         phase_mark ? phase_mark : "",
         geometry_id,
-        shader
+        TcShader(original_shader)
     );
+    return result.handle;
 }
 
 // Static vtable instance

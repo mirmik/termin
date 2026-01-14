@@ -167,6 +167,62 @@ inline void shader_delete(uint32_t gpu_id) {
     glDeleteProgram(gpu_id);
 }
 
+inline void shader_set_int(uint32_t gpu_id, const char* name, int value) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniform1i(loc, value);
+    }
+}
+
+inline void shader_set_float(uint32_t gpu_id, const char* name, float value) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniform1f(loc, value);
+    }
+}
+
+inline void shader_set_vec2(uint32_t gpu_id, const char* name, float x, float y) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniform2f(loc, x, y);
+    }
+}
+
+inline void shader_set_vec3(uint32_t gpu_id, const char* name, float x, float y, float z) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniform3f(loc, x, y, z);
+    }
+}
+
+inline void shader_set_vec4(uint32_t gpu_id, const char* name, float x, float y, float z, float w) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniform4f(loc, x, y, z, w);
+    }
+}
+
+inline void shader_set_mat4(uint32_t gpu_id, const char* name, const float* data, bool transpose) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniformMatrix4fv(loc, 1, transpose ? GL_TRUE : GL_FALSE, data);
+    }
+}
+
+inline void shader_set_mat4_array(uint32_t gpu_id, const char* name, const float* data, int count, bool transpose) {
+    GLint loc = glGetUniformLocation(gpu_id, name);
+    if (loc != -1) {
+        glUniformMatrix4fv(loc, count, transpose ? GL_TRUE : GL_FALSE, data);
+    }
+}
+
+inline void shader_set_block_binding(uint32_t gpu_id, const char* block_name, int binding_point) {
+    GLuint block_index = glGetUniformBlockIndex(gpu_id, block_name);
+    if (block_index != GL_INVALID_INDEX) {
+        glUniformBlockBinding(gpu_id, block_index, binding_point);
+    }
+}
+
 inline uint32_t mesh_upload(const tc_mesh* mesh) {
     if (!mesh || !mesh->vertices || mesh->vertex_count == 0) {
         return 0;
@@ -245,16 +301,30 @@ inline void mesh_delete(uint32_t vao_id) {
 
 inline void register_gpu_ops() {
     static tc_gpu_ops ops = {
+        // Texture operations
         texture_upload,
         texture_bind,
         texture_delete,
+        // Shader operations
+        nullptr,  // shader_preprocess - set from Python via tc_gpu_set_shader_preprocess
         shader_compile,
         shader_use,
         shader_delete,
+        // Uniform setters
+        shader_set_int,
+        shader_set_float,
+        shader_set_vec2,
+        shader_set_vec3,
+        shader_set_vec4,
+        shader_set_mat4,
+        shader_set_mat4_array,
+        shader_set_block_binding,
+        // Mesh operations
         mesh_upload,
         mesh_draw,
         mesh_delete,
-        nullptr  // user_data
+        // User data
+        nullptr
     };
     tc_gpu_set_ops(&ops);
 }

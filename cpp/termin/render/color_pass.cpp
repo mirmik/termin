@@ -1,5 +1,7 @@
 #include "color_pass.hpp"
+#include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
+#include "termin/lighting/lighting_upload.hpp"
 extern "C" {
 #include "tc_shader.h"
 #include "tc_profiler.h"
@@ -299,9 +301,6 @@ void ColorPass::execute_with_data(
     }
     if (detailed) tc_profiler_end_section();
 
-    // Track shaders we've already uploaded shadow maps to (avoid redundant uploads)
-    std::set<ShaderProgram*> shadow_maps_uploaded;
-
     // Render each draw call
     if (detailed) {
         tc_profiler_begin_section("DrawCalls");
@@ -338,53 +337,50 @@ void ColorPass::execute_with_data(
             tc_profiler_begin_section("Prep.OverrideShader");
         }
 
-        // Get shader (allow drawable to override for skinning etc.)
-        ShaderProgram* shader_to_use = dc.phase->shader.get();
-        ShaderProgram* overridden = static_cast<ShaderProgram*>(
-            tc_component_override_shader(dc.component, phase_mark.c_str(), dc.geometry_id, shader_to_use)
+        // Get shader handle and apply override
+        tc_shader_handle base_handle = dc.phase->shader->tc_shader().handle;
+        tc_shader_handle shader_handle = tc_component_override_shader(
+            dc.component, phase_mark.c_str(), dc.geometry_id, base_handle
         );
-        if (overridden != nullptr) {
-            shader_to_use = overridden;
-        }
+
+        // Use TcShader for everything
+        TcShader shader_to_use(shader_handle);
 
         if (detailed) {
             tc_profiler_end_section();
             tc_profiler_begin_section("Prep.ApplyMaterial");
         }
 
-        // Apply material uniforms to the (possibly overridden) shader
-        dc.phase->apply_to_shader(shader_to_use, model, view, projection, graphics, context_key);
+        // Compile and use shader
+        shader_to_use.use();
+
+        // Apply material uniforms via TcShader
+        dc.phase->apply_to_tc_shader(shader_to_use, model, view, projection);
 
         if (detailed) {
             tc_profiler_end_section();
             tc_profiler_begin_section("Prep.Uniforms");
         }
 
-        // Apply extra texture uniforms (set from Python)
-        if (shader_to_use && !extra_texture_uniforms.empty()) {
+        // Extra texture uniforms
+        if (!extra_texture_uniforms.empty()) {
             for (const auto& [uniform_name, unit] : extra_texture_uniforms) {
-                shader_to_use->set_uniform_int(uniform_name.c_str(), unit);
+                shader_to_use.set_uniform_int(uniform_name.c_str(), unit);
             }
         }
 
-        // Upload shader uniforms
-        if (shader_to_use) {
-            // Upload view matrix (needed for cascade depth calculation in shader)
-            shader_to_use->set_uniform_matrix4("u_view", view, false);
-
-            // Shadow maps: upload only once per unique shader
-            if (shadow_maps_uploaded.find(shader_to_use) == shadow_maps_uploaded.end()) {
-                upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
-                shadow_maps_uploaded.insert(shader_to_use);
-            }
-
-            // Bind lighting UBO for shaders that use it
-            if (shader_to_use->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO) && ubo_active) {
-                shader_to_use->set_uniform_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
-            }
-
-            context.current_shader = shader_to_use;
+        // Lighting UBO binding
+        if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO) && ubo_active) {
+            shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
         }
+
+        // Upload shadow maps uniforms
+        if (!shadow_maps.empty()) {
+            upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+        }
+
+        context.current_shader = dc.phase->shader.get();  // Legacy compatibility
+        context.current_tc_shader = shader_to_use;
 
         if (detailed) {
             tc_profiler_end_section();

@@ -12,6 +12,19 @@
 namespace termin {
 
 void bind_shader(nb::module_& m) {
+    // tc_shader_handle - C struct for shader handle
+    nb::class_<tc_shader_handle>(m, "TcShaderHandle")
+        .def(nb::init<>())
+        .def_rw("index", &tc_shader_handle::index)
+        .def_rw("generation", &tc_shader_handle::generation)
+        .def("is_invalid", [](const tc_shader_handle& h) {
+            return tc_shader_handle_is_invalid(h);
+        })
+        .def("__repr__", [](const tc_shader_handle& h) {
+            return "<TcShaderHandle index=" + std::to_string(h.index) +
+                   " gen=" + std::to_string(h.generation) + ">";
+        });
+
     // Shader variant operation enum
     nb::enum_<tc_shader_variant_op>(m, "ShaderVariantOp")
         .value("NONE", TC_SHADER_VARIANT_NONE)
@@ -27,6 +40,8 @@ void bind_shader(nb::module_& m) {
     // TcShader - RAII wrapper for shader in registry
     nb::class_<TcShader>(m, "TcShader")
         .def(nb::init<>())
+        .def(nb::init<tc_shader_handle>(), nb::arg("handle"))
+        .def_prop_ro("handle", [](const TcShader& s) { return s.handle; })
         .def_prop_ro("is_valid", &TcShader::is_valid)
         .def_prop_ro("uuid", [](const TcShader& s) { return std::string(s.uuid()); })
         .def_prop_ro("name", [](const TcShader& s) { return std::string(s.name()); })

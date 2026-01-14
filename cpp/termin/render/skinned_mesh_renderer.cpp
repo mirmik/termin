@@ -2,11 +2,30 @@
 #include "skeleton_controller.hpp"
 #include "graphics_backend.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "tc_log.hpp"
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
+#include <cstring>
 
 namespace termin {
+
+// Hash for TcShader (uses handle.index)
+struct TcShaderHash {
+    size_t operator()(const TcShader& s) const {
+        return std::hash<uint32_t>()(s.handle.index);
+    }
+};
+
+struct TcShaderEqual {
+    bool operator()(const TcShader& a, const TcShader& b) const {
+        return a.handle.index == b.handle.index && a.handle.generation == b.handle.generation;
+    }
+};
+
+// Static cache: original shader -> skinned shader
+static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> s_skinned_shader_cache;
 
 SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer()
@@ -62,27 +81,51 @@ void SkinnedMeshRenderer::upload_bone_matrices(ShaderProgram& shader) {
     shader.set_uniform_int("u_bone_count", _bone_count);
 }
 
-ShaderProgram* SkinnedMeshRenderer::override_shader(
+void SkinnedMeshRenderer::upload_bone_matrices(TcShader& shader) {
+    if (_bone_count == 0 || _bone_matrices_flat.empty()) {
+        return;
+    }
+
+    shader.set_uniform_mat4_array("u_bone_matrices", _bone_matrices_flat.data(), _bone_count, false);
+    shader.set_uniform_int("u_bone_count", _bone_count);
+}
+
+TcShader SkinnedMeshRenderer::override_shader(
     const std::string& phase_mark,
     int geometry_id,
-    ShaderProgram* original_shader
+    TcShader original_shader
 ) {
-    if (_skeleton_controller == nullptr || original_shader == nullptr) {
+    if (_skeleton_controller == nullptr || !original_shader.is_valid()) {
         return original_shader;
     }
 
     // Check if shader already has skinning
-    const std::string& vert_source = original_shader->vertex_source();
-    if (vert_source.find("u_bone_matrices") != std::string::npos) {
+    const char* vert_source = original_shader.vertex_source();
+    if (vert_source && std::strstr(vert_source, "u_bone_matrices") != nullptr) {
         return original_shader;
     }
 
-    // Inject skinning via Python
+    // Check C++ cache first
+    auto it = s_skinned_shader_cache.find(original_shader);
+    if (it != s_skinned_shader_cache.end()) {
+        TcShader& cached = it->second;
+        // Check if variant is stale (original shader was modified)
+        if (!cached.variant_is_stale()) {
+            return cached;
+        }
+        // Stale - need to recreate
+        s_skinned_shader_cache.erase(it);
+    }
+
+    // Inject skinning via Python (only on cache miss)
     try {
         nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
-        nb::object skinned_shader_obj = skinning_module.attr("get_skinned_shader")(original_shader);
-        if (!skinned_shader_obj.is_none()) {
-            return nb::cast<ShaderProgram*>(skinned_shader_obj);
+        nb::object skinned_obj = skinning_module.attr("get_skinned_shader_handle")(original_shader.handle);
+        if (!skinned_obj.is_none()) {
+            TcShader skinned = nb::cast<TcShader>(skinned_obj);
+            // Cache the result
+            s_skinned_shader_cache[original_shader] = skinned;
+            return skinned;
         }
     } catch (const nb::python_error& e) {
         tc::Log::warn(e, "SkinnedMeshRenderer::override_shader");
@@ -98,10 +141,12 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geomet
     }
 
     // Upload bone matrices if we have a skeleton
-    if (_skeleton_controller != nullptr && context.current_shader != nullptr) {
+    if (_skeleton_controller != nullptr && context.current_tc_shader.is_valid()) {
         update_bone_matrices();
         if (_bone_count > 0) {
-            upload_bone_matrices(*context.current_shader);
+            // Use TcShader for uniform upload
+            TcShader shader = context.current_tc_shader;
+            upload_bone_matrices(shader);
         }
     }
 

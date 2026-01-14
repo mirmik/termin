@@ -3,6 +3,7 @@
 from termin._native.render import (
     GlslPreprocessor,
     glsl_preprocessor,
+    register_glsl_preprocessor,
 )
 
 
@@ -31,6 +32,10 @@ def _glsl_fallback_loader(name: str) -> bool:
 
 # Set up fallback loader on module import
 glsl_preprocessor().set_fallback_loader(_glsl_fallback_loader)
+
+# Register the preprocessor with the C shader compilation system
+# This allows tc_shader_compile_gpu to preprocess #include directives
+register_glsl_preprocessor()
 
 
 def preprocess_glsl(source: str, source_name: str = "<unknown>") -> str:

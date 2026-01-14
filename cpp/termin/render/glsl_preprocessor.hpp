@@ -160,10 +160,8 @@ private:
 
 /**
  * Global GLSL preprocessor instance.
+ * Defined in glsl_preprocessor.cpp to ensure single instance across DLLs.
  */
-inline GlslPreprocessor& glsl_preprocessor() {
-    static GlslPreprocessor instance;
-    return instance;
-}
+GlslPreprocessor& glsl_preprocessor();
 
 } // namespace termin

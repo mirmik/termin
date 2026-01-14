@@ -264,10 +264,77 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     return registry.get_variant(shader, ShaderVariantOp.SKINNING)
 
 
+def get_skinned_shader_handle(original_handle):
+    """
+    Get or create a skinned variant shader.
+
+    Called from C++ SkinnedMeshRenderer::override_shader.
+
+    Args:
+        original_handle: tc_shader_handle of original shader
+
+    Returns:
+        TcShader of skinned variant, or None if injection fails
+    """
+    from termin._native.render import TcShader, ShaderVariantOp
+    from termin.visualization.render.glsl_preprocessor import preprocess_glsl, has_includes
+
+    # Create TcShader from handle
+    original = TcShader(original_handle)
+    if not original.is_valid:
+        return None
+
+    # Check if already has skinning
+    if 'u_bone_matrices' in original.vertex_source:
+        return original
+
+    # Get and preprocess sources
+    vertex_source = original.vertex_source
+    fragment_source = original.fragment_source
+    geometry_source = original.geometry_source
+
+    shader_name = original.name or "Unknown"
+
+    # Preprocess includes if present
+    if has_includes(vertex_source):
+        vertex_source = preprocess_glsl(vertex_source, f"{shader_name}/vertex")
+    if has_includes(fragment_source):
+        fragment_source = preprocess_glsl(fragment_source, f"{shader_name}/fragment")
+    if geometry_source and has_includes(geometry_source):
+        geometry_source = preprocess_glsl(geometry_source, f"{shader_name}/geometry")
+
+    # Inject skinning into vertex source
+    try:
+        skinned_vertex = inject_skinning_into_vertex_shader(vertex_source)
+    except Exception:
+        return None
+
+    # Create or find skinned variant in registry
+    skinned = TcShader.from_sources(
+        skinned_vertex,
+        fragment_source,
+        geometry_source or "",
+        f"{original.name}_Skinned" if original.name else "Skinned",
+        original.source_path
+    )
+
+    if not skinned.is_valid:
+        return None
+
+    # Mark as variant
+    skinned.set_variant_info(original, ShaderVariantOp.SKINNING)
+
+    return skinned
+
+
 # Cache for skinned material variants keyed by material id
 # Cleared via clear_skinning_cache() when shaders are reloaded
 # Note: Cannot use WeakKeyDictionary because C++ Material objects don't support weak references
 _skinned_material_cache: dict[int, Material] = {}
+
+# Cache for skinned TcShader objects to keep them alive (prevent refcount drop to 0)
+# Key: original handle as tuple (index, generation)
+_skinned_tc_shader_cache: dict[tuple[int, int], "TcShader"] = {}
 
 
 def get_skinned_material(material: Material) -> Material:

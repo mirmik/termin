@@ -3,6 +3,33 @@
 #include <nanobind/stl/optional.h>
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
+#include "tc_log.hpp"
+
+extern "C" {
+#include "tc_gpu.h"
+}
+
+namespace {
+
+// C callback that wraps GlslPreprocessor::preprocess
+char* glsl_preprocess_callback(const char* source, const char* source_name) {
+    if (!source) return nullptr;
+    try {
+        std::string result = termin::glsl_preprocessor().preprocess(
+            source, source_name ? source_name : "<unknown>"
+        );
+        char* out = static_cast<char*>(malloc(result.size() + 1));
+        if (out) {
+            memcpy(out, result.c_str(), result.size() + 1);
+        }
+        return out;
+    } catch (const std::exception& e) {
+        tc::Log::error("shader_preprocess failed: %s", e.what());
+        return nullptr;
+    }
+}
+
+} // anonymous namespace
 
 namespace termin {
 
@@ -32,7 +59,11 @@ void bind_shader_parser(nb::module_& m) {
                     nb::gil_scoped_acquire guard;
                     try {
                         return nb::cast<bool>(callback(name));
+                    } catch (const nb::python_error& e) {
+                        tc::Log::error("GLSL fallback loader error for '%s': %s", name.c_str(), e.what());
+                        return false;
                     } catch (const std::exception& e) {
+                        tc::Log::error("GLSL fallback loader error for '%s': %s", name.c_str(), e.what());
                         return false;
                     }
                 });
@@ -42,6 +73,12 @@ void bind_shader_parser(nb::module_& m) {
 
     m.def("glsl_preprocessor", &glsl_preprocessor, nb::rv_policy::reference,
         "Get the global GLSL preprocessor instance");
+
+    // Register the GLSL preprocess callback with tc_gpu
+    // This should be called after set_fallback_loader to ensure includes can be resolved
+    m.def("register_glsl_preprocessor", []() {
+        tc_gpu_set_shader_preprocess(glsl_preprocess_callback);
+    }, "Register GLSL preprocessor with shader compilation system");
 
     // --- MaterialProperty (UniformProperty) ---
     nb::class_<MaterialProperty>(m, "MaterialProperty")

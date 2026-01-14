@@ -41,6 +41,9 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
+# Import to ensure GLSL preprocessor fallback loader is set up before any shader compilation
+import termin.visualization.render.glsl_preprocessor  # noqa: F401
+
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
         FramebufferHandle,

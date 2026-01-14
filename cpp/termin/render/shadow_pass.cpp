@@ -1,5 +1,6 @@
 #include "shadow_pass.hpp"
 #include "shader_program.hpp"
+#include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
 
 #include <cmath>
@@ -297,26 +298,23 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
                 Mat44f model = get_model_matrix(dc.entity);
                 context.model = model;
 
-                // Allow drawable to override shader (for skinning injection)
-                ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-                    tc_component_override_shader(dc.component, "shadow", dc.geometry_id, shadow_shader_program)
+                // Get shader handle and apply override
+                tc_shader_handle base_handle = shadow_shader_program->tc_shader().handle;
+                tc_shader_handle shader_handle = tc_component_override_shader(
+                    dc.component, "shadow", dc.geometry_id, base_handle
                 );
-                if (shader_to_use == nullptr) {
-                    shader_to_use = shadow_shader_program;
-                }
 
-                // Ensure shader is ready and bind
-                shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-                    return graphics->create_shader(v, f, g);
-                });
-                shader_to_use->use();
+                // Use TcShader
+                TcShader shader_to_use(shader_handle);
+                shader_to_use.use();
 
-                // Apply uniforms to (possibly overridden) shader
-                shader_to_use->set_uniform_matrix4("u_model", model, false);
-                shader_to_use->set_uniform_matrix4("u_view", view_matrix, false);
-                shader_to_use->set_uniform_matrix4("u_projection", proj_matrix, false);
+                // Apply uniforms via TcShader
+                shader_to_use.set_uniform_mat4("u_model", model.data, false);
+                shader_to_use.set_uniform_mat4("u_view", view_matrix.data, false);
+                shader_to_use.set_uniform_mat4("u_projection", proj_matrix.data, false);
 
-                context.current_shader = shader_to_use;
+                context.current_shader = shadow_shader_program;  // Legacy
+                context.current_tc_shader = shader_to_use;
 
                 tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
             }

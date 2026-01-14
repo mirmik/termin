@@ -5,6 +5,7 @@
 #include <nanobind/nanobind.h>
 
 #include "termin/geom/mat44.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 
 namespace nb = nanobind;
 
@@ -47,7 +48,11 @@ struct RenderContext {
     nb::object shadow_data;
 
     // Currently bound shader (for setting additional uniforms)
+    // DEPRECATED: use current_tc_shader instead
     ShaderProgram* current_shader = nullptr;
+
+    // Currently bound shader (TcShader handle)
+    TcShader current_tc_shader;
 
     // Extra uniforms to copy when switching shader variants (nb::dict in Python)
     nb::object extra_uniforms;

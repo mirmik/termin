@@ -62,6 +62,7 @@ public:
      * Upload bone matrices to shader.
      */
     void upload_bone_matrices(ShaderProgram& shader);
+    void upload_bone_matrices(TcShader& shader);
 
     /**
      * Draw skinned geometry with bone matrices.
@@ -79,10 +80,10 @@ public:
      * Override shader to inject skinning if needed.
      * Called by passes before applying uniforms.
      */
-    ShaderProgram* override_shader(
+    TcShader override_shader(
         const std::string& phase_mark,
         int geometry_id,
-        ShaderProgram* original_shader
+        TcShader original_shader
     ) override;
 
     /**

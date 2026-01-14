@@ -3,6 +3,7 @@
 #define TC_COMPONENT_H
 
 #include "tc_types.h"
+#include "tc_shader.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -49,10 +50,9 @@ struct tc_drawable_vtable {
 
     // Override shader for a draw call (for skinning injection, etc.)
     // Pass calls this before applying uniforms to let drawable modify the shader.
-    // Returns original_shader if no override needed, or a different shader.
-    // original_shader is opaque (ShaderProgram* in C++)
+    // Returns original_shader if no override needed, or a different shader handle.
     // geometry_id: 0 = default, >0 = specific geometry slot
-    void* (*override_shader)(tc_component* self, const char* phase_mark, int geometry_id, void* original_shader);
+    tc_shader_handle (*override_shader)(tc_component* self, const char* phase_mark, int geometry_id, tc_shader_handle original_shader);
 };
 
 // ============================================================================
@@ -282,7 +282,7 @@ static inline void* tc_component_get_geometry_draws(tc_component* c, const char*
     return NULL;
 }
 
-static inline void* tc_component_override_shader(tc_component* c, const char* phase_mark, int geometry_id, void* original_shader) {
+static inline tc_shader_handle tc_component_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader) {
     if (c && c->drawable_vtable && c->drawable_vtable->override_shader) {
         return c->drawable_vtable->override_shader(c, phase_mark, geometry_id, original_shader);
     }

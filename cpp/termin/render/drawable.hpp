@@ -7,6 +7,7 @@
 
 #include "termin/render/material.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 #include "../../../core_c/include/tc_component.h"
@@ -96,10 +97,10 @@ public:
      * @param original_shader Shader the pass intends to use
      * @return Shader to use (original or modified)
      */
-    virtual ShaderProgram* override_shader(
+    virtual TcShader override_shader(
         const std::string& phase_mark,
         int geometry_id,
-        ShaderProgram* original_shader
+        TcShader original_shader
     ) {
         return original_shader;  // Default: no override
     }
@@ -128,7 +129,7 @@ private:
     static bool _cb_has_phase(tc_component* c, const char* phase_mark);
     static void _cb_draw_geometry(tc_component* c, void* render_context, int geometry_id);
     static void* _cb_get_geometry_draws(tc_component* c, const char* phase_mark);
-    static void* _cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, void* original_shader);
+    static tc_shader_handle _cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader);
 };
 
 // Draw call for passes - combines entity, component, phase, and geometry.

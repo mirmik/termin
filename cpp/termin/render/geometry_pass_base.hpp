@@ -15,6 +15,7 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/render_state.hpp"
 #include "termin/render/shader_program.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
@@ -283,21 +284,23 @@ protected:
                 entity_names.push_back(name);
             }
 
-            ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-                tc_component_override_shader(dc.component, phase_name(), dc.geometry_id, shader)
+            // Get shader handle and apply override
+            tc_shader_handle base_handle = shader->tc_shader().handle;
+            tc_shader_handle shader_handle = tc_component_override_shader(
+                dc.component, phase_name(), dc.geometry_id, base_handle
             );
-            if (shader_to_use == nullptr) {
-                shader_to_use = shader;
-            }
 
-            shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-                return graphics->create_shader(v, f, g);
-            });
-            shader_to_use->use();
+            // Use TcShader for everything
+            TcShader shader_to_use(shader_handle);
+            shader_to_use.use();
 
-            setup_draw_uniforms(dc, shader_to_use, model, view, projection, context, extra_uniforms);
+            // Set uniforms via TcShader
+            shader_to_use.set_uniform_mat4("u_model", model.data, false);
+            shader_to_use.set_uniform_mat4("u_view", view.data, false);
+            shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
 
-            context.current_shader = shader_to_use;
+            context.current_shader = shader;  // Legacy compatibility
+            context.current_tc_shader = shader_to_use;
             context.extra_uniforms = extra_uniforms;
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id);

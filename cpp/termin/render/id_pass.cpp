@@ -1,4 +1,5 @@
 #include "termin/render/id_pass.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "tc_log.hpp"
 
 namespace termin {
@@ -137,24 +138,23 @@ void IdPass::execute_with_data(
             context.extra_uniforms = extra_uniforms;
         }
 
-        ShaderProgram* shader_to_use = static_cast<ShaderProgram*>(
-            tc_component_override_shader(dc.component, phase_name(), dc.geometry_id, shader)
+        // Get shader handle and apply override
+        tc_shader_handle base_handle = shader->tc_shader().handle;
+        tc_shader_handle shader_handle = tc_component_override_shader(
+            dc.component, phase_name(), dc.geometry_id, base_handle
         );
-        if (shader_to_use == nullptr) {
-            shader_to_use = shader;
-        }
 
-        shader_to_use->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-            return graphics->create_shader(v, f, g);
-        });
-        shader_to_use->use();
+        // Use TcShader
+        TcShader shader_to_use(shader_handle);
+        shader_to_use.use();
 
-        shader_to_use->set_uniform_matrix4("u_model", model.data, false);
-        shader_to_use->set_uniform_matrix4("u_view", view.data, false);
-        shader_to_use->set_uniform_matrix4("u_projection", projection.data, false);
-        shader_to_use->set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
+        shader_to_use.set_uniform_mat4("u_model", model.data, false);
+        shader_to_use.set_uniform_mat4("u_view", view.data, false);
+        shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
+        shader_to_use.set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
 
-        context.current_shader = shader_to_use;
+        context.current_shader = shader;  // Legacy
+        context.current_tc_shader = shader_to_use;
 
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 
