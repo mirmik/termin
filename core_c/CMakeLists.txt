@@ -25,6 +25,8 @@ set(TC_SOURCES
     src/tc_mesh_registry.c
     src/tc_texture_registry.c
     src/tc_shader_registry.c
+    src/tc_skeleton_registry.c
+    src/tc_animation_registry.c
     src/tc_scene_registry.c
     src/tc_log.c
     src/tc_profiler.c
@@ -53,6 +55,10 @@ set(TC_HEADERS
     include/tc_texture_registry.h
     include/tc_shader.h
     include/tc_shader_registry.h
+    include/tc_skeleton.h
+    include/tc_skeleton_registry.h
+    include/tc_animation.h
+    include/tc_animation_registry.h
     include/tc_scene_registry.h
     include/tc_gpu.h
 )

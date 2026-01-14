@@ -15,8 +15,8 @@ void SkeletonController::start() {
     CxxComponent::start();
 }
 
-void SkeletonController::set_skeleton(const SkeletonHandle& handle) {
-    skeleton = handle;
+void SkeletonController::set_skeleton(const TcSkeleton& skel) {
+    skeleton = skel;
     _skeleton_instance.reset();
 }
 
@@ -26,11 +26,14 @@ void SkeletonController::set_bone_entities(std::vector<Entity> entities) {
 }
 
 SkeletonInstance* SkeletonController::skeleton_instance() {
-    SkeletonData* skel_data = skeleton.get();
-    if (_skeleton_instance == nullptr && skel_data != nullptr) {
+    // Ensure skeleton is loaded (trigger lazy loading if needed)
+    skeleton.ensure_loaded();
+
+    tc_skeleton* skel = skeleton.get();
+    if (_skeleton_instance == nullptr && skel != nullptr) {
         if (!bone_entities.empty()) {
             _skeleton_instance = std::make_unique<SkeletonInstance>(
-                skel_data,
+                skel,
                 bone_entities,
                 entity
             );
@@ -46,7 +49,7 @@ void SkeletonController::invalidate_instance() {
 
 void SkeletonController::before_render() {
     if (_skeleton_instance == nullptr) {
-        skeleton_instance(); // Try to create instance  
+        skeleton_instance(); // Try to create instance
     }
 
     if (_skeleton_instance != nullptr) {

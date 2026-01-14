@@ -4,43 +4,56 @@
 #include <nanobind/stl/array.h>
 #include <nanobind/ndarray.h>
 #include <iostream>
+#include <unordered_map>
+#include <mutex>
 
-#include "termin/skeleton/bone.hpp"
-#include "termin/skeleton/skeleton_data.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
+#include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/entity/entity.hpp"
-#include "termin/assets/handles.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
+#include "../../../trent/trent.h"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
 
+// ============================================================================
+// Python callback storage for lazy loading
+// ============================================================================
+
+static std::mutex g_skeleton_callback_mutex;
+static std::unordered_map<std::string, nb::callable> g_skeleton_python_callbacks;
+
+// C callback wrapper that calls the stored Python callable
+static bool skeleton_python_load_callback_wrapper(tc_skeleton* skeleton, void* user_data) {
+    (void)user_data;
+    if (!skeleton) return false;
+
+    std::string uuid(skeleton->header.uuid);
+
+    nb::callable callback;
+    {
+        std::lock_guard<std::mutex> lock(g_skeleton_callback_mutex);
+        auto it = g_skeleton_python_callbacks.find(uuid);
+        if (it == g_skeleton_python_callbacks.end()) {
+            return false;
+        }
+        callback = it->second;
+    }
+
+    nb::gil_scoped_acquire gil;
+    try {
+        nb::object result = callback(nb::cast(skeleton, nb::rv_policy::reference));
+        return nb::cast<bool>(result);
+    } catch (const std::exception& e) {
+        tc::Log::error("Python skeleton load callback failed for '%s': %s", uuid.c_str(), e.what());
+        return false;
+    }
+}
+
 namespace {
 
-// Helper: numpy (4,4) -> std::array<double, 16>
-std::array<double, 16> numpy_to_mat4(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
-    double* ptr = arr.data();
-    std::array<double, 16> result;
-    for (int i = 0; i < 16; ++i) {
-        result[i] = ptr[i];
-    }
-    return result;
-}
-
-// Helper: std::array<double, 16> -> numpy (4,4)
-nb::object mat4_to_numpy(const std::array<double, 16>& m) {
-    double* data = new double[16];
-    for (int i = 0; i < 16; ++i) {
-        data[i] = m[i];
-    }
-    nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    size_t shape[2] = {4, 4};
-    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner));
-}
-
-// Helper: numpy (3,) -> std::array<double, 3>
+// Helper: numpy/sequence (3,) -> std::array<double, 3>
 std::array<double, 3> numpy_to_vec3(nb::object obj) {
     try {
         auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
@@ -51,14 +64,7 @@ std::array<double, 3> numpy_to_vec3(nb::object obj) {
     return {nb::cast<double>(seq[0]), nb::cast<double>(seq[1]), nb::cast<double>(seq[2])};
 }
 
-// Helper: std::array<double, 3> -> numpy (3,)
-nb::object vec3_to_numpy(const std::array<double, 3>& v) {
-    double* data = new double[3]{v[0], v[1], v[2]};
-    nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner));
-}
-
-// Helper: numpy (4,) -> std::array<double, 4>
+// Helper: numpy/sequence (4,) -> std::array<double, 4>
 std::array<double, 4> numpy_to_vec4(nb::object obj) {
     try {
         auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
@@ -70,284 +76,201 @@ std::array<double, 4> numpy_to_vec4(nb::object obj) {
             nb::cast<double>(seq[2]), nb::cast<double>(seq[3])};
 }
 
-// Helper: std::array<double, 4> -> numpy (4,)
-nb::object vec4_to_numpy(const std::array<double, 4>& v) {
-    double* data = new double[4]{v[0], v[1], v[2], v[3]};
-    nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<4>>(data, {4}, owner));
-}
-
-void bind_bone(nb::module_& m) {
-    nb::class_<termin::Bone>(m, "Bone")
-        .def(nb::init<>())
-        .def(nb::init<const std::string&, int, int>(),
-             nb::arg("name"), nb::arg("index"), nb::arg("parent_index"))
-        .def_rw("name", &termin::Bone::name)
-        .def_rw("index", &termin::Bone::index)
-        .def_rw("parent_index", &termin::Bone::parent_index)
+void bind_tc_bone(nb::module_& m) {
+    nb::class_<tc_bone>(m, "TcBone")
+        .def_prop_rw("name",
+            [](const tc_bone& b) { return std::string(b.name); },
+            [](tc_bone& b, const std::string& name) {
+                size_t len = std::min(name.size(), (size_t)(TC_BONE_NAME_MAX - 1));
+                std::memcpy(b.name, name.c_str(), len);
+                b.name[len] = '\0';
+            })
+        .def_rw("index", &tc_bone::index)
+        .def_rw("parent_index", &tc_bone::parent_index)
         .def_prop_rw("inverse_bind_matrix",
-            [](const termin::Bone& b) { return mat4_to_numpy(b.inverse_bind_matrix); },
-            [](termin::Bone& b, nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) { b.inverse_bind_matrix = numpy_to_mat4(arr); })
-        .def_prop_rw("bind_translation",
-            [](const termin::Bone& b) { return vec3_to_numpy(b.bind_translation); },
-            [](termin::Bone& b, nb::object v) { b.bind_translation = numpy_to_vec3(v); })
-        .def_prop_rw("bind_rotation",
-            [](const termin::Bone& b) { return vec4_to_numpy(b.bind_rotation); },
-            [](termin::Bone& b, nb::object v) { b.bind_rotation = numpy_to_vec4(v); })
-        .def_prop_rw("bind_scale",
-            [](const termin::Bone& b) { return vec3_to_numpy(b.bind_scale); },
-            [](termin::Bone& b, nb::object v) { b.bind_scale = numpy_to_vec3(v); })
-        .def_prop_ro("is_root", &termin::Bone::is_root)
-        .def("serialize", [](const termin::Bone& b) {
-            nb::dict d;
-            d["name"] = b.name;
-            d["index"] = b.index;
-            d["parent_index"] = b.parent_index;
-            d["inverse_bind_matrix"] = mat4_to_numpy(b.inverse_bind_matrix).attr("tolist")();
-            d["bind_translation"] = vec3_to_numpy(b.bind_translation).attr("tolist")();
-            d["bind_rotation"] = vec4_to_numpy(b.bind_rotation).attr("tolist")();
-            d["bind_scale"] = vec3_to_numpy(b.bind_scale).attr("tolist")();
-            return d;
-        })
-        .def_static("deserialize", [](nb::dict data) {
-            termin::Bone bone;
-            bone.name = nb::cast<std::string>(data["name"]);
-            bone.index = nb::cast<int>(data["index"]);
-            bone.parent_index = nb::cast<int>(data["parent_index"]);
-
-            nb::list ibm_list = nb::cast<nb::list>(data["inverse_bind_matrix"]);
-            for (int i = 0; i < 4; ++i) {
-                nb::list row = nb::cast<nb::list>(ibm_list[i]);
-                for (int j = 0; j < 4; ++j) {
-                    bone.inverse_bind_matrix[i * 4 + j] = nb::cast<double>(row[j]);
-                }
-            }
-
-            if (data.contains("bind_translation")) {
-                nb::list t = nb::cast<nb::list>(data["bind_translation"]);
-                bone.bind_translation = {nb::cast<double>(t[0]), nb::cast<double>(t[1]), nb::cast<double>(t[2])};
-            }
-            if (data.contains("bind_rotation")) {
-                nb::list r = nb::cast<nb::list>(data["bind_rotation"]);
-                bone.bind_rotation = {nb::cast<double>(r[0]), nb::cast<double>(r[1]),
-                                      nb::cast<double>(r[2]), nb::cast<double>(r[3])};
-            }
-            if (data.contains("bind_scale")) {
-                nb::list s = nb::cast<nb::list>(data["bind_scale"]);
-                bone.bind_scale = {nb::cast<double>(s[0]), nb::cast<double>(s[1]), nb::cast<double>(s[2])};
-            }
-
-            return bone;
-        }, nb::arg("data"))
-        .def("__repr__", [](const termin::Bone& b) {
-            std::string parent_str = b.is_root() ? "root" : "parent=" + std::to_string(b.parent_index);
-            return "<Bone " + std::to_string(b.index) + ": '" + b.name + "' (" + parent_str + ")>";
-        });
-}
-
-void bind_skeleton_data(nb::module_& m) {
-    nb::class_<termin::SkeletonData>(m, "SkeletonData")
-        .def(nb::init<>())
-        .def(nb::init<std::vector<termin::Bone>>(), nb::arg("bones"))
-        .def(nb::init<std::vector<termin::Bone>, std::vector<int>>(),
-             nb::arg("bones"), nb::arg("root_bone_indices"))
-        .def_prop_ro("bones", [](const termin::SkeletonData& sd) {
-            return sd.bones();
-        }, nb::rv_policy::reference_internal)
-        .def("get_bone_count", &termin::SkeletonData::get_bone_count)
-        .def("get_bone_by_name", [](const termin::SkeletonData& sd, const std::string& name) -> nb::object {
-            const termin::Bone* bone = sd.get_bone_by_name(name);
-            if (bone) return nb::cast(*bone);
-            return nb::none();
-        }, nb::arg("name"))
-        .def("get_bone_index", &termin::SkeletonData::get_bone_index, nb::arg("name"))
-        .def_prop_ro("root_bone_indices", &termin::SkeletonData::root_bone_indices)
-        .def("add_bone", &termin::SkeletonData::add_bone, nb::arg("bone"))
-        .def("rebuild_maps", &termin::SkeletonData::rebuild_maps)
-        .def("serialize", [](const termin::SkeletonData& sd) {
-            nb::dict d;
-            nb::list bones_list;
-            for (const auto& bone : sd.bones()) {
-                nb::dict bd;
-                bd["name"] = bone.name;
-                bd["index"] = bone.index;
-                bd["parent_index"] = bone.parent_index;
-                bd["inverse_bind_matrix"] = mat4_to_numpy(bone.inverse_bind_matrix).attr("tolist")();
-                bd["bind_translation"] = vec3_to_numpy(bone.bind_translation).attr("tolist")();
-                bd["bind_rotation"] = vec4_to_numpy(bone.bind_rotation).attr("tolist")();
-                bd["bind_scale"] = vec3_to_numpy(bone.bind_scale).attr("tolist")();
-                bones_list.append(bd);
-            }
-            d["bones"] = bones_list;
-            d["root_bone_indices"] = sd.root_bone_indices();
-            return d;
-        })
-        .def_static("deserialize", [](nb::dict data) {
-            std::vector<termin::Bone> bones;
-            nb::list bones_list = nb::cast<nb::list>(data["bones"]);
-
-            for (auto item : bones_list) {
-                nb::dict bd = nb::cast<nb::dict>(item);
-                termin::Bone bone;
-                bone.name = nb::cast<std::string>(bd["name"]);
-                bone.index = nb::cast<int>(bd["index"]);
-                bone.parent_index = nb::cast<int>(bd["parent_index"]);
-
-                nb::list ibm_list = nb::cast<nb::list>(bd["inverse_bind_matrix"]);
-                for (int i = 0; i < 4; ++i) {
-                    nb::list row = nb::cast<nb::list>(ibm_list[i]);
-                    for (int j = 0; j < 4; ++j) {
-                        bone.inverse_bind_matrix[i * 4 + j] = nb::cast<double>(row[j]);
-                    }
-                }
-
-                if (bd.contains("bind_translation")) {
-                    nb::list t = nb::cast<nb::list>(bd["bind_translation"]);
-                    bone.bind_translation = {nb::cast<double>(t[0]), nb::cast<double>(t[1]), nb::cast<double>(t[2])};
-                }
-                if (bd.contains("bind_rotation")) {
-                    nb::list r = nb::cast<nb::list>(bd["bind_rotation"]);
-                    bone.bind_rotation = {nb::cast<double>(r[0]), nb::cast<double>(r[1]),
-                                          nb::cast<double>(r[2]), nb::cast<double>(r[3])};
-                }
-                if (bd.contains("bind_scale")) {
-                    nb::list s = nb::cast<nb::list>(bd["bind_scale"]);
-                    bone.bind_scale = {nb::cast<double>(s[0]), nb::cast<double>(s[1]), nb::cast<double>(s[2])};
-                }
-
-                bones.push_back(std::move(bone));
-            }
-
-            std::vector<int> root_indices;
-            if (data.contains("root_bone_indices") && !data["root_bone_indices"].is_none()) {
-                root_indices = nb::cast<std::vector<int>>(data["root_bone_indices"]);
-                return termin::SkeletonData(std::move(bones), std::move(root_indices));
-            }
-            return termin::SkeletonData(std::move(bones));
-        }, nb::arg("data"))
-        .def_static("from_glb_skin", [](nb::object skin, nb::list nodes) {
-            std::vector<termin::Bone> bones;
-
-            nb::list joint_indices = nb::cast<nb::list>(skin.attr("joint_node_indices"));
-            auto inv_bind_matrices = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(skin.attr("inverse_bind_matrices"));
-            double* ibm_ptr = inv_bind_matrices.data();
-
-            size_t num_joints = nb::len(joint_indices);
-
-            for (size_t bone_idx = 0; bone_idx < num_joints; ++bone_idx) {
-                int node_idx = nb::cast<int>(joint_indices[bone_idx]);
-                nb::object node = nodes[node_idx];
-
-                int parent_bone_idx = -1;
-                for (size_t other_bone_idx = 0; other_bone_idx < num_joints; ++other_bone_idx) {
-                    int other_node_idx = nb::cast<int>(joint_indices[other_bone_idx]);
-                    nb::object other_node = nodes[other_node_idx];
-                    nb::list children = nb::cast<nb::list>(other_node.attr("children"));
-                    for (auto child : children) {
-                        if (nb::cast<int>(child) == node_idx) {
-                            parent_bone_idx = static_cast<int>(other_bone_idx);
-                            break;
-                        }
-                    }
-                    if (parent_bone_idx >= 0) break;
-                }
-
-                termin::Bone bone;
-                bone.name = nb::cast<std::string>(node.attr("name"));
-                bone.index = static_cast<int>(bone_idx);
-                bone.parent_index = parent_bone_idx;
-
-                // Copy inverse bind matrix (4x4 stored per bone)
+            [](const tc_bone& b) {
+                nb::list result;
                 for (int i = 0; i < 16; ++i) {
-                    bone.inverse_bind_matrix[i] = ibm_ptr[bone_idx * 16 + i];
+                    result.append(b.inverse_bind_matrix[i]);
                 }
+                return result;
+            },
+            [](tc_bone& b, nb::sequence seq) {
+                for (int i = 0; i < 16 && i < nb::len(seq); ++i) {
+                    b.inverse_bind_matrix[i] = nb::cast<double>(seq[i]);
+                }
+            })
+        .def_prop_rw("bind_translation",
+            [](const tc_bone& b) {
+                return nb::make_tuple(b.bind_translation[0], b.bind_translation[1], b.bind_translation[2]);
+            },
+            [](tc_bone& b, nb::sequence seq) {
+                if (nb::len(seq) >= 3) {
+                    b.bind_translation[0] = nb::cast<double>(seq[0]);
+                    b.bind_translation[1] = nb::cast<double>(seq[1]);
+                    b.bind_translation[2] = nb::cast<double>(seq[2]);
+                }
+            })
+        .def_prop_rw("bind_rotation",
+            [](const tc_bone& b) {
+                return nb::make_tuple(b.bind_rotation[0], b.bind_rotation[1], b.bind_rotation[2], b.bind_rotation[3]);
+            },
+            [](tc_bone& b, nb::sequence seq) {
+                if (nb::len(seq) >= 4) {
+                    b.bind_rotation[0] = nb::cast<double>(seq[0]);
+                    b.bind_rotation[1] = nb::cast<double>(seq[1]);
+                    b.bind_rotation[2] = nb::cast<double>(seq[2]);
+                    b.bind_rotation[3] = nb::cast<double>(seq[3]);
+                }
+            })
+        .def_prop_rw("bind_scale",
+            [](const tc_bone& b) {
+                return nb::make_tuple(b.bind_scale[0], b.bind_scale[1], b.bind_scale[2]);
+            },
+            [](tc_bone& b, nb::sequence seq) {
+                if (nb::len(seq) >= 3) {
+                    b.bind_scale[0] = nb::cast<double>(seq[0]);
+                    b.bind_scale[1] = nb::cast<double>(seq[1]);
+                    b.bind_scale[2] = nb::cast<double>(seq[2]);
+                }
+            });
+}
 
-                auto trans = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(node.attr("translation"));
-                auto rot = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(node.attr("rotation"));
-                auto scale = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(node.attr("scale"));
+void bind_tc_skeleton_struct(nb::module_& m) {
+    // Bind tc_skeleton C struct for low-level access
+    nb::class_<tc_skeleton>(m, "tc_skeleton_struct")
+        .def_prop_rw("is_loaded",
+            [](const tc_skeleton& s) { return s.header.is_loaded != 0; },
+            [](tc_skeleton& s, bool loaded) { s.header.is_loaded = loaded ? 1 : 0; })
+        .def_prop_ro("uuid", [](const tc_skeleton& s) { return std::string(s.header.uuid); })
+        .def_prop_ro("name", [](const tc_skeleton& s) { return s.header.name ? std::string(s.header.name) : ""; })
+        .def_prop_ro("bone_count", [](const tc_skeleton& s) { return s.bone_count; })
+        .def_prop_ro("root_count", [](const tc_skeleton& s) { return s.root_count; });
+}
 
-                double* t_ptr = trans.data();
-                double* r_ptr = rot.data();
-                double* s_ptr = scale.data();
-
-                bone.bind_translation = {t_ptr[0], t_ptr[1], t_ptr[2]};
-                bone.bind_rotation = {r_ptr[0], r_ptr[1], r_ptr[2], r_ptr[3]};
-                bone.bind_scale = {s_ptr[0], s_ptr[1], s_ptr[2]};
-
-                bones.push_back(std::move(bone));
+void bind_tc_skeleton(nb::module_& m) {
+    nb::class_<termin::TcSkeleton>(m, "TcSkeleton")
+        .def(nb::init<>())
+        .def_prop_ro("is_valid", &termin::TcSkeleton::is_valid)
+        .def_prop_ro("uuid", [](const termin::TcSkeleton& s) {
+            return std::string(s.uuid());
+        })
+        .def_prop_ro("name", [](const termin::TcSkeleton& s) {
+            return std::string(s.name());
+        })
+        .def_prop_ro("version", &termin::TcSkeleton::version)
+        .def_prop_ro("bone_count", &termin::TcSkeleton::bone_count)
+        .def_prop_ro("root_count", &termin::TcSkeleton::root_count)
+        .def("find_bone", &termin::TcSkeleton::find_bone, nb::arg("bone_name"))
+        .def("bump_version", &termin::TcSkeleton::bump_version)
+        .def("ensure_loaded", &termin::TcSkeleton::ensure_loaded)
+        .def("rebuild_roots", &termin::TcSkeleton::rebuild_roots)
+        .def("get", &termin::TcSkeleton::get, nb::rv_policy::reference)
+        .def("get_bone", &termin::TcSkeleton::get_bone, nb::arg("index"), nb::rv_policy::reference)
+        .def("alloc_bones", &termin::TcSkeleton::alloc_bones, nb::arg("count"), nb::rv_policy::reference)
+        .def_static("from_uuid", &termin::TcSkeleton::from_uuid, nb::arg("uuid"))
+        .def_static("get_or_create", &termin::TcSkeleton::get_or_create, nb::arg("uuid"))
+        .def_static("create", &termin::TcSkeleton::create,
+            nb::arg("name") = "", nb::arg("uuid_hint") = "")
+        .def("serialize", [](const termin::TcSkeleton& s) {
+            nb::dict d;
+            if (!s.is_valid()) {
+                d["type"] = "none";
+                return d;
             }
-
-            return termin::SkeletonData(std::move(bones));
-        }, nb::arg("skin"), nb::arg("nodes"))
-        .def("__repr__", [](const termin::SkeletonData& sd) {
-            return "<SkeletonData bones=" + std::to_string(sd.get_bone_count()) +
-                   " roots=" + std::to_string(sd.root_bone_indices().size()) + ">";
+            d["uuid"] = std::string(s.uuid());
+            d["name"] = std::string(s.name());
+            d["type"] = "uuid";
+            return d;
+        })
+        .def_static("deserialize", [](nb::dict data) {
+            if (!data.contains("uuid")) {
+                return termin::TcSkeleton();
+            }
+            std::string uuid = nb::cast<std::string>(data["uuid"]);
+            return termin::TcSkeleton::from_uuid(uuid);
+        }, nb::arg("data"))
+        .def("__repr__", [](const termin::TcSkeleton& s) {
+            if (!s.is_valid()) return std::string("<TcSkeleton invalid>");
+            return "<TcSkeleton '" + std::string(s.name()) + "' bones=" +
+                   std::to_string(s.bone_count()) + ">";
         });
 }
 
-void bind_skeleton_handle(nb::module_& m) {
-    nb::class_<termin::SkeletonHandle>(m, "SkeletonHandle")
-        .def(nb::init<>())
-        .def("__init__", [](termin::SkeletonHandle* self, nb::object asset) {
-            new (self) termin::SkeletonHandle(asset);
-        }, nb::arg("asset"))
-        .def_static("from_name", &termin::SkeletonHandle::from_name, nb::arg("name"))
-        .def_static("from_asset", &termin::SkeletonHandle::from_asset, nb::arg("asset"))
-        .def_static("from_direct", &termin::SkeletonHandle::from_direct, nb::arg("skeleton"),
-            nb::rv_policy::reference)
-        .def_static("deserialize", &termin::SkeletonHandle::deserialize, nb::arg("data"))
-        .def_rw("_direct", &termin::SkeletonHandle::_direct)
-        .def_rw("asset", &termin::SkeletonHandle::asset)
-        .def_prop_ro("is_valid", &termin::SkeletonHandle::is_valid)
-        .def_prop_ro("is_direct", &termin::SkeletonHandle::is_direct)
-        .def_prop_ro("name", &termin::SkeletonHandle::name)
-        .def("get", &termin::SkeletonHandle::get, nb::rv_policy::reference)
-        .def("get_asset", [](const termin::SkeletonHandle& self) { return self.asset; })
-        .def("serialize", &termin::SkeletonHandle::serialize);
-}
+void register_tc_skeleton_kind() {
+    // C++ handler for tc_skeleton kind
+    tc::KindRegistry::instance().register_cpp("tc_skeleton",
+        // serialize: std::any(TcSkeleton) → trent
+        [](const std::any& value) -> nos::trent {
+            const termin::TcSkeleton& s = std::any_cast<const termin::TcSkeleton&>(value);
+            nos::trent result;
+            result.init(nos::trent_type::dict);
+            if (s.is_valid()) {
+                result["uuid"] = std::string(s.uuid());
+                result["name"] = std::string(s.name());
+            }
+            return result;
+        },
+        // deserialize: trent, scene → std::any(TcSkeleton)
+        [](const nos::trent& t, tc_scene*) -> std::any {
+            if (!t.is_dict()) return termin::TcSkeleton();
+            auto& dict = t.as_dict();
+            auto it = dict.find("uuid");
+            if (it == dict.end() || !it->second.is_string()) {
+                return termin::TcSkeleton();
+            }
+            std::string uuid = it->second.as_string();
+            termin::TcSkeleton skel = termin::TcSkeleton::from_uuid(uuid);
+            if (!skel.is_valid()) {
+                auto name_it = dict.find("name");
+                std::string name = (name_it != dict.end() && name_it->second.is_string())
+                    ? name_it->second.as_string() : "";
+                tc::Log::warn("tc_skeleton deserialize: skeleton not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
+            } else {
+                skel.ensure_loaded();
+            }
+            return skel;
+        }
+    );
 
-void register_skeleton_kind() {
-    // C++ handler for C++ fields
-    tc::register_cpp_handle_kind<termin::SkeletonHandle>("skeleton_handle");
-
-    // Python handler for Python fields
+    // Python handler for tc_skeleton kind
     tc::KindRegistry::instance().register_python(
-        "skeleton_handle",
+        "tc_skeleton",
         // serialize
         nb::cpp_function([](nb::object obj) -> nb::object {
-            termin::SkeletonHandle handle = nb::cast<termin::SkeletonHandle>(obj);
-            return handle.serialize();
+            termin::TcSkeleton skel = nb::cast<termin::TcSkeleton>(obj);
+            nb::dict d;
+            if (skel.is_valid()) {
+                d["uuid"] = nb::str(skel.uuid());
+                d["name"] = nb::str(skel.name());
+            }
+            return d;
         }),
         // deserialize
         nb::cpp_function([](nb::object data) -> nb::object {
             if (!nb::isinstance<nb::dict>(data)) {
-                return nb::cast(termin::SkeletonHandle());
+                return nb::cast(termin::TcSkeleton());
             }
             nb::dict d = nb::cast<nb::dict>(data);
-            return nb::cast(termin::SkeletonHandle::deserialize(d));
+            if (!d.contains("uuid")) {
+                return nb::cast(termin::TcSkeleton());
+            }
+            std::string uuid = nb::cast<std::string>(d["uuid"]);
+            return nb::cast(termin::TcSkeleton::from_uuid(uuid));
         }),
         // convert
         nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return nb::cast(termin::SkeletonHandle());
+                return nb::cast(termin::TcSkeleton());
             }
-            if (nb::isinstance<termin::SkeletonHandle>(value)) {
+            if (nb::isinstance<termin::TcSkeleton>(value)) {
                 return value;
-            }
-            // Try SkeletonData*
-            if (nb::isinstance<termin::SkeletonData>(value)) {
-                auto* skel_data = nb::cast<termin::SkeletonData*>(value);
-                return nb::cast(termin::SkeletonHandle::from_direct(skel_data));
-            }
-            // Try SkeletonAsset (has 'resource' attribute)
-            if (nb::hasattr(value, "resource")) {
-                return nb::cast(termin::SkeletonHandle::from_asset(value));
             }
             // Nothing worked
             nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
             std::string type_name = nb::cast<std::string>(type_str);
-            tc::Log::error("skeleton_handle convert failed: cannot convert %s to SkeletonHandle", type_name.c_str());
-            return nb::cast(termin::SkeletonHandle());
+            tc::Log::error("tc_skeleton convert failed: cannot convert %s to TcSkeleton", type_name.c_str());
+            return nb::cast(termin::TcSkeleton());
         })
     );
 }
@@ -355,9 +278,9 @@ void register_skeleton_kind() {
 void bind_skeleton_instance(nb::module_& m) {
     nb::class_<termin::SkeletonInstance>(m, "SkeletonInstance")
         .def(nb::init<>())
-        .def_prop_rw("skeleton_data",
-            &termin::SkeletonInstance::skeleton_data,
-            &termin::SkeletonInstance::set_skeleton_data,
+        .def_prop_rw("skeleton",
+            [](const termin::SkeletonInstance& si) { return si._skeleton; },
+            [](termin::SkeletonInstance& si, tc_skeleton* skel) { si.set_skeleton(skel); },
             nb::rv_policy::reference)
         .def_prop_rw("bone_entities",
             [](const termin::SkeletonInstance& si) {
@@ -515,21 +438,10 @@ void bind_skeleton_controller(nb::module_& m) {
         .def("__init__", [](termin::SkeletonController* self, nb::object skeleton_arg, nb::list bone_entities_list) {
             new (self) termin::SkeletonController();
 
-            // Handle skeleton argument: SkeletonHandle, SkeletonAsset, or SkeletonData*
+            // Handle skeleton argument: TcSkeleton
             if (!skeleton_arg.is_none()) {
-                if (nb::isinstance<termin::SkeletonHandle>(skeleton_arg)) {
-                    self->skeleton = nb::cast<termin::SkeletonHandle>(skeleton_arg);
-                } else if (nb::hasattr(skeleton_arg, "resource")) {
-                    self->skeleton = termin::SkeletonHandle::from_asset(skeleton_arg);
-                } else {
-                    auto skel_data = nb::cast<termin::SkeletonData*>(skeleton_arg);
-                    if (skel_data != nullptr) {
-                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
-                        asset.attr("skeleton_data") = skeleton_arg;
-                        self->skeleton = termin::SkeletonHandle::from_asset(asset);
-                    }
+                if (nb::isinstance<termin::TcSkeleton>(skeleton_arg)) {
+                    self->skeleton = nb::cast<termin::TcSkeleton>(skeleton_arg);
                 }
             }
 
@@ -544,27 +456,9 @@ void bind_skeleton_controller(nb::module_& m) {
             nb::arg("skeleton") = nb::none(),
             nb::arg("bone_entities") = nb::list())
         .def_rw("skeleton", &termin::SkeletonController::skeleton)
-        .def_prop_rw("skeleton_data",
-            &termin::SkeletonController::skeleton_data,
-            [](termin::SkeletonController& self, nb::object skel_arg) {
-                if (skel_arg.is_none()) {
-                    self.skeleton = termin::SkeletonHandle();
-                    return;
-                }
-                if (nb::isinstance<termin::SkeletonHandle>(skel_arg)) {
-                    self.set_skeleton(nb::cast<termin::SkeletonHandle>(skel_arg));
-                } else if (nb::hasattr(skel_arg, "resource")) {
-                    self.set_skeleton(termin::SkeletonHandle::from_asset(skel_arg));
-                } else {
-                    auto skel_data = nb::cast<termin::SkeletonData*>(skel_arg);
-                    if (skel_data != nullptr) {
-                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
-                        asset.attr("skeleton_data") = skel_arg;
-                        self.set_skeleton(termin::SkeletonHandle::from_asset(asset));
-                    }
-                }
+        .def_prop_ro("skeleton_data",
+            [](const termin::SkeletonController& self) {
+                return self.skeleton.get();
             },
             nb::rv_policy::reference)
         .def_prop_rw("bone_entities",
@@ -607,18 +501,60 @@ void bind_skeleton_controller(nb::module_& m) {
 } // anonymous namespace
 
 NB_MODULE(_skeleton_native, m) {
-    m.doc() = "Native C++ skeleton module (Bone, SkeletonData, SkeletonInstance, SkeletonController)";
+    m.doc() = "Native C++ skeleton module (TcSkeleton, SkeletonInstance, SkeletonController)";
 
     // Import _entity_native for Component type (SkeletonController inherits from it)
     nb::module_::import_("termin.entity._entity_native");
 
     // Bind types
-    bind_bone(m);
-    bind_skeleton_data(m);
-    bind_skeleton_handle(m);
+    bind_tc_bone(m);
+    bind_tc_skeleton_struct(m);
+    bind_tc_skeleton(m);
     bind_skeleton_instance(m);
     bind_skeleton_controller(m);
 
-    // Register skeleton kind handler for InspectRegistry
-    register_skeleton_kind();
+    // Register tc_skeleton kind handler for InspectRegistry
+    register_tc_skeleton_kind();
+
+    // Lazy loading API
+    m.def("tc_skeleton_declare", [](const std::string& uuid, const std::string& name) {
+        tc_skeleton_handle h = tc_skeleton_declare(uuid.c_str(), name.empty() ? nullptr : name.c_str());
+        return termin::TcSkeleton(h);
+    }, nb::arg("uuid"), nb::arg("name") = "",
+       "Declare a skeleton that will be loaded lazily");
+
+    m.def("tc_skeleton_is_loaded", [](termin::TcSkeleton& handle) {
+        return tc_skeleton_is_loaded(handle.handle);
+    }, nb::arg("handle"), "Check if skeleton data is loaded");
+
+    m.def("tc_skeleton_set_load_callback", [](termin::TcSkeleton& handle, nb::callable callback) {
+        tc_skeleton* skeleton = handle.get();
+        if (!skeleton) {
+            throw std::runtime_error("Invalid skeleton handle");
+        }
+
+        std::string uuid(skeleton->header.uuid);
+
+        {
+            std::lock_guard<std::mutex> lock(g_skeleton_callback_mutex);
+            g_skeleton_python_callbacks[uuid] = callback;
+        }
+
+        tc_skeleton_set_load_callback(handle.handle, skeleton_python_load_callback_wrapper, nullptr);
+    }, nb::arg("handle"), nb::arg("callback"),
+       "Set Python callback for lazy loading");
+
+    m.def("tc_skeleton_clear_load_callback", [](termin::TcSkeleton& handle) {
+        tc_skeleton* skeleton = handle.get();
+        if (!skeleton) return;
+
+        std::string uuid(skeleton->header.uuid);
+
+        {
+            std::lock_guard<std::mutex> lock(g_skeleton_callback_mutex);
+            g_skeleton_python_callbacks.erase(uuid);
+        }
+
+        tc_skeleton_set_load_callback(handle.handle, nullptr, nullptr);
+    }, nb::arg("handle"), "Clear load callback for skeleton");
 }

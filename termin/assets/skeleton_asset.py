@@ -1,4 +1,4 @@
-"""SkeletonAsset - Asset wrapper for skeleton data with UUID tracking."""
+"""SkeletonAsset - Asset wrapper for TcSkeleton with UUID tracking."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
-    from termin.skeleton import SkeletonData
+    from termin.skeleton import TcSkeleton
 
 
-class SkeletonAsset(DataAsset["SkeletonData"]):
+class SkeletonAsset(DataAsset["TcSkeleton"]):
     """
-    Asset wrapper for SkeletonData with UUID tracking.
+    Asset wrapper for TcSkeleton with UUID tracking.
 
     IMPORTANT: Create through ResourceManager.get_or_create_skeleton_asset(),
     not directly. This ensures proper registration and avoids duplicates.
@@ -28,7 +28,7 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
 
     def __init__(
         self,
-        skeleton_data: "SkeletonData | None" = None,
+        skeleton_data: "TcSkeleton | None" = None,
         name: str = "skeleton",
         source_path: Path | str | None = None,
         uuid: str | None = None,
@@ -38,18 +38,18 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
     # --- Convenience property ---
 
     @property
-    def skeleton_data(self) -> "SkeletonData | None":
+    def skeleton_data(self) -> "TcSkeleton | None":
         """Get skeleton data (lazy-loaded via parent's data property)."""
         return self.data
 
     @skeleton_data.setter
-    def skeleton_data(self, value: "SkeletonData | None") -> None:
+    def skeleton_data(self, value: "TcSkeleton | None") -> None:
         """Set skeleton data and bump version."""
         self.data = value
 
     # --- Content parsing ---
 
-    def _parse_content(self, content: str) -> "SkeletonData | None":
+    def _parse_content(self, content: str) -> "TcSkeleton | None":
         """
         Parse skeleton from content.
 
@@ -63,7 +63,7 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
     def get_bone_count(self) -> int:
         """Get number of bones in skeleton."""
         data = self.data
-        return data.get_bone_count() if data else 0
+        return data.bone_count if data and data.is_valid else 0
 
     # --- Serialization ---
 
@@ -73,21 +73,21 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
             "uuid": self.uuid,
             "name": self._name,
         }
-        if self._data is not None:
-            data["skeleton_data"] = self._data.serialize()
+        if self._data is not None and self._data.is_valid:
+            data["skeleton_uuid"] = self._data.uuid
         return data
 
     @classmethod
     def deserialize(cls, data: dict) -> "SkeletonAsset":
         """Deserialize skeleton asset from dict."""
-        from termin.skeleton import SkeletonData
+        from termin.skeleton import TcSkeleton
 
-        skeleton_data = None
-        if "skeleton_data" in data:
-            skeleton_data = SkeletonData.deserialize(data["skeleton_data"])
+        skeleton = None
+        if "skeleton_uuid" in data:
+            skeleton = TcSkeleton.from_uuid(data["skeleton_uuid"])
 
         return cls(
-            skeleton_data=skeleton_data,
+            skeleton_data=skeleton,
             name=data.get("name", "skeleton"),
             uuid=data.get("uuid"),
         )
@@ -95,16 +95,16 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
     # --- Factory methods ---
 
     @classmethod
-    def from_skeleton_data(
+    def from_tc_skeleton(
         cls,
-        skeleton_data: "SkeletonData",
+        skeleton: "TcSkeleton",
         name: str | None = None,
         source_path: str | Path | None = None,
         uuid: str | None = None,
     ) -> "SkeletonAsset":
-        """Create SkeletonAsset from existing SkeletonData."""
+        """Create SkeletonAsset from existing TcSkeleton."""
         return cls(
-            skeleton_data=skeleton_data,
+            skeleton_data=skeleton,
             name=name or "skeleton",
             source_path=source_path,
             uuid=uuid,

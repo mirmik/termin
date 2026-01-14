@@ -1,4 +1,4 @@
-"""SkeletonHandle - re-export from C++."""
-from termin.skeleton._skeleton_native import SkeletonHandle
+"""TcSkeleton - re-export from C++."""
+from termin.skeleton._skeleton_native import TcSkeleton
 
-__all__ = ["SkeletonHandle"]
+__all__ = ["TcSkeleton"]

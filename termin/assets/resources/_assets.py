@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from termin.assets.navmesh_asset import NavMeshAsset
     from termin.visualization.animation.clip import AnimationClip
     from termin.assets.animation_clip_asset import AnimationClipAsset
-    from termin.skeleton import SkeletonData
+    from termin.skeleton import TcSkeleton
     from termin.assets.skeleton_asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3
@@ -480,14 +480,14 @@ class AssetsMixin:
         return self._skeleton_registry.get_asset(name)
 
     def register_skeleton(
-        self, name: str, skeleton: "SkeletonData", source_path: str | None = None, uuid: str | None = None
+        self, name: str, skeleton: "TcSkeleton", source_path: str | None = None, uuid: str | None = None
     ) -> None:
         from termin.assets.skeleton_asset import SkeletonAsset
-        asset = SkeletonAsset.from_skeleton_data(skeleton, name=name, source_path=source_path, uuid=uuid)
+        asset = SkeletonAsset.from_tc_skeleton(skeleton, name=name, source_path=source_path, uuid=uuid)
         self._skeleton_registry.register(name, asset, source_path, uuid)
         self.skeletons[name] = skeleton
 
-    def get_skeleton(self, name: str) -> Optional["SkeletonData"]:
+    def get_skeleton(self, name: str) -> Optional["TcSkeleton"]:
         skeleton = self.skeletons.get(name)
         if skeleton is not None:
             return skeleton
@@ -499,13 +499,13 @@ class AssetsMixin:
     def list_skeleton_names(self) -> list[str]:
         return self._skeleton_registry.list_names()
 
-    def find_skeleton_name(self, skeleton: "SkeletonData") -> Optional[str]:
+    def find_skeleton_name(self, skeleton: "TcSkeleton") -> Optional[str]:
         return self._skeleton_registry.find_name(skeleton)
 
-    def find_skeleton_uuid(self, skeleton: "SkeletonData") -> Optional[str]:
+    def find_skeleton_uuid(self, skeleton: "TcSkeleton") -> Optional[str]:
         return self._skeleton_registry.find_uuid(skeleton)
 
-    def get_skeleton_by_uuid(self, uuid: str) -> Optional["SkeletonData"]:
+    def get_skeleton_by_uuid(self, uuid: str) -> Optional["TcSkeleton"]:
         skeleton = self._skeleton_registry.get_by_uuid(uuid)
         if skeleton is not None:
             asset = self._skeleton_registry.get_asset_by_uuid(uuid)

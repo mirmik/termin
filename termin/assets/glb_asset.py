@@ -109,8 +109,16 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 asset._loaded = False
 
     def _create_skeleton_assets(self, skeleton_uuids: Dict[str, str]) -> None:
-        """Get or create child SkeletonAssets with UUIDs from spec via ResourceManager."""
+        """Get or create child SkeletonAssets with UUIDs from spec via ResourceManager.
+
+        Also declares skeletons in tc_skeleton registry with lazy load callback.
+        """
         from termin.assets.resources import ResourceManager
+        from termin.skeleton._skeleton_native import (
+            tc_skeleton_declare,
+            tc_skeleton_set_load_callback,
+            tc_skeleton_is_loaded,
+        )
 
         rm = ResourceManager.instance()
         for skeleton_key, skeleton_uuid in skeleton_uuids.items():
@@ -126,6 +134,15 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 parent_key=skeleton_key,
             )
             self._skeleton_assets[skeleton_key] = asset
+
+            # Declare skeleton in tc_skeleton registry if not already loaded
+            tc_skel = tc_skeleton_declare(skeleton_uuid, skeleton_name)
+            if tc_skel.is_valid and not tc_skeleton_is_loaded(tc_skel):
+                # Set load callback that will trigger GLBAsset loading
+                tc_skeleton_set_load_callback(tc_skel, self._make_skeleton_load_callback(skeleton_key))
+                # Store handle in SkeletonAsset
+                asset._data = tc_skel
+                asset._loaded = False
 
     def _create_animation_assets(self, animation_uuids: Dict[str, str]) -> None:
         """Get or create child AnimationClipAssets with UUIDs from spec via ResourceManager."""
@@ -244,15 +261,48 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
         return load_callback
 
+    def _make_skeleton_load_callback(self, skeleton_key: str):
+        """Create a load callback that triggers GLBAsset loading for a specific skeleton."""
+        def load_callback(tc_skeleton_data) -> bool:
+            # Load the parent GLBAsset if not loaded
+            self.ensure_loaded()
+
+            if self._data is None:
+                return False
+
+            # Parse skeleton_key to get index
+            if skeleton_key == "skeleton":
+                index = 0
+            else:
+                index = int(skeleton_key.split("_")[-1])
+
+            if index < len(self._data.skins):
+                from termin.loaders.glb_instantiator import _populate_tc_skeleton_from_glb
+                from termin.skeleton import TcSkeleton
+
+                tc_skel = TcSkeleton.from_uuid(tc_skeleton_data.uuid)
+                if tc_skel.is_valid:
+                    return _populate_tc_skeleton_from_glb(
+                        tc_skel,
+                        self._data.skins[index],
+                        self._data.nodes,
+                    )
+
+            return False
+
+        return load_callback
+
     def _populate_child_assets(self) -> None:
         """Fill all child assets with extracted data from loaded GLB."""
         from termin.loaders.glb_instantiator import (
             _glb_mesh_to_tc_mesh,
             _populate_tc_mesh_from_glb,
+            _glb_skin_to_tc_skeleton,
+            _populate_tc_skeleton_from_glb,
         )
         from termin.mesh._mesh_native import tc_mesh_is_loaded
+        from termin.skeleton._skeleton_native import tc_skeleton_is_loaded
         from termin.visualization.animation.clip import clip_from_glb
-        from termin.skeleton import SkeletonData
 
         # Populate mesh assets
         for mesh_name, asset in self._mesh_assets.items():
@@ -270,18 +320,29 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
         # Populate skeleton assets
         for skeleton_key, asset in self._skeleton_assets.items():
-            if asset._data is None:
-                # Parse skeleton_key to get index
-                if skeleton_key == "skeleton":
-                    index = 0
+            # Parse skeleton_key to get index
+            if skeleton_key == "skeleton":
+                index = 0
+            else:
+                index = int(skeleton_key.split("_")[-1])
+
+            if index < len(self._data.skins):
+                if asset._data is not None and asset._data.is_valid:
+                    # Skeleton was declared, populate existing entry
+                    if not tc_skeleton_is_loaded(asset._data):
+                        _populate_tc_skeleton_from_glb(
+                            asset._data,
+                            self._data.skins[index],
+                            self._data.nodes,
+                        )
                 else:
-                    index = int(skeleton_key.split("_")[-1])
-                if index < len(self._data.skins):
-                    asset._data = SkeletonData.from_glb_skin(
+                    # Create new skeleton entry with asset's UUID
+                    asset._data = _glb_skin_to_tc_skeleton(
                         self._data.skins[index],
                         self._data.nodes,
+                        asset._uuid,
                     )
-                    asset._loaded = True
+                asset._loaded = True
 
         # Populate animation assets
         for anim_name, asset in self._animation_assets.items():

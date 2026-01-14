@@ -7,8 +7,6 @@
 #include "handles.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/material.hpp"
-#include "termin/skeleton/skeleton_data.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 #include "termin/entity/entity.hpp"
 #include "../../../core_c/include/tc_kind.hpp"
 #include "tc_log.hpp"
@@ -74,7 +72,7 @@ void bind_assets(nb::module_& m) {
 
     // Note: nanobind doesn't have implicitly_convertible - handle via explicit constructors
 
-    // Note: SkeletonHandle is now in _skeleton_native module
+    // Note: TcSkeleton is now in _skeleton_native module
 
     // ========== Free functions ==========
     m.def("get_white_texture_handle", &get_white_texture_handle,
@@ -132,7 +130,7 @@ void register_kind_handlers() {
         })
     );
 
-    // Note: skeleton kind is registered in _skeleton_native module
+    // Note: tc_skeleton kind is registered in _skeleton_native module
 
     // ===== entity kind =====
     tc::register_cpp_handle_kind<Entity>("entity");

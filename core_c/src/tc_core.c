@@ -216,6 +216,8 @@ void tc_init(void) {
     tc_mesh_init();
     tc_texture_init();
     tc_shader_init();
+    tc_skeleton_init();
+    tc_animation_init();
     tc_scene_registry_init();
     g_initialized = true;
 }
@@ -225,6 +227,8 @@ void tc_shutdown(void) {
 
     // Cleanup in reverse order of dependency
     tc_scene_registry_shutdown();
+    tc_animation_shutdown();
+    tc_skeleton_shutdown();
     tc_shader_shutdown();
     tc_texture_shutdown();
     tc_mesh_shutdown();

@@ -7,8 +7,7 @@
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/entity.hpp"
-#include "termin/assets/handles.hpp"
-#include "termin/skeleton/skeleton_data.hpp"
+#include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 
@@ -16,15 +15,15 @@ namespace termin {
 
 // SkeletonController - Component that manages skeleton for skinned meshes.
 //
-// Holds SkeletonHandle and bone Entity references.
+// Holds TcSkeleton and bone Entity references.
 // Creates SkeletonInstance lazily on first access.
 // SkinnedMeshRenderer uses this to get bone matrices.
 class SkeletonController : public CxxComponent {
 public:
-    // Skeleton handle (wraps SkeletonAsset)
-    SkeletonHandle skeleton;
+    // Skeleton (RAII wrapper over tc_skeleton)
+    TcSkeleton skeleton;
 
-    // Bone entities (same order as skeleton_data.bones)
+    // Bone entities (same order as skeleton bones)
     std::vector<Entity> bone_entities;
 
 private:
@@ -32,7 +31,7 @@ private:
     std::unique_ptr<SkeletonInstance> _skeleton_instance;
 
 public:
-    INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton_handle")
+    INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "tc_skeleton")
     INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity]")
 
 public:
@@ -40,14 +39,14 @@ public:
     ~SkeletonController() override = default;
 
     /**
-     * Get skeleton data pointer (from handle).
+     * Get tc_skeleton pointer.
      */
-    SkeletonData* skeleton_data() const { return skeleton.get(); }
+    tc_skeleton* get_skeleton() const { return skeleton.get(); }
 
     /**
-     * Set skeleton data via handle. Invalidates cached instance.
+     * Set skeleton. Invalidates cached instance.
      */
-    void set_skeleton(const SkeletonHandle& handle);
+    void set_skeleton(const TcSkeleton& skel);
 
     /**
      * Set bone entities. Invalidates cached instance.
@@ -58,7 +57,7 @@ public:
      * Get or create SkeletonInstance.
      *
      * Creates instance lazily on first access using:
-     * - skeleton handle
+     * - skeleton
      * - bone_entities
      * - this->entity as skeleton root
      */
@@ -79,7 +78,7 @@ public:
      * Called before render to update bone matrices once per frame.
      */
     void before_render() override;
-    
+
     void on_removed_from_entity() override;
 };
 

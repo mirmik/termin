@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.assets.navmesh_asset import NavMeshAsset
     from termin.visualization.animation.clip import AnimationClip
     from termin.assets.animation_clip_asset import AnimationClipAsset
-    from termin.skeleton import SkeletonData
+    from termin.skeleton import TcSkeleton
     from termin.assets.skeleton_asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.assets.glb_asset import GLBAsset
@@ -36,7 +36,7 @@ class ResourceManagerBase:
         self.voxel_grids: Dict[str, "VoxelGrid"] = {}
         self.navmeshes: Dict[str, "NavMesh"] = {}
         self.animation_clips: Dict[str, "AnimationClip"] = {}
-        self.skeletons: Dict[str, "SkeletonData"] = {}
+        self.skeletons: Dict[str, "TcSkeleton"] = {}
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}
         self.post_effects: Dict[str, type] = {}

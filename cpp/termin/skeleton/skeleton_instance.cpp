@@ -8,24 +8,24 @@
 namespace termin {
 
 SkeletonInstance::SkeletonInstance(
-    SkeletonData* skeleton_data,
+    tc_skeleton* skeleton,
     std::vector<Entity> bone_entities,
     Entity skeleton_root
 )
-    : _data(skeleton_data)
+    : _skeleton(skeleton)
     , _bone_entities(std::move(bone_entities))
     , _skeleton_root(skeleton_root)
 {
-    if (_data) {
-        size_t n = _data->get_bone_count();
+    if (_skeleton) {
+        size_t n = _skeleton->bone_count;
         _bone_matrices.resize(n, Mat44::identity());
     }
 }
 
-void SkeletonInstance::set_skeleton_data(SkeletonData* data) {
-    _data = data;
-    if (_data) {
-        size_t n = _data->get_bone_count();
+void SkeletonInstance::set_skeleton(tc_skeleton* skeleton) {
+    _skeleton = skeleton;
+    if (_skeleton) {
+        size_t n = _skeleton->bone_count;
         _bone_matrices.resize(n, Mat44::identity());
     } else {
         _bone_matrices.clear();
@@ -44,11 +44,11 @@ Entity SkeletonInstance::get_bone_entity(int bone_index) const {
 }
 
 Entity SkeletonInstance::get_bone_entity_by_name(const std::string& bone_name) const {
-    if (!_data) {
-        tc::Log::warn("[SkeletonInstance::get_bone_entity_by_name] skeleton data is null");
+    if (!_skeleton) {
+        tc::Log::warn("[SkeletonInstance::get_bone_entity_by_name] skeleton is null");
         return Entity();
     }
-    int idx = _data->get_bone_index(bone_name);
+    int idx = tc_skeleton_find_bone(_skeleton, bone_name.c_str());
     return get_bone_entity(idx);
 }
 
@@ -79,10 +79,10 @@ void SkeletonInstance::set_bone_transform_by_name(
     const double* rotation,
     const double* scale
 ) {
-    if (!_data) {
+    if (!_skeleton) {
         return;
     }
-    int idx = _data->get_bone_index(bone_name);
+    int idx = tc_skeleton_find_bone(_skeleton, bone_name.c_str());
     if (idx < 0) {
         return;
     }
@@ -95,8 +95,8 @@ Entity SkeletonInstance::find_skeleton_root() {
     }
 
     // Try to find root as parent of root bone entities
-    if (!_bone_entities.empty() && _data && !_data->root_bone_indices().empty()) {
-        int root_bone_idx = _data->root_bone_indices()[0];
+    if (!_bone_entities.empty() && _skeleton && _skeleton->root_count > 0) {
+        int root_bone_idx = _skeleton->root_indices[0];
         if (root_bone_idx >= 0 && root_bone_idx < static_cast<int>(_bone_entities.size())) {
             Entity root_bone_entity = _bone_entities[root_bone_idx];
             if (root_bone_entity.valid()) {
@@ -117,7 +117,7 @@ Entity SkeletonInstance::find_skeleton_root() {
 }
 
 void SkeletonInstance::update() {
-    if (_bone_entities.empty() || !_data) return;
+    if (_bone_entities.empty() || !_skeleton || !_skeleton->bones) return;
 
     // Helper to convert row-major array to column-major Mat44
     auto row_major_to_mat44 = [](const double* src) -> Mat44 {
@@ -142,7 +142,8 @@ void SkeletonInstance::update() {
     }
 
     // Compute bone matrices
-    for (const Bone& bone : _data->bones()) {
+    for (size_t i = 0; i < _skeleton->bone_count; ++i) {
+        const tc_bone& bone = _skeleton->bones[i];
         if (bone.index >= static_cast<int>(_bone_entities.size())) continue;
 
         Entity ent = _bone_entities[bone.index];
@@ -153,8 +154,8 @@ void SkeletonInstance::update() {
         ent.transform().world_matrix(bone_world_d);
         Mat44 bone_world = row_major_to_mat44(bone_world_d);
 
-        // Get inverse bind matrix (stored as row-major from numpy)
-        Mat44 inv_bind = row_major_to_mat44(bone.inverse_bind_matrix.data());
+        // Get inverse bind matrix (stored as row-major)
+        Mat44 inv_bind = row_major_to_mat44(bone.inverse_bind_matrix);
 
         // bone_matrix = skeleton_world_inv * bone_world * inv_bind
         _bone_matrices[bone.index] = skeleton_world_inv * bone_world * inv_bind;
@@ -171,7 +172,7 @@ void SkeletonInstance::get_bone_matrices_float(float* out) const {
 }
 
 int SkeletonInstance::bone_count() const {
-    return _data ? static_cast<int>(_data->get_bone_count()) : 0;
+    return _skeleton ? static_cast<int>(_skeleton->bone_count) : 0;
 }
 
 Mat44 SkeletonInstance::get_bone_world_matrix(int bone_index) const {

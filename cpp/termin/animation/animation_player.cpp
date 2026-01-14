@@ -101,14 +101,14 @@ void AnimationPlayer::_build_channel_mapping() {
         return;
     }
 
-    SkeletonData* skel_data = _target_skeleton->skeleton_data();
-    if (skel_data == nullptr) {
+    tc_skeleton* skel = _target_skeleton->_skeleton;
+    if (skel == nullptr) {
         return;
     }
 
     // Build mapping from channel index to bone index
     for (const auto& [name, channel] : _current->channels) {
-        int bone_idx = skel_data->get_bone_index(name);
+        int bone_idx = tc_skeleton_find_bone(skel, name.c_str());
         _channel_names.push_back(name);
         _channel_to_bone.push_back(bone_idx);
     }

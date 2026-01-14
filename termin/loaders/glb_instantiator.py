@@ -9,7 +9,7 @@ import numpy as np
 
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
-from termin.skeleton import Bone, SkeletonData, SkeletonInstance
+from termin.skeleton import SkeletonInstance, TcSkeleton
 from termin.visualization.core.entity import Entity
 from termin.mesh import TcMesh
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
@@ -185,6 +185,107 @@ def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool
     buffer_flat = buffer.ravel().astype(np.float32)
 
     return tc_mesh_set_data(tc_mesh, buffer_flat, num_verts, layout, indices, glb_mesh.name)
+
+
+def _glb_skin_to_tc_skeleton(skin, nodes, uuid: str = "") -> "TcSkeleton":
+    """Convert GLB skin data to TcSkeleton.
+
+    Args:
+        skin: GLBSkinData from GLB file
+        nodes: List of GLBNodeData
+        uuid: Optional UUID to use (if empty, generates new)
+
+    Returns:
+        TcSkeleton with bone data populated
+    """
+    from termin.skeleton import TcSkeleton
+
+    tc_skel = TcSkeleton.get_or_create(uuid) if uuid else TcSkeleton.create()
+    if not tc_skel.is_valid:
+        return tc_skel
+
+    _populate_tc_skeleton_from_glb(tc_skel, skin, nodes)
+    return tc_skel
+
+
+def _populate_tc_skeleton_from_glb(tc_skel: "TcSkeleton", skin, nodes) -> bool:
+    """Populate an existing declared TcSkeleton with data from GLB skin.
+
+    Args:
+        tc_skel: TcSkeleton to populate
+        skin: GLBSkinData from GLB file
+        nodes: List of GLBNodeData
+
+    Returns:
+        True if successful, False otherwise
+    """
+    from termin.skeleton._skeleton_native import TcSkeleton
+
+    if not tc_skel.is_valid:
+        return False
+
+    tc_skeleton_ptr = tc_skel.get()
+    if tc_skeleton_ptr is None:
+        return False
+
+    joint_indices = skin.joint_node_indices
+    inverse_bind_matrices = skin.inverse_bind_matrices
+    num_joints = len(joint_indices)
+
+    if num_joints == 0:
+        return True
+
+    # Allocate bones
+    bones = tc_skel.alloc_bones(num_joints)
+    if bones is None:
+        return False
+
+    # Build a mapping from joint bone index -> node index
+    joint_to_node = {i: joint_indices[i] for i in range(num_joints)}
+    # Inverse: node index -> bone index
+    node_to_bone = {node_idx: bone_idx for bone_idx, node_idx in enumerate(joint_indices)}
+
+    # Populate each bone
+    for bone_idx in range(num_joints):
+        node_idx = joint_indices[bone_idx]
+        node = nodes[node_idx]
+
+        # Find parent bone index by checking which other bone's node has this node as a child
+        parent_bone_idx = -1
+        for other_bone_idx in range(num_joints):
+            other_node_idx = joint_indices[other_bone_idx]
+            other_node = nodes[other_node_idx]
+            if node_idx in other_node.children:
+                parent_bone_idx = other_bone_idx
+                break
+
+        # Get tc_bone pointer and populate
+        bone = tc_skel.get_bone(bone_idx)
+        if bone is None:
+            continue
+
+        # Set bone data via C API
+        bone.name = node.name[:63]  # TC_BONE_NAME_MAX = 64
+        bone.index = bone_idx
+        bone.parent_index = parent_bone_idx
+
+        # Inverse bind matrix (row-major 4x4) - must assign entire list at once
+        ibm = inverse_bind_matrices[bone_idx]
+        bone.inverse_bind_matrix = [float(x) for x in ibm.flat]
+
+        # Bind pose
+        bone.bind_translation = (float(node.translation[0]), float(node.translation[1]), float(node.translation[2]))
+        bone.bind_rotation = (float(node.rotation[0]), float(node.rotation[1]), float(node.rotation[2]), float(node.rotation[3]))
+        bone.bind_scale = (float(node.scale[0]), float(node.scale[1]), float(node.scale[2]))
+
+    # Rebuild root indices
+    tc_skel.rebuild_roots()
+
+    # Mark as loaded
+    tc_skeleton_ptr.is_loaded = True
+    tc_skel.bump_version()
+
+    return True
 
 
 class _PendingSkinnedMesh:
@@ -415,8 +516,13 @@ def instantiate_glb(
                 entity = create_entity(f"missing_bone_{node_idx}")
             bone_entities.append(entity)
 
+        # Pass the TcSkeleton from the asset, not the asset itself
+        tc_skeleton = skeleton_asset.data
+        if tc_skeleton is None or not tc_skeleton.is_valid:
+            raise RuntimeError(f"[glb_instantiator] TcSkeleton is invalid for skeleton '{skeleton_key}'")
+
         skeleton_controller = SkeletonController(
-            skeleton=skeleton_asset,
+            skeleton=tc_skeleton,
             bone_entities=bone_entities,
         )
         root_entity.add_component(skeleton_controller)

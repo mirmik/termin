@@ -34,6 +34,10 @@
 #include "tc_texture_registry.h"
 #include "tc_shader.h"
 #include "tc_shader_registry.h"
+#include "tc_skeleton.h"
+#include "tc_skeleton_registry.h"
+#include "tc_animation.h"
+#include "tc_animation_registry.h"
 #include "tc_scene_registry.h"
 #include "tc_gpu.h"
 

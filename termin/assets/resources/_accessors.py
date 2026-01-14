@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from termin.assets.material_handle import MaterialHandle
     from termin.assets.voxel_grid_handle import VoxelGridHandle
     from termin.assets.navmesh_handle import NavMeshHandle
-    from termin.assets.skeleton_handle import SkeletonHandle
+    from termin.assets.skeleton_handle import TcSkeleton
     from termin.assets.ui_handle import UIHandle
     from termin.mesh import TcMesh
 
@@ -63,11 +63,11 @@ class AccessorsMixin:
                 find_name=self._find_navmesh_handle_name,
                 find_uuid=self._find_navmesh_uuid_by_name,
             )
-        if kind == "skeleton_handle":
+        if kind == "tc_skeleton":
             return HandleAccessors(
                 list_names=self.list_skeleton_names,
-                get_by_name=self._get_skeleton_handle,
-                find_name=self._find_skeleton_handle_name,
+                get_by_name=self._get_tc_skeleton,
+                find_name=self._find_tc_skeleton_name,
                 find_uuid=self._find_skeleton_uuid_by_name,
             )
         if kind == "texture_handle":
@@ -154,25 +154,24 @@ class AccessorsMixin:
         # Legacy: raw NavMesh
         return self.find_navmesh_name(handle)
 
-    # Handle accessors for SkeletonHandle
-    def _get_skeleton_handle(self, name: str) -> Optional["SkeletonHandle"]:
-        """Get SkeletonHandle by name."""
-        from termin.assets.skeleton_handle import SkeletonHandle
-        return SkeletonHandle.from_name(name)
-
-    def _find_skeleton_handle_name(self, handle: Any) -> Optional[str]:
-        """Find name for a SkeletonHandle or SkeletonData."""
-        from termin.assets.skeleton_handle import SkeletonHandle
-        if isinstance(handle, SkeletonHandle):
-            asset = handle.get_asset()
-            if asset:
-                return asset.name
-            skeleton = handle.get()
-            if skeleton:
-                return self.find_skeleton_name(skeleton)
+    # Handle accessors for TcSkeleton
+    def _get_tc_skeleton(self, name: str) -> Optional["TcSkeleton"]:
+        """Get TcSkeleton by name."""
+        from termin.assets.skeleton_handle import TcSkeleton
+        # Look up asset by name to get UUID
+        asset = self._skeleton_assets.get(name)
+        if asset is None:
             return None
-        # Legacy: raw SkeletonData
-        return self.find_skeleton_name(handle)
+        # Return TcSkeleton from registry by UUID
+        return TcSkeleton.from_uuid(asset.uuid)
+
+    def _find_tc_skeleton_name(self, handle: Any) -> Optional[str]:
+        """Find name for a TcSkeleton."""
+        from termin.assets.skeleton_handle import TcSkeleton
+        if isinstance(handle, TcSkeleton):
+            if handle.is_valid:
+                return handle.name
+        return None
 
     # Handle accessors for TextureHandle
     def _find_texture_handle_name(self, handle: Any) -> Optional[str]:
@@ -299,11 +298,8 @@ class AccessorsMixin:
             return None
 
         if kind == "skeleton":
-            from termin.assets.skeleton_handle import SkeletonHandle
-            asset = self.get_skeleton_asset_by_uuid(uuid)
-            if asset:
-                return SkeletonHandle.from_asset(asset)
-            return None
+            from termin.assets.skeleton_handle import TcSkeleton
+            return TcSkeleton.from_uuid(uuid)
 
         if kind == "audio_clip":
             return self.get_audio_clip_by_uuid(uuid)

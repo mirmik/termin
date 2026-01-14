@@ -4,7 +4,10 @@
 #include <array>
 #include <string>
 
-#include "termin/skeleton/skeleton_data.hpp"
+extern "C" {
+#include "termin_core.h"
+}
+
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 
@@ -22,8 +25,8 @@ class SkeletonInstance {
 public:
     static constexpr int MAX_BONES = 128;
 
-    // Data
-    SkeletonData* _data = nullptr;
+    // Data - now uses C skeleton directly
+    tc_skeleton* _skeleton = nullptr;
     std::vector<Entity> _bone_entities;
     Entity _skeleton_root;
 
@@ -35,14 +38,14 @@ public:
     SkeletonInstance() = default;
 
     SkeletonInstance(
-        SkeletonData* skeleton_data,
+        tc_skeleton* skeleton,
         std::vector<Entity> bone_entities,
         Entity skeleton_root
     );
 
     // Accessors
-    SkeletonData* skeleton_data() const { return _data; }
-    void set_skeleton_data(SkeletonData* data);
+    tc_skeleton* skeleton() const { return _skeleton; }
+    void set_skeleton(tc_skeleton* skeleton);
 
     const std::vector<Entity>& bone_entities() const { return _bone_entities; }
     void set_bone_entities(std::vector<Entity> entities);

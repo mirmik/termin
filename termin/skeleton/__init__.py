@@ -4,18 +4,14 @@
 from termin import _dll_setup  # noqa: F401
 
 from termin.skeleton._skeleton_native import (
-    Bone,
-    SkeletonData,
-    SkeletonHandle,
+    TcSkeleton,
     SkeletonInstance,
     SkeletonController,
 )
 from termin.skeleton.skeleton_asset import SkeletonAsset
 
 __all__ = [
-    "Bone",
-    "SkeletonData",
-    "SkeletonHandle",
+    "TcSkeleton",
     "SkeletonInstance",
     "SkeletonController",
     "SkeletonAsset",
