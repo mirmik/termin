@@ -373,8 +373,10 @@ void ColorPass::execute_with_data(
         }
 
         // Lighting UBO binding
+        // Note: AMD requires glBindBufferBase AFTER glUniformBlockBinding
         if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO) && ubo_active) {
             shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
+            lighting_ubo_.bind();
         }
 
         // Upload shadow maps uniforms (only if shader changed)
