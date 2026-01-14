@@ -310,7 +310,7 @@ void ColorPass::execute_with_data(
     for (const auto& dc : cached_draw_calls_)
     {
         if (detailed) {
-            tc_profiler_begin_section("DrawCalls.Preparation");
+            tc_profiler_begin_section("Prep.ModelMatrix");
         }
 
         // Cache entity name
@@ -321,12 +321,22 @@ void ColorPass::execute_with_data(
         Mat44f model = get_model_matrix(dc.entity);
         context.model = model;
 
+        if (detailed) {
+            tc_profiler_end_section();
+            tc_profiler_begin_section("Prep.RenderState");
+        }
+
         // Apply render state (override polygon mode if wireframe enabled)
         RenderState state = dc.phase->render_state;
         if (wireframe) {
             state.polygon_mode = PolygonMode::Line;
         }
         graphics->apply_render_state(state);
+
+        if (detailed) {
+            tc_profiler_end_section();
+            tc_profiler_begin_section("Prep.OverrideShader");
+        }
 
         // Get shader (allow drawable to override for skinning etc.)
         ShaderProgram* shader_to_use = dc.phase->shader.get();
@@ -337,8 +347,18 @@ void ColorPass::execute_with_data(
             shader_to_use = overridden;
         }
 
+        if (detailed) {
+            tc_profiler_end_section();
+            tc_profiler_begin_section("Prep.ApplyMaterial");
+        }
+
         // Apply material uniforms to the (possibly overridden) shader
         dc.phase->apply_to_shader(shader_to_use, model, view, projection, graphics, context_key);
+
+        if (detailed) {
+            tc_profiler_end_section();
+            tc_profiler_begin_section("Prep.Uniforms");
+        }
 
         // Apply extra texture uniforms (set from Python)
         if (shader_to_use && !extra_texture_uniforms.empty()) {
@@ -367,15 +387,15 @@ void ColorPass::execute_with_data(
         }
 
         if (detailed) {
-            tc_profiler_end_section(); // DrawCalls.Preparation
-            tc_profiler_begin_section("DrawCalls.DrawGeometry");
+            tc_profiler_end_section();
+            tc_profiler_begin_section("DrawGeometry");
         }
 
         // Draw geometry via vtable
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 
         if (detailed) {
-            tc_profiler_end_section(); // DrawCalls.DrawGeometry
+            tc_profiler_end_section(); // DrawGeometry
         }
 
         graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
