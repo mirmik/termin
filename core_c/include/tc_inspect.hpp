@@ -613,7 +613,6 @@ public:
 
             nb::str key(f.path.c_str());
             if (!data.contains(key)) {
-                tc_log_warn("deserialize %s.%s: field not in data", type_name.c_str(), f.path.c_str());
                 continue;
             }
 
