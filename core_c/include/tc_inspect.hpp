@@ -612,7 +612,10 @@ public:
             if (!f.is_serializable) continue;
 
             nb::str key(f.path.c_str());
-            if (!data.contains(key)) continue;
+            if (!data.contains(key)) {
+                tc_log_warn("deserialize %s.%s: field not in data", type_name.c_str(), f.path.c_str());
+                continue;
+            }
 
             nb::object field_data = data[key];
             if (field_data.is_none()) continue;
@@ -634,7 +637,12 @@ public:
                 nos::trent t = nb_to_trent_compat(field_data);
                 std::any val = KindRegistry::instance().deserialize_cpp(f.kind, t, scene);
                 if (val.has_value()) {
-                    f.cpp_setter(ptr, val);
+                    try {
+                        f.cpp_setter(ptr, val);
+                    } catch (const std::bad_any_cast& e) {
+                        tc_log_error("deserialize %s.%s (kind=%s): cpp_setter failed: %s",
+                            type_name.c_str(), f.path.c_str(), f.kind.c_str(), e.what());
+                    }
                 } else {
                     tc_log_warn("deserialize %s.%s (kind=%s): deserialize_cpp failed",
                         type_name.c_str(), f.path.c_str(), f.kind.c_str());

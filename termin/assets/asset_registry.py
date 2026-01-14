@@ -91,20 +91,29 @@ class AssetRegistry(Generic[AssetT, DataT]):
         parent_key: str | None = None,
     ) -> AssetT:
         """
-        Get asset by name, creating it if it doesn't exist.
+        Get asset by UUID (if provided), or create a new one.
 
-        This is the primary way to get assets - ensures single instance per name.
+        UUID is the primary key for assets. Name is used for display
+        and for assets without UUID (like GLSL includes).
 
         Args:
-            name: Resource name
+            name: Resource name (for display and name-based lookup)
             source_path: Source file path (for new assets)
-            uuid: UUID (for new assets, from spec)
+            uuid: UUID (primary key for lookup)
             parent: Parent asset (for embedded assets like mesh from GLB)
             parent_key: Key within parent (e.g., mesh name in GLB)
         """
-        asset = self._assets.get(name)
-        if asset is not None:
-            return asset
+        # UUID is the primary key - check it first
+        if uuid is not None:
+            asset = self._uuid_registry.get(uuid)
+            if asset is not None and isinstance(asset, self._asset_class):
+                return asset
+
+        # For assets without UUID, check by name
+        if uuid is None:
+            asset = self._assets.get(name)
+            if asset is not None:
+                return asset
 
         # Create new asset
         asset = self._asset_class(name=name, source_path=source_path, uuid=uuid)
@@ -115,6 +124,7 @@ class AssetRegistry(Generic[AssetT, DataT]):
             if isinstance(asset, DataAsset):
                 asset.set_parent(parent, parent_key)
 
+        # Register by both UUID and name
         self._assets[name] = asset
         self._uuid_registry[asset.uuid] = asset
         return asset

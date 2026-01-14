@@ -133,9 +133,8 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
         rm = ResourceManager.instance()
         for anim_name, anim_uuid in animation_uuids.items():
-            full_name = f"{self._name}_{anim_name}"
             asset = rm.get_or_create_animation_clip_asset(
-                name=full_name,
+                name=anim_name,
                 source_path=str(self._source_path) if self._source_path else None,
                 uuid=anim_uuid,
                 parent=self,
@@ -330,9 +329,8 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
-        full_name = f"{self._name}_{anim_name}"
         asset = rm.get_or_create_animation_clip_asset(
-            name=full_name,
+            name=anim_name,
             source_path=str(self._source_path) if self._source_path else None,
             uuid=None,  # Will auto-generate
             parent=self,

@@ -218,6 +218,7 @@ void register_cpp_handle_kind(const std::string& kind_name) {
 
     // List handler for std::vector<H>
     std::string list_kind = "list[" + kind_name + "]";
+    tc_log(TC_LOG_INFO, "[KindRegistry] Registering C++ kind: %s", list_kind.c_str());
     KindRegistry::instance().register_cpp(list_kind,
         // serialize: std::any(vector<H>) → trent (list)
         [](const std::any& value) -> nos::trent {
@@ -244,15 +245,18 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             return result;
         },
         // deserialize: trent, scene → std::any(vector<H>)
-        [](const nos::trent& t, tc_scene* scene) -> std::any {
+        [list_kind](const nos::trent& t, tc_scene* scene) -> std::any {
             std::vector<H> vec;
+            tc_log(TC_LOG_INFO, "[KindRegistry] deserialize %s: t.is_list()=%d", list_kind.c_str(), t.is_list());
             if (t.is_list()) {
+                tc_log(TC_LOG_INFO, "[KindRegistry] list size=%zu", t.as_list().size());
                 for (const auto& item : t.as_list()) {
                     H h;
                     h.deserialize_from(item, scene);
                     vec.push_back(h);
                 }
             }
+            tc_log(TC_LOG_INFO, "[KindRegistry] deserialized %zu items", vec.size());
             return vec;
         }
     );
@@ -312,6 +316,10 @@ inline void register_builtin_kinds() {
         [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); }
     );
     reg.register_cpp("multiline_text",
+        [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); }
+    );
+    reg.register_cpp("clip_selector",
         [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
         [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); }
     );

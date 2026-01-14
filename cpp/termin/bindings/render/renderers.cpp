@@ -5,28 +5,6 @@
 #include "termin/render/render.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
-#include <iostream>
-
-#ifdef _WIN32
-#define NOMINMAX
-#include <windows.h>
-#undef near
-#undef far
-
-inline bool check_heap() {
-    HANDLE heaps[100];
-    DWORD numHeaps = GetProcessHeaps(100, heaps);
-    for (DWORD i = 0; i < numHeaps; i++) {
-        if (!HeapValidate(heaps[i], 0, nullptr)) {
-            std::cerr << "[HEAP CORRUPT] Heap " << i << " is corrupted!" << std::endl;
-            return false;
-        }
-    }
-    return true;
-}
-#else
-inline bool check_heap() { return true; }
-#endif
 
 namespace termin {
 
@@ -34,120 +12,8 @@ void bind_renderers(nb::module_& m) {
     // Import _entity_native so nanobind can find Component type for inheritance
     nb::module_::import_("termin.entity._entity_native");
 
-    // SkeletonController - inherits from Component
-    nb::class_<SkeletonController, Component>(m, "SkeletonController")
-        .def(nb::init<>())
-        .def("__init__", [](SkeletonController* self, nb::object skeleton_arg, nb::list bone_entities_list) {
-            std::cerr << "[SkeletonController] Constructor start" << std::endl;
-            if (!check_heap()) {
-                std::cerr << "[SkeletonController] HEAP CORRUPTED at start!" << std::endl;
-            }
-
-            new (self) SkeletonController();
-
-            // Handle skeleton argument: SkeletonHandle, SkeletonAsset, or SkeletonData*
-            if (!skeleton_arg.is_none()) {
-                std::cerr << "[SkeletonController] Processing skeleton arg" << std::endl;
-                if (nb::isinstance<SkeletonHandle>(skeleton_arg)) {
-                    self->skeleton = nb::cast<SkeletonHandle>(skeleton_arg);
-                } else if (nb::hasattr(skeleton_arg, "resource")) {
-                    // SkeletonAsset - wrap in handle
-                    self->skeleton = SkeletonHandle::from_asset(skeleton_arg);
-                } else {
-                    // Raw SkeletonData* - wrap in handle via asset
-                    auto skel_data = nb::cast<SkeletonData*>(skeleton_arg);
-                    if (skel_data != nullptr) {
-                        // Create minimal asset and set skeleton_data
-                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
-                        asset.attr("skeleton_data") = skeleton_arg;
-                        self->skeleton = SkeletonHandle::from_asset(asset);
-                    }
-                }
-                std::cerr << "[SkeletonController] Skeleton set" << std::endl;
-                if (!check_heap()) {
-                    std::cerr << "[SkeletonController] HEAP CORRUPTED after skeleton!" << std::endl;
-                }
-            }
-
-            std::cerr << "[SkeletonController] Processing " << bone_entities_list.size() << " bone entities" << std::endl;
-            std::vector<Entity> entities;
-            for (auto item : bone_entities_list) {
-                if (!item.is_none()) {
-                    entities.push_back(nb::cast<Entity>(item));
-                }
-            }
-            self->set_bone_entities(std::move(entities));
-            std::cerr << "[SkeletonController] Bone entities set" << std::endl;
-            if (!check_heap()) {
-                std::cerr << "[SkeletonController] HEAP CORRUPTED after bone entities!" << std::endl;
-            }
-
-            std::cerr << "[SkeletonController] Constructor done" << std::endl;
-        },
-            nb::arg("skeleton") = nb::none(),
-            nb::arg("bone_entities") = nb::list())
-        .def_rw("skeleton", &SkeletonController::skeleton)
-        .def_prop_rw("skeleton_data",
-            &SkeletonController::skeleton_data,
-            [](SkeletonController& self, nb::object skel_arg) {
-                // Setter accepts SkeletonData*, SkeletonAsset, or SkeletonHandle
-                if (skel_arg.is_none()) {
-                    self.skeleton = SkeletonHandle();
-                    return;
-                }
-                if (nb::isinstance<SkeletonHandle>(skel_arg)) {
-                    self.set_skeleton(nb::cast<SkeletonHandle>(skel_arg));
-                } else if (nb::hasattr(skel_arg, "resource")) {
-                    self.set_skeleton(SkeletonHandle::from_asset(skel_arg));
-                } else {
-                    auto skel_data = nb::cast<SkeletonData*>(skel_arg);
-                    if (skel_data != nullptr) {
-                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
-                        asset.attr("skeleton_data") = skel_arg;
-                        self.set_skeleton(SkeletonHandle::from_asset(asset));
-                    }
-                }
-            },
-            nb::rv_policy::reference)
-        .def_prop_rw("bone_entities",
-            [](const SkeletonController& self) {
-                nb::list result;
-                for (const auto& e : self.bone_entities) {
-                    if (e.valid()) {
-                        result.append(nb::cast(e));
-                    } else {
-                        result.append(nb::none());
-                    }
-                }
-                return result;
-            },
-            [](SkeletonController& self, nb::list entities) {
-                std::vector<Entity> vec;
-                for (auto item : entities) {
-                    if (!item.is_none()) {
-                        vec.push_back(nb::cast<Entity>(item));
-                    }
-                }
-                self.set_bone_entities(std::move(vec));
-            })
-        .def_prop_ro("skeleton_instance",
-            &SkeletonController::skeleton_instance,
-            nb::rv_policy::reference)
-        .def("set_skeleton", &SkeletonController::set_skeleton)
-        .def("set_bone_entities", [](SkeletonController& self, nb::list entities) {
-            std::vector<Entity> vec;
-            for (auto item : entities) {
-                if (!item.is_none()) {
-                    vec.push_back(nb::cast<Entity>(item));
-                }
-            }
-            self.set_bone_entities(std::move(vec));
-        })
-        .def("invalidate_instance", &SkeletonController::invalidate_instance);
+    // Import _skeleton_native for SkeletonController type (used by SkinnedMeshRenderer)
+    nb::module_::import_("termin.skeleton._skeleton_native");
 
     // MeshRenderer - inherits from Component
     nb::class_<MeshRenderer, Component>(m, "MeshRenderer")

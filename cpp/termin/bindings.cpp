@@ -37,6 +37,10 @@ NB_MODULE(_native, m) {
     nb::module_ entity_native = nb::module_::import_("termin.entity._entity_native");
     m.attr("entity") = entity_native;
 
+    // Note: _skeleton_native and _animation_native are imported from Python
+    // before _native is loaded (in termin/__init__.py) to avoid circular imports
+    // and ensure kind handlers are registered early.
+
     // Create submodules
     auto render_module = m.def_submodule("render", "Render module");
     auto platform_module = m.def_submodule("platform", "Platform module");

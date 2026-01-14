@@ -3,6 +3,6 @@
 Re-exports C++ SkeletonController.
 """
 
-from termin._native.render import SkeletonController
+from termin.skeleton._skeleton_native import SkeletonController
 
 __all__ = ["SkeletonController"]

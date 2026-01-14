@@ -516,16 +516,9 @@ void bind_material(nb::module_& m) {
             auto shader = std::make_shared<ShaderProgram>(vs, fs, gs, "", shader_name, phase_uuid);
 
             // Apply features to the shader
-            // DEBUG
-            tc::Log::info("from_shader_phase: shader='%s' uuid='%s' features.size=%zu tc_shader.valid=%d",
-                shader_name.c_str(), phase_uuid.c_str(), features.size(),
-                shader->tc_shader().is_valid());
-
             for (const auto& feature : features) {
-                tc::Log::info("from_shader_phase: applying feature '%s'", feature.c_str());
                 if (feature == "lighting_ubo") {
                     shader->set_feature(TC_SHADER_FEATURE_LIGHTING_UBO);
-                    tc::Log::info("from_shader_phase: after set_feature, features=%u", shader->features());
                 }
                 // Add more feature mappings here as needed
             }

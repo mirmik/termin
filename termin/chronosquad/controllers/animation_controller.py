@@ -82,16 +82,19 @@ class AnimationController(PythonComponent):
         self._ensure_initialized()
 
         if self._object_controller is None or self._animation_player is None:
+            log.warning("[AnimationController] Missing ObjectController or AnimationPlayer")
             return
 
         # Get chrono object from ObjectController
         chrono_obj = self._object_controller.chrono_object
         if chrono_obj is None:
+            log.warning("[AnimationController] No chrono object found")
             return
 
         # Get timeline time
         timeline = chrono_obj.timeline
         if timeline is None:
+            log.warning("[AnimationController] Chrono object has no timeline")
             return
 
         timeline_time = timeline.current_time
@@ -126,16 +129,19 @@ class AnimationController(PythonComponent):
         # Get animation name
         anim_name = self.ANIMATION_NAMES.get(task.animation_type)
         if anim_name is None:
+            log.warning(f"[AnimationController] Unknown animation type: {task.animation_type}")
             return
 
         # Check if animation exists
-        if anim_name not in self._animation_player.clips:
+        clips_map = self._animation_player.clips_map
+        if anim_name not in clips_map:
+            log.warning(f"[AnimationController] Animation '{anim_name}' not found in AnimationPlayer")
             return
 
         # Switch clip if type changed
         if task.animation_type != self._current_animation_type:
             self._current_animation_type = task.animation_type
-            self._animation_player.current = self._animation_player.clips[anim_name]
+            self._animation_player.set_current(anim_name)
             log.info(f"[AnimationController] Switched to '{anim_name}'")
 
         # Set animation time directly

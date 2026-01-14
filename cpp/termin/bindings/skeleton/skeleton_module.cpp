@@ -3,9 +3,13 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/ndarray.h>
+#include <iostream>
 
 #include "termin/skeleton/bone.hpp"
 #include "termin/skeleton/skeleton_data.hpp"
+#include "termin/skeleton/skeleton_instance.hpp"
+#include "termin/render/skeleton_controller.hpp"
+#include "termin/entity/entity.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
@@ -348,15 +352,272 @@ void register_skeleton_kind() {
     );
 }
 
+void bind_skeleton_instance(nb::module_& m) {
+    nb::class_<termin::SkeletonInstance>(m, "SkeletonInstance")
+        .def(nb::init<>())
+        .def_prop_rw("skeleton_data",
+            &termin::SkeletonInstance::skeleton_data,
+            &termin::SkeletonInstance::set_skeleton_data,
+            nb::rv_policy::reference)
+        .def_prop_rw("bone_entities",
+            [](const termin::SkeletonInstance& si) {
+                nb::list result;
+                for (const termin::Entity& e : si.bone_entities()) {
+                    if (e.valid()) {
+                        result.append(nb::cast(e));
+                    } else {
+                        result.append(nb::none());
+                    }
+                }
+                return result;
+            },
+            [](termin::SkeletonInstance& si, nb::list entities) {
+                std::vector<termin::Entity> vec;
+                for (auto item : entities) {
+                    if (!item.is_none()) {
+                        vec.push_back(nb::cast<termin::Entity>(item));
+                    }
+                }
+                si.set_bone_entities(std::move(vec));
+            })
+        .def_prop_rw("skeleton_root",
+            [](const termin::SkeletonInstance& si) -> nb::object {
+                termin::Entity root = si.skeleton_root();
+                if (root.valid()) return nb::cast(root);
+                return nb::none();
+            },
+            [](termin::SkeletonInstance& si, nb::object root_obj) {
+                if (root_obj.is_none()) {
+                    si.set_skeleton_root(termin::Entity());
+                } else {
+                    si.set_skeleton_root(nb::cast<termin::Entity>(root_obj));
+                }
+            })
+        .def("get_bone_entity", [](const termin::SkeletonInstance& si, int index) -> nb::object {
+            termin::Entity e = si.get_bone_entity(index);
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("bone_index"))
+        .def("get_bone_entity_by_name", [](const termin::SkeletonInstance& si, const std::string& name) -> nb::object {
+            termin::Entity e = si.get_bone_entity_by_name(name);
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("bone_name"))
+        .def("set_bone_transform", [](termin::SkeletonInstance& si,
+                int bone_index,
+                nb::object translation,
+                nb::object rotation,
+                nb::object scale) {
+            std::array<double, 3> t_arr;
+            std::array<double, 4> r_arr;
+            std::array<double, 3> s_arr;
+            const double* t_ptr = nullptr;
+            const double* r_ptr = nullptr;
+            const double* s_ptr = nullptr;
+
+            if (!translation.is_none()) {
+                t_arr = numpy_to_vec3(translation);
+                t_ptr = t_arr.data();
+            }
+            if (!rotation.is_none()) {
+                r_arr = numpy_to_vec4(rotation);
+                r_ptr = r_arr.data();
+            }
+            if (!scale.is_none()) {
+                if (nb::isinstance<nb::float_>(scale) || nb::isinstance<nb::int_>(scale)) {
+                    double s = nb::cast<double>(scale);
+                    s_arr = {s, s, s};
+                } else {
+                    s_arr = numpy_to_vec3(scale);
+                }
+                s_ptr = s_arr.data();
+            }
+            si.set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr);
+        }, nb::arg("bone_index"),
+           nb::arg("translation") = nb::none(),
+           nb::arg("rotation") = nb::none(),
+           nb::arg("scale") = nb::none())
+        .def("set_bone_transform_by_name", [](termin::SkeletonInstance& si,
+                const std::string& bone_name,
+                nb::object translation,
+                nb::object rotation,
+                nb::object scale) {
+            std::array<double, 3> t_arr;
+            std::array<double, 4> r_arr;
+            std::array<double, 3> s_arr;
+            const double* t_ptr = nullptr;
+            const double* r_ptr = nullptr;
+            const double* s_ptr = nullptr;
+
+            if (!translation.is_none()) {
+                t_arr = numpy_to_vec3(translation);
+                t_ptr = t_arr.data();
+            }
+            if (!rotation.is_none()) {
+                r_arr = numpy_to_vec4(rotation);
+                r_ptr = r_arr.data();
+            }
+            if (!scale.is_none()) {
+                if (nb::isinstance<nb::float_>(scale) || nb::isinstance<nb::int_>(scale)) {
+                    double s = nb::cast<double>(scale);
+                    s_arr = {s, s, s};
+                } else {
+                    s_arr = numpy_to_vec3(scale);
+                }
+                s_ptr = s_arr.data();
+            }
+            si.set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr);
+        }, nb::arg("bone_name"),
+           nb::arg("translation") = nb::none(),
+           nb::arg("rotation") = nb::none(),
+           nb::arg("scale") = nb::none())
+        .def("update", &termin::SkeletonInstance::update)
+        .def("get_bone_matrices", [](termin::SkeletonInstance& si) {
+            si.update();
+            int n = si.bone_count();
+            float* buf = new float[n * 16];
+            for (int i = 0; i < n; ++i) {
+                const termin::Mat44& m = si.get_bone_matrix(i);
+                // Convert column-major Mat44 to row-major numpy array
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        buf[i * 16 + row * 4 + col] = static_cast<float>(m(col, row));
+                    }
+                }
+            }
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[3] = {static_cast<size_t>(n), 4, 4};
+            return nb::ndarray<nb::numpy, float>(buf, 3, shape, owner);
+        })
+        .def("bone_count", &termin::SkeletonInstance::bone_count)
+        .def("get_bone_world_matrix", [](const termin::SkeletonInstance& si, int bone_index) {
+            termin::Mat44 m = si.get_bone_world_matrix(bone_index);
+            float* buf = new float[16];
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    buf[row * 4 + col] = static_cast<float>(m(col, row));
+                }
+            }
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, float>(buf, 2, shape, owner);
+        }, nb::arg("bone_index"))
+        .def("__repr__", [](const termin::SkeletonInstance& si) {
+            bool has_entities = !si.bone_entities().empty();
+            return "<SkeletonInstance bones=" + std::to_string(si.bone_count()) +
+                   " has_entities=" + (has_entities ? "True" : "False") + ">";
+        });
+}
+
+void bind_skeleton_controller(nb::module_& m) {
+    nb::class_<termin::SkeletonController, termin::Component>(m, "SkeletonController")
+        .def(nb::init<>())
+        .def("__init__", [](termin::SkeletonController* self, nb::object skeleton_arg, nb::list bone_entities_list) {
+            new (self) termin::SkeletonController();
+
+            // Handle skeleton argument: SkeletonHandle, SkeletonAsset, or SkeletonData*
+            if (!skeleton_arg.is_none()) {
+                if (nb::isinstance<termin::SkeletonHandle>(skeleton_arg)) {
+                    self->skeleton = nb::cast<termin::SkeletonHandle>(skeleton_arg);
+                } else if (nb::hasattr(skeleton_arg, "resource")) {
+                    self->skeleton = termin::SkeletonHandle::from_asset(skeleton_arg);
+                } else {
+                    auto skel_data = nb::cast<termin::SkeletonData*>(skeleton_arg);
+                    if (skel_data != nullptr) {
+                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
+                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
+                        asset.attr("skeleton_data") = skeleton_arg;
+                        self->skeleton = termin::SkeletonHandle::from_asset(asset);
+                    }
+                }
+            }
+
+            std::vector<termin::Entity> entities;
+            for (auto item : bone_entities_list) {
+                if (!item.is_none()) {
+                    entities.push_back(nb::cast<termin::Entity>(item));
+                }
+            }
+            self->set_bone_entities(std::move(entities));
+        },
+            nb::arg("skeleton") = nb::none(),
+            nb::arg("bone_entities") = nb::list())
+        .def_rw("skeleton", &termin::SkeletonController::skeleton)
+        .def_prop_rw("skeleton_data",
+            &termin::SkeletonController::skeleton_data,
+            [](termin::SkeletonController& self, nb::object skel_arg) {
+                if (skel_arg.is_none()) {
+                    self.skeleton = termin::SkeletonHandle();
+                    return;
+                }
+                if (nb::isinstance<termin::SkeletonHandle>(skel_arg)) {
+                    self.set_skeleton(nb::cast<termin::SkeletonHandle>(skel_arg));
+                } else if (nb::hasattr(skel_arg, "resource")) {
+                    self.set_skeleton(termin::SkeletonHandle::from_asset(skel_arg));
+                } else {
+                    auto skel_data = nb::cast<termin::SkeletonData*>(skel_arg);
+                    if (skel_data != nullptr) {
+                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
+                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
+                        asset.attr("skeleton_data") = skel_arg;
+                        self.set_skeleton(termin::SkeletonHandle::from_asset(asset));
+                    }
+                }
+            },
+            nb::rv_policy::reference)
+        .def_prop_rw("bone_entities",
+            [](const termin::SkeletonController& self) {
+                nb::list result;
+                for (const auto& e : self.bone_entities) {
+                    if (e.valid()) {
+                        result.append(nb::cast(e));
+                    } else {
+                        result.append(nb::none());
+                    }
+                }
+                return result;
+            },
+            [](termin::SkeletonController& self, nb::list entities) {
+                std::vector<termin::Entity> vec;
+                for (auto item : entities) {
+                    if (!item.is_none()) {
+                        vec.push_back(nb::cast<termin::Entity>(item));
+                    }
+                }
+                self.set_bone_entities(std::move(vec));
+            })
+        .def_prop_ro("skeleton_instance",
+            &termin::SkeletonController::skeleton_instance,
+            nb::rv_policy::reference)
+        .def("set_skeleton", &termin::SkeletonController::set_skeleton)
+        .def("set_bone_entities", [](termin::SkeletonController& self, nb::list entities) {
+            std::vector<termin::Entity> vec;
+            for (auto item : entities) {
+                if (!item.is_none()) {
+                    vec.push_back(nb::cast<termin::Entity>(item));
+                }
+            }
+            self.set_bone_entities(std::move(vec));
+        })
+        .def("invalidate_instance", &termin::SkeletonController::invalidate_instance);
+}
+
 } // anonymous namespace
 
 NB_MODULE(_skeleton_native, m) {
-    m.doc() = "Native C++ skeleton module (Bone, SkeletonData, SkeletonHandle)";
+    m.doc() = "Native C++ skeleton module (Bone, SkeletonData, SkeletonInstance, SkeletonController)";
+
+    // Import _entity_native for Component type (SkeletonController inherits from it)
+    nb::module_::import_("termin.entity._entity_native");
 
     // Bind types
     bind_bone(m);
     bind_skeleton_data(m);
     bind_skeleton_handle(m);
+    bind_skeleton_instance(m);
+    bind_skeleton_controller(m);
 
     // Register skeleton kind handler for InspectRegistry
     register_skeleton_kind();

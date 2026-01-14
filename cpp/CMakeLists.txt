@@ -147,11 +147,12 @@ target_compile_options(_mesh_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Skeleton native module (Bone, SkeletonData, SkeletonHandle) - using nanobind
+# Skeleton native module (Bone, SkeletonData, SkeletonInstance, SkeletonController) - using nanobind
+# Implementation is in entity_lib, this module only contains bindings
 nanobind_add_module(_skeleton_native
     termin/bindings/skeleton/skeleton_module.cpp
 )
-target_link_libraries(_skeleton_native PRIVATE trent entity_lib)
+target_link_libraries(_skeleton_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_skeleton_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -219,6 +220,25 @@ set_target_properties(entity_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# Skeleton static library (linked into _skeleton_native, _animation_native, _native)
+# Static because it uses nanobind runtime and can't be a DLL without symbol conflicts
+add_library(skeleton_lib STATIC
+    termin/skeleton/skeleton_instance.cpp
+    termin/render/skeleton_controller.cpp
+)
+target_link_libraries(skeleton_lib PUBLIC entity_lib PRIVATE trent)
+# Need nanobind and Python includes for compilation
+target_include_directories(skeleton_lib PRIVATE
+    $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
+    ${Python_INCLUDE_DIRS}
+)
+target_compile_options(skeleton_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(skeleton_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
 # Entity native module (Component, Entity, registries) - nanobind
 nanobind_add_module(_entity_native
     termin/bindings/entity/entity_module.cpp
@@ -229,10 +249,13 @@ target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Animation native module (Channel, Clip, AnimationClipHandle) - nanobind
+# Animation native module (Channel, Clip, AnimationClipHandle, AnimationPlayer) - nanobind
 # Must be after entity_lib since it links against it
-nanobind_add_module(_animation_native termin/bindings/animation/animation_module.cpp)
-target_link_libraries(_animation_native PRIVATE trent entity_lib)
+nanobind_add_module(_animation_native
+    termin/bindings/animation/animation_module.cpp
+    termin/animation/animation_player.cpp
+)
+target_link_libraries(_animation_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_animation_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -317,7 +340,6 @@ nanobind_add_module(_native
     termin/render/mesh_gpu.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
-    termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp
     termin/render/color_pass.cpp
     termin/render/depth_pass.cpp
@@ -325,14 +347,13 @@ nanobind_add_module(_native
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
     termin/render/drawable.cpp
-    termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_lib)
+target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_lib skeleton_lib)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})

@@ -166,7 +166,7 @@ class PathfindingWorldComponent(PythonComponent):
         for entity in scene.entities:
             self._collect_from_entity(entity, visited_entities, rm)
 
-        log.info(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMeshes")
+        # log.debug(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMeshes")
 
     def _collect_from_entity(self, entity, visited_entities: set, rm) -> None:
         """Рекурсивно собрать NavMesh из дерева сущностей."""
@@ -186,12 +186,12 @@ class PathfindingWorldComponent(PythonComponent):
             if not name:
                 name = entity.name or "voxel_grid"
 
-            log.info(f"[PathfindingWorld] found VoxelizerComponent '{entity.name}', grid_name='{name}'")
+            # log.debug(f"[PathfindingWorld] found VoxelizerComponent '{entity.name}', grid_name='{name}'")
             navmesh = rm.get_navmesh(name)
             if navmesh is not None:
                 self._navmesh_sources.append((navmesh, entity))
                 pos = entity.transform.global_pose().lin
-                log.info(f"[PathfindingWorld] found NavMesh '{name}' ({navmesh.polygon_count()} polygons) at ({pos.x:.2f}, {pos.y:.2f}, {pos.z:.2f})")
+                # log.debug(f"[PathfindingWorld] found NavMesh '{name}' ({navmesh.polygon_count()} polygons) at ({pos.x:.2f}, {pos.y:.2f}, {pos.z:.2f})")
             else:
                 log.warn(f"[PathfindingWorld] NavMesh '{name}' not found in ResourceManager")
 
@@ -212,7 +212,7 @@ class PathfindingWorldComponent(PythonComponent):
             for poly_idx, polygon in enumerate(navmesh.polygons):
                 verts_count = len(polygon.vertices) if polygon.vertices is not None else 0
                 tris_count = len(polygon.triangles) if polygon.triangles is not None else 0
-                log.info(f"[PathfindingWorld] polygon {poly_idx}: {verts_count} verts, {tris_count} tris")
+                # # log.debug(f"[PathfindingWorld] polygon {poly_idx}: {verts_count} verts, {tris_count} tris")
                 if verts_count == 0 or tris_count == 0:
                     continue
 
@@ -233,7 +233,7 @@ class PathfindingWorldComponent(PythonComponent):
                 self._region_navmesh_info[region_id] = (navmesh, poly_idx)
                 region_id += 1
 
-        log.info(f"[PathfindingWorld] built graph with {region_id} regions")
+        # log.debug(f"[PathfindingWorld] built graph with {region_id} regions")
 
         # Вычисляем порталы между регионами
         self._compute_portals()
@@ -263,7 +263,7 @@ class PathfindingWorldComponent(PythonComponent):
                 voxel_to_region[voxel] = region_id
 
         if not voxel_to_region:
-            log.info("[PathfindingWorld] no voxel coords in polygons, skipping portal computation")
+            # log.debug("[PathfindingWorld] no voxel coords in polygons, skipping portal computation")
             return
 
         # Шаг 2: Найти все пары соседних регионов и граничные воксели
@@ -313,11 +313,11 @@ class PathfindingWorldComponent(PythonComponent):
                     portal = self._create_portal(region_a, region_b, cluster)
                     self._portals.append(portal)
 
-        log.info(f"[PathfindingWorld] computed {len(self._portals)} portals")
+        # log.debug(f"[PathfindingWorld] computed {len(self._portals)} portals")
 
         # Строим граф смежности регионов
         self._navmesh_graph.build_region_adjacency(self._portals)
-        log.info(f"[PathfindingWorld] built region adjacency: {len(self._navmesh_graph.region_adjacency)} regions")
+        # log.debug(f"[PathfindingWorld] built region adjacency: {len(self._navmesh_graph.region_adjacency)} regions")
 
     def _create_portal(
         self,
@@ -413,19 +413,19 @@ class PathfindingWorldComponent(PythonComponent):
             log.warn("[PathfindingWorld] not initialized")
             return None
 
-        log.info(f"[PathfindingWorld] find_path: start={start}, end={end}")
+        # log.debug(f"[PathfindingWorld] find_path: start={start}, end={end}")
 
         # Ищем треугольники с учётом трансформаций
         start_tri = self.find_containing_triangle(start)
-        log.info(f"[PathfindingWorld] start_tri={start_tri}")
+        # log.debug(f"[PathfindingWorld] start_tri={start_tri}")
         end_tri = self.find_containing_triangle(end)
-        log.info(f"[PathfindingWorld] end_tri={end_tri}")
+        # log.debug(f"[PathfindingWorld] end_tri={end_tri}")
 
         if start_tri is None:
-            log.info("[PathfindingWorld] start point not on navmesh")
+            # log.debug("[PathfindingWorld] start point not on navmesh")
             return None
         if end_tri is None:
-            log.info("[PathfindingWorld] end point not on navmesh")
+            # log.debug("[PathfindingWorld] end point not on navmesh")
             return None
 
         start_region, start_tri_idx = start_tri
@@ -471,7 +471,7 @@ class PathfindingWorldComponent(PythonComponent):
             local_start, local_end, start_tri_idx,
             region.triangles, region.vertices, region.neighbors
         ):
-            log.info("[PathfindingWorld] direct LOS, skipping A*")
+            # log.debug("[PathfindingWorld] direct LOS, skipping A*")
             return self._transform_path_to_world([local_start, local_end], transform)
 
         if start_tri_idx == end_tri_idx:
@@ -492,7 +492,7 @@ class PathfindingWorldComponent(PythonComponent):
             if path_indices is None:
                 return None
 
-        log.info(f"[PathfindingWorld] A* path: {len(path_indices)} triangles")
+        # log.debug(f"[PathfindingWorld] A* path: {len(path_indices)} triangles")
 
         # Строим путь в зависимости от настроек
         if self.use_funnel:
@@ -500,7 +500,7 @@ class PathfindingWorldComponent(PythonComponent):
             portals = get_portals_from_path(
                 path_indices, region.triangles, region.vertices, region.neighbors
             )
-            log.info(f"[PathfindingWorld] portals: {len(portals)}")
+            # log.debug(f"[PathfindingWorld] portals: {len(portals)}")
 
             # Вычисляем нормаль региона из первого треугольника
             first_tri = region.triangles[path_indices[0]]
@@ -515,21 +515,21 @@ class PathfindingWorldComponent(PythonComponent):
                 region_normal = np.array([0.0, 1.0, 0.0], dtype=np.float64)
 
             local_path = funnel_algorithm(local_start, local_end, portals, region_normal)
-            log.info(f"[PathfindingWorld] funnel path: {len(local_path)} points")
+            # log.debug(f"[PathfindingWorld] funnel path: {len(local_path)} points")
         else:
             # Путь через центроиды треугольников
             local_path = [local_start]
             for tri_idx in path_indices:
                 local_path.append(region.centroids[tri_idx].copy())
             local_path.append(local_end)
-            log.info(f"[PathfindingWorld] centroid path: {len(local_path)} points")
+            # log.debug(f"[PathfindingWorld] centroid path: {len(local_path)} points")
 
         # Оптимизация через line of sight
         if self.use_los_optimization and len(local_path) > 2:
             local_path = self._optimize_path_los(
                 local_path, start_tri_idx, region.triangles, region.vertices, region.neighbors
             )
-            log.info(f"[PathfindingWorld] LOS optimized: {len(local_path)} points")
+            # log.debug(f"[PathfindingWorld] LOS optimized: {len(local_path)} points")
 
         return self._transform_path_to_world(local_path, transform)
 
@@ -543,7 +543,7 @@ class PathfindingWorldComponent(PythonComponent):
         end_tri_idx: int,
     ) -> Optional[List[np.ndarray]]:
         """Найти путь между разными регионами через порталы."""
-        log.info(f"[PathfindingWorld] cross-region: {start_region} -> {end_region}")
+        # log.debug(f"[PathfindingWorld] cross-region: {start_region} -> {end_region}")
 
         # Высокоуровневый A* для поиска пути через регионы
         try:
@@ -555,10 +555,10 @@ class PathfindingWorldComponent(PythonComponent):
             return None
 
         if region_path is None:
-            log.info("[PathfindingWorld] no region path found")
+            # log.debug("[PathfindingWorld] no region path found")
             return None
 
-        log.info(f"[PathfindingWorld] region path: {region_path}")
+        # log.debug(f"[PathfindingWorld] region path: {region_path}")
 
         # Собираем полный путь через все регионы
         full_path: List[np.ndarray] = [start.copy()]
@@ -569,7 +569,7 @@ class PathfindingWorldComponent(PythonComponent):
             is_last = (i == len(region_path) - 1)
             is_first = (i == 0)
 
-            log.info(f"[PathfindingWorld] segment {i}: region={region_id}, portal_idx={portal_idx}, is_last={is_last}")
+            # log.debug(f"[PathfindingWorld] segment {i}: region={region_id}, portal_idx={portal_idx}, is_last={is_last}")
 
             # Для первого сегмента используем start_tri_idx, для остальных ищем в текущем регионе
             if is_first:
@@ -621,8 +621,8 @@ class PathfindingWorldComponent(PythonComponent):
                     current_pos = target_pos.copy()
                     continue
 
-            log.info(f"[PathfindingWorld] current_pos={current_pos}, target_pos={target_pos}")
-            log.info(f"[PathfindingWorld] current_tri={current_tri_idx}, target_tri={target_tri_idx}")
+            # log.debug(f"[PathfindingWorld] current_pos={current_pos}, target_pos={target_pos}")
+            # log.debug(f"[PathfindingWorld] current_tri={current_tri_idx}, target_tri={target_tri_idx}")
 
             # Находим путь внутри региона
             segment_path = None
@@ -639,15 +639,15 @@ class PathfindingWorldComponent(PythonComponent):
                 # Добавляем точки сегмента (пропуская первую — она уже есть)
                 for point in segment_path[1:]:
                     full_path.append(point)
-                log.info(f"[PathfindingWorld] added {len(segment_path) - 1} points from segment")
+                # log.debug(f"[PathfindingWorld] added {len(segment_path) - 1} points from segment")
             else:
                 # Если не нашли путь внутри региона, идём напрямую
                 full_path.append(target_pos.copy())
-                log.info("[PathfindingWorld] segment failed, adding direct line")
+                # log.debug("[PathfindingWorld] segment failed, adding direct line")
 
             current_pos = target_pos.copy()
 
-        log.info(f"[PathfindingWorld] cross-region path: {len(full_path)} points")
+        # log.debug(f"[PathfindingWorld] cross-region path: {len(full_path)} points")
         return full_path if len(full_path) > 1 else None
 
     def _transform_path_to_world(
@@ -861,7 +861,7 @@ class PathfindingWorldComponent(PythonComponent):
         Returns:
             (region_id, triangle_id) или None если точка вне NavMesh.
         """
-        log.info(f"[PathfindingWorld] find_containing_triangle: point={point}")
+        # log.debug(f"[PathfindingWorld] find_containing_triangle: point={point}")
         for region_id, region in enumerate(self._navmesh_graph.regions):
             # Трансформируем точку в локальные координаты региона
             entity = self._region_entities.get(region_id)
@@ -873,9 +873,9 @@ class PathfindingWorldComponent(PythonComponent):
 
             tri_idx = region.find_triangle(local_point)
             if tri_idx >= 0:
-                log.info(f"[PathfindingWorld] found in region {region_id}, tri {tri_idx}")
+                # log.debug(f"[PathfindingWorld] found in region {region_id}, tri {tri_idx}")
                 return (region_id, tri_idx)
-        log.info("[PathfindingWorld] not found in any region")
+        # log.debug("[PathfindingWorld] not found in any region")
         return None
 
     def raycast(

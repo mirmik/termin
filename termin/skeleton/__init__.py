@@ -3,8 +3,13 @@
 # Setup DLL paths before importing native extensions
 from termin import _dll_setup  # noqa: F401
 
-from termin.skeleton._skeleton_native import Bone, SkeletonData, SkeletonHandle
-from termin._native.skeleton import SkeletonInstance
+from termin.skeleton._skeleton_native import (
+    Bone,
+    SkeletonData,
+    SkeletonHandle,
+    SkeletonInstance,
+    SkeletonController,
+)
 from termin.skeleton.skeleton_asset import SkeletonAsset
 
 __all__ = [
@@ -12,5 +17,6 @@ __all__ = [
     "SkeletonData",
     "SkeletonHandle",
     "SkeletonInstance",
+    "SkeletonController",
     "SkeletonAsset",
 ]

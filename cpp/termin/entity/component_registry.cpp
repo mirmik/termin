@@ -118,7 +118,17 @@ nb::object ComponentRegistry::get_class(const std::string& name) const {
             if (nb::hasattr(render_mod, name.c_str())) {
                 return render_mod.attr(name.c_str());
             }
-            // Then skeleton module
+            // Skeleton native module (for SkeletonController, SkeletonInstance)
+            nb::object skeleton_native_mod = nb::module_::import_("termin.skeleton._skeleton_native");
+            if (nb::hasattr(skeleton_native_mod, name.c_str())) {
+                return skeleton_native_mod.attr(name.c_str());
+            }
+            // Animation native module (for AnimationPlayer)
+            nb::object animation_native_mod = nb::module_::import_("termin.visualization.animation._animation_native");
+            if (nb::hasattr(animation_native_mod, name.c_str())) {
+                return animation_native_mod.attr(name.c_str());
+            }
+            // Legacy skeleton module in _native
             nb::object skeleton_mod = nb::module_::import_("termin._native.skeleton");
             if (nb::hasattr(skeleton_mod, name.c_str())) {
                 return skeleton_mod.attr(name.c_str());

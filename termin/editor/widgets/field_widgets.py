@@ -443,9 +443,13 @@ class ClipSelectorWidget(FieldWidget):
         self._combo.addItem("(none)", userData="")
 
         if self._target is not None:
-            clips = getattr(self._target, "clips", {})
-            for clip_name in sorted(clips.keys()):
-                self._combo.addItem(clip_name, userData=clip_name)
+            # Get clips from InspectRegistry (serialized list of dicts)
+            from termin._native.inspect import InspectRegistry
+            clips = InspectRegistry.instance().get(self._target, "clips")
+            if clips:
+                names = sorted(item.get("name", "") for item in clips if item.get("name"))
+                for name in names:
+                    self._combo.addItem(name, userData=name)
 
         # Restore selection
         idx = self._combo.findData(current)
@@ -718,11 +722,9 @@ class FieldWidgetFactory:
         if kind == "animation_clip_handle_list" or kind == "list[animation_clip_handle]":
             from termin.editor.widgets.generic_list_widget import GenericListWidget
 
-            def get_clip_name(handle):
-                clip = handle.clip
-                if clip:
-                    return f"{clip.name} ({clip.duration:.2f}s)"
-                return "<unresolved>"
+            def get_clip_name(item: dict) -> str:
+                # item is serialized dict: {"uuid": "...", "name": "...", "type": "...", "path": "..."}
+                return item.get("name", "<unnamed>")
 
             return GenericListWidget(
                 get_item_name=get_clip_name,

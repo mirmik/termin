@@ -13,7 +13,8 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Камера
     ("termin.visualization.core.camera", "CameraComponent"),
     ("termin.visualization.core.camera", "CameraController"),
-    # Анимация
+    # Скелет и анимация
+    ("termin.visualization.render.components.skeleton_controller", "SkeletonController"),
     ("termin.visualization.animation.player", "AnimationPlayer"),
     ("termin.visualization.components.rotator", "RotatorComponent"),
     # Физика
