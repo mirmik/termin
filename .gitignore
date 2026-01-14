@@ -157,3 +157,4 @@ entity_lib.lib
 .claude/settings.local.json
 
 tmpclaude*
+build_test*

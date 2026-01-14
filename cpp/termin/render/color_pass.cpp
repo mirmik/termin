@@ -299,12 +299,15 @@ void ColorPass::execute_with_data(
     }
     if (detailed) tc_profiler_end_section();
 
+    // Track shaders we've already uploaded shadow maps to (avoid redundant uploads)
+    std::set<ShaderProgram*> shadow_maps_uploaded;
+
     // Render each draw call
     if (detailed) {
         tc_profiler_begin_section("DrawCalls");
     }
 
-    for (const auto& dc : cached_draw_calls_) 
+    for (const auto& dc : cached_draw_calls_)
     {
         if (detailed) {
             tc_profiler_begin_section("DrawCalls.Preparation");
@@ -349,25 +352,15 @@ void ColorPass::execute_with_data(
             // Upload view matrix (needed for cascade depth calculation in shader)
             shader_to_use->set_uniform_matrix4("u_view", view, false);
 
-            // Shadow maps are textures, always need to upload sampler uniforms
-            upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+            // Shadow maps: upload only once per unique shader
+            if (shadow_maps_uploaded.find(shader_to_use) == shadow_maps_uploaded.end()) {
+                upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+                shadow_maps_uploaded.insert(shader_to_use);
+            }
 
-            // Check if this specific shader uses UBO for lighting
-            bool shader_uses_ubo = shader_to_use->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO);
-            if (shader_uses_ubo && ubo_active) {
-                // UBO mode: bind uniform block to binding point (for GLSL 330 compatibility)
+            // Bind lighting UBO for shaders that use it
+            if (shader_to_use->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO) && ubo_active) {
                 shader_to_use->set_uniform_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
-            } else {
-                // Legacy mode: upload all lighting uniforms per-object
-                shader_to_use->set_uniform_vec3("u_camera_position",
-                    static_cast<float>(camera_position.x),
-                    static_cast<float>(camera_position.y),
-                    static_cast<float>(camera_position.z));
-
-                upload_lights_to_shader(shader_to_use, lights, ename);
-                upload_ambient_to_shader(shader_to_use, ambient_color, ambient_intensity);
-                upload_shadow_settings_to_shader(shader_to_use, shadow_settings);
-                upload_cascade_settings_to_shader(shader_to_use, lights);
             }
 
             context.current_shader = shader_to_use;
@@ -384,7 +377,7 @@ void ColorPass::execute_with_data(
         if (detailed) {
             tc_profiler_end_section(); // DrawCalls.DrawGeometry
         }
-        
+
         graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
 
         // Check for debug blit (use std::string comparison to avoid pointer issues)

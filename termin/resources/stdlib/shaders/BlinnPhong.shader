@@ -1,4 +1,5 @@
 @program BlinnPhong
+@features lighting_ubo
 
 // ============================================================
 // Blinn-Phong Shader - Canonical Implementation
@@ -82,7 +83,7 @@ void main() {
     vec3 N = normalize(v_normal);
 
     // View direction
-    vec3 V = normalize(u_camera_position - v_world_pos);
+    vec3 V = normalize(get_camera_position() - v_world_pos);
 
     // Sample diffuse texture
     vec4 tex_color = texture(u_diffuse_texture, v_uv);
@@ -93,50 +94,50 @@ void main() {
     // Ambient term: Ka * Ia
     // Ka = Kd * ambient_factor (common approximation)
     vec3 Ka = Kd * u_ambient_factor;
-    vec3 ambient = Ka * u_ambient_color * u_ambient_intensity;
+    vec3 ambient = Ka * get_ambient_color() * get_ambient_intensity();
 
     // Accumulate light contributions
     vec3 diffuse_sum = vec3(0.0);
     vec3 specular_sum = vec3(0.0);
 
-    for (int i = 0; i < u_light_count; ++i) {
+    for (int i = 0; i < get_light_count(); ++i) {
         vec3 L;           // Direction to light
         float atten = 1.0; // Attenuation
 
         // Compute light direction and attenuation based on light type
-        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {
-            L = normalize(-u_light_direction[i]);
+        if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
+            L = normalize(-get_light_direction(i));
         } else {
-            vec3 to_light = u_light_position[i] - v_world_pos;
+            vec3 to_light = get_light_position(i) - v_world_pos;
             float dist = length(to_light);
             L = to_light / max(dist, 0.0001);
 
             // Distance attenuation
             atten = compute_distance_attenuation(
-                u_light_attenuation[i],
-                u_light_range[i],
+                get_light_attenuation(i),
+                get_light_range(i),
                 dist
             );
 
             // Spot cone attenuation
-            if (u_light_type[i] == LIGHT_TYPE_SPOT) {
+            if (get_light_type(i) == LIGHT_TYPE_SPOT) {
                 atten *= compute_spot_weight(
-                    u_light_direction[i],
+                    get_light_direction(i),
                     L,
-                    u_light_inner_angle[i],
-                    u_light_outer_angle[i]
+                    get_light_inner_angle(i),
+                    get_light_outer_angle(i)
                 );
             }
         }
 
         // Shadow factor (directional lights only for now)
         float shadow = 1.0;
-        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {
+        if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
             shadow = compute_shadow_auto(i);
         }
 
         // Light intensity
-        vec3 Li = u_light_color[i] * u_light_intensity[i] * atten * shadow;
+        vec3 Li = get_light_color(i) * get_light_intensity(i) * atten * shadow;
 
         // Diffuse term: Kd * (N·L)
         float NdotL = max(dot(N, L), 0.0);

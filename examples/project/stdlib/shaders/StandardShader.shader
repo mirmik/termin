@@ -1,4 +1,5 @@
 @program StandardShader
+@features lighting_ubo
 
 // ============================================================
 // Standard Shader - Blinn-Phong lighting with shadow support
@@ -67,51 +68,48 @@ uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
 uniform float u_shininess;
 
-// Light uniforms are declared in lighting.glsl
-// Shadow uniforms are declared in shadows.glsl
-
 out vec4 FragColor;
 
 void main() {
     vec3 N = normalize(v_normal);
-    vec3 V = normalize(u_camera_position - v_world_pos);
+    vec3 V = normalize(get_camera_position() - v_world_pos);
 
     // Sample albedo texture
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 base_color = u_color.rgb * tex_color.rgb;
 
     // Start with ambient lighting
-    vec3 result = base_color * u_ambient_color * u_ambient_intensity;
+    vec3 result = base_color * get_ambient_color() * get_ambient_intensity();
 
     // Accumulate light contributions
-    for (int i = 0; i < u_light_count; ++i) {
-        int type = u_light_type[i];
-        vec3 radiance = u_light_color[i] * u_light_intensity[i];
+    for (int i = 0; i < get_light_count(); ++i) {
+        int type = get_light_type(i);
+        vec3 radiance = get_light_color(i) * get_light_intensity(i);
 
         vec3 L;
         float dist;
         float weight = 1.0;
 
         if (type == LIGHT_TYPE_DIRECTIONAL) {
-            L = normalize(-u_light_direction[i]);
+            L = normalize(-get_light_direction(i));
             dist = 1e9;
         } else {
-            vec3 to_light = u_light_position[i] - v_world_pos;
+            vec3 to_light = get_light_position(i) - v_world_pos;
             dist = length(to_light);
             L = dist > 0.0001 ? to_light / dist : vec3(0.0, 1.0, 0.0);
 
             weight *= compute_distance_attenuation(
-                u_light_attenuation[i],
-                u_light_range[i],
+                get_light_attenuation(i),
+                get_light_range(i),
                 dist
             );
 
             if (type == LIGHT_TYPE_SPOT) {
                 weight *= compute_spot_weight(
-                    u_light_direction[i],
+                    get_light_direction(i),
                     L,
-                    u_light_inner_angle[i],
-                    u_light_outer_angle[i]
+                    get_light_inner_angle(i),
+                    get_light_outer_angle(i)
                 );
             }
         }

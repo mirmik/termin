@@ -108,7 +108,6 @@ in vec2 v_uv;
 in mat3 v_TBN;
 in vec3 v_tangent;
 
-#define LIGHTING_USE_UBO
 #include "lighting.glsl"
 #include "shadows.glsl"
 
