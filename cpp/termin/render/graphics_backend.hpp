@@ -169,6 +169,8 @@ public:
     // --- Debug ---
     // Check for GL errors and log them. Returns true if error was found.
     virtual bool check_gl_error(const char* location) = 0;
+    // Clear any accumulated GL errors without logging
+    virtual void clear_gl_errors() = 0;
 
     // --- GPU Timer Queries ---
     // Begin a GPU timer query section (non-blocking)

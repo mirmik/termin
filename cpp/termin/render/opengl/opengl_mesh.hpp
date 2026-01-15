@@ -197,19 +197,26 @@ private:
 
             glEnableVertexAttribArray(location);
 
-            // Determine GL type
+            // Determine GL type and whether it's an integer type
             GLenum gl_type = GL_FLOAT;
+            bool is_integer = false;
             switch (attr.type) {
                 case TC_ATTRIB_FLOAT32: gl_type = GL_FLOAT; break;
-                case TC_ATTRIB_INT32: gl_type = GL_INT; break;
-                case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; break;
-                case TC_ATTRIB_INT16: gl_type = GL_SHORT; break;
-                case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; break;
-                case TC_ATTRIB_INT8: gl_type = GL_BYTE; break;
-                case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; break;
+                case TC_ATTRIB_INT32: gl_type = GL_INT; is_integer = true; break;
+                case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; is_integer = true; break;
+                case TC_ATTRIB_INT16: gl_type = GL_SHORT; is_integer = true; break;
+                case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; is_integer = true; break;
+                case TC_ATTRIB_INT8: gl_type = GL_BYTE; is_integer = true; break;
+                case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; is_integer = true; break;
             }
 
-            glVertexAttribPointer(location, attr.size, gl_type, GL_FALSE, stride, gl_offset(attr.offset));
+            // Use glVertexAttribIPointer for integer types (required for ivec4/uvec4 in shader)
+            // glVertexAttribPointer converts to float, which breaks integer attributes on AMD
+            if (is_integer) {
+                glVertexAttribIPointer(location, attr.size, gl_type, stride, gl_offset(attr.offset));
+            } else {
+                glVertexAttribPointer(location, attr.size, gl_type, GL_FALSE, stride, gl_offset(attr.offset));
+            }
         }
 
         glBindVertexArray(0);

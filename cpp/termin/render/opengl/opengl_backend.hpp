@@ -32,6 +32,82 @@ inline bool init_opengl() {
     return gladLoaderLoadGL() != 0;
 }
 
+// GL_KHR_debug constants (may not be in all glad versions)
+#ifndef GL_DEBUG_OUTPUT
+#define GL_DEBUG_OUTPUT 0x92E0
+#define GL_DEBUG_OUTPUT_SYNCHRONOUS 0x8242
+#define GL_DEBUG_SOURCE_API 0x8246
+#define GL_DEBUG_SOURCE_WINDOW_SYSTEM 0x8247
+#define GL_DEBUG_SOURCE_SHADER_COMPILER 0x8248
+#define GL_DEBUG_SOURCE_THIRD_PARTY 0x8249
+#define GL_DEBUG_SOURCE_APPLICATION 0x824A
+#define GL_DEBUG_SOURCE_OTHER 0x824B
+#define GL_DEBUG_TYPE_ERROR 0x824C
+#define GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR 0x824D
+#define GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR 0x824E
+#define GL_DEBUG_TYPE_PORTABILITY 0x824F
+#define GL_DEBUG_TYPE_PERFORMANCE 0x8250
+#define GL_DEBUG_TYPE_MARKER 0x8268
+#define GL_DEBUG_TYPE_OTHER 0x8251
+#define GL_DEBUG_SEVERITY_HIGH 0x9146
+#define GL_DEBUG_SEVERITY_MEDIUM 0x9147
+#define GL_DEBUG_SEVERITY_LOW 0x9148
+#define GL_DEBUG_SEVERITY_NOTIFICATION 0x826B
+#endif
+
+/**
+ * OpenGL debug callback for detailed error messages.
+ * Enabled when GL_KHR_debug extension is available.
+ */
+inline void GLAPIENTRY gl_debug_callback(
+    GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei /*length*/,
+    const GLchar* message,
+    const void* /*userParam*/
+) {
+    // Convert source to string
+    const char* src_str = "UNKNOWN";
+    switch (source) {
+        case GL_DEBUG_SOURCE_API: src_str = "API"; break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM: src_str = "WINDOW"; break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: src_str = "SHADER"; break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY: src_str = "3RD_PARTY"; break;
+        case GL_DEBUG_SOURCE_APPLICATION: src_str = "APP"; break;
+        case GL_DEBUG_SOURCE_OTHER: src_str = "OTHER"; break;
+    }
+
+    // Convert type to string
+    const char* type_str = "UNKNOWN";
+    switch (type) {
+        case GL_DEBUG_TYPE_ERROR: type_str = "ERROR"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: type_str = "DEPRECATED"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: type_str = "UNDEFINED"; break;
+        case GL_DEBUG_TYPE_PORTABILITY: type_str = "PORTABILITY"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE: type_str = "PERFORMANCE"; break;
+        case GL_DEBUG_TYPE_MARKER: type_str = "MARKER"; break;
+        case GL_DEBUG_TYPE_OTHER: type_str = "OTHER"; break;
+    }
+
+    // Log based on severity
+    switch (severity) {
+        case GL_DEBUG_SEVERITY_HIGH:
+            tc::Log::error("[GL %s/%s #%u] %s", src_str, type_str, id, message);
+            break;
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            tc::Log::warn("[GL %s/%s #%u] %s", src_str, type_str, id, message);
+            break;
+        case GL_DEBUG_SEVERITY_LOW:
+            tc::Log::info("[GL %s/%s #%u] %s", src_str, type_str, id, message);
+            break;
+        default:
+            tc::Log::debug("[GL %s/%s #%u] %s", src_str, type_str, id, message);
+            break;
+    }
+}
+
 // ============================================================================
 // tc_gpu_ops implementation functions
 // ============================================================================
@@ -254,25 +330,39 @@ inline uint32_t mesh_upload(const tc_mesh* mesh) {
         const tc_vertex_attrib& attr = mesh->layout.attribs[i];
 
         GLenum gl_type = GL_FLOAT;
+        bool is_integer = false;
         switch (attr.type) {
             case TC_ATTRIB_FLOAT32: gl_type = GL_FLOAT; break;
-            case TC_ATTRIB_INT32: gl_type = GL_INT; break;
-            case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; break;
-            case TC_ATTRIB_INT16: gl_type = GL_SHORT; break;
-            case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; break;
-            case TC_ATTRIB_INT8: gl_type = GL_BYTE; break;
-            case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; break;
+            case TC_ATTRIB_INT32: gl_type = GL_INT; is_integer = true; break;
+            case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; is_integer = true; break;
+            case TC_ATTRIB_INT16: gl_type = GL_SHORT; is_integer = true; break;
+            case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; is_integer = true; break;
+            case TC_ATTRIB_INT8: gl_type = GL_BYTE; is_integer = true; break;
+            case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; is_integer = true; break;
         }
 
         glEnableVertexAttribArray(attr.location);
-        glVertexAttribPointer(
-            attr.location,
-            attr.size,
-            gl_type,
-            GL_FALSE,
-            mesh->layout.stride,
-            reinterpret_cast<void*>(static_cast<size_t>(attr.offset))
-        );
+
+        // Use glVertexAttribIPointer for integer types (required for ivec4/uvec4 in shader)
+        // glVertexAttribPointer converts to float, which breaks integer attributes on AMD
+        if (is_integer) {
+            glVertexAttribIPointer(
+                attr.location,
+                attr.size,
+                gl_type,
+                mesh->layout.stride,
+                reinterpret_cast<void*>(static_cast<size_t>(attr.offset))
+            );
+        } else {
+            glVertexAttribPointer(
+                attr.location,
+                attr.size,
+                gl_type,
+                GL_FALSE,
+                mesh->layout.stride,
+                reinterpret_cast<void*>(static_cast<size_t>(attr.offset))
+            );
+        }
     }
 
     glBindVertexArray(0);
@@ -358,6 +448,18 @@ public:
 
             // Register GPU ops for tc_gpu module
             gpu_ops_impl::register_gpu_ops();
+
+            // Enable OpenGL debug output for detailed error messages (if available)
+            #ifdef GLAD_GL_KHR_debug
+            if (GLAD_GL_KHR_debug && glDebugMessageCallback) {
+                glEnable(GL_DEBUG_OUTPUT);
+                glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+                glDebugMessageCallback(gl_debug_callback, nullptr);
+                // Filter out notifications (too verbose)
+                glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+                tc::Log::info("OpenGL debug output enabled");
+            }
+            #endif
         }
 
         glEnable(GL_DEPTH_TEST);
@@ -786,7 +888,46 @@ public:
 
         tc::Log::error("GL error %s (0x%x) at '%s' [FBO=%d, program=%d, VAO=%d]",
                        name, err, location, fbo, program, vao);
+
+        // Validate current shader program for additional info
+        if (program > 0) {
+            glValidateProgram(program);
+            GLint validate_status = 0;
+            glGetProgramiv(program, GL_VALIDATE_STATUS, &validate_status);
+            if (validate_status == GL_FALSE) {
+                char info_log[1024];
+                GLsizei log_length = 0;
+                glGetProgramInfoLog(program, sizeof(info_log), &log_length, info_log);
+                if (log_length > 0) {
+                    tc::Log::error("  Shader validation failed: %s", info_log);
+                }
+            }
+        }
+
+        // Check framebuffer completeness
+        if (fbo > 0) {
+            GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            if (fb_status != GL_FRAMEBUFFER_COMPLETE) {
+                const char* fb_err = "UNKNOWN";
+                switch (fb_status) {
+                    case GL_FRAMEBUFFER_UNDEFINED: fb_err = "UNDEFINED"; break;
+                    case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT: fb_err = "INCOMPLETE_ATTACHMENT"; break;
+                    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT: fb_err = "MISSING_ATTACHMENT"; break;
+                    case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER: fb_err = "INCOMPLETE_DRAW_BUFFER"; break;
+                    case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER: fb_err = "INCOMPLETE_READ_BUFFER"; break;
+                    case GL_FRAMEBUFFER_UNSUPPORTED: fb_err = "UNSUPPORTED"; break;
+                    case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE: fb_err = "INCOMPLETE_MULTISAMPLE"; break;
+                    case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS: fb_err = "INCOMPLETE_LAYER_TARGETS"; break;
+                }
+                tc::Log::error("  Framebuffer incomplete: %s", fb_err);
+            }
+        }
+
         return true;
+    }
+
+    void clear_gl_errors() override {
+        while (glGetError() != GL_NO_ERROR) {}
     }
 
     // --- GPU Timer Queries ---

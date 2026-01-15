@@ -113,6 +113,28 @@ inline void upload_shadow_maps_to_shader(TcShader& shader, const std::vector<Sha
         shader.set_uniform_float(detail::shadow_split_near_names[i], entry.cascade_split_near);
         shader.set_uniform_float(detail::shadow_split_far_names[i], entry.cascade_split_far);
     }
+
+    // CRITICAL: Set remaining samplers to their dedicated units (for AMD drivers)
+    // sampler2DShadow uniforms default to unit 0, which conflicts with material textures (sampler2D)
+    // AMD strictly enforces that different sampler types cannot share the same texture unit
+    for (int i = count; i < MAX_SHADOW_MAPS; ++i) {
+        shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
+    }
+}
+
+/**
+ * Initialize shadow map sampler uniforms to their dedicated texture units.
+ * MUST be called when switching shaders, even if no shadow maps are used.
+ *
+ * On AMD drivers, sampler2DShadow uniforms default to texture unit 0.
+ * This conflicts with material textures (sampler2D) which also use unit 0,
+ * causing "Different sampler types for same sample texture unit" errors.
+ */
+inline void init_shadow_map_samplers(TcShader& shader) {
+    shader.set_uniform_int("u_shadow_map_count", 0);
+    for (int i = 0; i < MAX_SHADOW_MAPS; ++i) {
+        shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
+    }
 }
 
 } // namespace termin

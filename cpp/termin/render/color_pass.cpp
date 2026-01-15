@@ -295,9 +295,11 @@ void ColorPass::execute_with_data(
     if (detailed) tc_profiler_begin_section("UBO");
     if (ubo_active) {
         lighting_ubo_.create(graphics);
+        graphics->check_gl_error("ColorPass: after UBO create");
         lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
                                           camera_position, shadow_settings);
-        lighting_ubo_.upload_and_bind();
+        lighting_ubo_.upload();
+        graphics->check_gl_error("ColorPass: after UBO upload");
     }
     if (detailed) tc_profiler_end_section();
 
@@ -305,6 +307,9 @@ void ColorPass::execute_with_data(
     if (detailed) {
         tc_profiler_begin_section("DrawCalls");
     }
+
+    // Clear any accumulated GL errors before rendering
+    graphics->clear_gl_errors();
 
     // Track last shader to avoid redundant shadow map uploads
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
@@ -356,9 +361,15 @@ void ColorPass::execute_with_data(
 
         // Compile and use shader
         shader_to_use.use();
+        if (graphics->check_gl_error("after shader.use()")) {
+            tc::Log::error("  shader: %s, program=%u", shader_to_use.name(), shader_to_use.gpu_program());
+        }
 
         // Apply material uniforms via TcShader
         dc.phase->apply_to_tc_shader(shader_to_use, model, view, projection);
+        if (graphics->check_gl_error("after apply_to_tc_shader")) {
+            tc::Log::error("  shader: %s", shader_to_use.name());
+        }
 
         if (detailed) {
             tc_profiler_end_section();
@@ -374,18 +385,31 @@ void ColorPass::execute_with_data(
 
         // Lighting UBO binding
         // Note: AMD requires glBindBufferBase AFTER glUniformBlockBinding
-        if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO) && ubo_active) {
-            shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
-            lighting_ubo_.bind();
+        // Also AMD requires UBO to be unbound when shader doesn't use it
+        if (ubo_active) {
+            if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
+                shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
+                lighting_ubo_.bind();
+            } else {
+                // Unbind UBO for shaders that don't use it (AMD compatibility)
+                lighting_ubo_.unbind();
+            }
         }
+        graphics->check_gl_error("after UBO operations");
 
-        // Upload shadow maps uniforms (only if shader changed)
-        if (!shadow_maps.empty() &&
-            (shader_handle.index != last_shader_handle.index ||
-             shader_handle.generation != last_shader_handle.generation)) {
-            upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+        // Initialize/upload shadow maps uniforms when shader changes
+        // CRITICAL: Must always initialize shadow samplers to prevent AMD sampler type conflicts
+        // (sampler2DShadow defaults to unit 0, conflicting with material sampler2D textures)
+        if (shader_handle.index != last_shader_handle.index ||
+            shader_handle.generation != last_shader_handle.generation) {
+            if (!shadow_maps.empty()) {
+                upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
+            } else {
+                init_shadow_map_samplers(shader_to_use);
+            }
             last_shader_handle = shader_handle;
         }
+        graphics->check_gl_error("after shadow_maps upload");
 
         context.current_shader = dc.phase->shader.get();  // Legacy compatibility
         context.current_tc_shader = shader_to_use;
@@ -397,12 +421,13 @@ void ColorPass::execute_with_data(
 
         // Draw geometry via vtable
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
+        if (graphics->check_gl_error("after draw_geometry")) {
+            tc::Log::error("  entity: %s, shader: %s", ename ? ename : "(null)", shader_to_use.name());
+        }
 
         if (detailed) {
             tc_profiler_end_section(); // DrawGeometry
         }
-
-        graphics->check_gl_error(ename ? ename : "ColorPass: draw_geometry");
 
         // Check for debug blit (use std::string comparison to avoid pointer issues)
         if (!debug_symbol.empty() && ename && debug_symbol == ename) {

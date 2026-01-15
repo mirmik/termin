@@ -157,6 +157,13 @@ public:
         data._pad0 = 0.0f;
     }
 
+    // Upload data to GPU only (no bind)
+    void upload() {
+        if (buffer) {
+            buffer->update(&data, sizeof(data));
+        }
+    }
+
     // Upload data to GPU and bind
     void upload_and_bind() {
         if (buffer) {
