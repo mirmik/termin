@@ -5,6 +5,7 @@
 extern "C" {
 #include "tc_shader.h"
 #include "tc_profiler.h"
+#include "tc_component.h"
 }
 
 #include <cmath>
@@ -347,6 +348,29 @@ void ColorPass::execute_with_data(
 
         // Get shader handle and apply override
         tc_shader_handle base_handle = dc.phase->shader->tc_shader().handle;
+
+        // Debug: trace shader source for skinned meshes
+        static int shader_trace_count = 0;
+        if (shader_trace_count < 10) {
+            const char* type_name = tc_component_type_name(dc.component);
+            if (type_name && std::strcmp(type_name, "SkinnedMeshRenderer") == 0) {
+                TcShader base_shader(base_handle);
+                // Also check shader sources
+                const char* vert_src = base_shader.vertex_source();
+                const char* frag_src = base_shader.fragment_source();
+                size_t vert_len = vert_src ? std::strlen(vert_src) : 0;
+                size_t frag_len = frag_src ? std::strlen(frag_src) : 0;
+                tc::Log::info("[ColorPass] SkinnedMesh: entity='%s' base_shader='%s' uuid='%.8s' valid=%d vert_len=%zu frag_len=%zu phase_mark='%s'",
+                              ename ? ename : "(null)",
+                              base_shader.name() ? base_shader.name() : "(null)",
+                              base_shader.uuid() ? base_shader.uuid() : "(null)",
+                              base_shader.is_valid() ? 1 : 0,
+                              vert_len, frag_len,
+                              dc.phase->phase_mark.c_str());
+                shader_trace_count++;
+            }
+        }
+
         tc_shader_handle shader_handle = tc_component_override_shader(
             dc.component, phase_mark.c_str(), dc.geometry_id, base_handle
         );

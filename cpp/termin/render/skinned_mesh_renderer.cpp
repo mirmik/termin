@@ -86,6 +86,14 @@ void SkinnedMeshRenderer::upload_bone_matrices(TcShader& shader) {
         return;
     }
 
+    // Debug: log bone upload for first few frames
+    static int debug_count = 0;
+    if (debug_count < 5) {
+        tc::Log::info("[SkinnedMesh] Uploading %d bones to shader '%s' (program=%u)",
+                      _bone_count, shader.name(), shader.gpu_program());
+        debug_count++;
+    }
+
     shader.set_uniform_mat4_array("u_bone_matrices", _bone_matrices_flat.data(), _bone_count, false);
     shader.set_uniform_int("u_bone_count", _bone_count);
 }
@@ -123,6 +131,14 @@ TcShader SkinnedMeshRenderer::override_shader(
         nb::object skinned_obj = skinning_module.attr("get_skinned_shader_handle")(original_shader.handle);
         if (!skinned_obj.is_none()) {
             TcShader skinned = nb::cast<TcShader>(skinned_obj);
+            // Debug: log shader override
+            static int debug_count = 0;
+            if (debug_count < 3) {
+                tc::Log::info("[SkinnedMesh] Override: '%s' (prog=%u) -> '%s' (prog=%u)",
+                              original_shader.name(), original_shader.gpu_program(),
+                              skinned.name(), skinned.gpu_program());
+                debug_count++;
+            }
             // Cache the result
             s_skinned_shader_cache[original_shader] = skinned;
             return skinned;
@@ -146,6 +162,17 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geomet
         if (_bone_count > 0) {
             // Use TcShader for uniform upload
             TcShader shader = context.current_tc_shader;
+
+            // Debug: verify shader has skinning
+            static int debug_draw_count = 0;
+            if (debug_draw_count < 3) {
+                const char* vert_src = shader.vertex_source();
+                bool has_skinning = vert_src && std::strstr(vert_src, "u_bone_matrices") != nullptr;
+                tc::Log::info("[SkinnedMesh] draw_geometry: shader='%s' prog=%u has_skinning=%d",
+                              shader.name(), shader.gpu_program(), has_skinning ? 1 : 0);
+                debug_draw_count++;
+            }
+
             upload_bone_matrices(shader);
         }
     }

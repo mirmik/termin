@@ -289,6 +289,13 @@ inline void shader_set_mat4_array(uint32_t gpu_id, const char* name, const float
     GLint loc = glGetUniformLocation(gpu_id, name);
     if (loc != -1) {
         glUniformMatrix4fv(loc, count, transpose ? GL_TRUE : GL_FALSE, data);
+    } else {
+        // Debug: log if bone matrices uniform not found
+        static int debug_count = 0;
+        if (debug_count < 5 && std::strstr(name, "bone") != nullptr) {
+            tc::Log::warn("[shader_set_mat4_array] Uniform '%s' not found in program %u", name, gpu_id);
+            debug_count++;
+        }
     }
 }
 

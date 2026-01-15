@@ -28,6 +28,7 @@ void _applySkinning(inout vec3 position, inout vec3 normal) {
 
     vec4 skinned_pos = vec4(0.0);
     vec3 skinned_norm = vec3(0.0);
+    float total_weight = 0.0;
 
     for (int i = 0; i < 4; ++i) {
         int idx = int(a_joints[i]);
@@ -36,11 +37,15 @@ void _applySkinning(inout vec3 position, inout vec3 normal) {
             mat4 bone = u_bone_matrices[idx];
             skinned_pos += w * (bone * vec4(position, 1.0));
             skinned_norm += w * (mat3(bone) * normal);
+            total_weight += w;
         }
     }
 
-    position = skinned_pos.xyz;
-    normal = skinned_norm;
+    // Only apply skinning if we had valid weights (preserves bind pose otherwise)
+    if (total_weight > 0.0) {
+        position = skinned_pos.xyz;
+        normal = skinned_norm;
+    }
 }
 """
 
@@ -51,6 +56,7 @@ void _applySkinning(inout vec3 position) {
     if (u_bone_count <= 0) return;
 
     vec4 skinned_pos = vec4(0.0);
+    float total_weight = 0.0;
 
     for (int i = 0; i < 4; ++i) {
         int idx = int(a_joints[i]);
@@ -58,10 +64,14 @@ void _applySkinning(inout vec3 position) {
         if (w > 0.0 && idx < u_bone_count) {
             mat4 bone = u_bone_matrices[idx];
             skinned_pos += w * (bone * vec4(position, 1.0));
+            total_weight += w;
         }
     }
 
-    position = skinned_pos.xyz;
+    // Only apply skinning if we had valid weights (preserves bind pose otherwise)
+    if (total_weight > 0.0) {
+        position = skinned_pos.xyz;
+    }
 }
 """
 
@@ -278,6 +288,7 @@ def get_skinned_shader_handle(original_handle):
     """
     from termin._native.render import TcShader, ShaderVariantOp
     from termin.visualization.render.glsl_preprocessor import preprocess_glsl, has_includes
+    from termin._native import log
 
     # Create TcShader from handle
     original = TcShader(original_handle)
@@ -292,6 +303,10 @@ def get_skinned_shader_handle(original_handle):
     vertex_source = original.vertex_source
     fragment_source = original.fragment_source
     geometry_source = original.geometry_source
+
+    # Debug: log source lengths
+    log.info(f"[get_skinned_shader_handle] original name='{original.name}' uuid='{original.uuid[:8]}' "
+             f"vert_len={len(vertex_source)} frag_len={len(fragment_source)}")
 
     shader_name = original.name or "Unknown"
 
@@ -310,16 +325,25 @@ def get_skinned_shader_handle(original_handle):
         return None
 
     # Create or find skinned variant in registry
+    skinned_name = f"{original.name}_Skinned" if original.name else f"Skinned_{original.uuid[:8]}"
     skinned = TcShader.from_sources(
         skinned_vertex,
         fragment_source,
         geometry_source or "",
-        f"{original.name}_Skinned" if original.name else "Skinned",
+        skinned_name,
         original.source_path
     )
 
     if not skinned.is_valid:
+        log.error(f"[get_skinned_shader_handle] Failed to create skinned shader for '{original.name}'")
         return None
+
+    # Copy features from original shader (e.g., lighting_ubo)
+    skinned.set_features(original.features)
+
+    # Debug: log result
+    log.info(f"[get_skinned_shader_handle] Created '{skinned.name}' uuid='{skinned.uuid[:8]}' "
+             f"hash='{skinned.source_hash[:8] if skinned.source_hash else 'N/A'}' features={original.features}")
 
     # Mark as variant
     skinned.set_variant_info(original, ShaderVariantOp.SKINNING)
