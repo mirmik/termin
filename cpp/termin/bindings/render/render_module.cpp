@@ -17,7 +17,7 @@ void bind_render(nb::module_& m) {
     // RenderState, GraphicsBackend, handles - all defined in _graphics_native
     // They are imported in bindings.cpp before bind_render is called
 
-    // TcShader and ShaderProgram (deprecated)
+    // TcShader
     bind_shader(m);
 
     // Shader parser (MaterialProperty, ShaderPhase, etc.)

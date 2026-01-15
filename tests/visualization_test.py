@@ -8,7 +8,6 @@ import termin.visualization.core.mesh as mesh_module
 import termin.visualization.render.shader as shader_module
 import termin.visualization.render.texture as texture_module
 from termin.visualization.core.mesh import MeshDrawable
-# TcShader is used for shaders now (ShaderProgram removed)
 from termin.visualization.render.texture import Texture
 from termin.visualization.ui.elements import UIRectangle
 

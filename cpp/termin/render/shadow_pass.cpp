@@ -1,5 +1,4 @@
 #include "shadow_pass.hpp"
-#include "shader_program.hpp"
 #include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
 

@@ -5,7 +5,6 @@
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/render.hpp"
-#include "termin/render/shader_program.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/render/normal_pass.hpp"
