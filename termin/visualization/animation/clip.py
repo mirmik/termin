@@ -1,46 +1,54 @@
-# Re-export native AnimationClip
+# Animation clip helpers
 from __future__ import annotations
 
-from ._animation_native import AnimationClip, deserialize_clip
-from .channel import channel_from_fbx, channel_from_glb
+from ._animation_native import TcAnimationClip
+from .channel import channel_data_from_fbx, channel_data_from_glb
 
 
-def clip_from_fbx(fbx_clip) -> AnimationClip:
+def clip_from_fbx(fbx_clip, uuid_hint: str = "") -> TcAnimationClip:
     """
-    Создаёт AnimationClip из FBXAnimationClip.
+    Create TcAnimationClip from FBXAnimationClip.
 
     Args:
-        fbx_clip: FBXAnimationClip из fbx_loader
+        fbx_clip: FBXAnimationClip from fbx_loader
+        uuid_hint: Optional UUID for the clip
+
+    Returns:
+        TcAnimationClip
     """
-    channels = {}
+    channels_data = []
     for ch in fbx_clip.channels:
-        channels[ch.node_name] = channel_from_fbx(ch)
+        channels_data.append(channel_data_from_fbx(ch))
 
-    return AnimationClip(
-        fbx_clip.name,
-        channels,
-        fbx_clip.ticks_per_second or 30.0,
-        True,  # loop
-    )
+    clip = TcAnimationClip.create(fbx_clip.name, uuid_hint)
+    clip.set_tps(fbx_clip.ticks_per_second or 30.0)
+    clip.set_loop(True)
+    clip.set_channels(channels_data)
+
+    return clip
 
 
-def clip_from_glb(glb_clip) -> AnimationClip:
+def clip_from_glb(glb_clip, uuid_hint: str = "") -> TcAnimationClip:
     """
-    Создаёт AnimationClip из GLBAnimationClip.
+    Create TcAnimationClip from GLBAnimationClip.
 
     Args:
-        glb_clip: GLBAnimationClip из glb_loader
+        glb_clip: GLBAnimationClip from glb_loader
+        uuid_hint: Optional UUID for the clip
+
+    Returns:
+        TcAnimationClip
     """
-    channels = {}
+    channels_data = []
     for ch in glb_clip.channels:
-        channels[ch.node_name] = channel_from_glb(ch)
+        channels_data.append(channel_data_from_glb(ch))
 
-    return AnimationClip(
-        glb_clip.name,
-        channels,
-        1.0,  # GLB использует секунды напрямую
-        True,  # loop
-    )
+    clip = TcAnimationClip.create(glb_clip.name, uuid_hint)
+    clip.set_tps(1.0)  # GLB uses seconds directly
+    clip.set_loop(True)
+    clip.set_channels(channels_data)
+
+    return clip
 
 
-__all__ = ["AnimationClip", "clip_from_fbx", "clip_from_glb", "deserialize_clip"]
+__all__ = ["TcAnimationClip", "clip_from_fbx", "clip_from_glb"]

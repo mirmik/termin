@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
-    from termin.visualization.animation.clip import AnimationClip
+    from termin.visualization.animation.clip import TcAnimationClip
 
 
-class AnimationClipAsset(DataAsset["AnimationClip"]):
+class AnimationClipAsset(DataAsset["TcAnimationClip"]):
     """
     Asset for animation clip data.
 
     IMPORTANT: Create through ResourceManager.get_or_create_animation_clip_asset(),
     not directly. This ensures proper registration and avoids duplicates.
 
-    Stores AnimationClip (channels, duration, etc).
+    Stores TcAnimationClip (channels, duration, etc).
 
     Can be loaded from:
     - Standalone .anim files
@@ -29,7 +29,7 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
 
     def __init__(
         self,
-        clip: "AnimationClip | None" = None,
+        clip: "TcAnimationClip | None" = None,
         name: str = "animation",
         source_path: Path | str | None = None,
         uuid: str | None = None,
@@ -39,12 +39,12 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
     # --- Convenience property ---
 
     @property
-    def clip(self) -> "AnimationClip | None":
-        """AnimationClip data (lazy-loaded via parent's data property)."""
+    def clip(self) -> "TcAnimationClip | None":
+        """TcAnimationClip data (lazy-loaded via parent's data property)."""
         return self.data
 
     @clip.setter
-    def clip(self, value: "AnimationClip | None") -> None:
+    def clip(self, value: "TcAnimationClip | None") -> None:
         """Set clip and bump version."""
         self.data = value
 
@@ -56,7 +56,7 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
 
     # --- Content parsing ---
 
-    def _parse_content(self, content: str) -> "AnimationClip | None":
+    def _parse_content(self, content: str) -> "TcAnimationClip | None":
         """Parse animation content from file."""
         from termin.visualization.animation.clip_io import parse_animation_content
 
@@ -67,10 +67,10 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
     @classmethod
     def from_clip(
         cls,
-        clip: "AnimationClip",
+        clip: "TcAnimationClip",
         name: str | None = None,
         source_path: Path | str | None = None,
     ) -> "AnimationClipAsset":
-        """Create AnimationClipAsset from existing AnimationClip."""
+        """Create AnimationClipAsset from existing TcAnimationClip."""
         asset_name = name or clip.name or "animation"
         return cls(clip=clip, name=asset_name, source_path=source_path)

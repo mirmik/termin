@@ -1,4 +1,4 @@
 """Re-export for backwards compatibility."""
-from termin.assets.animation_clip_handle import AnimationClipHandle
+from termin.assets.animation_clip_handle import TcAnimationClip
 
-__all__ = ["AnimationClipHandle"]
+__all__ = ["TcAnimationClip"]

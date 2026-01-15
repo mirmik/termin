@@ -16,7 +16,7 @@ from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.components.skinned_mesh_renderer import SkinnedMeshRenderer
 from termin.visualization.render.components.skeleton_controller import SkeletonController
 from termin.visualization.animation.player import AnimationPlayer
-from termin.visualization.animation.clip import AnimationClip
+from termin.visualization.animation.clip import TcAnimationClip
 
 if TYPE_CHECKING:
     from termin.assets.mesh_asset import MeshAsset
@@ -541,7 +541,7 @@ def instantiate_glb(
 
     # Step 4: Setup animations from GLBAsset's child assets
     animation_player: Optional[AnimationPlayer] = None
-    clips: List[AnimationClip] = []  # keep reference for debug
+    clips: List[TcAnimationClip] = []  # keep reference for debug
     animation_assets = glb_asset.get_animation_assets()
 
     if animation_assets:
@@ -549,9 +549,9 @@ def instantiate_glb(
 
         for anim_name, anim_asset in animation_assets.items():
             clip = anim_asset.clip
-            if clip is not None:
+            if clip is not None and clip.is_valid:
                 clips.append(clip)
-                animation_player.add_clip(clip, asset=anim_asset)
+                animation_player.add_clip(clip)
 
         if clips:
             root_entity.add_component(animation_player)

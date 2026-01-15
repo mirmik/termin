@@ -8,6 +8,12 @@ extern "C" {
 }
 
 #include <string>
+#include <vector>
+#include <nanobind/nanobind.h>
+#include "../../trent/trent.h"
+#include "../../core_c/include/tc_scene.h"
+
+namespace nb = nanobind;
 
 namespace termin {
 namespace animation {
@@ -158,6 +164,83 @@ public:
     void recompute_duration() {
         if (tc_animation* a = get()) {
             tc_animation_recompute_duration(a);
+        }
+    }
+
+    // Sample animation at time t_seconds
+    // Returns vector of samples, one per channel
+    std::vector<tc_channel_sample> sample(double t_seconds) const {
+        tc_animation* a = get();
+        if (!a || a->channel_count == 0) {
+            return {};
+        }
+
+        std::vector<tc_channel_sample> samples(a->channel_count);
+        tc_animation_sample(a, t_seconds, samples.data());
+        return samples;
+    }
+
+    // Sample animation into preallocated buffer
+    // Returns number of channels sampled
+    size_t sample_into(double t_seconds, tc_channel_sample* out_samples, size_t max_count) const {
+        tc_animation* a = get();
+        if (!a || !out_samples || a->channel_count == 0) {
+            return 0;
+        }
+
+        size_t count = a->channel_count < max_count ? a->channel_count : max_count;
+        tc_animation_sample(a, t_seconds, out_samples);
+        return count;
+    }
+
+    // Serialize for scene saving (returns nanobind dict)
+    nb::dict serialize() const {
+        nb::dict d;
+        if (!is_valid()) {
+            d["type"] = "none";
+            return d;
+        }
+        d["uuid"] = uuid();
+        d["name"] = name();
+        d["type"] = "uuid";
+        return d;
+    }
+
+    // Deserialize from trent data
+    void deserialize_from(const nos::trent& data, tc_scene* = nullptr) {
+        // Release current handle
+        if (tc_animation* a = tc_animation_get(handle)) {
+            tc_animation_release(a);
+        }
+        handle = tc_animation_handle_invalid();
+
+        if (!data.is_dict()) {
+            return;
+        }
+
+        // Try UUID first
+        if (data.contains("uuid")) {
+            std::string uuid_str = data["uuid"].as_string();
+            tc_animation_handle h = tc_animation_find(uuid_str.c_str());
+            if (!tc_animation_handle_is_invalid(h)) {
+                handle = h;
+                if (tc_animation* a = tc_animation_get(handle)) {
+                    tc_animation_add_ref(a);
+                }
+                return;
+            }
+        }
+
+        // Try name lookup
+        if (data.contains("name")) {
+            std::string name_str = data["name"].as_string();
+            tc_animation_handle h = tc_animation_find_by_name(name_str.c_str());
+            if (!tc_animation_handle_is_invalid(h)) {
+                handle = h;
+                if (tc_animation* a = tc_animation_get(handle)) {
+                    tc_animation_add_ref(a);
+                }
+            }
         }
     }
 

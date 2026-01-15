@@ -719,7 +719,7 @@ class FieldWidgetFactory:
                 scene_getter=self._scene_getter,
             )
 
-        if kind == "animation_clip_handle_list" or kind == "list[animation_clip_handle]":
+        if kind in ("animation_clip_handle_list", "list[animation_clip_handle]", "list[tc_animation_clip]"):
             from termin.editor.widgets.generic_list_widget import GenericListWidget
 
             def get_clip_name(item: dict) -> str:

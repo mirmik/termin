@@ -27,7 +27,7 @@ void AnimationPlayer::start() {
     if (!_current_clip_name.empty()) {
         auto it = _clips_map.find(_current_clip_name);
         if (it != _clips_map.end()) {
-            _current = it->second;
+            _current_index = (int)it->second;
             _build_channel_mapping();
             tc::Log::info("[AnimationPlayer::start] Restored clip '%s'", _current_clip_name.c_str());
         }
@@ -36,10 +36,10 @@ void AnimationPlayer::start() {
 
 void AnimationPlayer::_rebuild_clips_map() {
     _clips_map.clear();
-    for (auto& handle : clips) {
-        animation::AnimationClip* clip = handle.get();
-        if (clip != nullptr) {
-            _clips_map[clip->name] = clip;
+    for (size_t i = 0; i < clips.size(); i++) {
+        const char* name = clips[i].name();
+        if (name && name[0] != '\0') {
+            _clips_map[name] = i;
         }
     }
 }
@@ -58,7 +58,7 @@ void AnimationPlayer::_acquire_skeleton() {
 void AnimationPlayer::set_target_skeleton(SkeletonInstance* skeleton) {
     _target_skeleton = skeleton;
     // Rebuild mapping if we have a clip
-    if (_current != nullptr) {
+    if (_current_index >= 0) {
         _build_channel_mapping();
     }
 }
@@ -67,12 +67,11 @@ void AnimationPlayer::set_current(const std::string& name) {
     _current_clip_name = name;
     auto it = _clips_map.find(name);
     if (it != _clips_map.end()) {
-        _current = it->second;
+        _current_index = (int)it->second;
         _build_channel_mapping();
     } else {
-        _current = nullptr;
+        _current_index = -1;
         _channel_to_bone.clear();
-        _channel_names.clear();
     }
 }
 
@@ -83,11 +82,12 @@ void AnimationPlayer::play(const std::string& name, bool restart) {
         return;
     }
 
-    if (_current != it->second || restart) {
+    int new_index = (int)it->second;
+    if (_current_index != new_index || restart) {
         time = 0.0;
     }
 
-    _current = it->second;
+    _current_index = new_index;
     _current_clip_name = name;
     _build_channel_mapping();
     playing = true;
@@ -95,96 +95,79 @@ void AnimationPlayer::play(const std::string& name, bool restart) {
 
 void AnimationPlayer::_build_channel_mapping() {
     _channel_to_bone.clear();
-    _channel_names.clear();
 
-    if (_current == nullptr || _target_skeleton == nullptr) {
+    if (_current_index < 0 || _current_index >= (int)clips.size()) {
+        return;
+    }
+
+    const animation::TcAnimationClip& clip = clips[_current_index];
+    tc_animation* anim = clip.get();
+    if (!anim || !_target_skeleton) {
         return;
     }
 
     tc_skeleton* skel = _target_skeleton->_skeleton;
-    if (skel == nullptr) {
+    if (!skel) {
         return;
     }
 
     // Build mapping from channel index to bone index
-    for (const auto& [name, channel] : _current->channels) {
-        int bone_idx = tc_skeleton_find_bone(skel, name.c_str());
-        _channel_names.push_back(name);
-        _channel_to_bone.push_back(bone_idx);
+    _channel_to_bone.resize(anim->channel_count);
+    for (size_t i = 0; i < anim->channel_count; i++) {
+        const char* target_name = anim->channels[i].target_name;
+        int bone_idx = tc_skeleton_find_bone(skel, target_name);
+        _channel_to_bone[i] = bone_idx;
     }
+
+    // Resize samples buffer
+    _samples_buffer.resize(anim->channel_count);
 }
 
 void AnimationPlayer::update(float dt) {
-    if (!playing || _current == nullptr) {
+    if (!playing || _current_index < 0) {
         return;
     }
 
     time += dt;
 
-    auto sample = _current->sample(time);
-    _apply_sample(sample);
+    const animation::TcAnimationClip& clip = clips[_current_index];
+    size_t count = clip.sample_into(time, _samples_buffer.data(), _samples_buffer.size());
+    _apply_sample(_samples_buffer.data(), count);
 }
 
 void AnimationPlayer::update_bones_at_time(double t) {
-    if (_current == nullptr) {
+    if (_current_index < 0 || _current_index >= (int)clips.size()) {
         return;
     }
 
-    auto sample = _current->sample(t);
-    _apply_sample(sample);
+    const animation::TcAnimationClip& clip = clips[_current_index];
+    size_t count = clip.sample_into(t, _samples_buffer.data(), _samples_buffer.size());
+    _apply_sample(_samples_buffer.data(), count);
 }
 
-void AnimationPlayer::_apply_sample(
-    const std::unordered_map<std::string, animation::AnimationChannelSample>& sample
-) {
-    if (_target_skeleton == nullptr) {
+void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t count) {
+    if (!_target_skeleton || !samples) {
         return;
     }
 
     // Use cached channel-to-bone mapping for fast lookup
-    for (size_t i = 0; i < _channel_names.size(); ++i) {
+    for (size_t i = 0; i < count && i < _channel_to_bone.size(); ++i) {
         int bone_idx = _channel_to_bone[i];
         if (bone_idx < 0) {
             continue;
         }
 
-        const std::string& name = _channel_names[i];
-        auto it = sample.find(name);
-        if (it == sample.end()) {
-            continue;
-        }
+        const tc_channel_sample& ch = samples[i];
 
-        const animation::AnimationChannelSample& ch = it->second;
+        const double* tr_ptr = ch.has_translation ? ch.translation : nullptr;
+        const double* rot_ptr = ch.has_rotation ? ch.rotation : nullptr;
 
-        // Prepare data for set_bone_transform
-        double tr[3] = {0, 0, 0};
-        double rot[4] = {0, 0, 0, 1};
         double sc[3] = {1, 1, 1};
-
-        const double* tr_ptr = nullptr;
-        const double* rot_ptr = nullptr;
         const double* sc_ptr = nullptr;
-
-        if (ch.translation.has_value()) {
-            tr[0] = ch.translation->x;
-            tr[1] = ch.translation->y;
-            tr[2] = ch.translation->z;
-            tr_ptr = tr;
-        }
-
-        if (ch.rotation.has_value()) {
-            rot[0] = ch.rotation->x;
-            rot[1] = ch.rotation->y;
-            rot[2] = ch.rotation->z;
-            rot[3] = ch.rotation->w;
-            rot_ptr = rot;
-        }
-
-        if (ch.scale.has_value()) {
-            double s = *ch.scale;
-            sc[0] = s;
-            sc[1] = s;
-            sc[2] = s;
+        if (ch.has_scale) {
+            sc[0] = ch.scale;
+            sc[1] = ch.scale;
+            sc[2] = ch.scale;
             sc_ptr = sc;
         }
 

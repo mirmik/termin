@@ -7,6 +7,7 @@
 #include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 // ============================================================================
 // Global state
@@ -435,6 +436,205 @@ void tc_animation_foreach(tc_animation_iter_fn callback, void* user_data) {
     if (!g_initialized || !callback) return;
     animation_iter_ctx ctx = { callback, user_data };
     tc_pool_foreach(&g_animation_pool, animation_iter_adapter, &ctx);
+}
+
+// ============================================================================
+// Sampling functions
+// ============================================================================
+
+// Binary search for keyframe interval
+static size_t find_keyframe_index_vec3(const tc_keyframe_vec3* keys, size_t count, double t) {
+    if (count == 0) return 0;
+    if (t <= keys[0].time) return 0;
+    if (t >= keys[count - 1].time) return count - 1;
+
+    size_t lo = 0;
+    size_t hi = count - 1;
+    while (lo + 1 < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (keys[mid].time <= t) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+static size_t find_keyframe_index_quat(const tc_keyframe_quat* keys, size_t count, double t) {
+    if (count == 0) return 0;
+    if (t <= keys[0].time) return 0;
+    if (t >= keys[count - 1].time) return count - 1;
+
+    size_t lo = 0;
+    size_t hi = count - 1;
+    while (lo + 1 < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (keys[mid].time <= t) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+static size_t find_keyframe_index_scalar(const tc_keyframe_scalar* keys, size_t count, double t) {
+    if (count == 0) return 0;
+    if (t <= keys[0].time) return 0;
+    if (t >= keys[count - 1].time) return count - 1;
+
+    size_t lo = 0;
+    size_t hi = count - 1;
+    while (lo + 1 < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (keys[mid].time <= t) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+// Quaternion slerp
+static void quat_slerp(const double* a, const double* b, double t, double* out) {
+    // a, b, out are [x, y, z, w]
+    double dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
+
+    double b_adj[4];
+    if (dot < 0.0) {
+        b_adj[0] = -b[0];
+        b_adj[1] = -b[1];
+        b_adj[2] = -b[2];
+        b_adj[3] = -b[3];
+        dot = -dot;
+    } else {
+        b_adj[0] = b[0];
+        b_adj[1] = b[1];
+        b_adj[2] = b[2];
+        b_adj[3] = b[3];
+    }
+
+    if (dot > 0.9995) {
+        // Linear interpolation for very close quaternions
+        out[0] = a[0] + t * (b_adj[0] - a[0]);
+        out[1] = a[1] + t * (b_adj[1] - a[1]);
+        out[2] = a[2] + t * (b_adj[2] - a[2]);
+        out[3] = a[3] + t * (b_adj[3] - a[3]);
+        // Normalize
+        double len = sqrt(out[0]*out[0] + out[1]*out[1] + out[2]*out[2] + out[3]*out[3]);
+        if (len > 0.0) {
+            out[0] /= len;
+            out[1] /= len;
+            out[2] /= len;
+            out[3] /= len;
+        }
+        return;
+    }
+
+    double theta_0 = acos(dot);
+    double theta = theta_0 * t;
+    double sin_theta = sin(theta);
+    double sin_theta_0 = sin(theta_0);
+
+    double s0 = cos(theta) - dot * sin_theta / sin_theta_0;
+    double s1 = sin_theta / sin_theta_0;
+
+    out[0] = s0 * a[0] + s1 * b_adj[0];
+    out[1] = s0 * a[1] + s1 * b_adj[1];
+    out[2] = s0 * a[2] + s1 * b_adj[2];
+    out[3] = s0 * a[3] + s1 * b_adj[3];
+}
+
+void tc_animation_channel_sample(
+    const tc_animation_channel* ch,
+    double t_ticks,
+    tc_channel_sample* out
+) {
+    tc_channel_sample_init(out);
+    if (!ch) return;
+
+    // Sample translation
+    if (ch->translation_keys && ch->translation_count > 0) {
+        out->has_translation = 1;
+        size_t idx = find_keyframe_index_vec3(ch->translation_keys, ch->translation_count, t_ticks);
+
+        if (idx >= ch->translation_count - 1 || t_ticks <= ch->translation_keys[0].time) {
+            // At or past bounds - use exact value
+            const tc_keyframe_vec3* k = &ch->translation_keys[idx];
+            out->translation[0] = k->value[0];
+            out->translation[1] = k->value[1];
+            out->translation[2] = k->value[2];
+        } else {
+            // Interpolate
+            const tc_keyframe_vec3* k1 = &ch->translation_keys[idx];
+            const tc_keyframe_vec3* k2 = &ch->translation_keys[idx + 1];
+            double dt = k2->time - k1->time;
+            double alpha = (dt > 0.0) ? (t_ticks - k1->time) / dt : 0.0;
+            out->translation[0] = k1->value[0] * (1.0 - alpha) + k2->value[0] * alpha;
+            out->translation[1] = k1->value[1] * (1.0 - alpha) + k2->value[1] * alpha;
+            out->translation[2] = k1->value[2] * (1.0 - alpha) + k2->value[2] * alpha;
+        }
+    }
+
+    // Sample rotation
+    if (ch->rotation_keys && ch->rotation_count > 0) {
+        out->has_rotation = 1;
+        size_t idx = find_keyframe_index_quat(ch->rotation_keys, ch->rotation_count, t_ticks);
+
+        if (idx >= ch->rotation_count - 1 || t_ticks <= ch->rotation_keys[0].time) {
+            const tc_keyframe_quat* k = &ch->rotation_keys[idx];
+            out->rotation[0] = k->value[0];
+            out->rotation[1] = k->value[1];
+            out->rotation[2] = k->value[2];
+            out->rotation[3] = k->value[3];
+        } else {
+            const tc_keyframe_quat* k1 = &ch->rotation_keys[idx];
+            const tc_keyframe_quat* k2 = &ch->rotation_keys[idx + 1];
+            double dt = k2->time - k1->time;
+            double alpha = (dt > 0.0) ? (t_ticks - k1->time) / dt : 0.0;
+            quat_slerp(k1->value, k2->value, alpha, out->rotation);
+        }
+    }
+
+    // Sample scale
+    if (ch->scale_keys && ch->scale_count > 0) {
+        out->has_scale = 1;
+        size_t idx = find_keyframe_index_scalar(ch->scale_keys, ch->scale_count, t_ticks);
+
+        if (idx >= ch->scale_count - 1 || t_ticks <= ch->scale_keys[0].time) {
+            out->scale = ch->scale_keys[idx].value;
+        } else {
+            const tc_keyframe_scalar* k1 = &ch->scale_keys[idx];
+            const tc_keyframe_scalar* k2 = &ch->scale_keys[idx + 1];
+            double dt = k2->time - k1->time;
+            double alpha = (dt > 0.0) ? (t_ticks - k1->time) / dt : 0.0;
+            out->scale = k1->value * (1.0 - alpha) + k2->value * alpha;
+        }
+    }
+}
+
+size_t tc_animation_sample(
+    const tc_animation* anim,
+    double t_seconds,
+    tc_channel_sample* out_samples
+) {
+    if (!anim || !out_samples || anim->channel_count == 0) return 0;
+
+    // Handle looping
+    if (anim->loop && anim->duration > 0.0) {
+        t_seconds = fmod(t_seconds, anim->duration);
+        if (t_seconds < 0.0) t_seconds += anim->duration;
+    }
+
+    double t_ticks = t_seconds * anim->tps;
+
+    for (size_t i = 0; i < anim->channel_count; i++) {
+        tc_animation_channel_sample(&anim->channels[i], t_ticks, &out_samples[i]);
+    }
+
+    return anim->channel_count;
 }
 
 // ============================================================================

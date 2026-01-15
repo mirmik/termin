@@ -138,7 +138,7 @@
                 "uuid": "65a82ebe-b0e2-4590-bc27-310b403475de",
                 "name": "Plt",
                 "type": "path",
-                "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Scenes\\Plt.navmesh"
+                "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Scenes\\Plt.navmesh"
               },
               "material": {
                 "type": "uuid",
@@ -225,13 +225,13 @@
                           "uuid": "6466ba011c0de12a",
                           "name": "Ground_Dirt_009_BaseColor",
                           "type": "path",
-                          "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
+                          "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
                         },
                         "u_normal_texture": {
                           "uuid": "2c041d3a2870c8bf",
                           "name": "Ground_Dirt_009_Normal",
                           "type": "path",
-                          "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
+                          "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
                         }
                       },
                       {
@@ -239,13 +239,13 @@
                           "uuid": "6466ba011c0de12a",
                           "name": "Ground_Dirt_009_BaseColor",
                           "type": "path",
-                          "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
+                          "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
                         },
                         "u_normal_texture": {
                           "uuid": "2c041d3a2870c8bf",
                           "name": "Ground_Dirt_009_Normal",
                           "type": "path",
-                          "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
+                          "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
                         }
                       }
                     ]
@@ -832,106 +832,89 @@
                   "enabled": true,
                   "clips": [
                     {
-                      "uuid": "d2ccc07e-eae7-4dfd-bd58-57421cf9da55",
+                      "uuid": "anim-0000000000000001",
                       "name": "A",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "872dc4d7-8cea-4545-972e-ec56b78e483c",
+                      "uuid": "anim-0000000000000002",
                       "name": "Breakdance",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "3e57fb7a-9883-4b55-9ea2-b7ef20b36809",
+                      "uuid": "anim-0000000000000003",
                       "name": "CroachIdle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "de42581b-783c-472c-a76e-b91b2fc2c0d6",
+                      "uuid": "anim-0000000000000004",
                       "name": "CroachWalk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "d26c236f-cfba-405b-bdc3-8cc867d7e9a5",
+                      "uuid": "anim-0000000000000005",
                       "name": "Crow",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "48bd223c-be0d-48be-be4f-c431ea5b6809",
+                      "uuid": "anim-0000000000000006",
                       "name": "Dance1",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "0ec904f6-32ca-4549-8eed-dbb058de37b1",
+                      "uuid": "anim-0000000000000007",
                       "name": "Dance2",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "4f6c8fe4-84ed-4161-80a0-ac1be976aa7e",
+                      "uuid": "anim-0000000000000008",
                       "name": "Dance3",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "5fb119c1-7b0e-4595-8ebb-4afad5707d6f",
+                      "uuid": "anim-0000000000000009",
                       "name": "Dance4",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "f70beb73-114e-4e82-95ce-4252871b4e0a",
+                      "uuid": "anim-000000000000000a",
                       "name": "Dance5",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "3664add3-6497-4a45-bd59-409d7cdbf18a",
+                      "uuid": "anim-000000000000000b",
                       "name": "Death",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "f9da6bd5-6767-4b49-b1c0-8cca7b382927",
+                      "uuid": "anim-000000000000000c",
                       "name": "Idle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "190ec4e8-13d9-411d-a22b-51e5f7d0569e",
+                      "uuid": "anim-000000000000000d",
                       "name": "LeanStandLeft",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "e948fb08-eb17-4b67-ad07-169c21c4bb0a",
+                      "uuid": "anim-000000000000000e",
                       "name": "LeanStandRight",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "476f1025-a4f9-4ea3-b7db-89a2f2ba872f",
+                      "uuid": "anim-000000000000000f",
                       "name": "Run",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "d62aec7b-0af7-4a90-ae4b-bde685a729db",
+                      "uuid": "anim-0000000000000010",
                       "name": "Shoot",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "8af80f7c-d7e7-4a9b-a385-0f3145b51cc5",
+                      "uuid": "anim-0000000000000011",
                       "name": "Walk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Glitch.glb"
+                      "type": "uuid"
                     }
                   ],
                   "_current_clip_name": "Walk",
@@ -4482,7 +4465,7 @@
                               "uuid": "74f0793b957fdb78",
                               "name": "6830-1745580165",
                               "type": "path",
-                              "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+                              "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\6830-1745580165.jpg"
                             }
                           },
                           {
@@ -4490,7 +4473,7 @@
                               "uuid": "74f0793b957fdb78",
                               "name": "6830-1745580165",
                               "type": "path",
-                              "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+                              "path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\6830-1745580165.jpg"
                             },
                             "u_normal_texture": {
                               "uuid": "07151644d3bb92c7",
@@ -4602,13 +4585,13 @@
                       "_overridden_material_data": {
                         "phases_uniforms": [
                           {
-                            "u_diffuse_mul": 1,
                             "u_color": [
                               0.15655755996704102,
                               0.31000229716300964,
                               0.20257876813411713,
                               1
-                            ]
+                            ],
+                            "u_diffuse_mul": 1
                           },
                           {
                             "u_emission_intensity": 0,
@@ -5293,322 +5276,269 @@
                   "enabled": true,
                   "clips": [
                     {
-                      "uuid": "feec5ee7-4b00-4b3b-a7a7-a938b871986f",
+                      "uuid": "anim-0000000000000012",
                       "name": "A",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "7b6c136f-f98d-4b22-8d8c-4429eebad901",
+                      "uuid": "anim-0000000000000013",
                       "name": "BracedHangLeft",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "8d3d11a2-dc33-431d-b160-3cda174bde80",
+                      "uuid": "anim-0000000000000014",
                       "name": "BracedHangRight",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "9f83a1b5-8f77-4a72-9fc4-46423e4584b0",
+                      "uuid": "anim-0000000000000015",
                       "name": "BracedIdle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "2a2eb200-8f34-4976-8005-42b09d001eb2",
+                      "uuid": "anim-0000000000000016",
                       "name": "BracedToCroach",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "bb0aafd6-71fc-4b7a-81aa-525b9e07b9f1",
+                      "uuid": "anim-0000000000000017",
                       "name": "ClimbingDownWall",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "d0da96fe-63bf-4464-9193-6d402cdbb06d",
+                      "uuid": "anim-0000000000000018",
                       "name": "ClimbingUpWall",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "fe566101-33e0-4ffe-abe1-a1916e26598c",
+                      "uuid": "anim-0000000000000019",
                       "name": "ClimbWall",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "94b16813-1a75-4ab3-b375-7ec8d3ec9241",
+                      "uuid": "anim-000000000000001a",
                       "name": "CroachIdle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "f18a41ee-bdb6-4ce6-882d-d6ea01f1bb66",
+                      "uuid": "anim-000000000000001b",
                       "name": "CroachToBraced",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "0f3b2b82-51d5-4308-bc5b-96ba3a56cdbf",
+                      "uuid": "anim-000000000000001c",
                       "name": "CroachWalk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "b712a09d-1938-4599-959c-3540cdde5156",
+                      "uuid": "anim-000000000000001d",
                       "name": "Death",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "b909d481-4bda-4365-bab1-efd69db652d6",
+                      "uuid": "anim-000000000000001e",
                       "name": "DoorEntrance",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "2b670767-3f68-4632-ac4a-23632014f38a",
+                      "uuid": "anim-000000000000001f",
                       "name": "FallingIdle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "e6cca1e3-2b14-49d7-9d62-681256efcc5a",
+                      "uuid": "anim-0000000000000020",
                       "name": "FallingT",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "22bd5d30-d67a-4d35-a661-e88d8d90ceb5",
+                      "uuid": "anim-0000000000000021",
                       "name": "Flying",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "cadab440-2205-4e7b-8ce3-5f62a98ada3d",
+                      "uuid": "anim-0000000000000022",
                       "name": "Idle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "d7e31674-6c9d-4979-927c-84b8a3a522db",
+                      "uuid": "anim-0000000000000023",
                       "name": "IdleToBraced",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "13e41a48-f7ce-4911-81f4-a9317839ba8d",
+                      "uuid": "anim-0000000000000024",
                       "name": "IdleToBraced_BracedPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "017b9116-946a-4c55-be6b-9e9a32daa6a7",
+                      "uuid": "anim-0000000000000025",
                       "name": "IdleToBraced_FleetPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "bb2d3939-ac86-4cc4-b536-d2d93d21f829",
+                      "uuid": "anim-0000000000000026",
                       "name": "IdleToBraced_GroundPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "d27a0e94-0a12-4e49-9dc3-c91b4e57d318",
+                      "uuid": "anim-0000000000000027",
                       "name": "Jump",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "cd7e02e0-cc78-43e4-b103-c22193b2322c",
+                      "uuid": "anim-0000000000000028",
                       "name": "Jump2",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "cf3f0547-1993-4237-a013-50872bd4e789",
+                      "uuid": "anim-0000000000000029",
                       "name": "JumpDown",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "6d346fb1-9b91-4b39-9beb-ddd238490741",
+                      "uuid": "anim-000000000000002a",
                       "name": "JumpDown_FleetPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "631d2426-30f6-4334-9573-0fa24b2efd90",
+                      "uuid": "anim-000000000000002b",
                       "name": "JumpDown_GroundPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "31b304c3-1a56-462f-a1fd-4bd3a3de461a",
+                      "uuid": "anim-000000000000002c",
                       "name": "JumpDown_TopPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "686d4b8a-d780-40c3-a799-f969070f94c5",
+                      "uuid": "anim-000000000000002d",
                       "name": "Kick100",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "44e0cca1-17f9-499e-ad6b-71ec14831d35",
+                      "uuid": "anim-000000000000002e",
                       "name": "Kick60",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "62cac129-1558-481c-b26b-2d6f184c35f2",
+                      "uuid": "anim-000000000000002f",
                       "name": "Kick80",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "b5fc3130-a35e-4cf9-977b-1abbdd28a21c",
+                      "uuid": "anim-0000000000000030",
                       "name": "LeanCrouchLeft",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "82a30679-6de1-4a58-baf5-bcadb7c138f1",
+                      "uuid": "anim-0000000000000031",
                       "name": "LeanCrouchRight",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "6425224d-4bb7-4b21-af68-19a1878c7f16",
+                      "uuid": "anim-0000000000000032",
                       "name": "LeanStandLeft",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "37768b0f-bccf-4215-ad8b-5e5614a1c0df",
+                      "uuid": "anim-0000000000000033",
                       "name": "LeanStandRight",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "40b0ff56-3896-4f5e-93da-8547b35cea57",
+                      "uuid": "anim-0000000000000034",
                       "name": "LowGravityRun",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "8468784d-4606-455d-9296-b764da450bfd",
+                      "uuid": "anim-0000000000000035",
                       "name": "LowGravityWalk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "327be3be-e512-4a88-9af7-35a006c5a499",
+                      "uuid": "anim-0000000000000036",
                       "name": "LowGravityWalk2",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "83714f56-8b6c-4a0d-b306-164fca4b587a",
+                      "uuid": "anim-0000000000000037",
                       "name": "LowGravityWalk3",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "41bb39d5-754c-4f0b-b609-3539960b6340",
+                      "uuid": "anim-0000000000000038",
                       "name": "Punch",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "220805ce-c06c-4d7d-b690-a9cf85772e25",
+                      "uuid": "anim-0000000000000039",
                       "name": "Run",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "c90252df-4657-455a-a4f7-2b30c9220c68",
+                      "uuid": "anim-000000000000003a",
                       "name": "SkyStrike",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "92d616bd-3d80-4662-a97f-13ebb4a07083",
+                      "uuid": "anim-000000000000003b",
                       "name": "SkyStrike_FleetPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "39cd8055-5e3a-45b7-8b18-40b9ee886472",
+                      "uuid": "anim-000000000000003c",
                       "name": "SkyStrike_GroundPhase",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "c0c70838-2bb6-4333-974c-e6206cb889c9",
+                      "uuid": "anim-000000000000003d",
                       "name": "StylishFlip",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "7efff6a7-a981-4aa8-94bb-c42b3c90437e",
+                      "uuid": "anim-000000000000003e",
                       "name": "T",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "2ac35825-2643-4900-b002-38de6a361b38",
+                      "uuid": "anim-000000000000003f",
                       "name": "Walk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "6b4e5551-38f4-4f22-9da1-8ba51e905731",
+                      "uuid": "anim-0000000000000040",
                       "name": "ZeroGravityCrawl",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "0f1743b5-a894-4e50-947f-ff9118cacb48",
+                      "uuid": "anim-0000000000000041",
                       "name": "ZeroGravityWalk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "a0ab5305-dc2d-41a3-9b5f-eda1948d8643",
+                      "uuid": "anim-0000000000000042",
                       "name": "ZeroGravityWalk2",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "3e0494d6-19ab-46dc-b482-7e1630058ac1",
+                      "uuid": "anim-0000000000000043",
                       "name": "ZeroJumpFleet",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "a4378652-4e91-40d0-90e6-ecf3f7b3adf0",
+                      "uuid": "anim-0000000000000044",
                       "name": "ZeroJumpGround",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "98671a03-a4d0-496c-a20c-8e0a07f92638",
+                      "uuid": "anim-0000000000000045",
                       "name": "ZeroJumpStart",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "c39551b3-9bdc-4cd7-b692-3db140d9ff7a",
+                      "uuid": "anim-0000000000000046",
                       "name": "ZeroJumpToGround",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/Arthur/ArthurDecimated.glb"
+                      "type": "uuid"
                     }
                   ],
                   "_current_clip_name": "",
@@ -9601,13 +9531,13 @@
               "_overridden_material_data": {
                 "phases_uniforms": [
                   {
+                    "u_emission_intensity": 2,
                     "u_color": [
                       0.34726482629776,
                       0.7852292656898499,
                       0.15172044932842255,
                       1
                     ],
-                    "u_emission_intensity": 2,
                     "u_diffuse_mul": 3.1414999961853027,
                     "u_emission_color": [
                       0.7799344062805176,
@@ -9770,14 +9700,14 @@
         ],
         "children": [
           {
-            "uuid": "00000000000000e4",
+            "uuid": "814ba329-db24-48fe-b931-fe68ab904998",
             "name": "Model",
             "priority": 0,
             "visible": true,
             "enabled": true,
             "pickable": true,
             "selectable": true,
-            "layer": 1,
+            "layer": 0,
             "flags": 0,
             "pose": {
               "position": [
@@ -9786,16 +9716,16 @@
                 0
               ],
               "rotation": [
-                0.7071067811865476,
+                -2.9802322387695312e-08,
                 0,
                 0,
-                0.7071067811865476
+                1
               ]
             },
             "scale": [
-              0.1,
-              0.1,
-              0.1
+              1,
+              1,
+              1
             ],
             "components": [
               {
@@ -9808,202 +9738,202 @@
                   },
                   "bone_entities": [
                     {
-                      "uuid": "00000000000000ec"
+                      "uuid": "27bb2cff-04ab-4edf-a259-a132382bb1b1"
                     },
                     {
-                      "uuid": "00000000000000ed"
+                      "uuid": "e8cbfe7f-a17d-4014-84b0-e87905d289bb"
                     },
                     {
-                      "uuid": "00000000000000ee"
+                      "uuid": "1569b79a-7e60-4f81-8e9e-f7bbf7dec7e3"
                     },
                     {
-                      "uuid": "00000000000000ef"
+                      "uuid": "f6bae89c-b308-4c83-a86a-ff62c621eca7"
                     },
                     {
-                      "uuid": "00000000000000f0"
+                      "uuid": "14226314-9a6c-49b7-bd98-701d6bb2b9c3"
                     },
                     {
-                      "uuid": "00000000000000f1"
+                      "uuid": "394737cd-cbbf-46fa-b5ed-fcd81fe52e34"
                     },
                     {
-                      "uuid": "00000000000000f2"
+                      "uuid": "6e0eb6d5-2178-446a-b86f-93c05c508e38"
                     },
                     {
-                      "uuid": "00000000000000f3"
+                      "uuid": "fb9b7279-b34a-4562-b161-6742dac7584c"
                     },
                     {
-                      "uuid": "00000000000000f4"
+                      "uuid": "69543a45-da2b-4980-884a-e80c925f4e2c"
                     },
                     {
-                      "uuid": "00000000000000f5"
+                      "uuid": "82dd2107-3150-41a1-a5ee-c90abd6e71d6"
                     },
                     {
-                      "uuid": "00000000000000f6"
+                      "uuid": "4f1d77cc-8f2e-4fe3-b351-f86ad4880186"
                     },
                     {
-                      "uuid": "00000000000000f7"
+                      "uuid": "1836cde1-0e79-43a1-99ba-a897918381b9"
                     },
                     {
-                      "uuid": "00000000000000f8"
+                      "uuid": "6690f4d3-0628-4e79-81ae-4a40eb73b02e"
                     },
                     {
-                      "uuid": "00000000000000f9"
+                      "uuid": "03cefd6e-116f-4248-95f0-8f511dad91df"
                     },
                     {
-                      "uuid": "00000000000000fa"
+                      "uuid": "f7d639c0-08c2-4f2c-bc86-67f7a0c7630b"
                     },
                     {
-                      "uuid": "00000000000000fb"
+                      "uuid": "8bcc3916-04d7-4680-a0b6-03a02b95a72f"
                     },
                     {
-                      "uuid": "00000000000000fc"
+                      "uuid": "4916cefd-5da4-49e2-aa04-d5f8b92c2007"
                     },
                     {
-                      "uuid": "00000000000000fd"
+                      "uuid": "fa590941-ad5c-4830-8334-8eec81e2ce91"
                     },
                     {
-                      "uuid": "00000000000000fe"
+                      "uuid": "a6793cf0-cd75-4485-954d-1eaafe4cf109"
                     },
                     {
-                      "uuid": "00000000000000ff"
+                      "uuid": "969cf657-d6a4-4f40-8794-b79de83d0bed"
                     },
                     {
-                      "uuid": "0000000000000100"
+                      "uuid": "54270a03-20dd-49fc-838c-c97439ccddfa"
                     },
                     {
-                      "uuid": "0000000000000101"
+                      "uuid": "a9be87c0-4557-4397-b1fb-061b284e682b"
                     },
                     {
-                      "uuid": "0000000000000102"
+                      "uuid": "9c47c09d-1d86-4e2f-bce7-5fc03057ecc0"
                     },
                     {
-                      "uuid": "0000000000000103"
+                      "uuid": "79e645e5-c31e-4c1f-8c93-04cf09bcec34"
                     },
                     {
-                      "uuid": "0000000000000104"
+                      "uuid": "c601e625-8e15-4e06-8a86-67f5ac932744"
                     },
                     {
-                      "uuid": "0000000000000105"
+                      "uuid": "4f3db62c-17a1-43bf-9f84-381f53309fee"
                     },
                     {
-                      "uuid": "0000000000000106"
+                      "uuid": "1a7f0505-3935-4e69-b492-697a7528956e"
                     },
                     {
-                      "uuid": "0000000000000107"
+                      "uuid": "72eb64fe-0b87-4f5f-b1f6-2b74cd518a42"
                     },
                     {
-                      "uuid": "0000000000000108"
+                      "uuid": "e0e6a4a4-e68c-4840-8133-eeb953bf3f27"
                     },
                     {
-                      "uuid": "0000000000000109"
+                      "uuid": "2c17d7c4-6578-49e7-8b10-633741c8b418"
                     },
                     {
-                      "uuid": "000000000000010a"
+                      "uuid": "5f614c6a-5fc2-4373-ba90-7d190e002b55"
                     },
                     {
-                      "uuid": "000000000000010b"
+                      "uuid": "c3e995e4-ee1e-4840-b5fa-6ace753c2659"
                     },
                     {
-                      "uuid": "000000000000010c"
+                      "uuid": "e01584bf-6b80-47ea-a7d2-9e026d9263e1"
                     },
                     {
-                      "uuid": "000000000000010d"
+                      "uuid": "808a28c8-6e1e-4450-b7dd-c8a33156e6eb"
                     },
                     {
-                      "uuid": "000000000000010e"
+                      "uuid": "ab2dd40b-d16e-4d8e-9020-d9dc3a1eefb4"
                     },
                     {
-                      "uuid": "000000000000010f"
+                      "uuid": "ab2218d6-ad23-4500-99e1-031c3fbefeb8"
                     },
                     {
-                      "uuid": "0000000000000110"
+                      "uuid": "08cfc4b6-5a33-4c45-bca3-b7103b4bd5b5"
                     },
                     {
-                      "uuid": "0000000000000111"
+                      "uuid": "8cd8eb78-72d3-4439-a22d-a5a3661b75a7"
                     },
                     {
-                      "uuid": "0000000000000112"
+                      "uuid": "3f24dd28-ce77-4df8-b483-bf0439c21fcb"
                     },
                     {
-                      "uuid": "0000000000000113"
+                      "uuid": "6ad52b15-86d6-48e1-9cea-369f6d15549f"
                     },
                     {
-                      "uuid": "0000000000000114"
+                      "uuid": "9753a6ca-f5e4-4690-81e7-7a21fb2ad5e0"
                     },
                     {
-                      "uuid": "0000000000000115"
+                      "uuid": "8f415f14-b2d5-49e1-8d3f-3c781d55a28a"
                     },
                     {
-                      "uuid": "0000000000000116"
+                      "uuid": "5984a802-9620-41f3-a9f7-6ecf4b2cfddb"
                     },
                     {
-                      "uuid": "0000000000000117"
+                      "uuid": "414310df-bc78-4022-bd55-41953e83674f"
                     },
                     {
-                      "uuid": "0000000000000118"
+                      "uuid": "cee16939-7bd3-460b-b4dd-2577ef70a1a3"
                     },
                     {
-                      "uuid": "0000000000000119"
+                      "uuid": "c903c5dd-6c66-448b-b653-cc609847acd6"
                     },
                     {
-                      "uuid": "000000000000011a"
+                      "uuid": "3b8f73d8-6aa6-4bbe-acbe-277fb09dc822"
                     },
                     {
-                      "uuid": "000000000000011b"
+                      "uuid": "6faa0676-8c48-4d03-bf62-6640f2477807"
                     },
                     {
-                      "uuid": "000000000000011c"
+                      "uuid": "ebb94e45-2c40-4af6-97c5-fa51565b7b3f"
                     },
                     {
-                      "uuid": "000000000000011d"
+                      "uuid": "7a605c12-e2c5-4474-9faa-959d152ed3ca"
                     },
                     {
-                      "uuid": "000000000000011e"
+                      "uuid": "258580ea-894b-4a9a-bf17-2853a954c1e2"
                     },
                     {
-                      "uuid": "000000000000011f"
+                      "uuid": "344c4d19-3886-40c5-9f52-e4e0caa2c507"
                     },
                     {
-                      "uuid": "0000000000000120"
+                      "uuid": "301b932e-486c-4492-aadf-39ef712da2f3"
                     },
                     {
-                      "uuid": "0000000000000121"
+                      "uuid": "e39763f3-5432-49de-8783-d86fd74b57a6"
                     },
                     {
-                      "uuid": "0000000000000122"
+                      "uuid": "55a40f78-334d-4fc6-a043-b38c7591265b"
                     },
                     {
-                      "uuid": "0000000000000123"
+                      "uuid": "d0682609-fe72-47a7-9f64-fbb304d3908f"
                     },
                     {
-                      "uuid": "0000000000000124"
+                      "uuid": "dc487a32-1096-431e-ab6b-20917e265600"
                     },
                     {
-                      "uuid": "0000000000000125"
+                      "uuid": "43e81dc1-00ee-4308-ae1e-d4141bdf79aa"
                     },
                     {
-                      "uuid": "0000000000000126"
+                      "uuid": "0d2e5ec3-a8ef-4982-9280-0768549439cb"
                     },
                     {
-                      "uuid": "0000000000000127"
+                      "uuid": "833fd084-214d-44e9-bed8-ebfbe21a18e0"
                     },
                     {
-                      "uuid": "0000000000000128"
+                      "uuid": "2f7f4293-c3fe-47da-9caa-f178bf84d7a4"
                     },
                     {
-                      "uuid": "0000000000000129"
+                      "uuid": "da94c7bb-2838-4332-95bb-c9ce23297717"
                     },
                     {
-                      "uuid": "000000000000012a"
+                      "uuid": "8c62af0a-296e-470e-9210-6529879e3974"
                     },
                     {
-                      "uuid": "000000000000012b"
+                      "uuid": "8e0f8bcc-de56-46cb-bcef-f5f6a4b79e38"
                     },
                     {
-                      "uuid": "000000000000012c"
+                      "uuid": "6a002c90-a1e5-4106-bcdb-ebe373896621"
                     },
                     {
-                      "uuid": "000000000000012d"
+                      "uuid": "e8daa321-0b50-489c-bb9b-f7dc2e6a932c"
                     }
                   ]
                 }
@@ -10014,83 +9944,66 @@
                   "enabled": true,
                   "clips": [
                     {
-                      "uuid": "79d2d965-5629-4d1f-8b19-bdc387b43fa1",
+                      "uuid": "anim-0000000000000047",
                       "name": "A",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "1be563f8-4449-4f2a-ba94-cc4f23e6e73a",
+                      "uuid": "anim-0000000000000048",
                       "name": "Death",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "968a3f5f-6855-4c63-a7e8-cc6af302a55f",
+                      "uuid": "anim-0000000000000049",
                       "name": "Dragged",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "7f7ee388-ecd9-4755-bb9d-f7f65f15d8a1",
+                      "uuid": "anim-000000000000004a",
                       "name": "Grabbed",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "6aabb1ba-dc21-4f2f-9c72-b9ea8dbd7c1c",
+                      "uuid": "anim-000000000000004b",
                       "name": "Idle",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "2d661d36-fe58-4c39-a8a4-7fe22de43a78",
+                      "uuid": "anim-000000000000004c",
                       "name": "LowGravityWalk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "6cbc3260-251c-497d-97c6-8ea364fd0565",
+                      "uuid": "anim-000000000000004d",
                       "name": "Run",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "0bbe0aa5-c64e-4673-bf23-dd36b140df8d",
+                      "uuid": "anim-000000000000004e",
                       "name": "Shoot",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     },
                     {
-                      "uuid": "c27f1c75-81bf-429f-a4d6-66758d3a404c",
+                      "uuid": "anim-000000000000004f",
                       "name": "Walk",
-                      "type": "path",
-                      "path": "C:/Users/mirmik/project/termin/examples/project/Models/CorpGuard/CorpGuard.glb"
+                      "type": "uuid"
                     }
                   ],
                   "_current_clip_name": "",
                   "playing": false
                 }
-              },
-              {
-                "type": "HumanModelCollider",
-                "data": {
-                  "enabled": true,
-                  "scale": 1.0,
-                  "overlap_radius": 2.0
-                }
               }
             ],
             "children": [
               {
-                "uuid": "00000000000000e5",
+                "uuid": "2a22a0a7-fee3-4387-9f7b-ed3a5b101641",
                 "name": "corpguardMesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10132,14 +10045,14 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000e6",
+                "uuid": "f75ffc58-990b-4460-a634-1b9d674c4221",
                 "name": "eyebrow004Mesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10181,14 +10094,14 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000e7",
+                "uuid": "31264988-c550-4ae6-b5a3-bafe88184cb5",
                 "name": "low-polyMesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10230,14 +10143,14 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000e8",
+                "uuid": "60de57c6-daa9-48b6-b64c-3b0bb88af6b9",
                 "name": "m_trousers_02Mesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10279,14 +10192,14 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000e9",
+                "uuid": "4d2936dd-7249-4fad-92f4-4eaf2ef6412a",
                 "name": "shoes03Mesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10328,14 +10241,14 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000ea",
+                "uuid": "02ef39db-66a6-4fe8-b2a0-e51a65f26e46",
                 "name": "short02Mesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10377,14 +10290,14 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000eb",
+                "uuid": "c853f00c-ce75-49c4-bf96-30b61552fd89",
                 "name": "uniform_jacketMesh",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
@@ -10426,26 +10339,26 @@
                 "children": []
               },
               {
-                "uuid": "00000000000000ec",
+                "uuid": "27bb2cff-04ab-4edf-a259-a132382bb1b1",
                 "name": "Base",
                 "priority": 0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 1,
+                "layer": 0,
                 "flags": 0,
                 "pose": {
                   "position": [
                     0,
-                    6.136579031590372e-07,
-                    -8.128145217895508
+                    0.8128144145011902,
+                    6.13657817893909e-08
                   ],
                   "rotation": [
-                    -0.7071067690849304,
                     0,
                     0,
-                    0.7071067690849304
+                    0,
+                    0.9999999403953552
                   ]
                 },
                 "scale": [
@@ -10456,20 +10369,20 @@
                 "components": [],
                 "children": [
                   {
-                    "uuid": "00000000000000ed",
+                    "uuid": "e8cbfe7f-a17d-4014-84b0-e87905d289bb",
                     "name": "mixamorig:Hips",
                     "priority": 0,
                     "visible": true,
                     "enabled": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 1,
+                    "layer": 0,
                     "flags": 0,
                     "pose": {
                       "position": [
                         0,
-                        -8.218896865844727,
-                        10.464820861816406
+                        -0.8218895792961121,
+                        1.046481966972351
                       ],
                       "rotation": [
                         -8.881785255792436e-16,
@@ -10486,20 +10399,20 @@
                     "components": [],
                     "children": [
                       {
-                        "uuid": "00000000000000ee",
+                        "uuid": "1569b79a-7e60-4f81-8e9e-f7bbf7dec7e3",
                         "name": "mixamorig:Spine",
                         "priority": 0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 1,
+                        "layer": 0,
                         "flags": 0,
                         "pose": {
                           "position": [
                             0,
-                            -0.03549058362841606,
-                            0.8920011520385742
+                            -0.0035490579903125763,
+                            0.08920010179281235
                           ],
                           "rotation": [
                             0.01988193951547146,
@@ -10513,39 +10426,23 @@
                           0.9999999403953552,
                           0.9999999403953552
                         ],
-                        "components": [
-                          {
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Capsule",
-                              "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
-                              ],
-                              "sphere_radius": 0.5,
-                              "capsule_height": 0.06,
-                              "capsule_radius": 2.014
-                            }
-                          }
-                        ],
+                        "components": [],
                         "children": [
                           {
-                            "uuid": "00000000000000ef",
+                            "uuid": "f6bae89c-b308-4c83-a86a-ff62c621eca7",
                             "name": "mixamorig:Spine1",
                             "priority": 0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 1,
+                            "layer": 0,
                             "flags": 0,
                             "pose": {
                               "position": [
                                 0,
-                                -1.4901161193847656e-08,
-                                1.041492223739624
+                                -1.4901159195446212e-09,
+                                0.10414920747280121
                               ],
                               "rotation": [
                                 9.313224857976365e-09,
@@ -10562,20 +10459,20 @@
                             "components": [],
                             "children": [
                               {
-                                "uuid": "00000000000000f0",
+                                "uuid": "14226314-9a6c-49b7-bd98-701d6bb2b9c3",
                                 "name": "mixamorig:Spine2",
                                 "priority": 0,
                                 "visible": true,
                                 "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 1,
+                                "layer": 0,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
                                     0,
-                                    -4.470348358154297e-08,
-                                    1.190274715423584
+                                    -4.470347647611561e-09,
+                                    0.11902745813131332
                                   ],
                                   "rotation": [
                                     -1.1175869119028903e-08,
@@ -10592,20 +10489,20 @@
                                 "components": [],
                                 "children": [
                                   {
-                                    "uuid": "00000000000000f1",
+                                    "uuid": "394737cd-cbbf-46fa-b5ed-fcd81fe52e34",
                                     "name": "mixamorig:Neck",
                                     "priority": 0,
                                     "visible": true,
                                     "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 1,
+                                    "layer": 0,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
                                         0,
-                                        2.9802322387695312e-08,
-                                        1.3390624523162842
+                                        2.9802318390892424e-09,
+                                        0.13390623033046722
                                       ],
                                       "rotation": [
                                         -0.01988198235630989,
@@ -10622,20 +10519,20 @@
                                     "components": [],
                                     "children": [
                                       {
-                                        "uuid": "00000000000000f2",
+                                        "uuid": "6e0eb6d5-2178-446a-b86f-93c05c508e38",
                                         "name": "mixamorig:Head",
                                         "priority": 0,
                                         "visible": true,
                                         "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 1,
+                                        "layer": 0,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
                                             0,
-                                            -0.12929335236549377,
-                                            0.811403214931488
+                                            -0.012929333373904228,
+                                            0.08114030957221985
                                           ],
                                           "rotation": [
                                             -1.7763570511584873e-15,
@@ -10649,39 +10546,23 @@
                                           0.9999998807907104,
                                           0.9999999403953552
                                         ],
-                                        "components": [
-                                          {
-                                            "type": "ColliderComponent",
-                                            "data": {
-                                              "enabled": true,
-                                              "collider_type": "Sphere",
-                                              "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
-                                              ],
-                                              "sphere_radius": 2.011,
-                                              "capsule_height": 1.0,
-                                              "capsule_radius": 0.25
-                                            }
-                                          }
-                                        ],
+                                        "components": [],
                                         "children": [
                                           {
-                                            "uuid": "00000000000000f3",
+                                            "uuid": "fb9b7279-b34a-4562-b161-6742dac7584c",
                                             "name": "mixamorig:HeadTop_End",
                                             "priority": 0,
                                             "visible": true,
                                             "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 1,
+                                            "layer": 0,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
                                                 0,
-                                                -0.3540682792663574,
-                                                2.222017288208008
+                                                -0.035406824201345444,
+                                                0.22220170497894287
                                               ],
                                               "rotation": [
                                                 -1.7763570511584873e-15,
@@ -10703,20 +10584,20 @@
                                     ]
                                   },
                                   {
-                                    "uuid": "00000000000000f4",
+                                    "uuid": "69543a45-da2b-4980-884a-e80c925f4e2c",
                                     "name": "mixamorig:LeftShoulder",
                                     "priority": 0,
                                     "visible": true,
                                     "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 1,
+                                    "layer": 0,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
-                                        0.6153404712677002,
-                                        -0.008932918310165405,
-                                        1.0828553438186646
+                                        0.06153403967618942,
+                                        -0.0008932917262427509,
+                                        0.10828551650047302
                                       ],
                                       "rotation": [
                                         0.5925042033195496,
@@ -10733,20 +10614,20 @@
                                     "components": [],
                                     "children": [
                                       {
-                                        "uuid": "00000000000000f5",
+                                        "uuid": "82dd2107-3150-41a1-a5ee-c90abd6e71d6",
                                         "name": "mixamorig:LeftArm",
                                         "priority": 0,
                                         "visible": true,
                                         "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 1,
+                                        "layer": 0,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
-                                            3.5390257835388184e-08,
-                                            -4.880130290985107e-07,
-                                            1.3412716388702393
+                                            3.5390252950406875e-09,
+                                            -4.880129722550919e-08,
+                                            0.13412714004516602
                                           ],
                                           "rotation": [
                                             0.21731449663639069,
@@ -10760,39 +10641,23 @@
                                           1,
                                           0.9999999403953552
                                         ],
-                                        "components": [
-                                          {
-                                            "type": "ColliderComponent",
-                                            "data": {
-                                              "enabled": true,
-                                              "collider_type": "Capsule",
-                                              "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
-                                              ],
-                                              "sphere_radius": 0.5,
-                                              "capsule_height": 0.03,
-                                              "capsule_radius": 2.006
-                                            }
-                                          }
-                                        ],
+                                        "components": [],
                                         "children": [
                                           {
-                                            "uuid": "00000000000000f6",
+                                            "uuid": "4f1d77cc-8f2e-4fe3-b351-f86ad4880186",
                                             "name": "mixamorig:LeftForeArm",
                                             "priority": 0,
                                             "visible": true,
                                             "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 1,
+                                            "layer": 0,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
-                                                3.725290298461914e-08,
-                                                -8.330680429935455e-07,
-                                                2.1512975692749023
+                                                3.7252898543727042e-09,
+                                                -8.330679435175625e-08,
+                                                0.21512973308563232
                                               ],
                                               "rotation": [
                                                 -0.01046398002654314,
@@ -10806,39 +10671,23 @@
                                               0.9999999403953552,
                                               1
                                             ],
-                                            "components": [
-                                              {
-                                                "type": "ColliderComponent",
-                                                "data": {
-                                                  "enabled": true,
-                                                  "collider_type": "Capsule",
-                                                  "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
-                                                  ],
-                                                  "sphere_radius": 0.5,
-                                                  "capsule_height": 0.03,
-                                                  "capsule_radius": 2.006
-                                                }
-                                              }
-                                            ],
+                                            "components": [],
                                             "children": [
                                               {
-                                                "uuid": "00000000000000f7",
+                                                "uuid": "1836cde1-0e79-43a1-99ba-a897918381b9",
                                                 "name": "mixamorig:LeftHand",
                                                 "priority": 0,
                                                 "visible": true,
                                                 "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 1,
+                                                "layer": 0,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
-                                                    -1.1920928955078125e-07,
-                                                    8.940696716308594e-08,
-                                                    2.7552895545959473
+                                                    -1.192092735635697e-08,
+                                                    8.940695295223122e-09,
+                                                    0.2755289077758789
                                                   ],
                                                   "rotation": [
                                                     0.06413647532463074,
@@ -10852,39 +10701,23 @@
                                                   0.9999999403953552,
                                                   0.9999999403953552
                                                 ],
-                                                "components": [
-                                                  {
-                                                    "type": "ColliderComponent",
-                                                    "data": {
-                                                      "enabled": true,
-                                                      "collider_type": "Capsule",
-                                                      "box_size": [
-                                                        1.0,
-                                                        1.0,
-                                                        1.0
-                                                      ],
-                                                      "sphere_radius": 0.5,
-                                                      "capsule_height": 0.03,
-                                                      "capsule_radius": 2.008
-                                                    }
-                                                  }
-                                                ],
+                                                "components": [],
                                                 "children": [
                                                   {
-                                                    "uuid": "00000000000000f8",
+                                                    "uuid": "6690f4d3-0628-4e79-81ae-4a40eb73b02e",
                                                     "name": "mixamorig:LeftHandThumb1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        -0.2827413082122803,
-                                                        -0.11135365068912506,
-                                                        0.4382636547088623
+                                                        -0.02827412635087967,
+                                                        -0.011135363951325417,
+                                                        0.04382636025547981
                                                       ],
                                                       "rotation": [
                                                         0.10005248337984085,
@@ -10901,20 +10734,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "00000000000000f9",
+                                                        "uuid": "03cefd6e-116f-4248-95f0-8f511dad91df",
                                                         "name": "mixamorig:LeftHandThumb2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            0.020869344472885132,
-                                                            -7.748603820800781e-07,
-                                                            0.4261358976364136
+                                                            0.002086934167891741,
+                                                            -7.748602826040951e-08,
+                                                            0.04261358454823494
                                                           ],
                                                           "rotation": [
                                                             0.12375607341527939,
@@ -10931,20 +10764,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "00000000000000fa",
+                                                            "uuid": "f7d639c0-08c2-4f2c-bc86-67f7a0c7630b",
                                                             "name": "mixamorig:LeftHandThumb3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                -0.008553475141525269,
-                                                                1.1920928955078125e-06,
-                                                                0.3882138729095459
+                                                                -0.0008553473744541407,
+                                                                1.1920927533992653e-07,
+                                                                0.03882138058543205
                                                               ],
                                                               "rotation": [
                                                                 0.0194077305495739,
@@ -10961,20 +10794,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "00000000000000fb",
+                                                                "uuid": "8bcc3916-04d7-4680-a0b6-03a02b95a72f",
                                                                 "name": "mixamorig:LeftHandThumb4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -0.012316226959228516,
-                                                                    -4.76837158203125e-07,
-                                                                    0.33168697357177734
+                                                                    -0.001231622532941401,
+                                                                    -4.768370942542788e-08,
+                                                                    0.033168692141771317
                                                                   ],
                                                                   "rotation": [
                                                                     -1.862645149230957e-08,
@@ -10998,20 +10831,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "00000000000000fc",
+                                                    "uuid": "4916cefd-5da4-49e2-aa04-d5f8b92c2007",
                                                     "name": "mixamorig:LeftHandIndex1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        -0.33797764778137207,
-                                                        0.004473663866519928,
-                                                        1.2717232704162598
+                                                        -0.03379775956273079,
+                                                        0.0004473663284443319,
+                                                        0.1271723061800003
                                                       ],
                                                       "rotation": [
                                                         0.050902534276247025,
@@ -11028,20 +10861,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "00000000000000fd",
+                                                        "uuid": "fa590941-ad5c-4830-8334-8eec81e2ce91",
                                                         "name": "mixamorig:LeftHandIndex2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            0.00330352783203125,
-                                                            -9.834766387939453e-07,
-                                                            0.31353068351745605
+                                                            0.00033035274827852845,
+                                                            -9.834764824745434e-08,
+                                                            0.03135306388139725
                                                           ],
                                                           "rotation": [
                                                             0.12111249566078186,
@@ -11058,20 +10891,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "00000000000000fe",
+                                                            "uuid": "a6793cf0-cd75-4485-954d-1eaafe4cf109",
                                                             "name": "mixamorig:LeftHandIndex3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                -0.0022742748260498047,
-                                                                -2.384185791015625e-07,
-                                                                0.3190698027610779
+                                                                -0.0002274274593219161,
+                                                                -2.384185471271394e-08,
+                                                                0.03190697729587555
                                                               ],
                                                               "rotation": [
                                                                 -0.022893672809004784,
@@ -11088,20 +10921,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "00000000000000ff",
+                                                                "uuid": "969cf657-d6a4-4f40-8794-b79de83d0bed",
                                                                 "name": "mixamorig:LeftHandIndex4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -0.0010266304016113281,
-                                                                    -4.76837158203125e-07,
-                                                                    0.27841946482658386
+                                                                    -0.00010266302706440911,
+                                                                    -4.768370942542788e-08,
+                                                                    0.027841942384839058
                                                                   ],
                                                                   "rotation": [
                                                                     3.7439167499542236e-07,
@@ -11125,20 +10958,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "0000000000000100",
+                                                    "uuid": "54270a03-20dd-49fc-838c-c97439ccddfa",
                                                     "name": "mixamorig:LeftHandMiddle1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        -0.10689067840576172,
-                                                        0.013125300407409668,
-                                                        1.3554604053497314
+                                                        -0.010689066722989082,
+                                                        0.0013125299010425806,
+                                                        0.1355460286140442
                                                       ],
                                                       "rotation": [
                                                         0.05491887032985687,
@@ -11155,20 +10988,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000101",
+                                                        "uuid": "a9be87c0-4557-4397-b1fb-061b284e682b",
                                                         "name": "mixamorig:LeftHandMiddle2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            0.000118255615234375,
-                                                            -9.5367431640625e-07,
-                                                            0.34475088119506836
+                                                            1.1825560250144918e-05,
+                                                            -9.536741885085576e-08,
+                                                            0.03447508439421654
                                                           ],
                                                           "rotation": [
                                                             0.11012743413448334,
@@ -11185,20 +11018,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000102",
+                                                            "uuid": "9c47c09d-1d86-4e2f-bce7-5fc03057ecc0",
                                                             "name": "mixamorig:LeftHandMiddle3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                -8.869171142578125e-05,
-                                                                -3.5762786865234375e-07,
-                                                                0.32487571239471436
+                                                                -8.869169505487662e-06,
+                                                                -3.576278118089249e-08,
+                                                                0.03248756751418114
                                                               ],
                                                               "rotation": [
                                                                 -0.030420895665884018,
@@ -11215,20 +11048,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000103",
+                                                                "uuid": "79e645e5-c31e-4c1f-8c93-04cf09bcec34",
                                                                 "name": "mixamorig:LeftHandMiddle4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -2.9087066650390625e-05,
+                                                                    -2.9087061648169765e-06,
                                                                     0,
-                                                                    0.2883951663970947
+                                                                    0.028839513659477234
                                                                   ],
                                                                   "rotation": [
                                                                     -7.450580596923828e-09,
@@ -11252,20 +11085,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "0000000000000104",
+                                                    "uuid": "c601e625-8e15-4e06-8a86-67f5ac932744",
                                                     "name": "mixamorig:LeftHandRing1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        0.13490724563598633,
-                                                        0.04071603715419769,
-                                                        1.3260471820831299
+                                                        0.013490722514688969,
+                                                        0.004071603063493967,
+                                                        0.1326047033071518
                                                       ],
                                                       "rotation": [
                                                         0.07000541687011719,
@@ -11282,20 +11115,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000105",
+                                                        "uuid": "4f3db62c-17a1-43bf-9f84-381f53309fee",
                                                         "name": "mixamorig:LeftHandRing2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            -0.0007874965667724609,
-                                                            -2.682209014892578e-06,
-                                                            0.313690185546875
+                                                            -7.874964649090543e-05,
+                                                            -2.682208730675484e-07,
+                                                            0.03136901557445526
                                                           ],
                                                           "rotation": [
                                                             0.09951701760292053,
@@ -11312,20 +11145,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000106",
+                                                            "uuid": "1a7f0505-3935-4e69-b492-697a7528956e",
                                                             "name": "mixamorig:LeftHandRing3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                0.0009002685546875,
-                                                                6.556510925292969e-07,
-                                                                0.30090904235839844
+                                                                9.00268423720263e-05,
+                                                                6.55651035685878e-08,
+                                                                0.030090900138020515
                                                               ],
                                                               "rotation": [
                                                                 -0.06173421069979668,
@@ -11342,20 +11175,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000107",
+                                                                "uuid": "72eb64fe-0b87-4f5f-b1f6-2b74cd518a42",
                                                                 "name": "mixamorig:LeftHandRing4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -0.000110626220703125,
-                                                                    1.9073486328125e-06,
-                                                                    0.26914334297180176
+                                                                    -1.1062620615120977e-05,
+                                                                    1.907348377017115e-07,
+                                                                    0.026914330199360847
                                                                   ],
                                                                   "rotation": [
                                                                     -5.587935447692871e-09,
@@ -11379,20 +11212,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "0000000000000108",
+                                                    "uuid": "e0e6a4a4-e68c-4840-8133-eeb953bf3f27",
                                                     "name": "mixamorig:LeftHandPinky1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        0.30995941162109375,
-                                                        0.002056822180747986,
-                                                        1.2193241119384766
+                                                        0.030995937064290047,
+                                                        0.00020568219770211726,
+                                                        0.12193239480257034
                                                       ],
                                                       "rotation": [
                                                         0.09278318285942078,
@@ -11409,20 +11242,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000109",
+                                                        "uuid": "2c17d7c4-6578-49e7-8b10-633741c8b418",
                                                         "name": "mixamorig:LeftHandPinky2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            -0.0018701553344726562,
-                                                            -1.1920928955078125e-07,
-                                                            0.24629759788513184
+                                                            -0.00018701551016420126,
+                                                            -1.192092735635697e-08,
+                                                            0.024629756808280945
                                                           ],
                                                           "rotation": [
                                                             0.10906348377466202,
@@ -11439,20 +11272,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000010a",
+                                                            "uuid": "5f614c6a-5fc2-4373-ba90-7d190e002b55",
                                                             "name": "mixamorig:LeftHandPinky3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                0.0019309520721435547,
-                                                                4.76837158203125e-07,
-                                                                0.21227937936782837
+                                                                0.0001930951839312911,
+                                                                4.768370942542788e-08,
+                                                                0.021227935329079628
                                                               ],
                                                               "rotation": [
                                                                 -0.05844120308756828,
@@ -11469,20 +11302,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "000000000000010b",
+                                                                "uuid": "c3e995e4-ee1e-4840-b5fa-6ace753c2659",
                                                                 "name": "mixamorig:LeftHandPinky4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -6.139278411865234e-05,
-                                                                    1.0132789611816406e-06,
-                                                                    0.18883419036865234
+                                                                    -6.139277502370533e-06,
+                                                                    1.0132788474948029e-07,
+                                                                    0.018883416429162025
                                                                   ],
                                                                   "rotation": [
                                                                     -3.073364496231079e-08,
@@ -11514,20 +11347,20 @@
                                     ]
                                   },
                                   {
-                                    "uuid": "000000000000010c",
+                                    "uuid": "e01584bf-6b80-47ea-a7d2-9e026d9263e1",
                                     "name": "mixamorig:RightShoulder",
                                     "priority": 0,
                                     "visible": true,
                                     "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 1,
+                                    "layer": 0,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
-                                        -0.6153404712677002,
-                                        -0.011450886726379395,
-                                        1.0829555988311768
+                                        -0.06153403967618942,
+                                        -0.0011450884630903602,
+                                        0.10829554498195648
                                       ],
                                       "rotation": [
                                         0.5936616659164429,
@@ -11544,20 +11377,20 @@
                                     "components": [],
                                     "children": [
                                       {
-                                        "uuid": "000000000000010d",
+                                        "uuid": "808a28c8-6e1e-4450-b7dd-c8a33156e6eb",
                                         "name": "mixamorig:RightArm",
                                         "priority": 0,
                                         "visible": true,
                                         "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 1,
+                                        "layer": 0,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
-                                            -3.725290298461914e-08,
-                                            1.0207295417785645e-06,
-                                            1.3412712812423706
+                                            -3.7252898543727042e-09,
+                                            1.0207293854591626e-07,
+                                            0.13412711024284363
                                           ],
                                           "rotation": [
                                             0.21735745668411255,
@@ -11571,39 +11404,23 @@
                                           0.9999999403953552,
                                           0.9999999403953552
                                         ],
-                                        "components": [
-                                          {
-                                            "type": "ColliderComponent",
-                                            "data": {
-                                              "enabled": true,
-                                              "collider_type": "Capsule",
-                                              "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
-                                              ],
-                                              "sphere_radius": 0.5,
-                                              "capsule_height": 0.03,
-                                              "capsule_radius": 2.006
-                                            }
-                                          }
-                                        ],
+                                        "components": [],
                                         "children": [
                                           {
-                                            "uuid": "000000000000010e",
+                                            "uuid": "ab2dd40b-d16e-4d8e-9020-d9dc3a1eefb4",
                                             "name": "mixamorig:RightForeArm",
                                             "priority": 0,
                                             "visible": true,
                                             "enabled": true,
                                             "pickable": true,
                                             "selectable": true,
-                                            "layer": 1,
+                                            "layer": 0,
                                             "flags": 0,
                                             "pose": {
                                               "position": [
-                                                -7.450580596923828e-09,
-                                                1.949956640601158e-06,
-                                                2.151263475418091
+                                                -7.450579597723106e-10,
+                                                1.9499563563840638e-07,
+                                                0.21512632071971893
                                               ],
                                               "rotation": [
                                                 -0.014818806201219559,
@@ -11617,39 +11434,23 @@
                                               1.0000001192092896,
                                               1.0000001192092896
                                             ],
-                                            "components": [
-                                              {
-                                                "type": "ColliderComponent",
-                                                "data": {
-                                                  "enabled": true,
-                                                  "collider_type": "Capsule",
-                                                  "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
-                                                  ],
-                                                  "sphere_radius": 0.5,
-                                                  "capsule_height": 0.03,
-                                                  "capsule_radius": 2.006
-                                                }
-                                              }
-                                            ],
+                                            "components": [],
                                             "children": [
                                               {
-                                                "uuid": "000000000000010f",
+                                                "uuid": "ab2218d6-ad23-4500-99e1-031c3fbefeb8",
                                                 "name": "mixamorig:RightHand",
                                                 "priority": 0,
                                                 "visible": true,
                                                 "enabled": true,
                                                 "pickable": true,
                                                 "selectable": true,
-                                                "layer": 1,
+                                                "layer": 0,
                                                 "flags": 0,
                                                 "pose": {
                                                   "position": [
                                                     0,
-                                                    5.960464477539063e-08,
-                                                    2.7559192180633545
+                                                    5.960463678178485e-09,
+                                                    0.2755918800830841
                                                   ],
                                                   "rotation": [
                                                     0.06575387716293335,
@@ -11663,39 +11464,23 @@
                                                   1,
                                                   0.9999998807907104
                                                 ],
-                                                "components": [
-                                                  {
-                                                    "type": "ColliderComponent",
-                                                    "data": {
-                                                      "enabled": true,
-                                                      "collider_type": "Capsule",
-                                                      "box_size": [
-                                                        1.0,
-                                                        1.0,
-                                                        1.0
-                                                      ],
-                                                      "sphere_radius": 0.5,
-                                                      "capsule_height": 0.03,
-                                                      "capsule_radius": 2.008
-                                                    }
-                                                  }
-                                                ],
+                                                "components": [],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000110",
+                                                    "uuid": "08cfc4b6-5a33-4c45-bca3-b7103b4bd5b5",
                                                     "name": "mixamorig:RightHandThumb1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        0.29316067695617676,
-                                                        -0.11090114712715149,
-                                                        0.4537811279296875
+                                                        0.029316063970327377,
+                                                        -0.01109011285007,
+                                                        0.04537810757756233
                                                       ],
                                                       "rotation": [
                                                         0.09661727398633957,
@@ -11712,20 +11497,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000111",
+                                                        "uuid": "8cd8eb78-72d3-4439-a22d-a5a3661b75a7",
                                                         "name": "mixamorig:RightHandThumb2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            -0.01002037525177002,
-                                                            1.6093254089355469e-06,
-                                                            0.44108936190605164
+                                                            -0.0010020374320447445,
+                                                            1.609325153140162e-07,
+                                                            0.044108930975198746
                                                           ],
                                                           "rotation": [
                                                             0.12128163129091263,
@@ -11742,20 +11527,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000112",
+                                                            "uuid": "3f24dd28-ce77-4df8-b483-bf0439c21fcb",
                                                             "name": "mixamorig:RightHandThumb3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                0.016712188720703125,
-                                                                -2.7418136596679688e-06,
-                                                                0.3765367269515991
+                                                                0.0016712186625227332,
+                                                                -2.7418133186074556e-07,
+                                                                0.037653665989637375
                                                               ],
                                                               "rotation": [
                                                                 -0.001583176082931459,
@@ -11772,20 +11557,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000113",
+                                                                "uuid": "6ad52b15-86d6-48e1-9cea-369f6d15549f",
                                                                 "name": "mixamorig:RightHandThumb4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -0.006693422794342041,
-                                                                    3.2186508178710938e-06,
-                                                                    0.317010760307312
+                                                                    -0.0006693421746604145,
+                                                                    3.218650306280324e-07,
+                                                                    0.03170107305049896
                                                                   ],
                                                                   "rotation": [
                                                                     -3.725290653733282e-08,
@@ -11809,20 +11594,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "0000000000000114",
+                                                    "uuid": "9753a6ca-f5e4-4690-81e7-7a21fb2ad5e0",
                                                     "name": "mixamorig:RightHandIndex1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        0.34073591232299805,
-                                                        0.007768318057060242,
-                                                        1.294053554534912
+                                                        0.034073587507009506,
+                                                        0.0007768317009322345,
+                                                        0.12940533459186554
                                                       ],
                                                       "rotation": [
                                                         0.04229413717985153,
@@ -11839,20 +11624,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000115",
+                                                        "uuid": "8f415f14-b2d5-49e1-8d3f-3c781d55a28a",
                                                         "name": "mixamorig:RightHandIndex2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            -0.0038198232650756836,
-                                                            -1.4007091522216797e-06,
-                                                            0.310757040977478
+                                                            -0.00038198227412067354,
+                                                            -1.4007089532697137e-07,
+                                                            0.031075699254870415
                                                           ],
                                                           "rotation": [
                                                             0.12496816366910934,
@@ -11869,20 +11654,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000116",
+                                                            "uuid": "5984a802-9620-41f3-a9f7-6ecf4b2cfddb",
                                                             "name": "mixamorig:RightHandIndex3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                0.002117156982421875,
-                                                                5.960464477539062e-07,
-                                                                0.31484532356262207
+                                                                0.00021171566913835704,
+                                                                5.960463766996327e-08,
+                                                                0.03148452937602997
                                                               ],
                                                               "rotation": [
                                                                 -0.0017012095777317882,
@@ -11899,20 +11684,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000117",
+                                                                "uuid": "414310df-bc78-4022-bd55-41953e83674f",
                                                                 "name": "mixamorig:RightHandIndex4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    0.0017020702362060547,
-                                                                    1.5497207641601562e-06,
-                                                                    0.2743028402328491
+                                                                    0.0001702070003375411,
+                                                                    1.5497205652081902e-07,
+                                                                    0.027430281043052673
                                                                   ],
                                                                   "rotation": [
                                                                     1.4528632164001465e-07,
@@ -11936,20 +11721,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "0000000000000118",
+                                                    "uuid": "cee16939-7bd3-460b-b4dd-2577ef70a1a3",
                                                     "name": "mixamorig:RightHandMiddle1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        0.09924077987670898,
-                                                        -0.0014538466930389404,
-                                                        1.3483047485351562
+                                                        0.009924076497554779,
+                                                        -0.00014538464893121272,
+                                                        0.13483045995235443
                                                       ],
                                                       "rotation": [
                                                         0.013969785533845425,
@@ -11966,20 +11751,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000119",
+                                                        "uuid": "c903c5dd-6c66-448b-b653-cc609847acd6",
                                                         "name": "mixamorig:RightHandMiddle2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            -0.0011544227600097656,
-                                                            8.940696716308594e-08,
-                                                            0.351531982421875
+                                                            -0.00011544225708348677,
+                                                            8.940695295223122e-09,
+                                                            0.03515319526195526
                                                           ],
                                                           "rotation": [
                                                             0.14972390234470367,
@@ -11996,20 +11781,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000011a",
+                                                            "uuid": "3b8f73d8-6aa6-4bbe-acbe-277fb09dc822",
                                                             "name": "mixamorig:RightHandMiddle3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                0.0009512901306152344,
-                                                                2.384185791015625e-07,
-                                                                0.33469510078430176
+                                                                9.512899850960821e-05,
+                                                                2.384185471271394e-08,
+                                                                0.03346950560808182
                                                               ],
                                                               "rotation": [
                                                                 -0.052752535790205,
@@ -12026,20 +11811,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "000000000000011b",
+                                                                "uuid": "6faa0676-8c48-4d03-bf62-6640f2477807",
                                                                 "name": "mixamorig:RightHandMiddle4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    0.00020360946655273438,
-                                                                    8.940696716308594e-07,
-                                                                    0.2955033779144287
+                                                                    2.036094338109251e-05,
+                                                                    8.940695295223122e-08,
+                                                                    0.029550334438681602
                                                                   ],
                                                                   "rotation": [
                                                                     7.450578820566989e-09,
@@ -12063,20 +11848,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "000000000000011c",
+                                                    "uuid": "ebb94e45-2c40-4af6-97c5-fa51565b7b3f",
                                                     "name": "mixamorig:RightHandRing1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        -0.12789595127105713,
-                                                        0.028272226452827454,
-                                                        1.3353230953216553
+                                                        -0.012789593078196049,
+                                                        0.002827222226187587,
+                                                        0.13353228569030762
                                                       ],
                                                       "rotation": [
                                                         0.03914821147918701,
@@ -12093,20 +11878,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "000000000000011d",
+                                                        "uuid": "7a605c12-e2c5-4474-9faa-959d152ed3ca",
                                                         "name": "mixamorig:RightHandRing2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            0.0009458065032958984,
-                                                            1.996755599975586e-06,
-                                                            0.3173459768295288
+                                                            9.458063868805766e-05,
+                                                            1.99675540102362e-07,
+                                                            0.03173459321260452
                                                           ],
                                                           "rotation": [
                                                             0.13188952207565308,
@@ -12123,20 +11908,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000011e",
+                                                            "uuid": "258580ea-894b-4a9a-bf17-2853a954c1e2",
                                                             "name": "mixamorig:RightHandRing3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                -0.0010077953338623047,
-                                                                -2.6226043701171875e-06,
-                                                                0.3039470911026001
+                                                                -0.00010077952174469829,
+                                                                -2.622604142743512e-07,
+                                                                0.03039470501244068
                                                               ],
                                                               "rotation": [
                                                                 -0.07458582520484924,
@@ -12153,20 +11938,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "000000000000011f",
+                                                                "uuid": "344c4d19-3886-40c5-9f52-e4e0caa2c507",
                                                                 "name": "mixamorig:RightHandRing4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    6.29425048828125e-05,
-                                                                    1.2516975402832031e-06,
-                                                                    0.26299571990966797
+                                                                    6.294249487837078e-06,
+                                                                    1.251697341331237e-07,
+                                                                    0.02629956789314747
                                                                   ],
                                                                   "rotation": [
                                                                     7.506460519834945e-07,
@@ -12190,20 +11975,20 @@
                                                     ]
                                                   },
                                                   {
-                                                    "uuid": "0000000000000120",
+                                                    "uuid": "301b932e-486c-4492-aadf-39ef712da2f3",
                                                     "name": "mixamorig:RightHandPinky1",
                                                     "priority": 0,
                                                     "visible": true,
                                                     "enabled": true,
                                                     "pickable": true,
                                                     "selectable": true,
-                                                    "layer": 1,
+                                                    "layer": 0,
                                                     "flags": 0,
                                                     "pose": {
                                                       "position": [
-                                                        -0.31207406520843506,
-                                                        0.005665227770805359,
-                                                        1.2167940139770508
+                                                        -0.031207403168082237,
+                                                        0.0005665227072313428,
+                                                        0.12167938798666
                                                       ],
                                                       "rotation": [
                                                         0.08256622403860092,
@@ -12220,20 +12005,20 @@
                                                     "components": [],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000121",
+                                                        "uuid": "e39763f3-5432-49de-8783-d86fd74b57a6",
                                                         "name": "mixamorig:RightHandPinky2",
                                                         "priority": 0,
                                                         "visible": true,
                                                         "enabled": true,
                                                         "pickable": true,
                                                         "selectable": true,
-                                                        "layer": 1,
+                                                        "layer": 0,
                                                         "flags": 0,
                                                         "pose": {
                                                           "position": [
-                                                            0.0015835762023925781,
-                                                            8.940696716308594e-08,
-                                                            0.2459176778793335
+                                                            0.0001583575940458104,
+                                                            8.940695295223122e-09,
+                                                            0.02459176443517208
                                                           ],
                                                           "rotation": [
                                                             0.13165734708309174,
@@ -12250,20 +12035,20 @@
                                                         "components": [],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000122",
+                                                            "uuid": "55a40f78-334d-4fc6-a043-b38c7591265b",
                                                             "name": "mixamorig:RightHandPinky3",
                                                             "priority": 0,
                                                             "visible": true,
                                                             "enabled": true,
                                                             "pickable": true,
                                                             "selectable": true,
-                                                            "layer": 1,
+                                                            "layer": 0,
                                                             "flags": 0,
                                                             "pose": {
                                                               "position": [
-                                                                -0.0013475418090820312,
-                                                                -4.172325134277344e-07,
-                                                                0.22230470180511475
+                                                                -0.00013475416926667094,
+                                                                -4.172324707951702e-08,
+                                                                0.022230466827750206
                                                               ],
                                                               "rotation": [
                                                                 -0.04275123402476311,
@@ -12280,20 +12065,20 @@
                                                             "components": [],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000123",
+                                                                "uuid": "d0682609-fe72-47a7-9f64-fbb304d3908f",
                                                                 "name": "mixamorig:RightHandPinky4",
                                                                 "priority": 0,
                                                                 "visible": true,
                                                                 "enabled": true,
                                                                 "pickable": true,
                                                                 "selectable": true,
-                                                                "layer": 1,
+                                                                "layer": 0,
                                                                 "flags": 0,
                                                                 "pose": {
                                                                   "position": [
-                                                                    -0.00023639202117919922,
-                                                                    -8.940696716308594e-07,
-                                                                    0.1898820400238037
+                                                                    -2.3639198843738995e-05,
+                                                                    -8.940695295223122e-08,
+                                                                    0.018988201394677162
                                                                   ],
                                                                   "rotation": [
                                                                     -1.30385160446167e-08,
@@ -12331,20 +12116,20 @@
                         ]
                       },
                       {
-                        "uuid": "0000000000000124",
+                        "uuid": "dc487a32-1096-431e-ab6b-20917e265600",
                         "name": "mixamorig:LeftUpLeg",
                         "priority": 0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 1,
+                        "layer": 0,
                         "flags": 0,
                         "pose": {
                           "position": [
-                            0.9795274138450623,
-                            -0.0874047800898552,
-                            -0.4970426559448242
+                            0.09795273095369339,
+                            -0.00874047726392746,
+                            -0.049704257398843765
                           ],
                           "rotation": [
                             0.0005090042832307518,
@@ -12358,39 +12143,23 @@
                           0.9999998211860657,
                           0.9999999403953552
                         ],
-                        "components": [
-                          {
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Capsule",
-                              "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
-                              ],
-                              "sphere_radius": 0.5,
-                              "capsule_height": 0.05,
-                              "capsule_radius": 2.008
-                            }
-                          }
-                        ],
+                        "components": [],
                         "children": [
                           {
-                            "uuid": "0000000000000125",
+                            "uuid": "43e81dc1-00ee-4308-ae1e-d4141bdf79aa",
                             "name": "mixamorig:LeftLeg",
                             "priority": 0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 1,
+                            "layer": 0,
                             "flags": 0,
                             "pose": {
                               "position": [
-                                -5.787296686321497e-08,
-                                6.634898852553306e-09,
-                                4.6582255363464355
+                                -5.787295975778761e-09,
+                                6.634898186419491e-10,
+                                0.4658224880695343
                               ],
                               "rotation": [
                                 0.004165156744420528,
@@ -12404,39 +12173,23 @@
                               1,
                               0.9999998807907104
                             ],
-                            "components": [
-                              {
-                                "type": "ColliderComponent",
-                                "data": {
-                                  "enabled": true,
-                                  "collider_type": "Capsule",
-                                  "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
-                                  ],
-                                  "sphere_radius": 0.5,
-                                  "capsule_height": 0.05,
-                                  "capsule_radius": 2.008
-                                }
-                              }
-                            ],
+                            "components": [],
                             "children": [
                               {
-                                "uuid": "0000000000000126",
+                                "uuid": "0d2e5ec3-a8ef-4982-9280-0768549439cb",
                                 "name": "mixamorig:LeftFoot",
                                 "priority": 0,
                                 "visible": true,
                                 "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 1,
+                                "layer": 0,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
-                                    4.731555236503482e-08,
-                                    4.540197551250458e-09,
-                                    4.588726997375488
+                                    4.73155470359643e-09,
+                                    4.540196829605492e-10,
+                                    0.45887264609336853
                                   ],
                                   "rotation": [
                                     0.49857449531555176,
@@ -12450,39 +12203,23 @@
                                   1,
                                   1
                                 ],
-                                "components": [
-                                  {
-                                    "type": "ColliderComponent",
-                                    "data": {
-                                      "enabled": true,
-                                      "collider_type": "Capsule",
-                                      "box_size": [
-                                        1.0,
-                                        1.0,
-                                        1.0
-                                      ],
-                                      "sphere_radius": 0.5,
-                                      "capsule_height": 0.03,
-                                      "capsule_radius": 2.008
-                                    }
-                                  }
-                                ],
+                                "components": [],
                                 "children": [
                                   {
-                                    "uuid": "0000000000000127",
+                                    "uuid": "833fd084-214d-44e9-bed8-ebfbe21a18e0",
                                     "name": "mixamorig:LeftToeBase",
                                     "priority": 0,
                                     "visible": true,
                                     "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 1,
+                                    "layer": 0,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
-                                        -4.284083843231201e-08,
-                                        3.3527612686157227e-07,
-                                        1.7024459838867188
+                                        -4.284083310324149e-09,
+                                        3.352760913344355e-08,
+                                        0.17024457454681396
                                       ],
                                       "rotation": [
                                         0.275122731924057,
@@ -12499,20 +12236,20 @@
                                     "components": [],
                                     "children": [
                                       {
-                                        "uuid": "0000000000000128",
+                                        "uuid": "2f7f4293-c3fe-47da-9caa-f178bf84d7a4",
                                         "name": "mixamorig:LeftToe_End",
                                         "priority": 0,
                                         "visible": true,
                                         "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 1,
+                                        "layer": 0,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
-                                            2.039596438407898e-07,
-                                            1.1175870895385742e-08,
-                                            0.6616635322570801
+                                            2.0395962252450772e-08,
+                                            1.1175869119028903e-09,
+                                            0.06616634130477905
                                           ],
                                           "rotation": [
                                             -3.4924594327634395e-09,
@@ -12538,20 +12275,20 @@
                         ]
                       },
                       {
-                        "uuid": "0000000000000129",
+                        "uuid": "da94c7bb-2838-4332-95bb-c9ce23297717",
                         "name": "mixamorig:RightUpLeg",
                         "priority": 0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 1,
+                        "layer": 0,
                         "flags": 0,
                         "pose": {
                           "position": [
-                            -0.9795274138450623,
-                            -0.07837044447660446,
-                            -0.4970426559448242
+                            -0.09795273095369339,
+                            -0.007837043143808842,
+                            -0.049704257398843765
                           ],
                           "rotation": [
                             0.00038324002525769174,
@@ -12565,39 +12302,23 @@
                           1.0000001192092896,
                           0.9999998807907104
                         ],
-                        "components": [
-                          {
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Capsule",
-                              "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
-                              ],
-                              "sphere_radius": 0.5,
-                              "capsule_height": 0.05,
-                              "capsule_radius": 2.008
-                            }
-                          }
-                        ],
+                        "components": [],
                         "children": [
                           {
-                            "uuid": "000000000000012a",
+                            "uuid": "8c62af0a-296e-470e-9210-6529879e3974",
                             "name": "mixamorig:RightLeg",
                             "priority": 0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 1,
+                            "layer": 0,
                             "flags": 0,
                             "pose": {
                               "position": [
-                                1.8211721908301115e-07,
-                                -9.52604750636965e-09,
-                                4.657883644104004
+                                1.8211720131944276e-08,
+                                -9.52604661819123e-10,
+                                0.4657883048057556
                               ],
                               "rotation": [
                                 0.0017563666915521026,
@@ -12611,39 +12332,23 @@
                               1.0000001192092896,
                               1
                             ],
-                            "components": [
-                              {
-                                "type": "ColliderComponent",
-                                "data": {
-                                  "enabled": true,
-                                  "collider_type": "Capsule",
-                                  "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
-                                  ],
-                                  "sphere_radius": 0.5,
-                                  "capsule_height": 0.05,
-                                  "capsule_radius": 2.008
-                                }
-                              }
-                            ],
+                            "components": [],
                             "children": [
                               {
-                                "uuid": "000000000000012b",
+                                "uuid": "8e0f8bcc-de56-46cb-bcef-f5f6a4b79e38",
                                 "name": "mixamorig:RightFoot",
                                 "priority": 0,
                                 "visible": true,
                                 "enabled": true,
                                 "pickable": true,
                                 "selectable": true,
-                                "layer": 1,
+                                "layer": 0,
                                 "flags": 0,
                                 "pose": {
                                   "position": [
-                                    1.8861464923247695e-07,
-                                    1.3213139027357101e-08,
-                                    4.588739395141602
+                                    1.8861461725805384e-08,
+                                    1.3213137251000262e-09,
+                                    0.4588738679885864
                                   ],
                                   "rotation": [
                                     0.49035969376564026,
@@ -12657,39 +12362,23 @@
                                   1,
                                   1
                                 ],
-                                "components": [
-                                  {
-                                    "type": "ColliderComponent",
-                                    "data": {
-                                      "enabled": true,
-                                      "collider_type": "Capsule",
-                                      "box_size": [
-                                        1.0,
-                                        1.0,
-                                        1.0
-                                      ],
-                                      "sphere_radius": 0.5,
-                                      "capsule_height": 0.03,
-                                      "capsule_radius": 2.008
-                                    }
-                                  }
-                                ],
+                                "components": [],
                                 "children": [
                                   {
-                                    "uuid": "000000000000012c",
+                                    "uuid": "6a002c90-a1e5-4106-bcdb-ebe373896621",
                                     "name": "mixamorig:RightToeBase",
                                     "priority": 0,
                                     "visible": true,
                                     "enabled": true,
                                     "pickable": true,
                                     "selectable": true,
-                                    "layer": 1,
+                                    "layer": 0,
                                     "flags": 0,
                                     "pose": {
                                       "position": [
-                                        3.5390257835388184e-08,
-                                        4.6193599700927734e-07,
-                                        1.6496858596801758
+                                        3.5390252950406875e-09,
+                                        4.6193594727128584e-08,
+                                        0.1649685651063919
                                       ],
                                       "rotation": [
                                         0.28439679741859436,
@@ -12706,20 +12395,20 @@
                                     "components": [],
                                     "children": [
                                       {
-                                        "uuid": "000000000000012d",
+                                        "uuid": "e8daa321-0b50-489c-bb9b-f7dc2e6a932c",
                                         "name": "mixamorig:RightToe_End",
                                         "priority": 0,
                                         "visible": true,
                                         "enabled": true,
                                         "pickable": true,
                                         "selectable": true,
-                                        "layer": 1,
+                                        "layer": 0,
                                         "flags": 0,
                                         "pose": {
                                           "position": [
-                                            -4.6566128730773926e-07,
-                                            -4.842877388000488e-08,
-                                            0.6535359621047974
+                                            -4.656612162534657e-08,
+                                            -4.8428767662755945e-09,
+                                            0.06535358726978302
                                           ],
                                           "rotation": [
                                             4.190951585769653e-09,
@@ -12864,15 +12553,15 @@
   "editor": {
     "camera": {
       "position": [
-        2.51478910446167,
-        -3.0779848098754883,
-        5.4219069480896
+        3.3558974266052246,
+        -4.563833713531494,
+        3.790872573852539
       ],
       "rotation": [
-        -0.41702058964126204,
-        -0.19092694839643895,
-        0.3699143439543663,
-        0.8079629362341373
+        -0.2840313045441709,
+        -0.11302979265092485,
+        0.3520467989666297,
+        0.8846544722938865
       ],
       "radius": 7.0,
       "editor_entities": {
@@ -12926,15 +12615,14 @@
         ]
       }
     },
-    "selected_entity": "0000000000000077",
+    "selected_entity": "814ba329-db24-48fe-b931-fe68ab904998",
     "expanded_entities": [
-      "0000000000000077",
-      "000000000000012c",
       "00000000000000dd",
-      "0000000000000130",
-      "0000000000000007",
       "000000000000000a",
-      "000000000000012d",
+      "0000000000000077",
+      "0000000000000007",
+      "814ba329-db24-48fe-b931-fe68ab904998",
+      "0000000000000130",
       "0000000000000131"
     ]
   },
@@ -12942,51 +12630,51 @@
     "textures": {
       "Image": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\textures\\Image.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\ArthurL\\textures\\Image.png"
       },
       "6830-1745580165": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\6830-1745580165.jpg"
       },
       "Dalan": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\Dalan.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\Dalan.png"
       },
       "eye_in_space.002": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\eye_in_space.002.png"
       },
       "eyebrow001_png": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\eyebrow001_png.png"
       },
       "eyelashes01_png": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\eyelashes01_png.png"
       },
       "toptex1_png": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\toptex1_png.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\toptex1_png.png"
       },
       "young_lightskinned_male_diffuse2_png.001": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
       },
       "Ground_Dirt_009_BaseColor": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
       },
       "Ground_Dirt_009_Height": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Height.png"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Height.png"
       },
       "Ground_Dirt_009_Normal": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
       },
       "Ground_Dirt_009_Roughness": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Roughness.jpg"
+        "source_path": "C:\\Users\\mirmik\\project\\termin3d\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Roughness.jpg"
       }
     }
   }

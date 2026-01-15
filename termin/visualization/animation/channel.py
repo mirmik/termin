@@ -1,18 +1,19 @@
-# Re-export native AnimationChannel
+# Animation channel helpers for creating TcAnimationClip from FBX/GLB data
 from __future__ import annotations
 
 import numpy as np
 
-from ._animation_native import AnimationChannel, AnimationKeyframe, deserialize_channel
 
-
-def channel_from_fbx(ch) -> AnimationChannel:
+def channel_data_from_fbx(ch) -> dict:
     """
-    Создаёт AnimationChannel из FBXAnimationChannel.
+    Create channel data dict from FBXAnimationChannel.
 
     Args:
-        ch: FBXAnimationChannel с pos_keys, rot_keys, scale_keys в тиках
-            rot_keys содержат Euler углы (в градусах) которые конвертируются в кватернионы
+        ch: FBXAnimationChannel with pos_keys, rot_keys, scale_keys in ticks
+            rot_keys contain Euler angles (in degrees) which are converted to quaternions
+
+    Returns:
+        dict with target_name, translation_keys, rotation_keys, scale_keys
     """
     from termin.geombase import Pose3
 
@@ -28,22 +29,35 @@ def channel_from_fbx(ch) -> AnimationChannel:
 
     sc_keys = [(t, float(np.mean(v))) for (t, v) in ch.scale_keys]
 
-    return AnimationChannel(tr_keys, rot_keys, sc_keys)
+    return {
+        "target_name": ch.node_name,
+        "translation_keys": tr_keys,
+        "rotation_keys": rot_keys,
+        "scale_keys": sc_keys,
+    }
 
 
-def channel_from_glb(ch) -> AnimationChannel:
+def channel_data_from_glb(ch) -> dict:
     """
-    Создаёт AnimationChannel из GLBAnimationChannel.
+    Create channel data dict from GLBAnimationChannel.
 
     Args:
-        ch: GLBAnimationChannel с pos_keys, rot_keys, scale_keys
-            Время уже в секундах, кватернионы в формате XYZW
+        ch: GLBAnimationChannel with pos_keys, rot_keys, scale_keys
+            Time is in seconds, quaternions in XYZW format
+
+    Returns:
+        dict with target_name, translation_keys, rotation_keys, scale_keys
     """
     tr_keys = [(t, np.array(v, dtype=np.float64)) for (t, v) in ch.pos_keys]
     rot_keys = [(t, np.array(v, dtype=np.float64)) for (t, v) in ch.rot_keys]
     sc_keys = [(t, float(np.mean(v))) for (t, v) in ch.scale_keys]
 
-    return AnimationChannel(tr_keys, rot_keys, sc_keys)
+    return {
+        "target_name": ch.node_name,
+        "translation_keys": tr_keys,
+        "rotation_keys": rot_keys,
+        "scale_keys": sc_keys,
+    }
 
 
-__all__ = ["AnimationChannel", "AnimationKeyframe", "channel_from_fbx", "channel_from_glb", "deserialize_channel"]
+__all__ = ["channel_data_from_fbx", "channel_data_from_glb"]

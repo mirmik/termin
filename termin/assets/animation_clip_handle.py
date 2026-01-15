@@ -1,4 +1,4 @@
-"""Re-export C++ AnimationClipHandle."""
-from termin.visualization.animation._animation_native import AnimationClipHandle
+"""Re-export C++ TcAnimationClip."""
+from termin.visualization.animation._animation_native import TcAnimationClip
 
-__all__ = ["AnimationClipHandle"]
+__all__ = ["TcAnimationClip"]

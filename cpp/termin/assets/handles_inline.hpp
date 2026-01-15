@@ -8,7 +8,6 @@
 // Note: MaterialHandle methods that access Material members are NOT inline
 // because they would create circular dependencies. They are in handles.cpp.
 
-#include "termin/animation/animation_clip.hpp"
 #include "termin/bindings/trent_helpers.hpp"
 #include "tc_log.hpp"
 
@@ -327,129 +326,6 @@ inline TextureHandle get_white_texture_handle() {
     } catch (const nb::python_error& e) {
         tc::Log::warn(e, "get_white_texture_handle");
         return TextureHandle();
-    }
-}
-
-// ========== AnimationClipHandle inline implementations ==========
-
-inline AnimationClipHandle AnimationClipHandle::from_name(const std::string& name) {
-    try {
-        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-        nb::object asset = rm.attr("get_animation_clip_asset")(name);
-        if (asset.is_none()) {
-            return AnimationClipHandle();
-        }
-        return AnimationClipHandle(asset);
-    } catch (const nb::python_error& e) {
-        tc::Log::warn(e, "AnimationClipHandle::from_name('%s')", name.c_str());
-        return AnimationClipHandle();
-    }
-}
-
-inline AnimationClipHandle AnimationClipHandle::from_uuid(const std::string& uuid) {
-    try {
-        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-        nb::object asset = rm.attr("get_animation_clip_asset_by_uuid")(uuid);
-        if (asset.is_none()) {
-            return AnimationClipHandle();
-        }
-        return AnimationClipHandle(asset);
-    } catch (const nb::python_error& e) {
-        tc::Log::warn(e, "AnimationClipHandle::from_uuid('%s')", uuid.c_str());
-        return AnimationClipHandle();
-    }
-}
-
-inline animation::AnimationClip* AnimationClipHandle::get() const {
-    if (_direct != nullptr) {
-        return _direct;
-    }
-    if (asset.is_none()) return nullptr;
-    nb::object res = asset.attr("resource");
-    if (res.is_none()) return nullptr;
-    return nb::cast<animation::AnimationClip*>(res);
-}
-
-inline AnimationClipHandle AnimationClipHandle::deserialize(const nb::dict& data) {
-    if (data.contains("uuid")) {
-        try {
-            std::string uuid = nb::cast<std::string>(data["uuid"]);
-            nb::object rm_module = nb::module_::import_("termin.assets.resources");
-            nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-            nb::object asset = rm.attr("get_animation_clip_asset_by_uuid")(uuid);
-            if (!asset.is_none()) {
-                return AnimationClipHandle(asset);
-            }
-        } catch (const nb::python_error& e) {
-            tc::Log::warn(e, "AnimationClipHandle::deserialize uuid lookup");
-        }
-    }
-
-    std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
-
-    if (type == "named") {
-        std::string name = nb::cast<std::string>(data["name"]);
-        return from_name(name);
-    } else if (type == "path") {
-        try {
-            std::string path = nb::cast<std::string>(data["path"]);
-            size_t last_slash = path.find_last_of("/\\");
-            std::string filename = (last_slash != std::string::npos)
-                ? path.substr(last_slash + 1) : path;
-            size_t last_dot = filename.find_last_of('.');
-            std::string name = (last_dot != std::string::npos)
-                ? filename.substr(0, last_dot) : filename;
-            return from_name(name);
-        } catch (const nb::python_error& e) {
-            tc::Log::warn(e, "AnimationClipHandle::deserialize path lookup");
-            return AnimationClipHandle();
-        }
-    }
-
-    return AnimationClipHandle();
-}
-
-inline void AnimationClipHandle::deserialize_from(const nos::trent& data, tc_scene*) {
-    _direct = nullptr;
-
-    if (!data.is_dict()) {
-        asset = nb::none();
-        return;
-    }
-
-    if (data.contains("uuid")) {
-        try {
-            std::string uuid = data["uuid"].as_string();
-            nb::object rm_module = nb::module_::import_("termin.assets.resources");
-            nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-            nb::object found = rm.attr("get_animation_clip_asset_by_uuid")(uuid);
-            if (!found.is_none()) {
-                asset = found;
-                return;
-            }
-        } catch (const std::exception& e) {
-            tc::Log::warn(e, "AnimationClipHandle::deserialize_from uuid lookup");
-        }
-    }
-
-    std::string type = data.contains("type") ? data["type"].as_string() : "none";
-
-    if (type == "named") {
-        std::string name = data["name"].as_string();
-        asset = from_name(name).asset;
-    } else if (type == "path") {
-        std::string path = data["path"].as_string();
-        size_t last_slash = path.find_last_of("/\\");
-        std::string filename = (last_slash != std::string::npos)
-            ? path.substr(last_slash + 1) : path;
-        size_t last_dot = filename.find_last_of('.');
-        std::string name = (last_dot != std::string::npos)
-            ? filename.substr(0, last_dot) : filename;
-        asset = from_name(name).asset;
-    } else {
-        asset = nb::none();
     }
 }
 

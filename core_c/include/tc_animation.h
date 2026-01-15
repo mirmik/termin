@@ -102,6 +102,56 @@ static inline void tc_animation_channel_free(tc_animation_channel* ch) {
 }
 
 // ============================================================================
+// Channel sample result
+// ============================================================================
+
+typedef struct tc_channel_sample {
+    double translation[3];
+    double rotation[4];  // [x, y, z, w]
+    double scale;
+    uint8_t has_translation;
+    uint8_t has_rotation;
+    uint8_t has_scale;
+    uint8_t _pad[5];
+} tc_channel_sample;
+
+// Initialize sample to empty
+static inline void tc_channel_sample_init(tc_channel_sample* s) {
+    if (!s) return;
+    s->translation[0] = 0.0;
+    s->translation[1] = 0.0;
+    s->translation[2] = 0.0;
+    s->rotation[0] = 0.0;
+    s->rotation[1] = 0.0;
+    s->rotation[2] = 0.0;
+    s->rotation[3] = 1.0;
+    s->scale = 1.0;
+    s->has_translation = 0;
+    s->has_rotation = 0;
+    s->has_scale = 0;
+}
+
+// ============================================================================
+// Sampling functions
+// ============================================================================
+
+// Sample a single channel at time t_ticks (returns interpolated values)
+TC_API void tc_animation_channel_sample(
+    const tc_animation_channel* ch,
+    double t_ticks,
+    tc_channel_sample* out
+);
+
+// Sample animation at time t_seconds (handles looping and tps conversion)
+// out_samples must be preallocated with animation->channel_count elements
+// Returns number of channels sampled
+TC_API size_t tc_animation_sample(
+    const tc_animation* anim,
+    double t_seconds,
+    tc_channel_sample* out_samples
+);
+
+// ============================================================================
 // Reference counting
 // ============================================================================
 

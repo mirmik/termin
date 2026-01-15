@@ -6,8 +6,7 @@
 
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
-#include "termin/assets/handles.hpp"
-#include "termin/animation/animation_clip.hpp"
+#include "termin/animation/tc_animation_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 
@@ -21,8 +20,8 @@ class SkeletonController;
 // Can be controlled externally (playing=false) via update_bones_at_time().
 class AnimationPlayer : public CxxComponent {
 public:
-    // Clip handles for serialization (named "clips" for compatibility with old scene files)
-    std::vector<AnimationClipHandle> clips;
+    // Clip handles for serialization
+    std::vector<animation::TcAnimationClip> clips;
 
     // Current clip name (for serialization, underscore prefix for compatibility)
     std::string _current_clip_name;
@@ -32,22 +31,24 @@ public:
     bool playing = false;
 
 private:
-    // Cached clips map: name -> AnimationClip*
-    std::unordered_map<std::string, animation::AnimationClip*> _clips_map;
+    // Cached clips map: name -> index in clips vector
+    std::unordered_map<std::string, size_t> _clips_map;
 
-    // Current clip pointer
-    animation::AnimationClip* _current = nullptr;
+    // Current clip index (-1 if none)
+    int _current_index = -1;
 
     // Target skeleton (from SkeletonController on same entity)
     SkeletonInstance* _target_skeleton = nullptr;
 
-    // Cached bone index mapping: channel_name -> bone_index
+    // Cached bone index mapping: channel index -> bone index
     // Rebuilt when clip changes
     std::vector<int> _channel_to_bone;
-    std::vector<std::string> _channel_names;
+
+    // Cached samples buffer for reuse
+    std::vector<tc_channel_sample> _samples_buffer;
 
 public:
-    INSPECT_FIELD(AnimationPlayer, clips, "Animation Clips", "list[animation_clip_handle]")
+    INSPECT_FIELD(AnimationPlayer, clips, "Animation Clips", "list[tc_animation_clip]")
     INSPECT_FIELD(AnimationPlayer, _current_clip_name, "Current Clip", "clip_selector")
     INSPECT_FIELD(AnimationPlayer, playing, "Playing", "bool")
 
@@ -56,8 +57,15 @@ public:
     ~AnimationPlayer() override = default;
 
     // Accessors
-    animation::AnimationClip* current() const { return _current; }
-    const std::unordered_map<std::string, animation::AnimationClip*>& clips_map() const { return _clips_map; }
+    animation::TcAnimationClip* current() {
+        if (_current_index < 0 || _current_index >= (int)clips.size()) return nullptr;
+        return &clips[_current_index];
+    }
+    const animation::TcAnimationClip* current() const {
+        if (_current_index < 0 || _current_index >= (int)clips.size()) return nullptr;
+        return &clips[_current_index];
+    }
+    const std::unordered_map<std::string, size_t>& clips_map() const { return _clips_map; }
 
     // Set current clip by name
     void set_current(const std::string& name);
@@ -90,7 +98,7 @@ private:
     void _build_channel_mapping();
 
     // Apply animation sample to skeleton
-    void _apply_sample(const std::unordered_map<std::string, animation::AnimationChannelSample>& sample);
+    void _apply_sample(const tc_channel_sample* samples, size_t count);
 };
 
 REGISTER_COMPONENT(AnimationPlayer, Component);

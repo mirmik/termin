@@ -156,6 +156,8 @@ vec4 doit()
     // Reconstruct world position
     vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
 
+    //return vec4(world_pos, 1.0);
+
     //return vec4(world_pos, 1.0); // DEBUG: visualize world position
 
     // Apply time-based color modification

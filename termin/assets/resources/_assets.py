@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from termin.assets.voxel_grid_asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
     from termin.assets.navmesh_asset import NavMeshAsset
-    from termin.visualization.animation.clip import AnimationClip
+    from termin.visualization.animation.clip import TcAnimationClip
     from termin.assets.animation_clip_asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
     from termin.assets.skeleton_asset import SkeletonAsset
@@ -435,15 +435,14 @@ class AssetsMixin:
         return self._animation_clip_registry.get_asset(name)
 
     def register_animation_clip(
-        self, name: str, clip: "AnimationClip", source_path: str | None = None, uuid: str | None = None
+        self, name: str, clip: "TcAnimationClip", source_path: str | None = None, uuid: str | None = None
     ) -> None:
         from termin.assets.animation_clip_asset import AnimationClipAsset
-        clip.name = name
         asset = AnimationClipAsset(clip=clip, name=name, source_path=source_path, uuid=uuid)
         self._animation_clip_registry.register(name, asset, source_path, uuid)
         self.animation_clips[name] = clip
 
-    def get_animation_clip(self, name: str) -> Optional["AnimationClip"]:
+    def get_animation_clip(self, name: str) -> Optional["TcAnimationClip"]:
         clip = self.animation_clips.get(name)
         if clip is not None:
             return clip
@@ -467,7 +466,7 @@ class AssetsMixin:
     def list_animation_clip_names(self) -> list[str]:
         return self._animation_clip_registry.list_names()
 
-    def find_animation_clip_name(self, clip: "AnimationClip") -> Optional[str]:
+    def find_animation_clip_name(self, clip: "TcAnimationClip") -> Optional[str]:
         return self._animation_clip_registry.find_name(clip)
 
     def unregister_animation_clip(self, name: str) -> None:

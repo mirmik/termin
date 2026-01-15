@@ -249,7 +249,7 @@ target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Animation native module (Channel, Clip, AnimationClipHandle, AnimationPlayer) - nanobind
+# Animation native module (TcAnimationClip, AnimationPlayer) - nanobind
 # Must be after entity_lib since it links against it
 nanobind_add_module(_animation_native
     termin/bindings/animation/animation_module.cpp
