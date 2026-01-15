@@ -13,7 +13,6 @@ namespace termin {
 
 // Forward declarations
 class GraphicsBackend;
-class ShaderProgram;
 
 /**
  * Render context passed to components during rendering.
@@ -46,10 +45,6 @@ struct RenderContext {
 
     // Shadow mapping data (stored as nb::object - not migrated to C++ yet)
     nb::object shadow_data;
-
-    // Currently bound shader (for setting additional uniforms)
-    // DEPRECATED: use current_tc_shader instead
-    ShaderProgram* current_shader = nullptr;
 
     // Currently bound shader (TcShader handle)
     TcShader current_tc_shader;

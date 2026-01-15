@@ -60,7 +60,7 @@ MaterialProperty::DefaultValue parse_property_value(
     }
     else if (property_type == "Vec2" || property_type == "Vec3" ||
              property_type == "Vec4" || property_type == "Color") {
-        // Parse: Color(1.0, 0.5, 0.0, 1.0) or Vec3(1, 2, 3) or "1.0 0.5 0.0"
+        // Parse: Color(1.0, 0.5, 0.0, 1.0) or Vec3(1, 2, 3) or [1.0, 0.5, 0.0, 1.0] or "1.0 0.5 0.0"
         std::vector<double> values;
 
         // Try constructor format: Type(...)
@@ -74,10 +74,10 @@ MaterialProperty::DefaultValue parse_property_value(
             inner = val;
         }
 
-        // Parse comma or space separated values
+        // Parse comma or space separated values, ignoring brackets
         std::string num;
         for (char c : inner) {
-            if (c == ',' || c == ' ' || c == '\t') {
+            if (c == ',' || c == ' ' || c == '\t' || c == '[' || c == ']') {
                 if (!num.empty()) {
                     values.push_back(std::stod(trim(num)));
                     num.clear();

@@ -39,7 +39,7 @@ void main() {
 }
 )";
 
-uint32_t compile_shader(GLenum type, const char* source) {
+uint32_t compile_shader_data(GLenum type, const char* source) {
     uint32_t shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
@@ -53,11 +53,11 @@ uint32_t compile_shader(GLenum type, const char* source) {
     return shader;
 }
 
-uint32_t create_shader_program(const char* vert_src, const char* frag_src) {
-    uint32_t vert = compile_shader(GL_VERTEX_SHADER, vert_src);
+uint32_t create_shader_data_program(const char* vert_src, const char* frag_src) {
+    uint32_t vert = compile_shader_data(GL_VERTEX_SHADER, vert_src);
     if (!vert) return 0;
 
-    uint32_t frag = compile_shader(GL_FRAGMENT_SHADER, frag_src);
+    uint32_t frag = compile_shader_data(GL_FRAGMENT_SHADER, frag_src);
     if (!frag) {
         glDeleteShader(vert);
         return 0;
@@ -142,7 +142,7 @@ void build_unit_line(float* out_vertices) {
     out_vertices[3] = 0.0f; out_vertices[4] = 0.0f; out_vertices[5] = 1.0f;
 }
 
-// Simple ShaderProgram wrapper for internal use
+// Simple shader wrapper for internal use
 class SimpleShader {
 public:
     uint32_t program = 0;
@@ -152,7 +152,7 @@ public:
     int u_color_loc = -1;
 
     bool create(const char* vert, const char* frag) {
-        program = create_shader_program(vert, frag);
+        program = create_shader_data_program(vert, frag);
         if (!program) return false;
 
         u_model_loc = glGetUniformLocation(program, "u_model");
@@ -198,7 +198,7 @@ struct WireframeShaderData {
     SimpleShader shader;
 };
 
-static WireframeShaderData* get_shader_data(void* ptr) {
+static WireframeShaderData* get_shader_data_data(void* ptr) {
     return reinterpret_cast<WireframeShaderData*>(ptr);
 }
 
@@ -206,8 +206,8 @@ static WireframeShaderData* get_shader_data(void* ptr) {
 WireframeRenderer::WireframeRenderer() = default;
 
 WireframeRenderer::~WireframeRenderer() {
-    if (_shader && _owns_shader) {
-        auto* data = get_shader_data(_shader);
+    if (_shader_data && _owns_shader) {
+        auto* data = get_shader_data_data(_shader_data);
         data->shader.destroy();
         delete data;
     }
@@ -222,7 +222,7 @@ WireframeRenderer::~WireframeRenderer() {
 }
 
 WireframeRenderer::WireframeRenderer(WireframeRenderer&& other) noexcept
-    : _shader(other._shader)
+    : _shader_data(other._shader_data)
     , _owns_shader(other._owns_shader)
     , _circle_vao(other._circle_vao)
     , _circle_vbo(other._circle_vbo)
@@ -238,7 +238,7 @@ WireframeRenderer::WireframeRenderer(WireframeRenderer&& other) noexcept
     , _initialized(other._initialized)
     , _in_frame(other._in_frame)
 {
-    other._shader = nullptr;
+    other._shader_data = nullptr;
     other._owns_shader = false;
     other._circle_vao = 0;
     other._circle_vbo = 0;
@@ -255,8 +255,8 @@ WireframeRenderer::WireframeRenderer(WireframeRenderer&& other) noexcept
 WireframeRenderer& WireframeRenderer::operator=(WireframeRenderer&& other) noexcept {
     if (this != &other) {
         // Clean up
-        if (_shader && _owns_shader) {
-            auto* data = get_shader_data(_shader);
+        if (_shader_data && _owns_shader) {
+            auto* data = get_shader_data_data(_shader_data);
             data->shader.destroy();
             delete data;
         }
@@ -270,7 +270,7 @@ WireframeRenderer& WireframeRenderer::operator=(WireframeRenderer&& other) noexc
         if (_line_vbo) glDeleteBuffers(1, &_line_vbo);
 
         // Move
-        _shader = other._shader;
+        _shader_data = other._shader_data;
         _owns_shader = other._owns_shader;
         _circle_vao = other._circle_vao;
         _circle_vbo = other._circle_vbo;
@@ -286,7 +286,7 @@ WireframeRenderer& WireframeRenderer::operator=(WireframeRenderer&& other) noexc
         _initialized = other._initialized;
         _in_frame = other._in_frame;
 
-        other._shader = nullptr;
+        other._shader_data = nullptr;
         other._owns_shader = false;
         other._circle_vao = 0;
         other._circle_vbo = 0;
@@ -338,7 +338,7 @@ void WireframeRenderer::_ensure_initialized() {
         delete shader_data;
         return;
     }
-    _shader = reinterpret_cast<ShaderProgram*>(shader_data);
+    _shader_data = shader_data;
     _owns_shader = true;
 
     // Create circle mesh
@@ -392,7 +392,7 @@ void WireframeRenderer::begin(
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Bind shader and set view/proj
-    auto* data = get_shader_data(_shader);
+    auto* data = get_shader_data_data(_shader_data);
     data->shader.use();
     data->shader.set_view(view);
     data->shader.set_proj(proj);
@@ -407,7 +407,7 @@ void WireframeRenderer::end() {
 void WireframeRenderer::draw_circle(const Mat44f& model, const Color4& color) {
     if (!_in_frame) return;
 
-    auto* data = get_shader_data(_shader);
+    auto* data = get_shader_data_data(_shader_data);
     data->shader.set_model(model);
     data->shader.set_color(color);
 
@@ -419,7 +419,7 @@ void WireframeRenderer::draw_circle(const Mat44f& model, const Color4& color) {
 void WireframeRenderer::draw_arc(const Mat44f& model, const Color4& color) {
     if (!_in_frame) return;
 
-    auto* data = get_shader_data(_shader);
+    auto* data = get_shader_data_data(_shader_data);
     data->shader.set_model(model);
     data->shader.set_color(color);
 
@@ -431,7 +431,7 @@ void WireframeRenderer::draw_arc(const Mat44f& model, const Color4& color) {
 void WireframeRenderer::draw_box(const Mat44f& model, const Color4& color) {
     if (!_in_frame) return;
 
-    auto* data = get_shader_data(_shader);
+    auto* data = get_shader_data_data(_shader_data);
     data->shader.set_model(model);
     data->shader.set_color(color);
 
@@ -443,7 +443,7 @@ void WireframeRenderer::draw_box(const Mat44f& model, const Color4& color) {
 void WireframeRenderer::draw_line(const Mat44f& model, const Color4& color) {
     if (!_in_frame) return;
 
-    auto* data = get_shader_data(_shader);
+    auto* data = get_shader_data_data(_shader_data);
     data->shader.set_model(model);
     data->shader.set_color(color);
 

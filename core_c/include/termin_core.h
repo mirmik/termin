@@ -38,6 +38,8 @@
 #include "tc_skeleton_registry.h"
 #include "tc_animation.h"
 #include "tc_animation_registry.h"
+#include "tc_material.h"
+#include "tc_material_registry.h"
 #include "tc_scene_registry.h"
 #include "tc_gpu.h"
 

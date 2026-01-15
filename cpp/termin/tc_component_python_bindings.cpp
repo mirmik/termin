@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "../../core_c/include/tc_component_python.h"
+#include "../../core_c/include/tc_material.h"
 #include "tc_log.hpp"
 #include "render/drawable.hpp"
 #include "render/render_context.hpp"
@@ -242,7 +243,15 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
                     // Get phase from draw call
                     nb::object phase_obj = item.attr("phase");
                     if (!phase_obj.is_none()) {
-                        dc.phase = nb::cast<MaterialPhase*>(phase_obj);
+                        // Try to cast to tc_material_phase* (new C-based material system)
+                        try {
+                            dc.phase = nb::cast<tc_material_phase*>(phase_obj);
+                        } catch (const nb::cast_error&) {
+                            // Phase is old MaterialPhase* type - skip this draw call
+                            // Python components using old material system will not render
+                            // until they are migrated to tc_material
+                            continue;
+                        }
                     }
                     // Get geometry_id
                     nb::object gid_obj = item.attr("geometry_id");

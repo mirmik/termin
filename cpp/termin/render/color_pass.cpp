@@ -4,8 +4,11 @@
 #include "termin/lighting/lighting_upload.hpp"
 extern "C" {
 #include "tc_shader.h"
+#include "tc_shader_registry.h"
 #include "tc_profiler.h"
 #include "tc_component.h"
+#include "tc_material.h"
+#include "tc_gpu.h"
 }
 
 #include <cmath>
@@ -16,6 +19,31 @@ extern "C" {
 namespace termin {
 
 namespace {
+
+// Convert tc_render_state to C++ RenderState
+inline RenderState convert_render_state(const tc_render_state& s) {
+    RenderState rs;
+    rs.polygon_mode = (s.polygon_mode == TC_POLYGON_LINE) ? PolygonMode::Line : PolygonMode::Fill;
+    rs.cull = s.cull != 0;
+    rs.depth_test = s.depth_test != 0;
+    rs.depth_write = s.depth_write != 0;
+    rs.blend = s.blend != 0;
+
+    // Convert blend factors
+    switch (s.blend_src) {
+        case TC_BLEND_ZERO: rs.blend_src = BlendFactor::Zero; break;
+        case TC_BLEND_ONE: rs.blend_src = BlendFactor::One; break;
+        case TC_BLEND_ONE_MINUS_SRC_ALPHA: rs.blend_src = BlendFactor::OneMinusSrcAlpha; break;
+        default: rs.blend_src = BlendFactor::SrcAlpha; break;
+    }
+    switch (s.blend_dst) {
+        case TC_BLEND_ZERO: rs.blend_dst = BlendFactor::Zero; break;
+        case TC_BLEND_ONE: rs.blend_dst = BlendFactor::One; break;
+        case TC_BLEND_SRC_ALPHA: rs.blend_dst = BlendFactor::SrcAlpha; break;
+        default: rs.blend_dst = BlendFactor::OneMinusSrcAlpha; break;
+    }
+    return rs;
+}
 
 // Get model matrix from Entity as Mat44f.
 // GeneralTransform3::world_matrix outputs row-major double[16], Mat44f is column-major float.
@@ -282,8 +310,9 @@ void ColorPass::execute_with_data(
     // Check if any shader needs UBO (has lighting_ubo feature)
     bool any_shader_needs_ubo = false;
     for (const auto& dc : cached_draw_calls_) {
-        if (dc.phase && dc.phase->shader) {
-            if (dc.phase->shader->has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
+        if (dc.phase && !tc_shader_handle_is_invalid(dc.phase->shader)) {
+            tc_shader* shader = tc_shader_get(dc.phase->shader);
+            if (shader && tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 any_shader_needs_ubo = true;
                 break;
             }
@@ -335,7 +364,7 @@ void ColorPass::execute_with_data(
         }
 
         // Apply render state (override polygon mode if wireframe enabled)
-        RenderState state = dc.phase->render_state;
+        RenderState state = convert_render_state(dc.phase->state);
         if (wireframe) {
             state.polygon_mode = PolygonMode::Line;
         }
@@ -347,7 +376,7 @@ void ColorPass::execute_with_data(
         }
 
         // Get shader handle and apply override
-        tc_shader_handle base_handle = dc.phase->shader->tc_shader().handle;
+        tc_shader_handle base_handle = dc.phase->shader;
 
         // Debug: trace shader source for skinned meshes
         static int shader_trace_count = 0;
@@ -366,7 +395,7 @@ void ColorPass::execute_with_data(
                               base_shader.uuid() ? base_shader.uuid() : "(null)",
                               base_shader.is_valid() ? 1 : 0,
                               vert_len, frag_len,
-                              dc.phase->phase_mark.c_str());
+                              dc.phase->phase_mark);
                 shader_trace_count++;
             }
         }
@@ -389,9 +418,18 @@ void ColorPass::execute_with_data(
             tc::Log::error("  shader: %s, program=%u", shader_to_use.name(), shader_to_use.gpu_program());
         }
 
-        // Apply material uniforms via TcShader
-        dc.phase->apply_to_tc_shader(shader_to_use, model, view, projection);
-        if (graphics->check_gl_error("after apply_to_tc_shader")) {
+        // Apply material uniforms (textures, uniforms, MVP matrices)
+        tc_shader* raw_shader = tc_shader_get(shader_handle);
+        if (raw_shader) {
+            tc_material_phase_apply_with_mvp(
+                dc.phase,
+                raw_shader,
+                model.data,
+                view.data,
+                projection.data
+            );
+        }
+        if (graphics->check_gl_error("after tc_material_phase_apply_with_mvp")) {
             tc::Log::error("  shader: %s", shader_to_use.name());
         }
 
@@ -435,7 +473,6 @@ void ColorPass::execute_with_data(
         }
         graphics->check_gl_error("after shadow_maps upload");
 
-        context.current_shader = dc.phase->shader.get();  // Legacy compatibility
         context.current_tc_shader = shader_to_use;
 
         if (detailed) {

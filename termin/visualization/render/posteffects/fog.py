@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
-
+from termin._native.render import TcShader
 from termin.visualization.render.postprocess import PostEffect
-from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
 
 FOG_VERT = """
@@ -84,55 +82,33 @@ class FogEffect(PostEffect):
         self._fog_color = fog_color
         self._fog_start = float(fog_start)
         self._fog_end = float(fog_end)
-        self._shader: ShaderProgram | None = None
+        self._shader: TcShader | None = None
 
     def required_resources(self) -> set[str]:
-        # Нужен ресурс "depth", который заполняет DepthPass
         return {"depth"}
 
-    def _get_shader(self) -> ShaderProgram:
+    def _get_shader(self) -> TcShader:
         if self._shader is None:
-            self._shader = ShaderProgram(FOG_VERT, FOG_FRAG)
+            self._shader = TcShader.from_sources(FOG_VERT, FOG_FRAG, "", "FogEffect")
         return self._shader
 
     def draw(self, gfx, context_key, color_tex, extra_textures, size, target_fbo=None):
-        w, h = size
         depth_tex = extra_textures.get("depth")
 
-        # Если depth нет — на всякий случай просто пробрасываем цвет
-        if depth_tex is None:
-            shader = self._get_shader()
-            shader.ensure_ready(gfx, context_key)
-            shader.use()
-
-            color_tex.bind(0)
-            shader.set_uniform_int("u_color", 0)
-
-            # заглушки
-            shader.set_uniform_vec3(
-                "u_fog_color", np.array(self._fog_color, dtype=np.float32)
-            )
-            shader.set_uniform_float("u_fog_start", 1.0)
-            shader.set_uniform_float("u_fog_end", 1.0)
-
-            gfx.draw_ui_textured_quad(context_key)
-            return
-
         shader = self._get_shader()
-        shader.ensure_ready(gfx, context_key)
+        shader.ensure_ready()
         shader.use()
 
-        # Основной цвет
         color_tex.bind(0)
         shader.set_uniform_int("u_color", 0)
 
-        # depth-карта
-        depth_tex.bind(1)
-        shader.set_uniform_int("u_depth", 1)
+        if depth_tex is not None:
+            depth_tex.bind(1)
+            shader.set_uniform_int("u_depth", 1)
 
-        fog_color_vec = np.array(self._fog_color, dtype=np.float32)
-        shader.set_uniform_vec3("u_fog_color", fog_color_vec)
-        shader.set_uniform_float("u_fog_start", self._fog_start)
-        shader.set_uniform_float("u_fog_end", self._fog_end)
+        fc = self._fog_color
+        shader.set_uniform_vec3("u_fog_color", float(fc[0]), float(fc[1]), float(fc[2]))
+        shader.set_uniform_float("u_fog_start", self._fog_start if depth_tex else 1.0)
+        shader.set_uniform_float("u_fog_end", self._fog_end if depth_tex else 1.0)
 
         gfx.draw_ui_textured_quad(context_key)

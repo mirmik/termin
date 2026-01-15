@@ -28,24 +28,24 @@ from termin.assets.data_asset import DataAsset
 from termin._native import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import Material
+    from termin._native.render import TcMaterial
 
 
-class MaterialAsset(DataAsset["Material"]):
+class MaterialAsset(DataAsset["TcMaterial"]):
     """
     Asset for material configuration.
 
     IMPORTANT: Create through ResourceManager, not directly.
     This ensures proper registration and avoids duplicates.
 
-    Stores Material (shader reference, uniforms, textures).
+    Stores TcMaterial (shader reference, uniforms, textures).
     """
 
     _uses_binary = False  # JSON text format
 
     def __init__(
         self,
-        material: "Material | None" = None,
+        material: "TcMaterial | None" = None,
         name: str = "material",
         source_path: Path | str | None = None,
         uuid: str | None = None,
@@ -55,19 +55,19 @@ class MaterialAsset(DataAsset["Material"]):
     # --- Convenience property ---
 
     @property
-    def material(self) -> "Material | None":
+    def material(self) -> "TcMaterial | None":
         """Material configuration (lazy-loaded)."""
         return self.data
 
     @material.setter
-    def material(self, value: "Material | None") -> None:
+    def material(self, value: "TcMaterial | None") -> None:
         """Set material and bump version."""
         self.data = value
 
     # --- Content parsing ---
 
-    def _parse_content(self, content: str) -> "Material | None":
-        """Parse JSON content into Material."""
+    def _parse_content(self, content: str) -> "TcMaterial | None":
+        """Parse JSON content into TcMaterial."""
         material, file_uuid = _parse_material_content(
             content,
             name=self._name,
@@ -132,13 +132,10 @@ class MaterialAsset(DataAsset["Material"]):
         """
         Update material data from another asset (hot-reload).
 
-        Preserves identity of this asset but updates material content.
+        For TcMaterial, we replace entirely (hot-reload will recreate phases).
         """
         if other._data is not None:
-            if self._data is not None:
-                self._data.update_from(other._data)
-            else:
-                self._data = other._data
+            self._data = other._data
             self._loaded = True
             self._bump_version()
 
@@ -159,12 +156,12 @@ class MaterialAsset(DataAsset["Material"]):
     @classmethod
     def from_material(
         cls,
-        material: "Material",
+        material: "TcMaterial",
         name: str | None = None,
         source_path: str | Path | None = None,
         uuid: str | None = None,
     ) -> "MaterialAsset":
-        """Create MaterialAsset from existing Material."""
+        """Create MaterialAsset from existing TcMaterial."""
         return cls(
             material=material,
             name=name or material.name or "material",
@@ -175,11 +172,91 @@ class MaterialAsset(DataAsset["Material"]):
 
 # --- File I/O functions ---
 
+def _build_render_state(shader_phase, phase_mark: str | None = None):
+    """Build tc_render_state from shader phase flags."""
+    from termin._native.render import TcRenderState
+
+    # Start with default based on phase mark
+    mark = phase_mark or shader_phase.phase_mark
+    if mark == "transparent":
+        state = TcRenderState.transparent()
+    elif mark == "wireframe":
+        state = TcRenderState.wireframe()
+    else:
+        state = TcRenderState.opaque()
+
+    # Check for per-mark settings first
+    if phase_mark and hasattr(shader_phase, 'mark_settings'):
+        mark_settings = shader_phase.mark_settings.get(phase_mark)
+        if mark_settings:
+            if mark_settings.gl_depth_mask is not None:
+                state.depth_write = 1 if mark_settings.gl_depth_mask else 0
+            if mark_settings.gl_depth_test is not None:
+                state.depth_test = 1 if mark_settings.gl_depth_test else 0
+            if mark_settings.gl_blend is not None:
+                state.blend = 1 if mark_settings.gl_blend else 0
+            if mark_settings.gl_cull is not None:
+                state.cull = 1 if mark_settings.gl_cull else 0
+            return state
+
+    # Apply phase-level overrides
+    if shader_phase.gl_depth_mask is not None:
+        state.depth_write = 1 if shader_phase.gl_depth_mask else 0
+    if shader_phase.gl_depth_test is not None:
+        state.depth_test = 1 if shader_phase.gl_depth_test else 0
+    if shader_phase.gl_blend is not None:
+        state.blend = 1 if shader_phase.gl_blend else 0
+    if shader_phase.gl_cull is not None:
+        state.cull = 1 if shader_phase.gl_cull else 0
+
+    return state
+
+
+def _apply_uniform_defaults(phase, shader_phase, uniforms: dict):
+    """Apply uniform defaults from shader phase and extra uniforms."""
+    from termin.geombase import Vec3, Vec4
+
+    # Apply defaults from shader phase properties
+    for prop in shader_phase.uniforms:
+        name = prop.name
+        default = prop.default  # Note: binding exposes as 'default', not 'default_value'
+
+        if default is None:
+            continue
+
+        prop_type = prop.property_type
+        if prop_type == "Float":
+            phase.set_uniform_float(name, float(default))
+        elif prop_type == "Int":
+            phase.set_uniform_int(name, int(default))
+        elif prop_type == "Bool":
+            phase.set_uniform_int(name, 1 if default else 0)
+        elif prop_type in ("Vec3", "Color") and isinstance(default, (list, tuple)) and len(default) >= 3:
+            phase.set_uniform_vec3(name, Vec3(default[0], default[1], default[2]))
+        elif prop_type == "Vec4" and isinstance(default, (list, tuple)) and len(default) >= 4:
+            phase.set_uniform_vec4(name, Vec4(default[0], default[1], default[2], default[3]))
+        elif prop_type == "Color" and isinstance(default, (list, tuple)) and len(default) >= 4:
+            phase.set_uniform_vec4(name, Vec4(default[0], default[1], default[2], default[3]))
+
+    # Apply extra uniforms (from .material file)
+    for name, value in uniforms.items():
+        if isinstance(value, Vec3):
+            phase.set_uniform_vec3(name, value)
+        elif isinstance(value, Vec4):
+            phase.set_uniform_vec4(name, value)
+        elif isinstance(value, float):
+            phase.set_uniform_float(name, value)
+        elif isinstance(value, bool):
+            phase.set_uniform_int(name, 1 if value else 0)
+        elif isinstance(value, int):
+            phase.set_uniform_int(name, value)
+
+
 def _parse_material_content(
     content: str,
     name: str | None = None,
     source_path: str | None = None,
-) -> tuple["Material", str | None]:
+) -> tuple["TcMaterial", str | None]:
     """
     Parse material from JSON content string.
 
@@ -189,12 +266,11 @@ def _parse_material_content(
         source_path: Source path for the material
 
     Returns:
-        Tuple of (Material, uuid or None)
-        Returns UnknownMaterial if shader is not found.
+        Tuple of (TcMaterial, uuid or None)
     """
-    from termin.visualization.core.material import Material
+    from termin._native.render import TcMaterial, TcRenderState
     from termin.assets.resources import ResourceManager
-    from termin.visualization.render.materials.unknown_material import UnknownMaterial
+    from termin.geombase import Vec3, Vec4
 
     data = json.loads(content)
 
@@ -206,32 +282,23 @@ def _parse_material_content(
     program = rm.get_shader(shader_name)
 
     if program is None:
-        log.error(f"[MaterialAsset] Shader '{shader_name}' not found, using UnknownMaterial")
-        unknown = UnknownMaterial.for_missing_shader(shader_name)
-        unknown.name = name or "unknown"
-        unknown.source_path = source_path or ""
-        # Preserve original data for re-serialization
-        unknown.original_data = data
-        return unknown, file_uuid
-
-    # Get shader asset UUID for hot-reload support
-    shader_asset = rm._shader_assets.get(shader_name)
-    shader_uuid = shader_asset.uuid if shader_asset else ""
+        log.error(f"[MaterialAsset] Shader '{shader_name}' not found, creating empty material")
+        mat = TcMaterial.create(name or "unknown", file_uuid or "")
+        mat.shader_name = shader_name
+        if source_path:
+            mat.source_path = source_path
+        return mat, file_uuid
 
     # Convert uniforms
-    from termin.geombase import Vec3, Vec4
-
     uniforms_data = data.get("uniforms", {})
     uniforms: Dict[str, Any] = {}
     for uname, value in uniforms_data.items():
         if isinstance(value, list):
-            # Convert lists to Vec3/Vec4
             if len(value) == 3:
                 uniforms[uname] = Vec3(value[0], value[1], value[2])
             elif len(value) == 4:
                 uniforms[uname] = Vec4(value[0], value[1], value[2], value[3])
             else:
-                # Keep as list for other sizes (vec2, etc.)
                 uniforms[uname] = [float(v) for v in value]
         else:
             uniforms[uname] = value
@@ -244,41 +311,71 @@ def _parse_material_content(
         if tex_handle is not None:
             textures[uniform_name] = tex_handle
 
-    # Create material with proper phase UUIDs for hot-reload
-    from termin.visualization.core.material import MaterialPhase
-    from termin.assets.shader_asset import make_phase_uuid
-
-    mat = Material()
-    mat.name = name or "material"
-    mat.source_path = source_path or ""
+    # Create TcMaterial
+    mat = TcMaterial.create(name or "material", file_uuid or "")
     mat.shader_name = shader_name
+    if source_path:
+        mat.source_path = source_path
 
-    phases_list = []
-    for shader_phase in program.phases:
-        # Generate deterministic UUID for this phase
-        phase_uuid = make_phase_uuid(shader_uuid, shader_phase.phase_mark) if shader_uuid else ""
+    # Create phases from shader
+    for i, shader_phase in enumerate(program.phases):
+        # Get shader sources
+        vertex_source = ""
+        fragment_source = ""
+        geometry_source = ""
 
-        phase = MaterialPhase.from_shader_phase(
-            shader_phase,
-            color=None,
-            textures=textures if textures else None,
-            extra_uniforms=uniforms if uniforms else None,
-            program_name=shader_name,
-            phase_uuid=phase_uuid,
-            features=program.features,
+        if "vertex" in shader_phase.stages:
+            vertex_source = shader_phase.stages["vertex"].source
+        if "fragment" in shader_phase.stages:
+            fragment_source = shader_phase.stages["fragment"].source
+        if "geometry" in shader_phase.stages:
+            geometry_source = shader_phase.stages["geometry"].source
+
+        if not vertex_source or not fragment_source:
+            log.warning(f"[MaterialAsset] Phase {i} missing vertex or fragment shader")
+            continue
+
+        # Determine phase mark (apply override if specified)
+        phase_mark = shader_phase.phase_mark
+        if i < len(phase_marks) and phase_marks[i]:
+            phase_mark = phase_marks[i]
+
+        # Build render state
+        state = _build_render_state(shader_phase, phase_mark)
+
+        # Add phase
+        phase = mat.add_phase_from_sources(
+            vertex_source=vertex_source,
+            fragment_source=fragment_source,
+            geometry_source=geometry_source,
+            shader_name=shader_name,
+            phase_mark=phase_mark,
+            priority=shader_phase.priority,
+            state=state,
         )
-        phases_list.append(phase)
-    mat.phases = phases_list
 
-    # Apply per-phase mark overrides (use set_phase_mark to also apply render state)
-    for i, mark in enumerate(phase_marks):
-        if i < len(mat.phases) and mark:
-            mat.phases[i].set_phase_mark(mark)
+        if phase is None:
+            log.error(f"[MaterialAsset] Failed to add phase {i}")
+            continue
+
+        # Set available marks
+        if shader_phase.available_marks:
+            phase.set_available_marks(shader_phase.available_marks)
+
+        # Apply uniform defaults
+        _apply_uniform_defaults(phase, shader_phase, uniforms)
+
+        # Apply textures
+        for tex_name, tex_handle in textures.items():
+            # TextureHandle.get() returns TcTexture
+            tc_tex = tex_handle.get() if tex_handle else None
+            if tc_tex is not None:
+                phase.set_texture(tex_name, tc_tex)
 
     return mat, file_uuid
 
 
-def _load_material_file(path: str) -> tuple["Material", str | None]:
+def _load_material_file(path: str) -> tuple["TcMaterial", str | None]:
     """
     Load material from .material file.
 
@@ -286,8 +383,9 @@ def _load_material_file(path: str) -> tuple["Material", str | None]:
         path: Path to .material file
 
     Returns:
-        Tuple of (Material, uuid or None)
+        Tuple of (TcMaterial, uuid or None)
     """
+    from termin._native.render import TcMaterial
     path = Path(path)
 
     with open(path, "r", encoding="utf-8") as f:
@@ -296,68 +394,38 @@ def _load_material_file(path: str) -> tuple["Material", str | None]:
     return _parse_material_content(content, name=path.stem, source_path=str(path))
 
 
-def _save_material_file(material: "Material", path: str | Path, uuid: str) -> None:
+def _save_material_file(material, path: str | Path, uuid: str) -> None:
     """
     Save material to .material file.
 
     Args:
-        material: Material to save
+        material: TcMaterial to save
         path: Path to save to
         uuid: UUID to include in file
     """
-    from termin.assets.resources import ResourceManager
-
-    def serialize_value(val: Any) -> Any:
-        from termin.geombase import Vec3, Vec4
-        if isinstance(val, Vec3):
-            return [val.x, val.y, val.z]
-        elif isinstance(val, Vec4):
-            return [val.x, val.y, val.z, val.w]
-        elif isinstance(val, (list, tuple)):
-            return [float(v) for v in val]
-        return val
-
-    rm = ResourceManager.instance()
-
-    # Collect uniforms from all phases
-    uniforms: Dict[str, Any] = {}
-    textures: Dict[str, str] = {}
-
-    for phase in material.phases:
-        for name, value in phase.uniforms.items():
-            if name not in uniforms:
-                uniforms[name] = serialize_value(value)
-        for name, tex in phase.textures.items():
-            if name not in textures:
-                log.info(f"[_save_material_file] texture uniform={name}, tex={tex}, type={type(tex)}")
-                tex_name = rm.find_texture_name(tex)
-                log.info(f"[_save_material_file] find_texture_name returned: {tex_name}")
-                # Don't save white texture - it's the default
-                if tex_name and tex_name != "__white_1x1__":
-                    textures[name] = tex_name
+    from termin._native.render import TcMaterial
 
     result: Dict[str, Any] = {
         "uuid": uuid,
-        "shader": material.shader_name,
+        "shader": material.shader_name if hasattr(material, 'shader_name') else "",
     }
 
-    # Save per-phase marks (only if different from default)
-    phase_marks = []
-    has_overrides = False
-    for phase in material.phases:
-        default_mark = phase.available_marks[0] if phase.available_marks else ""
-        if phase.phase_mark != default_mark:
-            phase_marks.append(phase.phase_mark)
-            has_overrides = True
-        else:
-            phase_marks.append("")
-    if has_overrides:
-        result["phase_marks"] = phase_marks
-
-    if uniforms:
-        result["uniforms"] = uniforms
-    if textures:
-        result["textures"] = textures
+    # For TcMaterial, save phase marks if available
+    if isinstance(material, TcMaterial):
+        phase_marks = []
+        has_overrides = False
+        for i in range(material.phase_count):
+            phase = material.get_phase(i)
+            if phase:
+                available = phase.get_available_marks()
+                default_mark = available[0] if available else ""
+                if phase.phase_mark != default_mark:
+                    phase_marks.append(phase.phase_mark)
+                    has_overrides = True
+                else:
+                    phase_marks.append("")
+        if has_overrides:
+            result["phase_marks"] = phase_marks
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)

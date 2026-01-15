@@ -19,7 +19,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.render.posteffects.gray import GrayscaleEffect
 from termin.visualization.render.posteffects.blur import GaussianBlurPass
 
@@ -90,7 +90,7 @@ def build_scene(world):
     mesh = TexturedCubeMesh()
     drawable = MeshDrawable(mesh)
     material = Material(
-        shader=ShaderProgram(VERT, FRAG),
+        shader=TcShader.from_sources(VERT, FRAG, "", "TextCubeShader"),
         color=None,
         textures={"u_diffuse_map": texture},
     )

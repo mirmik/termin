@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Set, TYPE_CHECKING
 
+from termin._native.render import TcShader
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -76,7 +76,7 @@ def blit_fbo_to_fbo(
 
     # берём ту же фуллскрин-квад-программу, что и PresentToScreenPass
     shader = PresentToScreenPass._get_shader()
-    shader.ensure_ready(gfx, context_key)
+    shader.ensure_ready()
     shader.use()
     shader.set_uniform_int("u_tex", 0)
 
@@ -260,7 +260,7 @@ class PresentToScreenPass(RenderFramePass):
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
     }
 
-    _shader: ShaderProgram | None = None
+    _shader: TcShader | None = None
 
     def __init__(self, input_res: str = "color", output_res: str = "DISPLAY", pass_name: str = "PresentToScreen"):
         super().__init__(pass_name=pass_name)
@@ -274,9 +274,9 @@ class PresentToScreenPass(RenderFramePass):
         return {self.output_res}
 
     @classmethod
-    def _get_shader(cls) -> ShaderProgram:
+    def _get_shader(cls) -> TcShader:
         if cls._shader is None:
-            cls._shader = ShaderProgram(FSQ_VERT, FSQ_FRAG)
+            cls._shader = TcShader.from_sources(FSQ_VERT, FSQ_FRAG, "", "PresentToScreen")
         return cls._shader
 
     def execute(self, ctx: "ExecuteContext") -> None:

@@ -61,7 +61,6 @@ public:
     /**
      * Upload bone matrices to shader.
      */
-    void upload_bone_matrices(ShaderProgram& shader);
     void upload_bone_matrices(TcShader& shader);
 
     /**

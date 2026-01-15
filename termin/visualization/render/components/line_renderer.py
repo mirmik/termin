@@ -21,15 +21,12 @@ from termin.mesh import TcMesh
 from termin.mesh._mesh_native import TcVertexLayout, TcAttribType, TcDrawMode
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
-from termin.visualization.core.material import Material
-from termin.visualization.core.material_handle import MaterialHandle
-from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.renderpass import RenderState
+from termin._native.render import TcMaterial, TcRenderState
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin._native.render import MeshGPU
+    from termin._native.render import MeshGPU, TcMaterialPhase
 
 
 # Дефолтный шейдер для линий
@@ -200,12 +197,6 @@ class LineRenderer(PythonComponent):
             kind="bool",
             setter=lambda obj, value: obj.set_raw_lines(value),
         ),
-
-        "material": InspectField(
-            path="_material_handle",
-            label="Material",
-            kind="material_handle",
-        ),
     }
 
     def __init__(
@@ -213,7 +204,7 @@ class LineRenderer(PythonComponent):
         points: Iterable[tuple[float, float, float]] | None = None,
         width: float = 0.1,
         raw_lines: bool = False,
-        material: Material | None = None,
+        material: TcMaterial | None = None,
     ):
         super().__init__(enabled=True)
 
@@ -221,10 +212,8 @@ class LineRenderer(PythonComponent):
         self._width: float = width
         self._raw_lines: bool = raw_lines
 
-        # Материал
-        self._material_handle: MaterialHandle = MaterialHandle()
-        if material is not None:
-            self._material_handle = MaterialHandle.from_material(material)
+        # Материал (TcMaterial or None for default)
+        self._material: TcMaterial | None = material
 
         # TcMesh (always GL_LINES)
         self._mesh: TcMesh | None = None
@@ -234,8 +223,8 @@ class LineRenderer(PythonComponent):
         self._dirty = True
 
         # Cached line ribbon material
-        self._ribbon_material: Material | None = None
-        self._ribbon_material_source_id: int = 0
+        self._ribbon_material: TcMaterial | None = None
+        self._ribbon_material_source_uuid: str = ""
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -247,8 +236,10 @@ class LineRenderer(PythonComponent):
         mat = self._get_effective_material()
         if mat is None:
             return marks
-        for phase in mat.phases:
-            marks.add(phase.phase_mark)
+        for i in range(mat.phase_count):
+            phase = mat.get_phase(i)
+            if phase is not None:
+                marks.add(phase.phase_mark)
         return marks
 
     # --- Properties ---
@@ -287,16 +278,13 @@ class LineRenderer(PythonComponent):
             self._ribbon_material = None  # Invalidate cached ribbon material
 
     @property
-    def material(self) -> Material | None:
+    def material(self) -> TcMaterial | None:
         """Текущий материал."""
-        return self._material_handle.get_material_or_none()
+        return self._material
 
     @material.setter
-    def material(self, value: Material | None):
-        if value is None:
-            self._material_handle = MaterialHandle()
-        else:
-            self._material_handle = MaterialHandle.from_material(value)
+    def material(self, value: TcMaterial | None):
+        self._material = value
         self._ribbon_material = None  # Invalidate cached ribbon material
 
     # --- Setters for inspector ---
@@ -313,13 +301,19 @@ class LineRenderer(PythonComponent):
         """Устанавливает режим GL_LINES."""
         self.raw_lines = value
 
-    def set_material(self, value: Material | None):
+    def set_material(self, value: TcMaterial | None):
         """Устанавливает материал."""
         self.material = value
 
     def set_material_by_name(self, name: str):
         """Устанавливает материал по имени из ResourceManager."""
-        self._material_handle = MaterialHandle.from_name(name)
+        from termin.assets.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_material_asset(name)
+        if asset is not None:
+            self._material = asset.material
+        else:
+            self._material = None
         self._ribbon_material = None
 
     # --- Geometry building ---
@@ -372,28 +366,34 @@ class LineRenderer(PythonComponent):
         return self._mesh
 
     # Class-level cache for default line material
-    _default_material: Optional[Material] = None
+    _default_material: Optional[TcMaterial] = None
 
-    def _get_base_material(self) -> Material:
+    def _get_base_material(self) -> TcMaterial:
         """Возвращает базовый материал (без ribbon трансформации)."""
-        mat = self._material_handle.get_material_or_none()
+        mat = self._material
         if mat is None:
             if LineRenderer._default_material is None:
-                shader = ShaderProgram(
+                # Create TcMaterial with default line shader
+                default_mat = TcMaterial.create(name="DefaultLineMaterial", uuid_hint="")
+                default_mat.shader_name = "DefaultLineShader"
+                state = TcRenderState.opaque()
+                state.cull = 0  # Disable backface culling for lines
+                phase = default_mat.add_phase_from_sources(
                     vertex_source=_DEFAULT_LINE_VERT,
                     fragment_source=_DEFAULT_LINE_FRAG,
-                )
-                render_state = RenderState(cull=False)
-                LineRenderer._default_material = Material(
-                    shader=shader,
-                    color=(1.0, 1.0, 1.0, 1.0),
+                    geometry_source="",
+                    shader_name="DefaultLineShader",
                     phase_mark="opaque",
-                    render_state=render_state,
+                    priority=0,
+                    state=state,
                 )
+                if phase is not None:
+                    phase.set_color(1.0, 1.0, 1.0, 1.0)
+                LineRenderer._default_material = default_mat
             mat = LineRenderer._default_material
         return mat
 
-    def _get_effective_material(self) -> Material:
+    def _get_effective_material(self) -> TcMaterial:
         """Возвращает материал с учётом режима (ribbon или raw)."""
         base_mat = self._get_base_material()
 
@@ -402,11 +402,11 @@ class LineRenderer(PythonComponent):
             return base_mat
 
         # Ribbon mode - apply line ribbon transformation
-        source_id = id(base_mat)
-        if self._ribbon_material is None or self._ribbon_material_source_id != source_id:
+        source_uuid = base_mat.uuid
+        if self._ribbon_material is None or self._ribbon_material_source_uuid != source_uuid:
             from termin.visualization.render.shader_line_ribbon import get_line_ribbon_material
             self._ribbon_material = get_line_ribbon_material(base_mat)
-            self._ribbon_material_source_id = source_id
+            self._ribbon_material_source_uuid = source_uuid
 
         return self._ribbon_material
 
@@ -446,14 +446,15 @@ class LineRenderer(PythonComponent):
         """
         mat = self._get_effective_material()
 
-        if phase_mark is None:
-            phases = list(mat.phases)
-        else:
-            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+        # Collect phases from TcMaterial
+        phases: List["TcMaterialPhase"] = []
+        for i in range(mat.phase_count):
+            phase = mat.get_phase(i)
+            if phase is None:
+                continue
+            if phase_mark is None or phase.phase_mark == phase_mark:
+                phases.append(phase)
 
-        # Disable backface culling for lines
-        for phase in phases:
-            phase.render_state.cull = False
-
+        # Note: culling is already disabled in the material's render state
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=p) for p in phases]

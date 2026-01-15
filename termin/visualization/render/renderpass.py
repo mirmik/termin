@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from termin.graphics import RenderState
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import Material
+    from termin._native.render import TcMaterial
 
 
 @dataclass
@@ -14,68 +14,40 @@ class RenderPass:
     """
     Один проход рендеринга.
 
-    Хранит MaterialHandle вместо Material напрямую.
-    При доступе к material возвращает актуальный материал через handle.
+    Хранит TcMaterial напрямую.
     """
-    _material_handle: "MaterialHandle" = field(default=None)  # type: ignore
+    _material: Optional["TcMaterial"] = field(default=None)
     state: RenderState = field(default_factory=RenderState)
     phase: str = "main"
     name: str = "unnamed_pass"
 
-    def __post_init__(self):
-        from termin.visualization.core.material_handle import MaterialHandle
-
-        # Если передали None — создаём пустой handle
-        if self._material_handle is None:
-            self._material_handle = MaterialHandle()
-
     @property
-    def material(self) -> "Material":
-        """Возвращает актуальный материал через handle."""
-        return self._material_handle.get_material()
+    def material(self) -> Optional["TcMaterial"]:
+        """Возвращает материал."""
+        return self._material
 
     @material.setter
-    def material(self, value: "Material | None"):
-        """Устанавливает материал (создаёт direct handle)."""
-        from termin.visualization.core.material_handle import MaterialHandle
-
-        if value is None:
-            self._material_handle = MaterialHandle()
-        else:
-            self._material_handle = MaterialHandle.from_material(value)
-
-    @property
-    def material_handle(self) -> "MaterialHandle":
-        """Доступ к handle напрямую."""
-        return self._material_handle
-
-    @material_handle.setter
-    def material_handle(self, value: "MaterialHandle"):
-        """Установить handle напрямую."""
-        self._material_handle = value
+    def material(self, value: Optional["TcMaterial"]):
+        """Устанавливает материал."""
+        self._material = value
 
     @classmethod
-    def from_material(cls, material: "Material", state: RenderState | None = None) -> "RenderPass":
+    def from_material(cls, material: "TcMaterial", state: RenderState | None = None) -> "RenderPass":
         """Создать RenderPass из материала."""
-        from termin.visualization.core.material_handle import MaterialHandle
-
-        handle = MaterialHandle.from_material(material)
         return cls(
-            _material_handle=handle,
+            _material=material,
             state=state or RenderState(),
         )
 
     @classmethod
     def from_material_name(cls, name: str, state: RenderState | None = None) -> "RenderPass":
         """Создать RenderPass по имени материала из ResourceManager."""
-        from termin.visualization.core.material_handle import MaterialHandle
+        from termin.assets.resources import ResourceManager
 
-        handle = MaterialHandle.from_name(name)
+        rm = ResourceManager.instance()
+        asset = rm.get_material_asset(name)
+        material = asset.material if asset is not None else None
         return cls(
-            _material_handle=handle,
+            _material=material,
             state=state or RenderState(),
         )
-
-
-# Для обратной совместимости импорта
-from termin.visualization.core.material_handle import MaterialHandle

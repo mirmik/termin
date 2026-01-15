@@ -1,6 +1,6 @@
 from __future__ import annotations
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+
+from termin._native.render import TcMaterial, TcRenderState
 
 ColorMaterial_VERT = """
 #version 330 core
@@ -35,10 +35,37 @@ void main() {
 }
 """
 
-class ColorMaterial(Material):
-    def __init__(self, color: tuple[float, float, float, float]):
-        shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)
-        super().__init__(shader=shader, color=color)
+
+def create_color_material(
+    color: tuple[float, float, float, float],
+    name: str = "ColorMaterial",
+) -> TcMaterial:
+    """Create a simple colored material with basic lighting."""
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "ColorShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=ColorMaterial_VERT,
+        fragment_source=ColorMaterial_FRAG,
+        geometry_source="",
+        shader_name="ColorShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        phase.set_color(color[0], color[1], color[2], color[3])
+
+    return mat
+
+
+class ColorMaterial(TcMaterial):
+    """Simple colored material with basic lighting. Returns TcMaterial."""
+
+    def __new__(cls, color: tuple[float, float, float, float]) -> TcMaterial:
+        return create_color_material(color=color)
 
 
 # Unlit shader - просто цвет без освещения
@@ -66,17 +93,34 @@ void main() {
 }
 """
 
-_unlit_shader: ShaderProgram | None = None
 
-def unlit_shader() -> ShaderProgram:
-    """Возвращает кэшированный unlit шейдер."""
-    global _unlit_shader
-    if _unlit_shader is None:
-        _unlit_shader = ShaderProgram(UNLIT_VERT, UNLIT_FRAG)
-    return _unlit_shader
+def create_unlit_material(
+    color: tuple[float, float, float, float],
+    name: str = "UnlitMaterial",
+) -> TcMaterial:
+    """Create an unlit material (no lighting, just solid color)."""
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "UnlitShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=UNLIT_VERT,
+        fragment_source=UNLIT_FRAG,
+        geometry_source="",
+        shader_name="UnlitShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        phase.set_color(color[0], color[1], color[2], color[3])
+
+    return mat
 
 
-class UnlitMaterial(Material):
-    """Материал без освещения - просто цвет."""
-    def __init__(self, color: tuple[float, float, float, float], **kwargs):
-        super().__init__(shader=unlit_shader(), color=color, **kwargs)
+class UnlitMaterial(TcMaterial):
+    """Unlit material (no lighting). Returns TcMaterial."""
+
+    def __new__(cls, color: tuple[float, float, float, float], **kwargs) -> TcMaterial:
+        return create_unlit_material(color=color)

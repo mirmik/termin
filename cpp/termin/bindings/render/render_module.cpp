@@ -17,7 +17,7 @@ void bind_render(nb::module_& m) {
     // RenderState, GraphicsBackend, handles - all defined in _graphics_native
     // They are imported in bindings.cpp before bind_render is called
 
-    // ShaderProgram
+    // TcShader and ShaderProgram (deprecated)
     bind_shader(m);
 
     // Shader parser (MaterialProperty, ShaderPhase, etc.)
@@ -43,6 +43,12 @@ void bind_render(nb::module_& m) {
 
     // MaterialPhase, Material
     bind_material(m);
+
+    // TcMaterial (C-based material wrapper)
+    bind_tc_material(m);
+
+    // Register kind handlers for TcMaterial serialization
+    register_material_kind_handlers();
 
     // GeometryDrawCall, PhaseDrawCall
     bind_drawable(m);

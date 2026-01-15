@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.core.serialization import serializable
 from termin.visualization.core.entity import Entity, Component
 from termin.geombase import Pose3, Vec3
@@ -26,7 +26,7 @@ class DummyComponent(Component):
 
 class DummyContext:
     def load_shader(self, path):
-        return ShaderProgram("vs", "fs")
+        return TcShader.from_sources("void main(){}", "void main(){}", "", "DummyShader")
 
     def load_texture(self, path):
         return f"texture:{path}"
@@ -37,7 +37,7 @@ class DummyContext:
 
 def test_material_serialize_deserialize():
     # source_path is passed via constructor (read-only property after creation)
-    shader = ShaderProgram("vs", "fs", geometry_source="", source_path="shaders/basic.glsl")
+    shader = TcShader.from_sources("void main(){}", "void main(){}", "", "TestShader", "shaders/basic.glsl")
 
     m = Material(
         shader=shader,

@@ -6,7 +6,7 @@
 #include "termin/geom/mat44.hpp"
 #include "termin/render/types.hpp"
 #include "termin/render/handles.hpp"
-#include "termin/render/shader_program.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 
 namespace termin {
 
@@ -31,7 +31,7 @@ public:
     GPUMeshHandlePtr _quad_mesh;
 
     bool _initialized = false;
-    std::unique_ptr<ShaderProgram> _shader;
+    TcShader _shader;
     GraphicsBackend* _graphics = nullptr;
 
 public:

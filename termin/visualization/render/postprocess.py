@@ -5,7 +5,6 @@ from typing import Dict, Set, Tuple, List, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.platform.backends.base import (
     FramebufferHandle,
     GraphicsBackend,

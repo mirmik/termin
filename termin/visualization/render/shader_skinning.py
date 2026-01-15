@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-import weakref
+from typing import Tuple, TYPE_CHECKING
 
-from termin.visualization.core.material import Material, MaterialPhase
-from termin.visualization.render.shader import ShaderProgram
+if TYPE_CHECKING:
+    from termin._native.render import TcShader
 
 
 # Skinning inputs to inject after existing layout declarations
@@ -249,14 +249,14 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     return result
 
 
-def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
+def get_skinned_shader(shader: "TcShader") -> "TcShader":
     """
     Get or create a skinned variant of a shader.
 
     Uses source-hash based registry for caching.
 
     Args:
-        shader: Original shader program
+        shader: Original shader (TcShader)
 
     Returns:
         Shader with skinning support injected
@@ -351,56 +351,9 @@ def get_skinned_shader_handle(original_handle):
     return skinned
 
 
-# Cache for skinned material variants keyed by material id
-# Cleared via clear_skinning_cache() when shaders are reloaded
-# Note: Cannot use WeakKeyDictionary because C++ Material objects don't support weak references
-_skinned_material_cache: dict[int, Material] = {}
-
 # Cache for skinned TcShader objects to keep them alive (prevent refcount drop to 0)
 # Key: original handle as tuple (index, generation)
 _skinned_tc_shader_cache: dict[tuple[int, int], "TcShader"] = {}
-
-
-def get_skinned_material(material: Material) -> Material:
-    """
-    Get or create a skinned variant of a material.
-
-    Creates a new material with all phases having skinning-enabled shaders.
-
-    Args:
-        material: Original material
-
-    Returns:
-        Material with skinning support
-    """
-    mat_id = id(material)
-    if mat_id in _skinned_material_cache:
-        return _skinned_material_cache[mat_id]
-
-    # Create new material with skinned phases
-    skinned_mat = Material()
-    skinned_mat.name = f"{material.name}_Skinned" if material.name else "Skinned"
-    skinned_mat.source_path = material.source_path
-    skinned_mat.shader_name = material.shader_name
-
-    # Build phases list first (nanobind doesn't support append on vector members)
-    new_phases = []
-    for phase in material.phases:
-        skinned_shader = get_skinned_shader(phase.shader_programm)
-        skinned_phase = MaterialPhase(
-            shader_programm=skinned_shader,
-            render_state=phase.render_state,
-            phase_mark=phase.phase_mark,
-            priority=phase.priority,
-            textures=dict(phase.textures),
-            uniforms=dict(phase.uniforms),  # includes u_color
-        )
-        new_phases.append(skinned_phase)
-
-    # Assign all phases at once
-    skinned_mat.phases = new_phases
-    _skinned_material_cache[mat_id] = skinned_mat
-    return skinned_mat
 
 
 def clear_skinning_cache() -> None:
@@ -414,5 +367,5 @@ def clear_skinning_cache() -> None:
     registry = get_variant_registry()
     registry.clear_operation(ShaderVariantOp.SKINNING)
 
-    # Clear material cache
-    _skinned_material_cache.clear()
+    # Clear TcShader cache
+    _skinned_tc_shader_cache.clear()

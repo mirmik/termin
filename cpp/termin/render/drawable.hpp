@@ -5,6 +5,10 @@
 #include <vector>
 #include <memory>
 
+extern "C" {
+#include "termin_core.h"
+}
+
 #include "termin/render/material.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/tc_shader_handle.hpp"
@@ -17,17 +21,17 @@ namespace termin {
 class GraphicsBackend;
 
 /**
- * Geometry draw call - links a MaterialPhase to a geometry ID.
+ * Geometry draw call - links a tc_material_phase to a geometry ID.
  *
  * Used by Drawable to specify which geometry to draw with which material phase.
  * geometry_id: 0 = default/all geometry, >0 = specific geometry slot
  */
 struct GeometryDrawCall {
-    MaterialPhase* phase = nullptr;
+    tc_material_phase* phase = nullptr;
     int geometry_id = 0;
 
     GeometryDrawCall() = default;
-    GeometryDrawCall(MaterialPhase* p, int gid = 0)
+    GeometryDrawCall(tc_material_phase* p, int gid = 0)
         : phase(p), geometry_id(gid) {}
 };
 
@@ -136,7 +140,7 @@ private:
 struct PhaseDrawCall {
     Entity entity;
     tc_component* component = nullptr;  // Component with drawable_vtable
-    MaterialPhase* phase = nullptr;
+    tc_material_phase* phase = nullptr;
     int priority = 0;
     int geometry_id = 0;
 };

@@ -10,52 +10,13 @@ from termin.visualization import (
     Entity,
     MeshDrawable,
     Scene,
-    Material,
     VisualizationWorld,
     PerspectiveCameraComponent,
     OrbitCameraController,
     Component,
 )
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.core.camera import CameraController
-
-VERT = """
-#version 330 core
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-out vec3 v_normal;
-out vec3 v_world_pos;
-
-void main() {
-    vec4 world = u_model * vec4(a_position, 1.0);
-    v_world_pos = world.xyz;
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;
-    gl_Position = u_projection * u_view * world;
-}
-"""
-
-FRAG = """
-#version 330 core
-in vec3 v_normal;
-
-uniform vec4 u_color;
-uniform vec3 u_light_dir;
-
-out vec4 FragColor;
-
-void main() {
-    vec3 N = normalize(v_normal);
-    float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);
-    vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);
-    FragColor = vec4(color, u_color.a);
-}
-"""
+from termin.visualization.render.materials import ColorMaterial
 
 
 class RotateComponent(Component):
@@ -80,8 +41,7 @@ class RotateComponent(Component):
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
     mesh = MeshDrawable(CubeMesh(size=1.0))
-    shader = ShaderProgram(VERT, FRAG)
-    material = Material(shader=shader, color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32))
+    material = ColorMaterial(color=(0.3, 0.7, 0.9, 1.0))
 
     cube = Entity(pose=Pose3.identity(), name="cube")
     cube.add_component(MeshRenderer(mesh, material))

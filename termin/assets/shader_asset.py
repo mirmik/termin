@@ -90,7 +90,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
     This ensures proper registration and avoids duplicates.
 
     Stores ShaderMultyPhaseProgramm (parsed shader with phases, uniforms).
-    GPU compilation is handled by ShaderProgram inside MaterialPhase.
+    GPU compilation is handled by TcShader inside MaterialPhase.
     """
 
     _uses_binary = False  # Shader text format
@@ -133,7 +133,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         if self._data is None or not self._uuid:
             return
 
-        # Update tc_shader for each phase so existing ShaderPrograms see new sources
+        # Update tc_shader for each phase so existing TcShaders see new sources
         for phase in self._data.phases:
             phase_mark = phase.phase_mark
             phase_uuid = make_phase_uuid(self._uuid, phase_mark)

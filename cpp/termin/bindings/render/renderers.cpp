@@ -5,6 +5,7 @@
 #include "termin/render/render.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
+#include "termin/material/tc_material_handle.hpp"
 
 namespace termin {
 
@@ -41,12 +42,13 @@ void bind_renderers(nb::module_& m) {
             }
 
             if (!material_arg.is_none()) {
-                // Check if it's a Material directly or a MaterialAsset
-                try {
-                    auto mat = nb::cast<Material*>(material_arg);
-                    self->material = MaterialHandle::from_direct(mat);
-                } catch (const nb::cast_error&) {
-                    self->material = MaterialHandle::from_asset(material_arg);
+                // Try TcMaterial first
+                if (nb::isinstance<TcMaterial>(material_arg)) {
+                    self->material = nb::cast<TcMaterial>(material_arg);
+                } else if (nb::isinstance<nb::str>(material_arg)) {
+                    // String - lookup by name
+                    std::string name = nb::cast<std::string>(material_arg);
+                    self->set_material_by_name(name);
                 }
             }
         }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
@@ -55,29 +57,25 @@ void bind_renderers(nb::module_& m) {
             [](MeshRenderer& self, const TcMesh& m) { self.mesh = m; },
             nb::rv_policy::reference_internal)
         .def_prop_rw("material",
-            [](MeshRenderer& self) -> MaterialHandle& { return self.material; },
-            [](MeshRenderer& self, const MaterialHandle& h) { self.material = h; },
+            [](MeshRenderer& self) -> TcMaterial& { return self.material; },
+            [](MeshRenderer& self, const TcMaterial& m) { self.material = m; },
             nb::rv_policy::reference_internal)
         .def_rw("cast_shadow", &MeshRenderer::cast_shadow)
         .def_rw("_override_material", &MeshRenderer::_override_material)
         .def("get_mesh", [](MeshRenderer& self) -> TcMesh& {
             return self.get_mesh();
         }, nb::rv_policy::reference_internal)
-        .def("material_handle", [](MeshRenderer& self) -> MaterialHandle& {
-            return self.material_handle();
-        }, nb::rv_policy::reference_internal)
         .def("set_mesh", &MeshRenderer::set_mesh)
         .def("set_mesh_by_name", &MeshRenderer::set_mesh_by_name)
-        .def("get_material", &MeshRenderer::get_material, nb::rv_policy::reference)
-        .def("get_base_material", &MeshRenderer::get_base_material, nb::rv_policy::reference)
+        .def("get_material", &MeshRenderer::get_material)
+        .def("get_base_material", &MeshRenderer::get_base_material)
         .def("set_material", &MeshRenderer::set_material)
-        .def("set_material_handle", &MeshRenderer::set_material_handle)
         .def("set_material_by_name", &MeshRenderer::set_material_by_name)
         .def_prop_rw("override_material",
             &MeshRenderer::override_material,
             &MeshRenderer::set_override_material)
         .def("set_override_material", &MeshRenderer::set_override_material)
-        .def("overridden_material", &MeshRenderer::overridden_material, nb::rv_policy::reference)
+        .def("get_overridden_material", &MeshRenderer::get_overridden_material)
         .def_prop_ro("phase_marks", [](MeshRenderer& self) {
             nb::set marks;
             for (const auto& mark : self.phase_marks()) {
@@ -89,8 +87,13 @@ void bind_renderers(nb::module_& m) {
             nb::arg("context"), nb::arg("geometry_id") = 0)
         .def("get_phases_for_mark", &MeshRenderer::get_phases_for_mark,
             nb::arg("phase_mark"))
-        .def("get_geometry_draws", &MeshRenderer::get_geometry_draws,
-            nb::arg("phase_mark") = "")
+        .def("get_geometry_draws", [](MeshRenderer& self, nb::object phase_mark) {
+            if (phase_mark.is_none()) {
+                return self.get_geometry_draws(nullptr);
+            }
+            std::string pm = nb::cast<std::string>(phase_mark);
+            return self.get_geometry_draws(&pm);
+        }, nb::arg("phase_mark") = nb::none())
         .def_prop_ro("mesh_gpu", [](MeshRenderer& self) -> MeshGPU& {
             return self.mesh_gpu();
         }, nb::rv_policy::reference_internal);
@@ -121,12 +124,13 @@ void bind_renderers(nb::module_& m) {
             }
 
             if (!material_arg.is_none()) {
-                // Check if it's a Material directly or a MaterialAsset
-                try {
-                    auto mat = nb::cast<Material*>(material_arg);
-                    self->material = MaterialHandle::from_direct(mat);
-                } catch (const nb::cast_error&) {
-                    self->material = MaterialHandle::from_asset(material_arg);
+                // Try TcMaterial first
+                if (nb::isinstance<TcMaterial>(material_arg)) {
+                    self->material = nb::cast<TcMaterial>(material_arg);
+                } else if (nb::isinstance<nb::str>(material_arg)) {
+                    // String - lookup by name
+                    std::string name = nb::cast<std::string>(material_arg);
+                    self->set_material_by_name(name);
                 }
             }
 

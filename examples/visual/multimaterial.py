@@ -3,7 +3,7 @@ demo_wire_cube.py
 
 Куб с кастомным solid-шейдером.
 
-Демонстрирует создание собственного ShaderProgram и Material.
+Демонстрирует создание собственного TcShader и Material.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 
 # ----------------------------------------------------------------------
@@ -105,7 +105,7 @@ def build_scene(world: VisualizationWorld):
     drawable = MeshDrawable(cube_mesh)
 
     # --- Solid материал ---
-    solid_shader = ShaderProgram(SOLID_VERT, SOLID_FRAG)
+    solid_shader = TcShader.from_sources(SOLID_VERT, SOLID_FRAG, "", "SolidShader")
     solid_material = Material(
         shader=solid_shader,
         color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32),

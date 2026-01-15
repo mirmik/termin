@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Protocol, Set, runtime_checkable
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import MaterialPhase
+    from termin._native.render import TcMaterialPhase
     from termin.visualization.render.render_context import RenderContext
 
 
@@ -49,7 +49,7 @@ class GeometryDrawCall:
     """
     Описание одного запроса на отрисовку геометрии.
 
-    Связывает MaterialPhase с идентификатором геометрии.
+    Связывает TcMaterialPhase с идентификатором геометрии.
     Позволяет Drawable рисовать разную геометрию с разными материалами
     в одной фазе рендеринга.
 
@@ -58,7 +58,7 @@ class GeometryDrawCall:
         geometry_id: Идентификатор геометрии для draw_geometry.
                      0 = основная геометрия.
     """
-    phase: "MaterialPhase"
+    phase: "TcMaterialPhase"
     geometry_id: int = DEFAULT_GEOMETRY_ID
 
 

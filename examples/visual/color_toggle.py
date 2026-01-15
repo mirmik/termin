@@ -17,7 +17,7 @@ from termin.visualization import (
 )
 from termin.visualization.platform.backends.base import Action, Key
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 
 VERT = """
@@ -69,7 +69,7 @@ class ColorToggleComponent(InputComponent):
 
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
-    shader = ShaderProgram(VERT, FRAG)
+    shader = TcShader.from_sources(VERT, FRAG, "", "ColorToggleShader")
     material = Material(shader=shader, color=np.array([0.9, 0.2, 0.2, 1.0], dtype=np.float32))
     mesh = MeshDrawable(CubeMesh(size=1.5))
     cube = Entity(name="cube")

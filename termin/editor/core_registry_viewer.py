@@ -31,7 +31,14 @@ from termin._native.scene import (
     tc_scene_get_entities,
     tc_scene_get_component_types,
 )
-from termin._native.render import shader_get_all_info, shader_count, TcShader
+from termin._native.render import (
+    shader_get_all_info,
+    shader_count,
+    TcShader,
+    tc_material_get_all_info,
+    tc_material_count,
+    TcMaterial,
+)
 from termin.entity._entity_native import (
     component_registry_get_all_info,
     component_registry_type_count,
@@ -101,6 +108,13 @@ class CoreRegistryViewer(QDialog):
         self._shaders_tree.setAlternatingRowColors(True)
         self._shaders_tree.itemClicked.connect(self._on_shader_clicked)
         self._tab_widget.addTab(self._shaders_tree, "Shaders")
+
+        # Materials tab
+        self._materials_tree = QTreeWidget()
+        self._materials_tree.setHeaderLabels(["Name", "Phases", "Textures", "Version"])
+        self._materials_tree.setAlternatingRowColors(True)
+        self._materials_tree.itemClicked.connect(self._on_material_clicked)
+        self._tab_widget.addTab(self._materials_tree, "Materials")
 
         # Components tab
         self._components_tree = QTreeWidget()
@@ -198,6 +212,7 @@ class CoreRegistryViewer(QDialog):
         self._refresh_meshes()
         self._refresh_textures()
         self._refresh_shaders()
+        self._refresh_materials()
         self._refresh_components()
         self._refresh_scenes()
         self._update_status()
@@ -435,6 +450,72 @@ class CoreRegistryViewer(QDialog):
         self._details_text.setText("\n".join(lines))
 
     # =========================================================================
+    # Materials
+    # =========================================================================
+
+    def _refresh_materials(self) -> None:
+        """Refresh material list from tc_material registry."""
+        self._materials_tree.clear()
+
+        infos = tc_material_get_all_info()
+        for info in sorted(infos, key=lambda x: x["name"] or x["uuid"]):
+            name = info["name"] or "(unnamed)"
+            phases = str(info["phase_count"])
+            textures = str(info["texture_count"])
+            version = str(info["version"])
+
+            item = QTreeWidgetItem([name, phases, textures, version])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("material", info))
+            self._materials_tree.addTopLevelItem(item)
+
+        for i in range(4):
+            self._materials_tree.resizeColumnToContents(i)
+
+    def _on_material_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show material details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "material":
+            return
+
+        info = data[1]
+        self._show_material_details(info)
+
+    def _show_material_details(self, info: dict) -> None:
+        """Display material details in the details panel."""
+        lines = [
+            "=== MATERIAL ===",
+            "",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            f"UUID:           {info['uuid']}",
+            "",
+            "--- Phases ---",
+            f"Count:          {info['phase_count']}",
+            "",
+            "--- Textures ---",
+            f"Count:          {info['texture_count']}",
+            "",
+            "--- State ---",
+            f"Ref count:      {info['ref_count']}",
+            f"Version:        {info['version']}",
+        ]
+
+        # Get more details from the material itself
+        mat = TcMaterial.from_uuid(info["uuid"])
+        if mat.is_valid:
+            lines.extend([
+                "",
+                "--- Properties ---",
+                f"Shader name:    {mat.shader_name or '(none)'}",
+                f"Active mark:    {mat.active_phase_mark or '(none)'}",
+            ])
+
+            color = mat.color
+            if color is not None:
+                lines.append(f"Color:          ({color.x:.2f}, {color.y:.2f}, {color.z:.2f}, {color.w:.2f})")
+
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
     # Components
     # =========================================================================
 
@@ -613,6 +694,7 @@ class CoreRegistryViewer(QDialog):
         mesh_count_val = tc_mesh_count()
         texture_count_val = tc_texture_count()
         shader_count_val = shader_count()
+        material_count_val = tc_material_count()
         scene_count_val = tc_scene_registry_count()
 
         mesh_infos = tc_mesh_get_all_info()
@@ -630,6 +712,7 @@ class CoreRegistryViewer(QDialog):
             f"Meshes: {mesh_count_val} ({self._format_bytes(mesh_memory)}) | "
             f"Textures: {texture_count_val} ({self._format_bytes(texture_memory)}) | "
             f"Shaders: {shader_count_val} ({self._format_bytes(shader_memory)}) | "
+            f"Materials: {material_count_val} | "
             f"Components: {component_count_val} | "
             f"Scenes: {scene_count_val}"
         )

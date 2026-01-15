@@ -70,7 +70,7 @@ protected:
 
     void setup_draw_uniforms(
         const DrawCall& dc,
-        ShaderProgram* shader,
+        TcShader& shader,
         const Mat44f& model,
         const Mat44f& view,
         const Mat44f& projection,
@@ -78,8 +78,8 @@ protected:
         nb::dict& extra_uniforms
     ) override {
         GeometryPassBase::setup_draw_uniforms(dc, shader, model, view, projection, context, extra_uniforms);
-        shader->set_uniform_float("u_near", _near_plane);
-        shader->set_uniform_float("u_far", _far_plane);
+        shader.set_uniform_float("u_near", _near_plane);
+        shader.set_uniform_float("u_far", _far_plane);
     }
 
 private:

@@ -1,6 +1,5 @@
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.render.postprocess import PostEffect
-from termin.editor.inspect_field import InspectField
 
 
 # ================================================================
@@ -35,28 +34,22 @@ class GrayscaleEffect(PostEffect):
     name = "grayscale"
 
     def __init__(self):
-        self._shader: ShaderProgram | None = None
+        self._shader: TcShader | None = None
 
     def required_resources(self) -> set[str]:
-        # Ему не нужны доп. ресурсы, только входной color_tex
         return set()
 
-    def _get_shader(self) -> ShaderProgram:
+    def _get_shader(self) -> TcShader:
         if self._shader is None:
-            from termin.visualization.render.shader import ShaderProgram
-            self._shader = ShaderProgram(GRAY_VERT, GRAY_FRAG)
+            self._shader = TcShader.from_sources(GRAY_VERT, GRAY_FRAG, "", "GrayscaleEffect")
         return self._shader
 
     def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
-        w, h = size
-
         shader = self._get_shader()
-        shader.ensure_ready(gfx, key)
+        shader.ensure_ready()
         shader.use()
 
-        # биндим цвет на юнит 0
         color_tex.bind(0)
-
         shader.set_uniform_int("u_texture", 0)
 
         gfx.draw_ui_textured_quad(key)

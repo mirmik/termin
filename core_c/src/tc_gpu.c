@@ -1,6 +1,9 @@
 // tc_gpu.c - GPU operations implementation
 #include "tc_gpu.h"
 #include "tc_log.h"
+#include "tc_material.h"
+#include "tc_shader_registry.h"
+#include "tc_texture_registry.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -361,4 +364,105 @@ void tc_shader_set_block_binding(tc_shader* shader, const char* block_name, int 
     if (g_gpu_ops && g_gpu_ops->shader_set_block_binding) {
         g_gpu_ops->shader_set_block_binding(shader->gpu_program, block_name, binding_point);
     }
+}
+
+// ============================================================================
+// Material GPU operations
+// ============================================================================
+
+void tc_material_phase_apply_textures(tc_material_phase* phase) {
+    if (!phase) return;
+
+    for (size_t i = 0; i < phase->texture_count; i++) {
+        tc_texture* tex = tc_texture_get(phase->textures[i].texture);
+        if (tex) {
+            tc_texture_bind_gpu(tex, (int)i);
+        }
+    }
+}
+
+void tc_material_phase_apply_uniforms(tc_material_phase* phase, tc_shader* shader) {
+    if (!phase || !shader) return;
+
+    for (size_t i = 0; i < phase->uniform_count; i++) {
+        const tc_uniform_value* u = &phase->uniforms[i];
+        switch (u->type) {
+            case TC_UNIFORM_BOOL:
+            case TC_UNIFORM_INT:
+                tc_shader_set_int(shader, u->name, u->data.i);
+                break;
+            case TC_UNIFORM_FLOAT:
+                tc_shader_set_float(shader, u->name, u->data.f);
+                break;
+            case TC_UNIFORM_VEC2:
+                tc_shader_set_vec2(shader, u->name, u->data.v2[0], u->data.v2[1]);
+                break;
+            case TC_UNIFORM_VEC3:
+                tc_shader_set_vec3(shader, u->name, u->data.v3[0], u->data.v3[1], u->data.v3[2]);
+                break;
+            case TC_UNIFORM_VEC4:
+                tc_shader_set_vec4(shader, u->name, u->data.v4[0], u->data.v4[1], u->data.v4[2], u->data.v4[3]);
+                break;
+            case TC_UNIFORM_MAT4:
+                tc_shader_set_mat4(shader, u->name, u->data.m4, true);
+                break;
+            case TC_UNIFORM_FLOAT_ARRAY:
+                // Arrays handled separately if needed
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Bind texture samplers
+    for (size_t i = 0; i < phase->texture_count; i++) {
+        tc_shader_set_int(shader, phase->textures[i].name, (int)i);
+    }
+}
+
+bool tc_material_phase_apply_gpu(tc_material_phase* phase) {
+    if (!phase) return false;
+
+    // Get shader
+    tc_shader* shader = tc_shader_get(phase->shader);
+    if (!shader) {
+        tc_log(TC_LOG_ERROR, "tc_material_phase_apply_gpu: invalid shader handle");
+        return false;
+    }
+
+    // Compile and use shader
+    if (tc_shader_compile_gpu(shader) == 0) {
+        tc_log(TC_LOG_ERROR, "tc_material_phase_apply_gpu: shader compile failed");
+        return false;
+    }
+    tc_shader_use_gpu(shader);
+
+    // Apply textures
+    tc_material_phase_apply_textures(phase);
+
+    // Apply uniforms
+    tc_material_phase_apply_uniforms(phase, shader);
+
+    return true;
+}
+
+void tc_material_phase_apply_with_mvp(
+    tc_material_phase* phase,
+    tc_shader* shader,
+    const float* model,
+    const float* view,
+    const float* projection
+) {
+    if (!phase || !shader) return;
+
+    // Set MVP matrices
+    tc_shader_set_mat4(shader, "u_model", model, false);
+    tc_shader_set_mat4(shader, "u_view", view, false);
+    tc_shader_set_mat4(shader, "u_projection", projection, false);
+
+    // Apply textures
+    tc_material_phase_apply_textures(phase);
+
+    // Apply uniforms
+    tc_material_phase_apply_uniforms(phase, shader);
 }

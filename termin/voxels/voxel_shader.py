@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 
 VOXEL_VERTEX_SHADER = """#version 330 core
@@ -109,9 +109,11 @@ void main() {
 """
 
 
-def voxel_display_shader() -> ShaderProgram:
+def voxel_display_shader() -> TcShader:
     """Creates shader for voxel display with slice clipping."""
-    return ShaderProgram(
-        vertex_source=VOXEL_VERTEX_SHADER,
-        fragment_source=VOXEL_FRAGMENT_SHADER,
+    return TcShader.from_sources(
+        VOXEL_VERTEX_SHADER,
+        VOXEL_FRAGMENT_SHADER,
+        "",
+        "VoxelDisplay",
     )

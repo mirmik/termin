@@ -7,6 +7,7 @@
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/component.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
+#include "termin/material/tc_material_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/render/material.hpp"
 #include "termin/render/drawable.hpp"
@@ -29,20 +30,20 @@ public:
     // Mesh to render (GPU-ready, from tc_mesh registry)
     TcMesh mesh;
 
-    // Material for rendering
-    MaterialHandle material;
+    // Material for rendering (C-based tc_material)
+    TcMaterial material;
 
     // Shadow casting
     bool cast_shadow = true;
 
-    // Material override
+    // Material override (creates a copy of tc_material for per-instance customization)
     bool _override_material = false;
-    Material* _overridden_material = nullptr;
+    TcMaterial _overridden_material;
     std::unique_ptr<nos::trent> _pending_override_data;
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
-    INSPECT_FIELD(MeshRenderer, material, "Material", "material_handle")
+    INSPECT_FIELD(MeshRenderer, material, "Material", "tc_material")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
     INSPECT_FIELD(MeshRenderer, _override_material, "Override Material", "bool")
 
@@ -73,31 +74,31 @@ public:
      * Get current material for rendering.
      * Returns overridden material if override is active, otherwise base material.
      */
-    Material* get_material() const;
+    TcMaterial get_material() const;
 
     /**
-     * Get base material (from handle).
+     * Get raw tc_material pointer for current material.
      */
-    Material* get_base_material() const;
+    tc_material* get_material_ptr() const;
 
     /**
-     * Get material handle.
+     * Get base material.
      */
-    MaterialHandle& material_handle() { return material; }
-    const MaterialHandle& material_handle() const { return material; }
+    TcMaterial get_base_material() const { return material; }
 
     /**
-     * Set base material.
+     * Get material reference.
      */
-    void set_material(Material* material);
+    TcMaterial& get_material_ref() { return material; }
+    const TcMaterial& get_material_ref() const { return material; }
 
     /**
-     * Set material by handle.
+     * Set material.
      */
-    void set_material_handle(const MaterialHandle& handle);
+    void set_material(const TcMaterial& mat);
 
     /**
-     * Set material by name (lookup in ResourceManager).
+     * Set material by name (lookup in tc_material registry).
      */
     void set_material_by_name(const std::string& name);
 
@@ -110,8 +111,8 @@ public:
     /**
      * Get overridden material (if override is active).
      */
-    Material* overridden_material() const {
-        return _override_material ? _overridden_material : nullptr;
+    TcMaterial get_overridden_material() const {
+        return _override_material ? _overridden_material : TcMaterial();
     }
 
     // --- Phase marks ---
@@ -144,7 +145,7 @@ public:
      * Get material phases for given phase mark.
      * Returns sorted by priority.
      */
-    std::vector<MaterialPhase*> get_phases_for_mark(const std::string& phase_mark);
+    std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
 
     /**
      * Get geometry draw calls for given phase mark (Drawable interface).

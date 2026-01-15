@@ -18,46 +18,25 @@ Usage:
 
 from __future__ import annotations
 
-import hashlib
-from enum import Enum, auto
 from typing import Callable, Dict, Tuple
 
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader, ShaderVariantOp as NativeShaderVariantOp
 
 
-class ShaderVariantOp(Enum):
-    """Types of shader variant operations."""
-
-    SKINNING = auto()  # Add skeletal animation support
-    LINE_RIBBON = auto()  # Convert lines to screen-space ribbons via geometry shader
+# Re-export variant op for consistency
+ShaderVariantOp = NativeShaderVariantOp
 
 
 # Type alias for variant transform functions
 # Takes original shader, returns transformed shader
-VariantTransformFunc = Callable[[ShaderProgram], ShaderProgram]
-
-
-def compute_shader_hash(shader: ShaderProgram) -> str:
-    """
-    Compute a stable hash from shader source code.
-
-    Combines vertex, fragment, and geometry sources into a single hash.
-    """
-    hasher = hashlib.sha256()
-    hasher.update(shader.vertex_source.encode('utf-8'))
-    hasher.update(b'\x00')  # Separator
-    hasher.update(shader.fragment_source.encode('utf-8'))
-    if shader.geometry_source:
-        hasher.update(b'\x00')
-        hasher.update(shader.geometry_source.encode('utf-8'))
-    return hasher.hexdigest()[:16]  # 16 hex chars = 64 bits, enough for uniqueness
+VariantTransformFunc = Callable[[TcShader], TcShader]
 
 
 class ShaderVariantRegistry:
     """
     Registry for caching shader variants by source hash.
 
-    Maps (source_hash, operation) -> compiled ShaderProgram.
+    Maps (source_hash, operation) -> TcShader.
 
     This allows multiple components to share the same shader variant
     without recompiling. For example, if two SkinnedMeshRenderers
@@ -66,8 +45,8 @@ class ShaderVariantRegistry:
     """
 
     def __init__(self):
-        # Map (hash, op) -> ShaderProgram
-        self._cache: Dict[Tuple[str, ShaderVariantOp], ShaderProgram] = {}
+        # Map (hash, op) -> TcShader
+        self._cache: Dict[Tuple[str, ShaderVariantOp], TcShader] = {}
 
         # Map op -> transform function
         self._transforms: Dict[ShaderVariantOp, VariantTransformFunc] = {}
@@ -88,9 +67,9 @@ class ShaderVariantRegistry:
 
     def get_variant(
         self,
-        shader: ShaderProgram,
+        shader: TcShader,
         op: ShaderVariantOp,
-    ) -> ShaderProgram:
+    ) -> TcShader:
         """
         Get or create a shader variant.
 
@@ -98,17 +77,17 @@ class ShaderVariantRegistry:
         Otherwise, applies the transform and caches the result.
 
         Args:
-            shader: Original shader program
+            shader: Original shader
             op: Variant operation to apply
 
         Returns:
-            Transformed shader program
+            Transformed shader
 
         Raises:
             ValueError: If no transform is registered for the operation
         """
-        # Compute hash of original shader
-        source_hash = compute_shader_hash(shader)
+        # Use source_hash from shader (already computed by C core)
+        source_hash = shader.source_hash
         cache_key = (source_hash, op)
 
         # Check cache
@@ -128,11 +107,11 @@ class ShaderVariantRegistry:
 
     def has_variant(
         self,
-        shader: ShaderProgram,
+        shader: TcShader,
         op: ShaderVariantOp,
     ) -> bool:
         """Check if a variant exists in cache without creating it."""
-        source_hash = compute_shader_hash(shader)
+        source_hash = shader.source_hash
         return (source_hash, op) in self._cache
 
     def clear(self) -> None:
@@ -170,26 +149,22 @@ def _register_default_transforms(registry: ShaderVariantRegistry) -> None:
     from termin.visualization.render.shader_skinning import (
         inject_skinning_into_vertex_shader,
     )
-    from termin.visualization.render.shader_line_ribbon import (
-        inject_line_ribbon_geometry_shader,
-    )
 
-    def skinning_transform(shader: ShaderProgram) -> ShaderProgram:
+    def skinning_transform(shader: TcShader) -> TcShader:
         """Transform shader to add skinning support."""
         skinned_vert = inject_skinning_into_vertex_shader(shader.vertex_source)
-        return ShaderProgram(
-            vertex_source=skinned_vert,
-            fragment_source=shader.fragment_source,
-            geometry_source=shader.geometry_source,
+        variant = TcShader.from_sources(
+            vertex=skinned_vert,
+            fragment=shader.fragment_source,
+            geometry=shader.geometry_source,
+            name=f"{shader.name}_skinned" if shader.name else "",
             source_path=f"{shader.source_path}:skinned" if shader.source_path else "",
         )
-
-    def line_ribbon_transform(shader: ShaderProgram) -> ShaderProgram:
-        """Transform shader to add line ribbon geometry shader."""
-        return inject_line_ribbon_geometry_shader(shader)
+        variant.set_variant_info(shader, ShaderVariantOp.SKINNING)
+        return variant
 
     registry.register_transform(ShaderVariantOp.SKINNING, skinning_transform)
-    registry.register_transform(ShaderVariantOp.LINE_RIBBON, line_ribbon_transform)
+    # Note: LINE_RIBBON is now handled at material level via get_line_ribbon_material()
 
 
 def clear_variant_cache() -> None:

@@ -17,7 +17,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 
 VERT = """
@@ -79,7 +79,7 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     texture = Texture.from_file(texture_path)
     mesh = TexturedCubeMesh()
     drawable = MeshDrawable(mesh)
-    shader_prog = ShaderProgram(VERT, FRAG)
+    shader_prog = TcShader.from_sources(VERT, FRAG, "", "TexturedCubeShader")
     material = Material(shader=shader_prog, color=None, textures={"u_diffuse_map": texture})
 
     cube = Entity(pose=Pose3.identity(), name="cube")

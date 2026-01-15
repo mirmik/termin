@@ -7,7 +7,7 @@ from typing import Sequence
 import numpy as np
 
 from termin.lighting import Light, LightType
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 # Максимальное число источников, поддерживаемых дефолтным forward-проходом.
 MAX_LIGHTS = 8
@@ -39,7 +39,7 @@ _DEBUG_LIGHTS = False  # TODO: убрать после отладки
 _debug_frame_counter = 0
 
 
-def upload_lights_to_shader(shader: ShaderProgram, lights: Sequence[Light]) -> None:
+def upload_lights_to_shader(shader: TcShader, lights: Sequence[Light]) -> None:
     """
     Передать массив источников в uniform-пакет.
 
@@ -58,8 +58,6 @@ def upload_lights_to_shader(shader: ShaderProgram, lights: Sequence[Light]) -> N
     if should_debug:
         print(f"\n=== upload_lights_to_shader (call #{_debug_frame_counter}) ===")
         print(f"  shader: {shader}")
-        print(f"  shader._compiled: {shader._compiled}")
-        print(f"  shader._handle: {shader._handle}")
         print(f"  light_count: {count}")
 
     for index in range(count):
@@ -67,15 +65,19 @@ def upload_lights_to_shader(shader: ShaderProgram, lights: Sequence[Light]) -> N
 
         light_type_int = _light_type_to_int(light.type)
         shader.set_uniform_int(f"{prefix}type[{index}]", light_type_int)
-        shader.set_uniform_vec3(f"{prefix}color[{index}]", np.asarray(light.color, dtype=np.float32))
+        color = light.color
+        shader.set_uniform_vec3(f"{prefix}color[{index}]", float(color[0]), float(color[1]), float(color[2]))
         shader.set_uniform_float(f"{prefix}intensity[{index}]", float(light.intensity))
-        shader.set_uniform_vec3(f"{prefix}direction[{index}]", np.asarray(light.direction, dtype=np.float32))
-        shader.set_uniform_vec3(f"{prefix}position[{index}]", np.asarray(light.position, dtype=np.float32))
+        direction = light.direction
+        shader.set_uniform_vec3(f"{prefix}direction[{index}]", float(direction[0]), float(direction[1]), float(direction[2]))
+        position = light.position
+        shader.set_uniform_vec3(f"{prefix}position[{index}]", float(position[0]), float(position[1]), float(position[2]))
 
         light_range = 1e9 if light.range is None else float(light.range)
         shader.set_uniform_float(f"{prefix}range[{index}]", light_range)
 
-        shader.set_uniform_vec3(f"{prefix}attenuation[{index}]", _attenuation_vector(light))
+        attn = _attenuation_vector(light)
+        shader.set_uniform_vec3(f"{prefix}attenuation[{index}]", float(attn[0]), float(attn[1]), float(attn[2]))
         shader.set_uniform_float(f"{prefix}inner_angle[{index}]", float(light.inner_angle))
         shader.set_uniform_float(f"{prefix}outer_angle[{index}]", float(light.outer_angle))
 
@@ -96,10 +98,11 @@ def upload_lights_to_shader(shader: ShaderProgram, lights: Sequence[Light]) -> N
 
 
 def upload_ambient_to_shader(
-    shader: ShaderProgram,
+    shader: TcShader,
     ambient_color: np.ndarray,
     ambient_intensity: float,
 ) -> None:
     """Upload scene-level ambient lighting uniforms."""
-    shader.set_uniform_vec3("u_ambient_color", np.asarray(ambient_color, dtype=np.float32))
+    ac = ambient_color
+    shader.set_uniform_vec3("u_ambient_color", float(ac[0]), float(ac[1]), float(ac[2]))
     shader.set_uniform_float("u_ambient_intensity", float(ambient_intensity))

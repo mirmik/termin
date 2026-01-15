@@ -7,8 +7,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 
 SHADOW_VERT = """
@@ -37,14 +36,32 @@ void main()
 """
 
 
-class ShadowMaterial(Material):
+def create_shadow_material(name: str = "ShadowMaterial") -> TcMaterial:
+    """Create a shadow pass material."""
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "ShadowShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=SHADOW_VERT,
+        fragment_source=SHADOW_FRAG,
+        geometry_source="",
+        shader_name="ShadowShader",
+        phase_mark="shadow",
+        priority=0,
+        state=state,
+    )
+
+    return mat
+
+
+class ShadowMaterial(TcMaterial):
     """
-    Минимальный материал для shadow pass.
-    
+    Минимальный материал для shadow pass. Returns TcMaterial.
+
     Рендерит геометрию без освещения и текстур — только позиции.
     Глубина записывается в depth buffer средствами OpenGL.
     """
 
-    def __init__(self):
-        shader = ShaderProgram(SHADOW_VERT, SHADOW_FRAG)
-        super().__init__(shader=shader, uniforms={})
+    def __new__(cls) -> TcMaterial:
+        return create_shadow_material()

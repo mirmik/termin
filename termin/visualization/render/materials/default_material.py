@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 # Матрицы работают в однородных координатах: gl_Position = P * V * M * [x, y, z, 1]^T
 DEFAULT_VERT = """#version 330 core
@@ -210,19 +209,60 @@ void main() {
 """
 
 
-def default_shader() -> ShaderProgram:
-    """Создает шейдер по умолчанию с комбинированным диффузным и бликовым освещением."""
-    return ShaderProgram(vertex_source=DEFAULT_VERT, fragment_source=DEFAULT_FRAG)
+def create_default_material(
+    name: str = "DefaultMaterial",
+    color: tuple[float, float, float, float] | None = None,
+) -> TcMaterial:
+    """
+    Создаёт материал по умолчанию с диффузным освещением по Ламберту и бликом по Фонгу.
+
+    Args:
+        name: Имя материала.
+        color: RGBA цвет (по умолчанию белый).
+
+    Returns:
+        TcMaterial с одной фазой "opaque".
+    """
+    from termin.visualization.render.texture import get_white_texture
+
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "DefaultShader"
+
+    # Add opaque phase
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=DEFAULT_VERT,
+        fragment_source=DEFAULT_FRAG,
+        geometry_source="",
+        shader_name="DefaultShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        # Set default color
+        c = color or (1.0, 1.0, 1.0, 1.0)
+        phase.set_color(c[0], c[1], c[2], c[3])
+
+        # Set white texture as default albedo
+        white_tex = get_white_texture()
+        if white_tex and white_tex.texture_data:
+            phase.set_texture("u_albedo_texture", white_tex.texture_data)
+
+        # Set default shininess
+        phase.set_uniform_float("u_shininess", 32.0)
+
+    return mat
 
 
-class DefaultMaterial(Material):
+class DefaultMaterial(TcMaterial):
     """
     Базовый материал сцены. Диффузная часть следует модели Ламберта, блик — Фонга.
+
+    NOTE: This is a factory class that returns TcMaterial.
+    Use create_default_material() for explicit creation.
     """
 
-    def __init__(self, color: tuple[float, float, float, float] | None = None):
-        from termin.visualization.render.texture import get_white_texture
-
-        shader = default_shader()
-        white_tex = get_white_texture()
-        super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})
+    def __new__(cls, color: tuple[float, float, float, float] | None = None) -> TcMaterial:
+        return create_default_material(name="DefaultMaterial", color=color)

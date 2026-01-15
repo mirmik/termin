@@ -4,8 +4,7 @@ Uses progressive downsampling/upsampling for wide, high-quality bloom.
 Based on the approach used in Unreal Engine and Unity.
 """
 
-import numpy as np
-from ..shader import ShaderProgram
+from termin._native.render import TcShader
 from ..postprocess import PostEffect
 from termin.editor.inspect_field import InspectField
 
@@ -202,6 +201,41 @@ void main() {
 """
 
 
+# Lazy-loaded shared shaders
+_bright_shader: TcShader | None = None
+_downsample_shader: TcShader | None = None
+_upsample_shader: TcShader | None = None
+_composite_shader: TcShader | None = None
+
+
+def _get_bright_shader() -> TcShader:
+    global _bright_shader
+    if _bright_shader is None:
+        _bright_shader = TcShader.from_sources(BRIGHT_VERT, BRIGHT_FRAG, "", "BloomBright")
+    return _bright_shader
+
+
+def _get_downsample_shader() -> TcShader:
+    global _downsample_shader
+    if _downsample_shader is None:
+        _downsample_shader = TcShader.from_sources(DOWNSAMPLE_VERT, DOWNSAMPLE_FRAG, "", "BloomDownsample")
+    return _downsample_shader
+
+
+def _get_upsample_shader() -> TcShader:
+    global _upsample_shader
+    if _upsample_shader is None:
+        _upsample_shader = TcShader.from_sources(UPSAMPLE_VERT, UPSAMPLE_FRAG, "", "BloomUpsample")
+    return _upsample_shader
+
+
+def _get_composite_shader() -> TcShader:
+    global _composite_shader
+    if _composite_shader is None:
+        _composite_shader = TcShader.from_sources(COMPOSITE_VERT, COMPOSITE_FRAG, "", "BloomComposite")
+    return _composite_shader
+
+
 class BloomEffect(PostEffect):
     """
     HDR Bloom post-processing effect with progressive downsampling.
@@ -253,25 +287,10 @@ class BloomEffect(PostEffect):
         intensity: float = 1.0,
         mip_levels: int = 5,
     ):
-        """
-        Args:
-            threshold: Brightness threshold for bloom extraction.
-            soft_threshold: Soft knee (0-1) for smoother threshold transition.
-            intensity: Bloom intensity multiplier.
-            mip_levels: Number of downsample levels (more = wider bloom).
-                        5 levels = 1/32 resolution at lowest = very wide bloom.
-        """
-
         self.threshold = threshold
         self.soft_threshold = soft_threshold
         self.intensity = intensity
         self.mip_levels = mip_levels
-
-        # Shaders
-        self._bright_shader = ShaderProgram(BRIGHT_VERT, BRIGHT_FRAG)
-        self._downsample_shader = ShaderProgram(DOWNSAMPLE_VERT, DOWNSAMPLE_FRAG)
-        self._upsample_shader = ShaderProgram(UPSAMPLE_VERT, UPSAMPLE_FRAG)
-        self._composite_shader = ShaderProgram(COMPOSITE_VERT, COMPOSITE_FRAG)
 
         # Mip chain FBOs
         self._mip_fbos = []
@@ -281,7 +300,6 @@ class BloomEffect(PostEffect):
         w, h = base_size
         mip_levels = int(self.mip_levels)
 
-        # Create/resize FBOs for each mip level
         for i in range(mip_levels):
             mip_w = max(1, w >> i)
             mip_h = max(1, h >> i)
@@ -292,7 +310,6 @@ class BloomEffect(PostEffect):
             else:
                 self._mip_fbos[i].resize(mip_w, mip_h)
 
-        # Remove excess FBOs if mip_levels decreased
         while len(self._mip_fbos) > mip_levels:
             fbo = self._mip_fbos.pop()
             fbo.delete()
@@ -305,7 +322,6 @@ class BloomEffect(PostEffect):
 
         self._ensure_mip_fbos(gfx, size, format_str)
 
-        # Disable depth testing for post-processing
         gfx.set_depth_test(False)
         gfx.set_blend(False)
 
@@ -314,19 +330,21 @@ class BloomEffect(PostEffect):
         gfx.bind_framebuffer(mip0)
         gfx.set_viewport(0, 0, w, h)
 
-        self._bright_shader.ensure_ready(gfx, context_key)
-        self._bright_shader.use()
+        bright = _get_bright_shader()
+        bright.ensure_ready()
+        bright.use()
 
         color_tex.bind(0)
-        self._bright_shader.set_uniform_int("u_texture", 0)
-        self._bright_shader.set_uniform_float("u_threshold", self.threshold)
-        self._bright_shader.set_uniform_float("u_soft_threshold", self.soft_threshold)
+        bright.set_uniform_int("u_texture", 0)
+        bright.set_uniform_float("u_threshold", self.threshold)
+        bright.set_uniform_float("u_soft_threshold", self.soft_threshold)
 
         gfx.draw_ui_textured_quad(context_key)
 
         # === 2. Progressive Downsample ===
-        self._downsample_shader.ensure_ready(gfx, context_key)
-        self._downsample_shader.use()
+        down = _get_downsample_shader()
+        down.ensure_ready()
+        down.use()
 
         for i in range(1, mip_levels):
             src_fbo = self._mip_fbos[i - 1]
@@ -341,21 +359,19 @@ class BloomEffect(PostEffect):
             gfx.set_viewport(0, 0, dst_w, dst_h)
 
             src_fbo.color_texture().bind(0)
-            self._downsample_shader.set_uniform_int("u_texture", 0)
-            self._downsample_shader.set_uniform_auto(
-                "u_texel_size",
-                np.array([1.0 / max(1, src_w), 1.0 / max(1, src_h)], dtype=np.float32)
-            )
+            down.set_uniform_int("u_texture", 0)
+            down.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
 
             gfx.draw_ui_textured_quad(context_key)
 
         # === 3. Progressive Upsample (accumulate bloom) ===
-        self._upsample_shader.ensure_ready(gfx, context_key)
-        self._upsample_shader.use()
+        up = _get_upsample_shader()
+        up.ensure_ready()
+        up.use()
 
         for i in range(mip_levels - 2, -1, -1):
-            src_fbo = self._mip_fbos[i + 1]  # Lower mip (upsampling from)
-            dst_fbo = self._mip_fbos[i]      # Higher mip (upsampling to)
+            src_fbo = self._mip_fbos[i + 1]
+            dst_fbo = self._mip_fbos[i]
 
             src_w = max(1, w >> (i + 1))
             src_h = max(1, h >> (i + 1))
@@ -368,13 +384,10 @@ class BloomEffect(PostEffect):
             src_fbo.color_texture().bind(0)
             dst_fbo.color_texture().bind(1)
 
-            self._upsample_shader.set_uniform_int("u_texture", 0)
-            self._upsample_shader.set_uniform_int("u_higher_mip", 1)
-            self._upsample_shader.set_uniform_auto(
-                "u_texel_size",
-                np.array([1.0 / max(1, src_w), 1.0 / max(1, src_h)], dtype=np.float32)
-            )
-            self._upsample_shader.set_uniform_float("u_blend_factor", 1.0)
+            up.set_uniform_int("u_texture", 0)
+            up.set_uniform_int("u_higher_mip", 1)
+            up.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
+            up.set_uniform_float("u_blend_factor", 1.0)
 
             gfx.draw_ui_textured_quad(context_key)
 
@@ -383,15 +396,16 @@ class BloomEffect(PostEffect):
             gfx.bind_framebuffer(target_fbo)
             gfx.set_viewport(0, 0, w, h)
 
-        self._composite_shader.ensure_ready(gfx, context_key)
-        self._composite_shader.use()
+        comp = _get_composite_shader()
+        comp.ensure_ready()
+        comp.use()
 
         color_tex.bind(0)
         self._mip_fbos[0].color_texture().bind(1)
 
-        self._composite_shader.set_uniform_int("u_original", 0)
-        self._composite_shader.set_uniform_int("u_bloom", 1)
-        self._composite_shader.set_uniform_float("u_intensity", self.intensity)
+        comp.set_uniform_int("u_original", 0)
+        comp.set_uniform_int("u_bloom", 1)
+        comp.set_uniform_float("u_intensity", self.intensity)
 
         gfx.draw_ui_textured_quad(context_key)
 

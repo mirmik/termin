@@ -18,7 +18,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 
 # =============================
@@ -103,11 +103,7 @@ def build_scene(world: VisualizationWorld):
     drawable = MeshDrawable(cube_mesh)
 
     # теперь прокидываем третий аргумент — geometry shader
-    shader_prog = ShaderProgram(
-        vertex_source=vert,
-        fragment_source=frag,
-        geometry_source=geom,
-    )
+    shader_prog = TcShader.from_sources(vert, frag, geom, "WireframeShader")
 
     # красим линии (красный wireframe)
     material = Material(

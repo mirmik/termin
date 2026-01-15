@@ -14,7 +14,6 @@
 #include "termin/render/render_context.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/render_state.hpp"
-#include "termin/render/shader_program.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/entity/entity.hpp"
@@ -51,12 +50,12 @@ public:
     }
 
     void destroy() override {
-        _shader.reset();
+        _shader = TcShader();
     }
 
 protected:
     // Cached shader
-    std::unique_ptr<ShaderProgram> _shader;
+    TcShader _shader;
 
     GeometryPassBase(
         const std::string& name,
@@ -90,16 +89,16 @@ protected:
     // Setup uniforms for each draw call
     virtual void setup_draw_uniforms(
         const DrawCall& dc,
-        ShaderProgram* shader,
+        TcShader& shader,
         const Mat44f& model,
         const Mat44f& view,
         const Mat44f& projection,
         RenderContext& context,
         nb::dict& extra_uniforms
     ) {
-        shader->set_uniform_matrix4("u_model", model.data, false);
-        shader->set_uniform_matrix4("u_view", view.data, false);
-        shader->set_uniform_matrix4("u_projection", projection.data, false);
+        shader.set_uniform_mat4("u_model", model.data, false);
+        shader.set_uniform_mat4("u_view", view.data, false);
+        shader.set_uniform_mat4("u_projection", projection.data, false);
     }
 
     // Entity filter (return false to skip entity)
@@ -116,17 +115,17 @@ protected:
 
     // --- Helper methods ---
 
-    ShaderProgram* get_shader(GraphicsBackend* graphics) {
-        if (!_shader) {
-            _shader = std::make_unique<ShaderProgram>(
+    TcShader& get_shader(GraphicsBackend* graphics) {
+        if (!_shader.is_valid()) {
+            _shader = TcShader::from_sources(
                 vertex_shader_source(),
-                fragment_shader_source()
+                fragment_shader_source(),
+                "",
+                pass_name
             );
-            _shader->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-                return graphics->create_shader(v, f, g);
-            });
+            _shader.ensure_ready();
         }
-        return _shader.get();
+        return _shader;
     }
 
     static Mat44f get_model_matrix(const Entity& entity) {
@@ -251,7 +250,7 @@ protected:
         apply_default_render_state(graphics);
 
         // Get shader
-        ShaderProgram* shader = get_shader(graphics);
+        TcShader& shader = get_shader(graphics);
 
         // Setup extra uniforms
         nb::dict extra_uniforms;
@@ -270,7 +269,7 @@ protected:
         context.context_key = context_key;
         context.graphics = graphics;
         context.phase = phase_name();
-        context.current_shader = shader;
+        context.current_tc_shader = shader;
         context.extra_uniforms = extra_uniforms;
 
         const std::string& debug_symbol = get_debug_internal_point();
@@ -285,7 +284,7 @@ protected:
             }
 
             // Get shader handle and apply override
-            tc_shader_handle base_handle = shader->tc_shader().handle;
+            tc_shader_handle base_handle = shader.handle;
             tc_shader_handle shader_handle = tc_component_override_shader(
                 dc.component, phase_name(), dc.geometry_id, base_handle
             );
@@ -299,7 +298,6 @@ protected:
             shader_to_use.set_uniform_mat4("u_view", view.data, false);
             shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
 
-            context.current_shader = shader;  // Legacy compatibility
             context.current_tc_shader = shader_to_use;
             context.extra_uniforms = extra_uniforms;
 

@@ -2,7 +2,7 @@
 ResourceHandle — базовый класс для умных ссылок на ресурсы.
 
 Три режима работы:
-1. Direct — хранит raw объект напрямую (Texture, ShaderProgram)
+1. Direct — хранит raw объект напрямую (Texture, TcShader)
 2. Asset — хранит ссылку на Asset
 3. Named — хранит имя, ищет в ResourceManager при get()
 
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 if TYPE_CHECKING:
     from termin.assets.asset import Asset
 
-T = TypeVar("T")  # Raw resource type (Texture, ShaderProgram, etc.)
+T = TypeVar("T")  # Raw resource type (Texture, TcShader, etc.)
 AssetT = TypeVar("AssetT", bound="Asset")  # Asset type
 
 
@@ -72,7 +72,7 @@ class ResourceHandle(Generic[T, AssetT]):
     Базовая умная ссылка на ресурс.
 
     Два режима работы:
-    1. Direct — хранит raw объект напрямую (Texture, ShaderProgram)
+    1. Direct — хранит raw объект напрямую (Texture, TcShader)
     2. Asset — хранит ссылку на Asset (lookup по имени через ResourceManager)
 
     Subclasses should set _asset_getter to enable from_name():

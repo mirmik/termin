@@ -328,10 +328,8 @@ void SolidPrimitiveRenderer::_ensure_initialized(GraphicsBackend* graphics) {
     if (_initialized) return;
 
     // Shader
-    _shader = std::make_unique<ShaderProgram>(SOLID_VERT, SOLID_FRAG);
-    _shader->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-        return graphics->create_shader(v, f, g);
-    });
+    _shader = TcShader::from_sources(SOLID_VERT, SOLID_FRAG, "", "SolidPrimitiveRenderer");
+    _shader.ensure_ready();
 
     // Create meshes using tc_mesh and GPUMeshHandle
     {
@@ -383,9 +381,9 @@ void SolidPrimitiveRenderer::begin(
     graphics->set_cull_face(true);
 
     // Bind shader and set view/proj
-    _shader->use();
-    _shader->set_uniform_matrix4("u_view", view.data, false);
-    _shader->set_uniform_matrix4("u_projection", proj.data, false);
+    _shader.use();
+    _shader.set_uniform_mat4("u_view", view.data, false);
+    _shader.set_uniform_mat4("u_projection", proj.data, false);
 }
 
 void SolidPrimitiveRenderer::end() {
@@ -393,26 +391,26 @@ void SolidPrimitiveRenderer::end() {
 }
 
 void SolidPrimitiveRenderer::draw_torus(const Mat44f& model, const Color4& color) {
-    _shader->set_uniform_matrix4("u_model", model.data, false);
-    _shader->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _shader.set_uniform_mat4("u_model", model.data, false);
+    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
     _torus_mesh->draw();
 }
 
 void SolidPrimitiveRenderer::draw_cylinder(const Mat44f& model, const Color4& color) {
-    _shader->set_uniform_matrix4("u_model", model.data, false);
-    _shader->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _shader.set_uniform_mat4("u_model", model.data, false);
+    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
     _cylinder_mesh->draw();
 }
 
 void SolidPrimitiveRenderer::draw_cone(const Mat44f& model, const Color4& color) {
-    _shader->set_uniform_matrix4("u_model", model.data, false);
-    _shader->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _shader.set_uniform_mat4("u_model", model.data, false);
+    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
     _cone_mesh->draw();
 }
 
 void SolidPrimitiveRenderer::draw_quad(const Mat44f& model, const Color4& color) {
-    _shader->set_uniform_matrix4("u_model", model.data, false);
-    _shader->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _shader.set_uniform_mat4("u_model", model.data, false);
+    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
     _quad_mesh->draw();
 }
 

@@ -15,7 +15,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.ui import Canvas, UIRectangle
 from termin.visualization.ui.elements import UIText
 from termin.visualization.ui.font import FontTextureAtlas
@@ -90,7 +90,7 @@ void main(){
 
 
 def build_scene(world: VisualizationWorld):
-    shader = ShaderProgram(VERT, FRAG)
+    shader = TcShader.from_sources(VERT, FRAG, "", "UITextSceneShader")
     mat = Material(shader=shader, color=np.array([0.7, 0.4, 0.2, 1.0]))
     mesh = MeshDrawable(CubeMesh())
     cube = Entity(pose=Pose3.identity(), name="cube")
@@ -107,7 +107,7 @@ def build_scene(world: VisualizationWorld):
     scene.add(cam_e)
 
     canvas = Canvas()
-    ui_shader = ShaderProgram(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER)
+    ui_shader = TcShader.from_sources(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UITextShader")
     rect_material = Material(shader=ui_shader, color=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32), uniforms={"u_use_texture": False})
     text_material = Material(shader=ui_shader, color=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32), uniforms={"u_use_texture": True})
 

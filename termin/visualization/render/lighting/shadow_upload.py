@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin.visualization.render.shader import ShaderProgram
+    from termin._native.render import TcShader
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
     from termin.visualization.core.scene.lighting import ShadowSettings
 
@@ -18,7 +18,7 @@ SHADOW_MAP_TEXTURE_UNIT_START = 8
 
 
 def upload_shadow_settings_to_shader(
-    shader: "ShaderProgram",
+    shader: "TcShader",
     shadow_settings: "ShadowSettings",
 ) -> None:
     """
@@ -39,7 +39,7 @@ def upload_shadow_settings_to_shader(
 
 
 def upload_shadow_maps_to_shader(
-    shader: "ShaderProgram",
+    shader: "TcShader",
     shadow_array: "ShadowMapArrayResource",
 ) -> None:
     """
@@ -82,7 +82,7 @@ def upload_shadow_maps_to_shader(
 
         # Матрица light-space: P_light * V_light
         # Преобразует мировые координаты в clip-пространство источника
-        shader.set_uniform_matrix4(f"u_light_space_matrix[{i}]", entry.light_space_matrix)
+        shader.set_uniform_mat4(f"u_light_space_matrix[{i}]", entry.light_space_matrix.data, False)
 
         # Индекс источника света (для соответствия с u_light_* массивами)
         shader.set_uniform_int(f"u_shadow_light_index[{i}]", entry.light_index)

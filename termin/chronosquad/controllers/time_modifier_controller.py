@@ -11,7 +11,7 @@ from termin.visualization.render.manager import RenderingManager
 if TYPE_CHECKING:
     from .chronosphere_controller import ChronosphereController
     from termin.visualization.render.posteffects.material_effect import MaterialPostEffect
-    from termin.visualization.core.shader import ShaderProgram
+    from termin._native.render import TcShader
     from termin.visualization.core.camera import CameraComponent
 
 
@@ -140,7 +140,7 @@ class TimeModifierController(PythonComponent):
 
         self._time_effect_pass = render_pass 
 
-    def _before_draw(self, shader: "ShaderProgram") -> None:
+    def _before_draw(self, shader: "TcShader") -> None:
         """Callback to set uniforms for the post-effect shader."""
         # Set time modifier
         if self._chronosphere_controller is not None:
@@ -156,8 +156,8 @@ class TimeModifierController(PythonComponent):
             view = self._camera.view_matrix()
             proj = self._camera.projection_matrix()
 
-            shader.set_uniform_matrix4("u_inv_view", view.inverse(), False)
-            shader.set_uniform_matrix4("u_inv_proj", proj.inverse(), False)
+            shader.set_uniform_mat4("u_inv_view", view.inverse().data, False)
+            shader.set_uniform_mat4("u_inv_proj", proj.inverse().data, False)
 
             shader.set_uniform_float("u_grid_scale", 1.0)
             shader.set_uniform_float("u_grid_line_width", 0.03)

@@ -252,12 +252,12 @@ class ComponentInspectorPanel(QWidget):
         from termin._native.render import MeshRenderer  # SkinnedMeshRenderer inherits from this
 
         if isinstance(self._component, MeshRenderer) and self._component.override_material:
-            mat = self._component.overridden_material()
+            mat = self._component.get_overridden_material()
             # If override enabled but material not created (e.g. after scene load), recreate it
             if mat is None:
                 self._component._override_material = False
                 self._component.set_override_material(True)
-                mat = self._component.overridden_material()
+                mat = self._component.get_overridden_material()
             self._material_props_editor.set_material(mat)
             self._material_props_editor.setVisible(True)
         else:

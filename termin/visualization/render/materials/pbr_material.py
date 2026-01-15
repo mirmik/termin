@@ -3,8 +3,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 
 PBR_VERT = """#version 330 core
@@ -191,14 +190,66 @@ void main() {
 """
 
 
-def pbr_shader() -> ShaderProgram:
-    """Create PBR shader program."""
-    return ShaderProgram(vertex_source=PBR_VERT, fragment_source=PBR_FRAG)
-
-
-class PBRMaterial(Material):
+def create_pbr_material(
+    color: tuple[float, float, float, float] | None = None,
+    metallic: float = 0.0,
+    roughness: float = 0.5,
+    name: str = "PBRMaterial",
+) -> TcMaterial:
     """
-    PBR material using Cook-Torrance BRDF.
+    Create a PBR material using Cook-Torrance BRDF.
+
+    Args:
+        color: Base color (albedo) multiplier.
+        metallic: 0 = dielectric, 1 = metal.
+        roughness: 0 = smooth/mirror, 1 = rough/matte.
+        name: Material name.
+
+    Returns:
+        TcMaterial with PBR shader.
+    """
+    from termin.visualization.render.texture import get_white_texture
+
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "PBRShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=PBR_VERT,
+        fragment_source=PBR_FRAG,
+        geometry_source="",
+        shader_name="PBRShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        # Set color
+        c = color or (1.0, 1.0, 1.0, 1.0)
+        phase.set_color(c[0], c[1], c[2], c[3])
+
+        # Set PBR parameters
+        phase.set_uniform_float("u_metallic", metallic)
+        phase.set_uniform_float("u_roughness", roughness)
+
+        # Set white texture as default albedo
+        white_tex = get_white_texture()
+        if white_tex and white_tex.texture_data:
+            phase.set_texture("u_albedo_texture", white_tex.texture_data)
+
+    return mat
+
+
+# Legacy alias
+def pbr_shader():
+    """Deprecated: Use create_pbr_material() instead."""
+    raise NotImplementedError("pbr_shader() is deprecated. Use create_pbr_material() instead.")
+
+
+class PBRMaterial(TcMaterial):
+    """
+    PBR material using Cook-Torrance BRDF. Returns TcMaterial.
 
     Parameters:
         color: Base color (albedo) multiplier
@@ -206,21 +257,10 @@ class PBRMaterial(Material):
         roughness: 0 = smooth/mirror, 1 = rough/matte
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         color: tuple[float, float, float, float] | None = None,
         metallic: float = 0.0,
         roughness: float = 0.5,
-    ):
-        from termin.visualization.render.texture import get_white_texture
-
-        shader = pbr_shader()
-        white_tex = get_white_texture()
-        super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})
-        self.metallic = metallic
-        self.roughness = roughness
-
-    def apply(self, graphics):
-        super().apply(graphics)
-        self.shader.set_uniform("u_metallic", self.metallic)
-        self.shader.set_uniform("u_roughness", self.roughness)
+    ) -> TcMaterial:
+        return create_pbr_material(color=color, metallic=metallic, roughness=roughness)

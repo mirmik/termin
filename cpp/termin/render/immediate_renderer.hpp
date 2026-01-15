@@ -3,7 +3,7 @@
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/render/types.hpp"
-#include "termin/render/shader_program.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 
 #include <vector>
 #include <memory>
@@ -223,7 +223,7 @@ private:
         bool blend
     );
 
-    std::unique_ptr<ShaderProgram> _shader;
+    TcShader _shader;
 };
 
 } // namespace termin

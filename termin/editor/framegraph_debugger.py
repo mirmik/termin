@@ -10,7 +10,7 @@ from OpenGL import GL as gl
 import numpy as np
 
 from termin.visualization.platform.backends.base import GraphicsBackend
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GPUTextureHandle
@@ -213,7 +213,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._get_fbos = get_fbos
         self._resource_name = resource_name
 
-        self._shader: Optional[ShaderProgram] = None
+        self._shader: Optional[TcShader] = None
         self._vao: Optional[int] = None
         self._vbo: Optional[int] = None
         self._initialized = False
@@ -270,7 +270,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._init_fullscreen_quad()
         self._initialized = True
 
-    def _get_shader(self) -> ShaderProgram:
+    def _get_shader(self) -> TcShader:
         """Ленивая инициализация шейдера фуллскрин-квада."""
         if self._shader is None:
             vert_src = """
@@ -320,8 +320,8 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
                 FragColor = vec4(result, 1.0);
             }
             """
-            self._shader = ShaderProgram(vert_src, frag_src)
-            self._shader.ensure_ready(self._graphics, 0)  # debugger window context
+            self._shader = TcShader.from_sources(vert_src, frag_src, "", "FramegraphDebugger")
+            self._shader.ensure_ready()
         return self._shader
 
     def _init_fullscreen_quad(self) -> None:

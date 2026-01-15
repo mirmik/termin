@@ -72,15 +72,6 @@ void SkinnedMeshRenderer::update_bone_matrices() {
     }
 }
 
-void SkinnedMeshRenderer::upload_bone_matrices(ShaderProgram& shader) {
-    if (_bone_count == 0 || _bone_matrices_flat.empty()) {
-        return;
-    }
-
-    shader.set_uniform_matrix4_array("u_bone_matrices", _bone_matrices_flat.data(), _bone_count, false);
-    shader.set_uniform_int("u_bone_count", _bone_count);
-}
-
 void SkinnedMeshRenderer::upload_bone_matrices(TcShader& shader) {
     if (_bone_count == 0 || _bone_matrices_flat.empty()) {
         return;

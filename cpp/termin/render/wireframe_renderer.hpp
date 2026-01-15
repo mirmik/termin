@@ -9,7 +9,6 @@ namespace termin {
 
 // Forward declarations
 class GraphicsBackend;
-class ShaderProgram;
 
 /**
  * Efficient wireframe renderer using pre-built unit meshes.
@@ -36,8 +35,8 @@ public:
     static constexpr int ARC_SEGMENTS = 8;
 
 private:
-    // Shader
-    ShaderProgram* _shader = nullptr;
+    // Shader (opaque pointer to internal WireframeShaderData)
+    void* _shader_data = nullptr;
     bool _owns_shader = false;
 
     // VAOs and VBOs for unit meshes

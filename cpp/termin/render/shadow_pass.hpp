@@ -18,13 +18,11 @@
 #include "termin/entity/entity.hpp"
 #include "tc_scene.h"
 #include "tc_inspect.hpp"
+#include "tc_shader_handle.hpp"
 
 namespace nb = nanobind;
 
 namespace termin {
-
-// Forward declarations
-class ShaderProgram;
 
 // Draw call for shadow pass (defined before ShadowPass class)
 struct ShadowDrawCall {
@@ -133,8 +131,8 @@ public:
         return entity_names;
     }
 
-    // Shadow shader program - set from Python before execute
-    ShaderProgram* shadow_shader_program = nullptr;
+    // Shadow shader - set from Python before execute
+    TcShader* shadow_shader = nullptr;
 
 private:
     // FBO pool: index -> FBO

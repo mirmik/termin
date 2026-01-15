@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from termin._native import log
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 
 SKINNED_VERT = """#version 330 core
@@ -226,33 +224,62 @@ void main() {
 """
 
 
-def skinned_shader() -> ShaderProgram:
-    """Create shader for skinned meshes with skeletal animation."""
-    return ShaderProgram(vertex_source=SKINNED_VERT, fragment_source=SKINNED_FRAG)
+def create_skinned_material(
+    color: tuple[float, float, float, float] | None = None,
+    name: str = "SkinnedMaterial",
+) -> TcMaterial:
+    """
+    Create a skinned material for meshes with skeletal animation.
+
+    Uses same lighting model as DefaultMaterial but with skinning support
+    in the vertex shader.
+    """
+    from termin.visualization.render.texture import get_white_texture
+
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "SkinnedShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=SKINNED_VERT,
+        fragment_source=SKINNED_FRAG,
+        geometry_source="",
+        shader_name="SkinnedShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        # Set default color
+        c = color or (1.0, 1.0, 1.0, 1.0)
+        phase.set_color(c[0], c[1], c[2], c[3])
+
+        # Set white texture as default albedo
+        white_tex = get_white_texture()
+        if white_tex and white_tex.texture_data:
+            phase.set_texture("u_albedo_texture", white_tex.texture_data)
+
+        # Set default shininess
+        phase.set_uniform_float("u_shininess", 32.0)
+
+    return mat
 
 
-class SkinnedMaterial(Material):
+# Legacy alias
+def skinned_shader():
+    """Deprecated: Use create_skinned_material() instead."""
+    raise NotImplementedError("skinned_shader() is deprecated. Use create_skinned_material() instead.")
+
+
+class SkinnedMaterial(TcMaterial):
     """
     Material for skinned meshes with skeletal animation.
+    Returns TcMaterial.
 
     Uses same lighting model as DefaultMaterial but with skinning support
     in the vertex shader.
     """
 
-    _DEBUG_INIT = False
-
-    def __init__(self, color: tuple[float, float, float, float] | None = None):
-        from termin.visualization.render.texture import get_white_texture
-
-        if self._DEBUG_INIT:
-            log.debug(f"[SkinnedMaterial.__init__] Creating SkinnedMaterial with color={color}")
-
-        shader = skinned_shader()
-        white_tex = get_white_texture()
-        super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})
-
-        if self._DEBUG_INIT:
-            log.debug(f"  shader={shader}")
-            log.debug(f"  phases={len(self.phases)}")
-            for i, p in enumerate(self.phases):
-                log.debug(f"  phase[{i}]: phase_mark={p.phase_mark!r}, shader={p.shader_programm}")
+    def __new__(cls, color: tuple[float, float, float, float] | None = None) -> TcMaterial:
+        return create_skinned_material(color=color)

@@ -176,7 +176,7 @@ class NavMeshDisplayComponent(PythonComponent):
         """Получить или создать материал для контуров."""
         if self._contour_material is None:
             from termin.visualization.render.renderpass import RenderState
-            from termin.visualization.render.shader import ShaderProgram
+            from termin._native.render import TcShader
 
             # Простой шейдер для линий
             vertex_source = """
@@ -203,9 +203,11 @@ void main() {
     FragColor = u_color;
 }
 """
-            shader = ShaderProgram(
-                vertex_source=vertex_source,
-                fragment_source=fragment_source,
+            shader = TcShader.from_sources(
+                vertex_source,
+                fragment_source,
+                "",
+                "NavMeshContour",
             )
 
             # Контуры — яркий контрастный цвет (жёлтый)

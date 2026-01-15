@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import numpy as np
-
+from termin._native.render import TcShader
 from termin.visualization.render.postprocess import PostEffect
-from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.core.picking import id_to_rgb
 from termin.editor.inspect_field import InspectField
 
@@ -99,54 +97,48 @@ class HighlightEffect(PostEffect):
         """
         self._get_id = selected_id_getter
         self._color = color
-        self._shader: ShaderProgram | None = None
+        self._shader: TcShader | None = None
 
     def required_resources(self) -> set[str]:
-        # Нужна id-карта с именем "id" (её пишет IdPass)
         return {"id"}
 
-    def _get_shader(self) -> ShaderProgram:
+    def _get_shader(self) -> TcShader:
         if self._shader is None:
-            self._shader = ShaderProgram(HIGHLIGHT_VERT, HIGHLIGHT_FRAG)
+            self._shader = TcShader.from_sources(HIGHLIGHT_VERT, HIGHLIGHT_FRAG, "", "HighlightEffect")
         return self._shader
 
     def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
         tex_id = extra_textures.get("id")
 
-        # id выделенного энтити
-        selected_id = self._get_id() or 0
+        selected_id = self._get_id() if self._get_id else 0
 
         shader = self._get_shader()
-        shader.ensure_ready(gfx, key)
+        shader.ensure_ready()
         shader.use()
 
-        # основной цвет
         color_tex.bind(0)
         shader.set_uniform_int("u_color", 0)
 
-        # включён ли эффект?
         enabled = (tex_id is not None) and (selected_id > 0)
         shader.set_uniform_float("u_enabled", 1.0 if enabled else 0.0)
 
-        # если можем — биндим id-map и передаём цвет выбранного id
         if enabled:
             tex_id.bind(1)
             shader.set_uniform_int("u_id", 1)
 
-            sel_color = id_to_rgb(selected_id)  # (r,g,b) того же формата, что в IdPass
-            shader.set_uniform_vec3("u_selected_color", sel_color)
+            sel_color = id_to_rgb(selected_id)
+            shader.set_uniform_vec3("u_selected_color", float(sel_color[0]), float(sel_color[1]), float(sel_color[2]))
 
-        # размер текселя (для выборки соседей)
-        texel_size = np.array(
-            [1.0 / max(1, w), 1.0 / max(1, h)],
-            dtype=np.float32,
-        )
-        shader.set_uniform_vec2("u_texel_size", texel_size)
+        texel_x = 1.0 / max(1, w)
+        texel_y = 1.0 / max(1, h)
+        shader.set_uniform_vec2("u_texel_size", texel_x, texel_y)
 
-        # цвет рамки (желтый, например)
-        outline_color = np.array(self._color[0:3], dtype=np.float32)
-        shader.set_uniform_vec3("u_outline_color", outline_color)
+        oc = self._color
+        shader.set_uniform_vec3("u_outline_color", float(oc[0]), float(oc[1]), float(oc[2]))
 
-        # остальное состояние depth/blend уже подготовил PostProcessPass
         gfx.draw_ui_textured_quad(key)
+
+    def clear_callbacks(self) -> None:
+        """Clear callback to allow garbage collection."""
+        self._get_id = None

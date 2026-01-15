@@ -13,12 +13,14 @@ import pytest
 def test_material_phase_serialize_deserialize():
     """MaterialPhase должен сериализоваться и десериализоваться."""
     from termin.visualization.core.material import MaterialPhase
-    from termin.visualization.render.shader import ShaderProgram
+    from termin._native.render import TcShader
     from termin.visualization.render.renderpass import RenderState
 
-    shader = ShaderProgram(
-        vertex_source="void main() { gl_Position = vec4(0); }",
-        fragment_source="void main() { gl_FragColor = vec4(1); }",
+    shader = TcShader.from_sources(
+        "void main() { gl_Position = vec4(0); }",
+        "void main() { gl_FragColor = vec4(1); }",
+        "",
+        "TestShader1",
     )
     phase = MaterialPhase(
         shader_programm=shader,
@@ -49,11 +51,13 @@ def test_material_phase_serialize_deserialize():
 def test_material_phase_json_serializable():
     """MaterialPhase.serialize() должен быть JSON-сериализуемым."""
     from termin.visualization.core.material import MaterialPhase
-    from termin.visualization.render.shader import ShaderProgram
+    from termin._native.render import TcShader
 
-    shader = ShaderProgram(
-        vertex_source="void main() {}",
-        fragment_source="void main() {}",
+    shader = TcShader.from_sources(
+        "void main() {}",
+        "void main() {}",
+        "",
+        "TestShader2",
     )
     phase = MaterialPhase(shader_programm=shader, color=np.array([1, 0, 0, 1], dtype=np.float32))
 
@@ -79,11 +83,13 @@ def test_material_phase_json_serializable():
 def test_material_serialize_inline():
     """Material без source_path сериализуется inline."""
     from termin.visualization.core.material import Material
-    from termin.visualization.render.shader import ShaderProgram
+    from termin._native.render import TcShader
 
-    shader = ShaderProgram(
-        vertex_source="void main() { gl_Position = vec4(0); }",
-        fragment_source="void main() { gl_FragColor = vec4(1); }",
+    shader = TcShader.from_sources(
+        "void main() { gl_Position = vec4(0); }",
+        "void main() { gl_FragColor = vec4(1); }",
+        "",
+        "TestShader1",
     )
     mat = Material(
         shader=shader,
@@ -103,11 +109,13 @@ def test_material_serialize_inline():
 def test_material_serialize_file_reference():
     """Material с source_path сериализуется как ссылка на файл."""
     from termin.visualization.core.material import Material
-    from termin.visualization.render.shader import ShaderProgram
+    from termin._native.render import TcShader
 
-    shader = ShaderProgram(
-        vertex_source="void main() {}",
-        fragment_source="void main() {}",
+    shader = TcShader.from_sources(
+        "void main() {}",
+        "void main() {}",
+        "",
+        "TestShader2",
     )
     mat = Material(
         shader=shader,
@@ -125,11 +133,13 @@ def test_material_serialize_file_reference():
 def test_material_deserialize_inline():
     """Material десериализуется из inline формата."""
     from termin.visualization.core.material import Material
-    from termin.visualization.render.shader import ShaderProgram
+    from termin._native.render import TcShader
 
-    shader = ShaderProgram(
-        vertex_source="void main() { gl_Position = vec4(0); }",
-        fragment_source="void main() { gl_FragColor = vec4(1); }",
+    shader = TcShader.from_sources(
+        "void main() { gl_Position = vec4(0); }",
+        "void main() { gl_FragColor = vec4(1); }",
+        "",
+        "TestShader1",
     )
     mat = Material(
         shader=shader,

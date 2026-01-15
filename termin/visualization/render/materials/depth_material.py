@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 DEPTH_VERT = """
 #version 330 core
@@ -22,10 +21,10 @@ void main()
 {
     vec4 world_pos = u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
-    
+
     float y = view_pos.y; // forward = +Y in view space
     float depth = (y - u_near) / (u_far - u_near);
-    
+
     v_linear_depth = depth;
     gl_Position = u_projection * view_pos;
 }
@@ -46,22 +45,38 @@ void main()
 """
 
 
-class DepthMaterial(Material):
+def create_depth_material(
+    near: float = 0.1,
+    far: float = 100.0,
+    name: str = "DepthMaterial",
+) -> TcMaterial:
+    """Create a depth material that writes linear depth to color channel."""
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "DepthShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=DEPTH_VERT,
+        fragment_source=DEPTH_FRAG,
+        geometry_source="",
+        shader_name="DepthShader",
+        phase_mark="depth",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        phase.set_uniform_float("u_near", near)
+        phase.set_uniform_float("u_far", far)
+
+    return mat
+
+
+class DepthMaterial(TcMaterial):
     """
     Простой материал, который пишет линейную глубину в канал цвета.
+    Returns TcMaterial.
     """
 
-    def __init__(self):
-        shader = ShaderProgram(DEPTH_VERT, DEPTH_FRAG)
-        super().__init__(
-            shader=shader,
-            uniforms={
-                "u_near": 0.1,
-                "u_far": 100.0,
-            },
-        )
-
-    def update_camera_planes(self, near_plane: float, far_plane: float):
-        from termin._native import log
-        self.set_param("u_near", float(near_plane))
-        self.set_param("u_far", float(far_plane))
+    def __new__(cls) -> TcMaterial:
+        return create_depth_material()

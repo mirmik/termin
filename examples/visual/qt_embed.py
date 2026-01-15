@@ -17,7 +17,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.platform.backends.qt import QtWindowBackend
 
 
@@ -57,7 +57,7 @@ void main() {
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
     """Создаём простую сцену с шаром и skybox."""
-    shader = ShaderProgram(VERT, FRAG)
+    shader = TcShader.from_sources(VERT, FRAG, "", "QtEmbedShader")
     material = Material(
         shader=shader,
         color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32),

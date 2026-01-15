@@ -19,7 +19,7 @@ from termin.visualization import (
 )
 from termin.visualization.core.entity import Entity, Component
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.colliders import BoxCollider
 from termin.colliders.collider_component import ColliderComponent
 from termin.geombase._geom_native import Vec3
@@ -98,7 +98,7 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     texture = Texture.from_file(texture_path)
     mesh = TexturedCubeMesh()
     drawable = MeshDrawable(mesh)
-    shader_prog = ShaderProgram(VERT, FRAG)
+    shader_prog = TcShader.from_sources(VERT, FRAG, "", "ClickableShader")
     material = Material(shader=shader_prog, color=None, textures={"u_diffuse_map": texture})
 
     # Первый куб

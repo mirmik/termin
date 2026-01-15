@@ -2,10 +2,14 @@
 
 # Re-export C++ classes
 from termin._native.render import (
-    ShaderProgram,
+    TcShader,
     GlslPreprocessor,
     glsl_preprocessor,
 )
+
+# DEPRECATED: ShaderProgram is being phased out in favor of TcShader
+# Keeping re-export for backwards compatibility during migration
+from termin._native.render import ShaderProgram
 
 
 class ShaderCompilationError(RuntimeError):
@@ -13,7 +17,8 @@ class ShaderCompilationError(RuntimeError):
 
 
 __all__ = [
-    "ShaderProgram",
+    "TcShader",
+    "ShaderProgram",  # DEPRECATED
     "ShaderCompilationError",
     "GlslPreprocessor",
     "glsl_preprocessor",

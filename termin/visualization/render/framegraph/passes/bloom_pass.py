@@ -10,10 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
 
-import numpy as np
-
+from termin._native.render import TcShader
 from termin.visualization.render.framegraph.passes.post_effect_base import PostEffectPass
-from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -215,6 +213,41 @@ void main() {
 """
 
 
+# Lazy-loaded shared shaders
+_bright_shader: TcShader | None = None
+_downsample_shader: TcShader | None = None
+_upsample_shader: TcShader | None = None
+_composite_shader: TcShader | None = None
+
+
+def _get_bright_shader() -> TcShader:
+    global _bright_shader
+    if _bright_shader is None:
+        _bright_shader = TcShader.from_sources(BRIGHT_VERT, BRIGHT_FRAG, "", "BloomPassBright")
+    return _bright_shader
+
+
+def _get_downsample_shader() -> TcShader:
+    global _downsample_shader
+    if _downsample_shader is None:
+        _downsample_shader = TcShader.from_sources(DOWNSAMPLE_VERT, DOWNSAMPLE_FRAG, "", "BloomPassDownsample")
+    return _downsample_shader
+
+
+def _get_upsample_shader() -> TcShader:
+    global _upsample_shader
+    if _upsample_shader is None:
+        _upsample_shader = TcShader.from_sources(UPSAMPLE_VERT, UPSAMPLE_FRAG, "", "BloomPassUpsample")
+    return _upsample_shader
+
+
+def _get_composite_shader() -> TcShader:
+    global _composite_shader
+    if _composite_shader is None:
+        _composite_shader = TcShader.from_sources(COMPOSITE_VERT, COMPOSITE_FRAG, "", "BloomPassComposite")
+    return _composite_shader
+
+
 class BloomPass(PostEffectPass):
     """
     HDR Bloom post-processing pass with progressive downsampling.
@@ -269,16 +302,6 @@ class BloomPass(PostEffectPass):
         intensity: float = 1.0,
         mip_levels: int = 5,
     ):
-        """
-        Args:
-            input_res: Input resource name.
-            output_res: Output resource name.
-            pass_name: Pass name for identification.
-            threshold: Brightness threshold for bloom extraction.
-            soft_threshold: Soft knee (0-1) for smoother threshold.
-            intensity: Bloom intensity multiplier.
-            mip_levels: Number of downsample levels (more = wider bloom).
-        """
         super().__init__(input_res, output_res, pass_name)
 
         self.threshold = threshold
@@ -286,25 +309,8 @@ class BloomPass(PostEffectPass):
         self.intensity = intensity
         self.mip_levels = mip_levels
 
-        # Shaders (lazy init)
-        self._bright_shader: ShaderProgram | None = None
-        self._downsample_shader: ShaderProgram | None = None
-        self._upsample_shader: ShaderProgram | None = None
-        self._composite_shader: ShaderProgram | None = None
-
         # Internal mip chain FBOs
         self._mip_fbos: List[FramebufferHandle] = []
-
-    def _ensure_shaders(self) -> None:
-        """Lazy-create shaders."""
-        if self._bright_shader is None:
-            self._bright_shader = ShaderProgram(BRIGHT_VERT, BRIGHT_FRAG)
-        if self._downsample_shader is None:
-            self._downsample_shader = ShaderProgram(DOWNSAMPLE_VERT, DOWNSAMPLE_FRAG)
-        if self._upsample_shader is None:
-            self._upsample_shader = ShaderProgram(UPSAMPLE_VERT, UPSAMPLE_FRAG)
-        if self._composite_shader is None:
-            self._composite_shader = ShaderProgram(COMPOSITE_VERT, COMPOSITE_FRAG)
 
     def _ensure_mip_fbos(
         self,
@@ -316,7 +322,6 @@ class BloomPass(PostEffectPass):
         w, h = base_size
         mip_count = int(self.mip_levels)
 
-        # Create/resize FBOs
         for i in range(mip_count):
             mip_w = max(1, w >> i)
             mip_h = max(1, h >> i)
@@ -327,7 +332,6 @@ class BloomPass(PostEffectPass):
             else:
                 self._mip_fbos[i].resize(mip_w, mip_h)
 
-        # Remove excess FBOs if mip_levels decreased
         while len(self._mip_fbos) > mip_count:
             fbo = self._mip_fbos.pop()
             fbo.delete()
@@ -347,7 +351,6 @@ class BloomPass(PostEffectPass):
         w, h = size
         mip_count = int(self.mip_levels)
 
-        self._ensure_shaders()
         self._ensure_mip_fbos(graphics, size)
 
         # === 1. Bright Pass -> mip[0] ===
@@ -355,19 +358,21 @@ class BloomPass(PostEffectPass):
         graphics.bind_framebuffer(mip0)
         graphics.set_viewport(0, 0, w, h)
 
-        self._bright_shader.ensure_ready(graphics, context_key)
-        self._bright_shader.use()
+        bright = _get_bright_shader()
+        bright.ensure_ready()
+        bright.use()
 
         input_tex.bind(0)
-        self._bright_shader.set_uniform_int("u_texture", 0)
-        self._bright_shader.set_uniform_float("u_threshold", self.threshold)
-        self._bright_shader.set_uniform_float("u_soft_threshold", self.soft_threshold)
+        bright.set_uniform_int("u_texture", 0)
+        bright.set_uniform_float("u_threshold", self.threshold)
+        bright.set_uniform_float("u_soft_threshold", self.soft_threshold)
 
         self.draw_fullscreen_quad(graphics, context_key)
 
         # === 2. Progressive Downsample ===
-        self._downsample_shader.ensure_ready(graphics, context_key)
-        self._downsample_shader.use()
+        down = _get_downsample_shader()
+        down.ensure_ready()
+        down.use()
 
         for i in range(1, mip_count):
             src_fbo = self._mip_fbos[i - 1]
@@ -382,17 +387,15 @@ class BloomPass(PostEffectPass):
             graphics.set_viewport(0, 0, dst_w, dst_h)
 
             src_fbo.color_texture().bind(0)
-            self._downsample_shader.set_uniform_int("u_texture", 0)
-            self._downsample_shader.set_uniform_auto(
-                "u_texel_size",
-                np.array([1.0 / max(1, src_w), 1.0 / max(1, src_h)], dtype=np.float32)
-            )
+            down.set_uniform_int("u_texture", 0)
+            down.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
 
             self.draw_fullscreen_quad(graphics, context_key)
 
         # === 3. Progressive Upsample (accumulate bloom) ===
-        self._upsample_shader.ensure_ready(graphics, context_key)
-        self._upsample_shader.use()
+        up = _get_upsample_shader()
+        up.ensure_ready()
+        up.use()
 
         for i in range(mip_count - 2, -1, -1):
             src_fbo = self._mip_fbos[i + 1]  # Lower mip (upsampling from)
@@ -409,13 +412,10 @@ class BloomPass(PostEffectPass):
             src_fbo.color_texture().bind(0)
             dst_fbo.color_texture().bind(1)
 
-            self._upsample_shader.set_uniform_int("u_texture", 0)
-            self._upsample_shader.set_uniform_int("u_higher_mip", 1)
-            self._upsample_shader.set_uniform_auto(
-                "u_texel_size",
-                np.array([1.0 / max(1, src_w), 1.0 / max(1, src_h)], dtype=np.float32)
-            )
-            self._upsample_shader.set_uniform_float("u_blend_factor", 1.0)
+            up.set_uniform_int("u_texture", 0)
+            up.set_uniform_int("u_higher_mip", 1)
+            up.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
+            up.set_uniform_float("u_blend_factor", 1.0)
 
             self.draw_fullscreen_quad(graphics, context_key)
 
@@ -423,15 +423,16 @@ class BloomPass(PostEffectPass):
         graphics.bind_framebuffer(output_fbo)
         graphics.set_viewport(0, 0, w, h)
 
-        self._composite_shader.ensure_ready(graphics, context_key)
-        self._composite_shader.use()
+        comp = _get_composite_shader()
+        comp.ensure_ready()
+        comp.use()
 
         input_tex.bind(0)
         self._mip_fbos[0].color_texture().bind(1)
 
-        self._composite_shader.set_uniform_int("u_original", 0)
-        self._composite_shader.set_uniform_int("u_bloom", 1)
-        self._composite_shader.set_uniform_float("u_intensity", self.intensity)
+        comp.set_uniform_int("u_original", 0)
+        comp.set_uniform_int("u_bloom", 1)
+        comp.set_uniform_float("u_intensity", self.intensity)
 
         self.draw_fullscreen_quad(graphics, context_key)
 
@@ -441,7 +442,3 @@ class BloomPass(PostEffectPass):
             if fbo is not None:
                 fbo.delete()
         self._mip_fbos.clear()
-        self._bright_shader = None
-        self._downsample_shader = None
-        self._upsample_shader = None
-        self._composite_shader = None

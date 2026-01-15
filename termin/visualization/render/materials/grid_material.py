@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 
 GRID_VERT = """
@@ -79,20 +78,14 @@ void main() {
 """
 
 
-_grid_shader: ShaderProgram | None = None
-
-
-def grid_shader() -> ShaderProgram:
-    """Returns cached grid shader."""
-    global _grid_shader
-    if _grid_shader is None:
-        _grid_shader = ShaderProgram(GRID_VERT, GRID_FRAG)
-    return _grid_shader
-
-
-class GridMaterial(Material):
+def create_grid_material(
+    color: tuple[float, float, float, float] = (0.8, 0.8, 0.8, 1.0),
+    grid_spacing: float = 1.0,
+    line_width: float = 0.02,
+    name: str = "GridMaterial",
+) -> TcMaterial:
     """
-    Calibration material that draws grid lines parallel to XY, YZ, ZX planes.
+    Create a grid/calibration material.
 
     Grid lines are drawn at integer intervals in local object space.
 
@@ -100,21 +93,51 @@ class GridMaterial(Material):
         color: Base color (r, g, b, a)
         grid_spacing: Distance between grid lines (default 1.0)
         line_width: Width of grid lines in local units (default 0.02)
+        name: Material name
+
+    Returns:
+        TcMaterial with grid shader.
+    """
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "GridShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=GRID_VERT,
+        fragment_source=GRID_FRAG,
+        geometry_source="",
+        shader_name="GridShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        phase.set_color(color[0], color[1], color[2], color[3])
+        phase.set_uniform_float("u_grid_spacing", grid_spacing)
+        phase.set_uniform_float("u_line_width", line_width)
+
+    return mat
+
+
+# Legacy alias for backward compatibility
+def grid_shader():
+    """Deprecated: Use create_grid_material() instead."""
+    raise NotImplementedError("grid_shader() is deprecated. Use create_grid_material() instead.")
+
+
+class GridMaterial(TcMaterial):
+    """
+    Calibration material that draws grid lines parallel to XY, YZ, ZX planes.
+
+    Grid lines are drawn at integer intervals in local object space.
+    Returns TcMaterial.
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         color: tuple[float, float, float, float] = (0.8, 0.8, 0.8, 1.0),
         grid_spacing: float = 1.0,
         line_width: float = 0.02,
-    ):
-        self.grid_spacing = grid_spacing
-        self.line_width = line_width
-        super().__init__(
-            shader=grid_shader(),
-            color=color,
-            uniforms={
-                "u_grid_spacing": grid_spacing,
-                "u_line_width": line_width,
-            },
-        )
+    ) -> TcMaterial:
+        return create_grid_material(color=color, grid_spacing=grid_spacing, line_width=line_width)

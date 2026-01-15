@@ -35,7 +35,7 @@ class FrameDebuggerPass(RenderFramePass):
         if FrameDebuggerPass._shader is not None:
             return FrameDebuggerPass._shader
 
-        from termin.visualization.render.shader import ShaderProgram
+        from termin._native.render import TcShader
 
         vert_src = """
         #version 330 core
@@ -82,7 +82,7 @@ class FrameDebuggerPass(RenderFramePass):
             FragColor = vec4(result, 1.0);
         }
         """
-        FrameDebuggerPass._shader = ShaderProgram(vert_src, frag_src)
+        FrameDebuggerPass._shader = TcShader.from_sources(vert_src, frag_src, "", "FrameDebugger")
         return FrameDebuggerPass._shader
 
     def __init__(
@@ -330,7 +330,7 @@ class FrameDebuggerPass(RenderFramePass):
 
             # Рендерим fullscreen quad с нашим шейдером
             shader = FrameDebuggerPass._get_shader()
-            shader.ensure_ready(ctx.graphics, 0)  # debugger has its own context
+            shader.ensure_ready()
             shader.use()
             shader.set_uniform_int("u_tex", 0)
             shader.set_uniform_int("u_channel", self._channel_mode)

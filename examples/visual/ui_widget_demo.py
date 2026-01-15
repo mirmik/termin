@@ -16,7 +16,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.ui.widgets import (
     UIComponent,
     Panel,
@@ -67,7 +67,7 @@ void main(){
 
 def build_scene(world: VisualizationWorld):
     # 3D cube
-    shader = ShaderProgram(VERT, FRAG)
+    shader = TcShader.from_sources(VERT, FRAG, "", "UIWidgetDemoShader")
     material = Material(shader=shader, color=np.array([0.6, 0.8, 0.9, 1.0], dtype=np.float32))
     cube_mesh = MeshDrawable(CubeMesh(size=1.0))
 

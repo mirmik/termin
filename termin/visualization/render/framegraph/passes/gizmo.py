@@ -4,8 +4,8 @@ from typing import List, Optional, Set, Tuple
 
 from typing import TYPE_CHECKING
 
+from termin._native.render import TcShader
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ class GizmoPass(RenderFramePass):
         self._gizmo_entities_source = gizmo_entities
         self.input_res = input_res
         self.output_res = output_res
-        self._shader: ShaderProgram | None = None
+        self._shader: TcShader | None = None
 
     def compute_reads(self) -> Set[str]:
         return {self.input_res}
@@ -77,10 +77,10 @@ class GizmoPass(RenderFramePass):
         """GizmoPass читает input_res и пишет output_res inplace."""
         return [(self.input_res, self.output_res)]
 
-    def _ensure_shader(self, gfx, context_key: int = 0) -> ShaderProgram:
+    def _ensure_shader(self) -> TcShader:
         if self._shader is None:
-            self._shader = ShaderProgram(GIZMO_MASK_VERT, GIZMO_MASK_FRAG)
-        self._shader.ensure_ready(gfx, context_key)
+            self._shader = TcShader.from_sources(GIZMO_MASK_VERT, GIZMO_MASK_FRAG, "", "GizmoMask")
+        self._shader.ensure_ready()
         return self._shader
 
     def execute(self, ctx: "ExecuteContext") -> None:
@@ -104,10 +104,10 @@ class GizmoPass(RenderFramePass):
         view = ctx.camera.get_view_matrix()
         proj = ctx.camera.get_projection_matrix()
 
-        shader = self._ensure_shader(ctx.graphics, key)
+        shader = self._ensure_shader()
         shader.use()
-        shader.set_uniform_matrix4("u_view", view)
-        shader.set_uniform_matrix4("u_projection", proj)
+        shader.set_uniform_mat4("u_view", view.data, False)
+        shader.set_uniform_mat4("u_projection", proj.data, False)
 
         from termin.visualization.render.render_context import RenderContext
         ctx_render = RenderContext(
@@ -135,9 +135,9 @@ class GizmoPass(RenderFramePass):
 
             # alpha < 1.0 для гизмо, alpha=1.0 зарезервирована для обычных объектов
             alpha = index * 1.0 / (maxindex + 1)
-            shader.set_uniform_vec4("u_color", (0.0, 0.0, 0.0, alpha))
+            shader.set_uniform_vec4("u_color", 0.0, 0.0, 0.0, alpha)
             model = ent.model_matrix()
-            shader.set_uniform_matrix4("u_model", model)
+            shader.set_uniform_mat4("u_model", model.data, False)
             tc_mesh = mr.mesh
             if tc_mesh is not None and tc_mesh.is_valid:
                 gpu = mr.mesh_gpu

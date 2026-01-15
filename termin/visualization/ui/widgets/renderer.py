@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from termin.visualization.platform.backends.base import GraphicsBackend
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.ui.font import FontTextureAtlas, get_default_font
 
 
@@ -48,7 +48,7 @@ class UIRenderer:
     def __init__(self, graphics: GraphicsBackend, font: FontTextureAtlas | None = None):
         self._graphics = graphics
         self._font = font
-        self._shader: ShaderProgram | None = None
+        self._shader: TcShader | None = None
         self._context_key: int | None = None
 
         # Viewport size in pixels
@@ -67,7 +67,7 @@ class UIRenderer:
 
     def _ensure_shader(self):
         if self._shader is None:
-            self._shader = ShaderProgram(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER)
+            self._shader = TcShader.from_sources(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIRenderer")
 
     def begin(self, viewport_w: int, viewport_h: int, context_key: int | None = None):
         """Begin UI rendering pass."""
@@ -129,10 +129,10 @@ class UIRenderer:
 
         # Bind shader and set uniforms
         key = self._context_key if self._context_key is not None else 0
-        self._shader.ensure_ready(self._graphics, key)
+        self._shader.ensure_ready()
         self._shader.use()
         self._graphics.check_gl_error("UIRenderer: after shader.use")
-        self._shader.set_uniform_vec4("u_color", np.array(color, dtype=np.float32))
+        self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
         self._shader.set_uniform_int("u_use_texture", 0)
         self._graphics.check_gl_error("UIRenderer: after set uniforms")
 
@@ -150,9 +150,9 @@ class UIRenderer:
             return
 
         key = self._context_key if self._context_key is not None else 0
-        self._shader.ensure_ready(self._graphics, key)
+        self._shader.ensure_ready()
         self._shader.use()
-        self._shader.set_uniform_vec4("u_color", np.array(color, dtype=np.float32))
+        self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
         self._shader.set_uniform_int("u_use_texture", 1)
 
         # Bind font texture

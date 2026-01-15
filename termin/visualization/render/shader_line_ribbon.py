@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from termin.visualization.core.material import Material, MaterialPhase
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
+
+if TYPE_CHECKING:
+    from termin._native.render import TcShader
 
 
 # Geometry shader that expands lines into billboard quads facing camera
@@ -169,119 +172,100 @@ def _inject_line_ribbon_into_vertex_shader(vertex_source: str) -> str:
     return '\n'.join(new_lines)
 
 
-def inject_line_ribbon_geometry_shader(shader: ShaderProgram) -> ShaderProgram:
+def create_line_ribbon_shader_sources(
+    vertex_source: str,
+    fragment_source: str,
+    geometry_source: str,
+) -> tuple[str, str, str]:
     """
-    Inject line ribbon geometry shader into a shader program.
+    Create shader sources with line ribbon geometry shader.
 
     Modifies vertex shader to output world position, and adds geometry
     shader that expands GL_LINES into world-space quads.
 
     Args:
-        shader: Original shader program
+        vertex_source: Original vertex shader source
+        fragment_source: Original fragment shader source
+        geometry_source: Original geometry shader source (may be empty)
 
     Returns:
-        Shader with line ribbon support
+        Tuple of (modified_vert, fragment, geometry) sources
     """
     # Don't inject if shader already has a geometry shader
-    if shader.geometry_source:
-        return shader
+    if geometry_source:
+        return vertex_source, fragment_source, geometry_source
 
     # Modify vertex shader to output world position
-    modified_vert = _inject_line_ribbon_into_vertex_shader(shader.vertex_source)
+    modified_vert = _inject_line_ribbon_into_vertex_shader(vertex_source)
 
-    return ShaderProgram(
-        vertex_source=modified_vert,
-        fragment_source=shader.fragment_source,
-        geometry_source=LINE_RIBBON_GEOMETRY_SHADER,
-        source_path=f"{shader.source_path}:line_ribbon" if shader.source_path else "",
-    )
+    return modified_vert, fragment_source, LINE_RIBBON_GEOMETRY_SHADER
 
 
-# Cache for line ribbon shader variants
-_line_ribbon_shader_cache: dict[int, ShaderProgram] = {}
+# Cache for line ribbon materials (keyed by material uuid)
+_line_ribbon_material_cache: dict[str, TcMaterial] = {}
 
 
-def get_line_ribbon_shader(shader: ShaderProgram) -> ShaderProgram:
+def get_line_ribbon_material(material: TcMaterial) -> TcMaterial:
     """
-    Get or create a line ribbon variant of a shader.
+    Get or create a line ribbon variant of a TcMaterial.
 
     Args:
-        shader: Original shader program
+        material: Original TcMaterial
 
     Returns:
-        Shader with line ribbon geometry shader
+        TcMaterial with line ribbon geometry shader in all phases
     """
-    ptr = shader.ptr()
-    if ptr in _line_ribbon_shader_cache:
-        return _line_ribbon_shader_cache[ptr]
-
-    # Check if already has geometry shader
-    if shader.geometry_source:
-        _line_ribbon_shader_cache[ptr] = shader
-        return shader
-
-    from termin.visualization.render.shader_variants import (
-        get_variant_registry,
-        ShaderVariantOp,
-    )
-
-    registry = get_variant_registry()
-    result = registry.get_variant(shader, ShaderVariantOp.LINE_RIBBON)
-    _line_ribbon_shader_cache[ptr] = result
-    return result
-
-
-# Cache for line ribbon materials
-_line_ribbon_material_cache: dict[int, Material] = {}
-
-
-def get_line_ribbon_material(material: Material) -> Material:
-    """
-    Get or create a line ribbon variant of a material.
-
-    Args:
-        material: Original material
-
-    Returns:
-        Material with line ribbon geometry shader in all phases
-    """
-    mat_id = id(material)
-    if mat_id in _line_ribbon_material_cache:
-        return _line_ribbon_material_cache[mat_id]
+    mat_uuid = material.uuid
+    if mat_uuid in _line_ribbon_material_cache:
+        return _line_ribbon_material_cache[mat_uuid]
 
     # Create new material with line ribbon phases
-    ribbon_mat = Material()
-    ribbon_mat.name = f"{material.name}_LineRibbon" if material.name else "LineRibbon"
-    ribbon_mat.source_path = material.source_path
+    ribbon_mat = TcMaterial.create(
+        name=f"{material.name}_LineRibbon" if material.name else "LineRibbon",
+        uuid_hint=""
+    )
     ribbon_mat.shader_name = material.shader_name
+    ribbon_mat.source_path = material.source_path
 
-    new_phases = []
-    for phase in material.phases:
-        ribbon_shader = get_line_ribbon_shader(phase.shader_programm)
-        ribbon_phase = MaterialPhase(
-            shader_programm=ribbon_shader,
-            render_state=phase.render_state,
+    # Copy phases with modified shaders
+    for i in range(material.phase_count):
+        phase = material.get_phase(i)
+        if phase is None:
+            continue
+
+        shader = material.get_phase_shader(i)
+        if shader is None or not shader.is_valid:
+            continue
+
+        # Get original sources
+        orig_vert = shader.vertex_source
+        orig_frag = shader.fragment_source
+        orig_geom = shader.geometry_source
+
+        # Create ribbon variant sources
+        vert, frag, geom = create_line_ribbon_shader_sources(orig_vert, orig_frag, orig_geom)
+
+        # Create new phase with ribbon shader
+        state = material.get_phase_render_state(i)
+        new_phase = ribbon_mat.add_phase_from_sources(
+            vertex_source=vert,
+            fragment_source=frag,
+            geometry_source=geom,
+            shader_name=f"{material.shader_name}_LineRibbon",
             phase_mark=phase.phase_mark,
             priority=phase.priority,
-            textures=dict(phase.textures),
-            uniforms=dict(phase.uniforms),
+            state=state,
         )
-        new_phases.append(ribbon_phase)
 
-    ribbon_mat.phases = new_phases
-    _line_ribbon_material_cache[mat_id] = ribbon_mat
+        if new_phase is not None:
+            # Copy uniforms from original phase
+            # Phase uniforms are applied via TcMaterial methods
+            pass  # Uniforms will be applied by LineRenderer before draw
+
+    _line_ribbon_material_cache[mat_uuid] = ribbon_mat
     return ribbon_mat
 
 
 def clear_line_ribbon_cache() -> None:
     """Clear all cached line ribbon variants."""
-    from termin.visualization.render.shader_variants import (
-        get_variant_registry,
-        ShaderVariantOp,
-    )
-
-    registry = get_variant_registry()
-    registry.clear_operation(ShaderVariantOp.LINE_RIBBON)
-
-    _line_ribbon_shader_cache.clear()
     _line_ribbon_material_cache.clear()

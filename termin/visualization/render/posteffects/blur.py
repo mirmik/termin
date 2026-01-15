@@ -1,5 +1,5 @@
 import numpy as np
-from ..shader import ShaderProgram
+from termin._native.render import TcShader
 from ..postprocess import PostEffect
 from termin.editor.inspect_field import InspectField
 
@@ -47,6 +47,16 @@ void main() {
 }
 """
 
+# Lazy-loaded shared shader
+_blur_shader: TcShader | None = None
+
+def _get_blur_shader() -> TcShader:
+    global _blur_shader
+    if _blur_shader is None:
+        _blur_shader = TcShader.from_sources(GAUSS_VERT, GAUSS_FRAG, "", "GaussianBlur")
+    return _blur_shader
+
+
 class GaussianBlurPass(PostEffect):
     """Один проход: горизонтальный или вертикальный."""
 
@@ -65,20 +75,20 @@ class GaussianBlurPass(PostEffect):
     }
 
     def __init__(self, direction=(1.0, 0.0)):
-        self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)
         self.direction = np.array(direction, dtype=np.float32)
 
     def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
-        texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)
+        texel_size = (1.0 / max(1, w), 1.0 / max(1, h))
 
-        self.shader.ensure_ready(gfx, key)
-        self.shader.use()
+        shader = _get_blur_shader()
+        shader.ensure_ready()
+        shader.use()
 
         color_tex.bind(0)
-        self.shader.set_uniform_int("u_texture", 0)
-        self.shader.set_uniform_auto("u_texel_size", texel_size)
-        self.shader.set_uniform_auto("u_direction", self.direction)
+        shader.set_uniform_int("u_texture", 0)
+        shader.set_uniform_vec2("u_texel_size", texel_size[0], texel_size[1])
+        shader.set_uniform_vec2("u_direction", float(self.direction[0]), float(self.direction[1]))
 
         gfx.set_depth_test(False)
         gfx.set_cull_face(False)

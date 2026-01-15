@@ -4,17 +4,14 @@ System shaders registry.
 Simple shaders used by render passes (shadow, pick, etc.)
 that don't need material phases.
 
-These are compiled lazily on first use and cached per-context.
+These are compiled lazily on first use and cached.
 """
 
 from __future__ import annotations
 
-from typing import Dict, TYPE_CHECKING
+from typing import Dict
 
-from termin.visualization.render.shader import ShaderProgram
-
-if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend
+from termin._native.render import TcShader
 
 
 # ============================================================
@@ -81,8 +78,7 @@ class SystemShaderRegistry:
     """
     Registry for system shaders.
 
-    Shaders are created lazily and cached PER CONTEXT.
-    Each GL context gets its own compiled shader instances.
+    Shaders are created lazily and cached.
     """
 
     _instance: "SystemShaderRegistry | None" = None
@@ -94,8 +90,8 @@ class SystemShaderRegistry:
             "pick": (PICK_VERT, PICK_FRAG),
         }
 
-        # Compiled shaders per context: (context_key, name) -> ShaderProgram
-        self._shaders: Dict[tuple[int, str], ShaderProgram] = {}
+        # Compiled shaders: name -> TcShader
+        self._shaders: Dict[str, TcShader] = {}
 
     @classmethod
     def instance(cls) -> "SystemShaderRegistry":
@@ -104,34 +100,26 @@ class SystemShaderRegistry:
             cls._instance = cls()
         return cls._instance
 
-    def get(self, name: str, graphics: "GraphicsBackend") -> ShaderProgram:
+    def get(self, name: str) -> TcShader:
         """
-        Get a system shader by name for the current context, compiling if necessary.
+        Get a system shader by name, compiling if necessary.
 
         Args:
             name: Shader name ("shadow", "pick", etc.)
-            graphics: Graphics backend for compilation
 
         Returns:
-            Compiled ShaderProgram ready for use
+            TcShader ready for use
         """
-        from termin.visualization.platform.backends import get_current_context_key
-
-        context_key = get_current_context_key()
-        if context_key is None:
-            context_key = 0  # fallback
-        cache_key = (context_key, name)
-
-        if cache_key not in self._shaders:
+        if name not in self._shaders:
             if name not in self._definitions:
                 raise KeyError(f"Unknown system shader: {name}")
 
             vert, frag = self._definitions[name]
-            shader = ShaderProgram(vert, frag)
-            shader.ensure_ready(graphics, context_key)
-            self._shaders[cache_key] = shader
+            shader = TcShader.from_sources(vert, frag, "", f"system:{name}")
+            shader.ensure_ready()
+            self._shaders[name] = shader
 
-        return self._shaders[cache_key]
+        return self._shaders[name]
 
     def register(self, name: str, vert_source: str, frag_source: str) -> None:
         """
@@ -143,21 +131,19 @@ class SystemShaderRegistry:
             frag_source: Fragment shader GLSL source
         """
         self._definitions[name] = (vert_source, frag_source)
-        # Clear all cached shaders for this name (will be recompiled on next get)
-        keys_to_remove = [k for k in self._shaders if k[1] == name]
-        for k in keys_to_remove:
-            del self._shaders[k]
+        # Clear cached shader for this name (will be recompiled on next get)
+        if name in self._shaders:
+            del self._shaders[name]
 
 
-def get_system_shader(name: str, graphics: "GraphicsBackend") -> ShaderProgram:
+def get_system_shader(name: str) -> TcShader:
     """
     Convenience function to get a system shader.
 
     Args:
         name: Shader name ("shadow", "pick", etc.)
-        graphics: Graphics backend for compilation
 
     Returns:
-        Compiled ShaderProgram ready for use
+        TcShader ready for use
     """
-    return SystemShaderRegistry.instance().get(name, graphics)
+    return SystemShaderRegistry.instance().get(name)

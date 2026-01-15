@@ -16,7 +16,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.animation import (
     AnimationChannel,
     AnimationClip,
@@ -61,7 +61,7 @@ void main() {
 
 def build_scene(world: VisualizationWorld):
     mesh = MeshDrawable(CubeMesh(size=1.0))
-    shader = ShaderProgram(VERT, FRAG)
+    shader = TcShader.from_sources(VERT, FRAG, "", "KeyframeShader")
     material = Material(
         shader=shader,
         color=np.array([0.4, 0.9, 0.4, 1.0], dtype=np.float32),

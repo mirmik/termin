@@ -6,6 +6,7 @@
 #include "tc_texture.h"
 #include "tc_shader.h"
 #include "tc_mesh.h"
+#include "tc_material.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -146,6 +147,33 @@ TC_API void tc_mesh_draw_gpu(tc_mesh* mesh);
 
 // Delete mesh from GPU
 TC_API void tc_mesh_delete_gpu(tc_mesh* mesh);
+
+// ============================================================================
+// Material GPU operations
+// ============================================================================
+
+// Apply material phase for rendering:
+// 1. Compile and use shader
+// 2. Bind textures
+// 3. Apply uniform values
+// Returns true if successful
+TC_API bool tc_material_phase_apply_gpu(tc_material_phase* phase);
+
+// Apply material uniforms only (shader must already be in use)
+TC_API void tc_material_phase_apply_uniforms(tc_material_phase* phase, tc_shader* shader);
+
+// Apply material textures only
+TC_API void tc_material_phase_apply_textures(tc_material_phase* phase);
+
+// Apply material phase with MVP matrices (shader must already be in use)
+// Sets u_model, u_view, u_projection, binds textures, applies uniforms
+TC_API void tc_material_phase_apply_with_mvp(
+    tc_material_phase* phase,
+    tc_shader* shader,
+    const float* model,      // 16 floats
+    const float* view,       // 16 floats
+    const float* projection  // 16 floats
+);
 
 #ifdef __cplusplus
 }

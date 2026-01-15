@@ -16,7 +16,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 from termin.visualization.ui import Canvas, UIRectangle
 
 
@@ -91,7 +91,7 @@ void main(){
 
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent, Canvas]:
-    shader = ShaderProgram(VERT, FRAG)
+    shader = TcShader.from_sources(VERT, FRAG, "", "UIOverlaySceneShader")
     material = Material(shader=shader, color=np.array([0.6, 0.8, 0.9, 1.0], dtype=np.float32))
     mesh = MeshDrawable(CubeMesh(size=1.5))
     cube = Entity(name="cube", pose=Pose3.identity())
@@ -108,7 +108,7 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     scene.add(cam_entity)
 
     canvas = Canvas()
-    ui_shader = ShaderProgram(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER)
+    ui_shader = TcShader.from_sources(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIOverlayShader")
     ui_material = Material(shader=ui_shader, color=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32), uniforms={"u_use_texture": False})
     canvas.add(UIRectangle(position=(0.05, 0.05), size=(0.25, 0.1), color=(0.1, 0.1, 0.1, 0.7), material=ui_material))
     canvas.add(UIRectangle(position=(0.07, 0.07), size=(0.21, 0.06), color=(0.9, 0.4, 0.2, 1.0), material=ui_material))

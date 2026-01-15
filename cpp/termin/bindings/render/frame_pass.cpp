@@ -107,12 +107,7 @@ void bind_frame_pass(nb::module_& m) {
                     self->graphics = nb::cast<GraphicsBackend*>(g_obj);
                 }
             }
-            if (kwargs.contains("current_shader")) {
-                nb::object s_obj = nb::borrow<nb::object>(kwargs["current_shader"]);
-                if (!s_obj.is_none()) {
-                    self->current_shader = nb::cast<ShaderProgram*>(s_obj);
-                }
-            }
+            // current_shader removed - use current_tc_shader instead
             if (kwargs.contains("view")) {
                 nb::object v = nb::borrow<nb::object>(kwargs["view"]);
                 if (nb::isinstance<Mat44>(v)) {
@@ -165,11 +160,7 @@ void bind_frame_pass(nb::module_& m) {
             [](const RenderContext& self) -> GraphicsBackend* { return self.graphics; },
             [](RenderContext& self, GraphicsBackend* g) { self.graphics = g; },
             nb::rv_policy::reference)
-        // current_shader
-        .def_prop_rw("current_shader",
-            [](const RenderContext& self) -> ShaderProgram* { return self.current_shader; },
-            [](RenderContext& self, ShaderProgram* s) { self.current_shader = s; },
-            nb::rv_policy::reference)
+        // current_shader removed - use current_tc_shader instead
         // view matrix
         .def_prop_rw("view",
             [](const RenderContext& self) { return self.view; },
@@ -827,9 +818,9 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("caster_offset") = 50.0f)
         .def_rw("output_res", &ShadowPass::output_res)
         .def_rw("caster_offset", &ShadowPass::caster_offset)
-        .def_prop_rw("shadow_shader_program",
-            [](ShadowPass& self) -> ShaderProgram* { return self.shadow_shader_program; },
-            [](ShadowPass& self, ShaderProgram* s) { self.shadow_shader_program = s; })
+        .def_prop_rw("shadow_shader",
+            [](ShadowPass& self) -> TcShader* { return self.shadow_shader; },
+            [](ShadowPass& self, TcShader* s) { self.shadow_shader = s; })
         .def("get_resource_specs", &ShadowPass::get_resource_specs)
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
         .def("set_debugger_window", &RenderFramePass::set_debugger_window,

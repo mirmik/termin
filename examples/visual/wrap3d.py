@@ -10,14 +10,12 @@ from termin.visualization import (
     Entity,
     MeshDrawable,
     Scene,
-    Material,
     VisualizationWorld,
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.materials.simple import ColorMaterial
+from termin.visualization.render.materials import ColorMaterial
 
 # import convex hull
 from scipy.spatial import ConvexHull

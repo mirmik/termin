@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from termin._native.render import TcShader
 from termin.visualization.render.framegraph.passes.post_effect_base import PostEffectPass
-from termin.visualization.render.shader import ShaderProgram
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -128,12 +128,12 @@ class TonemapPass(PostEffectPass):
         super().__init__(input_res, output_res, pass_name)
         self.exposure = exposure
         self.method = method
-        self._shader: ShaderProgram | None = None
+        self._shader: TcShader | None = None
 
-    def _get_shader(self) -> ShaderProgram:
+    def _get_shader(self) -> TcShader:
         """Lazy-create shader."""
         if self._shader is None:
-            self._shader = ShaderProgram(TONEMAP_VERT, TONEMAP_FRAG)
+            self._shader = TcShader.from_sources(TONEMAP_VERT, TONEMAP_FRAG, "", "Tonemap")
         return self._shader
 
     def apply(
@@ -149,7 +149,7 @@ class TonemapPass(PostEffectPass):
     ) -> None:
         """Apply tonemapping."""
         shader = self._get_shader()
-        shader.ensure_ready(graphics, context_key)
+        shader.ensure_ready()
         shader.use()
 
         # Bind input texture

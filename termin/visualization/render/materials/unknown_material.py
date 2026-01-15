@@ -6,16 +6,12 @@ Used when:
 - Material class not found
 - Deserialization failed
 
-Provides visual feedback (magenta color) and preserves original reference
-for later recovery.
+Provides visual feedback (magenta color).
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcMaterial, TcRenderState
 
 
 UNKNOWN_VERT = """#version 330 core
@@ -66,109 +62,95 @@ void main() {
 }
 """
 
-_unknown_shader: ShaderProgram | None = None
+def create_unknown_material(
+    name: str = "UnknownMaterial",
+    error_message: str | None = None,
+) -> TcMaterial:
+    """
+    Create an unknown/missing material (bright magenta).
+
+    Args:
+        name: Material name (can include error info).
+        error_message: Optional error message to store in name.
+
+    Returns:
+        TcMaterial that renders as magenta.
+    """
+    # Include error in name for debugging
+    mat_name = name
+    if error_message:
+        mat_name = f"{name}: {error_message[:50]}"
+
+    mat = TcMaterial.create(mat_name, "")
+    mat.shader_name = "UnknownShader"
+
+    state = TcRenderState.opaque()
+    phase = mat.add_phase_from_sources(
+        vertex_source=UNKNOWN_VERT,
+        fragment_source=UNKNOWN_FRAG,
+        geometry_source="",
+        shader_name="UnknownShader",
+        phase_mark="opaque",
+        priority=0,
+        state=state,
+    )
+
+    if phase is not None:
+        # Magenta color
+        phase.set_color(1.0, 0.0, 1.0, 1.0)
+
+    return mat
 
 
-def get_unknown_shader() -> ShaderProgram:
-    """Get or create the unknown/missing shader."""
-    global _unknown_shader
-    if _unknown_shader is None:
-        _unknown_shader = ShaderProgram(
-            vertex_source=UNKNOWN_VERT,
-            fragment_source=UNKNOWN_FRAG
-        )
-    return _unknown_shader
+# Legacy function alias
+def get_unknown_shader():
+    """Deprecated: Use create_unknown_material() instead."""
+    raise NotImplementedError("get_unknown_shader() is deprecated. Use create_unknown_material() instead.")
 
 
-class UnknownMaterial(Material):
+class UnknownMaterial(TcMaterial):
     """
     Fallback material for missing/broken shaders and materials.
 
-    Renders as bright magenta (standard "missing" color) with simple
-    hemisphere lighting. Stores the original reference for debugging
-    and potential recovery.
-
-    Attributes:
-        original_shader: Name of the shader that was not found
-        original_material: Name of the material class that was not found
-        original_data: Serialized data that failed to deserialize
-        error_message: Description of what went wrong
+    Renders as bright magenta (standard "missing" color).
+    Returns TcMaterial.
     """
 
-    original_shader: str | None = None
-    original_material: str | None = None
-    original_data: dict | None = None
-    error_message: str | None = None
-
-    def __init__(
-        self,
+    def __new__(
+        cls,
         original_shader: str | None = None,
         original_material: str | None = None,
         original_data: dict | None = None,
         error_message: str | None = None,
-    ):
-        shader = get_unknown_shader()
-        super().__init__(shader=shader, color=(1.0, 0.0, 1.0, 1.0))
-
-        self.original_shader = original_shader
-        self.original_material = original_material
-        self.original_data = original_data
-        self.error_message = error_message
-
-    def serialize(self) -> dict:
-        """
-        Serialize preserving original data for recovery.
-
-        If original_data exists, return it unchanged so the scene
-        can be saved and loaded again when the missing resource
-        becomes available.
-        """
-        if self.original_data is not None:
-            return self.original_data
-
-        return {
-            "type": "UnknownMaterial",
-            "original_shader": self.original_shader,
-            "original_material": self.original_material,
-            "error_message": self.error_message,
-        }
+    ) -> TcMaterial:
+        # Build error message for debugging
+        msg = error_message
+        if not msg:
+            if original_shader:
+                msg = f"Missing shader: {original_shader}"
+            elif original_material:
+                msg = f"Missing material: {original_material}"
+        return create_unknown_material(error_message=msg)
 
     @classmethod
-    def for_missing_shader(cls, shader_name: str) -> "UnknownMaterial":
+    def for_missing_shader(cls, shader_name: str) -> TcMaterial:
         """Create UnknownMaterial for a missing shader."""
-        return cls(
-            original_shader=shader_name,
-            error_message=f"Shader not found: {shader_name}",
-        )
+        return create_unknown_material(error_message=f"Missing shader: {shader_name}")
 
     @classmethod
     def for_missing_material(
         cls,
         material_name: str,
         original_data: dict | None = None,
-    ) -> "UnknownMaterial":
+    ) -> TcMaterial:
         """Create UnknownMaterial for a missing material class."""
-        return cls(
-            original_material=material_name,
-            original_data=original_data,
-            error_message=f"Material class not found: {material_name}",
-        )
+        return create_unknown_material(error_message=f"Missing material: {material_name}")
 
     @classmethod
     def for_error(
         cls,
         error: Exception,
         original_data: dict | None = None,
-    ) -> "UnknownMaterial":
+    ) -> TcMaterial:
         """Create UnknownMaterial for a deserialization error."""
-        return cls(
-            original_data=original_data,
-            error_message=str(error),
-        )
-
-    def __repr__(self) -> str:
-        if self.original_shader:
-            return f"<UnknownMaterial shader={self.original_shader!r}>"
-        if self.original_material:
-            return f"<UnknownMaterial material={self.original_material!r}>"
-        return f"<UnknownMaterial error={self.error_message!r}>"
+        return create_unknown_material(error_message=str(error))

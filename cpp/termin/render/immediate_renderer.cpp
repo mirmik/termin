@@ -445,12 +445,10 @@ void ImmediateRenderer::arrow_solid(
 // ============================================================
 
 void ImmediateRenderer::_ensure_shader(GraphicsBackend* graphics) {
-    if (_shader) return;
+    if (_shader.is_valid()) return;
 
-    _shader = std::make_unique<ShaderProgram>(IMMEDIATE_VERT, IMMEDIATE_FRAG);
-    _shader->ensure_ready([graphics](const char* v, const char* f, const char* g) {
-        return graphics->create_shader(v, f, g);
-    });
+    _shader = TcShader::from_sources(IMMEDIATE_VERT, IMMEDIATE_FRAG, "", "ImmediateRenderer");
+    _shader.ensure_ready();
 }
 
 void ImmediateRenderer::_flush_buffers(
@@ -465,7 +463,7 @@ void ImmediateRenderer::_flush_buffers(
     if (lines.empty() && tris.empty()) return;
 
     _ensure_shader(graphics);
-    if (!_shader) return;
+    if (!_shader.is_valid()) return;
 
     // Setup render state
     RenderState state;
@@ -478,7 +476,7 @@ void ImmediateRenderer::_flush_buffers(
     graphics->apply_render_state(state);
 
     // Use shader and set uniforms
-    _shader->use();
+    _shader.use();
 
     // Convert Mat44 (double) to float for OpenGL
     float view_f[16], proj_f[16];
@@ -486,8 +484,8 @@ void ImmediateRenderer::_flush_buffers(
         view_f[i] = static_cast<float>(view_matrix.data[i]);
         proj_f[i] = static_cast<float>(proj_matrix.data[i]);
     }
-    _shader->set_uniform_matrix4("u_view", view_f, false);
-    _shader->set_uniform_matrix4("u_projection", proj_f, false);
+    _shader.set_uniform_mat4("u_view", view_f, false);
+    _shader.set_uniform_mat4("u_projection", proj_f, false);
 
     // Draw lines
     if (!lines.empty()) {
@@ -502,8 +500,6 @@ void ImmediateRenderer::_flush_buffers(
         graphics->draw_immediate_triangles(tris.data(), vertex_count);
         tris.clear();
     }
-
-    _shader->stop();
 }
 
 void ImmediateRenderer::flush(

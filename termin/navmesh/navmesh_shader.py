@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.render.shader import ShaderProgram
+from termin._native.render import TcShader
 
 
 NAVMESH_VERTEX_SHADER = """#version 330 core
@@ -53,9 +53,11 @@ void main() {
 """
 
 
-def navmesh_display_shader() -> ShaderProgram:
+def navmesh_display_shader() -> TcShader:
     """Creates shader for NavMesh display."""
-    return ShaderProgram(
-        vertex_source=NAVMESH_VERTEX_SHADER,
-        fragment_source=NAVMESH_FRAGMENT_SHADER,
+    return TcShader.from_sources(
+        NAVMESH_VERTEX_SHADER,
+        NAVMESH_FRAGMENT_SHADER,
+        "",
+        "NavMeshDisplay",
     )

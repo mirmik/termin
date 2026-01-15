@@ -77,7 +77,7 @@ void IdPass::execute_with_data(
     apply_default_render_state(graphics);
 
     // Get shader
-    ShaderProgram* shader = get_shader(graphics);
+    TcShader& shader = get_shader(graphics);
 
     // Import Python picking module for id_to_rgb cache
     nb::object py_id_to_rgb;
@@ -104,7 +104,6 @@ void IdPass::execute_with_data(
     context.context_key = context_key;
     context.graphics = graphics;
     context.phase = phase_name();
-    context.current_shader = shader;
     context.extra_uniforms = extra_uniforms;
 
     const std::string& debug_symbol = get_debug_internal_point();
@@ -139,7 +138,7 @@ void IdPass::execute_with_data(
         }
 
         // Get shader handle and apply override
-        tc_shader_handle base_handle = shader->tc_shader().handle;
+        tc_shader_handle base_handle = shader.handle;
         tc_shader_handle shader_handle = tc_component_override_shader(
             dc.component, phase_name(), dc.geometry_id, base_handle
         );
@@ -153,7 +152,6 @@ void IdPass::execute_with_data(
         shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
         shader_to_use.set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
 
-        context.current_shader = shader;  // Legacy
         context.current_tc_shader = shader_to_use;
 
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);

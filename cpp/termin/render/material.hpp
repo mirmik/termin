@@ -7,7 +7,6 @@
 #include <variant>
 #include <optional>
 
-#include "termin/render/shader_program.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/render_state.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
@@ -47,8 +46,8 @@ struct PhaseRenderSettings;
 
 class MaterialPhase {
 public:
-    // Shader program for this phase (shared - compiled once, used by many phases)
-    std::shared_ptr<ShaderProgram> shader;
+    // Shader for this phase (TcShader is reference-counted via tc_shader)
+    TcShader shader;
 
     // Render state (depth, blend, cull, etc.)
     RenderState render_state;
@@ -74,7 +73,7 @@ public:
     MaterialPhase() = default;
 
     MaterialPhase(
-        std::shared_ptr<ShaderProgram> shader_,
+        TcShader shader_,
         RenderState render_state_ = RenderState::opaque(),
         std::string phase_mark_ = "opaque",
         int priority_ = 0
@@ -130,39 +129,16 @@ public:
     );
 
     /**
-     * Apply uniforms to a specific shader (for shader override scenarios).
+     * Apply uniforms to a TcShader (for shader override).
      *
-     * Like apply(), but uses the provided shader instead of this->shader.
-     * Used when drawable overrides shader (e.g., for skinning injection).
-     *
-     * @param target_shader Shader to upload uniforms to
-     * @param model Model matrix
-     * @param view View matrix
-     * @param projection Projection matrix
-     * @param graphics Graphics backend
-     * @param context_key Context key for caching
-     */
-    void apply_to_shader(
-        ShaderProgram* target_shader,
-        const Mat44f& model,
-        const Mat44f& view,
-        const Mat44f& projection,
-        GraphicsBackend* graphics,
-        int64_t context_key = 0
-    );
-
-    /**
-     * Apply uniforms to a TcShader (for shader override with direct tc_gpu access).
-     *
-     * Used when drawable overrides shader and we use TcShader directly
-     * instead of ShaderProgram wrapper. Shader must already be in use.
+     * Used when drawable overrides shader. Shader must already be in use.
      *
      * @param target_shader TcShader to upload uniforms to (must be active)
      * @param model Model matrix
      * @param view View matrix
      * @param projection Projection matrix
      */
-    void apply_to_tc_shader(
+    void apply_to_shader(
         TcShader& target_shader,
         const Mat44f& model,
         const Mat44f& view,
@@ -215,7 +191,7 @@ public:
      * Create material with a single phase.
      */
     Material(
-        std::shared_ptr<ShaderProgram> shader,
+        TcShader shader,
         RenderState render_state = RenderState::opaque(),
         std::string phase_mark = "opaque",
         int priority = 0

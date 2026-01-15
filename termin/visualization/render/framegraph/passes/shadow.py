@@ -122,7 +122,7 @@ class ShadowPass(_ShadowPassNative):
             return
 
         # Set shadow shader for C++ (enables skinning injection)
-        self.shadow_shader_program = get_system_shader("shadow", ctx.graphics)
+        self.shadow_shader = get_system_shader("shadow")
 
         # Get camera matrices
         camera_view = ctx.camera.get_view_matrix().to_numpy_f32()

@@ -12,10 +12,10 @@ from termin._native import log
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
     from termin.visualization.core.material import Material
-    from termin.visualization.core.shader import ShaderProgram
+    from termin._native.render import TcShader
 
 # Callback type: (shader) -> None
-BeforeDrawCallback = Callable[["ShaderProgram"], None]
+BeforeDrawCallback = Callable[["TcShader"], None]
 
 
 class MaterialPostEffect(PostEffect):
@@ -102,7 +102,7 @@ class MaterialPostEffect(PostEffect):
         Called after the shader is bound but before drawing the quad.
 
         Args:
-            callback: Callable[[ShaderProgram], None] or None to clear.
+            callback: Callable[[TcShader], None] or None to clear.
         """
         self._before_draw = callback
 
@@ -181,7 +181,7 @@ class MaterialPostEffect(PostEffect):
             self._draw_passthrough(gfx, context_key, color_tex)
             return
 
-        shader.ensure_ready(gfx, context_key)
+        shader.ensure_ready()
         shader.use()
         gfx.check_gl_error(f"MaterialPostEffect({self.name}): after shader.use")
 
@@ -210,7 +210,7 @@ class MaterialPostEffect(PostEffect):
 
         # Set resolution uniform
         w, h = size
-        shader.set_uniform_vec2("u_resolution", np.array([w, h], dtype=np.float32))
+        shader.set_uniform_vec2("u_resolution", float(w), float(h))
         gfx.check_gl_error(f"MaterialPostEffect({self.name}): after resolution")
 
         # Bind material textures (starting from next available unit)
@@ -245,18 +245,18 @@ class MaterialPostEffect(PostEffect):
         elif isinstance(value, float):
             shader.set_uniform_float(name, value)
         elif isinstance(value, Vec3):
-            shader.set_uniform_vec3(name, np.array([value.x, value.y, value.z], dtype=np.float32))
+            shader.set_uniform_vec3(name, float(value.x), float(value.y), float(value.z))
         elif isinstance(value, Vec4):
-            shader.set_uniform_vec4(name, np.array([value.x, value.y, value.z, value.w], dtype=np.float32))
+            shader.set_uniform_vec4(name, float(value.x), float(value.y), float(value.z), float(value.w))
         elif isinstance(value, np.ndarray):
             if value.size == 2:
-                shader.set_uniform_vec2(name, value.astype(np.float32))
+                shader.set_uniform_vec2(name, float(value[0]), float(value[1]))
             elif value.size == 3:
-                shader.set_uniform_vec3(name, value.astype(np.float32))
+                shader.set_uniform_vec3(name, float(value[0]), float(value[1]), float(value[2]))
             elif value.size == 4:
-                shader.set_uniform_vec4(name, value.astype(np.float32))
+                shader.set_uniform_vec4(name, float(value[0]), float(value[1]), float(value[2]), float(value[3]))
             elif value.size == 16:
-                shader.set_uniform_matrix4(name, value.astype(np.float32))
+                shader.set_uniform_mat4(name, value.astype(np.float32).flatten().tolist(), False)
         elif isinstance(value, (list, tuple)):
             arr = np.array(value, dtype=np.float32)
             self._set_uniform(shader, name, arr)
@@ -271,7 +271,7 @@ class MaterialPostEffect(PostEffect):
         from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 
         shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready(gfx, context_key)
+        shader.ensure_ready()
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         color_tex.bind(0)

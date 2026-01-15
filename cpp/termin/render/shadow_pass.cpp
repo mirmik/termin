@@ -171,8 +171,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     }
 
     // Check shader is set from Python
-    if (!shadow_shader_program) {
-        tc::Log::error("ShadowPass: shadow_shader_program not set");
+    if (!shadow_shader) {
+        tc::Log::error("ShadowPass: shadow_shader not set");
         return results;
     }
 
@@ -285,13 +285,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             graphics->apply_render_state(render_state);
 
             // Setup shader
-            shadow_shader_program->use();
-            shadow_shader_program->set_uniform_matrix4("u_view", view_matrix, false);
-            shadow_shader_program->set_uniform_matrix4("u_projection", proj_matrix, false);
+            shadow_shader->use();
+            shadow_shader->set_uniform_mat4("u_view", view_matrix.data, false);
+            shadow_shader->set_uniform_mat4("u_projection", proj_matrix.data, false);
 
             context.view = view_matrix;
             context.projection = proj_matrix;
-            context.current_shader = shadow_shader_program;
+            context.current_tc_shader = *shadow_shader;
 
             // Render all shadow casters
             for (const auto& dc : draw_calls) {
@@ -299,7 +299,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
                 context.model = model;
 
                 // Get shader handle and apply override
-                tc_shader_handle base_handle = shadow_shader_program->tc_shader().handle;
+                tc_shader_handle base_handle = shadow_shader->handle;
                 tc_shader_handle shader_handle = tc_component_override_shader(
                     dc.component, "shadow", dc.geometry_id, base_handle
                 );
@@ -313,7 +313,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
                 shader_to_use.set_uniform_mat4("u_view", view_matrix.data, false);
                 shader_to_use.set_uniform_mat4("u_projection", proj_matrix.data, false);
 
-                context.current_shader = shadow_shader_program;  // Legacy
                 context.current_tc_shader = shader_to_use;
 
                 tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
@@ -324,8 +323,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
         }
     }
 
-    // Reset state: stop shader, unbind framebuffer, reset GL state
-    shadow_shader_program->stop();
+    // Reset state: unbind framebuffer, reset GL state
     graphics->bind_framebuffer(nullptr);
     graphics->reset_gl_state();
 

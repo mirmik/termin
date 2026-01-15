@@ -48,11 +48,13 @@ class SkyboxManager:
     def _create_gradient_skybox_material(self) -> "Material":
         """Create gradient skybox material."""
         from termin.visualization.core.material import Material
-        from termin.visualization.render.shader import ShaderProgram
+        from termin._native.render import TcShader
         from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_FRAGMENT_SHADER
-        shader = ShaderProgram(
-            vertex_source=SKYBOX_VERTEX_SHADER,
-            fragment_source=SKYBOX_FRAGMENT_SHADER,
+        shader = TcShader.from_sources(
+            SKYBOX_VERTEX_SHADER,
+            SKYBOX_FRAGMENT_SHADER,
+            "",
+            "SkyboxGradient",
         )
         material = Material(shader=shader)
         # Note: color is already None/unset by default
@@ -61,11 +63,13 @@ class SkyboxManager:
     def _create_solid_skybox_material(self) -> "Material":
         """Create solid color skybox material."""
         from termin.visualization.core.material import Material
-        from termin.visualization.render.shader import ShaderProgram
+        from termin._native.render import TcShader
         from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_SOLID_FRAGMENT_SHADER
-        shader = ShaderProgram(
-            vertex_source=SKYBOX_VERTEX_SHADER,
-            fragment_source=SKYBOX_SOLID_FRAGMENT_SHADER,
+        shader = TcShader.from_sources(
+            SKYBOX_VERTEX_SHADER,
+            SKYBOX_SOLID_FRAGMENT_SHADER,
+            "",
+            "SkyboxSolid",
         )
         material = Material(shader=shader)
         # Note: color is already None/unset by default
