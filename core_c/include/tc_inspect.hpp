@@ -146,8 +146,8 @@ inline nb::object tc_value_to_nb(const tc_value* v) {
     }
 
     case TC_VALUE_CUSTOM: {
-        // Custom types need kind handler to convert
-        const tc_kind_handler* h = tc_kind_get(v->kind);
+        // Custom types need custom type handler to convert
+        const tc_custom_type_handler* h = tc_custom_type_get(v->kind);
         if (h && h->serialize) {
             tc_value serialized = h->serialize(v);
             nb::object result = tc_value_to_nb(&serialized);
@@ -278,7 +278,7 @@ public:
 
     bool has_kind_handler(const std::string& kind) const {
         return KindRegistry::instance().get(kind) != nullptr
-            || tc_kind_exists(kind.c_str());
+            || tc_custom_type_exists(kind.c_str());
     }
 
     // Set callback for generating Python handlers (must be called from nanobind module)

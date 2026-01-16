@@ -113,7 +113,7 @@ void tc_value_free(tc_value* v) {
         break;
 
     case TC_VALUE_CUSTOM: {
-        const tc_kind_handler* h = tc_kind_get(v->kind);
+        const tc_custom_type_handler* h = tc_custom_type_get(v->kind);
         if (h && h->free_data) {
             h->free_data(v->data.custom);
         }
@@ -162,7 +162,7 @@ tc_value tc_value_copy(const tc_value* v) {
         break;
 
     case TC_VALUE_CUSTOM: {
-        const tc_kind_handler* h = tc_kind_get(v->kind);
+        const tc_custom_type_handler* h = tc_custom_type_get(v->kind);
         if (h && h->copy_data) {
             copy.data.custom = h->copy_data(v->data.custom);
         } else {
@@ -273,63 +273,59 @@ bool tc_value_dict_has(const tc_value* dict, const char* key) {
 }
 
 // ============================================================================
-// Kind handler registry
+// Custom type handler registry (for TC_VALUE_CUSTOM memory management)
 // ============================================================================
 
-#define MAX_KIND_HANDLERS 64
+#define MAX_CUSTOM_TYPE_HANDLERS 64
 
 static struct {
-    tc_kind_handler handlers[MAX_KIND_HANDLERS];
+    tc_custom_type_handler handlers[MAX_CUSTOM_TYPE_HANDLERS];
     size_t count;
-} g_kind_registry = {{{0}}, 0};
+} g_custom_type_registry = {{{0}}, 0};
 
-void tc_kind_register(const tc_kind_handler* handler) {
+void tc_custom_type_register(const tc_custom_type_handler* handler) {
     if (!handler || !handler->kind) return;
-    if (g_kind_registry.count >= MAX_KIND_HANDLERS) return;
+    if (g_custom_type_registry.count >= MAX_CUSTOM_TYPE_HANDLERS) return;
 
     // Check if already registered
-    for (size_t i = 0; i < g_kind_registry.count; i++) {
-        if (strcmp(g_kind_registry.handlers[i].kind, handler->kind) == 0) {
-            g_kind_registry.handlers[i] = *handler;
+    for (size_t i = 0; i < g_custom_type_registry.count; i++) {
+        if (strcmp(g_custom_type_registry.handlers[i].kind, handler->kind) == 0) {
+            g_custom_type_registry.handlers[i] = *handler;
             return;
         }
     }
 
-    g_kind_registry.handlers[g_kind_registry.count++] = *handler;
+    g_custom_type_registry.handlers[g_custom_type_registry.count++] = *handler;
 }
 
-void tc_kind_unregister(const char* kind) {
+void tc_custom_type_unregister(const char* kind) {
     if (!kind) return;
 
-    for (size_t i = 0; i < g_kind_registry.count; i++) {
-        if (strcmp(g_kind_registry.handlers[i].kind, kind) == 0) {
+    for (size_t i = 0; i < g_custom_type_registry.count; i++) {
+        if (strcmp(g_custom_type_registry.handlers[i].kind, kind) == 0) {
             // Shift remaining
-            for (size_t j = i; j < g_kind_registry.count - 1; j++) {
-                g_kind_registry.handlers[j] = g_kind_registry.handlers[j + 1];
+            for (size_t j = i; j < g_custom_type_registry.count - 1; j++) {
+                g_custom_type_registry.handlers[j] = g_custom_type_registry.handlers[j + 1];
             }
-            g_kind_registry.count--;
+            g_custom_type_registry.count--;
             return;
         }
     }
 }
 
-const tc_kind_handler* tc_kind_get(const char* kind) {
+const tc_custom_type_handler* tc_custom_type_get(const char* kind) {
     if (!kind) return NULL;
 
-    for (size_t i = 0; i < g_kind_registry.count; i++) {
-        if (strcmp(g_kind_registry.handlers[i].kind, kind) == 0) {
-            return &g_kind_registry.handlers[i];
+    for (size_t i = 0; i < g_custom_type_registry.count; i++) {
+        if (strcmp(g_custom_type_registry.handlers[i].kind, kind) == 0) {
+            return &g_custom_type_registry.handlers[i];
         }
     }
     return NULL;
 }
 
-bool tc_kind_exists(const char* kind) {
-    return tc_kind_get(kind) != NULL;
-}
-
-void tc_kind_cleanup(void) {
-    g_kind_registry.count = 0;
+bool tc_custom_type_exists(const char* kind) {
+    return tc_custom_type_get(kind) != NULL;
 }
 
 // ============================================================================
@@ -495,8 +491,8 @@ void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value
     const tc_field_desc* field = tc_inspect_find_field(type_name, path);
     if (!field) return;
 
-    // Apply convert if kind handler exists
-    const tc_kind_handler* h = tc_kind_get(field->kind);
+    // Apply convert if custom type handler exists
+    const tc_custom_type_handler* h = tc_custom_type_get(field->kind);
     if (h && h->convert) {
         tc_value converted = h->convert(&value);
         desc->vtable->set(obj, field, converted, desc->vtable->user_data);
@@ -532,8 +528,8 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
 
         tc_value val = tc_inspect_get(obj, type_name, f->path);
 
-        // Apply kind serializer if exists
-        const tc_kind_handler* h = tc_kind_get(f->kind);
+        // Apply custom type serializer if exists
+        const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
         if (h && h->serialize) {
             tc_value serialized = h->serialize(&val);
             tc_value_dict_set(&result, f->path, serialized);
@@ -557,8 +553,8 @@ void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* da
         tc_value* field_data = tc_value_dict_get((tc_value*)data, f->path);
         if (!field_data || field_data->type == TC_VALUE_NIL) continue;
 
-        // Apply kind deserializer if exists
-        const tc_kind_handler* h = tc_kind_get(f->kind);
+        // Apply custom type deserializer if exists
+        const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
         if (h && h->deserialize) {
             tc_value deserialized = h->deserialize(field_data);
             tc_inspect_set(obj, type_name, f->path, deserialized);

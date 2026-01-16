@@ -21,6 +21,7 @@ set(TC_SOURCES
     src/tc_pool.c
     src/tc_scene.c
     src/tc_inspect.c
+    src/tc_kind.c
     src/tc_mesh.c
     src/tc_mesh_registry.c
     src/tc_texture_registry.c
@@ -50,6 +51,7 @@ set(TC_HEADERS
     include/tc_resource_map.h
     include/tc_scene.h
     include/tc_inspect.h
+    include/tc_kind.h
     include/tc_mesh.h
     include/tc_mesh_registry.h
     include/tc_texture.h

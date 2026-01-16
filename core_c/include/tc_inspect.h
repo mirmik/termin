@@ -106,10 +106,11 @@ TC_API tc_value* tc_value_dict_get(tc_value* dict, const char* key);
 TC_API bool tc_value_dict_has(const tc_value* dict, const char* key);
 
 // ============================================================================
-// Kind handler - plugin mechanism for custom types
+// Custom type handler - for TC_VALUE_CUSTOM memory management
+// (Separate from tc_kind.h which handles language-specific serialization)
 // ============================================================================
 
-typedef struct tc_kind_handler {
+typedef struct tc_custom_type_handler {
     // Kind name (e.g., "mesh_handle", "entity_handle")
     const char* kind;
 
@@ -130,19 +131,19 @@ typedef struct tc_kind_handler {
     // Convert for setter (e.g., None → empty handle)
     // Can return same value if no conversion needed
     tc_value (*convert)(const tc_value* v);
-} tc_kind_handler;
+} tc_custom_type_handler;
 
-// Register a kind handler
-TC_API void tc_kind_register(const tc_kind_handler* handler);
+// Register a custom type handler
+TC_API void tc_custom_type_register(const tc_custom_type_handler* handler);
 
-// Unregister a kind handler
-TC_API void tc_kind_unregister(const char* kind);
+// Unregister a custom type handler
+TC_API void tc_custom_type_unregister(const char* kind);
 
-// Get handler for a kind (returns NULL if not registered)
-TC_API const tc_kind_handler* tc_kind_get(const char* kind);
+// Get handler for a custom type (returns NULL if not registered)
+TC_API const tc_custom_type_handler* tc_custom_type_get(const char* kind);
 
-// Check if kind is registered
-TC_API bool tc_kind_exists(const char* kind);
+// Check if custom type is registered
+TC_API bool tc_custom_type_exists(const char* kind);
 
 // ============================================================================
 // Field descriptor - metadata for one inspectable field
@@ -278,7 +279,6 @@ TC_API tc_value tc_value_from_json(const char* json);
 // ============================================================================
 
 TC_API void tc_inspect_cleanup(void);
-TC_API void tc_kind_cleanup(void);
 
 #ifdef __cplusplus
 }
