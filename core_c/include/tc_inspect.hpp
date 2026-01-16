@@ -765,6 +765,53 @@ public:
     }
 };
 
+// Context for SERIALIZABLE_FIELD (stores trent getter/setter functions)
+template<typename C>
+struct SerializableFieldTrentContext {
+    std::function<nos::trent(C*)> getter;
+    std::function<void(C*, const nos::trent&)> setter;
+};
+
+// Storage for serializable field contexts
+class SerializableFieldContextStorage {
+    std::vector<std::unique_ptr<void, void(*)(void*)>> contexts_;
+public:
+    static SerializableFieldContextStorage& instance() {
+        static SerializableFieldContextStorage storage;
+        return storage;
+    }
+
+    template<typename C>
+    SerializableFieldTrentContext<C>* store(
+        std::function<nos::trent(C*)> getter,
+        std::function<void(C*, const nos::trent&)> setter
+    ) {
+        auto* ctx = new SerializableFieldTrentContext<C>{std::move(getter), std::move(setter)};
+        contexts_.emplace_back(ctx, [](void* p) { delete static_cast<SerializableFieldTrentContext<C>*>(p); });
+        return ctx;
+    }
+};
+
+// Getter for SERIALIZABLE_FIELD (uses trent getter → tc_value)
+template<typename C>
+static tc_value serializable_field_getter(void* obj, const tc_field_desc* field, void* user_data) {
+    (void)field;
+    auto* ctx = static_cast<SerializableFieldTrentContext<C>*>(user_data);
+    C* instance = static_cast<C*>(obj);
+    nos::trent t = ctx->getter(instance);
+    return trent_to_tc_value(t);
+}
+
+// Setter for SERIALIZABLE_FIELD (uses tc_value → trent setter)
+template<typename C>
+static void serializable_field_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
+    (void)field;
+    auto* ctx = static_cast<SerializableFieldTrentContext<C>*>(user_data);
+    C* instance = static_cast<C*>(obj);
+    nos::trent t = tc_value_to_trent(&value);
+    ctx->setter(instance, t);
+}
+
 // Getter via KindRegistry (converts C++ value → trent → tc_value)
 template<typename C, typename T>
 static tc_value cpp_field_getter_via_kind(void* obj, const tc_field_desc* field, void* user_data) {
@@ -903,6 +950,23 @@ struct SerializableFieldRegistrar {
         // Access private member via friend-like workaround: add to _py_fields directly
         // Note: We need to add a method for this in InspectRegistry
         InspectRegistry::instance().add_serializable_field(type_name, std::move(info));
+
+        // Also register with C API for tc_inspect_serialize/deserialize
+        tc_field_desc desc = {};
+        desc.path = path;
+        desc.label = "";
+        desc.kind = "";
+        desc.is_serializable = true;
+        desc.is_inspectable = false;
+        tc_inspect_add_field(type_name, &desc);
+
+        // Set up vtable for C API
+        auto* ctx = SerializableFieldContextStorage::instance().store<C>(getter, setter);
+        tc_field_vtable vtable = {};
+        vtable.get = serializable_field_getter<C>;
+        vtable.set = serializable_field_setter<C>;
+        vtable.user_data = ctx;
+        tc_inspect_set_field_vtable(type_name, path, TC_INSPECT_LANG_CPP, &vtable);
     }
 };
 

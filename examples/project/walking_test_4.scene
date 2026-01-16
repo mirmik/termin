@@ -191,57 +191,7 @@
                     "type": "uuid"
                   },
                   "cast_shadow": true,
-                  "_override_material": true,
-                  "_overridden_material_data": {
-                    "phases_uniforms": [
-                      {
-                        "u_diffuse_mul": 3.1414999961853027,
-                        "u_color": [
-                          0.4899366796016693,
-                          0.13119706511497498,
-                          0.13119706511497498,
-                          1
-                        ]
-                      },
-                      {
-                        "u_color": [
-                          0.4899366796016693,
-                          0.13119706511497498,
-                          0.13119706511497498,
-                          1
-                        ],
-                        "u_metallic": 0,
-                        "u_roughness": 0.5,
-                        "u_subsurface": 0,
-                        "u_diffuse_mul": 3.1414999961853027,
-                        "u_emission_color": [
-                          0,
-                          0,
-                          0,
-                          1
-                        ],
-                        "u_emission_intensity": 0,
-                        "u_normal_strength": 1
-                      }
-                    ],
-                    "phases_textures": [
-                      {},
-                      {
-                        "u_albedo_texture": {
-                          "uuid": "5fb7972ad02ddfad",
-                          "name": "__white_1x1__",
-                          "type": "path",
-                          "path": "__white_1x1__"
-                        },
-                        "u_normal_texture": {
-                          "uuid": "07151644d3bb92c7",
-                          "name": "__normal_1x1__",
-                          "type": "path",
-                          "path": "__normal_1x1__"
-                        }
-                      }
-                    ]
-                  }
+                  "_override_material": true
                 }
               },
               {
@@ -304,58 +254,7 @@
                     "type": "uuid"
                   },
                   "cast_shadow": true,
-                  "_override_material": true,
-                  "_overridden_material_data": {
-                    "phases_uniforms": [
-                      {
-                        "u_diffuse_mul": 3.1414999961853027
-                      },
-                      {
-                        "u_color": [
-                          1,
-                          1,
-                          1,
-                          1
-                        ],
-                        "u_metallic": 0,
-                        "u_roughness": 0.5,
-                        "u_subsurface": 0,
-                        "u_diffuse_mul": 3.1414999961853027,
-                        "u_emission_color": [
-                          0,
-                          0,
-                          0,
-                          1
-                        ],
-                        "u_emission_intensity": 0,
-                        "u_normal_strength": 1
-                      }
-                    ],
-                    "phases_textures": [
-                      {
-                        "u_albedo_texture": {
-                          "uuid": "74f0793b957fdb78",
-                          "name": "6830-1745580165",
-                          "type": "path",
-                          "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
-                        }
-                      },
-                      {
-                        "u_albedo_texture": {
-                          "uuid": "74f0793b957fdb78",
-                          "name": "6830-1745580165",
-                          "type": "path",
-                          "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
-                        },
-                        "u_normal_texture": {
-                          "uuid": "07151644d3bb92c7",
-                          "name": "__normal_1x1__",
-                          "type": "path",
-                          "path": "__normal_1x1__"
-                        }
-                      }
-                    ]
-                  }
+                  "_override_material": false
                 }
               },
               {
@@ -4282,58 +4181,7 @@
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": true,
-                      "_overridden_material_data": {
-                        "phases_uniforms": [
-                          {
-                            "u_diffuse_mul": 3.1414999961853027
-                          },
-                          {
-                            "u_color": [
-                              1,
-                              1,
-                              1,
-                              1
-                            ],
-                            "u_metallic": 0,
-                            "u_roughness": 0.5,
-                            "u_subsurface": 0,
-                            "u_diffuse_mul": 3.1414999961853027,
-                            "u_emission_color": [
-                              0,
-                              0,
-                              0,
-                              1
-                            ],
-                            "u_emission_intensity": 0,
-                            "u_normal_strength": 1
-                          }
-                        ],
-                        "phases_textures": [
-                          {
-                            "u_albedo_texture": {
-                              "uuid": "74f0793b957fdb78",
-                              "name": "6830-1745580165",
-                              "type": "path",
-                              "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
-                            }
-                          },
-                          {
-                            "u_albedo_texture": {
-                              "uuid": "74f0793b957fdb78",
-                              "name": "6830-1745580165",
-                              "type": "path",
-                              "path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
-                            },
-                            "u_normal_texture": {
-                              "uuid": "07151644d3bb92c7",
-                              "name": "__normal_1x1__",
-                              "type": "path",
-                              "path": "__normal_1x1__"
-                            }
-                          }
-                        ]
-                      }
+                      "_override_material": true
                     }
                   }
                 ],
@@ -4429,57 +4277,7 @@
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": true,
-                      "_overridden_material_data": {
-                        "phases_uniforms": [
-                          {
-                            "u_color": [
-                              0.15655755996704102,
-                              0.31000229716300964,
-                              0.20257876813411713,
-                              1
-                            ],
-                            "u_diffuse_mul": 1
-                          },
-                          {
-                            "u_color": [
-                              0.15655755996704102,
-                              0.31000229716300964,
-                              0.20257876813411713,
-                              1
-                            ],
-                            "u_metallic": 0,
-                            "u_roughness": 0.5,
-                            "u_subsurface": 0,
-                            "u_diffuse_mul": 1,
-                            "u_emission_color": [
-                              0,
-                              0,
-                              0,
-                              1
-                            ],
-                            "u_emission_intensity": 0,
-                            "u_normal_strength": 1
-                          }
-                        ],
-                        "phases_textures": [
-                          {},
-                          {
-                            "u_albedo_texture": {
-                              "uuid": "5fb7972ad02ddfad",
-                              "name": "__white_1x1__",
-                              "type": "path",
-                              "path": "__white_1x1__"
-                            },
-                            "u_normal_texture": {
-                              "uuid": "07151644d3bb92c7",
-                              "name": "__normal_1x1__",
-                              "type": "path",
-                              "path": "__normal_1x1__"
-                            }
-                          }
-                        ]
-                      }
+                      "_override_material": true
                     }
                   }
                 ],
@@ -5951,57 +5749,7 @@
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": true,
-                      "_overridden_material_data": {
-                        "phases_uniforms": [
-                          {
-                            "u_diffuse_mul": 3.1414999961853027,
-                            "u_color": [
-                              0.5503318905830383,
-                              0.018661784008145332,
-                              0.018661784008145332,
-                              1
-                            ]
-                          },
-                          {
-                            "u_color": [
-                              0.5503318905830383,
-                              0.018661784008145332,
-                              0.018661784008145332,
-                              1
-                            ],
-                            "u_metallic": 0,
-                            "u_roughness": 0.5,
-                            "u_subsurface": 0,
-                            "u_diffuse_mul": 3.1414999961853027,
-                            "u_emission_color": [
-                              0,
-                              0,
-                              0,
-                              1
-                            ],
-                            "u_emission_intensity": 0,
-                            "u_normal_strength": 1
-                          }
-                        ],
-                        "phases_textures": [
-                          {},
-                          {
-                            "u_albedo_texture": {
-                              "uuid": "5fb7972ad02ddfad",
-                              "name": "__white_1x1__",
-                              "type": "path",
-                              "path": "__white_1x1__"
-                            },
-                            "u_normal_texture": {
-                              "uuid": "07151644d3bb92c7",
-                              "name": "__normal_1x1__",
-                              "type": "path",
-                              "path": "__normal_1x1__"
-                            }
-                          }
-                        ]
-                      }
+                      "_override_material": true
                     }
                   }
                 ],
@@ -9187,64 +8935,7 @@
                 "type": "uuid"
               },
               "cast_shadow": true,
-              "_override_material": true,
-              "_overridden_material_data": {
-                "phases_uniforms": [
-                  {
-                    "u_diffuse_mul": 3.1414999961853027,
-                    "u_emission_intensity": 2,
-                    "u_color": [
-                      0.34726482629776,
-                      0.7852292656898499,
-                      0.15172044932842255,
-                      1
-                    ],
-                    "u_emission_color": [
-                      0.7799344062805176,
-                      0.8389257788658142,
-                      0.16209658980369568,
-                      1
-                    ]
-                  },
-                  {
-                    "u_color": [
-                      0.34726482629776,
-                      0.7852292656898499,
-                      0.15172044932842255,
-                      1
-                    ],
-                    "u_metallic": 0,
-                    "u_roughness": 0.5,
-                    "u_subsurface": 0,
-                    "u_diffuse_mul": 1,
-                    "u_emission_color": [
-                      0.7799344062805176,
-                      0.8389257788658142,
-                      0.16209658980369568,
-                      1
-                    ],
-                    "u_emission_intensity": 2,
-                    "u_normal_strength": 1
-                  }
-                ],
-                "phases_textures": [
-                  {},
-                  {
-                    "u_albedo_texture": {
-                      "uuid": "5fb7972ad02ddfad",
-                      "name": "__white_1x1__",
-                      "type": "path",
-                      "path": "__white_1x1__"
-                    },
-                    "u_normal_texture": {
-                      "uuid": "07151644d3bb92c7",
-                      "name": "__normal_1x1__",
-                      "type": "path",
-                      "path": "__normal_1x1__"
-                    }
-                  }
-                ]
-              }
+              "_override_material": true
             }
           }
         ],
@@ -9292,22 +8983,7 @@
                 "type": "uuid"
               },
               "cast_shadow": true,
-              "_override_material": true,
-              "_overridden_material_data": {
-                "phases_uniforms": [
-                  {
-                    "u_color": [
-                      0.1266193687915802,
-                      0.7099260091781616,
-                      0.7183032035827637,
-                      0.5
-                    ]
-                  }
-                ],
-                "phases_textures": [
-                  {}
-                ]
-              }
+              "_override_material": true
             }
           }
         ],
@@ -12071,17 +11747,17 @@
   "editor": {
     "camera": {
       "position": [
-        3.300598621368408,
-        -2.672281503677368,
-        2.933279514312744
+        2.9080896377563477,
+        -2.285170555114746,
+        2.8080544471740723
       ],
       "rotation": [
-        -0.2664463115838708,
-        -0.15321342660131937,
-        0.4743581743981223,
-        0.8249341375734875
+        -0.2807740492643869,
+        -0.16803981735144155,
+        0.4852703091880192,
+        0.810827527939659
       ],
-      "radius": 5.5,
+      "radius": 5.0,
       "editor_entities": {
         "camera": [
           {
@@ -12099,7 +11775,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 5.5,
+              "radius": 5.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12133,14 +11809,15 @@
         ]
       }
     },
+    "selected_entity": "0000000000000140",
     "expanded_entities": [
-      "0000000000000131",
-      "0000000000000130",
-      "000000000000000a",
-      "814ba329-db24-48fe-b931-fe68ab904998",
-      "0000000000000077",
       "0000000000000007",
-      "00000000000000dd"
+      "000000000000000a",
+      "00000000000000dd",
+      "814ba329-db24-48fe-b931-fe68ab904998",
+      "0000000000000131",
+      "0000000000000077",
+      "0000000000000130"
     ]
   },
   "resources": {

@@ -688,15 +688,11 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
     tc_value result = tc_value_dict_new();
 
     size_t count = tc_inspect_field_count(type_name);
-    tc_log(TC_LOG_INFO, "[tc_inspect_serialize] type=%s field_count=%zu", type_name, count);
-
     for (size_t i = 0; i < count; i++) {
         const tc_field_desc* f = tc_inspect_field_at(type_name, i);
         if (!f || !f->is_serializable) continue;
 
         tc_value val = tc_inspect_get(obj, type_name, f->path);
-        tc_log(TC_LOG_INFO, "[tc_inspect_serialize] %s.%s kind=%s val.type=%d",
-            type_name, f->path, f->kind ? f->kind : "NULL", val.type);
         if (val.type == TC_VALUE_NIL) continue;
 
         // Try tc_kind serialization first (language-agnostic)

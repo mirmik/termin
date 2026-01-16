@@ -16,6 +16,7 @@
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
 #include "../../../../core_c/include/tc_scene.h"
+#include "../../../../core_c/include/tc_inspect.hpp"
 
 namespace nb = nanobind;
 
@@ -559,8 +560,10 @@ void bind_entity_class(nb::module_& m) {
                                 if (nb::isinstance<nb::dict>(data_field)) {
                                     nb::dict data_dict = nb::cast<nb::dict>(data_field);
                                     void* raw_ptr = nb::inst_ptr<void>(comp);
-                                    InspectRegistry::instance().deserialize_component_fields_over_python(
-                                        raw_ptr, comp, type_name, data_dict, c_scene);
+                                    // Use C API for deserialization
+                                    tc_value tc_data = tc::nb_to_tc_value(data_dict);
+                                    tc_inspect_deserialize_with_scene(raw_ptr, type_name.c_str(), &tc_data, c_scene);
+                                    tc_value_free(&tc_data);
                                 }
                             } else {
                                 if (nb::hasattr(comp, "deserialize_data")) {
@@ -762,8 +765,10 @@ void bind_entity_class(nb::module_& m) {
                             if (nb::isinstance<nb::dict>(data_field)) {
                                 nb::dict data_dict = nb::cast<nb::dict>(data_field);
                                 void* raw_ptr = nb::inst_ptr<void>(comp);
-                                InspectRegistry::instance().deserialize_component_fields_over_python(
-                                    raw_ptr, comp, type_name, data_dict, c_scene);
+                                // Use C API for deserialization
+                                tc_value tc_data = tc::nb_to_tc_value(data_dict);
+                                tc_inspect_deserialize_with_scene(raw_ptr, type_name.c_str(), &tc_data, c_scene);
+                                tc_value_free(&tc_data);
                             }
                         } else {
                             if (nb::hasattr(comp, "deserialize_data")) {

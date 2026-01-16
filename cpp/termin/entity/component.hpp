@@ -8,6 +8,7 @@
 #include "../../trent/trent.h"
 #include "../inspect/inspect_registry.hpp"
 #include "../../../core_c/include/tc_component.h"
+#include "../../../core_c/include/tc_inspect.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
 #include "entity.hpp"
 
@@ -98,27 +99,26 @@ public:
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
 
-    // Serialization - uses C API (tc_inspect) for INSPECT_FIELD properties.
-    // DO NOT OVERRIDE in derived components!
+    // Serialization - uses C API tc_inspect for INSPECT_FIELD properties.
     virtual nos::trent serialize_data() const {
-        tc_value result = tc_inspect_serialize(
+        tc_value v = tc_inspect_serialize(
             const_cast<void*>(static_cast<const void*>(this)),
             type_name()
         );
-        nos::trent t = tc::tc_value_to_trent(&result);
-        tc_value_free(&result);
-        return t;
+        nos::trent result = tc::tc_value_to_trent(&v);
+        tc_value_free(&v);
+        return result;
     }
 
     virtual void deserialize_data(const nos::trent& data, tc_scene* scene = nullptr) {
-        tc_value tc_data = tc::trent_to_tc_value(data);
+        tc_value v = tc::trent_to_tc_value(data);
         tc_inspect_deserialize_with_scene(
             static_cast<void*>(this),
             type_name(),
-            &tc_data,
+            &v,
             scene
         );
-        tc_value_free(&tc_data);
+        tc_value_free(&v);
     }
 
     nos::trent serialize() const {
