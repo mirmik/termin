@@ -19,7 +19,7 @@ class SkyboxRenderer(MeshRenderer):
         view_no_translation[:3, 3] = 0.0
         context.graphics.set_depth_mask(False)
         context.graphics.set_depth_func("lequal")
-        self.material.apply(self.entity.model_matrix(), view_no_translation, context.projection, graphics=context.graphics, context_key=context.context_key)
+        self.material.apply(self.entity.model_matrix(), view_no_translation, context.projection)
 
         # Draw via MeshGPU (mesh is inherited from MeshRenderer)
         if self.mesh.is_valid:

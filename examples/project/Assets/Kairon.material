@@ -1,9 +1,7 @@
 {
   "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
-  "shader": "DefaultShader",
-  "phase_marks": [
-    "opaque"
-  ],
+  "shader": "CookTorrancePBR",
+  "shader_uuid": "09e2dae3-6096-4fb1-9cd2-2e07c87706b4",
   "uniforms": {
     "u_color": [
       1.0,
@@ -11,13 +9,17 @@
       1.0,
       1.0
     ],
-    "u_emission_intensity": 0.0,
     "u_shininess": 32.0,
     "u_emission_color": [
       0.0,
       0.0,
       0.0,
       1.0
-    ]
+    ],
+    "u_emission_intensity": 0.0,
+    "u_diffuse_mul": 3.140000104904175
+  },
+  "textures": {
+    "u_albedo_texture": "3deafdca-0c04-4e23-97eb-2e1bd76f98e9"
   }
 }

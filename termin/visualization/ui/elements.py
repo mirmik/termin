@@ -68,7 +68,7 @@ class UIRectangle(UIElement):
 
     def draw(self, canvas, graphics, context_key: int, viewport_rect: Tuple[int, int, int, int]):
         material = self._require_material()
-        material.apply(IDENTITY, IDENTITY, IDENTITY, graphics=graphics, context_key=context_key)
+        material.apply(IDENTITY, IDENTITY, IDENTITY)
         vertices = self._to_clip_vertices()
         shader = material.shader
         shader.set_uniform_vec4("u_color", np.array(self.color, dtype=np.float32))
@@ -86,7 +86,7 @@ class UIText(UIElement):
 
     def draw(self, canvas, graphics, context_key, viewport):
         material = self._require_material()
-        material.apply(IDENTITY, IDENTITY, IDENTITY, graphics=graphics, context_key=context_key)
+        material.apply(IDENTITY, IDENTITY, IDENTITY)
 
         shader = material.shader
         shader.set_uniform_vec4("u_color", np.array(self.color, dtype=np.float32))

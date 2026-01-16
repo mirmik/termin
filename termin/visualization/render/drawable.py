@@ -12,8 +12,8 @@ Drawable protocol — унифицированный интерфейс для �
     # ColorPass спрашивает фазы у Drawable, применяет их и рисует
     for drawable in drawables:
         for draw_call in drawable.get_geometry_draws(phase_mark):
-            graphics.apply_render_state(draw_call.phase.render_state)
-            draw_call.phase.apply(model, view, projection, graphics, context_key)
+            graphics.apply_render_state(draw_call.phase.state)
+            material.apply(model, view, projection)
             drawable.draw_geometry(context, draw_call.geometry_id)
 
     # ShadowPass использует свой шейдер

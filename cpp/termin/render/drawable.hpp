@@ -9,7 +9,6 @@ extern "C" {
 #include "termin_core.h"
 }
 
-#include "termin/render/material.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"

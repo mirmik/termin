@@ -238,6 +238,17 @@ class AssetsMixin:
             self.shaders[name] = asset.program
         return asset.program
 
+    def get_shader_by_uuid(self, uuid: str) -> Optional["ShaderMultyPhaseProgramm"]:
+        """Get shader by UUID (lazy loading)."""
+        from termin.assets.shader_asset import ShaderAsset
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is None or not isinstance(asset, ShaderAsset):
+            return None
+        if asset.program is None:
+            if not asset.ensure_loaded():
+                return None
+        return asset.program
+
     def list_shader_names(self) -> list[str]:
         names = set(self._shader_assets.keys()) | set(self.shaders.keys())
         return sorted(names)
@@ -611,6 +622,8 @@ class AssetsMixin:
 
     def find_texture_name(self, texture) -> Optional[str]:
         from termin.assets.texture_handle import TextureHandle
+        from termin.texture import TcTexture
+
         if isinstance(texture, TextureHandle):
             # Get asset from handle and compare by uuid
             asset = texture.asset
@@ -624,6 +637,18 @@ class AssetsMixin:
                     pass
             # Fallback to registry method
             return self._texture_registry.find_name(texture)
+        elif isinstance(texture, TcTexture):
+            # TcTexture from material bindings - find by uuid
+            tex_uuid = texture.uuid
+            if tex_uuid:
+                for name, a in self._texture_registry.assets.items():
+                    if a.uuid == tex_uuid:
+                        return name
+            # Fallback to name match
+            tex_name = texture.name
+            if tex_name and tex_name in self._texture_registry.assets:
+                return tex_name
+            return None
         else:
             for n, a in self._texture_assets.items():
                 if a is texture:

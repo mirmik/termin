@@ -335,7 +335,6 @@ nanobind_add_module(_native
     termin/render/immediate_renderer.cpp
     termin/render/wireframe_renderer.cpp
     termin/render/solid_primitive_renderer.cpp
-    termin/render/material.cpp
     termin/render/glsl_preprocessor.cpp
     termin/render/mesh_gpu.cpp
     termin/texture/tc_texture_handle.cpp

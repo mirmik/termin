@@ -454,15 +454,8 @@ void ColorPass::execute_with_data(
         // Lighting UBO binding
         // Note: AMD requires glBindBufferBase AFTER glUniformBlockBinding
         // Also AMD requires UBO to be unbound when shader doesn't use it
-        static int ubo_debug_count = 0;
         if (ubo_active) {
-            bool has_ubo_feature = shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO);
-            if (ubo_debug_count < 5) {
-                tc::Log::info("[ColorPass] shader='%s' has_lighting_ubo=%d features=%u",
-                             shader_to_use.name(), has_ubo_feature ? 1 : 0, shader_to_use.features());
-                ubo_debug_count++;
-            }
-            if (has_ubo_feature) {
+            if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
                 lighting_ubo_.bind();
             } else {

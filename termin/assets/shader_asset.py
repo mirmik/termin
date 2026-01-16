@@ -34,12 +34,14 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     """Update material's shader with proper phase UUIDs for hot-reload.
 
     Args:
-        material: Material to update
+        material: TcMaterial to update
         program: ShaderMultyPhaseProgramm - new shader program
         shader_name: Shader name
         shader_uuid: Shader asset UUID
     """
-    from termin.visualization.core.material import MaterialPhase
+    from termin._native.render import TcRenderState
+    from termin.assets.material_asset import _build_render_state, _apply_uniform_defaults, _apply_texture_defaults
+    from termin.assets.resources import ResourceManager
 
     if not program.phases:
         raise ValueError("Program has no phases")
@@ -47,39 +49,71 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     # Preserve existing uniforms/textures from first phase
     old_uniforms = {}
     old_textures = {}
-    old_color = None
-    if material.phases:
-        old_uniforms = dict(material.phases[0].uniforms)
-        old_textures = dict(material.phases[0].textures)
-        old_color = material.phases[0].color
+    if material.phase_count > 0:
+        phase = material.get_phase(0)
+        if phase is not None:
+            old_uniforms = dict(phase.uniforms)
+            old_textures = dict(phase.textures)
 
-    # Rebuild phases (must use list assignment, not append - nanobind returns copy)
+    # Clear existing phases and rebuild
+    material.clear_phases()
     material.shader_name = shader_name or program.program
 
-    phases_list = []
-    for shader_phase in program.phases:
-        # Generate deterministic UUID for this phase
-        phase_uuid = make_phase_uuid(shader_uuid, shader_phase.phase_mark) if shader_uuid else ""
+    rm = ResourceManager.instance()
 
-        phase = MaterialPhase.from_shader_phase(
-            shader_phase,
-            color=old_color,
-            textures=None,
-            extra_uniforms=None,
-            program_name=shader_name or program.program,
-            phase_uuid=phase_uuid,
-            features=program.features,
+    for shader_phase in program.phases:
+        # Get shader sources
+        vertex_source = ""
+        fragment_source = ""
+        geometry_source = ""
+
+        if "vertex" in shader_phase.stages:
+            vertex_source = shader_phase.stages["vertex"].source
+        if "fragment" in shader_phase.stages:
+            fragment_source = shader_phase.stages["fragment"].source
+        if "geometry" in shader_phase.stages:
+            geometry_source = shader_phase.stages["geometry"].source
+
+        if not vertex_source or not fragment_source:
+            log.warning(f"[update_material_shader] Phase missing vertex or fragment shader")
+            continue
+
+        # Build render state
+        state = _build_render_state(shader_phase, shader_phase.phase_mark)
+
+        # Add phase
+        phase = material.add_phase_from_sources(
+            vertex_source=vertex_source,
+            fragment_source=fragment_source,
+            geometry_source=geometry_source,
+            shader_name=shader_name or program.program,
+            phase_mark=shader_phase.phase_mark,
+            priority=shader_phase.priority,
+            state=state,
         )
 
-        # Restore old textures and uniforms
-        for key, val in old_textures.items():
-            phase.textures[key] = val
-        for key, val in old_uniforms.items():
-            phase.uniforms[key] = val
+        if phase is None:
+            log.error(f"[update_material_shader] Failed to add phase")
+            continue
 
-        phases_list.append(phase)
+        # Apply shader features
+        shader = phase.shader
+        for feature in program.features:
+            if feature == "lighting_ubo":
+                shader.set_feature(1)
 
-    material.phases = phases_list
+        # Set available marks
+        if shader_phase.available_marks:
+            phase.set_available_marks(shader_phase.available_marks)
+
+        # Apply uniform defaults from shader, then restore old values
+        _apply_uniform_defaults(phase, shader_phase, old_uniforms)
+
+        # Apply texture defaults, then restore old textures
+        _apply_texture_defaults(phase, shader_phase, rm)
+        for key, tex in old_textures.items():
+            if tex is not None and tex.is_valid:
+                phase.set_texture(key, tex)
 
 
 class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):

@@ -99,6 +99,13 @@ void bind_shader(nb::module_& m) {
         .def("set_uniform_mat4", [](TcShader& self, const char* name, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> m, bool transpose) {
             self.set_uniform_mat4(name, m.data(), transpose);
         }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
+        .def("set_uniform_mat4", [](TcShader& self, const char* name, const Mat44f& m, bool transpose) {
+            self.set_uniform_mat4(name, m.data, transpose);
+        }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
+        .def("set_uniform_mat4", [](TcShader& self, const char* name, const Mat44& m, bool transpose) {
+            Mat44f mf = m.to_float();
+            self.set_uniform_mat4(name, mf.data, transpose);
+        }, nb::arg("name"), nb::arg("matrix"), nb::arg("transpose") = true)
         .def("set_uniform_mat4_array", [](TcShader& self, const char* name, nb::ndarray<nb::numpy, float> m, int count, bool transpose) {
             self.set_uniform_mat4_array(name, m.data(), count, transpose);
         }, nb::arg("name"), nb::arg("matrices"), nb::arg("count"), nb::arg("transpose") = true)

@@ -156,8 +156,8 @@ class TimeModifierController(PythonComponent):
             view = self._camera.view_matrix()
             proj = self._camera.projection_matrix()
 
-            shader.set_uniform_mat4("u_inv_view", view.inverse().data, False)
-            shader.set_uniform_mat4("u_inv_proj", proj.inverse().data, False)
+            shader.set_uniform_mat4("u_inv_view", view.inverse(), False)
+            shader.set_uniform_mat4("u_inv_proj", proj.inverse(), False)
 
             shader.set_uniform_float("u_grid_scale", 1.0)
             shader.set_uniform_float("u_grid_line_width", 0.03)

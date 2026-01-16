@@ -270,6 +270,9 @@ def _apply_texture_defaults(phase, shader_phase, rm):
         tc_tex = tex_handle.get()
         if tc_tex is not None:
             phase.set_texture(name, tc_tex)
+            log.info(f"[MaterialAsset] Set default texture '{name}' -> {tc_tex.uuid}")
+        else:
+            log.warn(f"[MaterialAsset] Failed to get default texture for '{name}'")
 
 
 def _parse_material_content(
@@ -294,15 +297,22 @@ def _parse_material_content(
 
     data = json.loads(content)
 
+    shader_uuid = data.get("shader_uuid")
     shader_name = data.get("shader", "DefaultShader")
     file_uuid = data.get("uuid")
     phase_marks = data.get("phase_marks", [])  # Per-phase mark overrides
 
     rm = ResourceManager.instance()
-    program = rm.get_shader(shader_name)
+
+    # Try to load shader by UUID first, fallback to name
+    program = None
+    if shader_uuid:
+        program = rm.get_shader_by_uuid(shader_uuid)
+    if program is None:
+        program = rm.get_shader(shader_name)
 
     if program is None:
-        log.error(f"[MaterialAsset] Shader '{shader_name}' not found, creating empty material")
+        log.error(f"[MaterialAsset] Shader not found (uuid={shader_uuid}, name={shader_name}), creating empty material")
         mat = TcMaterial.create(name or "unknown", file_uuid or "")
         mat.shader_name = shader_name
         if source_path:
@@ -323,13 +333,16 @@ def _parse_material_content(
         else:
             uniforms[uname] = value
 
-    # Load textures by name from ResourceManager
+    # Load textures by asset UUID
     textures_data = data.get("textures", {})
     textures = {}
-    for uniform_name, tex_name in textures_data.items():
-        tex_handle = rm.get_texture_handle(tex_name)
-        if tex_handle is not None:
-            textures[uniform_name] = tex_handle
+    for uniform_name, tex_asset_uuid in textures_data.items():
+        # Find TextureAsset by UUID
+        asset = rm._assets_by_uuid.get(tex_asset_uuid)
+        if asset is not None and asset.texture_data is not None:
+            textures[uniform_name] = asset.texture_data
+        else:
+            log.warning(f"[MaterialAsset] Texture asset not found by UUID: {tex_asset_uuid}")
 
     # Create TcMaterial
     mat = TcMaterial.create(name or "material", file_uuid or "")
@@ -383,7 +396,6 @@ def _parse_material_content(
         for feature in program.features:
             if feature == "lighting_ubo":
                 shader.set_feature(1)  # TC_SHADER_FEATURE_LIGHTING_UBO = 1
-                log.info(f"[MaterialAsset] Applied lighting_ubo feature to shader '{shader_name}'")
 
         # Set available marks
         if shader_phase.available_marks:
@@ -396,10 +408,8 @@ def _parse_material_content(
         _apply_texture_defaults(phase, shader_phase, rm)
 
         # Apply textures from .material file (override defaults)
-        for tex_name, tex_handle in textures.items():
-            # TextureHandle.get() returns TcTexture
-            tc_tex = tex_handle.get() if tex_handle else None
-            if tc_tex is not None:
+        for tex_name, tc_tex in textures.items():
+            if tc_tex is not None and tc_tex.is_valid:
                 phase.set_texture(tex_name, tc_tex)
 
     return mat, file_uuid
@@ -434,13 +444,27 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         uuid: UUID to include in file
     """
     from termin._native.render import TcMaterial
+    from termin.geombase import Vec3, Vec4
+    from termin.assets.resources import ResourceManager
+
+    shader_name = material.shader_name
+
+    # Get shader UUID from ResourceManager
+    shader_uuid = ""
+    if shader_name:
+        rm = ResourceManager.instance()
+        shader_asset = rm.get_shader_asset(shader_name)
+        if shader_asset is not None:
+            shader_uuid = shader_asset.uuid
 
     result: Dict[str, Any] = {
         "uuid": uuid,
-        "shader": material.shader_name if hasattr(material, 'shader_name') else "",
+        "shader": shader_name,
     }
+    if shader_uuid:
+        result["shader_uuid"] = shader_uuid
 
-    # For TcMaterial, save phase marks if available
+    # For TcMaterial, save phase marks, uniforms, and textures
     if isinstance(material, TcMaterial):
         phase_marks = []
         has_overrides = False
@@ -456,6 +480,45 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
                     phase_marks.append("")
         if has_overrides:
             result["phase_marks"] = phase_marks
+
+        # Save uniforms from default phase (phase 0)
+        uniforms_data: Dict[str, Any] = {}
+        default_phase = material.default_phase()
+        if default_phase is not None:
+            phase_uniforms = default_phase.uniforms
+            for name, value in phase_uniforms.items():
+                if isinstance(value, Vec3):
+                    uniforms_data[name] = [value.x, value.y, value.z]
+                elif isinstance(value, Vec4):
+                    uniforms_data[name] = [value.x, value.y, value.z, value.w]
+                elif isinstance(value, (int, float, bool)):
+                    uniforms_data[name] = value
+                elif isinstance(value, tuple):
+                    uniforms_data[name] = list(value)
+        if uniforms_data:
+            result["uniforms"] = uniforms_data
+
+        # Save textures from default phase (by asset UUID)
+        textures_data: Dict[str, str] = {}
+        if default_phase is not None:
+            phase_textures = default_phase.textures
+            for name, tex in phase_textures.items():
+                if tex is not None and tex.is_valid:
+                    tex_name = tex.name
+                    # Skip default placeholder textures (by name)
+                    if tex_name in ("__white_1x1__", "__normal_1x1__"):
+                        continue
+                    # Find TextureAsset UUID via ResourceManager
+                    asset_uuid = None
+                    for asset_name, asset in rm._texture_registry.assets.items():
+                        if asset.uuid and asset.texture_data is not None:
+                            if asset.texture_data.uuid == tex.uuid:
+                                asset_uuid = asset.uuid
+                                break
+                    if asset_uuid:
+                        textures_data[name] = asset_uuid
+        if textures_data:
+            result["textures"] = textures_data
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)

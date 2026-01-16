@@ -9,7 +9,6 @@
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/assets/handles.hpp"
-#include "termin/render/material.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/mesh_gpu.hpp"
@@ -158,13 +157,15 @@ public:
     nos::trent get_override_data() const;
     void set_override_data(const nos::trent& val);
 
+    // Create override material lazily if needed (for deserialization)
+    void try_create_override_material();
+
 protected:
     // GPU mesh cache (uploaded buffers)
     MeshGPU _mesh_gpu;
 
 private:
     void recreate_overridden_material();
-    void try_create_override_material();
     void apply_pending_override_data();
 };
 

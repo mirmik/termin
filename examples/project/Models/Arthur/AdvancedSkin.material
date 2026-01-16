@@ -1,6 +1,7 @@
 {
   "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b",
   "shader": "CookTorrancePBR",
+  "shader_uuid": "09e2dae3-6096-4fb1-9cd2-2e07c87706b4",
   "uniforms": {
     "u_diffuse_mul": 3.140000104904175,
     "u_color": [
@@ -8,20 +9,9 @@
       1.0,
       1.0,
       1.0
-    ],
-    "u_metallic": 0.0,
-    "u_emission_intensity": 0.0,
-    "u_roughness": 0.5,
-    "u_subsurface": 0.0,
-    "u_emission_color": [
-      0.0,
-      0.0,
-      0.0,
-      1.0
-    ],
-    "u_normal_strength": 1.0
+    ]
   },
   "textures": {
-    "u_albedo_texture": "young_lightskinned_male_diffuse2_png.001"
+    "u_albedo_texture": "61d0f4f4-bb5a-458e-9de0-135ef62c1a29"
   }
 }

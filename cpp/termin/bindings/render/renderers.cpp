@@ -58,10 +58,20 @@ void bind_renderers(nb::module_& m) {
             nb::rv_policy::reference_internal)
         .def_prop_rw("material",
             [](MeshRenderer& self) -> TcMaterial& { return self.material; },
-            [](MeshRenderer& self, const TcMaterial& m) { self.material = m; },
+            [](MeshRenderer& self, const TcMaterial& m) { self.set_material(m); },
             nb::rv_policy::reference_internal)
         .def_rw("cast_shadow", &MeshRenderer::cast_shadow)
-        .def_rw("_override_material", &MeshRenderer::_override_material)
+        .def_prop_rw("_override_material",
+            [](MeshRenderer& self) { return self._override_material; },
+            [](MeshRenderer& self, bool v) {
+                // Use try_create instead of set_override_material to avoid early-return
+                self._override_material = v;
+                if (v && !self._overridden_material.is_valid()) {
+                    self.try_create_override_material();
+                } else if (!v) {
+                    self._overridden_material = TcMaterial();
+                }
+            })
         .def("get_mesh", [](MeshRenderer& self) -> TcMesh& {
             return self.get_mesh();
         }, nb::rv_policy::reference_internal)

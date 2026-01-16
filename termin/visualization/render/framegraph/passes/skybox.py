@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Dict, List, Set, Tuple, TYPE_CHECKING
 
-import numpy as np
-
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.render_context import RenderContext
 from termin.editor.inspect_field import InspectField
+from termin.geombase import Vec3
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
@@ -116,29 +115,18 @@ class SkyBoxPass(RenderFramePass):
         ctx.graphics.set_depth_mask(False)
         ctx.graphics.set_depth_func("lequal")
 
-        material.apply(
-            model,
-            view_no_translation,
-            projection,
-            graphics=ctx.graphics,
-            context_key=ctx.context_key,
-        )
-
-        # Upload skybox colors based on type
+        # Set skybox colors on material before applying
         if ctx.scene.skybox_type == "solid":
-            material.shader.set_uniform_vec3(
-                "u_skybox_color",
-                np.asarray(ctx.scene.skybox_color, dtype=np.float32),
-            )
+            c = ctx.scene.skybox_color
+            material.set_uniform_vec3("u_skybox_color", Vec3(c[0], c[1], c[2]))
         elif ctx.scene.skybox_type == "gradient":
-            material.shader.set_uniform_vec3(
-                "u_skybox_top_color",
-                np.asarray(ctx.scene.skybox_top_color, dtype=np.float32),
-            )
-            material.shader.set_uniform_vec3(
-                "u_skybox_bottom_color",
-                np.asarray(ctx.scene.skybox_bottom_color, dtype=np.float32),
-            )
+            top = ctx.scene.skybox_top_color
+            bottom = ctx.scene.skybox_bottom_color
+            material.set_uniform_vec3("u_skybox_top_color", Vec3(top[0], top[1], top[2]))
+            material.set_uniform_vec3("u_skybox_bottom_color", Vec3(bottom[0], bottom[1], bottom[2]))
+
+        # Apply material with MVP matrices
+        material.apply(model, view_no_translation, projection)
 
         render_context = RenderContext(
             view=view_no_translation,

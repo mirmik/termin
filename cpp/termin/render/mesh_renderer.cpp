@@ -166,12 +166,15 @@ void MeshRenderer::apply_pending_override_data() {
                 for (const auto& [key, val] : phase_textures.as_dict()) {
                     if (!val.is_dict()) continue;
 
-                    // Try to find texture by UUID
                     if (val.contains("uuid")) {
                         std::string uuid = val["uuid"].as_string();
                         tc_texture_handle tex_h = tc_texture_find(uuid.c_str());
                         if (!tc_texture_handle_is_invalid(tex_h)) {
                             tc_material_phase_set_texture(phase, key.c_str(), tex_h);
+                        } else {
+                            std::string name = val.contains("name") ? val["name"].as_string() : "";
+                            tc::Log::warn("[MeshRenderer] Texture not found: uuid=%s name=%s uniform=%s",
+                                         uuid.c_str(), name.c_str(), key.c_str());
                         }
                     }
                 }
@@ -353,6 +356,11 @@ void MeshRenderer::set_override_data(const nos::trent& val) {
     // Save data for lazy application (base material may not be loaded yet)
     if (!val.is_nil()) {
         _pending_override_data = std::make_unique<nos::trent>(val);
+    }
+
+    // If override flag is already set (from deserialization), create the override material now
+    if (_override_material && !_overridden_material.is_valid()) {
+        try_create_override_material();
     }
 }
 

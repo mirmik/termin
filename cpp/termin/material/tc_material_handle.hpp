@@ -160,6 +160,14 @@ public:
         return m ? tc_material_find_phase(m, mark) : nullptr;
     }
 
+    // Clear all phases
+    void clear_phases() {
+        tc_material* m = get();
+        if (m) {
+            m->phase_count = 0;
+        }
+    }
+
     // Add phase
     tc_material_phase* add_phase(TcShader& shader, const char* mark = "opaque", int priority = 0) {
         tc_material* m = get();
@@ -346,6 +354,24 @@ public:
     // Apply default (first) phase
     bool apply() const {
         return apply_phase(0);
+    }
+
+    // Apply with MVP matrices (for skybox, etc.)
+    bool apply_with_mvp(const Mat44f& model, const Mat44f& view, const Mat44f& projection) const {
+        tc_material* m = get();
+        if (!m || m->phase_count == 0) return false;
+
+        tc_material_phase* phase = &m->phases[0];
+        tc_shader* shader = tc_shader_get(phase->shader);
+        if (!shader) return false;
+
+        // Compile and use shader
+        if (tc_shader_compile_gpu(shader) == 0) return false;
+        tc_shader_use_gpu(shader);
+
+        // Apply with MVP
+        tc_material_phase_apply_with_mvp(phase, shader, model.data, view.data, projection.data);
+        return true;
     }
 
     // Get shader from phase
