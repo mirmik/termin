@@ -197,17 +197,17 @@
                       {
                         "u_diffuse_mul": 3.1414999961853027,
                         "u_color": [
-                          0.26399633288383484,
-                          0.13121232390403748,
-                          0.02560463920235634,
+                          1,
+                          1,
+                          1,
                           1
                         ]
                       },
                       {
                         "u_color": [
-                          0.26399633288383484,
-                          0.13121232390403748,
-                          0.02560463920235634,
+                          1,
+                          1,
+                          1,
                           1
                         ],
                         "u_metallic": 0,
@@ -6093,7 +6093,51 @@
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_diffuse_mul": 3.1414999961853027
+                          },
+                          {
+                            "u_color": [
+                              1,
+                              1,
+                              1,
+                              1
+                            ],
+                            "u_metallic": 0,
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0,
+                            "u_diffuse_mul": 3.1414999961853027,
+                            "u_emission_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ],
+                            "u_emission_intensity": 0,
+                            "u_normal_strength": 1
+                          }
+                        ],
+                        "phases_textures": [
+                          {},
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "5fb7972ad02ddfad",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "07151644d3bb92c7",
+                              "name": "__normal_1x1__",
+                              "type": "path",
+                              "path": "__normal_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -12422,17 +12466,17 @@
   "editor": {
     "camera": {
       "position": [
-        5.175607681274414,
-        -2.0750808715820312,
-        4.56801700592041
+        4.067402362823486,
+        -1.9497804641723633,
+        3.536384344100952
       ],
       "rotation": [
-        -0.27710811443044664,
-        -0.1976593114997338,
-        0.5460281604056706,
-        0.7655031923762653
+        -0.26761641206590725,
+        -0.15450842370394238,
+        0.4755283232586139,
+        0.8236391301876964
       ],
-      "radius": 8.0,
+      "radius": 3.5,
       "editor_entities": {
         "camera": [
           {
@@ -12450,7 +12494,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 8.0,
+              "radius": 3.5,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12484,15 +12528,15 @@
         ]
       }
     },
-    "selected_entity": "02ef39db-66a6-4fe8-b2a0-e51a65f26e46",
+    "selected_entity": "000000000000013d",
     "expanded_entities": [
-      "0000000000000007",
-      "000000000000000a",
       "0000000000000130",
-      "814ba329-db24-48fe-b931-fe68ab904998",
+      "0000000000000007",
       "0000000000000131",
       "0000000000000077",
-      "00000000000000dd"
+      "000000000000000a",
+      "00000000000000dd",
+      "814ba329-db24-48fe-b931-fe68ab904998"
     ]
   },
   "resources": {

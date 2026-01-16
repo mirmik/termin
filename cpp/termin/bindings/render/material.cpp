@@ -313,7 +313,9 @@ void bind_tc_material(nb::module_& m) {
         .def_static("get_or_create", &TcMaterial::get_or_create, nb::arg("uuid"))
         .def_static("create", &TcMaterial::create,
             nb::arg("name") = "", nb::arg("uuid_hint") = "")
-        .def_static("copy", &TcMaterial::copy, nb::arg("src"), nb::arg("new_uuid") = "")
+        .def("copy", [](const TcMaterial& self, const std::string& new_uuid) {
+            return TcMaterial::copy(self, new_uuid);
+        }, nb::arg("new_uuid") = "")
         .def_prop_ro("is_valid", &TcMaterial::is_valid)
         .def_prop_ro("uuid", &TcMaterial::uuid)
         .def_prop_rw("name",
