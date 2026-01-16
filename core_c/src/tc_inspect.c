@@ -603,7 +603,7 @@ tc_value tc_inspect_get(void* obj, const char* type_name, const char* path) {
     return vtable->get(obj, field, vtable->user_data);
 }
 
-void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value) {
+void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene) {
     tc_field_desc* field = tc_inspect_find_field(type_name, path);
     if (!field) return;
 
@@ -614,12 +614,12 @@ void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value
     const tc_custom_type_handler* h = tc_custom_type_get(field->kind);
     if (h && h->convert) {
         tc_value converted = h->convert(&value);
-        vtable->set(obj, field, converted, vtable->user_data);
+        vtable->set(obj, field, converted, vtable->user_data, scene);
         if (converted.type != value.type || converted.data.custom != value.data.custom) {
             tc_value_free(&converted);
         }
     } else {
-        vtable->set(obj, field, value, vtable->user_data);
+        vtable->set(obj, field, value, vtable->user_data, scene);
     }
 }
 
@@ -646,7 +646,7 @@ tc_value tc_inspect_get_lang(void* obj, const char* type_name, const char* path,
     return vtable->get(obj, field, vtable->user_data);
 }
 
-void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_value value, tc_inspect_lang lang) {
+void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_value value, tc_inspect_lang lang, tc_scene* scene) {
     if (lang < 0 || lang >= TC_INSPECT_LANG_COUNT) return;
 
     tc_field_desc* field = tc_inspect_find_field(type_name, path);
@@ -659,12 +659,12 @@ void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_
     const tc_custom_type_handler* h = tc_custom_type_get(field->kind);
     if (h && h->convert) {
         tc_value converted = h->convert(&value);
-        vtable->set(obj, field, converted, vtable->user_data);
+        vtable->set(obj, field, converted, vtable->user_data, scene);
         if (converted.type != value.type || converted.data.custom != value.data.custom) {
             tc_value_free(&converted);
         }
     } else {
-        vtable->set(obj, field, value, vtable->user_data);
+        vtable->set(obj, field, value, vtable->user_data, scene);
     }
 }
 
@@ -739,7 +739,7 @@ void tc_inspect_deserialize_with_scene(void* obj, const char* type_name, const t
         if (tc_kind_exists(f->kind)) {
             tc_value deserialized = tc_kind_deserialize_any(f->kind, field_data, scene);
             if (deserialized.type != TC_VALUE_NIL) {
-                tc_inspect_set(obj, type_name, f->path, deserialized);
+                tc_inspect_set(obj, type_name, f->path, deserialized, scene);
                 tc_value_free(&deserialized);
                 continue;
             }
@@ -749,11 +749,11 @@ void tc_inspect_deserialize_with_scene(void* obj, const char* type_name, const t
         const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
         if (h && h->deserialize) {
             tc_value deserialized = h->deserialize(field_data);
-            tc_inspect_set(obj, type_name, f->path, deserialized);
+            tc_inspect_set(obj, type_name, f->path, deserialized, scene);
             tc_value_free(&deserialized);
         } else {
             // No deserializer - set value as-is
-            tc_inspect_set(obj, type_name, f->path, *field_data);
+            tc_inspect_set(obj, type_name, f->path, *field_data, scene);
         }
     }
 }

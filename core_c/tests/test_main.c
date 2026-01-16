@@ -341,7 +341,7 @@ static int test_inspect(void) {
     TEST_ASSERT(v.type == TC_VALUE_FLOAT, "get returns float");
     TEST_ASSERT(fabs(v.data.f - 5.0f) < 0.001f, "get value");
 
-    tc_inspect_set(&data, "TestComponent", "health", tc_value_int(50));
+    tc_inspect_set(&data, "TestComponent", "health", tc_value_int(50), NULL);
     TEST_ASSERT(data.health == 50, "set value");
 
     tc_value serialized = tc_inspect_serialize(&data, "TestComponent");

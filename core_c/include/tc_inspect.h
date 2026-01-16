@@ -162,7 +162,7 @@ typedef struct tc_field_desc tc_field_desc;
 
 // Per-field vtable for one language
 typedef tc_value (*tc_field_getter)(void* obj, const tc_field_desc* field, void* user_data);
-typedef void (*tc_field_setter)(void* obj, const tc_field_desc* field, tc_value value, void* user_data);
+typedef void (*tc_field_setter)(void* obj, const tc_field_desc* field, tc_value value, void* user_data, tc_scene* scene);
 typedef void (*tc_field_action)(void* obj, const tc_field_desc* field, void* user_data);
 
 typedef struct tc_field_vtable {
@@ -276,12 +276,12 @@ TC_API tc_field_desc* tc_inspect_find_field(const char* type_name, const char* p
 
 // Get/set using first available language vtable
 TC_API tc_value tc_inspect_get(void* obj, const char* type_name, const char* path);
-TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value);
+TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene);
 TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path);
 
 // Get/set using specific language vtable
 TC_API tc_value tc_inspect_get_lang(void* obj, const char* type_name, const char* path, tc_inspect_lang lang);
-TC_API void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_value value, tc_inspect_lang lang);
+TC_API void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_value value, tc_inspect_lang lang, tc_scene* scene);
 TC_API void tc_inspect_action_lang(void* obj, const char* type_name, const char* path, tc_inspect_lang lang);
 
 // ============================================================================

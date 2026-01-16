@@ -804,8 +804,9 @@ static tc_value serializable_field_getter(void* obj, const tc_field_desc* field,
 
 // Setter for SERIALIZABLE_FIELD (uses tc_value → trent setter)
 template<typename C>
-static void serializable_field_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
+static void serializable_field_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data, tc_scene* scene) {
     (void)field;
+    (void)scene;
     auto* ctx = static_cast<SerializableFieldTrentContext<C>*>(user_data);
     C* instance = static_cast<C*>(obj);
     nos::trent t = tc_value_to_trent(&value);
@@ -827,14 +828,14 @@ static tc_value cpp_field_getter_via_kind(void* obj, const tc_field_desc* field,
 
 // Setter via KindRegistry (converts tc_value → trent → C++ value)
 template<typename C, typename T>
-static void cpp_field_setter_via_kind(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
+static void cpp_field_setter_via_kind(void* obj, const tc_field_desc* field, tc_value value, void* user_data, tc_scene* scene) {
     (void)field;
     auto* ctx = static_cast<CppFieldContext<C, T>*>(user_data);
     C* instance = static_cast<C*>(obj);
 
-    // Deserialize via KindRegistry
+    // Deserialize via KindRegistry with scene
     nos::trent t = tc_value_to_trent(&value);
-    std::any result = KindRegistry::instance().deserialize_cpp(ctx->kind, t, nullptr);
+    std::any result = KindRegistry::instance().deserialize_cpp(ctx->kind, t, scene);
     if (result.has_value()) {
         try {
             instance->*(ctx->member) = std::any_cast<T>(result);

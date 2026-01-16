@@ -56,8 +56,9 @@ inline tc_value python_field_getter(void* obj, const tc_field_desc* field, void*
     }
 }
 
-inline void python_field_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
+inline void python_field_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data, tc_scene* scene) {
     (void)field;
+    (void)scene;
     auto* ctx = static_cast<PythonFieldContext*>(user_data);
 
     nb::object py_obj = nb::borrow<nb::object>(nb::handle(static_cast<PyObject*>(obj)));

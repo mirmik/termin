@@ -43,7 +43,6 @@ void register_cpp_handle_kind(const std::string& kind_name) {
 
     // Register list handler for std::vector<H>
     std::string list_kind = "list[" + kind_name + "]";
-    tc_log(TC_LOG_INFO, "[KindRegistry] Registering C++ kind: %s", list_kind.c_str());
     KindRegistryCpp::instance().register_kind(list_kind,
         // serialize: std::any(vector<H>) → trent (list)
         [](const std::any& value) -> nos::trent {
@@ -72,16 +71,13 @@ void register_cpp_handle_kind(const std::string& kind_name) {
         // deserialize: trent, scene → std::any(vector<H>)
         [list_kind](const nos::trent& t, tc_scene* scene) -> std::any {
             std::vector<H> vec;
-            tc_log(TC_LOG_INFO, "[KindRegistry] deserialize %s: t.is_list()=%d", list_kind.c_str(), t.is_list());
             if (t.is_list()) {
-                tc_log(TC_LOG_INFO, "[KindRegistry] list size=%zu", t.as_list().size());
                 for (const auto& item : t.as_list()) {
                     H h;
                     h.deserialize_from(item, scene);
                     vec.push_back(h);
                 }
             }
-            tc_log(TC_LOG_INFO, "[KindRegistry] deserialized %zu items", vec.size());
             return vec;
         }
     );
