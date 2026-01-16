@@ -14,7 +14,7 @@ import numpy as np
 from termin.visualization.core.python_component import PythonComponent
 from termin.mesh import TcMesh
 from termin.assets.navmesh_handle import NavMeshHandle
-from termin.assets.material_handle import MaterialHandle
+from termin._native.render import TcMaterial
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
@@ -43,7 +43,7 @@ class NavMeshFovShowerComponent(PythonComponent):
         "material": InspectField(
             path="material",
             label="Material",
-            kind="material_handle",
+            kind="tc_material",
         ),
     }
 
@@ -52,7 +52,7 @@ class NavMeshFovShowerComponent(PythonComponent):
     ) -> None:
         super().__init__()
         self.navmesh: NavMeshHandle = NavMeshHandle()
-        self.material: MaterialHandle = MaterialHandle()
+        self.material: TcMaterial = TcMaterial()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh: Optional[TcMesh] = None
         self._mesh_gpu: Optional["MeshGPU"] = None
@@ -81,22 +81,20 @@ class NavMeshFovShowerComponent(PythonComponent):
         view_matrix = self._fov_camera.get_view_matrix()
         projection_matrix = self._fov_camera.get_projection_matrix()
 
-        material = self.material.get()
-        if material is None:
+        if not self.material.is_valid:
             return
 
-        material.set_param("u_fov_view", view_matrix)
-        material.set_param("u_fov_projection", projection_matrix)
+        self.material.set_uniform_mat4("u_fov_view", view_matrix)
+        self.material.set_uniform_mat4("u_fov_projection", projection_matrix)
 
     # --- Drawable protocol ---
 
     @property
     def phase_marks(self) -> Set[str]:
         """Get phase marks from material."""
-        mat = self.material.get()
-        if mat is None:
+        if not self.material.is_valid:
             return set()
-        return {p.phase_mark for p in mat.phases}
+        return {p.phase_mark for p in self.material.phases}
 
     def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
         """Draw NavMesh geometry."""
@@ -117,14 +115,13 @@ class NavMeshFovShowerComponent(PythonComponent):
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Return GeometryDrawCalls for rendering."""
-        mat = self.material.get()
-        if mat is None:
+        if not self.material.is_valid:
             return []
 
         if phase_mark is None:
-            phases = list(mat.phases)
+            phases = list(self.material.phases)
         else:
-            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+            phases = [p for p in self.material.phases if p.phase_mark == phase_mark]
 
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=phase, geometry_id=0) for phase in phases]

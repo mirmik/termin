@@ -7,7 +7,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from ._handle_accessors import HandleAccessors
 
 if TYPE_CHECKING:
-    from termin.assets.material_handle import MaterialHandle
+    from termin._native.render import TcMaterial
     from termin.assets.voxel_grid_handle import VoxelGridHandle
     from termin.assets.navmesh_handle import NavMeshHandle
     from termin.assets.skeleton_handle import TcSkeleton
@@ -28,11 +28,11 @@ class AccessorsMixin:
         Returns:
             HandleAccessors with list_names, get_by_name, find_name methods
         """
-        if kind == "material_handle":
+        if kind == "material_handle" or kind == "tc_material":
             return HandleAccessors(
                 list_names=self.list_material_names,
-                get_by_name=self._get_material_handle,
-                find_name=self._find_material_handle_name,
+                get_by_name=self._get_tc_material,
+                find_name=self._find_tc_material_name,
                 find_uuid=self._find_material_uuid_by_name,
             )
         if kind == "mesh_handle":
@@ -93,26 +93,20 @@ class AccessorsMixin:
             )
         return None
 
-    # Handle accessors for MaterialHandle
-    def _get_material_handle(self, name: str) -> Optional["MaterialHandle"]:
-        """Get MaterialHandle by name."""
-        from termin.assets.material_handle import MaterialHandle
-        return MaterialHandle.from_name(name)
+    # Handle accessors for TcMaterial
+    def _get_tc_material(self, name: str) -> Optional["TcMaterial"]:
+        """Get TcMaterial by name."""
+        from termin._native.render import TcMaterial
+        mat = TcMaterial.from_name(name)
+        return mat if mat.is_valid else None
 
-    def _find_material_handle_name(self, handle: Any) -> Optional[str]:
-        """Find name for a MaterialHandle or Material."""
-        from termin.assets.material_handle import MaterialHandle
-        if isinstance(handle, MaterialHandle):
-            asset = handle.get_asset()
-            if asset:
-                return asset.name
-            # Try to find by material
-            mat = handle.get()
-            if mat:
-                return self.find_material_name(mat)
-            return None
-        # Legacy: raw Material object
-        return self.find_material_name(handle)
+    def _find_tc_material_name(self, handle: Any) -> Optional[str]:
+        """Find name for a TcMaterial."""
+        from termin._native.render import TcMaterial
+        if isinstance(handle, TcMaterial):
+            if handle.is_valid:
+                return handle.name or None
+        return None
 
     # Handle accessors for VoxelGridHandle (creates handle on-the-fly)
     def _get_voxel_grid_handle(self, name: str) -> Optional["VoxelGridHandle"]:
@@ -277,11 +271,8 @@ class AccessorsMixin:
             return self.get_mesh_by_uuid(uuid)
 
         if kind == "material":
-            from termin.assets.material_handle import MaterialHandle
-            asset = self.get_material_asset_by_uuid(uuid)
-            if asset:
-                return MaterialHandle.from_asset(asset)
-            return None
+            from termin._native.render import TcMaterial
+            return TcMaterial.from_uuid(uuid)
 
         if kind == "voxel_grid":
             from termin.assets.voxel_grid_handle import VoxelGridHandle

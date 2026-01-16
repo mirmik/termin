@@ -6,7 +6,7 @@
 
 #include "handles.hpp"
 #include "termin/render/graphics_backend.hpp"
-#include "termin/render/material.hpp"
+#include "termin/material/tc_material_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "../../../core_c/include/tc_kind.hpp"
 #include "tc_log.hpp"
@@ -44,33 +44,7 @@ void bind_assets(nb::module_& m) {
         .def("get_asset", [](const TextureHandle& self) { return self.asset; })
         .def("serialize", &TextureHandle::serialize);
 
-    // ========== MaterialHandle ==========
-    nb::class_<MaterialHandle>(m, "MaterialHandle")
-        .def(nb::init<>())
-        .def(nb::init<Material*>(), nb::arg("material"))
-        .def_static("from_direct", &MaterialHandle::from_direct, nb::arg("material"),
-            nb::rv_policy::reference)
-        .def_static("from_material", &MaterialHandle::from_direct, nb::arg("material"),
-            nb::rv_policy::reference)  // alias for from_direct
-        .def_static("from_asset", &MaterialHandle::from_asset, nb::arg("asset"))
-        .def_static("from_name", &MaterialHandle::from_name, nb::arg("name"))
-        .def_static("deserialize", &MaterialHandle::deserialize, nb::arg("data"))
-        .def_prop_ro("_direct", [](MaterialHandle& self) { return self._direct; },
-            nb::rv_policy::reference)
-        .def_rw("asset", &MaterialHandle::asset)
-        .def_prop_ro("is_valid", &MaterialHandle::is_valid)
-        .def_prop_ro("is_direct", &MaterialHandle::is_direct)
-        .def_prop_ro("name", &MaterialHandle::name)
-        .def_prop_ro("material", &MaterialHandle::get_material_or_none,
-            nb::rv_policy::reference)
-        .def("get", &MaterialHandle::get, nb::rv_policy::reference)
-        .def("get_asset", [](const MaterialHandle& self) { return self.asset; })
-        .def("get_material", &MaterialHandle::get_material, nb::rv_policy::reference)
-        .def("get_material_or_none", &MaterialHandle::get_material_or_none,
-            nb::rv_policy::reference)
-        .def("serialize", &MaterialHandle::serialize);
-
-    // Note: nanobind doesn't have implicitly_convertible - handle via explicit constructors
+    // Note: TcMaterial is bound in _render_native module
 
     // Note: TcSkeleton is now in _skeleton_native module
 
@@ -85,48 +59,57 @@ void bind_assets(nb::module_& m) {
 void register_kind_handlers() {
     // Note: mesh_handle kind is registered in _mesh_native module
 
-    // ===== material_handle kind =====
+    // ===== tc_material kind =====
     // C++ handler for C++ fields
-    tc::register_cpp_handle_kind<MaterialHandle>("material_handle");
+    tc::register_cpp_handle_kind<TcMaterial>("tc_material");
 
     // Python handler for Python fields
     tc::KindRegistry::instance().register_python(
-        "material_handle",
+        "tc_material",
         // serialize
         nb::cpp_function([](nb::object obj) -> nb::object {
-            MaterialHandle handle = nb::cast<MaterialHandle>(obj);
-            return handle.serialize();
+            TcMaterial mat = nb::cast<TcMaterial>(obj);
+            return mat.serialize();
         }),
         // deserialize
         nb::cpp_function([](nb::object data) -> nb::object {
             if (data.is_none()) {
-                return nb::cast(MaterialHandle());
+                return nb::cast(TcMaterial());
             }
 
             nb::dict d = nb::cast<nb::dict>(data);
-            return nb::cast(MaterialHandle::deserialize(d));
+            // Try uuid first
+            if (d.contains("uuid")) {
+                std::string uuid = nb::cast<std::string>(d["uuid"]);
+                TcMaterial mat = TcMaterial::from_uuid(uuid);
+                if (mat.is_valid()) {
+                    return nb::cast(mat);
+                }
+            }
+            // Try name
+            if (d.contains("name")) {
+                std::string name = nb::cast<std::string>(d["name"]);
+                TcMaterial mat = TcMaterial::from_name(name);
+                if (mat.is_valid()) {
+                    return nb::cast(mat);
+                }
+            }
+            return nb::cast(TcMaterial());
         }),
         // convert
         nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return nb::cast(MaterialHandle());
+                return nb::cast(TcMaterial());
             }
-            if (nb::isinstance<MaterialHandle>(value)) {
+            if (nb::isinstance<TcMaterial>(value)) {
                 return value;
             }
-            // Try Material*
-            if (nb::isinstance<Material>(value)) {
-                auto* mat = nb::cast<Material*>(value);
-                return nb::cast(MaterialHandle::from_direct(mat));
+            // Try string (material name)
+            if (nb::isinstance<nb::str>(value)) {
+                std::string name = nb::cast<std::string>(value);
+                return nb::cast(TcMaterial::from_name(name));
             }
-            // Try MaterialAsset (has 'resource' attribute)
-            if (nb::hasattr(value, "resource")) {
-                return nb::cast(MaterialHandle::from_asset(value));
-            }
-            // Nothing worked
-            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
-            std::string type_name = nb::cast<std::string>(type_str);
-            return nb::cast(MaterialHandle());
+            return nb::cast(TcMaterial());
         })
     );
 

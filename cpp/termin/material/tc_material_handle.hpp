@@ -422,6 +422,15 @@ public:
         return TcMaterial(h);
     }
 
+    // Get by name from registry
+    static TcMaterial from_name(const std::string& name) {
+        tc_material_handle h = tc_material_find_by_name(name.c_str());
+        if (tc_material_handle_is_invalid(h)) {
+            return TcMaterial();
+        }
+        return TcMaterial(h);
+    }
+
     // Get or create by UUID
     static TcMaterial get_or_create(const std::string& uuid) {
         tc_material_handle h = tc_material_get_or_create(uuid.c_str());

@@ -15,9 +15,6 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Forward declarations
-class Material;
-
 /**
  * TextureHandle - smart reference to texture asset.
  *
@@ -163,100 +160,6 @@ public:
  * Get a white 1x1 texture handle (singleton).
  */
 TextureHandle get_white_texture_handle();
-
-
-/**
- * MaterialHandle - smart reference to material asset.
- *
- * Two modes:
- * 1. Direct - stores Material* directly
- * 2. Asset - stores MaterialAsset via nb::object
- */
-class MaterialHandle {
-public:
-    // Direct material pointer (optional)
-    Material* _direct = nullptr;
-
-    // Python asset object (MaterialAsset or None)
-    nb::object asset;
-
-    MaterialHandle() : asset(nb::none()) {}
-
-    explicit MaterialHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
-
-    explicit MaterialHandle(Material* direct) : _direct(direct), asset(nb::none()) {}
-
-    /**
-     * Create handle from direct Material.
-     */
-    static MaterialHandle from_direct(Material* material) {
-        return MaterialHandle(material);
-    }
-
-    /**
-     * Create handle from Python MaterialAsset.
-     */
-    static MaterialHandle from_asset(nb::object asset) {
-        return MaterialHandle(std::move(asset));
-    }
-
-    /**
-     * Create handle by name lookup in ResourceManager.
-     */
-    static MaterialHandle from_name(const std::string& name);
-
-    /**
-     * Check if handle is valid (has direct material or asset).
-     */
-    bool is_valid() const {
-        return _direct != nullptr || !asset.is_none();
-    }
-
-    /**
-     * Check if this is a direct material (not from asset).
-     */
-    bool is_direct() const {
-        return _direct != nullptr;
-    }
-
-    /**
-     * Get asset name (empty if direct).
-     */
-    std::string name() const;
-
-    /**
-     * Get Material pointer.
-     * Returns nullptr if handle is empty.
-     */
-    Material* get() const;
-
-    /**
-     * Get Material pointer, or error material if not available.
-     */
-    Material* get_material() const;
-
-    /**
-     * Get Material pointer or nullptr.
-     */
-    Material* get_material_or_none() const {
-        return get();
-    }
-
-    /**
-     * Serialize for scene saving.
-     */
-    nb::dict serialize() const;
-
-    /**
-     * Deserialize from scene data.
-     */
-    static MaterialHandle deserialize(const nb::dict& data);
-
-    /**
-     * Deserialize inplace from scene data.
-     */
-    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
-};
 
 } // namespace termin
 

@@ -1252,6 +1252,45 @@ void bind_tc_material(nb::module_& m) {
         .def_prop_ro("priority", [](tc_material_phase& p) { return p.priority; })
         .def_prop_ro("texture_count", [](tc_material_phase& p) { return p.texture_count; })
         .def_prop_ro("uniform_count", [](tc_material_phase& p) { return p.uniform_count; })
+        .def_prop_ro("shader", [](tc_material_phase& p) { return TcShader(p.shader); })
+        .def_prop_ro("textures", [](tc_material_phase& p) {
+            nb::dict result;
+            for (size_t i = 0; i < p.texture_count; i++) {
+                std::string name = p.textures[i].name;
+                if (!tc_texture_handle_is_invalid(p.textures[i].texture)) {
+                    result[nb::cast(name)] = TcTexture(p.textures[i].texture);
+                }
+            }
+            return result;
+        })
+        .def_prop_ro("uniforms", [](tc_material_phase& p) {
+            nb::dict result;
+            for (size_t i = 0; i < p.uniform_count; i++) {
+                std::string name = p.uniforms[i].name;
+                tc_uniform_value& u = p.uniforms[i];
+                switch (u.type) {
+                    case TC_UNIFORM_BOOL:
+                    case TC_UNIFORM_INT:
+                        result[nb::cast(name)] = u.data.i;
+                        break;
+                    case TC_UNIFORM_FLOAT:
+                        result[nb::cast(name)] = u.data.f;
+                        break;
+                    case TC_UNIFORM_VEC2:
+                        result[nb::cast(name)] = nb::make_tuple(u.data.v2[0], u.data.v2[1]);
+                        break;
+                    case TC_UNIFORM_VEC3:
+                        result[nb::cast(name)] = Vec3{u.data.v3[0], u.data.v3[1], u.data.v3[2]};
+                        break;
+                    case TC_UNIFORM_VEC4:
+                        result[nb::cast(name)] = Vec4{u.data.v4[0], u.data.v4[1], u.data.v4[2], u.data.v4[3]};
+                        break;
+                    default:
+                        break;
+                }
+            }
+            return result;
+        })
         .def_prop_rw("state",
             [](tc_material_phase& p) { return p.state; },
             [](tc_material_phase& p, const tc_render_state& s) { p.state = s; })
@@ -1293,13 +1332,7 @@ void bind_tc_material(nb::module_& m) {
     nb::class_<TcMaterial>(m, "TcMaterial")
         .def(nb::init<>())
         .def_static("from_uuid", &TcMaterial::from_uuid, nb::arg("uuid"))
-        .def_static("from_name", [](const std::string& name) {
-            tc_material_handle h = tc_material_find_by_name(name.c_str());
-            if (tc_material_handle_is_invalid(h)) {
-                return TcMaterial();
-            }
-            return TcMaterial(h);
-        }, nb::arg("name"))
+        .def_static("from_name", &TcMaterial::from_name, nb::arg("name"))
         .def_static("get_or_create", &TcMaterial::get_or_create, nb::arg("uuid"))
         .def_static("create", &TcMaterial::create,
             nb::arg("name") = "", nb::arg("uuid_hint") = "")
@@ -1320,6 +1353,13 @@ void bind_tc_material(nb::module_& m) {
         .def("get_phase", [](TcMaterial& self, size_t index) -> tc_material_phase* {
             return self.get_phase(index);
         }, nb::arg("index"), nb::rv_policy::reference)
+        .def_prop_ro("phases", [](TcMaterial& self) {
+            nb::list result;
+            for (size_t i = 0; i < self.phase_count(); i++) {
+                result.append(nb::cast(self.get_phase(i), nb::rv_policy::reference));
+            }
+            return result;
+        })
         .def("default_phase", [](TcMaterial& self) -> tc_material_phase* {
             return self.default_phase();
         }, nb::rv_policy::reference)

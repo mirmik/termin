@@ -5,13 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Optional, Set
 
 from termin.visualization.render.postprocess import PostEffect
-from termin.visualization.core.material_handle import MaterialHandle
+from termin._native.render import TcMaterial
 from termin.editor.inspect_field import InspectField
 from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
-    from termin.visualization.core.material import Material
     from termin._native.render import TcShader
 
 # Callback type: (shader) -> None
@@ -38,9 +37,9 @@ class MaterialPostEffect(PostEffect):
 
     inspect_fields = {
         "material": InspectField(
-            path="_material_handle",
+            path="_material",
             label="Material",
-            kind="material_handle",
+            kind="tc_material",
         ),
         "required_depth": InspectField(
             path="_required_depth",
@@ -64,9 +63,9 @@ class MaterialPostEffect(PostEffect):
             material_path: Path to .material file (relative to project).
             required_depth: Whether this effect needs the depth buffer.
         """
-        self._material_handle = MaterialHandle()
+        self._material = TcMaterial()
         if material_path:
-            self._material_handle = MaterialHandle.from_name(material_path)
+            self._material = TcMaterial.from_name(material_path)
         self._required_depth = required_depth
         self._before_draw: Optional[BeforeDrawCallback] = None
         # Map: resource_name -> uniform_name
@@ -147,9 +146,9 @@ class MaterialPostEffect(PostEffect):
             resources.add("depth")
         return resources
 
-    def _get_material(self) -> "Material | None":
-        """Get material from handle."""
-        return self._material_handle.get_material_or_none() if self._material_handle else None
+    def _get_material(self) -> "TcMaterial | None":
+        """Get material."""
+        return self._material if self._material.is_valid else None
 
     def draw(
         self,
@@ -175,9 +174,9 @@ class MaterialPostEffect(PostEffect):
             return
 
         phase = material.phases[0]
-        shader = phase.shader_programm
+        shader = phase.shader
 
-        if shader is None:
+        if not shader.is_valid:
             self._draw_passthrough(gfx, context_key, color_tex)
             return
 

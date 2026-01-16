@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Callable, Set, List, Tuple
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.post_effect_base import PostEffectPass
-from termin.visualization.core.material_handle import MaterialHandle
+from termin._native.render import TcMaterial
 from termin.editor.inspect_field import InspectField
 from termin._native import log
 
@@ -21,7 +21,6 @@ if TYPE_CHECKING:
         FramebufferHandle,
         GPUTextureHandle,
     )
-    from termin.visualization.core.material import Material
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
@@ -54,7 +53,7 @@ class MaterialPass(PostEffectPass):
         "material": InspectField(
             path="material_name",
             label="Material",
-            kind="material_handle",
+            kind="tc_material",
         ),
     }
 
@@ -68,10 +67,10 @@ class MaterialPass(PostEffectPass):
     ):
         # MaterialPass doesn't use legacy input_res - all textures come from _texture_resources
         super().__init__(input_res, output_res, pass_name)
-        self._material_handle = MaterialHandle()
+        self._material = TcMaterial()
         self._material_name = material_name
         if material_name and material_name != "(None)":
-            self._material_handle = MaterialHandle.from_name(material_name)
+            self._material = TcMaterial.from_name(material_name)
 
         # Extra resources to bind (resource_name -> uniform_name)
         # For programmatic use via add_resource()
@@ -110,10 +109,8 @@ class MaterialPass(PostEffectPass):
     @property
     def material_name(self) -> str:
         """Get material name for serialization."""
-        if self._material_handle:
-            mat = self._material_handle.get_material_or_none()
-            if mat is not None:
-                return mat.name or ""
+        if self._material.is_valid:
+            return self._material.name or ""
         return self._material_name or ""
 
     @material_name.setter
@@ -121,9 +118,9 @@ class MaterialPass(PostEffectPass):
         """Set material by name."""
         self._material_name = value
         if value and value != "(None)":
-            self._material_handle = MaterialHandle.from_name(value)
+            self._material = TcMaterial.from_name(value)
         else:
-            self._material_handle = MaterialHandle()
+            self._material = TcMaterial()
 
     def add_resource(self, resource_name: str, uniform_name: str | None = None) -> "MaterialPass":
         """
@@ -336,11 +333,9 @@ class MaterialPass(PostEffectPass):
             output_res=data.get("output_res", "color"),
         )
 
-    def _get_material(self) -> "Material | None":
-        """Get material from handle."""
-        if self._material_handle:
-            return self._material_handle.get_material_or_none()
-        return None
+    def _get_material(self) -> "TcMaterial | None":
+        """Get material."""
+        return self._material if self._material.is_valid else None
 
     def execute(self, ctx: "ExecuteContext") -> None:
         """Execute the material pass.
@@ -404,9 +399,9 @@ class MaterialPass(PostEffectPass):
             return
 
         phase = material.phases[0]
-        shader = phase.shader_programm
+        shader = phase.shader
 
-        if shader is None:
+        if not shader.is_valid:
             self._draw_passthrough(graphics, context_key, input_tex)
             return
 
@@ -526,6 +521,6 @@ class MaterialPass(PostEffectPass):
     def destroy(self) -> None:
         """Clean up resources and callbacks."""
         self._before_draw = None
-        self._material_handle = MaterialHandle()
+        self._material = TcMaterial()
         self._extra_resources.clear()
         self._texture_resources.clear()
