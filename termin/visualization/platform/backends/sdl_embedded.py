@@ -487,7 +487,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             if tex is not None:
                 # Render fullscreen quad with texture
                 shader = PresentToScreenPass._get_shader()
-                shader.ensure_ready(graphics, 0)  # debugger has its own context
+                shader.ensure_ready()  # debugger has its own context
                 shader.use()
                 shader.set_uniform_int("u_tex", 0)
                 tex.bind(0)
@@ -621,7 +621,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         # Render fullscreen quad with texture
         shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready(graphics, 0)  # embedded window context
+        shader.ensure_ready()  # embedded window context
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         tex.bind(0)

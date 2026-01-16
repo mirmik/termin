@@ -92,7 +92,7 @@ class RenderFramePass(FramePass):
             graphics.set_depth_mask(False)
 
             shader = PresentToScreenPass._get_shader()
-            shader.ensure_ready(graphics, 0)  # debugger has its own context
+            shader.ensure_ready()  # debugger has its own context
             shader.use()
             shader.set_uniform_int("u_tex", 0)
             tex.bind(0)

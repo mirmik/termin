@@ -405,7 +405,7 @@ class MaterialPass(PostEffectPass):
             self._draw_passthrough(graphics, context_key, input_tex)
             return
 
-        shader.ensure_ready(graphics, context_key)
+        shader.ensure_ready()
         shader.use()
 
         w, h = size
@@ -512,7 +512,7 @@ class MaterialPass(PostEffectPass):
         from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 
         shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready(graphics, context_key)
+        shader.ensure_ready()
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         input_tex.bind(0)

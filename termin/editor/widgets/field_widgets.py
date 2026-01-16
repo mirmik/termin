@@ -686,7 +686,7 @@ class FieldWidgetFactory:
 
         # Handle-based resource selectors
         if kind in (
-            "material_handle",
+            "tc_material",
             "mesh_handle",
             "tc_mesh",
             "skeleton_handle",

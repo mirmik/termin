@@ -120,7 +120,7 @@ def inspect_field_info_to_node_param(info) -> NodeParam | None:
             choices=choice_labels,
         )
 
-    elif kind == "material_handle":
+    elif kind == "tc_material":
         # Get material names from ResourceManager
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
