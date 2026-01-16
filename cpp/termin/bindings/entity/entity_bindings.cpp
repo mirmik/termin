@@ -234,7 +234,7 @@ void bind_entity_class(nb::module_& m) {
         .def("add_component", [](Entity& e, nb::object component) -> nb::object {
             if (nb::isinstance<Component>(component)) {
                 Component* c = nb::cast<Component*>(component);
-                c->set_py_wrap(component);
+                c->set_wrapper(component);
                 e.add_component(c);
                 register_component_with_scene(e, component);
                 return component;

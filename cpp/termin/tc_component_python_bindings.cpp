@@ -4,7 +4,7 @@
 #include <nanobind/stl/string.h>
 #include <unordered_map>
 
-#include "../../core_c/include/tc_component_python.h"
+#include "tc_component_python.h"
 #include "../../core_c/include/tc_material.h"
 #include "tc_log.hpp"
 #include "render/drawable.hpp"

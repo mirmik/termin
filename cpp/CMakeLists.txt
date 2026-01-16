@@ -323,6 +323,7 @@ nanobind_add_module(_native
     termin/bindings/render/solid_primitive.cpp
     termin/sdl_bindings.cpp
     termin/tc_scene_bindings.cpp
+    termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/profiler_bindings.cpp
     termin/skeleton_bindings.cpp

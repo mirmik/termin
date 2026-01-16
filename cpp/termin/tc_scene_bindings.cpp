@@ -163,10 +163,10 @@ private:
                 if (cxx) {
                     cxx->entity = ent;
                 }
-            } else if (tc->kind == TC_PYTHON_COMPONENT && tc->py_wrap) {
+            } else if (tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
                 // Python component - update via Python attribute
                 nb::gil_scoped_acquire gil;
-                nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->py_wrap);
+                nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->wrapper);
                 if (nb::hasattr(py_comp, "entity")) {
                     py_comp.attr("entity") = nb::cast(ent);
                 }
@@ -343,8 +343,8 @@ void bind_tc_scene(nb::module_& m) {
             tc_component* c = tc_scene_first_component_of_type(self._s, type_name.c_str());
             while (c != NULL) {
                 // Return the Python wrapper if available
-                if (c->py_wrap) {
-                    result.append(nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->py_wrap)));
+                if (c->wrapper) {
+                    result.append(nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper)));
                 }
                 c = c->type_next;
             }
@@ -388,9 +388,9 @@ void bind_tc_scene(nb::module_& m) {
                     if (data->had_exception) return false;
 
                     try {
-                        if (c->py_wrap) {
+                        if (c->wrapper) {
                             nb::object py_comp = nb::borrow<nb::object>(
-                                reinterpret_cast<PyObject*>(c->py_wrap));
+                                reinterpret_cast<PyObject*>(c->wrapper));
                             nb::object result = data->py_callback(py_comp);
                             // If callback returns False, stop iteration
                             if (nb::isinstance<nb::bool_>(result) && !nb::cast<bool>(result)) {

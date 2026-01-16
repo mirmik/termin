@@ -1,71 +1,73 @@
+# core_c - Pure C library for Termin engine core
+# No C++ or Python dependencies
 cmake_minimum_required(VERSION 3.14)
-project(termin_core C CXX)
+project(termin_core C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Options
 option(TC_BUILD_SHARED "Build shared library" ON)
 option(TC_BUILD_TESTS "Build tests" ON)
 
-# Source files
+# Source files (only .c)
 set(TC_SOURCES
-    src/tc_core.c
+    src/tc_animation_registry.c
     src/tc_component.c
-    src/tc_component_python.c
+    src/tc_core.c
     src/tc_entity_pool.c
+    src/tc_gpu.c
     src/tc_hash_map.c
-    src/tc_resource_map.c
-    src/tc_pool.c
-    src/tc_scene.c
     src/tc_inspect.c
     src/tc_kind.c
+    src/tc_log.c
+    src/tc_material_registry.c
     src/tc_mesh.c
     src/tc_mesh_registry.c
-    src/tc_texture_registry.c
+    src/tc_pool.c
+    src/tc_profiler.c
+    src/tc_resource_map.c
+    src/tc_scene.c
+    src/tc_scene_registry.c
     src/tc_shader_registry.c
     src/tc_skeleton_registry.c
-    src/tc_animation_registry.c
-    src/tc_material_registry.c
-    src/tc_scene_registry.c
-    src/tc_log.c
-    src/tc_profiler.c
-    src/tc_gpu.c
+    src/tc_texture_registry.c
 )
 
-# Header files (for IDE integration)
+# Header files (only .h, for IDE integration)
 set(TC_HEADERS
-    include/termin_core.h
-    include/tc_types.h
-    include/tc_vec3.h
-    include/tc_quat.h
-    include/tc_pose.h
-    include/tc_handle.h
-    include/tc_pool.h
+    include/tc_animation.h
+    include/tc_animation_registry.h
     include/tc_component.h
-    include/tc_component_python.h
     include/tc_entity_pool.h
+    include/tc_gpu.h
+    include/tc_handle.h
     include/tc_hash_map.h
-    include/tc_resource_map.h
-    include/tc_scene.h
     include/tc_inspect.h
     include/tc_kind.h
+    include/tc_log.h
+    include/tc_material.h
+    include/tc_material_registry.h
     include/tc_mesh.h
     include/tc_mesh_registry.h
-    include/tc_texture.h
-    include/tc_texture_registry.h
+    include/tc_pool.h
+    include/tc_pose.h
+    include/tc_profiler.h
+    include/tc_quat.h
+    include/tc_registry_utils.h
+    include/tc_resource.h
+    include/tc_resource_map.h
+    include/tc_scene.h
+    include/tc_scene_registry.h
     include/tc_shader.h
     include/tc_shader_registry.h
     include/tc_skeleton.h
     include/tc_skeleton_registry.h
-    include/tc_animation.h
-    include/tc_animation_registry.h
-    include/tc_material.h
-    include/tc_material_registry.h
-    include/tc_scene_registry.h
-    include/tc_gpu.h
+    include/tc_texture.h
+    include/tc_texture_registry.h
+    include/tc_types.h
+    include/tc_vec3.h
+    include/termin_core.h
 )
 
 # Library target
@@ -76,7 +78,6 @@ else()
     add_library(termin_core STATIC ${TC_SOURCES} ${TC_HEADERS})
 endif()
 
-# Output directories (when built as subdirectory, inherit parent's bin/)
 set_target_properties(termin_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -90,77 +91,37 @@ target_include_directories(termin_core
         $<INSTALL_INTERFACE:include>
 )
 
-# Find Python and pybind11
-find_package(Python3 COMPONENTS Interpreter Development)
-
-# Find pybind11 via pip
-if(WIN32)
-    execute_process(
-        COMMAND python -m pybind11 --cmakedir
-        OUTPUT_VARIABLE pybind11_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    execute_process(
-        COMMAND python3 -m pybind11 --cmakedir
-        OUTPUT_VARIABLE pybind11_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-endif()
-find_package(pybind11 QUIET)
-
 # Platform-specific
 if(WIN32)
     target_link_libraries(termin_core PRIVATE winmm)
+    target_compile_definitions(termin_core PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(termin_core PRIVATE m)
 endif()
 
-# Link Python if found
-if(Python3_FOUND)
-    target_include_directories(termin_core PRIVATE ${Python3_INCLUDE_DIRS})
-    target_link_libraries(termin_core PRIVATE ${Python3_LIBRARIES})
-endif()
-
-# Link pybind11 if found
-if(pybind11_FOUND)
-    target_link_libraries(termin_core PRIVATE pybind11::headers)
-endif()
-
 # Compiler warnings
 if(MSVC)
-    target_compile_options(termin_core PRIVATE /W4)
+    target_compile_options(termin_core PRIVATE /W3)
 else()
-    target_compile_options(termin_core PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(termin_core PRIVATE -Wall -Wextra)
 endif()
 
 # Tests
 if(TC_BUILD_TESTS)
     enable_testing()
 
-    # C tests - main
     add_executable(termin_core_test tests/test_main.c)
-    target_link_libraries(termin_core_test termin_core)
+    target_link_libraries(termin_core_test PRIVATE termin_core)
     if(UNIX AND NOT APPLE)
-        target_link_libraries(termin_core_test m)
+        target_link_libraries(termin_core_test PRIVATE m)
     endif()
     add_test(NAME termin_core_test COMMAND termin_core_test)
 
-    # C tests - mesh
     add_executable(termin_mesh_test tests/test_mesh.c)
-    target_link_libraries(termin_mesh_test termin_core)
+    target_link_libraries(termin_mesh_test PRIVATE termin_core)
     add_test(NAME termin_mesh_test COMMAND termin_mesh_test)
-
-    # C++ tests (disabled - termin_core.hpp needs updating)
-    # add_executable(termin_core_test_cpp tests/test_cpp.cpp)
-    # target_link_libraries(termin_core_test_cpp termin_core)
-    # set_target_properties(termin_core_test_cpp PROPERTIES
-    #     CXX_STANDARD 17
-    #     CXX_STANDARD_REQUIRED ON
-    # )
-    # add_test(NAME termin_core_test_cpp COMMAND termin_core_test_cpp)
 endif()
 
 # Install

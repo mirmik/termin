@@ -48,10 +48,10 @@ CxxComponent::CxxComponent() {
 
 CxxComponent::~CxxComponent() {
     // Release Python wrapper reference if we have one
-    if (_c.py_wrap) {
-        nb::handle wrapper(reinterpret_cast<PyObject*>(_c.py_wrap));
-        wrapper.dec_ref();
-        _c.py_wrap = nullptr;
+    if (_c.wrapper) {
+        nb::handle py_wrapper(reinterpret_cast<PyObject*>(_c.wrapper));
+        py_wrapper.dec_ref();
+        _c.wrapper = nullptr;
     }
 }
 

@@ -9,9 +9,7 @@
 #include <stdio.h>
 #include <time.h>
 
-// For Py_INCREF/Py_DECREF on Python components
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
+// Reference counting is handled via vtable->retain/release
 
 // Macro for warning on access to dead entity
 #define WARN_DEAD_ENTITY(func_name, id) \
@@ -306,12 +304,12 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
         free(pool->uuids[i]);
         entity_id_array_free(&pool->children[i]);
 
-        // Release Python references for all components with py_wrap
+        // Release references for all components with wrapper
         ComponentArray* comps = &pool->components[i];
         for (size_t j = 0; j < comps->count; j++) {
             tc_component* c = comps->items[j];
-            if (c && c->py_wrap) {
-                Py_DECREF((PyObject*)c->py_wrap);
+            if (c && c->wrapper) {
+                tc_component_release(c);
             }
         }
         component_array_free(&pool->components[i]);
@@ -549,10 +547,10 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
         // Notify component it's being removed from entity
         tc_component_on_removed_from_entity(c);
 
-        // Remove from array and release Python reference
+        // Remove from array and release wrapper reference
         component_array_remove(comps, c);
-        if (c->py_wrap) {
-            Py_DECREF((PyObject*)c->py_wrap);
+        if (c->wrapper) {
+            tc_component_release(c);
         }
     }
     // Free components array itself
@@ -1147,9 +1145,9 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     c->owner_entity_id = id;
     c->owner_pool = pool;
 
-    // Keep Python object alive while attached to entity
-    if (c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
-        Py_INCREF((PyObject*)c->py_wrap);
+    // Keep external wrapper alive while attached to entity
+    if (c->kind == TC_EXTERNAL_COMPONENT && c->wrapper) {
+        tc_component_retain(c);
     }
 
     component_array_push(&pool->components[id.index], c);
@@ -1177,11 +1175,11 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
     // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
 
-    // Release Python reference (matches incref in add_component/set_py_wrap)
-    // For Python components: INCREF was done in add_component
-    // For C++ components: INCREF was done via set_py_wrap in bindings
-    if (c->py_wrap) {
-        Py_DECREF((PyObject*)c->py_wrap);
+    // Release wrapper reference (matches retain in add_component/set_wrapper)
+    // For external components: retain was done in add_component
+    // For native components: retain was done via set_wrapper in bindings
+    if (c->wrapper) {
+        tc_component_release(c);
     }
 }
 
@@ -1238,7 +1236,7 @@ tc_entity_id tc_entity_pool_migrate(
     dst_pool->transform_dirty[dst_idx] = true;
 
     // Move components (transfer ownership, don't copy)
-    // Components keep their py_wrap references
+    // Components keep their wrapper references
     ComponentArray* src_comps = &src_pool->components[src_idx];
     for (size_t i = 0; i < src_comps->count; i++) {
         tc_component* c = src_comps->items[i];
@@ -1268,7 +1266,7 @@ tc_entity_id tc_entity_pool_migrate(
     tc_u32_map_remove(src_pool->by_pick_id, src_pool->pick_ids[src_idx]);
 
     // Free source entity (bumps generation, invalidates old handles)
-    // Note: components were already moved, so no Py_DECREF will happen
+    // Note: components were already moved, so no release will happen
     src_pool->alive[src_idx] = false;
     src_pool->generations[src_idx]++;
     src_pool->free_stack[src_pool->free_count++] = src_idx;

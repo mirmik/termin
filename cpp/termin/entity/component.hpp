@@ -132,39 +132,39 @@ public:
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
 
-    // Get Python wrapper for this component (cached in _c.py_wrap)
+    // Get Python wrapper for this component (cached in _c.wrapper)
     nb::object to_python() {
-        if (!_c.py_wrap) {
-            nb::object wrapper = nb::cast(this, nb::rv_policy::reference);
-            _c.py_wrap = wrapper.inc_ref().ptr();
+        if (!_c.wrapper) {
+            nb::object py_wrapper = nb::cast(this, nb::rv_policy::reference);
+            _c.wrapper = py_wrapper.inc_ref().ptr();
         }
         return nb::borrow<nb::object>(
-            reinterpret_cast<PyObject*>(_c.py_wrap)
+            reinterpret_cast<PyObject*>(_c.wrapper)
         );
     }
 
     // Set cached Python wrapper (called from bindings when component is created)
-    void set_py_wrap(nb::object self) {
-        if (_c.py_wrap) {
-            nb::handle old(reinterpret_cast<PyObject*>(_c.py_wrap));
+    void set_wrapper(nb::object self) {
+        if (_c.wrapper) {
+            nb::handle old(reinterpret_cast<PyObject*>(_c.wrapper));
             old.dec_ref();
         }
-        _c.py_wrap = self.inc_ref().ptr();
+        _c.wrapper = self.inc_ref().ptr();
     }
 
     // Convert any tc_component to Python object
     static nb::object tc_to_python(tc_component* c) {
         if (!c) return nb::none();
 
-        if (c->kind == TC_CXX_COMPONENT) {
+        if (c->kind == TC_NATIVE_COMPONENT) {
             CxxComponent* cxx = from_tc(c);
             if (!cxx) return nb::none();
             return cxx->to_python();
         } else {
-            // TC_PYTHON_COMPONENT: py_wrap holds the Python object
-            if (!c->py_wrap) return nb::none();
+            // TC_EXTERNAL_COMPONENT: wrapper holds the Python object
+            if (!c->wrapper) return nb::none();
             return nb::borrow<nb::object>(
-                reinterpret_cast<PyObject*>(c->py_wrap)
+                reinterpret_cast<PyObject*>(c->wrapper)
             );
         }
     }

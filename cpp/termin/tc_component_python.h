@@ -1,10 +1,10 @@
-// tc_component_python.h - Python-specific component functions
-// These functions are used when components are created from Python
-// and need GIL-safe callbacks.
+// tc_component_python.h - External component functions
+// These functions are used when components are created from external
+// scripting languages (e.g. Python) and need callback support.
 #ifndef TC_COMPONENT_PYTHON_H
 #define TC_COMPONENT_PYTHON_H
 
-#include "tc_component.h"
+#include "../../core_c/include/tc_component.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +36,10 @@ typedef void (*tc_py_on_scene_inactive_fn)(void* py_self);
 typedef void (*tc_py_on_scene_active_fn)(void* py_self);
 typedef void (*tc_py_on_editor_start_fn)(void* py_self);
 
+// Reference counting callbacks for Python objects
+typedef void (*tc_py_incref_fn)(void* py_obj);
+typedef void (*tc_py_decref_fn)(void* py_obj);
+
 // Global Python callback table.
 // Set once at module initialization.
 typedef struct {
@@ -51,6 +55,9 @@ typedef struct {
     tc_py_on_scene_inactive_fn on_scene_inactive;
     tc_py_on_scene_active_fn on_scene_active;
     tc_py_on_editor_start_fn on_editor_start;
+    // Reference counting
+    tc_py_incref_fn incref;
+    tc_py_decref_fn decref;
 } tc_python_callbacks;
 
 // Set the global Python callbacks.

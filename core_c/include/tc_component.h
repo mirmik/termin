@@ -22,13 +22,17 @@ typedef struct {
 #endif
 
 // ============================================================================
-// Component Kind - distinguishes C++ vs Python components
+// Component Kind - distinguishes native vs external (scripted) components
 // ============================================================================
 
 typedef enum tc_component_kind {
-    TC_CXX_COMPONENT = 0,     // C++ component (data points to CxxComponent*)
-    TC_PYTHON_COMPONENT = 1   // Python component (data points to PythonComponent PyObject*)
+    TC_NATIVE_COMPONENT = 0,    // Native component (C/C++)
+    TC_EXTERNAL_COMPONENT = 1   // External component (scripting language, e.g. Python)
 } tc_component_kind;
+
+// Backwards compatibility aliases
+#define TC_CXX_COMPONENT TC_NATIVE_COMPONENT
+#define TC_PYTHON_COMPONENT TC_EXTERNAL_COMPONENT
 
 // ============================================================================
 // Drawable VTable - for components that can render geometry
@@ -88,6 +92,13 @@ struct tc_component_vtable {
     // If NULL, component data is not freed (external ownership)
     void (*drop)(tc_component* self);
 
+    // Reference counting for external wrapper objects
+    // retain: called when component gets a new wrapper reference (INCREF equivalent)
+    // release: called when wrapper reference is released (DECREF equivalent)
+    // These allow language-agnostic reference management
+    void (*retain)(tc_component* self);
+    void (*release)(tc_component* self);
+
     // Serialization (optional)
     // serialize returns opaque data pointer, deserialize consumes it
     void* (*serialize)(const tc_component* self);
@@ -115,16 +126,17 @@ struct tc_component {
     // Instance-specific type name (takes precedence over vtable->type_name)
     const char* type_name;
 
-    // Component kind (C++ or Python)
+    // Component kind (native or external)
     tc_component_kind kind;
 
-    // If true, this tc_component was allocated from Python
-    bool python_allocated;
+    // If true, this tc_component was allocated externally (e.g. from Python)
+    // and memory is managed by the external system
+    bool externally_managed;
 
-    // Python wrapper object (PyObject*)
-    // - For python_allocated components: holds the owning reference
-    // - For C++ components accessed from Python: cached wrapper (may be NULL)
-    void* py_wrap;
+    // External wrapper object (e.g. PyObject* for Python)
+    // - For externally_managed components: holds the owning reference
+    // - For native components accessed externally: cached wrapper (may be NULL)
+    void* wrapper;
 
     // Flags
     bool enabled;
@@ -155,9 +167,9 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
 #endif
     c->owner_pool = NULL;
     c->type_name = NULL;
-    c->kind = TC_CXX_COMPONENT;
-    c->python_allocated = false;
-    c->py_wrap = NULL;
+    c->kind = TC_NATIVE_COMPONENT;
+    c->externally_managed = false;
+    c->wrapper = NULL;
     c->enabled = true;
     c->active_in_editor = false;
     c->_started = false;
@@ -242,6 +254,18 @@ static inline void tc_component_on_scene_active(tc_component* c) {
 static inline void tc_component_drop(tc_component* c) {
     if (c && c->vtable && c->vtable->drop) {
         c->vtable->drop(c);
+    }
+}
+
+static inline void tc_component_retain(tc_component* c) {
+    if (c && c->vtable && c->vtable->retain) {
+        c->vtable->retain(c);
+    }
+}
+
+static inline void tc_component_release(tc_component* c) {
+    if (c && c->vtable && c->vtable->release) {
+        c->vtable->release(c);
     }
 }
 

@@ -124,11 +124,11 @@ nb::object Entity::get_python_component(const std::string& type_name) {
     size_t count = component_count();
     for (size_t i = 0; i < count; i++) {
         tc_component* tc = component_at(i);
-        if (tc && tc->kind == TC_PYTHON_COMPONENT && tc->py_wrap) {
+        if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
             const char* comp_type = tc->type_name ? tc->type_name :
                                     (tc->vtable ? tc->vtable->type_name : nullptr);
             if (comp_type && type_name == comp_type) {
-                return nb::borrow((PyObject*)tc->py_wrap);
+                return nb::borrow((PyObject*)tc->wrapper);
             }
         }
     }
