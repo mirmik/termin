@@ -377,6 +377,12 @@ void tc_material_phase_apply_textures(tc_material_phase* phase) {
         tc_texture* tex = tc_texture_get(phase->textures[i].texture);
         if (tex) {
             tc_texture_bind_gpu(tex, (int)i);
+        } else {
+            // Texture handle is stale or invalid - log warning
+            tc_log(TC_LOG_WARN, "tc_material_phase_apply_textures: texture '%s' is invalid (handle %d:%d)",
+                   phase->textures[i].name,
+                   phase->textures[i].texture.index,
+                   phase->textures[i].texture.generation);
         }
     }
 }
@@ -384,8 +390,19 @@ void tc_material_phase_apply_textures(tc_material_phase* phase) {
 void tc_material_phase_apply_uniforms(tc_material_phase* phase, tc_shader* shader) {
     if (!phase || !shader) return;
 
+    // Debug: log shader name for first few calls
+    static int debug_count = 0;
+    bool do_debug = (debug_count < 5);
+    if (do_debug) {
+        tc_log(TC_LOG_INFO, "[apply_uniforms] shader='%s' program=%u uniform_count=%zu",
+               shader->name ? shader->name : "(null)", shader->gpu_program, phase->uniform_count);
+    }
+
     for (size_t i = 0; i < phase->uniform_count; i++) {
         const tc_uniform_value* u = &phase->uniforms[i];
+        if (do_debug) {
+            tc_log(TC_LOG_INFO, "  uniform[%zu]: name='%s' type=%d", i, u->name, u->type);
+        }
         switch (u->type) {
             case TC_UNIFORM_BOOL:
             case TC_UNIFORM_INT:
@@ -410,8 +427,15 @@ void tc_material_phase_apply_uniforms(tc_material_phase* phase, tc_shader* shade
                 // Arrays handled separately if needed
                 break;
             default:
+                if (do_debug) {
+                    tc_log(TC_LOG_WARN, "  unknown uniform type %d for '%s'", u->type, u->name);
+                }
                 break;
         }
+    }
+
+    if (do_debug) {
+        debug_count++;
     }
 
     // Bind texture samplers
@@ -454,6 +478,11 @@ void tc_material_phase_apply_with_mvp(
     const float* projection
 ) {
     if (!phase || !shader) return;
+
+    // Ensure shader is active (defensive - caller should have called use() already)
+    if (shader->gpu_program != 0) {
+        tc_shader_use_gpu(shader);
+    }
 
     // Set MVP matrices
     tc_shader_set_mat4(shader, "u_model", model, false);

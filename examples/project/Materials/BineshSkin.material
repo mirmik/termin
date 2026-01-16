@@ -1,6 +1,6 @@
 {
   "uuid": "bac6b899-71ad-443f-bc4b-ceeed449e11e",
-  "shader": "AdvancedPBRShader",
+  "shader": "AdvancedPBR",
   "uniforms": {
     "u_metallic": 0.0,
     "u_color": [

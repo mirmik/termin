@@ -231,11 +231,9 @@ def _apply_uniform_defaults(phase, shader_phase, uniforms: dict):
             phase.set_uniform_int(name, int(default))
         elif prop_type == "Bool":
             phase.set_uniform_int(name, 1 if default else 0)
-        elif prop_type in ("Vec3", "Color") and isinstance(default, (list, tuple)) and len(default) >= 3:
+        elif prop_type == "Vec3" and isinstance(default, (list, tuple)) and len(default) >= 3:
             phase.set_uniform_vec3(name, Vec3(default[0], default[1], default[2]))
-        elif prop_type == "Vec4" and isinstance(default, (list, tuple)) and len(default) >= 4:
-            phase.set_uniform_vec4(name, Vec4(default[0], default[1], default[2], default[3]))
-        elif prop_type == "Color" and isinstance(default, (list, tuple)) and len(default) >= 4:
+        elif prop_type in ("Vec4", "Color") and isinstance(default, (list, tuple)) and len(default) >= 4:
             phase.set_uniform_vec4(name, Vec4(default[0], default[1], default[2], default[3]))
 
     # Apply extra uniforms (from .material file)
@@ -250,6 +248,28 @@ def _apply_uniform_defaults(phase, shader_phase, uniforms: dict):
             phase.set_uniform_int(name, 1 if value else 0)
         elif isinstance(value, int):
             phase.set_uniform_int(name, value)
+
+
+def _apply_texture_defaults(phase, shader_phase, rm):
+    """Apply default textures from shader phase properties."""
+    from termin.assets.texture_handle import get_white_texture_handle, get_normal_texture_handle
+
+    for prop in shader_phase.uniforms:
+        if prop.property_type != "Texture":
+            continue
+
+        name = prop.name
+        default = prop.default
+
+        # Get default texture based on property default value
+        if isinstance(default, str) and default == "normal":
+            tex_handle = get_normal_texture_handle()
+        else:
+            tex_handle = get_white_texture_handle()
+
+        tc_tex = tex_handle.get()
+        if tc_tex is not None:
+            phase.set_texture(name, tc_tex)
 
 
 def _parse_material_content(
@@ -358,6 +378,13 @@ def _parse_material_content(
             log.error(f"[MaterialAsset] Failed to add phase {i}")
             continue
 
+        # Apply shader features (e.g., lighting_ubo)
+        shader = phase.shader
+        for feature in program.features:
+            if feature == "lighting_ubo":
+                shader.set_feature(1)  # TC_SHADER_FEATURE_LIGHTING_UBO = 1
+                log.info(f"[MaterialAsset] Applied lighting_ubo feature to shader '{shader_name}'")
+
         # Set available marks
         if shader_phase.available_marks:
             phase.set_available_marks(shader_phase.available_marks)
@@ -365,7 +392,10 @@ def _parse_material_content(
         # Apply uniform defaults
         _apply_uniform_defaults(phase, shader_phase, uniforms)
 
-        # Apply textures
+        # Set default textures from shader properties
+        _apply_texture_defaults(phase, shader_phase, rm)
+
+        # Apply textures from .material file (override defaults)
         for tex_name, tex_handle in textures.items():
             # TextureHandle.get() returns TcTexture
             tc_tex = tex_handle.get() if tex_handle else None

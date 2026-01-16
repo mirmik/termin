@@ -421,6 +421,9 @@ void ColorPass::execute_with_data(
         // Apply material uniforms (textures, uniforms, MVP matrices)
         tc_shader* raw_shader = tc_shader_get(shader_handle);
         if (raw_shader) {
+            // Clear any pending GL errors before apply
+            graphics->clear_gl_errors();
+
             tc_material_phase_apply_with_mvp(
                 dc.phase,
                 raw_shader,
@@ -430,7 +433,10 @@ void ColorPass::execute_with_data(
             );
         }
         if (graphics->check_gl_error("after tc_material_phase_apply_with_mvp")) {
-            tc::Log::error("  shader: %s", shader_to_use.name());
+            tc::Log::error("  shader: %s, phase->uniform_count=%zu, phase->texture_count=%zu",
+                          shader_to_use.name(),
+                          dc.phase->uniform_count,
+                          dc.phase->texture_count);
         }
 
         if (detailed) {
@@ -448,8 +454,15 @@ void ColorPass::execute_with_data(
         // Lighting UBO binding
         // Note: AMD requires glBindBufferBase AFTER glUniformBlockBinding
         // Also AMD requires UBO to be unbound when shader doesn't use it
+        static int ubo_debug_count = 0;
         if (ubo_active) {
-            if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
+            bool has_ubo_feature = shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO);
+            if (ubo_debug_count < 5) {
+                tc::Log::info("[ColorPass] shader='%s' has_lighting_ubo=%d features=%u",
+                             shader_to_use.name(), has_ubo_feature ? 1 : 0, shader_to_use.features());
+                ubo_debug_count++;
+            }
+            if (has_ubo_feature) {
                 shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
                 lighting_ubo_.bind();
             } else {
