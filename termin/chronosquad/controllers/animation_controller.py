@@ -44,10 +44,8 @@ class AnimationController(PythonComponent):
         if self._initialized:
             return
         self._initialized = True
-        log.info(f"[AnimationController] Initializing for entity '{self.entity.name if self.entity else None}'")
         self._find_object_controller()
         self._find_animation_player()
-        log.info(f"[AnimationController] Init done: objctr={self._object_controller is not None}, player={self._animation_player is not None}")
 
     def _find_object_controller(self) -> None:
         """Find ObjectController on same entity."""
@@ -100,7 +98,6 @@ class AnimationController(PythonComponent):
             return
 
         timeline_time = timeline.current_time
-        log.info(f"[AnimationController] {self.entity.name}: timeline_time={timeline_time:.2f}")
 
         # Convert to local time
         local_time = chrono_obj.local_time_real_time(timeline_time)
@@ -161,5 +158,4 @@ class AnimationController(PythonComponent):
 
         # Update bones at calculated time (with booster)
         final_time = anim_time * task.animation_booster
-        log.info(f"[AnimationController] {self.entity.name}: update_bones_at_time({final_time:.2f})")
         self._animation_player.update_bones_at_time(final_time)

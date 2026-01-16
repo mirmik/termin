@@ -293,13 +293,11 @@ protected:
             TcShader shader_to_use(shader_handle);
             shader_to_use.use();
 
-            // Set uniforms via TcShader
-            shader_to_use.set_uniform_mat4("u_model", model.data, false);
-            shader_to_use.set_uniform_mat4("u_view", view.data, false);
-            shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
-
             context.current_tc_shader = shader_to_use;
             context.extra_uniforms = extra_uniforms;
+
+            // Set uniforms via virtual method (allows derived classes to add custom uniforms)
+            setup_draw_uniforms(dc, shader_to_use, model, view, projection, context, extra_uniforms);
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 

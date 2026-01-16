@@ -153,6 +153,9 @@ vec4 doit()
     vec3 color = texture(u_input_tex, v_uv).rgb;
     float linear_depth = texture(u_depth_texture, v_uv).r;
 
+    //DEBUG:
+    // return vec4(vec3(linear_depth), 1.0);
+
     // Reconstruct world position
     vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
 
