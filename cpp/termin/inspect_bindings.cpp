@@ -6,7 +6,7 @@
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
 #include "render/frame_pass.hpp"
-#include "../../core_c/include/tc_kind.hpp"
+#include "inspect/tc_kind.hpp"
 #include "inspect_bindings.hpp"
 
 namespace nb = nanobind;
@@ -60,9 +60,7 @@ void register_builtin_kind_handlers() {
         // deserialize - return as-is, setter handles conversion
         nb::cpp_function([](nb::object data) -> nb::object {
             return data;
-        }),
-        // convert
-        nb::none()
+        })
     );
 }
 
@@ -126,25 +124,9 @@ static tc::TcKind* generate_list_handler(const std::string& kind) {
         return result;
     });
 
-    // convert
-    list_handler.python.convert = nb::cpp_function([elem_kind](nb::object value) -> nb::object {
-        if (value.is_none()) return nb::list();
-        auto* handler = tc::KindRegistry::instance().get(elem_kind);
-        if (!handler || !handler->has_python()) {
-            return value;
-        }
-        nb::list result;
-        for (auto item : value) {
-            nb::object nb_item = nb::borrow<nb::object>(item);
-            result.append(handler->python.convert(nb_item));
-        }
-        return result;
-    });
-
     // Prevent Python GC from collecting these
     list_handler.python.serialize.inc_ref();
     list_handler.python.deserialize.inc_ref();
-    list_handler.python.convert.inc_ref();
     list_handler._has_python = true;
 
     return &list_handler;

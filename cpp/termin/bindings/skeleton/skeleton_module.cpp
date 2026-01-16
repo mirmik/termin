@@ -11,7 +11,7 @@
 #include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/entity/entity.hpp"
-#include "../../../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 #include "../../../trent/trent.h"
 #include "tc_log.hpp"
 
@@ -257,20 +257,6 @@ void register_tc_skeleton_kind() {
             }
             std::string uuid = nb::cast<std::string>(d["uuid"]);
             return nb::cast(termin::TcSkeleton::from_uuid(uuid));
-        }),
-        // convert
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(termin::TcSkeleton());
-            }
-            if (nb::isinstance<termin::TcSkeleton>(value)) {
-                return value;
-            }
-            // Nothing worked
-            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
-            std::string type_name = nb::cast<std::string>(type_str);
-            tc::Log::error("tc_skeleton convert failed: cannot convert %s to TcSkeleton", type_name.c_str());
-            return nb::cast(termin::TcSkeleton());
         })
     );
 }

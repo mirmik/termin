@@ -22,8 +22,7 @@ Usage:
     KindRegistry.instance().register_python(
         "my_handle",
         serialize=lambda obj: obj.to_dict(),
-        deserialize=lambda data: MyHandle.from_dict(data),
-        convert=None
+        deserialize=lambda data: MyHandle.from_dict(data)
     )
 """
 
@@ -42,8 +41,7 @@ class KindRegistry:
     def register_python(
         name: str,
         serialize=None,
-        deserialize=None,
-        convert=None
+        deserialize=None
     ):
         """Register Python handlers for a kind.
 
@@ -51,13 +49,11 @@ class KindRegistry:
             name: Kind name (e.g., "mesh_handle", "my_enum")
             serialize: callable(obj) -> dict
             deserialize: callable(dict) -> obj
-            convert: callable(obj) -> obj (optional, for UI value conversion)
         """
         _KindRegistry.instance().register_python(
             name,
             serialize or (lambda x: None),
-            deserialize or (lambda x: None),
-            convert
+            deserialize or (lambda x: None)
         )
 
     @staticmethod
@@ -71,11 +67,6 @@ class KindRegistry:
         return _KindRegistry.instance().deserialize(kind, data)
 
     @staticmethod
-    def convert(kind: str, value):
-        """Convert value using registered handler."""
-        return _KindRegistry.instance().convert(kind, value)
-
-    @staticmethod
     def kinds():
         """Get all registered kind names."""
         return _KindRegistry.instance().kinds()
@@ -87,7 +78,6 @@ def register_kind(name: str):
     The class should have static methods:
     - serialize(obj) -> dict
     - deserialize(dict) -> obj
-    - convert(obj) -> obj (optional)
 
     Example:
         @register_kind("light_type")
@@ -104,13 +94,11 @@ def register_kind(name: str):
     def decorator(cls):
         serialize_fn = getattr(cls, 'serialize', None)
         deserialize_fn = getattr(cls, 'deserialize', None)
-        convert_fn = getattr(cls, 'convert', None)
 
         KindRegistry.register_python(
             name,
             serialize=serialize_fn,
-            deserialize=deserialize_fn,
-            convert=convert_fn
+            deserialize=deserialize_fn
         )
         return cls
 

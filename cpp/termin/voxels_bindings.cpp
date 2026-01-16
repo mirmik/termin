@@ -9,7 +9,7 @@
 #include "termin/voxels/voxel_grid.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
-#include "../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -546,24 +546,6 @@ NB_MODULE(_voxels_native, m) {
                 nb::dict d = nb::cast<nb::dict>(data);
                 return nb::cast(VoxelGridHandle::deserialize(d));
             }
-            return nb::cast(VoxelGridHandle());
-        }),
-        // convert
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(VoxelGridHandle());
-            }
-            if (nb::isinstance<VoxelGridHandle>(value)) {
-                return value;
-            }
-            // Try VoxelGridAsset (has 'resource' attribute)
-            if (nb::hasattr(value, "resource")) {
-                return nb::cast(VoxelGridHandle::from_asset(value));
-            }
-            // Nothing worked
-            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
-            std::string type_name = nb::cast<std::string>(type_str);
-            tc::Log::error("voxel_grid_handle convert failed: cannot convert %s to VoxelGridHandle", type_name.c_str());
             return nb::cast(VoxelGridHandle());
         })
     );

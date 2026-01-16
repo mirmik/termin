@@ -4,7 +4,7 @@
 #include "termin/mesh_bindings.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/inspect/inspect_registry.hpp"
-#include "../../../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -79,32 +79,6 @@ void register_tc_mesh_kind() {
                 mesh.ensure_loaded();
             }
             return nb::cast(mesh);
-        }),
-        // convert
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(termin::TcMesh());
-            }
-            if (nb::isinstance<termin::TcMesh>(value)) {
-                return value;
-            }
-            // Try MeshAsset (has 'mesh_data' attribute returning TcMesh)
-            if (nb::hasattr(value, "mesh_data")) {
-                nb::object res = value.attr("mesh_data");
-                if (nb::isinstance<termin::TcMesh>(res)) {
-                    return res;
-                }
-            }
-            // Try string (lookup by name)
-            if (nb::isinstance<nb::str>(value)) {
-                std::string name = nb::cast<std::string>(value);
-                tc_mesh_handle h = tc_mesh_find_by_name(name.c_str());
-                if (!tc_mesh_handle_is_invalid(h)) {
-                    return nb::cast(termin::TcMesh(h));
-                }
-            }
-            tc::Log::error("tc_mesh convert failed: cannot convert to TcMesh");
-            return nb::cast(termin::TcMesh());
         })
     );
 }

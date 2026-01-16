@@ -6,7 +6,7 @@
 #include "termin/render/render_state.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/inspect/inspect_registry.hpp"
-#include "../../../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 extern "C" {
 #include "tc_shader.h"
@@ -758,22 +758,6 @@ void register_material_kind_handlers() {
                     return nb::cast(TcMaterial::from_uuid(uuid));
                 }
             }
-            return nb::cast(TcMaterial());
-        }),
-        // convert
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(TcMaterial());
-            }
-            if (nb::isinstance<TcMaterial>(value)) {
-                return value;
-            }
-            if (nb::isinstance<nb::str>(value)) {
-                return nb::cast(TcMaterial::from_uuid(nb::cast<std::string>(value)));
-            }
-            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
-            std::string type_name = nb::cast<std::string>(type_str);
-            tc::Log::error("tc_material convert failed: cannot convert %s to TcMaterial", type_name.c_str());
             return nb::cast(TcMaterial());
         })
     );

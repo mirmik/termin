@@ -8,7 +8,7 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/entity/entity.hpp"
-#include "../../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -93,21 +93,6 @@ void register_kind_handlers() {
                 if (mat.is_valid()) {
                     return nb::cast(mat);
                 }
-            }
-            return nb::cast(TcMaterial());
-        }),
-        // convert
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(TcMaterial());
-            }
-            if (nb::isinstance<TcMaterial>(value)) {
-                return value;
-            }
-            // Try string (material name)
-            if (nb::isinstance<nb::str>(value)) {
-                std::string name = nb::cast<std::string>(value);
-                return nb::cast(TcMaterial::from_name(name));
             }
             return nb::cast(TcMaterial());
         })

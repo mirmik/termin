@@ -51,7 +51,7 @@ inline bool check_heap_entity() { return true; }
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/pose3.hpp"
 #include "trent/trent.h"
-#include "../../../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 
 namespace nb = nanobind;
 using namespace termin;

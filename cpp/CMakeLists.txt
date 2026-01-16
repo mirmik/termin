@@ -205,9 +205,10 @@ add_library(entity_lib SHARED
     termin/entity/components/rotator_component.cpp
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp
-    ../core_c/src/tc_kind_instance.cpp
+    termin/inspect/tc_kind_cpp.cpp
+    termin/bindings/inspect/tc_kind_python_instance.cpp
 )
-target_include_directories(entity_lib PUBLIC ../core_c/include)
+target_include_directories(entity_lib PUBLIC ../core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE

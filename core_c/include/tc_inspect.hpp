@@ -13,7 +13,9 @@
 #include <any>
 
 #include "trent/trent.h"
-#include "tc_kind.hpp"
+// tc_kind.hpp has been moved to cpp/termin/inspect/
+// Include via proper path from projects that need both C++ and Python kind support
+#include "../../cpp/termin/inspect/tc_kind.hpp"
 
 namespace nb = nanobind;
 

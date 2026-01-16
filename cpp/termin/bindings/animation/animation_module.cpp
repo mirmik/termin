@@ -6,7 +6,7 @@
 #include "termin/animation/animation_player.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
 #include "termin/inspect/inspect_registry.hpp"
-#include "../../../../core_c/include/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -248,24 +248,6 @@ void register_animation_kind_handlers() {
                     return nb::cast(TcAnimationClip::from_uuid(uuid));
                 }
             }
-            return nb::cast(TcAnimationClip());
-        }),
-        // convert
-        nb::cpp_function([](nb::object value) -> nb::object {
-            if (value.is_none()) {
-                return nb::cast(TcAnimationClip());
-            }
-            if (nb::isinstance<TcAnimationClip>(value)) {
-                return value;
-            }
-            // Try string (UUID)
-            if (nb::isinstance<nb::str>(value)) {
-                return nb::cast(TcAnimationClip::from_uuid(nb::cast<std::string>(value)));
-            }
-            // Nothing worked
-            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
-            std::string type_name = nb::cast<std::string>(type_str);
-            tc::Log::error("tc_animation_clip convert failed: cannot convert %s to TcAnimationClip", type_name.c_str());
             return nb::cast(TcAnimationClip());
         })
     );
