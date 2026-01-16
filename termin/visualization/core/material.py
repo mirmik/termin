@@ -1,29 +1,25 @@
 """Material and MaterialPhase - re-export from C++.
 
-NOTE: TcMaterial is the new C-based material system.
-Material and MaterialPhase are exported as aliases for backwards compatibility
-during the migration period.
+TcMaterial is the C-based material system.
+Material and MaterialPhase are now aliases to TcMaterial/TcMaterialPhase.
 """
 from termin._native.render import (
     TcMaterial,
     TcMaterialPhase,
     TcRenderState,
-    # Old classes (deprecated, use TcMaterial instead)
-    Material,
-    MaterialPhase,
-    get_error_material,
 )
 
-# Alias for convenience
+# Backwards compatibility aliases
+Material = TcMaterial
+MaterialPhase = TcMaterialPhase
 MaterialPhaseC = TcMaterialPhase
 
 __all__ = [
     "TcMaterial",
     "TcMaterialPhase",
     "TcRenderState",
-    "MaterialPhaseC",
-    # Old (deprecated)
+    # Aliases for backwards compatibility
     "Material",
     "MaterialPhase",
-    "get_error_material",
+    "MaterialPhaseC",
 ]

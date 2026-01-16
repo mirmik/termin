@@ -4,7 +4,7 @@
 
 #include "inspect/inspect_registry.hpp"
 #include "entity/component.hpp"
-#include "render/material.hpp"
+#include "material/tc_material_handle.hpp"
 #include "render/frame_pass.hpp"
 #include "../../core_c/include/tc_kind.hpp"
 #include "inspect_bindings.hpp"
@@ -30,9 +30,10 @@ static void* get_raw_pointer(nb::object obj) {
         return static_cast<void*>(nb::cast<Component*>(obj));
     } catch (const nb::cast_error&) {}
 
-    // Material uses shared_ptr
+    // TcMaterial (handle-based)
     try {
-        return static_cast<void*>(nb::cast<Material*>(obj));
+        TcMaterial mat = nb::cast<TcMaterial>(obj);
+        return static_cast<void*>(mat.get());
     } catch (const nb::cast_error&) {}
 
     // FramePass (ColorPass, ShadowPass, etc.)

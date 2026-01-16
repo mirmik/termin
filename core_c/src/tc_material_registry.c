@@ -1,5 +1,6 @@
 // tc_material_registry.c - Material registry with pool + hash table
 #include "tc_material_registry.h"
+#include "tc_shader_registry.h"
 #include "tc_pool.h"
 #include "tc_resource_map.h"
 #include "tc_registry_utils.h"
@@ -42,6 +43,19 @@ void tc_material_init(void) {
 
 void tc_material_shutdown(void) {
     TC_REGISTRY_SHUTDOWN_GUARD(g_initialized, "tc_material");
+
+    // Release shader references for all materials before freeing pool
+    for (uint32_t i = 0; i < g_material_pool.capacity; i++) {
+        if (g_material_pool.states[i] == TC_SLOT_OCCUPIED) {
+            tc_material* mat = (tc_material*)tc_pool_get_unchecked(&g_material_pool, i);
+            for (size_t j = 0; j < mat->phase_count; j++) {
+                tc_shader* s = tc_shader_get(mat->phases[j].shader);
+                if (s) {
+                    tc_shader_release(s);
+                }
+            }
+        }
+    }
 
     tc_pool_free(&g_material_pool);
     tc_resource_map_free(g_uuid_to_index);
@@ -174,11 +188,25 @@ bool tc_material_is_valid(tc_material_handle h) {
     return tc_pool_is_valid(&g_material_pool, h);
 }
 
+// Helper to release all shader references in a material
+static void material_release_shaders(tc_material* mat) {
+    if (!mat) return;
+    for (size_t i = 0; i < mat->phase_count; i++) {
+        tc_shader* s = tc_shader_get(mat->phases[i].shader);
+        if (s) {
+            tc_shader_release(s);
+        }
+    }
+}
+
 bool tc_material_destroy(tc_material_handle h) {
     if (!g_initialized) return false;
 
     tc_material* mat = tc_material_get(h);
     if (!mat) return false;
+
+    // Release all shader references before destroying
+    material_release_shaders(mat);
 
     tc_resource_map_remove(g_uuid_to_index, mat->header.uuid);
     tc_pool_free_slot(&g_material_pool, h);
@@ -233,6 +261,12 @@ tc_material_phase* tc_material_add_phase(
         return NULL;
     }
 
+    // Add reference to shader (material owns it now)
+    tc_shader* s = tc_shader_get(shader);
+    if (s) {
+        tc_shader_add_ref(s);
+    }
+
     tc_material_phase* phase = &mat->phases[mat->phase_count];
     memset(phase, 0, sizeof(tc_material_phase));
 
@@ -255,6 +289,12 @@ tc_material_phase* tc_material_add_phase(
 bool tc_material_remove_phase(tc_material* mat, size_t index) {
     if (!mat || index >= mat->phase_count) {
         return false;
+    }
+
+    // Release shader reference for removed phase
+    tc_shader* s = tc_shader_get(mat->phases[index].shader);
+    if (s) {
+        tc_shader_release(s);
     }
 
     for (size_t i = index; i < mat->phase_count - 1; i++) {
@@ -560,10 +600,15 @@ tc_material_handle tc_material_copy(tc_material_handle src, const char* new_uuid
         return tc_material_handle_invalid();
     }
 
-    // Copy phases
+    // Copy phases and add shader references
     dst_mat->phase_count = src_mat->phase_count;
     for (size_t i = 0; i < src_mat->phase_count; i++) {
         dst_mat->phases[i] = src_mat->phases[i];
+        // Add reference to shader for the copied phase
+        tc_shader* s = tc_shader_get(dst_mat->phases[i].shader);
+        if (s) {
+            tc_shader_add_ref(s);
+        }
     }
 
     // Copy texture handles
