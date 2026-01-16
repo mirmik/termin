@@ -236,10 +236,12 @@ cpp/termin/inspect/ (тонкие обёртки)
 
 ## Порядок реализации
 
-1. [ ] Добавить `tc_inspect_lang` enum и `tc_field_vtable` в tc_inspect.h
-2. [ ] Изменить `tc_field_desc` - добавить per-field vtable slots
-3. [ ] Добавить `tc_inspect_register_field`, `tc_inspect_set_field_vtable`
-4. [ ] Создать `tc_inspect_cpp.hpp` с template регистрацией
-5. [ ] Создать `tc_inspect_python.hpp` с Python регистрацией
-6. [ ] Мигрировать существующий код с InspectRegistry на новый API
-7. [ ] Удалить InspectRegistry и InspectFieldInfo
+1. [x] Добавить `tc_inspect_lang` enum и `tc_field_vtable` в tc_inspect.h
+2. [x] Изменить `tc_field_desc` - добавить per-field vtable slots
+3. [x] Добавить `tc_inspect_add_field`, `tc_inspect_set_field_vtable`
+4. [x] Обновить `tc_inspect.c` с новой реализацией
+5. [x] Обновить тесты под новый API
+6. [x] Создать `tc_inspect_cpp.hpp` с template регистрацией
+7. [x] Создать `tc_inspect_python.hpp` с Python регистрацией
+8. [ ] Мигрировать существующий код с InspectRegistry на новый API
+9. [ ] Удалить InspectRegistry и InspectFieldInfo

@@ -16,6 +16,7 @@
 // tc_kind.hpp has been moved to cpp/termin/inspect/
 // Include via proper path from projects that need both C++ and Python kind support
 #include "../../cpp/termin/inspect/tc_kind.hpp"
+#include "../../cpp/termin/inspect/tc_inspect_cpp.hpp"
 
 namespace nb = nanobind;
 
@@ -736,6 +737,7 @@ public:
 
 // ============================================================================
 // Static registration helpers (for C++ components)
+// Uses new C API via tc_inspect_cpp.hpp
 // ============================================================================
 
 template<typename C, typename T>
@@ -743,6 +745,9 @@ struct InspectFieldRegistrar {
     InspectFieldRegistrar(T C::*member, const char* type_name,
                           const char* path, const char* label, const char* kind,
                           double min = 0.0, double max = 1.0, double step = 0.01) {
+        // Use new API from tc_inspect_cpp.hpp
+        InspectCpp::register_field<C, T>(type_name, member, path, label, kind, min, max, step);
+        // Also register in legacy InspectRegistry for backward compatibility during migration
         InspectRegistry::instance().add<C, T>(type_name, member, path, label, kind, min, max, step);
     }
 };
