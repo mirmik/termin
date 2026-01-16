@@ -7,6 +7,7 @@
 #include "../../cpp/termin/entity/component.hpp"
 
 #include "../include/tc_inspect.hpp"
+#include "../../cpp/termin/inspect/tc_inspect_python.hpp"
 
 namespace tc {
 
@@ -152,6 +153,9 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
     }
 
     _type_backends[type_name] = TypeBackend::Python;
+
+    // Also register in C API for vtable-based access
+    InspectPython::register_fields_from_dict(type_name.c_str(), fields_dict);
 }
 
 } // namespace tc

@@ -1,5 +1,6 @@
 // tc_inspect.c - Field inspection/serialization implementation
 #include "../include/tc_inspect.h"
+#include "../include/tc_kind.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -691,14 +692,26 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
         if (!f || !f->is_serializable) continue;
 
         tc_value val = tc_inspect_get(obj, type_name, f->path);
+        if (val.type == TC_VALUE_NIL) continue;
 
-        // Apply custom type serializer if exists
+        // Try tc_kind serialization first (language-agnostic)
+        if (tc_kind_exists(f->kind)) {
+            tc_value serialized = tc_kind_serialize_any(f->kind, &val);
+            if (serialized.type != TC_VALUE_NIL) {
+                tc_value_dict_set(&result, f->path, serialized);
+                tc_value_free(&val);
+                continue;
+            }
+        }
+
+        // Fallback to tc_custom_type_handler (for TC_VALUE_CUSTOM memory management)
         const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
         if (h && h->serialize) {
             tc_value serialized = h->serialize(&val);
             tc_value_dict_set(&result, f->path, serialized);
             tc_value_free(&val);
         } else {
+            // No serializer - store value as-is
             tc_value_dict_set(&result, f->path, val);
         }
     }
@@ -707,6 +720,10 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
 }
 
 void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data) {
+    tc_inspect_deserialize_with_scene(obj, type_name, data, NULL);
+}
+
+void tc_inspect_deserialize_with_scene(void* obj, const char* type_name, const tc_value* data, tc_scene* scene) {
     if (!data || data->type != TC_VALUE_DICT) return;
 
     size_t count = tc_inspect_field_count(type_name);
@@ -717,13 +734,24 @@ void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* da
         tc_value* field_data = tc_value_dict_get((tc_value*)data, f->path);
         if (!field_data || field_data->type == TC_VALUE_NIL) continue;
 
-        // Apply custom type deserializer if exists
+        // Try tc_kind deserialization first (language-agnostic)
+        if (tc_kind_exists(f->kind)) {
+            tc_value deserialized = tc_kind_deserialize_any(f->kind, field_data, scene);
+            if (deserialized.type != TC_VALUE_NIL) {
+                tc_inspect_set(obj, type_name, f->path, deserialized);
+                tc_value_free(&deserialized);
+                continue;
+            }
+        }
+
+        // Fallback to tc_custom_type_handler
         const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
         if (h && h->deserialize) {
             tc_value deserialized = h->deserialize(field_data);
             tc_inspect_set(obj, type_name, f->path, deserialized);
             tc_value_free(&deserialized);
         } else {
+            // No deserializer - set value as-is
             tc_inspect_set(obj, type_name, f->path, *field_data);
         }
     }

@@ -288,11 +288,18 @@ TC_API void tc_inspect_action_lang(void* obj, const char* type_name, const char*
 // Serialization
 // ============================================================================
 
+// Forward declaration for scene (needed for deserialization with scene context)
+struct tc_scene;
+typedef struct tc_scene tc_scene;
+
 // Serialize all fields to dict (only is_serializable fields)
 TC_API tc_value tc_inspect_serialize(void* obj, const char* type_name);
 
 // Deserialize from dict
 TC_API void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data);
+
+// Deserialize from dict with scene context (for entity_handle deserialization)
+TC_API void tc_inspect_deserialize_with_scene(void* obj, const char* type_name, const tc_value* data, tc_scene* scene);
 
 // ============================================================================
 // Parameterized kinds (e.g., "list[entity_handle]")

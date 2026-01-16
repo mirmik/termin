@@ -236,6 +236,8 @@ cpp/termin/inspect/ (тонкие обёртки)
 
 ## Порядок реализации
 
+### Фаза 1: Метаданные в C API (ЗАВЕРШЕНО)
+
 1. [x] Добавить `tc_inspect_lang` enum и `tc_field_vtable` в tc_inspect.h
 2. [x] Изменить `tc_field_desc` - добавить per-field vtable slots
 3. [x] Добавить `tc_inspect_add_field`, `tc_inspect_set_field_vtable`
@@ -243,5 +245,18 @@ cpp/termin/inspect/ (тонкие обёртки)
 5. [x] Обновить тесты под новый API
 6. [x] Создать `tc_inspect_cpp.hpp` с template регистрацией
 7. [x] Создать `tc_inspect_python.hpp` с Python регистрацией
-8. [ ] Мигрировать существующий код с InspectRegistry на новый API
-9. [ ] Удалить InspectRegistry и InspectFieldInfo
+8. [x] INSPECT_FIELD макросы регистрируют в обоих API (C + InspectRegistry)
+
+### Фаза 2: Полная миграция сериализации (TODO)
+
+9. [ ] Интегрировать tc_kind с tc_inspect для сериализации через C API
+10. [ ] Переписать serialize_all на использование C API
+11. [ ] Переписать deserialize_component_fields на C API
+12. [ ] Удалить InspectFieldInfo struct
+13. [ ] Удалить InspectRegistry class
+
+## Текущее состояние
+
+- **Метаданные полей**: хранятся в C API (tc_inspect), дублируются в InspectRegistry
+- **Сериализация**: через InspectRegistry (использует KindRegistry + InspectFieldInfo)
+- **Регистрация полей**: INSPECT_FIELD вызывает оба API
