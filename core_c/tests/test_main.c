@@ -303,33 +303,35 @@ static void test_setter(void* obj, const tc_field_desc* field, tc_value value, v
 static int test_inspect(void) {
     printf("Testing tc_inspect...\n");
 
-    static const tc_field_desc test_fields[] = {
-        { .path = "speed",  .label = "Speed",  .kind = "float", .min = 0, .max = 100, .step = 0.1 },
-        { .path = "health", .label = "Health", .kind = "int",   .min = 0, .max = 100, .step = 1 },
-        { .path = "active", .label = "Active", .kind = "bool" },
-    };
+    // Register type first
+    tc_inspect_register_type("TestComponent", NULL);
 
-    static const tc_type_vtable test_vtable = {
+    // Create field vtable
+    static const tc_field_vtable test_vtable = {
         .get = test_getter,
         .set = test_setter,
         .action = NULL,
         .user_data = NULL,
     };
 
-    static const tc_type_desc test_desc = {
-        .type_name = "TestComponent",
-        .base_type = NULL,
-        .fields = test_fields,
-        .field_count = 3,
-        .vtable = &test_vtable,
-    };
+    // Add fields with vtable
+    tc_field_desc speed_desc = { .path = "speed",  .label = "Speed",  .kind = "float", .min = 0, .max = 100, .step = 0.1, .is_serializable = true };
+    tc_field_desc health_desc = { .path = "health", .label = "Health", .kind = "int",   .min = 0, .max = 100, .step = 1, .is_serializable = true };
+    tc_field_desc active_desc = { .path = "active", .label = "Active", .kind = "bool", .is_serializable = true };
 
-    tc_inspect_register(&test_desc);
+    tc_inspect_add_field("TestComponent", &speed_desc);
+    tc_inspect_add_field("TestComponent", &health_desc);
+    tc_inspect_add_field("TestComponent", &active_desc);
 
-    TEST_ASSERT(tc_inspect_get_type("TestComponent") != NULL, "type registered");
+    // Set vtables for each field (using C language slot)
+    tc_inspect_set_field_vtable("TestComponent", "speed", TC_INSPECT_LANG_C, &test_vtable);
+    tc_inspect_set_field_vtable("TestComponent", "health", TC_INSPECT_LANG_C, &test_vtable);
+    tc_inspect_set_field_vtable("TestComponent", "active", TC_INSPECT_LANG_C, &test_vtable);
+
+    TEST_ASSERT(tc_inspect_has_type("TestComponent"), "type registered");
     TEST_ASSERT(tc_inspect_field_count("TestComponent") == 3, "field count");
 
-    const tc_field_desc* speed_field = tc_inspect_find_field("TestComponent", "speed");
+    tc_field_desc* speed_field = tc_inspect_find_field("TestComponent", "speed");
     TEST_ASSERT(speed_field != NULL, "find field");
     TEST_ASSERT(strcmp(speed_field->label, "Speed") == 0, "field label");
 
@@ -347,8 +349,8 @@ static int test_inspect(void) {
     TEST_ASSERT(tc_value_dict_has(&serialized, "speed"), "serialized has speed");
     tc_value_free(&serialized);
 
-    tc_inspect_unregister("TestComponent");
-    TEST_ASSERT(tc_inspect_get_type("TestComponent") == NULL, "type unregistered");
+    tc_inspect_unregister_type("TestComponent");
+    TEST_ASSERT(!tc_inspect_has_type("TestComponent"), "type unregistered");
 
     printf("  tc_inspect: PASS\n");
     return 0;

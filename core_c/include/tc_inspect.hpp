@@ -255,10 +255,6 @@ class TC_INSPECT_API InspectRegistry {
     // Python-specific storage (for fields registered from Python)
     std::unordered_map<std::string, std::vector<InspectFieldInfo>> _py_fields;
 
-    // Type vtables for Python types
-    std::unordered_map<std::string, tc_type_vtable> _py_vtables;
-    std::unordered_map<std::string, std::vector<tc_field_desc>> _py_field_descs;
-
     // Type backend registry
     std::unordered_map<std::string, TypeBackend> _type_backends;
 

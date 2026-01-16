@@ -146,6 +146,33 @@ TC_API const tc_custom_type_handler* tc_custom_type_get(const char* kind);
 TC_API bool tc_custom_type_exists(const char* kind);
 
 // ============================================================================
+// Language slots for field access
+// Each language registers its getter/setter in dedicated slot
+// ============================================================================
+
+typedef enum tc_inspect_lang {
+    TC_INSPECT_LANG_C = 0,
+    TC_INSPECT_LANG_CPP = 1,
+    TC_INSPECT_LANG_PYTHON = 2,
+    TC_INSPECT_LANG_COUNT = 3
+} tc_inspect_lang;
+
+// Forward declaration
+typedef struct tc_field_desc tc_field_desc;
+
+// Per-field vtable for one language
+typedef tc_value (*tc_field_getter)(void* obj, const tc_field_desc* field, void* user_data);
+typedef void (*tc_field_setter)(void* obj, const tc_field_desc* field, tc_value value, void* user_data);
+typedef void (*tc_field_action)(void* obj, const tc_field_desc* field, void* user_data);
+
+typedef struct tc_field_vtable {
+    tc_field_getter get;
+    tc_field_setter set;
+    tc_field_action action;
+    void* user_data;
+} tc_field_vtable;
+
+// ============================================================================
 // Field descriptor - metadata for one inspectable field
 // Kind is a string, not enum - allows extension
 // ============================================================================
@@ -155,7 +182,7 @@ typedef struct tc_enum_choice {
     const char* label;
 } tc_enum_choice;
 
-typedef struct tc_field_desc {
+struct tc_field_desc {
     const char* path;           // Field path ("mesh", "transform.position")
     const char* label;          // Display label
     const char* kind;           // "bool", "float", "mesh_handle", "list[entity_handle]"
@@ -173,60 +200,62 @@ typedef struct tc_field_desc {
     const tc_enum_choice* choices;
     size_t choice_count;
 
-    // Field offset in struct (for C structs with known layout)
-    // Set to -1 if using getter/setter
-    ptrdiff_t offset;
-    size_t size;    // sizeof(field_type)
-} tc_field_desc;
-
-// ============================================================================
-// Type access vtable - language-specific implementations
-// Each language provides its own vtable for accessing fields
-// ============================================================================
-
-typedef tc_value (*tc_type_getter)(void* obj, const tc_field_desc* field, void* user_data);
-typedef void (*tc_type_setter)(void* obj, const tc_field_desc* field, tc_value value, void* user_data);
-typedef void (*tc_type_action)(void* obj, const tc_field_desc* field, void* user_data);
-
-typedef struct tc_type_vtable {
-    tc_type_getter get;
-    tc_type_setter set;
-    tc_type_action action;
-    void* user_data;    // Language-specific context (e.g., Python type object)
-} tc_type_vtable;
+    // Per-field language-specific access
+    // Each language registers its getter/setter here
+    tc_field_vtable lang[TC_INSPECT_LANG_COUNT];
+};
 
 // ============================================================================
 // Type descriptor - all fields for one component type
+// Note: vtable is now per-field (in tc_field_desc.lang[])
 // ============================================================================
 
 typedef struct tc_type_desc {
     const char* type_name;
     const char* base_type;      // Parent type for field inheritance
-
-    // Field definitions
-    const tc_field_desc* fields;
-    size_t field_count;
-
-    // Access implementation
-    const tc_type_vtable* vtable;
 } tc_type_desc;
 
 // ============================================================================
-// Inspect Registry API
+// Type Registry API
 // ============================================================================
 
-// Register a type with its fields
-TC_API void tc_inspect_register(const tc_type_desc* desc);
+// Register a type (creates empty type, fields added separately)
+TC_API void tc_inspect_register_type(const char* type_name, const char* base_type);
 
-// Unregister a type
-TC_API void tc_inspect_unregister(const char* type_name);
+// Unregister a type and all its fields
+TC_API void tc_inspect_unregister_type(const char* type_name);
 
-// Get type descriptor (returns NULL if not found)
-TC_API const tc_type_desc* tc_inspect_get_type(const char* type_name);
+// Check if type exists
+TC_API bool tc_inspect_has_type(const char* type_name);
+
+// Get base type (returns NULL if no base)
+TC_API const char* tc_inspect_get_base_type(const char* type_name);
 
 // Iterate registered types
 TC_API size_t tc_inspect_type_count(void);
 TC_API const char* tc_inspect_type_at(size_t index);
+
+// ============================================================================
+// Field Registry API
+// ============================================================================
+
+// Add a field to a type (copies the descriptor, type must exist)
+TC_API void tc_inspect_add_field(const char* type_name, const tc_field_desc* field);
+
+// Set vtable for a specific field and language
+TC_API void tc_inspect_set_field_vtable(
+    const char* type_name,
+    const char* field_path,
+    tc_inspect_lang lang,
+    const tc_field_vtable* vtable
+);
+
+// Get vtable for a specific field and language (returns NULL if not set)
+TC_API const tc_field_vtable* tc_inspect_get_field_vtable(
+    const char* type_name,
+    const char* field_path,
+    tc_inspect_lang lang
+);
 
 // ============================================================================
 // Field queries (includes inherited fields from base_type)
@@ -238,16 +267,22 @@ TC_API size_t tc_inspect_field_count(const char* type_name);
 // Get field by index (base fields first, then own fields)
 TC_API const tc_field_desc* tc_inspect_field_at(const char* type_name, size_t index);
 
-// Find field by path
-TC_API const tc_field_desc* tc_inspect_find_field(const char* type_name, const char* path);
+// Find field by path (searches own fields first, then base)
+TC_API tc_field_desc* tc_inspect_find_field(const char* type_name, const char* path);
 
 // ============================================================================
-// Field access (uses registered vtable)
+// Field access (uses per-field vtable)
 // ============================================================================
 
+// Get/set using first available language vtable
 TC_API tc_value tc_inspect_get(void* obj, const char* type_name, const char* path);
 TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value);
 TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path);
+
+// Get/set using specific language vtable
+TC_API tc_value tc_inspect_get_lang(void* obj, const char* type_name, const char* path, tc_inspect_lang lang);
+TC_API void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_value value, tc_inspect_lang lang);
+TC_API void tc_inspect_action_lang(void* obj, const char* type_name, const char* path, tc_inspect_lang lang);
 
 // ============================================================================
 // Serialization
