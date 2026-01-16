@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <functional>
 #include <any>
+#include <memory>
 
 #include "trent/trent.h"
 // tc_kind.hpp has been moved to cpp/termin/inspect/
@@ -740,6 +741,63 @@ public:
 // Uses new C API via tc_inspect_cpp.hpp
 // ============================================================================
 
+// Context for C++ field vtable (stores member pointer and kind for KindRegistry)
+template<typename C, typename T>
+struct CppFieldContext {
+    T C::* member;
+    std::string kind;
+};
+
+// Storage for C++ field contexts (must outlive vtable registrations)
+class CppFieldContextStorage {
+    std::vector<std::unique_ptr<void, void(*)(void*)>> contexts_;
+public:
+    static CppFieldContextStorage& instance() {
+        static CppFieldContextStorage storage;
+        return storage;
+    }
+
+    template<typename C, typename T>
+    CppFieldContext<C, T>* store(T C::* member, const std::string& kind) {
+        auto* ctx = new CppFieldContext<C, T>{member, kind};
+        contexts_.emplace_back(ctx, [](void* p) { delete static_cast<CppFieldContext<C, T>*>(p); });
+        return ctx;
+    }
+};
+
+// Getter via KindRegistry (converts C++ value → trent → tc_value)
+template<typename C, typename T>
+static tc_value cpp_field_getter_via_kind(void* obj, const tc_field_desc* field, void* user_data) {
+    (void)field;
+    auto* ctx = static_cast<CppFieldContext<C, T>*>(user_data);
+    C* instance = static_cast<C*>(obj);
+    T& value = instance->*(ctx->member);
+
+    // Serialize via KindRegistry
+    nos::trent t = KindRegistry::instance().serialize_cpp(ctx->kind, value);
+    return trent_to_tc_value(t);
+}
+
+// Setter via KindRegistry (converts tc_value → trent → C++ value)
+template<typename C, typename T>
+static void cpp_field_setter_via_kind(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
+    (void)field;
+    auto* ctx = static_cast<CppFieldContext<C, T>*>(user_data);
+    C* instance = static_cast<C*>(obj);
+
+    // Deserialize via KindRegistry
+    nos::trent t = tc_value_to_trent(&value);
+    std::any result = KindRegistry::instance().deserialize_cpp(ctx->kind, t, nullptr);
+    if (result.has_value()) {
+        try {
+            instance->*(ctx->member) = std::any_cast<T>(result);
+        } catch (const std::bad_any_cast& e) {
+            tc_log_error("cpp_field_setter_via_kind: bad_any_cast for kind=%s: %s",
+                ctx->kind.c_str(), e.what());
+        }
+    }
+}
+
 template<typename C, typename T>
 struct InspectFieldRegistrar {
     InspectFieldRegistrar(T C::*member, const char* type_name,
@@ -749,6 +807,16 @@ struct InspectFieldRegistrar {
         InspectCpp::register_field<C, T>(type_name, member, path, label, kind, min, max, step);
         // Also register in legacy InspectRegistry for backward compatibility during migration
         InspectRegistry::instance().add<C, T>(type_name, member, path, label, kind, min, max, step);
+
+        // Set up C++ vtable for C API access
+        auto* ctx = CppFieldContextStorage::instance().store<C, T>(member, kind);
+
+        tc_field_vtable vtable = {};
+        vtable.get = cpp_field_getter_via_kind<C, T>;
+        vtable.set = cpp_field_setter_via_kind<C, T>;
+        vtable.user_data = ctx;
+
+        tc_inspect_set_field_vtable(type_name, path, TC_INSPECT_LANG_CPP, &vtable);
     }
 };
 
