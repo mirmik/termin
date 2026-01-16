@@ -46,12 +46,17 @@ void AnimationPlayer::_rebuild_clips_map() {
 
 void AnimationPlayer::_acquire_skeleton() {
     if (!entity.valid()) {
+        tc::Log::warn("[AnimationPlayer::_acquire_skeleton] entity not valid");
         return;
     }
 
     SkeletonController* sc = entity.get_component<SkeletonController>();
     if (sc != nullptr) {
         _target_skeleton = sc->skeleton_instance();
+        tc::Log::info("[AnimationPlayer::_acquire_skeleton] SkeletonController found, skeleton=%p",
+            (void*)_target_skeleton);
+    } else {
+        tc::Log::warn("[AnimationPlayer::_acquire_skeleton] SkeletonController not found on entity");
     }
 }
 
@@ -69,9 +74,13 @@ void AnimationPlayer::set_current(const std::string& name) {
     if (it != _clips_map.end()) {
         _current_index = (int)it->second;
         _build_channel_mapping();
+        tc::Log::info("[AnimationPlayer::set_current] '%s' found at index %d, skeleton=%p, mapping=%zu",
+            name.c_str(), _current_index, (void*)_target_skeleton, _channel_to_bone.size());
     } else {
         _current_index = -1;
         _channel_to_bone.clear();
+        tc::Log::warn("[AnimationPlayer::set_current] '%s' not found in clips_map (size=%zu)",
+            name.c_str(), _clips_map.size());
     }
 }
 
@@ -137,6 +146,13 @@ void AnimationPlayer::update(float dt) {
 
 void AnimationPlayer::update_bones_at_time(double t) {
     if (_current_index < 0 || _current_index >= (int)clips.size()) {
+        tc::Log::warn("[AnimationPlayer::update_bones_at_time] no current clip: index=%d clips=%zu",
+            _current_index, clips.size());
+        return;
+    }
+
+    if (!_target_skeleton) {
+        tc::Log::warn("[AnimationPlayer::update_bones_at_time] no target skeleton");
         return;
     }
 
@@ -147,6 +163,18 @@ void AnimationPlayer::update_bones_at_time(double t) {
 
 void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t count) {
     if (!_target_skeleton || !samples) {
+        tc::Log::warn("[AnimationPlayer::_apply_sample] skeleton=%p samples=%p",
+            (void*)_target_skeleton, (void*)samples);
+        return;
+    }
+
+    if (count == 0) {
+        tc::Log::warn("[AnimationPlayer::_apply_sample] count=0");
+        return;
+    }
+
+    if (_channel_to_bone.empty()) {
+        tc::Log::warn("[AnimationPlayer::_apply_sample] _channel_to_bone is empty! count=%zu", count);
         return;
     }
 

@@ -71,13 +71,17 @@ void register_cpp_handle_kind(const std::string& kind_name) {
         // deserialize: trent, scene → std::any(vector<H>)
         [list_kind](const nos::trent& t, tc_scene* scene) -> std::any {
             std::vector<H> vec;
+            tc_log(TC_LOG_INFO, "[list deserialize] %s: is_list=%d scene=%p",
+                list_kind.c_str(), t.is_list() ? 1 : 0, (void*)scene);
             if (t.is_list()) {
+                tc_log(TC_LOG_INFO, "[list deserialize] list size=%zu", t.as_list().size());
                 for (const auto& item : t.as_list()) {
                     H h;
                     h.deserialize_from(item, scene);
                     vec.push_back(h);
                 }
             }
+            tc_log(TC_LOG_INFO, "[list deserialize] result size=%zu", vec.size());
             return vec;
         }
     );

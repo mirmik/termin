@@ -38,6 +38,11 @@ SkeletonInstance* SkeletonController::skeleton_instance() {
                 entity
             );
             _skeleton_instance->update();
+            tc::Log::info("[SkeletonController::skeleton_instance] Created instance with %zu bones",
+                bone_entities.size());
+        } else {
+            tc::Log::warn("[SkeletonController::skeleton_instance] bone_entities is empty! skel=%p",
+                (void*)skel);
         }
     }
     return _skeleton_instance.get();
@@ -54,6 +59,8 @@ void SkeletonController::before_render() {
 
     if (_skeleton_instance != nullptr) {
         _skeleton_instance->update();
+    } else {
+        tc::Log::warn("[SkeletonController::before_render] no skeleton instance");
     }
 }
 

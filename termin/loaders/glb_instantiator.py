@@ -424,8 +424,8 @@ def instantiate_glb(
     rm = ResourceManager.instance()
 
     # Get materials (as assets for proper serialization)
-    default_material_asset = rm.get_material_asset("DefaultMaterial")
-    # Use StandartMaterial for skinned meshes - SkinnedMeshRenderer will inject skinning
+    # Use StandartMaterial for all meshes
+    default_material_asset = rm.get_material_asset("StandartMaterial")
     skinned_material_asset = rm.get_material_asset("StandartMaterial")
 
     if default_material_asset is None or skinned_material_asset is None:
