@@ -98,24 +98,27 @@ public:
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
 
-    // Serialization - uses InspectRegistry for INSPECT_FIELD properties.
+    // Serialization - uses C API (tc_inspect) for INSPECT_FIELD properties.
     // DO NOT OVERRIDE in derived components!
     virtual nos::trent serialize_data() const {
-        return InspectRegistry::instance().serialize_all(
+        tc_value result = tc_inspect_serialize(
             const_cast<void*>(static_cast<const void*>(this)),
             type_name()
         );
+        nos::trent t = tc::tc_value_to_trent(&result);
+        tc_value_free(&result);
+        return t;
     }
-    virtual void deserialize_data(const nos::trent& data) {
-        // Convert trent to nb::dict and call over-python method
-        nb::dict nb_data = InspectRegistry::trent_to_py_dict(data);
-        nb::object nb_self = nb::cast(this);
-        InspectRegistry::instance().deserialize_component_fields_over_python(
+
+    virtual void deserialize_data(const nos::trent& data, tc_scene* scene = nullptr) {
+        tc_value tc_data = tc::trent_to_tc_value(data);
+        tc_inspect_deserialize_with_scene(
             static_cast<void*>(this),
-            nb_self,
             type_name(),
-            nb_data
+            &tc_data,
+            scene
         );
+        tc_value_free(&tc_data);
     }
 
     nos::trent serialize() const {

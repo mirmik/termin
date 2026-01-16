@@ -101,6 +101,8 @@ struct ComponentRegistrar {
         // Register type parent for field inheritance
         if (parent) {
             tc::InspectRegistry::instance().set_type_parent(name, parent);
+            // Also register in C API for tc_inspect_serialize inheritance
+            tc_inspect_register_type(name, parent);
         }
 
         // Mark as drawable if component inherits from Drawable
