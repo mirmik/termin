@@ -125,9 +125,9 @@
               "skip_astar_if_los": true,
               "use_funnel": true,
               "use_los_optimization": true,
-              "use_edge_centers": false,
-              "show_graph_edges": false,
-              "show_portals": false
+              "use_edge_centers": true,
+              "show_graph_edges": true,
+              "show_portals": true
             }
           },
           {
@@ -145,6 +145,42 @@
                 "name": "NavMeshFOV",
                 "type": "uuid"
               }
+            }
+          },
+          {
+            "type": "VoxelDisplayComponent",
+            "data": {
+              "enabled": false,
+              "voxel_grid": {
+                "uuid": "485911ec-312a-488a-9771-dde9b624e074",
+                "name": "Plt",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/termin/examples/project/Scenes/Plt.voxels"
+              },
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
             }
           }
         ],
@@ -181,7 +217,6 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
@@ -295,7 +330,6 @@
               {
                 "type": "MeshRenderer",
                 "data": {
-                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
@@ -537,7 +571,6 @@
               {
                 "type": "SkeletonController",
                 "data": {
-                  "enabled": true,
                   "skeleton": {
                     "uuid": "49cf1726-b337-44ec-b171-7ed5cb4c9ced",
                     "name": "Glitch_skeleton"
@@ -822,7 +855,6 @@
               {
                 "type": "AnimationPlayer",
                 "data": {
-                  "enabled": true,
                   "clips": [
                     {
                       "uuid": "anim-0000000000000001",
@@ -4071,7 +4103,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "786bb9bf-0e64-4dca-afec-d62b3dc9feae",
                         "name": "gymuniform"
@@ -4120,7 +4151,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "287cc28b-657b-429c-9d00-e69195cb1887",
                         "name": "jammers3"
@@ -4169,7 +4199,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "ed833ccb-7339-4d23-94d2-07d21d3e7b08",
                         "name": "low-poly.002"
@@ -4218,7 +4247,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7",
                         "name": "male_muscle_13290.002"
@@ -4267,7 +4295,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": false,
                       "mesh": {
                         "uuid": "7b49ace0-9ca3-42f4-a911-fcf77a6cbd3c",
                         "name": "male_muscle_13290"
@@ -4316,7 +4343,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "507bd6b6-819a-4ebb-92bf-a167f42ac354",
                         "name": "MC-SciFi-Armor_Helios"
@@ -4365,7 +4391,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "6432a38a-882f-4c5c-8e47-a800cb44cc3e",
                         "name": "mens_shirt_untuck_elvbhp1f.002"
@@ -4414,7 +4439,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "0cb882c2-d41b-4ebe-b500-72dd04b63e90",
                         "name": "mens_shirt_untuck_elvbhp1f"
@@ -4463,7 +4487,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "282bd2fd-dcd6-42ff-a07d-f76aaa11cec9",
                         "name": "mens_tanks_elv1f"
@@ -4512,7 +4535,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "c6513438-2b62-4d41-ab65-d7371067cd14",
                         "name": "mens_trouser_f_elv_chr.002"
@@ -4561,7 +4583,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "b7de39e1-9b44-4358-ac3f-40dffc2ca401",
                         "name": "mind_eyebrows_14.002"
@@ -4610,7 +4631,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "35f6c7a0-80f6-437e-9c89-04c71d55e4cc",
                         "name": "mind_eyelashes_03.002"
@@ -4659,7 +4679,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "82ff9fa0-28ad-41fc-8007-54cda380f60c",
                         "name": "shoes06.002"
@@ -4708,7 +4727,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "f995496f-6565-44b6-9df1-99b10b48ca81",
                         "name": "spiky.002"
@@ -4824,7 +4842,7 @@
             "data": {
               "enabled": true,
               "pipeline_name": "ChronoSquadPipeline",
-              "layer_mask": "0xffffffffffffffff"
+              "layer_mask": "0xfb"
             }
           },
           {
@@ -4913,7 +4931,6 @@
               {
                 "type": "SkeletonController",
                 "data": {
-                  "enabled": true,
                   "skeleton": {
                     "uuid": "eb4b4dfb-22c7-43d7-909d-f920f018f2ff",
                     "name": "ArthurDecimated_skeleton"
@@ -5165,7 +5182,6 @@
               {
                 "type": "AnimationPlayer",
                 "data": {
-                  "enabled": true,
                   "clips": [
                     {
                       "uuid": "anim-0000000000000012",
@@ -5479,7 +5495,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "3321865b-7128-4be9-a189-1bfa1a7d3950",
                         "name": "cargo_pants"
@@ -5528,7 +5543,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "483ca9ae-2652-4279-9fd4-ea972e1550b3",
                         "name": "collier_02"
@@ -5577,7 +5591,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "0ec8c3a4-0671-4465-94d9-4a757e8b30dd",
                         "name": "combatboots"
@@ -5626,7 +5639,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "c23ac6ac-b8b7-4035-ad28-892f2f75ab79",
                         "name": "eyebrow001"
@@ -5675,7 +5687,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "c9ef5c24-5cb5-4ace-8cf0-5add93fcfd96",
                         "name": "eyelashes01"
@@ -5724,7 +5735,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "3118b894-2c4d-4707-9e42-aafb98a80db5",
                         "name": "Glactic_Warrior_02"
@@ -5773,7 +5783,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "d1e48e1e-9830-4421-9a96-446ce79dbbf8",
                         "name": "harvey_vestv1"
@@ -5822,7 +5831,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "a151a0b2-3d17-4e5d-99ec-c68cfec09fad",
                         "name": "jade_mask"
@@ -5871,7 +5879,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "f6eeb63f-65ff-4b9d-aa0e-039b0c7be860",
                         "name": "jammers3"
@@ -5920,7 +5927,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "a3a37dfe-e077-481e-b9bc-2df1aaeb401c",
                         "name": "low-poly"
@@ -5969,7 +5975,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "e81a0a09-a136-4440-975c-42e01ab22aaf",
                         "name": "male_muscle_13290.003"
@@ -6018,7 +6023,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "9425c9e1-a1fc-45f1-a6a3-253d9aa7ddb6",
                         "name": "male_muscle_13290.006"
@@ -6067,7 +6071,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "6aee3579-4c5c-4472-87ea-f25c6251a0a2",
                         "name": "MC-BodySuit-2021"
@@ -6116,7 +6119,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "4e55110b-d990-4e4b-98a0-4542b47d10b7",
                         "name": "mens_cargo_short1j"
@@ -6165,7 +6167,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "be4cd469-1341-43e7-83ac-5ee406bd5899",
                         "name": "mens_tanks_elv1f"
@@ -6264,7 +6265,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "3db2ea62-9b16-44d0-9b9f-34e49dbc8a63",
                         "name": "mma_gloves"
@@ -6313,7 +6313,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "ba9eeaba-ce2f-4373-b0f8-40f9910c2cc9",
                         "name": "Monks_Hood"
@@ -6362,7 +6361,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "4661d9bc-2fc5-4836-9f85-5082f3672a1b",
                         "name": "sneakers"
@@ -6411,7 +6409,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "fbaaddde-03c3-4415-bb4f-a8730007d06f",
                         "name": "spiky"
@@ -6460,7 +6457,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "cb893db5-a28a-4662-ae83-c278afc05dae",
                         "name": "Vietnam_Military_Jacket"
@@ -9359,7 +9355,6 @@
           {
             "type": "MeshRenderer",
             "data": {
-              "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
                 "name": "Cube"
@@ -9408,7 +9403,6 @@
           {
             "type": "MeshRenderer",
             "data": {
-              "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
                 "name": "Cube"
@@ -9508,7 +9502,6 @@
           {
             "type": "MeshRenderer",
             "data": {
-              "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
                 "name": "Cube"
@@ -9602,7 +9595,6 @@
               {
                 "type": "SkeletonController",
                 "data": {
-                  "enabled": true,
                   "skeleton": {
                     "uuid": "9a358a86-c955-4b88-aba1-ded136579b83",
                     "name": "CorpGuard_skeleton"
@@ -9812,7 +9804,6 @@
               {
                 "type": "AnimationPlayer",
                 "data": {
-                  "enabled": true,
                   "clips": [
                     {
                       "uuid": "anim-0000000000000047",
@@ -9898,7 +9889,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "67036e16-24cd-4bfb-ac54-d44adf5143b4",
                         "name": "corpguard.001"
@@ -9947,7 +9937,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "7621e4b3-43d6-4074-8e9e-844ef2d9f020",
                         "name": "eyebrow004.001"
@@ -9996,7 +9985,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "f03b45cb-da6d-4489-944e-58e4bee36f6e",
                         "name": "low-poly.002"
@@ -10045,7 +10033,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "884dc1a9-5cac-430d-bb14-ef5e22764fb1",
                         "name": "m_trousers_02.001"
@@ -10094,7 +10081,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "3cd4ac37-37e5-4fe3-95e8-812377ea1a3a",
                         "name": "shoes03.001"
@@ -10143,7 +10129,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "b64efbd6-2d9b-4991-8bd0-42e14b5d3dee",
                         "name": "short02.001"
@@ -10242,7 +10227,6 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
-                      "enabled": true,
                       "mesh": {
                         "uuid": "d692788f-efba-4710-8556-216fc9c00fa3",
                         "name": "uniform_jacket.001"
@@ -12474,15 +12458,15 @@
   "editor": {
     "camera": {
       "position": [
-        5.175607681274414,
-        -2.0750808715820312,
-        4.56801700592041
+        4.589503765106201,
+        -2.292062997817993,
+        5.084213733673096
       ],
       "rotation": [
-        -0.27710811443044664,
-        -0.1976593114997338,
-        0.5460281604056706,
-        0.7655031923762653
+        -0.3177690421681821,
+        -0.21032675556707175,
+        0.510291212330028,
+        0.7709658684733687
       ],
       "radius": 8.0,
       "editor_entities": {
@@ -12512,7 +12496,7 @@
             "data": {
               "enabled": true,
               "pipeline_name": "(Editor)",
-              "layer_mask": "0xfb"
+              "layer_mask": "0xff"
             }
           }
         ],
@@ -12536,15 +12520,12 @@
         ]
       }
     },
-    "selected_entity": "02ef39db-66a6-4fe8-b2a0-e51a65f26e46",
+    "selected_entity": "0000000000000007",
     "expanded_entities": [
-      "0000000000000130",
-      "814ba329-db24-48fe-b931-fe68ab904998",
       "0000000000000131",
-      "0000000000000007",
       "0000000000000077",
-      "00000000000000dd",
-      "000000000000000a"
+      "000000000000000a",
+      "814ba329-db24-48fe-b931-fe68ab904998"
     ]
   },
   "resources": {

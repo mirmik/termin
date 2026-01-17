@@ -498,6 +498,7 @@ class EditorWindow(QMainWindow):
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
+            on_show_agent_types=self._show_agent_types_dialog,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._mode_controller.is_fullscreen,
@@ -570,6 +571,10 @@ class EditorWindow(QMainWindow):
     def _show_shadow_settings_dialog(self) -> None:
         """Opens shadow settings dialog."""
         self._dialog_manager.show_shadow_settings_dialog()
+
+    def _show_agent_types_dialog(self) -> None:
+        """Opens agent types configuration dialog."""
+        self._dialog_manager.show_agent_types_dialog()
 
     def _show_pipeline_editor(self) -> None:
         """Opens the visual pipeline graph editor."""

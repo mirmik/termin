@@ -245,3 +245,22 @@ class DialogManager:
         dialog.finished.connect(lambda: setattr(self, '_shadow_settings_dialog', None))
         self._shadow_settings_dialog = dialog
         dialog.show()
+
+    def show_agent_types_dialog(self) -> None:
+        """Opens agent types configuration dialog."""
+        from termin.editor.agent_types_dialog import AgentTypesDialog
+
+        # Reuse existing dialog if open
+        if hasattr(self, '_agent_types_dialog') and self._agent_types_dialog is not None:
+            self._agent_types_dialog.raise_()
+            self._agent_types_dialog.activateWindow()
+            return
+
+        dialog = AgentTypesDialog(
+            parent=self._parent,
+            on_changed=self._request_viewport_update,
+        )
+        dialog.setModal(False)
+        dialog.finished.connect(lambda: setattr(self, '_agent_types_dialog', None))
+        self._agent_types_dialog = dialog
+        dialog.show()

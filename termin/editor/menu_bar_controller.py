@@ -58,6 +58,7 @@ class MenuBarController:
         on_show_scene_manager_viewer: Callable,
         on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
+        on_show_agent_types: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
@@ -107,6 +108,7 @@ class MenuBarController:
             on_show_scene_manager_viewer=on_show_scene_manager_viewer,
             on_toggle_profiler=on_toggle_profiler,
             on_toggle_fullscreen=on_toggle_fullscreen,
+            on_show_agent_types=on_show_agent_types,
         )
 
     def _setup_menu_bar(
@@ -142,12 +144,14 @@ class MenuBarController:
         on_show_scene_manager_viewer: Callable,
         on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
+        on_show_agent_types: Callable,
     ) -> None:
         """Create menu bar structure and connect actions."""
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
         view_menu = menu_bar.addMenu("View")
         scene_menu = menu_bar.addMenu("Scene")
+        navigation_menu = menu_bar.addMenu("Navigation")
         game_menu = menu_bar.addMenu("Game")
         debug_menu = menu_bar.addMenu("Debug")
 
@@ -238,6 +242,10 @@ class MenuBarController:
 
         pipeline_editor_action = scene_menu.addAction("Pipeline Editor...")
         pipeline_editor_action.triggered.connect(on_pipeline_editor)
+
+        # Navigation menu
+        agent_types_action = navigation_menu.addAction("Agent Types...")
+        agent_types_action.triggered.connect(on_show_agent_types)
 
         # Game menu
         self._action_play = game_menu.addAction("Play")
