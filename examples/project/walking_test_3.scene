@@ -360,6 +360,321 @@
               }
             ],
             "children": []
+          },
+          {
+            "uuid": "32719f8a-d86e-4516-a10a-a28d230f352e",
+            "name": "entity1",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                6.993739128112793,
+                7.336162567138672,
+                0.0010000000474974513
+              ],
+              "rotation": [
+                0,
+                0,
+                0.34744584560394287,
+                0.937700092792511
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "b8ea0316-767e-4d8e-bf54-8bb4822d1fdf",
+            "name": "entity5",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                12.62234878540039,
+                8.683868408203125,
+                1.5973608493804932
+              ],
+              "rotation": [
+                0.0015895068645477295,
+                -0.004573673475533724,
+                0.3282693922519684,
+                0.9445717334747314
+              ]
+            },
+            "scale": [
+              5,
+              0.5,
+              2
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "89b7d8e2-2efa-478f-8cf4-cf7a75809c00",
+            "name": "entity5_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                10.944812774658203,
+                10.805864334106445,
+                1.5973608493804932
+              ],
+              "rotation": [
+                0.0015895068645477295,
+                -0.004573673475533724,
+                0.3282693922519684,
+                0.9445717334747314
+              ]
+            },
+            "scale": [
+              5,
+              0.5,
+              2
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "637d9587-b02b-4406-89d8-16c920bd2e6e",
+            "name": "entity1_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                15.315,
+                12.725,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0.34744304751572597,
+                0.9377010870917155
+              ]
+            },
+            "scale": [
+              10,
+              3,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "e1d31c5a-02ce-4d9b-81d3-80821194aafa",
+            "name": "entity1_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                17.233787536621094,
+                16.13228988647461,
+                0.0010000000474974513
+              ],
+              "rotation": [
+                0,
+                0,
+                0.34744584560394287,
+                0.937700092792511
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
           }
         ]
       },
@@ -12458,17 +12773,17 @@
   "editor": {
     "camera": {
       "position": [
-        4.589503765106201,
-        -2.292062997817993,
-        5.084213733673096
+        9.6160249710083,
+        1.6037285327911377,
+        5.213981628417969
       ],
       "rotation": [
-        -0.3177690421681821,
-        -0.21032675556707175,
-        0.510291212330028,
-        0.7709658684733687
+        -0.3408134990835879,
+        -0.20075455361826586,
+        0.4661468805606953,
+        0.7913601290104685
       ],
-      "radius": 8.0,
+      "radius": 6.5,
       "editor_entities": {
         "camera": [
           {
@@ -12486,7 +12801,7 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 8.0,
+              "radius": 6.5,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12520,12 +12835,12 @@
         ]
       }
     },
-    "selected_entity": "0000000000000007",
     "expanded_entities": [
+      "814ba329-db24-48fe-b931-fe68ab904998",
+      "000000000000000a",
       "0000000000000131",
       "0000000000000077",
-      "000000000000000a",
-      "814ba329-db24-48fe-b931-fe68ab904998"
+      "0000000000000007"
     ]
   },
   "resources": {
