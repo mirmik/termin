@@ -804,6 +804,7 @@ class Scene:
     def deserialize(cls, data: dict, context=None) -> "Scene":
         """Deserialize a scene."""
         scene = cls(
+            name=data.get("name", ""),
             background_color=data.get("background_color", (0.05, 0.05, 0.08, 1.0)),
             uuid=data.get("uuid"),
         )

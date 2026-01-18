@@ -42,6 +42,9 @@ from termin.navmesh.contour_extraction import (
     bresenham_line,
     extract_contours_from_mask,
     extract_contours_from_region,
+    compute_distance_field_for_region,
+    watershed_split_region,
+    WatershedResult,
 )
 
 
@@ -110,7 +113,13 @@ class PolygonBuilder:
     def __init__(self, config: NavMeshConfig | None = None) -> None:
         self.config = config or NavMeshConfig()
         self._last_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        self._last_watershed_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._last_boundary_voxels: set[tuple[int, int, int]] = set()
+        self._last_distance_fields: list[dict[tuple[int, int, int], float]] = []
+        self._last_peaks: set[tuple[int, int, int]] = set()
+        self._last_all_local_maxima: set[tuple[int, int, int]] = set()
+        self._last_cell_size: float = 1.0
+        self._last_origin: np.ndarray = np.zeros(3, dtype=np.float32)
 
     def build(
         self,
@@ -134,7 +143,8 @@ class PolygonBuilder:
             Навигационная сетка.
         """
         # Шаг 1: Собираем все поверхностные воксели с нормалями
-        surface_voxels = collect_surface_voxels(grid)
+        # Фильтруем по максимальному углу наклона (если задан)
+        surface_voxels = collect_surface_voxels(grid, max_slope_cos=self.config.max_slope_cos)
 
         if not surface_voxels:
             return NavMesh(
@@ -167,6 +177,85 @@ class PolygonBuilder:
         self._last_boundary_voxels = set()
         if share_boundary:
             regions, self._last_boundary_voxels = share_boundary_voxels(regions)
+
+        # Сохраняем исходные регионы (до watershed) для отладки
+        self._last_regions = regions
+        self._last_cell_size = grid.cell_size
+        self._last_origin = np.array(grid.origin, dtype=np.float32)
+
+        # Шаг 2.8: Watershed — разбиваем большие регионы на под-регионы
+        # Watershed также вычисляет distance field и пики
+        self._last_watershed_regions = []
+        self._last_distance_fields = []
+        self._last_peaks = set()
+        self._last_all_local_maxima = set()
+
+        if self.config.use_watershed:
+            new_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+            total_split = 0
+            for region_voxels, region_normal in regions:
+                ws_result = watershed_split_region(
+                    region_voxels,
+                    region_normal,
+                    grid.cell_size,
+                    np.array(grid.origin, dtype=np.float32),
+                    smoothing=self.config.watershed_smoothing,
+                )
+                # Сохраняем данные из watershed
+                self._last_distance_fields.append(ws_result.distance_field)
+                self._last_peaks.update(ws_result.peaks)
+                self._last_all_local_maxima.update(ws_result.all_local_maxima)
+
+                for sub_voxels in ws_result.sub_regions:
+                    new_regions.append((sub_voxels, region_normal.copy()))
+                if len(ws_result.sub_regions) > 1:
+                    total_split += len(ws_result.sub_regions) - 1
+            print(f"PolygonBuilder: watershed split {len(regions)} regions into {len(new_regions)} (+{total_split})")
+            self._last_watershed_regions = new_regions
+            regions = new_regions
+        else:
+            # Без watershed — вычисляем только distance field для визуализации
+            for region_voxels, region_normal in regions:
+                df = compute_distance_field_for_region(
+                    region_voxels,
+                    region_normal,
+                    grid.cell_size,
+                    np.array(grid.origin, dtype=np.float32),
+                )
+                self._last_distance_fields.append(df)
+
+        # Шаг 2.9: Эрозия по радиусу агента
+        # Убираем воксели, у которых расстояние до границы меньше agent_radius
+        if self.config.agent_radius > 0:
+            min_distance = self.config.agent_radius / grid.cell_size
+            eroded_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+            total_removed = 0
+
+            # Объединяем все distance fields в один словарь для быстрого поиска
+            combined_df: dict[tuple[int, int, int], float] = {}
+            for df in self._last_distance_fields:
+                combined_df.update(df)
+
+            for region_voxels, region_normal in regions:
+                # Фильтруем воксели
+                filtered_voxels = []
+                for voxel in region_voxels:
+                    dist = combined_df.get(voxel, 0.0)
+                    if dist >= min_distance:
+                        filtered_voxels.append(voxel)
+
+                removed = len(region_voxels) - len(filtered_voxels)
+                total_removed += removed
+
+                if filtered_voxels:
+                    eroded_regions.append((filtered_voxels, region_normal))
+
+            print(f"PolygonBuilder: erosion removed {total_removed} voxels (agent_radius={self.config.agent_radius}, min_distance={min_distance:.2f})")
+            regions = eroded_regions
+
+            # Обновляем watershed regions если они были
+            if self._last_watershed_regions:
+                self._last_watershed_regions = regions
 
         # Для сшивки контуров: находим какие воксели в каких регионах
         voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
@@ -245,14 +334,35 @@ class PolygonBuilder:
 
         print(f"NavMesh build stats: {stats}, final polygons: {len(polygons)}")
 
-        # Сохраняем регионы для отладки
-        self._last_regions = regions
-
         return NavMesh(
             polygons=polygons,
             cell_size=grid.cell_size,
             origin=grid.origin.copy(),
         )
+
+    def get_distance_field_points(
+        self,
+    ) -> list[tuple[np.ndarray, float, int]]:
+        """
+        Получить точки с distance field для визуализации.
+
+        Returns:
+            Список (world_position, distance, max_distance_in_region).
+        """
+        result: list[tuple[np.ndarray, float, int]] = []
+
+        for region_idx, df in enumerate(self._last_distance_fields):
+            if not df:
+                continue
+
+            max_dist = max(df.values()) if df else 1
+
+            for voxel, dist in df.items():
+                vx, vy, vz = voxel
+                world_pos = self._last_origin + (np.array([vx, vy, vz], dtype=np.float32) + 0.5) * self._last_cell_size
+                result.append((world_pos, float(dist), max_dist))
+
+        return result
 
     def get_regions(
         self, grid: VoxelGrid

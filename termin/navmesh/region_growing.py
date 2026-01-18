@@ -31,17 +31,36 @@ NEIGHBORS_26 = [
 
 def collect_surface_voxels(
     grid: VoxelGrid,
+    max_slope_cos: float = 0.0,
+    up_axis: np.ndarray | None = None,
 ) -> dict[tuple[int, int, int], list[np.ndarray]]:
     """
     Шаг 1: Собрать поверхностные воксели с нормалями.
 
+    Args:
+        grid: Воксельная сетка.
+        max_slope_cos: Косинус максимального угла наклона (0 = без фильтрации).
+                       Например: cos(45°) ≈ 0.707, cos(60°) = 0.5.
+        up_axis: Вектор "вверх" для проверки наклона. По умолчанию (0, 0, 1).
+
     Returns:
-        {(vx, vy, vz): [normal, ...]} для всех поверхностных вокселей.
+        {(vx, vy, vz): [normal, ...]} для всех проходимых поверхностных вокселей.
     """
+    if up_axis is None:
+        up_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+
     result: dict[tuple[int, int, int], list[np.ndarray]] = {}
 
     for coord, normals_list in grid.surface_normals.items():
         if grid.get(*coord) != 0 and normals_list:
+            # Фильтрация по углу наклона
+            if max_slope_cos > 0:
+                # Проверяем первую нормаль (основную)
+                normal = normals_list[0]
+                dot = float(np.dot(normal, up_axis))
+                if dot < max_slope_cos:
+                    # Слишком крутой склон — непроходим
+                    continue
             result[coord] = normals_list
 
     return result

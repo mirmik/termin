@@ -304,10 +304,6 @@ def get_skinned_shader_handle(original_handle):
     fragment_source = original.fragment_source
     geometry_source = original.geometry_source
 
-    # Debug: log source lengths
-    log.info(f"[get_skinned_shader_handle] original name='{original.name}' uuid='{original.uuid[:8]}' "
-             f"vert_len={len(vertex_source)} frag_len={len(fragment_source)}")
-
     shader_name = original.name or "Unknown"
 
     # Preprocess includes if present
@@ -340,10 +336,6 @@ def get_skinned_shader_handle(original_handle):
 
     # Copy features from original shader (e.g., lighting_ubo)
     skinned.set_features(original.features)
-
-    # Debug: log result
-    log.info(f"[get_skinned_shader_handle] Created '{skinned.name}' uuid='{skinned.uuid[:8]}' "
-             f"hash='{skinned.source_hash[:8] if skinned.source_hash else 'N/A'}' features={original.features}")
 
     # Mark as variant
     skinned.set_variant_info(original, ShaderVariantOp.SKINNING)

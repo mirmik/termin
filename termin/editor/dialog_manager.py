@@ -58,6 +58,7 @@ class DialogManager:
         self._audio_debugger: "AudioDebugDialog | None" = None
         self._core_registry_viewer: "CoreRegistryViewer | None" = None
         self._inspect_registry_viewer = None
+        self._navmesh_registry_viewer = None
 
     @property
     def framegraph_debugger(self) -> "FramegraphDebugDialog | None":
@@ -209,6 +210,18 @@ class DialogManager:
         self._inspect_registry_viewer.show()
         self._inspect_registry_viewer.raise_()
         self._inspect_registry_viewer.activateWindow()
+
+    def show_navmesh_registry_viewer(self) -> None:
+        """Opens NavMesh registry viewer dialog."""
+        if self._navmesh_registry_viewer is None:
+            from termin.editor.navmesh_registry_viewer import NavMeshRegistryViewer
+
+            self._navmesh_registry_viewer = NavMeshRegistryViewer(parent=self._parent)
+
+        self._navmesh_registry_viewer.refresh()
+        self._navmesh_registry_viewer.show()
+        self._navmesh_registry_viewer.raise_()
+        self._navmesh_registry_viewer.activateWindow()
 
     def show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""

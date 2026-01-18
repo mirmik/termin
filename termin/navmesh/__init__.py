@@ -18,6 +18,7 @@ from termin.navmesh.pathfinding_world_component import PathfindingWorldComponent
 from termin.navmesh.agent_component import NavMeshAgentComponent
 from termin.navmesh.settings import AgentType, NavigationSettings, NavigationSettingsManager
 from termin.navmesh.builder_component import NavMeshBuilderComponent
+from termin.navmesh.registry import NavMeshRegistry
 
 __all__ = [
     "NavPolygon",
@@ -36,4 +37,5 @@ __all__ = [
     "NavigationSettings",
     "NavigationSettingsManager",
     "NavMeshBuilderComponent",
+    "NavMeshRegistry",
 ]

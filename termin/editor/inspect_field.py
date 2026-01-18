@@ -47,6 +47,15 @@ class InspectField:
         return _resolve_path_get(obj, self.path)
 
     def set_value(self, obj, value):
+        # Convert None to appropriate default for the kind
+        if value is None:
+            if self.kind == "string":
+                value = ""
+            elif self.kind in ("int", "float"):
+                value = 0
+            elif self.kind == "bool":
+                value = False
+
         if self.setter:
             self.setter(obj, value)
             return

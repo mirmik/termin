@@ -3,12 +3,13 @@ NavMeshBuilderComponent — component for building NavMesh from mesh geometry.
 
 Voxelization is an internal step, voxels are not saved to file.
 Supports agent type selection for future NavMesh erosion.
+
+Uses SceneCache for persistent storage and NavMeshRegistry for runtime access.
 """
 
 from __future__ import annotations
 
 from enum import IntEnum
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List, Set
 
 import numpy as np
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
+    from termin.navmesh.polygon_builder import PolygonBuilder
 
 
 class VoxelizeSource(IntEnum):
@@ -77,11 +79,6 @@ class NavMeshBuilderComponent(PythonComponent):
                 (VoxelizeSource.CURRENT_MESH, "Current Mesh"),
                 (VoxelizeSource.ALL_DESCENDANTS, "All Descendants"),
             ],
-        ),
-        "output_path": InspectField(
-            path="output_path",
-            label="Output Path",
-            kind="string",
         ),
         # --- NavMesh parameters ---
         "normal_angle": InspectField(
@@ -162,6 +159,19 @@ class NavMeshBuilderComponent(PythonComponent):
             label="Second Pass",
             kind="bool",
         ),
+        "use_watershed": InspectField(
+            path="use_watershed",
+            label="Watershed Split",
+            kind="bool",
+        ),
+        "watershed_smoothing": InspectField(
+            path="watershed_smoothing",
+            label="Smoothing",
+            kind="int",
+            min=0,
+            max=10,
+            step=1,
+        ),
         "build_btn": InspectField(
             label="Build NavMesh",
             kind="button",
@@ -184,15 +194,45 @@ class NavMeshBuilderComponent(PythonComponent):
             label="Show Triangulated",
             kind="bool",
         ),
+        "show_distance_field": InspectField(
+            path="show_distance_field",
+            label="Show Distance Field",
+            kind="bool",
+        ),
+        "show_local_maxima": InspectField(
+            path="show_local_maxima",
+            label="Show Local Maxima",
+            kind="bool",
+        ),
+        "show_peaks": InspectField(
+            path="show_peaks",
+            label="Show Peaks (after plateau)",
+            kind="bool",
+        ),
+        "show_watershed_regions": InspectField(
+            path="show_watershed_regions",
+            label="Show Watershed",
+            kind="bool",
+        ),
+        "color_seed": InspectField(
+            path="color_seed",
+            label="Color Seed",
+            kind="int",
+            min=0,
+            max=1000,
+            step=1,
+        ),
     }
 
     serializable_fields = [
-        "navmesh_name", "agent_type_name", "cell_size", "output_path", "voxelize_source",
+        "navmesh_name", "agent_type_name", "cell_size", "voxelize_source",
         "normal_angle", "contour_simplify", "max_edge_length",
         "min_edge_length", "min_contour_edge_length", "max_vertex_valence",
         "use_delaunay_flip", "use_valence_flip", "use_angle_flip", "use_cvt_smoothing",
-        "use_edge_collapse", "use_second_pass", "show_region_voxels",
-        "show_simplified_contours", "show_triangulated",
+        "use_edge_collapse", "use_second_pass", "use_watershed", "watershed_smoothing",
+        "show_region_voxels", "show_simplified_contours", "show_triangulated",
+        "show_distance_field", "show_local_maxima", "show_peaks", "show_watershed_regions",
+        "color_seed",
     ]
 
     def __init__(
@@ -200,7 +240,6 @@ class NavMeshBuilderComponent(PythonComponent):
         navmesh_name: str = "",
         agent_type_name: str = "Human",
         cell_size: float = 0.25,
-        output_path: str = "",
         voxelize_source: VoxelizeSource = VoxelizeSource.CURRENT_MESH,
         normal_angle: float = 25.0,
         contour_simplify: float = 0.0,
@@ -214,15 +253,21 @@ class NavMeshBuilderComponent(PythonComponent):
         use_cvt_smoothing: bool = False,
         use_edge_collapse: bool = False,
         use_second_pass: bool = False,
+        use_watershed: bool = False,
+        watershed_smoothing: int = 0,
         show_region_voxels: bool = False,
         show_simplified_contours: bool = False,
         show_triangulated: bool = False,
+        show_distance_field: bool = False,
+        show_local_maxima: bool = False,
+        show_peaks: bool = False,
+        show_watershed_regions: bool = False,
+        color_seed: int = 42,
     ) -> None:
         super().__init__()
         self.navmesh_name = navmesh_name
         self.agent_type_name = agent_type_name
         self.cell_size = cell_size
-        self.output_path = output_path
         self.voxelize_source = voxelize_source
         self.normal_angle = normal_angle
         self.contour_simplify = contour_simplify
@@ -236,34 +281,143 @@ class NavMeshBuilderComponent(PythonComponent):
         self.use_cvt_smoothing = use_cvt_smoothing
         self.use_edge_collapse = use_edge_collapse
         self.use_second_pass = use_second_pass
+        self.use_watershed = use_watershed
+        self.watershed_smoothing = watershed_smoothing
 
         # Debug visualization
         self.show_region_voxels: bool = show_region_voxels
         self.show_simplified_contours: bool = show_simplified_contours
         self.show_triangulated: bool = show_triangulated
+        self.show_distance_field: bool = show_distance_field
+        self.show_local_maxima: bool = show_local_maxima
+        self.show_peaks: bool = show_peaks
+        self.show_watershed_regions: bool = show_watershed_regions
+        self.color_seed: int = color_seed
 
         # Internal state
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        self._debug_watershed_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._debug_grid: Optional["VoxelGrid"] = None
+        self._debug_builder: Optional["PolygonBuilder"] = None
         self._debug_region_voxels_mesh: Optional[TcMesh] = None
         self._debug_simplified_contours_mesh: Optional[TcMesh] = None
         self._debug_triangulated_mesh: Optional[TcMesh] = None
+        self._debug_distance_field_mesh: Optional[TcMesh] = None
+        self._debug_watershed_mesh: Optional[TcMesh] = None
+
+        # Cached data for distance field visualization (to avoid recomputation)
+        self._cached_local_maxima: set[tuple[int, int, int]] = set()
+        self._cached_plateau_peaks: set[tuple[int, int, int]] = set()
+        self._cached_distance_fields: list[dict[tuple[int, int, int], float]] = []
+        self._cached_show_local_maxima: bool = False
+        self._cached_show_peaks: bool = False
 
         # GPU caches
         from termin._native.render import MeshGPU
         self._debug_region_voxels_gpu: Optional[MeshGPU] = None
         self._debug_simplified_contours_gpu: Optional[MeshGPU] = None
         self._debug_triangulated_gpu: Optional[MeshGPU] = None
+        self._debug_distance_field_gpu: Optional[MeshGPU] = None
+        self._debug_watershed_gpu: Optional[MeshGPU] = None
         self._debug_material: Optional[Material] = None
         self._debug_line_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
+
+        # Cached NavMesh (loaded from cache or built)
+        self._navmesh: Optional["NavMesh"] = None
+
+    # --- Lifecycle ---
+
+    def on_added(self, scene: "Scene") -> None:
+        """Called when added to scene. Load from cache if available."""
+        super().on_added(scene)
+        self._try_load_from_cache()
+
+    def on_removed(self) -> None:
+        """Called when removed from scene. Unregister from NavMeshRegistry."""
+        if self._scene is not None and self.entity is not None:
+            from termin.navmesh.registry import NavMeshRegistry
+            registry = NavMeshRegistry.for_scene(self._scene)
+            registry.unregister_all(self.entity.uuid)
+        super().on_removed()
+
+    def _try_load_from_cache(self) -> bool:
+        """
+        Try to load NavMesh from cache.
+
+        Returns:
+            True if loaded successfully, False otherwise.
+        """
+        if self._scene is None or self.entity is None:
+            return False
+
+        # Scene must have name or uuid for cache
+        if not self._scene.name and not self._scene.uuid:
+            return False
+
+        from termin.cache import SceneCache
+        from termin.navmesh.persistence import NavMeshPersistence
+        from termin.navmesh.registry import NavMeshRegistry
+
+        cache = SceneCache.for_scene(self._scene)
+        cache_key = f"navmesh_{self.agent_type_name}"
+
+        data = cache.get(self.entity.uuid, type(self).__name__, cache_key)
+        if data is None:
+            return False
+
+        try:
+            navmesh = NavMeshPersistence.from_bytes(data)
+            self._navmesh = navmesh
+
+            # Register in NavMeshRegistry
+            registry = NavMeshRegistry.for_scene(self._scene)
+            registry.register(self.agent_type_name, navmesh, self.entity)
+
+            print(f"NavMeshBuilderComponent: loaded from cache ({navmesh.polygon_count()} polygons)")
+            return True
+        except Exception as e:
+            print(f"NavMeshBuilderComponent: failed to load from cache: {e}")
+            return False
+
+    def _save_to_cache(self, navmesh: "NavMesh") -> bool:
+        """
+        Save NavMesh to cache.
+
+        Returns:
+            True if saved successfully, False otherwise.
+        """
+        if self._scene is None or self.entity is None:
+            return False
+
+        # Scene must have name or uuid for cache
+        if not self._scene.name and not self._scene.uuid:
+            print("NavMeshBuilderComponent: cannot save to cache - scene has no name or uuid")
+            return False
+
+        from termin.cache import SceneCache
+        from termin.navmesh.persistence import NavMeshPersistence
+
+        cache = SceneCache.for_scene(self._scene)
+        cache_key = f"navmesh_{self.agent_type_name}"
+
+        try:
+            data = NavMeshPersistence.to_bytes(navmesh)
+            cache.put(self.entity.uuid, type(self).__name__, cache_key, data)
+            print(f"NavMeshBuilderComponent: saved to cache ({len(data)} bytes)")
+            return True
+        except Exception as e:
+            print(f"NavMeshBuilderComponent: failed to save to cache: {e}")
+            return False
 
     # --- Drawable protocol ---
 
     GEOMETRY_REGIONS = 1
     GEOMETRY_SIMPLIFIED_CONTOURS = 2
     GEOMETRY_TRIANGULATED = 3
+    GEOMETRY_DISTANCE_FIELD = 4
+    GEOMETRY_WATERSHED = 5
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -277,6 +431,12 @@ class NavMeshBuilderComponent(PythonComponent):
             marks.update(p.phase_mark for p in mat.phases)
         if self.show_triangulated:
             mat = self._get_or_create_line_material()
+            marks.update(p.phase_mark for p in mat.phases)
+        if self.show_distance_field:
+            mat = self._get_or_create_debug_material()
+            marks.update(p.phase_mark for p in mat.phases)
+        if self.show_watershed_regions:
+            mat = self._get_or_create_debug_material()
             marks.update(p.phase_mark for p in mat.phases)
         return marks
 
@@ -302,6 +462,20 @@ class NavMeshBuilderComponent(PythonComponent):
                     from termin._native.render import MeshGPU
                     self._debug_triangulated_gpu = MeshGPU()
                 self._debug_triangulated_gpu.draw(context, self._debug_triangulated_mesh.mesh, self._debug_triangulated_mesh.version)
+
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_DISTANCE_FIELD:
+            if self.show_distance_field and self._debug_distance_field_mesh is not None and self._debug_distance_field_mesh.is_valid:
+                if self._debug_distance_field_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._debug_distance_field_gpu = MeshGPU()
+                self._debug_distance_field_gpu.draw(context, self._debug_distance_field_mesh.mesh, self._debug_distance_field_mesh.version)
+
+        if geometry_id == 0 or geometry_id == self.GEOMETRY_WATERSHED:
+            if self.show_watershed_regions and self._debug_watershed_mesh is not None and self._debug_watershed_mesh.is_valid:
+                if self._debug_watershed_gpu is None:
+                    from termin._native.render import MeshGPU
+                    self._debug_watershed_gpu = MeshGPU()
+                self._debug_watershed_gpu.draw(context, self._debug_watershed_mesh.mesh, self._debug_watershed_mesh.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Return GeometryDrawCalls for debug rendering."""
@@ -351,6 +525,58 @@ class NavMeshBuilderComponent(PythonComponent):
 
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_TRIANGULATED) for p in phases)
+
+        # Distance field
+        if self.show_distance_field:
+            # Check if checkbox state changed - rebuild mesh from cached data
+            if (self.show_local_maxima != self._cached_show_local_maxima or
+                self.show_peaks != self._cached_show_peaks):
+                self._rebuild_distance_field_from_cache()
+
+        if self.show_distance_field and self._debug_distance_field_mesh is not None and self._debug_distance_field_mesh.is_valid:
+            mat = self._get_or_create_debug_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            for phase in phases:
+                phase.set_param("u_color_below", white_color)
+                phase.set_param("u_color_above", white_color)
+                phase.set_param("u_color_surface", white_color)
+                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
+                phase.set_param("u_fill_percent", 1.0)
+                phase.set_param("u_bounds_min", self._debug_bounds_min)
+                phase.set_param("u_bounds_max", self._debug_bounds_max)
+                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
+                phase.set_param("u_ambient_intensity", 0.5)
+
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_DISTANCE_FIELD) for p in phases)
+
+        # Watershed regions
+        if self.show_watershed_regions and self._debug_watershed_mesh is not None and self._debug_watershed_mesh.is_valid:
+            mat = self._get_or_create_debug_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            for phase in phases:
+                phase.set_param("u_color_below", white_color)
+                phase.set_param("u_color_above", white_color)
+                phase.set_param("u_color_surface", white_color)
+                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
+                phase.set_param("u_fill_percent", 1.0)
+                phase.set_param("u_bounds_min", self._debug_bounds_min)
+                phase.set_param("u_bounds_max", self._debug_bounds_max)
+                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
+                phase.set_param("u_ambient_intensity", 0.5)
+
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_WATERSHED) for p in phases)
 
         return result
 
@@ -538,11 +764,9 @@ void main() {
         Returns:
             True if successful, False on error.
         """
-        from termin.visualization.core.resources import ResourceManager
         from termin.voxels.grid import VoxelGrid
         from termin.voxels.native_voxelizer import voxelize_mesh_native
         from termin.navmesh import PolygonBuilder, NavMeshConfig
-        from termin.navmesh.persistence import NavMeshPersistence
         import math
 
         print("NavMeshBuilderComponent: starting build")
@@ -551,13 +775,18 @@ void main() {
             print("NavMeshBuilderComponent: no entity")
             return False
 
-        # Get agent type info (for logging, not used in algorithm yet)
+        # Get agent type info
         manager = NavigationSettingsManager.instance()
         agent_type = manager.settings.get_agent_type(self.agent_type_name)
         if agent_type is not None:
-            print(f"NavMeshBuilderComponent: using agent type '{agent_type.name}' (radius={agent_type.radius}, height={agent_type.height})")
+            print(f"NavMeshBuilderComponent: using agent type '{agent_type.name}' "
+                  f"(radius={agent_type.radius}, height={agent_type.height}, max_slope={agent_type.max_slope}°)")
+            max_slope_cos = math.cos(math.radians(agent_type.max_slope))
+            agent_radius = agent_type.radius
         else:
             print(f"NavMeshBuilderComponent: agent type '{self.agent_type_name}' not found, using defaults")
+            max_slope_cos = 0.0  # Без фильтрации по наклону
+            agent_radius = 0.0  # Без эрозии
 
         # Collect meshes
         root_world = self.entity.model_matrix()
@@ -608,6 +837,8 @@ void main() {
         contour_epsilon = self.contour_simplify * grid.cell_size
 
         config = NavMeshConfig(
+            max_slope_cos=max_slope_cos,
+            agent_radius=agent_radius,
             normal_threshold=normal_threshold,
             contour_epsilon=contour_epsilon,
             max_edge_length=self.max_edge_length,
@@ -620,6 +851,8 @@ void main() {
             use_cvt_smoothing=self.use_cvt_smoothing,
             use_edge_collapse=self.use_edge_collapse,
             use_second_pass=self.use_second_pass,
+            use_watershed=self.use_watershed,
+            watershed_smoothing=self.watershed_smoothing,
         )
         builder = PolygonBuilder(config)
 
@@ -633,7 +866,12 @@ void main() {
 
         # Save debug data
         self._debug_regions = builder._last_regions
-        print(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions for debug")
+        self._debug_watershed_regions = builder._last_watershed_regions
+        self._debug_builder = builder
+        if self._debug_watershed_regions:
+            print(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions, {len(self._debug_watershed_regions)} watershed regions")
+        else:
+            print(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions (watershed disabled)")
 
         # Rebuild debug meshes
         self._rebuild_debug_meshes()
@@ -643,39 +881,19 @@ void main() {
 
         # Set navmesh name
         navmesh.name = name
+        self._navmesh = navmesh
 
-        # Register in ResourceManager
-        rm = ResourceManager.instance()
-        rm.register_navmesh(name, navmesh)
-        print(f"NavMeshBuilderComponent: registered NavMesh '{name}'")
+        # Save to cache
+        self._save_to_cache(navmesh)
 
-        # Save to file
-        output = self.output_path.strip()
-        if not output:
-            output = f"{name}.navmesh"
+        # Register in NavMeshRegistry
+        if self._scene is not None:
+            from termin.navmesh.registry import NavMeshRegistry
+            registry = NavMeshRegistry.for_scene(self._scene)
+            registry.register(self.agent_type_name, navmesh, self.entity)
+            print(f"NavMeshBuilderComponent: registered in NavMeshRegistry for agent type '{self.agent_type_name}'")
 
-        if not output.endswith(".navmesh"):
-            output += ".navmesh"
-
-        try:
-            output_path = Path(output)
-
-            if not output_path.is_absolute():
-                from termin.editor.project_browser import ProjectBrowser
-                project_root = ProjectBrowser.current_project_path
-                if project_root is not None:
-                    output_path = project_root / output_path
-
-            if output_path.parent and not output_path.parent.exists():
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            NavMeshPersistence.save(navmesh, output_path)
-            print(f"NavMeshBuilderComponent: saved NavMesh to {output_path.absolute()}")
-
-            return True
-        except Exception as e:
-            print(f"NavMeshBuilderComponent: failed to save NavMesh: {e}")
-            return False
+        return True
 
     # --- Debug mesh building ---
 
@@ -692,6 +910,10 @@ void main() {
         self._debug_region_voxels_gpu = None
         self._debug_simplified_contours_mesh = None
         self._debug_simplified_contours_gpu = None
+        self._debug_distance_field_mesh = None
+        self._debug_distance_field_gpu = None
+        self._debug_watershed_mesh = None
+        self._debug_watershed_gpu = None
 
         if not self._debug_regions or self._debug_grid is None:
             return
@@ -701,7 +923,7 @@ void main() {
         cube_size = cell_size * CUBE_SCALE
 
         # Generate region colors
-        random.seed(42)
+        random.seed(self.color_seed)
         region_colors = []
         for _ in self._debug_regions:
             h = random.random()
@@ -715,6 +937,23 @@ void main() {
 
         # Build simplified contours
         self._build_debug_simplified_contours(grid, region_colors)
+
+        # Build distance field mesh
+        self._build_debug_distance_field(grid, cube_size, _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS, VERTS_PER_CUBE, TRIS_PER_CUBE)
+
+        # Build watershed regions mesh
+        if self._debug_watershed_regions:
+            random.seed(self.color_seed + 81)  # Different seed for watershed colors
+            watershed_colors = []
+            for _ in self._debug_watershed_regions:
+                h = random.random()
+                s = random.random() * 0.3 + 0.7
+                v = random.random() * 0.2 + 0.8
+                r, g, b = colorsys.hsv_to_rgb(h, s, v)
+                watershed_colors.append((r, g, b))
+            self._build_debug_watershed_voxels(grid, cube_size, _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS, VERTS_PER_CUBE, TRIS_PER_CUBE, watershed_colors)
+        else:
+            print("NavMeshBuilderComponent: no watershed regions (enable Watershed Split and rebuild)")
 
         total_voxels = sum(len(voxels) for voxels, _ in self._debug_regions)
         print(f"NavMeshBuilderComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
@@ -784,6 +1023,60 @@ void main() {
             vertex_normals=normals,
             name="navmesh_builder_debug_regions",
         )
+
+    def _build_debug_watershed_voxels(
+        self,
+        grid: "VoxelGrid",
+        cube_size: float,
+        cube_vertices: np.ndarray,
+        cube_triangles: np.ndarray,
+        cube_normals: np.ndarray,
+        verts_per_cube: int,
+        tris_per_cube: int,
+        region_colors: list[tuple[float, float, float]],
+    ) -> None:
+        """Build mesh for watershed region voxels with different colors."""
+        if not self._debug_watershed_regions:
+            return
+
+        total_voxels = sum(len(voxels) for voxels, _ in self._debug_watershed_regions)
+        if total_voxels == 0:
+            return
+
+        vertices = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
+        triangles = np.zeros((total_voxels * tris_per_cube, 3), dtype=np.int32)
+        normals = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
+        uvs = np.zeros((total_voxels * verts_per_cube, 2), dtype=np.float32)
+        colors = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
+
+        voxel_idx = 0
+        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_watershed_regions):
+            region_color = region_colors[region_idx]
+
+            for vx, vy, vz in region_voxels:
+                center = grid.voxel_to_world(vx, vy, vz)
+
+                v_offset = voxel_idx * verts_per_cube
+                t_offset = voxel_idx * tris_per_cube
+
+                vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
+                triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
+                normals[v_offset:v_offset + verts_per_cube] = cube_normals
+                uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
+                colors[v_offset:v_offset + verts_per_cube] = region_color
+
+                voxel_idx += 1
+
+        self._debug_watershed_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=uvs,
+            vertex_colors=colors,
+            vertex_normals=normals,
+            name="navmesh_builder_debug_watershed",
+        )
+
+        print(f"NavMeshBuilderComponent: watershed mesh built ({len(self._debug_watershed_regions)} regions, {total_voxels} voxels)")
 
     def _build_debug_simplified_contours(
         self,
@@ -869,6 +1162,137 @@ void main() {
             vertex_normals=np.zeros_like(vertices),
             name="navmesh_builder_debug_simplified_contours",
         )
+
+    def _build_debug_distance_field(
+        self,
+        grid: "VoxelGrid",
+        cube_size: float,
+        cube_vertices: np.ndarray,
+        cube_triangles: np.ndarray,
+        cube_normals: np.ndarray,
+        verts_per_cube: int,
+        tris_per_cube: int,
+    ) -> None:
+        """Build mesh for distance field visualization with color gradient."""
+        self._debug_distance_field_mesh = None
+        self._debug_distance_field_gpu = None
+
+        if self._debug_builder is None:
+            return
+
+        distance_fields = self._debug_builder._last_distance_fields
+        if not distance_fields:
+            return
+
+        # Используем данные из polygon_builder (вычислены в watershed)
+        self._cached_distance_fields = distance_fields
+        self._cached_local_maxima = self._debug_builder._last_all_local_maxima
+        self._cached_plateau_peaks = self._debug_builder._last_peaks
+
+        print(f"NavMeshBuilderComponent: using cached peaks: local_maxima={len(self._cached_local_maxima)}, peaks={len(self._cached_plateau_peaks)}")
+
+        # Build mesh using cached data
+        self._rebuild_distance_field_from_cache()
+
+    def _rebuild_distance_field_from_cache(self) -> None:
+        """Rebuild distance field mesh from cached data (peaks, distance fields)."""
+        from termin.voxels.display_component import (
+            _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS,
+            VERTS_PER_CUBE, TRIS_PER_CUBE, CUBE_SCALE,
+        )
+
+        self._debug_distance_field_mesh = None
+        self._debug_distance_field_gpu = None
+
+        if self._debug_grid is None or not self._cached_distance_fields:
+            return
+
+        grid = self._debug_grid
+        distance_fields = self._cached_distance_fields
+        cube_size = grid.cell_size * CUBE_SCALE
+
+        # Update cached checkbox state
+        self._cached_show_local_maxima = self.show_local_maxima
+        self._cached_show_peaks = self.show_peaks
+
+        # Count total voxels
+        total_voxels = sum(len(df) for df in distance_fields)
+        if total_voxels == 0:
+            return
+
+        # Find global max distance for normalization
+        global_max_dist = 1.0
+        for df in distance_fields:
+            if df:
+                max_dist = max(df.values())
+                if max_dist > global_max_dist:
+                    global_max_dist = max_dist
+
+        verts_per_cube = VERTS_PER_CUBE
+        tris_per_cube = TRIS_PER_CUBE
+        cube_vertices = _CUBE_VERTICES
+        cube_triangles = _CUBE_TRIANGLES
+        cube_normals = _CUBE_NORMALS
+
+        vertices = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
+        triangles = np.zeros((total_voxels * tris_per_cube, 3), dtype=np.int32)
+        normals = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
+        uvs = np.zeros((total_voxels * verts_per_cube, 2), dtype=np.float32)
+        colors = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
+
+        voxel_idx = 0
+
+        for df in distance_fields:
+            for voxel, dist in df.items():
+                vx, vy, vz = voxel
+                center = grid.voxel_to_world(vx, vy, vz)
+
+                v_offset = voxel_idx * verts_per_cube
+                t_offset = voxel_idx * tris_per_cube
+
+                vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
+                triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
+                normals[v_offset:v_offset + verts_per_cube] = cube_normals
+                uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
+
+                # Check if this voxel is a peak
+                is_plateau_peak = self.show_peaks and voxel in self._cached_plateau_peaks
+                is_local_max = self.show_local_maxima and voxel in self._cached_local_maxima
+
+                if is_plateau_peak:
+                    # White for plateau peaks
+                    r, g, b = 1.0, 1.0, 1.0
+                elif is_local_max:
+                    # Magenta for local maxima (not plateau peaks)
+                    r, g, b = 1.0, 0.0, 1.0
+                else:
+                    # Color gradient: blue (boundary) -> green -> yellow -> red (center)
+                    t = dist / global_max_dist if global_max_dist > 0 else 0.0
+                    if t < 0.33:
+                        # Blue to Cyan
+                        r, g, b = 0.0, t * 3, 1.0
+                    elif t < 0.66:
+                        # Cyan to Yellow
+                        tt = (t - 0.33) * 3
+                        r, g, b = tt, 1.0, 1.0 - tt
+                    else:
+                        # Yellow to Red
+                        tt = (t - 0.66) * 3
+                        r, g, b = 1.0, 1.0 - tt, 0.0
+
+                colors[v_offset:v_offset + verts_per_cube] = (r, g, b)
+                voxel_idx += 1
+
+        self._debug_distance_field_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=uvs,
+            vertex_colors=colors,
+            vertex_normals=normals,
+            name="navmesh_builder_debug_distance_field",
+        )
+
+        print(f"NavMeshBuilderComponent: distance field mesh rebuilt ({total_voxels} voxels, max_dist={global_max_dist:.1f})")
 
     def _build_debug_mesh_from_navmesh(self, navmesh: "NavMesh") -> None:
         """Build debug mesh from finished NavMesh."""

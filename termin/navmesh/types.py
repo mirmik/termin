@@ -13,6 +13,14 @@ import numpy as np
 class NavMeshConfig:
     """Конфигурация для построения NavMesh."""
 
+    max_slope_cos: float = 0.0
+    """Косинус максимального угла наклона поверхности. 0 = без фильтрации.
+    cos(45°) ≈ 0.707, cos(60°) = 0.5, cos(30°) ≈ 0.866."""
+
+    agent_radius: float = 0.0
+    """Радиус агента в мировых координатах. 0 = без эрозии.
+    Воксели с distance < agent_radius / cell_size отфильтровываются."""
+
     normal_threshold: float = 0.9
     """Порог схожести нормалей (косинус угла). 0.9 ≈ 25°, 0.866 ≈ 30°."""
 
@@ -51,6 +59,12 @@ class NavMeshConfig:
 
     use_second_pass: bool = False
     """Повторный проход flips + smoothing после edge collapse."""
+
+    use_watershed: bool = False
+    """Разбивать большие регионы с помощью watershed."""
+
+    watershed_smoothing: int = 0
+    """Количество итераций сглаживания distance field для watershed."""
 
 
 @dataclass

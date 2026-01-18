@@ -93,13 +93,12 @@
           {
             "type": "NavMeshBuilderComponent",
             "data": {
-              "display_name": "",
+              "display_name": "navmesh_Human",
               "enabled": true,
               "navmesh_name": "Plt",
               "agent_type_name": "Human",
-              "cell_size": 0.25,
+              "cell_size": 0.2,
               "voxelize_source": 1.0,
-              "output_path": "Scenes/Plt.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
               "max_edge_length": 6.0,
@@ -112,22 +111,30 @@
               "use_cvt_smoothing": true,
               "use_edge_collapse": false,
               "use_second_pass": true,
+              "use_watershed": true,
+              "watershed_smoothing": 10.0,
               "show_region_voxels": false,
               "show_simplified_contours": false,
-              "show_triangulated": false
+              "show_triangulated": false,
+              "show_distance_field": true,
+              "show_local_maxima": true,
+              "show_peaks": false,
+              "show_watershed_regions": true,
+              "color_seed": 32.0
             }
           },
           {
             "type": "PathfindingWorldComponent",
             "data": {
-              "display_name": "Plt",
+              "display_name": "",
               "enabled": true,
+              "agent_type_name": "Human",
               "skip_astar_if_los": true,
               "use_funnel": true,
               "use_los_optimization": true,
               "use_edge_centers": true,
               "show_graph_edges": true,
-              "show_portals": true
+              "show_portals": false
             }
           },
           {
@@ -184,6 +191,39 @@
                 0.9
               ]
             }
+          },
+          {
+            "type": "NavMeshBuilderComponent",
+            "data": {
+              "display_name": "navmesh_Skiby",
+              "enabled": true,
+              "navmesh_name": "",
+              "agent_type_name": "Skiby",
+              "cell_size": 0.25,
+              "voxelize_source": 1.0,
+              "normal_angle": 25.0,
+              "contour_simplify": 1.0,
+              "max_edge_length": 6.0,
+              "min_edge_length": 1.0,
+              "min_contour_edge_length": 0.5,
+              "max_vertex_valence": 0.0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": true,
+              "use_angle_flip": true,
+              "use_cvt_smoothing": true,
+              "use_edge_collapse": false,
+              "use_second_pass": true,
+              "use_watershed": false,
+              "watershed_smoothing": 0.0,
+              "show_region_voxels": false,
+              "show_simplified_contours": false,
+              "show_triangulated": false,
+              "show_distance_field": false,
+              "show_local_maxima": false,
+              "show_peaks": false,
+              "show_watershed_regions": false,
+              "color_seed": 42.0
+            }
           }
         ],
         "children": [
@@ -224,62 +264,12 @@
                     "name": "Cube"
                   },
                   "material": {
-                    "uuid": "00000000-0001-0000-0001-000000000003",
-                    "name": "NormalizedPBR",
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
                     "type": "uuid"
                   },
                   "cast_shadow": true,
-                  "_override_material": true,
-                  "_overridden_material_data": {
-                    "phases_uniforms": [
-                      {
-                        "u_diffuse_mul": 3.1414999961853027,
-                        "u_color": [
-                          0.26399633288383484,
-                          0.13121232390403748,
-                          0.02560463920235634,
-                          1
-                        ]
-                      },
-                      {
-                        "u_color": [
-                          0.26399633288383484,
-                          0.13121232390403748,
-                          0.02560463920235634,
-                          1
-                        ],
-                        "u_metallic": 0,
-                        "u_roughness": 0.5,
-                        "u_subsurface": 0,
-                        "u_diffuse_mul": 3.1414999961853027,
-                        "u_emission_color": [
-                          0,
-                          0,
-                          0,
-                          1
-                        ],
-                        "u_emission_intensity": 0,
-                        "u_normal_strength": 1
-                      }
-                    ],
-                    "phases_textures": [
-                      {},
-                      {
-                        "u_albedo_texture": {
-                          "uuid": "5fb7972ad02ddfad",
-                          "name": "__white_1x1__",
-                          "type": "path",
-                          "path": "__white_1x1__"
-                        },
-                        "u_normal_texture": {
-                          "uuid": "07151644d3bb92c7",
-                          "name": "__normal_1x1__",
-                          "type": "path",
-                          "path": "__normal_1x1__"
-                        }
-                      }
-                    ]
-                  }
+                  "_override_material": false
                 }
               },
               {
@@ -441,9 +431,9 @@
             "flags": 0,
             "pose": {
               "position": [
-                12.62234878540039,
-                8.683868408203125,
-                1.5973608493804932
+                12.623335838317871,
+                8.684647560119629,
+                1.4675014019012451
               ],
               "rotation": [
                 0.0015895068645477295,
@@ -505,9 +495,9 @@
             "flags": 0,
             "pose": {
               "position": [
-                10.944812774658203,
-                10.805864334106445,
-                1.5973608493804932
+                10.945873260498047,
+                10.806703567504883,
+                1.4576995372772217
               ],
               "rotation": [
                 0.0015895068645477295,
@@ -744,6 +734,54 @@
                   "sphere_radius": 0.5,
                   "capsule_height": 1.0,
                   "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "c3c08a97-239a-4287-80ba-4cc2ce94f36e",
+            "name": "entity6",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                14.716891288757324,
+                4.0921454429626465,
+                0.6420947313308716
+              ],
+              "rotation": [
+                0,
+                0,
+                -0.1706918179988861,
+                0.985324501991272
+              ]
+            },
+            "scale": [
+              5,
+              5,
+              0.1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
                 }
               }
             ],
@@ -5281,8 +5319,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            1.6990000009536743,
-            0,
+            15.79020881652832,
+            14.411012649536133,
             0.5
           ],
           "rotation": [
@@ -9769,7 +9807,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            3.497128963470459,
+            6.910222053527832,
             -2.206026315689087,
             0.9935950040817261
           ],
@@ -9817,9 +9855,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            -2.61989164352417,
-            -3.390488624572754,
-            1.3829948902130127
+            -2.7872071266174316,
+            -5.888918876647949,
+            1.3827593326568604
           ],
           "rotation": [
             4.701771467807703e-05,
@@ -9916,7 +9954,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            2.295976400375366,
+            -6.676997184753418,
             -1.7307894229888916,
             1.1729645729064941
           ],
@@ -12895,17 +12933,17 @@
   "editor": {
     "camera": {
       "position": [
-        16.172191619873047,
-        1.8902196884155273,
-        9.992144584655762
+        13.933103561401367,
+        4.366338729858398,
+        10.038052558898926
       ],
       "rotation": [
-        -0.2970066530942587,
-        -0.15593202305791193,
-        0.4379080125732842,
-        0.8340916165068021
+        -0.4964000990518547,
+        -0.205615686122281,
+        0.3227519772585838,
+        0.7791920767419591
       ],
-      "radius": 16.0,
+      "radius": 20.0,
       "editor_entities": {
         "camera": [
           {
@@ -12925,7 +12963,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "radius": 16.0,
+              "radius": 20.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12963,11 +13001,11 @@
       }
     },
     "expanded_entities": [
-      "814ba329-db24-48fe-b931-fe68ab904998",
-      "0000000000000077",
       "0000000000000007",
       "0000000000000131",
-      "000000000000000a"
+      "000000000000000a",
+      "0000000000000077",
+      "814ba329-db24-48fe-b931-fe68ab904998"
     ]
   },
   "resources": {

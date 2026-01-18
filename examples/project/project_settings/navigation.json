@@ -13,6 +13,13 @@
       "height": 2.0,
       "max_slope": 45.0,
       "step_height": 0.4
+    },
+    {
+      "name": "Skiby",
+      "radius": 0.5,
+      "height": 2.0,
+      "max_slope": 45.0,
+      "step_height": 0.4
     }
   ]
 }

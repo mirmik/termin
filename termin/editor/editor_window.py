@@ -495,6 +495,7 @@ class EditorWindow(QMainWindow):
             on_show_audio_debugger=self._show_audio_debugger,
             on_show_core_registry_viewer=self._show_core_registry_viewer,
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
+            on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
@@ -631,6 +632,10 @@ class EditorWindow(QMainWindow):
     def _show_inspect_registry_viewer(self) -> None:
         """Opens inspect registry viewer dialog."""
         self._dialog_manager.show_inspect_registry_viewer()
+
+    def _show_navmesh_registry_viewer(self) -> None:
+        """Opens NavMesh registry viewer dialog."""
+        self._dialog_manager.show_navmesh_registry_viewer()
 
     def _show_scene_manager_viewer(self) -> None:
         """Opens scene manager viewer window."""

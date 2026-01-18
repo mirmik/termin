@@ -835,14 +835,10 @@ static void cpp_field_setter_via_kind(void* obj, const tc_field_desc* field, tc_
 
     // Deserialize via KindRegistry with scene
     nos::trent t = tc_value_to_trent(&value);
-    tc_log(TC_LOG_INFO, "[cpp_field_setter] kind=%s scene=%p value.type=%d",
-        ctx->kind.c_str(), (void*)scene, (int)value.type);
     std::any result = KindRegistry::instance().deserialize_cpp(ctx->kind, t, scene);
-    tc_log(TC_LOG_INFO, "[cpp_field_setter] result.has_value=%d", result.has_value() ? 1 : 0);
     if (result.has_value()) {
         try {
             instance->*(ctx->member) = std::any_cast<T>(result);
-            tc_log(TC_LOG_INFO, "[cpp_field_setter] assigned successfully");
         } catch (const std::bad_any_cast& e) {
             tc_log_error("cpp_field_setter_via_kind: bad_any_cast for kind=%s: %s",
                 ctx->kind.c_str(), e.what());

@@ -42,7 +42,11 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                 for klass in reversed(cls.__mro__):
                     fields = getattr(klass, 'inspect_fields', None)
                     if fields:
-                        result.update(fields)
+                        for name, field in fields.items():
+                            # Skip non-inspectable fields
+                            if not field.is_inspectable:
+                                continue
+                            result[name] = field
                 return result
 
         # For C++ types (and fallback), use InspectRegistry

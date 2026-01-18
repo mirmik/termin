@@ -259,13 +259,13 @@ class SceneManager:
 
         scene = self._create_new_scene()
 
+        # Set scene name BEFORE loading data (components need it for cache)
+        scene.name = os.path.splitext(os.path.basename(path))[0]
+
         # Support both new format "scene" and old "scenes"
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         if scene_data:
             scene.load_from_data(scene_data, context=None, update_settings=True)
-
-        # Set scene name from filename (without extension)
-        scene.name = os.path.splitext(os.path.basename(path))[0]
 
         self._scenes[name] = scene
         self._modes[name] = SceneMode.INACTIVE

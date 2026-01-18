@@ -1,7 +1,7 @@
 """
 PathfindingWorldComponent — глобальный компонент для поиска пути.
 
-Собирает NavMesh из VoxelizerComponent, строит NavMeshGraph и обрабатывает запросы на поиск пути.
+Собирает NavMesh из NavMeshRegistry, строит NavMeshGraph и обрабатывает запросы на поиск пути.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ import numpy as np
 
 from termin._native import log
 from termin.visualization.core.python_component import PythonComponent
-from termin.visualization.core.scene import get_current_scene
 from termin.editor.inspect_field import InspectField
 from termin.navmesh.pathfinding import (
     RegionGraph,
@@ -26,7 +25,11 @@ from termin.navmesh.region_growing import NEIGHBORS_26
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.entity import Entity
-    from termin.voxels.voxelizer_component import VoxelizerComponent
+
+
+def _rebuild_graph_action(component: "PathfindingWorldComponent") -> None:
+    """Rebuild graph button action."""
+    component.rebuild()
 
 
 class PathfindingWorldComponent(PythonComponent):
@@ -50,6 +53,11 @@ class PathfindingWorldComponent(PythonComponent):
         return cls._instance
 
     inspect_fields = {
+        "agent_type_name": InspectField(
+            path="agent_type_name",
+            label="Agent Type",
+            kind="agent_type",
+        ),
         "skip_astar_if_los": InspectField(
             path="skip_astar_if_los",
             label="Skip A* if direct LOS",
@@ -80,9 +88,16 @@ class PathfindingWorldComponent(PythonComponent):
             label="Show Portals",
             kind="bool",
         ),
+        "rebuild_btn": InspectField(
+            label="Rebuild Graph",
+            kind="button",
+            action=_rebuild_graph_action,
+            is_serializable=False,
+        ),
     }
 
     serializable_fields = [
+        "agent_type_name",
         "skip_astar_if_los",
         "use_funnel",
         "use_los_optimization",
@@ -93,6 +108,7 @@ class PathfindingWorldComponent(PythonComponent):
 
     def __init__(
         self,
+        agent_type_name: str = "Human",
         skip_astar_if_los: bool = True,
         use_funnel: bool = True,
         use_los_optimization: bool = True,
@@ -104,6 +120,7 @@ class PathfindingWorldComponent(PythonComponent):
 
         self.active_in_editor = True
 
+        self.agent_type_name = agent_type_name
         self.skip_astar_if_los = skip_astar_if_los
         self.use_funnel = use_funnel
         self.use_los_optimization = use_los_optimization
@@ -112,9 +129,8 @@ class PathfindingWorldComponent(PythonComponent):
         self.show_portals = show_portals
 
         self._navmesh_graph: NavMeshGraph = NavMeshGraph()
-        self._voxelizer_components: List["VoxelizerComponent"] = []
         self._initialized: bool = False
-        # (navmesh, entity)
+        # (navmesh, entity) - from NavMeshRegistry
         self._navmesh_sources: List[tuple[NavMesh, "Entity"]] = []
         # Маппинг region_id -> entity (для получения актуальной трансформации)
         self._region_entities: dict[int, "Entity"] = {}
@@ -133,72 +149,43 @@ class PathfindingWorldComponent(PythonComponent):
         """Количество регионов в графе."""
         return len(self._navmesh_graph.regions)
 
-    def start(self) -> None:
-        """Инициализация при старте сцены."""
-        super().start()
-
+    def on_added(self, scene: "Scene") -> None:
+        """Called when added to scene. Build graph in editor mode."""
+        super().on_added(scene)
         # Register as global instance
         PathfindingWorldComponent._instance = self
+        # Auto-rebuild in editor mode
+        self.rebuild()
 
-        scene = get_current_scene()
-        if not scene:
-            return
-
-        self._collect_navmeshes(scene)
-        self._build_graph()
-        self._initialized = True
+    def start(self) -> None:
+        """Инициализация при старте сцены (game mode)."""
+        super().start()
+        # Register as global instance
+        PathfindingWorldComponent._instance = self
+        # Rebuild graph for game mode
+        self.rebuild()
 
     def update(self, dt: float) -> None:
         """Обновление каждый кадр."""
         self.draw()
 
     def _collect_navmeshes(self, scene: "Scene") -> None:
-        """Найти все VoxelizerComponent и собрать их NavMesh."""
-        from termin.voxels.voxelizer_component import VoxelizerComponent
-        from termin.visualization.core.resources import ResourceManager
+        """Собрать NavMesh из NavMeshRegistry для выбранного типа агента."""
+        from termin.navmesh.registry import NavMeshRegistry
 
-        self._voxelizer_components.clear()
         self._navmesh_sources.clear()
 
-        rm = ResourceManager.instance()
+        registry = NavMeshRegistry.for_scene(scene)
+        entries = registry.get_all(self.agent_type_name)
 
-        visited_entities = set()
-        for entity in scene.entities:
-            self._collect_from_entity(entity, visited_entities, rm)
-
-        # log.debug(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMeshes")
-
-    def _collect_from_entity(self, entity, visited_entities: set, rm) -> None:
-        """Рекурсивно собрать NavMesh из дерева сущностей."""
-        from termin.voxels.voxelizer_component import VoxelizerComponent
-
-        entity_id = id(entity)
-        if entity_id in visited_entities:
+        if not entries:
+            log.warn(f"[PathfindingWorld] no NavMesh found for agent type '{self.agent_type_name}'")
             return
-        visited_entities.add(entity_id)
 
-        vox_comp = entity.get_component(VoxelizerComponent)
-        if vox_comp is not None:
-            self._voxelizer_components.append(vox_comp)
+        for navmesh, entity in entries:
+            self._navmesh_sources.append((navmesh, entity))
 
-            # Получаем NavMesh из ResourceManager по имени грида
-            name = vox_comp.grid_name.strip()
-            if not name:
-                name = entity.name or "voxel_grid"
-
-            # log.debug(f"[PathfindingWorld] found VoxelizerComponent '{entity.name}', grid_name='{name}'")
-            navmesh = rm.get_navmesh(name)
-            if navmesh is not None:
-                self._navmesh_sources.append((navmesh, entity))
-                pos = entity.transform.global_pose().lin
-                # log.debug(f"[PathfindingWorld] found NavMesh '{name}' ({navmesh.polygon_count()} polygons) at ({pos.x:.2f}, {pos.y:.2f}, {pos.z:.2f})")
-            else:
-                log.warn(f"[PathfindingWorld] NavMesh '{name}' not found in ResourceManager")
-
-        # Рекурсивно обходим детей
-        for child_transform in entity.transform.children:
-            if child_transform.entity is not None:
-                self._collect_from_entity(child_transform.entity, visited_entities, rm)
+        print(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMesh for agent '{self.agent_type_name}'")
 
     def _build_graph(self) -> None:
         """Построить NavMeshGraph из собранных NavMesh."""
@@ -212,11 +199,10 @@ class PathfindingWorldComponent(PythonComponent):
             for poly_idx, polygon in enumerate(navmesh.polygons):
                 verts_count = len(polygon.vertices) if polygon.vertices is not None else 0
                 tris_count = len(polygon.triangles) if polygon.triangles is not None else 0
-                # # log.debug(f"[PathfindingWorld] polygon {poly_idx}: {verts_count} verts, {tris_count} tris")
                 if verts_count == 0 or tris_count == 0:
                     continue
 
-                # Храним вершины в ЛОКАЛЬНЫХ координатах
+                # Вершины в локальных координатах entity
                 local_verts = polygon.vertices
 
                 # Создаём RegionGraph для каждого полигона
@@ -233,7 +219,7 @@ class PathfindingWorldComponent(PythonComponent):
                 self._region_navmesh_info[region_id] = (navmesh, poly_idx)
                 region_id += 1
 
-        # log.debug(f"[PathfindingWorld] built graph with {region_id} regions")
+        print(f"[PathfindingWorld] built graph with {region_id} regions")
 
         # Вычисляем порталы между регионами
         self._compute_portals()
@@ -388,10 +374,11 @@ class PathfindingWorldComponent(PythonComponent):
 
     def rebuild(self) -> None:
         """Перестроить граф (вызывать после изменения NavMesh)."""
-        scene = get_current_scene()
-        if scene:
-            self._collect_navmeshes(scene)
-            self._build_graph()
+        if self._scene is None:
+            return
+        self._collect_navmeshes(self._scene)
+        self._build_graph()
+        self._initialized = True
 
     def find_path(
         self,
