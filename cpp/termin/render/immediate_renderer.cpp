@@ -92,6 +92,60 @@ void ImmediateRenderer::quad(const Vec3& p0, const Vec3& p1, const Vec3& p2, con
     triangle(p0, p2, p3, color, depth_test);
 }
 
+void ImmediateRenderer::triangles(
+    const float* vertices, size_t vertex_count,
+    const uint32_t* indices, size_t triangle_count,
+    const float* colors,
+    bool depth_test
+) {
+    auto& buf = depth_test ? tri_vertices_depth : tri_vertices;
+
+    // Reserve space for efficiency
+    buf.reserve(buf.size() + triangle_count * 3 * 7);
+
+    for (size_t t = 0; t < triangle_count; ++t) {
+        for (size_t v = 0; v < 3; ++v) {
+            uint32_t idx = indices[t * 3 + v];
+            // Position (3 floats)
+            buf.push_back(vertices[idx * 3 + 0]);
+            buf.push_back(vertices[idx * 3 + 1]);
+            buf.push_back(vertices[idx * 3 + 2]);
+            // Color (4 floats)
+            buf.push_back(colors[idx * 4 + 0]);
+            buf.push_back(colors[idx * 4 + 1]);
+            buf.push_back(colors[idx * 4 + 2]);
+            buf.push_back(colors[idx * 4 + 3]);
+        }
+    }
+}
+
+void ImmediateRenderer::triangles(
+    const float* vertices, size_t vertex_count,
+    const uint32_t* indices, size_t triangle_count,
+    const Color4& color,
+    bool depth_test
+) {
+    auto& buf = depth_test ? tri_vertices_depth : tri_vertices;
+
+    // Reserve space for efficiency
+    buf.reserve(buf.size() + triangle_count * 3 * 7);
+
+    for (size_t t = 0; t < triangle_count; ++t) {
+        for (size_t v = 0; v < 3; ++v) {
+            uint32_t idx = indices[t * 3 + v];
+            // Position (3 floats)
+            buf.push_back(vertices[idx * 3 + 0]);
+            buf.push_back(vertices[idx * 3 + 1]);
+            buf.push_back(vertices[idx * 3 + 2]);
+            // Color (4 floats) - same for all vertices
+            buf.push_back(color.r);
+            buf.push_back(color.g);
+            buf.push_back(color.b);
+            buf.push_back(color.a);
+        }
+    }
+}
+
 // ============================================================
 // Wireframe primitives
 // ============================================================

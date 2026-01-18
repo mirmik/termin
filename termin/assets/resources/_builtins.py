@@ -35,6 +35,7 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.navmesh.material_component", "NavMeshMaterialComponent"),
     ("termin.navmesh.pathfinding_world_component", "PathfindingWorldComponent"),
     ("termin.navmesh.agent_component", "NavMeshAgentComponent"),
+    ("termin.navmesh.builder_component", "NavMeshBuilderComponent"),
     # Audio
     ("termin.audio.components.audio_source", "AudioSource"),
     ("termin.audio.components.audio_listener", "AudioListener"),

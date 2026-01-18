@@ -187,6 +187,11 @@ class InspectFieldPanel(QWidget):
             new_value = widget.get_value()
             field.set_value(target, new_value)
             self.field_changed.emit(key, old_value, new_value)
+            # Request viewport redraw after property change
+            from termin.editor.rendering_controller import RenderingController
+            ctrl = RenderingController.instance()
+            if ctrl is not None:
+                ctrl._request_update()
 
         widget.value_changed.connect(on_change)
 

@@ -414,6 +414,62 @@ class ComboFieldWidget(FieldWidget):
         self._combo.blockSignals(False)
 
 
+class AgentTypeFieldWidget(FieldWidget):
+    """Widget for selecting navigation agent type from NavigationSettingsManager."""
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._combo = QComboBox()
+        self._combo.currentIndexChanged.connect(lambda _: self.value_changed.emit())
+        layout.addWidget(self._combo)
+
+        self._refresh_choices()
+
+    def _refresh_choices(self) -> None:
+        """Refresh dropdown options from NavigationSettingsManager."""
+        self._combo.blockSignals(True)
+        current = self._combo.currentText()
+        self._combo.clear()
+
+        try:
+            from termin.navmesh.settings import NavigationSettingsManager
+            manager = NavigationSettingsManager.instance()
+            names = manager.settings.get_agent_type_names()
+            for name in names:
+                self._combo.addItem(name)
+        except Exception as e:
+            log.debug(f"[AgentTypeFieldWidget] Failed to get agent types: {e}")
+            self._combo.addItem("Human")  # Default fallback
+
+        # Restore selection
+        idx = self._combo.findText(current)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+        elif self._combo.count() > 0:
+            self._combo.setCurrentIndex(0)
+
+        self._combo.blockSignals(False)
+
+    def get_value(self) -> str:
+        return self._combo.currentText()
+
+    def set_value(self, value: Any) -> None:
+        self._combo.blockSignals(True)
+        self._refresh_choices()
+
+        value_str = str(value) if value else "Human"
+        idx = self._combo.findText(value_str)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+        elif self._combo.count() > 0:
+            self._combo.setCurrentIndex(0)
+        self._combo.blockSignals(False)
+
+
 class ClipSelectorWidget(FieldWidget):
     """Widget for selecting animation clip from available clips."""
 
@@ -683,6 +739,9 @@ class FieldWidgetFactory:
 
         if kind == "clip_selector":
             return ClipSelectorWidget()
+
+        if kind == "agent_type":
+            return AgentTypeFieldWidget()
 
         # Handle-based resource selectors
         if kind in (

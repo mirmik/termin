@@ -41,6 +41,7 @@
           {
             "type": "LightComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "light_type": 0.0,
               "color": [
@@ -90,15 +91,15 @@
         ],
         "components": [
           {
-            "type": "VoxelizerComponent",
+            "type": "NavMeshBuilderComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
-              "grid_name": "Plt",
+              "navmesh_name": "Plt",
+              "agent_type_name": "Human",
               "cell_size": 0.25,
-              "voxelize_mode": 4.0,
               "voxelize_source": 1.0,
-              "output_path": "Scenes/Plt.voxels",
-              "navmesh_output_path": "Scenes/Plt.navmesh",
+              "output_path": "Scenes/Plt.navmesh",
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
               "max_edge_length": 6.0,
@@ -109,18 +110,17 @@
               "use_valence_flip": true,
               "use_angle_flip": true,
               "use_cvt_smoothing": true,
-              "use_edge_collapse": true,
+              "use_edge_collapse": false,
               "use_second_pass": true,
               "show_region_voxels": false,
-              "show_sparse_boundary": false,
               "show_simplified_contours": false,
-              "show_bridged_contours": true,
               "show_triangulated": false
             }
           },
           {
             "type": "PathfindingWorldComponent",
             "data": {
+              "display_name": "Plt",
               "enabled": true,
               "skip_astar_if_los": true,
               "use_funnel": true,
@@ -133,7 +133,8 @@
           {
             "type": "NavMeshFovShowerComponent",
             "data": {
-              "enabled": true,
+              "display_name": "",
+              "enabled": false,
               "navmesh": {
                 "uuid": "65a82ebe-b0e2-4590-bc27-310b403475de",
                 "name": "Plt",
@@ -150,6 +151,7 @@
           {
             "type": "VoxelDisplayComponent",
             "data": {
+              "display_name": "",
               "enabled": false,
               "voxel_grid": {
                 "uuid": "485911ec-312a-488a-9771-dde9b624e074",
@@ -283,6 +285,7 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -346,6 +349,7 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -409,6 +413,7 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -472,6 +477,7 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -535,6 +541,7 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -598,6 +605,7 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -661,6 +669,71 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "3dad235e-0969-45d8-a8a0-a831e843616a",
+            "name": "entity1_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                3.5194406509399414,
+                11.38097095489502,
+                4.492423057556152
+              ],
+              "rotation": [
+                0.6630547974085494,
+                0.24567933497448968,
+                0.24567933497448968,
+                0.6630547974085494
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
@@ -710,6 +783,7 @@
           {
             "type": "ChronosphereController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -748,6 +822,7 @@
           {
             "type": "TimelineInitializer",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -786,6 +861,7 @@
           {
             "type": "TimelineController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -824,6 +900,7 @@
           {
             "type": "ObjectController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "selectable": true,
               "fov_target": false
@@ -832,12 +909,14 @@
           {
             "type": "AnimationController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           },
           {
             "type": "HumanModelCollider",
             "data": {
+              "display_name": "",
               "enabled": true,
               "scale": 1.0,
               "overlap_radius": 0.023
@@ -846,6 +925,7 @@
           {
             "type": "BlinkActionComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "cooldown": 3.0,
               "max_distance": 15.0,
@@ -1325,6 +1405,7 @@
                       {
                         "type": "ColliderComponent",
                         "data": {
+                          "display_name": "",
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
@@ -1461,6 +1542,7 @@
                                       {
                                         "type": "ColliderComponent",
                                         "data": {
+                                          "display_name": "",
                                           "enabled": true,
                                           "collider_type": "Sphere",
                                           "box_size": [
@@ -1636,6 +1718,7 @@
                                       {
                                         "type": "ColliderComponent",
                                         "data": {
+                                          "display_name": "",
                                           "enabled": true,
                                           "collider_type": "Capsule",
                                           "box_size": [
@@ -1682,6 +1765,7 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
@@ -1728,6 +1812,7 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
@@ -2767,6 +2852,7 @@
                                       {
                                         "type": "ColliderComponent",
                                         "data": {
+                                          "display_name": "",
                                           "enabled": true,
                                           "collider_type": "Capsule",
                                           "box_size": [
@@ -2813,6 +2899,7 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
@@ -2859,6 +2946,7 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
@@ -3874,6 +3962,7 @@
                       {
                         "type": "ColliderComponent",
                         "data": {
+                          "display_name": "",
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
@@ -3920,6 +4009,7 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
@@ -3966,6 +4056,7 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
@@ -4145,6 +4236,7 @@
                       {
                         "type": "ColliderComponent",
                         "data": {
+                          "display_name": "",
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
@@ -4191,6 +4283,7 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
@@ -4237,6 +4330,7 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
@@ -5094,12 +5188,14 @@
           {
             "type": "ClickController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           },
           {
             "type": "GameController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -5138,12 +5234,14 @@
           {
             "type": "ChronoCameraController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           },
           {
             "type": "CameraComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 59.99999999999999,
@@ -5155,6 +5253,7 @@
           {
             "type": "ViewportHintComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "pipeline_name": "ChronoSquadPipeline",
               "layer_mask": "0xfb"
@@ -5163,6 +5262,7 @@
           {
             "type": "TimeModifierController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -5201,6 +5301,7 @@
           {
             "type": "ObjectController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "selectable": true,
               "fov_target": false
@@ -5209,6 +5310,7 @@
           {
             "type": "AnimationController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -5771,6 +5873,7 @@
               {
                 "type": "HumanModelCollider",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "scale": 1.0,
                   "overlap_radius": 0.2
@@ -6880,6 +6983,7 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
@@ -7016,6 +7120,7 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Sphere",
                                               "box_size": [
@@ -7159,6 +7264,7 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
@@ -7205,6 +7311,7 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
@@ -7251,6 +7358,7 @@
                                                   {
                                                     "type": "ColliderComponent",
                                                     "data": {
+                                                      "display_name": "",
                                                       "enabled": true,
                                                       "collider_type": "Capsule",
                                                       "box_size": [
@@ -8130,6 +8238,7 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
@@ -8176,6 +8285,7 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
@@ -8222,6 +8332,7 @@
                                                   {
                                                     "type": "ColliderComponent",
                                                     "data": {
+                                                      "display_name": "",
                                                       "enabled": true,
                                                       "collider_type": "Capsule",
                                                       "box_size": [
@@ -9077,6 +9188,7 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
@@ -9123,6 +9235,7 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
@@ -9169,6 +9282,7 @@
                                   {
                                     "type": "ColliderComponent",
                                     "data": {
+                                      "display_name": "",
                                       "enabled": true,
                                       "collider_type": "Capsule",
                                       "box_size": [
@@ -9316,6 +9430,7 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
@@ -9362,6 +9477,7 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
@@ -9408,6 +9524,7 @@
                                   {
                                     "type": "ColliderComponent",
                                     "data": {
+                                      "display_name": "",
                                       "enabled": true,
                                       "collider_type": "Capsule",
                                       "box_size": [
@@ -9594,6 +9711,7 @@
           {
             "type": "ActionServerComponent",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -9632,6 +9750,7 @@
           {
             "type": "VisualEffectsController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -9865,6 +9984,7 @@
           {
             "type": "ObjectController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "selectable": false,
               "fov_target": true
@@ -9873,6 +9993,7 @@
           {
             "type": "AnimationController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -12693,6 +12814,7 @@
           {
             "type": "CameraComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 119.99999999999999,
@@ -12773,22 +12895,23 @@
   "editor": {
     "camera": {
       "position": [
-        9.6160249710083,
-        1.6037285327911377,
-        5.213981628417969
+        16.172191619873047,
+        1.8902196884155273,
+        9.992144584655762
       ],
       "rotation": [
-        -0.3408134990835879,
-        -0.20075455361826586,
-        0.4661468805606953,
-        0.7913601290104685
+        -0.2970066530942587,
+        -0.15593202305791193,
+        0.4379080125732842,
+        0.8340916165068021
       ],
-      "radius": 6.5,
+      "radius": 16.0,
       "editor_entities": {
         "camera": [
           {
             "type": "PerspectiveCameraComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 80.0,
@@ -12800,8 +12923,9 @@
           {
             "type": "OrbitCameraController",
             "data": {
+              "display_name": "",
               "enabled": true,
-              "radius": 6.5,
+              "radius": 16.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -12809,6 +12933,7 @@
           {
             "type": "ViewportHintComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "pipeline_name": "(Editor)",
               "layer_mask": "0xff"
@@ -12819,6 +12944,7 @@
           {
             "type": "UIComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "ui_layout": null
             }
@@ -12826,6 +12952,7 @@
           {
             "type": "EditorCameraUIController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "colliders_enabled": false,
               "wireframe_enabled": false,
@@ -12837,10 +12964,10 @@
     },
     "expanded_entities": [
       "814ba329-db24-48fe-b931-fe68ab904998",
-      "000000000000000a",
-      "0000000000000131",
       "0000000000000077",
-      "0000000000000007"
+      "0000000000000007",
+      "0000000000000131",
+      "000000000000000a"
     ]
   },
   "resources": {

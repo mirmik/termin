@@ -16,6 +16,44 @@ void bind_immediate(nb::module_& m) {
              nb::arg("p0"), nb::arg("p1"), nb::arg("p2"), nb::arg("color"), nb::arg("depth_test") = false)
         .def("quad", &ImmediateRenderer::quad,
              nb::arg("p0"), nb::arg("p1"), nb::arg("p2"), nb::arg("p3"), nb::arg("color"), nb::arg("depth_test") = false)
+        // Batch triangles with per-vertex colors
+        .def("triangles", [](ImmediateRenderer& self,
+                             nb::ndarray<nb::numpy, float, nb::c_contig> vertices,
+                             nb::ndarray<nb::numpy, uint32_t, nb::c_contig> indices,
+                             nb::ndarray<nb::numpy, float, nb::c_contig> colors,
+                             bool depth_test) {
+            size_t vertex_count = vertices.shape(0);
+            size_t triangle_count = indices.shape(0);
+            self.triangles(
+                vertices.data(),
+                vertex_count,
+                indices.data(),
+                triangle_count,
+                colors.data(),
+                depth_test
+            );
+        },
+             nb::arg("vertices"), nb::arg("indices"), nb::arg("colors"), nb::arg("depth_test") = false,
+             "Batch triangles from numpy arrays (vertices Nx3, indices Mx3, colors Nx4)")
+        // Batch triangles with single color
+        .def("triangles", [](ImmediateRenderer& self,
+                             nb::ndarray<nb::numpy, float, nb::c_contig> vertices,
+                             nb::ndarray<nb::numpy, uint32_t, nb::c_contig> indices,
+                             const Color4& color,
+                             bool depth_test) {
+            size_t vertex_count = vertices.shape(0);
+            size_t triangle_count = indices.shape(0);
+            self.triangles(
+                vertices.data(),
+                vertex_count,
+                indices.data(),
+                triangle_count,
+                color,
+                depth_test
+            );
+        },
+             nb::arg("vertices"), nb::arg("indices"), nb::arg("color"), nb::arg("depth_test") = false,
+             "Batch triangles from numpy arrays with single color (vertices Nx3, indices Mx3)")
         // Wireframe
         .def("polyline", &ImmediateRenderer::polyline,
              nb::arg("points"), nb::arg("color"), nb::arg("closed") = false, nb::arg("depth_test") = false)

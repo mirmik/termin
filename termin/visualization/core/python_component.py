@@ -27,13 +27,22 @@ class PythonComponent:
 
     # Class-level inspect fields - enabled is inherited by all subclasses
     inspect_fields: Dict[str, Any] = {
+        "display_name": InspectField(
+            path="display_name",
+            label="Name",
+            kind="string",
+            is_inspectable=False,  # Hidden from inspector, renamed via context menu
+        ),
         "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
     }
 
     # Override to True in drawable subclasses (that have phase_marks)
     is_drawable: bool = False
 
-    def __init__(self, enabled: bool = True):
+    def __init__(self, enabled: bool = True, display_name: str = ""):
+        # Custom display name for this component instance
+        self.display_name = display_name
+
         # Create TcComponent wrapper
         type_name = type(self).__name__
         self._tc = TcComponent(self, type_name)

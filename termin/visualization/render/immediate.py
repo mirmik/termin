@@ -23,8 +23,10 @@ class ImmediateRenderer(_ImmediateRenderer):
         ImmediateRenderer._instance = self
 
     @classmethod
-    def instance(cls) -> "ImmediateRenderer | None":
-        """Получить глобальный экземпляр (None если ещё не создан)."""
+    def instance(cls) -> "ImmediateRenderer":
+        """Получить глобальный экземпляр (создаёт если не существует)."""
+        if cls._instance is None:
+            cls._instance = cls()
         return cls._instance
 
 

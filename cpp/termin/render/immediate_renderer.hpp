@@ -60,6 +60,25 @@ public:
     void triangle(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Color4& color, bool depth_test = false);
     void quad(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, const Color4& color, bool depth_test = false);
 
+    // Batch triangles from arrays (efficient for meshes)
+    // vertices: Nx3 array of positions
+    // indices: Mx3 array of triangle indices
+    // colors: Nx4 array of RGBA colors (per-vertex)
+    void triangles(
+        const float* vertices, size_t vertex_count,
+        const uint32_t* indices, size_t triangle_count,
+        const float* colors,
+        bool depth_test = false
+    );
+
+    // Batch triangles with single color
+    void triangles(
+        const float* vertices, size_t vertex_count,
+        const uint32_t* indices, size_t triangle_count,
+        const Color4& color,
+        bool depth_test = false
+    );
+
     // ============================================================
     // Wireframe primitives
     // ============================================================

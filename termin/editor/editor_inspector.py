@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QPushButton,
+    QInputDialog,
 )
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -80,9 +81,17 @@ class ComponentsPanel(QWidget):
         if ent is None:
             return
         for comp in ent.components:
-            name = comp.__class__.__name__
+            name = self._get_component_display_name(comp)
             item = QListWidgetItem(name)
             self._list.addItem(item)
+
+    def _get_component_display_name(self, comp: Component) -> str:
+        """Get display name for component: 'display_name (ClassName)' or just 'ClassName'."""
+        class_name = comp.__class__.__name__
+        display_name = getattr(comp, "display_name", "")
+        if display_name:
+            return f"{display_name} ({class_name})"
+        return class_name
 
     def current_component(self) -> Optional[Component]:
         if self._entity is None:
@@ -122,10 +131,20 @@ class ComponentsPanel(QWidget):
         global_pos = self._list.mapToGlobal(pos)
         menu = QMenu(self)
         comp = self.current_component()
+
+        # Rename action
+        rename_action = QAction("Переименовать", self)
+        rename_action.setEnabled(comp is not None)
+        rename_action.triggered.connect(self._rename_current_component)
+        menu.addAction(rename_action)
+
+        # Remove action
         remove_action = QAction("Удалить компонент", self)
         remove_action.setEnabled(comp is not None)
         remove_action.triggered.connect(self._remove_current_component)
         menu.addAction(remove_action)
+
+        menu.addSeparator()
 
         component_names = self._get_component_library()
 
@@ -139,6 +158,34 @@ class ComponentsPanel(QWidget):
                 add_menu.addAction(act)
 
         menu.exec(global_pos)
+
+    def _rename_current_component(self) -> None:
+        if self._entity is None:
+            return
+        comp = self.current_component()
+        if comp is None:
+            return
+
+        # Get current display name
+        current_name = getattr(comp, "display_name", "") or ""
+
+        # Show input dialog
+        new_name, ok = QInputDialog.getText(
+            self,
+            "Переименовать компонент",
+            "Имя:",
+            text=current_name,
+        )
+
+        if ok:
+            # Set new display name (empty string clears custom name)
+            comp.display_name = new_name.strip()
+            # Update list item
+            row = self._list.currentRow()
+            item = self._list.item(row)
+            if item is not None:
+                item.setText(self._get_component_display_name(comp))
+            self.components_changed.emit()
 
     def _remove_current_component(self) -> None:
         if self._entity is None:

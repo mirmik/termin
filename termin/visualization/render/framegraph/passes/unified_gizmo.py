@@ -50,7 +50,6 @@ class UnifiedGizmoPass(RenderFramePass):
         self._gizmo_manager_source = gizmo_manager
         self.input_res = input_res
         self.output_res = output_res
-        self._renderer = ImmediateRenderer()
 
     def compute_reads(self) -> Set[str]:
         return {self.input_res}
@@ -70,8 +69,7 @@ class UnifiedGizmoPass(RenderFramePass):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         manager = self._get_gizmo_manager()
-        if manager is None:
-            return
+        renderer = ImmediateRenderer.instance()
 
         px, py, pw, ph = ctx.rect
 
@@ -86,14 +84,24 @@ class UnifiedGizmoPass(RenderFramePass):
         proj = ctx.camera.get_projection_matrix()
 
         # Render all gizmos
-        manager.render(self._renderer, ctx.graphics, view, proj, ctx.context_key)
+        if manager is not None and renderer is not None:
+            manager.render(renderer, ctx.graphics, view, proj, ctx.context_key)
 
-        # Flush debug lines added by components via ImmediateRenderer.instance()
-        # Components add lines during update(), we flush them here
-        self._renderer.flush(
-            graphics=ctx.graphics,
-            view_matrix=view,
-            proj_matrix=proj,
-            depth_test=False,
-            blend=False,
-        )
+        # Flush debug primitives added by components via ImmediateRenderer.instance()
+        if renderer is not None:
+            # First flush depth-tested primitives (with depth test enabled)
+            renderer.flush_depth(
+                graphics=ctx.graphics,
+                view_matrix=view,
+                proj_matrix=proj,
+                blend=True,
+            )
+            # Then flush non-depth-tested primitives (overlay)
+            renderer.flush(
+                graphics=ctx.graphics,
+                view_matrix=view,
+                proj_matrix=proj,
+                depth_test=False,
+                blend=True,
+            )
+            renderer.begin()  # Clear for next frame
