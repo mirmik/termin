@@ -1,0 +1,26 @@
+{
+  "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+  "shader": "CookTorrancePBR",
+  "shader_uuid": "09e2dae3-6096-4fb1-9cd2-2e07c87706b4",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_shininess": 32.0,
+    "u_emission_color": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "u_emission_intensity": 0.0,
+    "u_diffuse_mul": 3.140000104904175
+  },
+  "textures": {
+    "u_albedo_texture": "471b29f1-7031-4136-8926-55ab90d2ed75",
+    "u_normal_texture": "26027ca3-c5d4-477b-bdcd-48e18619df6b"
+  }
+}
