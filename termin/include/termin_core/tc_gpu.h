@@ -65,8 +65,8 @@ typedef struct tc_gpu_ops {
     // Upload mesh to GPU, returns GPU VAO ID (0 on failure)
     uint32_t (*mesh_upload)(const tc_mesh* mesh);
 
-    // Draw mesh
-    void (*mesh_draw)(uint32_t gpu_id);
+    // Draw mesh (binds VAO and calls glDrawElements with correct index count/mode)
+    void (*mesh_draw)(const tc_mesh* mesh);
 
     // Delete GPU mesh
     void (*mesh_delete)(uint32_t gpu_id);

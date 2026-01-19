@@ -287,7 +287,7 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
     }
 
     if (g_gpu_ops && g_gpu_ops->mesh_draw) {
-        g_gpu_ops->mesh_draw(mesh->gpu_vao);
+        g_gpu_ops->mesh_draw(mesh);
     }
 }
 

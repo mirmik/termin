@@ -1,0 +1,10 @@
+prefix=C:/Users/mirmik/project/termin/build/lib.win-amd64-cpython-312/termin
+exec_prefix=${prefix}
+libdir=C:/Users/mirmik/project/termin/build/lib.win-amd64-cpython-312/termin/lib
+includedir=C:/Users/mirmik/project/termin/build/lib.win-amd64-cpython-312/termin/include
+
+Name: RecastNavigation
+Description: RecastNavigation is a cross-platform navigation mesh construction toolset for games
+Version: 1.6.0
+Libs: -L${libdir} -lRecast -lDetour -lDebugUtils -lDetourCrowd -lDetourTileCache
+Cflags: -I${includedir} -I${includedir}/recastnavigation 

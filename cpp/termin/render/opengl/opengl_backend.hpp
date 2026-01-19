@@ -384,10 +384,14 @@ inline uint32_t mesh_upload(const tc_mesh* mesh) {
     return vao;
 }
 
-inline void mesh_draw(uint32_t vao_id) {
-    // This is a simplified draw - actual implementation needs mesh info
-    // For now just bind VAO; actual draw happens elsewhere with index count
-    glBindVertexArray(vao_id);
+inline void mesh_draw(const tc_mesh* mesh) {
+    if (!mesh || mesh->gpu_vao == 0) {
+        return;
+    }
+    glBindVertexArray(mesh->gpu_vao);
+    GLenum gl_mode = (mesh->draw_mode == TC_DRAW_LINES) ? GL_LINES : GL_TRIANGLES;
+    glDrawElements(gl_mode, static_cast<GLsizei>(mesh->index_count), GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(0);
 }
 
 inline void mesh_delete(uint32_t vao_id) {
