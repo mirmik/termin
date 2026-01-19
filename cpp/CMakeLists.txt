@@ -230,9 +230,10 @@ set_target_properties(entity_lib PROPERTIES
 # Render library (Drawable vtable, shared by components that need rendering)
 add_library(render_lib STATIC
     termin/render/drawable.cpp
+    termin/render/mesh_renderer.cpp
 )
 target_include_directories(render_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(render_lib PUBLIC entity_lib)
+target_link_libraries(render_lib PUBLIC entity_lib trent)
 target_include_directories(render_lib PRIVATE
     $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
     ${Python_INCLUDE_DIRS}
@@ -301,6 +302,15 @@ nanobind_add_module(_animation_native
 )
 target_link_libraries(_animation_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_animation_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
+# NavMesh native module (RecastNavMeshBuilderComponent) - nanobind
+nanobind_add_module(_navmesh_native
+    termin/bindings/navmesh/navmesh_module.cpp
+)
+target_link_libraries(_navmesh_native PRIVATE trent entity_lib navmesh_lib render_lib)
+target_compile_options(_navmesh_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
@@ -382,7 +392,6 @@ nanobind_add_module(_native
     termin/render/glsl_preprocessor.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
-    termin/render/mesh_renderer.cpp
     termin/render/color_pass.cpp
     termin/render/depth_pass.cpp
     termin/render/normal_pass.cpp
@@ -523,6 +532,10 @@ set_target_properties(_animation_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/../.."
     BUILD_WITH_INSTALL_RPATH TRUE
 )
+set_target_properties(_navmesh_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
 set_target_properties(_native PROPERTIES
     INSTALL_RPATH "$ORIGIN"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -534,6 +547,7 @@ install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
 install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
 install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
+install(TARGETS _navmesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/navmesh)
 install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
 install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)

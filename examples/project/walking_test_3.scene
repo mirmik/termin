@@ -43,17 +43,17 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "light_type": 0.0,
+              "light_type": 0,
               "color": [
-                1.0,
-                1.0,
-                1.0
+                1,
+                1,
+                1
               ],
-              "intensity": 1.0,
+              "intensity": 1,
               "shadows_enabled": true,
-              "shadows_map_resolution": 4096.0,
-              "cascade_count": 4.0,
-              "max_distance": 100.0,
+              "shadows_map_resolution": 4096,
+              "cascade_count": 4,
+              "max_distance": 100,
               "split_lambda": 0.5,
               "cascade_blend": true
             }
@@ -98,13 +98,13 @@
               "navmesh_name": "Plt",
               "agent_type_name": "Human",
               "cell_size": 0.15,
-              "voxelize_source": 1.0,
-              "normal_angle": 25.0,
-              "contour_simplify": 1.0,
-              "max_edge_length": 6.0,
-              "min_edge_length": 1.0,
+              "voxelize_source": 1,
+              "normal_angle": 25,
+              "contour_simplify": 1,
+              "max_edge_length": 6,
+              "min_edge_length": 1,
               "min_contour_edge_length": 0.5,
-              "max_vertex_valence": 0.0,
+              "max_vertex_valence": 0,
               "use_delaunay_flip": true,
               "use_valence_flip": true,
               "use_angle_flip": true,
@@ -112,7 +112,7 @@
               "use_edge_collapse": false,
               "use_second_pass": true,
               "use_watershed": true,
-              "watershed_smoothing": 10.0,
+              "watershed_smoothing": 10,
               "show_region_voxels": false,
               "show_simplified_contours": false,
               "show_triangulated": false,
@@ -120,7 +120,7 @@
               "show_local_maxima": false,
               "show_peaks": false,
               "show_watershed_regions": true,
-              "color_seed": 56.0
+              "color_seed": 56
             }
           },
           {
@@ -169,24 +169,24 @@
               "color_below": [
                 0.2,
                 0.6,
-                1.0,
+                1,
                 0.8
               ],
               "color_above": [
-                1.0,
+                1,
                 0.3,
                 0.2,
                 0.8
               ],
-              "fill_percent": 100.0,
+              "fill_percent": 100,
               "slice_axis": [
-                0.0,
-                0.0,
-                1.0
+                0,
+                0,
+                1
               ],
               "color_surface": [
                 0.2,
-                1.0,
+                1,
                 0.3,
                 0.9
               ]
@@ -200,13 +200,13 @@
               "navmesh_name": "",
               "agent_type_name": "Skiby",
               "cell_size": 0.25,
-              "voxelize_source": 1.0,
-              "normal_angle": 25.0,
-              "contour_simplify": 1.0,
-              "max_edge_length": 6.0,
-              "min_edge_length": 1.0,
+              "voxelize_source": 1,
+              "normal_angle": 25,
+              "contour_simplify": 1,
+              "max_edge_length": 6,
+              "min_edge_length": 1,
               "min_contour_edge_length": 0.5,
-              "max_vertex_valence": 0.0,
+              "max_vertex_valence": 0,
               "use_delaunay_flip": true,
               "use_valence_flip": true,
               "use_angle_flip": true,
@@ -214,7 +214,7 @@
               "use_edge_collapse": false,
               "use_second_pass": true,
               "use_watershed": false,
-              "watershed_smoothing": 0.0,
+              "watershed_smoothing": 0,
               "show_region_voxels": false,
               "show_simplified_contours": false,
               "show_triangulated": false,
@@ -222,7 +222,34 @@
               "show_local_maxima": false,
               "show_peaks": false,
               "show_watershed_regions": false,
-              "color_seed": 42.0
+              "color_seed": 42
+            }
+          },
+          {
+            "type": "RecastNavMeshBuilderComponent",
+            "data": {
+              "cell_size": 0.30000001192092896,
+              "cell_height": 0.20000000298023224,
+              "agent_height": 2,
+              "agent_radius": 0.5,
+              "agent_max_climb": 0.4000000059604645,
+              "agent_max_slope": 45,
+              "min_region_area": 7,
+              "merge_region_area": 20,
+              "max_edge_length": 12,
+              "max_simplification_error": 1.5,
+              "max_verts_per_poly": 6,
+              "build_detail_mesh": false,
+              "mesh_source": 1,
+              "capture_heightfield": true,
+              "capture_compact": true,
+              "capture_contours": true,
+              "capture_poly_mesh": true,
+              "show_heightfield": true,
+              "show_regions": true,
+              "show_distance_field": true,
+              "show_contours": true,
+              "show_poly_mesh": true
             }
           }
         ],
@@ -279,12 +306,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -343,12 +370,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -407,12 +434,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -471,12 +498,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -535,12 +562,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -599,12 +626,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -663,12 +690,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -727,12 +754,12 @@
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -956,7 +983,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "scale": 1.0,
+              "scale": 1,
               "overlap_radius": 0.023
             }
           },
@@ -965,8 +992,8 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "cooldown": 3.0,
-              "max_distance": 15.0,
+              "cooldown": 3,
+              "max_distance": 15,
               "blink_time_lapse": 0.5
             }
           }
@@ -1447,9 +1474,9 @@
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
-                            1.0,
-                            1.0,
-                            1.0
+                            1,
+                            1,
+                            1
                           ],
                           "sphere_radius": 0.5,
                           "capsule_height": 0.06,
@@ -1584,12 +1611,12 @@
                                           "enabled": true,
                                           "collider_type": "Sphere",
                                           "box_size": [
-                                            1.0,
-                                            1.0,
-                                            1.0
+                                            1,
+                                            1,
+                                            1
                                           ],
                                           "sphere_radius": 0.16650000000000004,
-                                          "capsule_height": 1.0,
+                                          "capsule_height": 1,
                                           "capsule_radius": 0.25
                                         }
                                       }
@@ -1760,9 +1787,9 @@
                                           "enabled": true,
                                           "collider_type": "Capsule",
                                           "box_size": [
-                                            1.0,
-                                            1.0,
-                                            1.0
+                                            1,
+                                            1,
+                                            1
                                           ],
                                           "sphere_radius": 0.5,
                                           "capsule_height": 0.045,
@@ -1807,9 +1834,9 @@
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.045,
@@ -1854,9 +1881,9 @@
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.045,
@@ -2894,9 +2921,9 @@
                                           "enabled": true,
                                           "collider_type": "Capsule",
                                           "box_size": [
-                                            1.0,
-                                            1.0,
-                                            1.0
+                                            1,
+                                            1,
+                                            1
                                           ],
                                           "sphere_radius": 0.5,
                                           "capsule_height": 0.045,
@@ -2941,9 +2968,9 @@
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.045,
@@ -2988,9 +3015,9 @@
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.045,
@@ -4004,9 +4031,9 @@
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
-                            1.0,
-                            1.0,
-                            1.0
+                            1,
+                            1,
+                            1
                           ],
                           "sphere_radius": 0.5,
                           "capsule_height": 0.07500000000000001,
@@ -4051,9 +4078,9 @@
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.07500000000000001,
@@ -4098,9 +4125,9 @@
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.045,
@@ -4278,9 +4305,9 @@
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
-                            1.0,
-                            1.0,
-                            1.0
+                            1,
+                            1,
+                            1
                           ],
                           "sphere_radius": 0.5,
                           "capsule_height": 0.07500000000000001,
@@ -4325,9 +4352,9 @@
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.07500000000000001,
@@ -4372,9 +4399,9 @@
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.045,
@@ -5283,9 +5310,9 @@
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 59.99999999999999,
-              "ortho_size": 5.0,
+              "ortho_size": 5,
               "near": 0.1,
-              "far": 100.0
+              "far": 100
             }
           },
           {
@@ -5913,7 +5940,7 @@
                 "data": {
                   "display_name": "",
                   "enabled": true,
-                  "scale": 1.0,
+                  "scale": 1,
                   "overlap_radius": 0.2
                 }
               }
@@ -7025,9 +7052,9 @@
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.06,
@@ -7162,12 +7189,12 @@
                                               "enabled": true,
                                               "collider_type": "Sphere",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.21100000000000002,
-                                              "capsule_height": 1.0,
+                                              "capsule_height": 1,
                                               "capsule_radius": 0.25
                                             }
                                           }
@@ -7306,9 +7333,9 @@
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.03,
@@ -7353,9 +7380,9 @@
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.03,
@@ -7400,9 +7427,9 @@
                                                       "enabled": true,
                                                       "collider_type": "Capsule",
                                                       "box_size": [
-                                                        1.0,
-                                                        1.0,
-                                                        1.0
+                                                        1,
+                                                        1,
+                                                        1
                                                       ],
                                                       "sphere_radius": 0.5,
                                                       "capsule_height": 0.03,
@@ -8280,9 +8307,9 @@
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.03,
@@ -8327,9 +8354,9 @@
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.03,
@@ -8374,9 +8401,9 @@
                                                       "enabled": true,
                                                       "collider_type": "Capsule",
                                                       "box_size": [
-                                                        1.0,
-                                                        1.0,
-                                                        1.0
+                                                        1,
+                                                        1,
+                                                        1
                                                       ],
                                                       "sphere_radius": 0.5,
                                                       "capsule_height": 0.03,
@@ -9230,9 +9257,9 @@
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.05,
@@ -9277,9 +9304,9 @@
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.05,
@@ -9324,9 +9351,9 @@
                                       "enabled": true,
                                       "collider_type": "Capsule",
                                       "box_size": [
-                                        1.0,
-                                        1.0,
-                                        1.0
+                                        1,
+                                        1,
+                                        1
                                       ],
                                       "sphere_radius": 0.5,
                                       "capsule_height": 0.03,
@@ -9472,9 +9499,9 @@
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.05,
@@ -9519,9 +9546,9 @@
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.05,
@@ -9566,9 +9593,9 @@
                                       "enabled": true,
                                       "collider_type": "Capsule",
                                       "box_size": [
-                                        1.0,
-                                        1.0,
-                                        1.0
+                                        1,
+                                        1,
+                                        1
                                       ],
                                       "sphere_radius": 0.5,
                                       "capsule_height": 0.03,
@@ -12856,9 +12883,9 @@
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 119.99999999999999,
-              "ortho_size": 5.0,
+              "ortho_size": 5,
               "near": 0.1,
-              "far": 100.0
+              "far": 100
             }
           }
         ],
@@ -12933,15 +12960,15 @@
   "editor": {
     "camera": {
       "position": [
-        12.243253707885742,
-        -2.533304452896118,
-        9.383171081542969
+        17.10161590576172,
+        0.16733694076538086,
+        8.65078353881836
       ],
       "rotation": [
-        -0.48430531926946563,
-        -0.11806094012662056,
-        0.20531426690973553,
-        0.842232761145657
+        -0.4189256873052848,
+        -0.2152985790450943,
+        0.40321838749158423,
+        0.7845780537114486
       ],
       "radius": 22.0,
       "editor_entities": {
@@ -12952,10 +12979,10 @@
               "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
-              "fov_deg": 80.0,
-              "ortho_size": 5.0,
+              "fov_deg": 80,
+              "ortho_size": 5,
               "near": 0.1,
-              "far": 50.0
+              "far": 50
             }
           },
           {
@@ -12963,9 +12990,9 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "radius": 22.0,
-              "min_radius": 1.0,
-              "max_radius": 100.0
+              "radius": 22,
+              "min_radius": 1,
+              "max_radius": 100
             }
           },
           {
@@ -13002,11 +13029,11 @@
     },
     "selected_entity": "0000000000000007",
     "expanded_entities": [
-      "0000000000000007",
       "814ba329-db24-48fe-b931-fe68ab904998",
-      "0000000000000131",
       "0000000000000077",
-      "000000000000000a"
+      "0000000000000131",
+      "000000000000000a",
+      "0000000000000007"
     ]
   },
   "resources": {

@@ -20,6 +20,13 @@ from termin.navmesh.settings import AgentType, NavigationSettings, NavigationSet
 from termin.navmesh.builder_component import NavMeshBuilderComponent
 from termin.navmesh.registry import NavMeshRegistry
 
+# Optional C++ components (require _navmesh_native to be built)
+try:
+    from termin.navmesh._navmesh_native import RecastNavMeshBuilderComponent, RecastBuildResult
+except ImportError:
+    RecastNavMeshBuilderComponent = None
+    RecastBuildResult = None
+
 __all__ = [
     "NavPolygon",
     "NavMesh",
@@ -39,3 +46,7 @@ __all__ = [
     "NavMeshBuilderComponent",
     "NavMeshRegistry",
 ]
+
+# Add C++ components to __all__ only if available
+if RecastNavMeshBuilderComponent is not None:
+    __all__.extend(["RecastNavMeshBuilderComponent", "RecastBuildResult"])

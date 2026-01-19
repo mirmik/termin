@@ -14,6 +14,12 @@
 
 namespace termin {
 
+// Source of mesh geometry for navmesh building
+enum class MeshSource : int {
+    CurrentMesh = 0,      // Only current entity mesh
+    AllDescendants = 1,   // All descendant meshes (including current entity)
+};
+
 // Result of navmesh build
 struct RecastBuildResult {
     bool success = false;
@@ -53,6 +59,9 @@ public:
     float detail_sample_max_error = 1.0f;
     bool build_detail_mesh = false;
 
+    // Mesh source
+    int mesh_source = static_cast<int>(MeshSource::CurrentMesh);
+
     // Debug capture flags (auto-enable corresponding show flags)
     bool capture_heightfield = false;
     bool capture_compact = false;
@@ -81,18 +90,27 @@ public:
     INSPECT_FIELD(RecastNavMeshBuilderComponent, max_verts_per_poly, "Max Verts Per Poly", "int", 3, 6, 1)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, build_detail_mesh, "Build Detail Mesh", "bool")
 
+    // Mesh source selection
+    INSPECT_FIELD_CHOICES(RecastNavMeshBuilderComponent, mesh_source, "Mesh Source", "enum",
+        {"0", "Current Mesh"}, {"1", "All Descendants"})
+
     // Inspector field declarations - Debug capture
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_heightfield, "Capture Heightfield", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_compact, "Capture Compact", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_contours, "Capture Contours", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_poly_mesh, "Capture Poly Mesh", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_heightfield, "Capture Heightfield (1)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_compact, "Capture Compact (2)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_contours, "Capture Contours (3)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_poly_mesh, "Capture Poly Mesh (4)", "bool")
 
     // Inspector field declarations - Debug visualization
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_heightfield, "Show Heightfield", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_regions, "Show Regions", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_distance_field, "Show Distance Field", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_contours, "Show Contours", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_poly_mesh, "Show Poly Mesh", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_heightfield, "Show Heightfield (1)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_regions, "Show Regions (2)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_distance_field, "Show Distance Field (3)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_contours, "Show Contours (4)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_poly_mesh, "Show Poly Mesh (5)", "bool")
+
+    // Build from entity's MeshRenderer (called by inspector button)
+    void build_from_entity();
+
+    INSPECT_BUTTON(RecastNavMeshBuilderComponent, build_btn, "Build NavMesh", &RecastNavMeshBuilderComponent::build_from_entity)
 
     // --- Runtime state ---
 

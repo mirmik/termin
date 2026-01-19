@@ -1,6 +1,8 @@
 #include "recast_navmesh_builder_component.hpp"
+#include "../render/mesh_renderer.hpp"
 #include <cstring>
 #include <cmath>
+#include <tc_log.hpp>
 
 namespace termin {
 
@@ -18,7 +20,7 @@ protected:
 };
 
 RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent() {
-    // Install drawable vtable
+    set_type_name("RecastNavMeshBuilderComponent");
     install_drawable_vtable(&_c);
 }
 
@@ -55,6 +57,8 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
     // Calculate bounds
     float bmin[3], bmax[3];
     rcCalcBounds(verts, nverts, bmin, bmax);
+    tc_log_info("[NavMesh] Bounds: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)",
+        bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2]);
 
     // Initialize config
     rcConfig cfg;
@@ -78,6 +82,14 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
     rcVcopy(cfg.bmax, bmax);
     rcCalcGridSize(cfg.bmin, cfg.bmax, cfg.cs, &cfg.width, &cfg.height);
 
+    tc_log_info("[NavMesh] Config: cs=%.3f ch=%.3f grid=%dx%d",
+        cfg.cs, cfg.ch, cfg.width, cfg.height);
+    tc_log_info("[NavMesh] Agent: height=%d climb=%d radius=%d slope=%.1f",
+        cfg.walkableHeight, cfg.walkableClimb, cfg.walkableRadius, cfg.walkableSlopeAngle);
+    tc_log_info("[NavMesh] Region: minArea=%d mergeArea=%d", cfg.minRegionArea, cfg.mergeRegionArea);
+    tc_log_info("[NavMesh] Edge: maxLen=%d maxSimplErr=%.2f maxVertsPerPoly=%d",
+        cfg.maxEdgeLen, cfg.maxSimplificationError, cfg.maxVertsPerPoly);
+
     // Stage 1: Create heightfield
     rcHeightfield* hf = rcAllocHeightfield();
     if (!hf) {
@@ -97,6 +109,13 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
     rcMarkWalkableTriangles(&ctx, cfg.walkableSlopeAngle,
                             verts, nverts, tris, ntris, tri_areas.data());
 
+    // Count walkable triangles
+    int walkable_count = 0;
+    for (int i = 0; i < ntris; i++) {
+        if (tri_areas[i] != RC_NULL_AREA) walkable_count++;
+    }
+    tc_log_info("[NavMesh] Walkable triangles: %d / %d", walkable_count, ntris);
+
     // Rasterize triangles
     if (!rcRasterizeTriangles(&ctx, verts, nverts, tris, tri_areas.data(), ntris,
                               *hf, cfg.walkableClimb)) {
@@ -105,10 +124,28 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
         return result;
     }
 
+    // Count spans before filtering
+    int span_count_before = 0;
+    for (int i = 0; i < hf->width * hf->height; i++) {
+        for (rcSpan* s = hf->spans[i]; s; s = s->next) span_count_before++;
+    }
+    tc_log_info("[NavMesh] Heightfield spans after rasterize: %d", span_count_before);
+
     // Filter walkable surfaces
     rcFilterLowHangingWalkableObstacles(&ctx, cfg.walkableClimb, *hf);
     rcFilterLedgeSpans(&ctx, cfg.walkableHeight, cfg.walkableClimb, *hf);
     rcFilterWalkableLowHeightSpans(&ctx, cfg.walkableHeight, *hf);
+
+    // Count spans after filtering
+    int span_count_after = 0;
+    int walkable_spans = 0;
+    for (int i = 0; i < hf->width * hf->height; i++) {
+        for (rcSpan* s = hf->spans[i]; s; s = s->next) {
+            span_count_after++;
+            if (s->area != RC_NULL_AREA) walkable_spans++;
+        }
+    }
+    tc_log_info("[NavMesh] After filtering: %d spans, %d walkable", span_count_after, walkable_spans);
 
     // Capture heightfield debug data
     if (capture_heightfield) {
@@ -130,6 +167,8 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
         return result;
     }
 
+    tc_log_info("[NavMesh] Compact heightfield: %d spans", chf->spanCount);
+
     // Done with heightfield
     rcFreeHeightField(hf);
     hf = nullptr;
@@ -141,6 +180,13 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
         return result;
     }
 
+    // Count walkable after erode
+    int walkable_after_erode = 0;
+    for (int i = 0; i < chf->spanCount; i++) {
+        if (chf->areas[i] != RC_NULL_AREA) walkable_after_erode++;
+    }
+    tc_log_info("[NavMesh] After erode (radius=%d): %d walkable spans", cfg.walkableRadius, walkable_after_erode);
+
     // Build distance field
     if (!rcBuildDistanceField(&ctx, *chf)) {
         result.error = "Failed to build distance field";
@@ -148,12 +194,21 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
         return result;
     }
 
+    tc_log_info("[NavMesh] Distance field built, maxDistance=%d", chf->maxDistance);
+
     // Build regions (watershed algorithm)
     if (!rcBuildRegions(&ctx, *chf, cfg.borderSize, cfg.minRegionArea, cfg.mergeRegionArea)) {
         result.error = "Failed to build regions";
         rcFreeCompactHeightfield(chf);
         return result;
     }
+
+    // Count regions
+    int max_region = 0;
+    for (int i = 0; i < chf->spanCount; i++) {
+        if (chf->spans[i].reg > max_region) max_region = chf->spans[i].reg;
+    }
+    tc_log_info("[NavMesh] Regions built: %d regions", max_region);
 
     // Capture compact heightfield debug data
     if (capture_compact) {
@@ -548,6 +603,91 @@ void RecastNavMeshBuilderComponent::capture_detail_mesh_data(rcPolyMeshDetail* d
     // Triangles
     data.tris.resize(dmesh->ntris * 4);
     memcpy(data.tris.data(), dmesh->tris, dmesh->ntris * 4 * sizeof(uint8_t));
+}
+
+// Helper: extract positions from TcMesh into flat float array
+static bool extract_mesh_positions(const TcMesh& mesh, std::vector<float>& out_verts, std::vector<int>& out_tris) {
+    tc_mesh* m = mesh.get();
+    if (!m || !m->vertices || m->vertex_count == 0) return false;
+    if (!m->indices || m->index_count == 0) return false;
+
+    const tc_vertex_attrib* pos = tc_vertex_layout_find(&m->layout, "position");
+    if (!pos || pos->size != 3) return false;
+
+    size_t n = m->vertex_count;
+    size_t stride = m->layout.stride;
+    const uint8_t* src = static_cast<const uint8_t*>(m->vertices);
+
+    // Extract positions
+    size_t base_vert = out_verts.size() / 3;
+    out_verts.resize(out_verts.size() + n * 3);
+    float* dst = out_verts.data() + base_vert * 3;
+    for (size_t i = 0; i < n; ++i) {
+        const float* p = reinterpret_cast<const float*>(src + i * stride + pos->offset);
+        dst[i * 3] = p[0];
+        dst[i * 3 + 1] = p[1];
+        dst[i * 3 + 2] = p[2];
+    }
+
+    // Extract triangles (adjust indices by base_vert)
+    size_t num_tris = m->index_count / 3;
+    size_t base_tri = out_tris.size();
+    out_tris.resize(out_tris.size() + num_tris * 3);
+    for (size_t i = 0; i < num_tris * 3; ++i) {
+        out_tris[base_tri + i] = static_cast<int>(m->indices[i] + base_vert);
+    }
+
+    return true;
+}
+
+// Helper: collect meshes from entity (and optionally children)
+static void collect_meshes_recursive(Entity ent, std::vector<float>& verts, std::vector<int>& tris, bool recurse) {
+    if (!ent.valid()) return;
+
+    // Get MeshRenderer from this entity
+    MeshRenderer* mr = ent.get_component<MeshRenderer>();
+    if (mr && mr->mesh.is_valid()) {
+        extract_mesh_positions(mr->mesh, verts, tris);
+    }
+
+    // Recurse into children
+    if (recurse) {
+        for (Entity child : ent.children()) {
+            collect_meshes_recursive(child, verts, tris, true);
+        }
+    }
+}
+
+void RecastNavMeshBuilderComponent::build_from_entity() {
+    if (!entity.valid()) {
+        tc_log_error("RecastNavMeshBuilderComponent: no entity");
+        return;
+    }
+
+    std::vector<float> verts;
+    std::vector<int> tris;
+
+    bool recurse = (mesh_source == static_cast<int>(MeshSource::AllDescendants));
+    collect_meshes_recursive(entity, verts, tris, recurse);
+
+    if (verts.empty() || tris.empty()) {
+        tc_log_error("RecastNavMeshBuilderComponent: no mesh geometry found");
+        return;
+    }
+
+    int nverts = static_cast<int>(verts.size() / 3);
+    int ntris = static_cast<int>(tris.size() / 3);
+
+    tc_log_info("RecastNavMeshBuilderComponent: building from %d vertices, %d triangles", nverts, ntris);
+
+    auto result = build(verts.data(), nverts, tris.data(), ntris);
+
+    if (result.success) {
+        tc_log_info("RecastNavMeshBuilderComponent: build successful (%d polys)",
+                    result.poly_mesh ? result.poly_mesh->npolys : 0);
+    } else {
+        tc_log_error("RecastNavMeshBuilderComponent: build failed - %s", result.error.c_str());
+    }
 }
 
 } // namespace termin

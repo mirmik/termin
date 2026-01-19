@@ -130,6 +130,11 @@ inline void register_builtin_cpp_kinds() {
         [](const std::any& v) { return nos::trent(static_cast<int64_t>(std::any_cast<int>(v))); },
         [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<int>(t.as_numer()); }
     );
+    // enum (C++ uses int for enum-like fields with choices)
+    reg.register_kind("enum",
+        [](const std::any& v) { return nos::trent(static_cast<int64_t>(std::any_cast<int>(v))); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return static_cast<int>(t.as_numer()); }
+    );
 
     // float
     reg.register_kind("float",

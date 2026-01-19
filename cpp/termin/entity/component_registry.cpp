@@ -128,6 +128,11 @@ nb::object ComponentRegistry::get_class(const std::string& name) const {
             if (nb::hasattr(animation_native_mod, name.c_str())) {
                 return animation_native_mod.attr(name.c_str());
             }
+            // NavMesh native module (for RecastNavMeshBuilderComponent)
+            nb::object navmesh_native_mod = nb::module_::import_("termin.navmesh._navmesh_native");
+            if (nb::hasattr(navmesh_native_mod, name.c_str())) {
+                return navmesh_native_mod.attr(name.c_str());
+            }
             // Legacy skeleton module in _native
             nb::object skeleton_mod = nb::module_::import_("termin._native.skeleton");
             if (nb::hasattr(skeleton_mod, name.c_str())) {

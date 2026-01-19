@@ -605,10 +605,16 @@ tc_value tc_inspect_get(void* obj, const char* type_name, const char* path) {
 
 void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene) {
     tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) return;
+    if (!field) {
+        tc_log(TC_LOG_WARN, "[tc_inspect_set] field not found: %s.%s", type_name, path);
+        return;
+    }
 
     const tc_field_vtable* vtable = find_any_vtable(field);
-    if (!vtable || !vtable->set) return;
+    if (!vtable || !vtable->set) {
+        tc_log(TC_LOG_WARN, "[tc_inspect_set] no vtable/setter for %s.%s", type_name, path);
+        return;
+    }
 
     // Apply convert if custom type handler exists
     const tc_custom_type_handler* h = tc_custom_type_get(field->kind);

@@ -203,7 +203,8 @@ struct InspectFieldInfo {
     bool is_serializable = true;   // Include in serialization
     bool is_inspectable = true;    // Show in inspector
     std::vector<EnumChoice> choices;
-    nb::object action;
+    nb::object action;             // Python action (for buttons)
+    void (*cpp_action)(void*) = nullptr;  // C++ action callback (for buttons, lazy-wrapped)
 
     // Which language backend owns this field
     TypeBackend backend = TypeBackend::Python;
@@ -456,6 +457,42 @@ public:
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
+    // Add a button field (for inspector buttons that trigger actions)
+    void add_button(const std::string& type_name, const std::string& path,
+                    const std::string& label, nb::object action) {
+        InspectFieldInfo info;
+        info.type_name = type_name;
+        info.path = path;
+        info.label = label;
+        info.kind = "button";
+        info.backend = TypeBackend::Cpp;
+        info.is_serializable = false;
+        info.is_inspectable = true;
+        info.action = std::move(action);
+
+        _py_fields[type_name].push_back(std::move(info));
+    }
+
+    // Add a button field with C++ callback (no Python dependency at registration time)
+    // The nb::cpp_function is created lazily when action is accessed
+    using ButtonActionFn = void (*)(void* component);
+
+    void add_button_cpp(const std::string& type_name, const std::string& path,
+                        const std::string& label, ButtonActionFn action_fn) {
+        InspectFieldInfo info;
+        info.type_name = type_name;
+        info.path = path;
+        info.label = label;
+        info.kind = "button";
+        info.backend = TypeBackend::Cpp;
+        info.is_serializable = false;
+        info.is_inspectable = true;
+        info.cpp_action = action_fn;  // Store C++ callback
+        // info.action will be created lazily
+
+        _py_fields[type_name].push_back(std::move(info));
+    }
+
     // ========================================================================
     // Field registration (Python types)
     // ========================================================================
@@ -608,7 +645,8 @@ public:
 
     // Takes both raw C++ pointer (for cpp_setter) and nb::object (for py_setter)
     void deserialize_fields_of_cxx_component_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data, tc_scene* scene = nullptr) {
-        for (const auto& f : all_fields(type_name)) {
+        auto fields = all_fields(type_name);
+        for (const auto& f : fields) {
             if (!f.is_serializable) continue;
 
             nb::str key(f.path.c_str());
@@ -642,9 +680,6 @@ public:
                         tc_log_error("deserialize %s.%s (kind=%s): cpp_setter failed: %s",
                             type_name.c_str(), f.path.c_str(), f.kind.c_str(), e.what());
                     }
-                } else {
-                    tc_log_warn("deserialize %s.%s (kind=%s): deserialize_cpp failed",
-                        type_name.c_str(), f.path.c_str(), f.kind.c_str());
                 }
             } else {
                 if (!f.py_setter) {
@@ -919,6 +954,25 @@ struct InspectFieldChoicesRegistrar {
         };
 
         InspectRegistry::instance().add_field_with_choices(type_name, std::move(info));
+
+        // Register field in C API
+        tc_field_desc desc = {};
+        desc.path = path;
+        desc.label = label;
+        desc.kind = kind;
+        desc.is_serializable = true;
+        desc.is_inspectable = true;
+        tc_inspect_add_field(type_name, &desc);
+
+        // Set up C++ vtable for C API access (for serialization)
+        auto* ctx = CppFieldContextStorage::instance().store<C, T>(member, kind);
+
+        tc_field_vtable vtable = {};
+        vtable.get = cpp_field_getter_via_kind<C, T>;
+        vtable.set = cpp_field_setter_via_kind<C, T>;
+        vtable.user_data = ctx;
+
+        tc_inspect_set_field_vtable(type_name, path, TC_INSPECT_LANG_CPP, &vtable);
     }
 };
 
@@ -971,6 +1025,34 @@ struct SerializableFieldRegistrar {
     }
 };
 
+// Button action function type (C++ side, no Python dependency)
+using ButtonActionFn = void (*)(void* component);
+
+// Registrar for INSPECT_BUTTON (button field with C++ method callback)
+template<typename C>
+struct InspectButtonRegistrar {
+    template<typename Method>
+    InspectButtonRegistrar(
+        const char* type_name,
+        const char* path,
+        const char* label,
+        Method method
+    ) {
+        // Store method in static to capture it without Python
+        static Method stored_method = method;
+
+        // C++ callback that doesn't need Python
+        ButtonActionFn action_fn = [](void* component) {
+            C* ptr = static_cast<C*>(component);
+            if (ptr) {
+                (ptr->*stored_method)();
+            }
+        };
+
+        InspectRegistry::instance().add_button_cpp(type_name, path, label, action_fn);
+    }
+};
+
 // ============================================================================
 // Trent compatibility functions
 // ============================================================================
@@ -981,8 +1063,13 @@ inline tc_value trent_to_tc_value(const nos::trent& t) {
         return tc_value_nil();
     case nos::trent_type::boolean:
         return tc_value_bool(t.as_bool());
-    case nos::trent_type::numer:
-        return tc_value_double(static_cast<double>(t.as_numer()));
+    case nos::trent_type::numer: {
+        double val = t.as_numer();
+        if (val == static_cast<int64_t>(val)) {
+            return tc_value_int(static_cast<int64_t>(val));
+        }
+        return tc_value_double(val);
+    }
     case nos::trent_type::string:
         return tc_value_string(t.as_string().c_str());
     case nos::trent_type::list: {
@@ -1105,3 +1192,9 @@ inline nb::object trent_to_nb_compat(const nos::trent& t) {
 #define INSPECT_FIELD_CHOICES(cls, field, label, kind, ...) \
     inline static ::tc::InspectFieldChoicesRegistrar<cls, decltype(cls::field)> \
         _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, {__VA_ARGS__}};
+
+// INSPECT_BUTTON - button field with C++ callback
+// Usage: INSPECT_BUTTON(MyClass, build_btn, "Build", &MyClass::build)
+#define INSPECT_BUTTON(cls, name, label, method) \
+    inline static ::tc::InspectButtonRegistrar<cls> \
+        _inspect_btn_##cls##_##name{#cls, #name, label, method};

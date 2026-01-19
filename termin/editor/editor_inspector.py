@@ -77,13 +77,19 @@ class ComponentsPanel(QWidget):
 
     def set_entity(self, ent: Optional[Entity]) -> None:
         self._entity = ent
+        # Block signals during list update to prevent spurious selection events
+        self._list.blockSignals(True)
         self._list.clear()
         if ent is None:
+            self._list.blockSignals(False)
             return
         for comp in ent.components:
             name = self._get_component_display_name(comp)
             item = QListWidgetItem(name)
             self._list.addItem(item)
+        # Clear selection after populating
+        self._list.setCurrentRow(-1)
+        self._list.blockSignals(False)
 
     def _get_component_display_name(self, comp: Component) -> str:
         """Get display name for component: 'display_name (ClassName)' or just 'ClassName'."""
@@ -157,7 +163,9 @@ class ComponentsPanel(QWidget):
                 )
                 add_menu.addAction(act)
 
+        self._list.blockSignals(True)
         menu.exec(global_pos)
+        self._list.blockSignals(False)
 
     def _rename_current_component(self) -> None:
         if self._entity is None:
@@ -227,11 +235,12 @@ class ComponentsPanel(QWidget):
 
         self.set_entity(self._entity)
 
-        row = len(self._entity.components) - 1
-        if row >= 0:
-            self._list.setCurrentRow(row)
+        # Don't auto-select - debugging crash
+        self._list.blockSignals(True)
+        self._list.setCurrentRow(-1)
+        self._list.blockSignals(False)
 
-        self.components_changed.emit()
+        # self.components_changed.emit()
 
 
 class ComponentInspectorPanel(QWidget):

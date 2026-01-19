@@ -87,7 +87,7 @@ class FieldWidget(QWidget):
 
     @staticmethod
     def _values_equal(a: Any, b: Any) -> bool:
-        """Safe comparison that handles numpy arrays."""
+        """Safe comparison that handles numpy arrays and mixed int/string types."""
         try:
             if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
                 a_arr = np.asarray(a)
@@ -99,7 +99,10 @@ class FieldWidget(QWidget):
                 if len(a) != len(b):
                     return False
                 return all(FieldWidget._values_equal(x, y) for x, y in zip(a, b))
-            return a == b
+            if a == b:
+                return True
+            # Fallback: compare as strings (for enum choices where value is "1" but field is int 1)
+            return str(a) == str(b)
         except Exception:
             log.debug(f"[field_widgets] _values_equal failed comparing {type(a)} and {type(b)}")
             return False

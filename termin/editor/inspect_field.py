@@ -44,7 +44,8 @@ class InspectField:
             return self.getter(obj)
         if self.path is None:
             raise ValueError("InspectField: path or getter must be set")
-        return _resolve_path_get(obj, self.path)
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().get(obj, self.path)
 
     def set_value(self, obj, value):
         # Convert None to appropriate default for the kind
@@ -68,13 +69,6 @@ class InspectField:
         except Exception as e:
             log.warn(e, f"[InspectField] falling back to setattr for '{self.path}'")
             _resolve_path_set(obj, self.path, value)
-
-
-def _resolve_path_get(obj, path: str):
-    cur = obj
-    for part in path.split("."):
-        cur = getattr(cur, part)
-    return cur
 
 
 def _resolve_path_set(obj, path: str, value):

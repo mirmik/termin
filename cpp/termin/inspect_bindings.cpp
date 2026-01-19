@@ -165,11 +165,24 @@ void bind_inspect(nb::module_& m) {
         .def_ro("is_serializable", &InspectFieldInfo::is_serializable)
         .def_ro("is_inspectable", &InspectFieldInfo::is_inspectable)
         .def_ro("choices", &InspectFieldInfo::choices)
-        .def_prop_ro("action", [](const InspectFieldInfo& self) -> nb::object {
-            if (self.action.ptr() == nullptr || self.action.is_none()) {
-                return nb::none();
+        .def_prop_ro("action", [](InspectFieldInfo& self) -> nb::object {
+            // If we have a Python action, return it
+            if (self.action.ptr() != nullptr && !self.action.is_none()) {
+                return self.action;
             }
-            return self.action;
+            // If we have a C++ action callback, lazily create nb::cpp_function
+            if (self.cpp_action) {
+                auto cpp_fn = self.cpp_action;
+                self.action = nb::cpp_function([cpp_fn](nb::object obj) {
+                    // Cast to Component* and call C++ callback
+                    void* ptr = static_cast<void*>(nb::cast<Component*>(obj));
+                    if (ptr) {
+                        cpp_fn(ptr);
+                    }
+                });
+                return self.action;
+            }
+            return nb::none();
         });
 
     // InspectRegistry singleton
@@ -233,7 +246,11 @@ void bind_inspect(nb::module_& m) {
             nb::dict py_data = nb::cast<nb::dict>(data);
             self.deserialize_component_fields_over_python(ptr, obj, type_name, py_data);
         }, nb::arg("obj"), nb::arg("data"),
-           "Deserialize all fields from dict to object");
+           "Deserialize all fields from dict to object")
+
+        .def("add_button", &InspectRegistry::add_button,
+             nb::arg("type_name"), nb::arg("path"), nb::arg("label"), nb::arg("action"),
+             "Add a button field to a type");
 }
 
 } // namespace termin
