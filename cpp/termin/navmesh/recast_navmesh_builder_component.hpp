@@ -79,6 +79,7 @@ public:
     bool show_distance_field = false;
     bool show_contours = false;
     bool show_poly_mesh = false;
+    bool show_detail_mesh = false;
 
     // Inspector field declarations - Configuration
     INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_type_name, "Agent Type", "agent_type")
@@ -100,6 +101,7 @@ public:
     INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_compact, "Capture Compact (2)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_contours, "Capture Contours (3)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_poly_mesh, "Capture Poly Mesh (4)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_detail_mesh, "Capture Detail Mesh (5)", "bool")
 
     // Inspector field declarations - Debug visualization
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_input_mesh, "Show Input Mesh (0)", "bool")
@@ -108,6 +110,7 @@ public:
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_distance_field, "Show Distance Field (3)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_contours, "Show Contours (4)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_poly_mesh, "Show Poly Mesh (5)", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_detail_mesh, "Show Detail Mesh (6)", "bool")
 
     // Apply agent type parameters (called from Python before build)
     void apply_agent_type(float height, float radius, float max_climb, float max_slope);
@@ -156,6 +159,7 @@ private:
     static constexpr int GEOMETRY_DISTANCE_FIELD = 3;
     static constexpr int GEOMETRY_CONTOURS = 4;
     static constexpr int GEOMETRY_POLY_MESH = 5;
+    static constexpr int GEOMETRY_DETAIL_MESH = 6;
 
     // Debug meshes
     TcMesh _input_mesh;
@@ -164,6 +168,7 @@ private:
     TcMesh _distance_field_mesh;
     TcMesh _contours_mesh;
     TcMesh _poly_mesh_debug;
+    TcMesh _detail_mesh_debug;
 
     // Debug material
     TcMaterial _debug_material;
@@ -176,6 +181,7 @@ private:
     void build_distance_field_mesh();
     void build_contours_mesh();
     void build_poly_mesh_debug();
+    void build_detail_mesh_debug();
 
     // Get or create debug material
     TcMaterial get_debug_material();

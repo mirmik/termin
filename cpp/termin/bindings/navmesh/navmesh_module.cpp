@@ -76,6 +76,7 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def_rw("show_distance_field", &RecastNavMeshBuilderComponent::show_distance_field)
         .def_rw("show_contours", &RecastNavMeshBuilderComponent::show_contours)
         .def_rw("show_poly_mesh", &RecastNavMeshBuilderComponent::show_poly_mesh)
+        .def_rw("show_detail_mesh", &RecastNavMeshBuilderComponent::show_detail_mesh)
         // Last build result
         .def_prop_ro("last_result", [](RecastNavMeshBuilderComponent& self) -> const RecastBuildResult& {
             return self.last_result;

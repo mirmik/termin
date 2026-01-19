@@ -49,6 +49,7 @@ void RecastNavMeshBuilderComponent::clear_debug_data() {
     _distance_field_mesh = TcMesh();
     _contours_mesh = TcMesh();
     _poly_mesh_debug = TcMesh();
+    _detail_mesh_debug = TcMesh();
 }
 
 RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int nverts,
@@ -350,7 +351,7 @@ std::set<std::string> RecastNavMeshBuilderComponent::get_phase_marks() const {
 
     // Only participate in rendering if we have something to show
     if (show_input_mesh || show_heightfield || show_regions || show_distance_field ||
-        show_contours || show_poly_mesh) {
+        show_contours || show_poly_mesh || show_detail_mesh) {
         marks.insert("opaque");
     }
 
@@ -401,6 +402,12 @@ void RecastNavMeshBuilderComponent::draw_geometry(const RenderContext& context, 
             draw_mesh(_poly_mesh_debug);
         }
     }
+
+    if (geometry_id == 0 || geometry_id == GEOMETRY_DETAIL_MESH) {
+        if (show_detail_mesh && _detail_mesh_debug.is_valid()) {
+            draw_mesh(_detail_mesh_debug);
+        }
+    }
 }
 
 std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(const std::string* phase_mark) {
@@ -444,6 +451,9 @@ std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(
         if (show_poly_mesh && _poly_mesh_debug.is_valid()) {
             result.emplace_back(phase, GEOMETRY_POLY_MESH);
         }
+        if (show_detail_mesh && _detail_mesh_debug.is_valid()) {
+            result.emplace_back(phase, GEOMETRY_DETAIL_MESH);
+        }
     }
 
     return result;
@@ -464,6 +474,9 @@ void RecastNavMeshBuilderComponent::rebuild_debug_meshes() {
     }
     if (debug_data.poly_mesh) {
         build_poly_mesh_debug();
+    }
+    if (debug_data.detail_mesh) {
+        build_detail_mesh_debug();
     }
 }
 
@@ -967,9 +980,6 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
         return {r, g, b, 1.0f};
     };
 
-    // Small offset to avoid z-fighting with other debug meshes
-    const float z_offset = 0.05f;
-
     for (const auto& contour : cset.contours) {
         if (contour.nverts < 2) continue;
 
@@ -990,7 +1000,7 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
             // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
             float tm_x = rc_x;
             float tm_y = rc_z;  // Recast Z -> termin Y
-            float tm_z = rc_y + z_offset;  // Recast Y -> termin Z (with offset)
+            float tm_z = rc_y;  // Recast Y -> termin Z
 
             vertices.push_back({{tm_x, tm_y, tm_z}, {color[0], color[1], color[2], color[3]}});
         }
@@ -1037,8 +1047,248 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
 }
 
 void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
-    // TODO: Create mesh from poly mesh (triangulated polygons)
-    // Convert rcPolyMesh polygons to triangles with region-based colors
+    if (!debug_data.poly_mesh) return;
+
+    const auto& pmesh = *debug_data.poly_mesh;
+    if (pmesh.nverts == 0 || pmesh.npolys == 0) return;
+
+    tc_log_info("[NavMesh] PolyMesh debug: %d verts, %d polys (nvp=%d)",
+        pmesh.nverts, pmesh.npolys, pmesh.nvp);
+
+    // Vertex layout: position (vec3) + color (vec4)
+    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    tc_vertex_layout layout;
+    tc_vertex_layout_init(&layout);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+
+    struct Vertex {
+        float pos[3];
+        float color[4];
+    };
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    // Generate color from region ID using golden ratio hue distribution
+    auto region_color = [](uint16_t region) -> std::array<float, 4> {
+        if (region == 0) {
+            return {0.3f, 0.3f, 0.3f, 0.8f};
+        }
+        float hue = std::fmod(region * 0.618033988749895f, 1.0f);
+        float saturation = 0.6f;
+        float value = 0.9f;
+
+        // HSV to RGB conversion
+        float h = hue * 6.0f;
+        int i = static_cast<int>(h);
+        float f = h - i;
+        float p = value * (1.0f - saturation);
+        float q = value * (1.0f - saturation * f);
+        float t = value * (1.0f - saturation * (1.0f - f));
+
+        float r, g, b;
+        switch (i % 6) {
+            case 0: r = value; g = t; b = p; break;
+            case 1: r = q; g = value; b = p; break;
+            case 2: r = p; g = value; b = t; break;
+            case 3: r = p; g = q; b = value; break;
+            case 4: r = t; g = p; b = value; break;
+            default: r = value; g = p; b = q; break;
+        }
+        return {r, g, b, 0.8f};
+    };
+
+    // For each polygon, triangulate using fan triangulation
+    for (int p = 0; p < pmesh.npolys; p++) {
+        const uint16_t* poly = &pmesh.polys[p * pmesh.nvp * 2];
+        uint16_t region = pmesh.regions[p];
+
+        // Count vertices in this polygon (stop at 0xFFFF)
+        int nv = 0;
+        for (int i = 0; i < pmesh.nvp; i++) {
+            if (poly[i] == 0xFFFF) break;
+            nv++;
+        }
+        if (nv < 3) continue;
+
+        auto color = region_color(region);
+
+        // Add vertices for this polygon
+        uint32_t base_vertex = static_cast<uint32_t>(vertices.size());
+
+        for (int i = 0; i < nv; i++) {
+            uint16_t vi = poly[i];
+            // Vertices are stored as (x, y, z) uint16 in voxel coords
+            uint16_t vx = pmesh.verts[vi * 3 + 0];
+            uint16_t vy = pmesh.verts[vi * 3 + 1];
+            uint16_t vz = pmesh.verts[vi * 3 + 2];
+
+            // Convert voxel coords to Recast world coords (Y-up)
+            float rc_x = pmesh.bmin[0] + vx * pmesh.cs;
+            float rc_y = pmesh.bmin[1] + vy * pmesh.ch;
+            float rc_z = pmesh.bmin[2] + vz * pmesh.cs;
+
+            // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
+            float tm_x = rc_x;
+            float tm_y = rc_z;  // Recast Z -> termin Y
+            float tm_z = rc_y;  // Recast Y -> termin Z
+
+            vertices.push_back({{tm_x, tm_y, tm_z}, {color[0], color[1], color[2], color[3]}});
+        }
+
+        // Fan triangulation: (0, 1, 2), (0, 2, 3), (0, 3, 4), ...
+        for (int i = 2; i < nv; i++) {
+            indices.push_back(base_vertex);
+            indices.push_back(base_vertex + i - 1);
+            indices.push_back(base_vertex + i);
+        }
+    }
+
+    if (vertices.empty()) return;
+
+    // Compute UUID from vertex data
+    size_t vertices_size = vertices.size() * sizeof(Vertex);
+    char uuid[40];
+    tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
+
+    // Get or create mesh
+    tc_mesh_handle h = tc_mesh_get_or_create(uuid);
+    tc_mesh* m = tc_mesh_get(h);
+    if (!m) return;
+
+    // Set data if mesh is new
+    if (m->vertex_count == 0) {
+        tc_mesh_set_data(m,
+            vertices.data(), vertices.size(), &layout,
+            indices.data(), indices.size(),
+            "navmesh_debug_poly_mesh");
+    }
+
+    _poly_mesh_debug = TcMesh(h);
+
+    tc_log_info("[NavMesh] PolyMesh debug mesh: %zu verts, %zu tris",
+        vertices.size(), indices.size() / 3);
+}
+
+void RecastNavMeshBuilderComponent::build_detail_mesh_debug() {
+    if (!debug_data.detail_mesh) return;
+
+    const auto& dmesh = *debug_data.detail_mesh;
+    if (dmesh.nmeshes == 0 || dmesh.nverts == 0 || dmesh.ntris == 0) return;
+
+    tc_log_info("[NavMesh] DetailMesh debug: %d meshes, %d verts, %d tris",
+        dmesh.nmeshes, dmesh.nverts, dmesh.ntris);
+
+    // Vertex layout: position (vec3) + color (vec4)
+    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    tc_vertex_layout layout;
+    tc_vertex_layout_init(&layout);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+
+    struct Vertex {
+        float pos[3];
+        float color[4];
+    };
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    // Generate color from mesh index using golden ratio hue distribution
+    auto mesh_color = [](int mesh_idx) -> std::array<float, 4> {
+        float hue = std::fmod(mesh_idx * 0.618033988749895f, 1.0f);
+        float saturation = 0.5f;
+        float value = 1.0f;
+
+        // HSV to RGB conversion
+        float h = hue * 6.0f;
+        int i = static_cast<int>(h);
+        float f = h - i;
+        float p = value * (1.0f - saturation);
+        float q = value * (1.0f - saturation * f);
+        float t = value * (1.0f - saturation * (1.0f - f));
+
+        float r, g, b;
+        switch (i % 6) {
+            case 0: r = value; g = t; b = p; break;
+            case 1: r = q; g = value; b = p; break;
+            case 2: r = p; g = value; b = t; break;
+            case 3: r = p; g = q; b = value; break;
+            case 4: r = t; g = p; b = value; break;
+            default: r = value; g = p; b = q; break;
+        }
+        return {r, g, b, 0.9f};
+    };
+
+    // Process each sub-mesh (one per polygon)
+    for (int m = 0; m < dmesh.nmeshes; m++) {
+        // meshes array: (vert_base, vert_count, tri_base, tri_count) per mesh
+        uint32_t vert_base = dmesh.meshes[m * 4 + 0];
+        uint32_t vert_count = dmesh.meshes[m * 4 + 1];
+        uint32_t tri_base = dmesh.meshes[m * 4 + 2];
+        uint32_t tri_count = dmesh.meshes[m * 4 + 3];
+
+        if (vert_count == 0 || tri_count == 0) continue;
+
+        auto color = mesh_color(m);
+        uint32_t base_vertex = static_cast<uint32_t>(vertices.size());
+
+        // Add vertices for this sub-mesh
+        // Detail mesh vertices are already in Recast world coords (float, Y-up)
+        for (uint32_t v = 0; v < vert_count; v++) {
+            uint32_t vi = vert_base + v;
+            float rc_x = dmesh.verts[vi * 3 + 0];
+            float rc_y = dmesh.verts[vi * 3 + 1];
+            float rc_z = dmesh.verts[vi * 3 + 2];
+
+            // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
+            float tm_x = rc_x;
+            float tm_y = rc_z;  // Recast Z -> termin Y
+            float tm_z = rc_y;  // Recast Y -> termin Z
+
+            vertices.push_back({{tm_x, tm_y, tm_z}, {color[0], color[1], color[2], color[3]}});
+        }
+
+        // Add triangles for this sub-mesh
+        // Detail triangles: (v0, v1, v2, flags) as uint8, indices are local to sub-mesh
+        for (uint32_t t = 0; t < tri_count; t++) {
+            uint32_t ti = tri_base + t;
+            uint8_t v0 = dmesh.tris[ti * 4 + 0];
+            uint8_t v1 = dmesh.tris[ti * 4 + 1];
+            uint8_t v2 = dmesh.tris[ti * 4 + 2];
+            // uint8_t flags = dmesh.tris[ti * 4 + 3]; // not used for visualization
+
+            indices.push_back(base_vertex + v0);
+            indices.push_back(base_vertex + v1);
+            indices.push_back(base_vertex + v2);
+        }
+    }
+
+    if (vertices.empty()) return;
+
+    // Compute UUID from vertex data
+    size_t vertices_size = vertices.size() * sizeof(Vertex);
+    char uuid[40];
+    tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
+
+    // Get or create mesh
+    tc_mesh_handle h = tc_mesh_get_or_create(uuid);
+    tc_mesh* mesh = tc_mesh_get(h);
+    if (!mesh) return;
+
+    // Set data if mesh is new
+    if (mesh->vertex_count == 0) {
+        tc_mesh_set_data(mesh,
+            vertices.data(), vertices.size(), &layout,
+            indices.data(), indices.size(),
+            "navmesh_debug_detail_mesh");
+    }
+
+    _detail_mesh_debug = TcMesh(h);
+
+    tc_log_info("[NavMesh] DetailMesh debug mesh: %zu verts, %zu tris",
+        vertices.size(), indices.size() / 3);
 }
 
 TcMaterial RecastNavMeshBuilderComponent::get_debug_material() {

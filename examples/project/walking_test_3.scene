@@ -235,18 +235,20 @@
               "max_edge_length": 12,
               "max_simplification_error": 1.5,
               "max_verts_per_poly": 6,
-              "build_detail_mesh": false,
+              "build_detail_mesh": true,
               "mesh_source": 1,
               "capture_heightfield": true,
               "capture_compact": true,
               "capture_contours": true,
               "capture_poly_mesh": true,
+              "capture_detail_mesh": true,
               "show_input_mesh": false,
               "show_heightfield": false,
               "show_regions": false,
               "show_distance_field": false,
               "show_contours": false,
-              "show_poly_mesh": false
+              "show_poly_mesh": false,
+              "show_detail_mesh": true
             }
           }
         ],
@@ -13021,15 +13023,15 @@
   "editor": {
     "camera": {
       "position": [
-        14.555238723754883,
-        2.496791124343872,
-        15.42850399017334
+        12.267818450927734,
+        -2.4037835597991943,
+        12.24921989440918
       ],
       "rotation": [
-        -0.557925137862034,
-        -0.1391063974137713,
-        0.19792837877432234,
-        0.7938471563317215
+        -0.4826037098320555,
+        -0.10522465174031297,
+        0.18522888463103904,
+        0.8495361629859017
       ],
       "radius": 27.5,
       "editor_entities": {
@@ -13089,11 +13091,11 @@
       }
     },
     "expanded_entities": [
-      "0000000000000131",
       "0000000000000007",
-      "000000000000000a",
+      "0000000000000131",
       "0000000000000077",
-      "814ba329-db24-48fe-b931-fe68ab904998"
+      "814ba329-db24-48fe-b931-fe68ab904998",
+      "000000000000000a"
     ]
   },
   "resources": {
