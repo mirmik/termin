@@ -193,6 +193,28 @@ target_compile_options(_graphics_native PRIVATE
 set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
+# Recastnavigation (static libraries for navmesh building)
+set(RECASTNAVIGATION_DEMO OFF CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_TESTS OFF CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation ${CMAKE_CURRENT_BINARY_DIR}/recastnavigation)
+
+# NavMesh library (RecastNavMeshBuilder)
+add_library(navmesh_lib STATIC
+    termin/navmesh/recast_builder.cpp
+)
+target_include_directories(navmesh_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation/Recast/Include
+)
+target_link_libraries(navmesh_lib PUBLIC Recast)
+target_compile_options(navmesh_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(navmesh_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
 # are the same instance across all Python extension modules.

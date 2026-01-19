@@ -1,0 +1,3 @@
+[submodule "third/recastnavigation"]
+	path = third/recastnavigation
+	url = git@github.com:mirmik/recastnavigation.git
