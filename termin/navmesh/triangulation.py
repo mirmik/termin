@@ -256,6 +256,86 @@ def douglas_peucker_2d(
         return points[[0, -1]]
 
 
+def douglas_peucker_2d_with_fixed(
+    points: np.ndarray,
+    epsilon: float,
+    fixed_indices: set[int],
+) -> np.ndarray:
+    """
+    Упростить 2D полилинию алгоритмом Douglas-Peucker, сохраняя фиксированные вершины.
+
+    Фиксированные вершины (например, на границах с другими регионами) не удаляются.
+
+    Args:
+        points: np.ndarray shape (N, 2) — вершины полилинии.
+        epsilon: Максимальное отклонение.
+        fixed_indices: Индексы вершин, которые нельзя удалять.
+
+    Returns:
+        Упрощённая полилиния shape (M, 2).
+    """
+    if len(points) <= 2:
+        return points
+
+    n = len(points)
+
+    # Находим индексы, которые нужно сохранить (включая первый, последний и фиксированные)
+    keep_indices: set[int] = {0, n - 1}
+    keep_indices.update(i for i in fixed_indices if 0 <= i < n)
+
+    # Рекурсивная функция для упрощения сегмента
+    def simplify_segment(start_idx: int, end_idx: int) -> None:
+        if end_idx - start_idx <= 1:
+            return
+
+        start = points[start_idx]
+        end = points[end_idx]
+        line_vec = end - start
+        line_len = np.linalg.norm(line_vec)
+
+        if line_len < 1e-10:
+            return
+
+        line_dir = line_vec / line_len
+
+        max_dist = 0.0
+        max_idx = -1
+
+        # Ищем точку с максимальным отклонением (исключая фиксированные)
+        for i in range(start_idx + 1, end_idx):
+            to_point = points[i] - start
+            proj_len = np.dot(to_point, line_dir)
+            proj_point = start + proj_len * line_dir
+            dist = np.linalg.norm(points[i] - proj_point)
+
+            if dist > max_dist:
+                max_dist = dist
+                max_idx = i
+
+        # Проверяем, есть ли фиксированные точки в этом сегменте
+        fixed_in_segment = [i for i in range(start_idx + 1, end_idx) if i in fixed_indices]
+
+        if fixed_in_segment:
+            # Если есть фиксированные точки, добавляем их и рекурсивно обрабатываем подсегменты
+            for fixed_idx in fixed_in_segment:
+                keep_indices.add(fixed_idx)
+            # Сортируем все сохраняемые точки в сегменте
+            segment_keep = sorted([start_idx] + fixed_in_segment + [end_idx])
+            for i in range(len(segment_keep) - 1):
+                simplify_segment(segment_keep[i], segment_keep[i + 1])
+        elif max_dist > epsilon and max_idx > 0:
+            # Стандартный Douglas-Peucker
+            keep_indices.add(max_idx)
+            simplify_segment(start_idx, max_idx)
+            simplify_segment(max_idx, end_idx)
+
+    simplify_segment(0, n - 1)
+
+    # Собираем результат
+    sorted_indices = sorted(keep_indices)
+    return points[sorted_indices]
+
+
 def is_vertex_visible(
     contour: list,
     vertex_idx: int,

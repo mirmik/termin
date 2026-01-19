@@ -308,6 +308,7 @@ class NavMeshBuilderComponent(PythonComponent):
         # Cached data for distance field visualization (to avoid recomputation)
         self._cached_local_maxima: set[tuple[int, int, int]] = set()
         self._cached_plateau_peaks: set[tuple[int, int, int]] = set()
+        self._cached_eroded_voxels: set[tuple[int, int, int]] = set()
         self._cached_distance_fields: list[dict[tuple[int, int, int], float]] = []
         self._cached_show_local_maxima: bool = False
         self._cached_show_peaks: bool = False
@@ -1188,8 +1189,9 @@ void main() {
         self._cached_distance_fields = distance_fields
         self._cached_local_maxima = self._debug_builder._last_all_local_maxima
         self._cached_plateau_peaks = self._debug_builder._last_peaks
+        self._cached_eroded_voxels = self._debug_builder._last_eroded_voxels
 
-        print(f"NavMeshBuilderComponent: using cached peaks: local_maxima={len(self._cached_local_maxima)}, peaks={len(self._cached_plateau_peaks)}")
+        print(f"NavMeshBuilderComponent: using cached peaks: local_maxima={len(self._cached_local_maxima)}, peaks={len(self._cached_plateau_peaks)}, eroded={len(self._cached_eroded_voxels)}")
 
         # Build mesh using cached data
         self._rebuild_distance_field_from_cache()
@@ -1204,7 +1206,13 @@ void main() {
         self._debug_distance_field_mesh = None
         self._debug_distance_field_gpu = None
 
-        if self._debug_grid is None or not self._cached_distance_fields:
+        if self._debug_grid is None:
+            return
+
+        # Нужны либо per-region distance fields, либо eroded voxels
+        has_distance_fields = bool(self._cached_distance_fields)
+        has_eroded = bool(self._cached_eroded_voxels)
+        if not has_distance_fields and not has_eroded:
             return
 
         grid = self._debug_grid
@@ -1215,8 +1223,8 @@ void main() {
         self._cached_show_local_maxima = self.show_local_maxima
         self._cached_show_peaks = self.show_peaks
 
-        # Count total voxels
-        total_voxels = sum(len(df) for df in distance_fields)
+        # Count total voxels (per-region + eroded)
+        total_voxels = sum(len(df) for df in distance_fields) + len(self._cached_eroded_voxels)
         if total_voxels == 0:
             return
 
@@ -1242,6 +1250,7 @@ void main() {
 
         voxel_idx = 0
 
+        # Рисуем воксели из per-region distance fields
         for df in distance_fields:
             for voxel, dist in df.items():
                 vx, vy, vz = voxel
@@ -1255,33 +1264,43 @@ void main() {
                 normals[v_offset:v_offset + verts_per_cube] = cube_normals
                 uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
 
-                # Check if this voxel is a peak
+                # Check voxel state
                 is_plateau_peak = self.show_peaks and voxel in self._cached_plateau_peaks
                 is_local_max = self.show_local_maxima and voxel in self._cached_local_maxima
 
                 if is_plateau_peak:
-                    # White for plateau peaks
                     r, g, b = 1.0, 1.0, 1.0
                 elif is_local_max:
-                    # Magenta for local maxima (not plateau peaks)
                     r, g, b = 1.0, 0.0, 1.0
                 else:
                     # Color gradient: blue (boundary) -> green -> yellow -> red (center)
                     t = dist / global_max_dist if global_max_dist > 0 else 0.0
                     if t < 0.33:
-                        # Blue to Cyan
                         r, g, b = 0.0, t * 3, 1.0
                     elif t < 0.66:
-                        # Cyan to Yellow
                         tt = (t - 0.33) * 3
                         r, g, b = tt, 1.0, 1.0 - tt
                     else:
-                        # Yellow to Red
                         tt = (t - 0.66) * 3
                         r, g, b = 1.0, 1.0 - tt, 0.0
 
                 colors[v_offset:v_offset + verts_per_cube] = (r, g, b)
                 voxel_idx += 1
+
+        # Рисуем eroded воксели (из глобального distance field) чёрным
+        for voxel in self._cached_eroded_voxels:
+            vx, vy, vz = voxel
+            center = grid.voxel_to_world(vx, vy, vz)
+
+            v_offset = voxel_idx * verts_per_cube
+            t_offset = voxel_idx * tris_per_cube
+
+            vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
+            triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
+            normals[v_offset:v_offset + verts_per_cube] = cube_normals
+            uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
+            colors[v_offset:v_offset + verts_per_cube] = (0.0, 0.0, 0.0)  # Black for eroded
+            voxel_idx += 1
 
         self._debug_distance_field_mesh = create_voxel_mesh(
             vertices=vertices,

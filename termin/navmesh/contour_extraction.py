@@ -9,9 +9,92 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+import heapq
+import math
 import numpy as np
 
 from termin.navmesh.triangulation import build_2d_basis
+
+
+def compute_distance_field_3d(
+    voxels: set[tuple[int, int, int]],
+) -> dict[tuple[int, int, int], float]:
+    """
+    Вычислить distance field для набора вокселей в 3D.
+
+    Расстояние = кратчайший путь до границы (вокселя с пустым соседом).
+    Использует Dijkstra с весами рёбер (1.0 для осевых, sqrt(2) для диагональных).
+
+    Args:
+        voxels: Набор координат вокселей.
+
+    Returns:
+        {(vx, vy, vz): distance} для каждого вокселя.
+        Граничные воксели имеют distance = 0.
+    """
+    if not voxels:
+        return {}
+
+    sqrt2 = math.sqrt(2)
+    sqrt3 = math.sqrt(3)
+
+    # 6-связность для определения границы
+    cardinal_6 = [
+        (1, 0, 0), (-1, 0, 0),
+        (0, 1, 0), (0, -1, 0),
+        (0, 0, 1), (0, 0, -1),
+    ]
+
+    # 26-связность с весами для распространения
+    directions_26: list[tuple[int, int, int, float]] = []
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                if dx == 0 and dy == 0 and dz == 0:
+                    continue
+                count = abs(dx) + abs(dy) + abs(dz)
+                if count == 1:
+                    weight = 1.0
+                elif count == 2:
+                    weight = sqrt2
+                else:
+                    weight = sqrt3
+                directions_26.append((dx, dy, dz, weight))
+
+    distance: dict[tuple[int, int, int], float] = {v: float('inf') for v in voxels}
+
+    # Находим граничные воксели (имеют пустого соседа по 6-связности)
+    heap: list[tuple[float, tuple[int, int, int]]] = []
+    for voxel in voxels:
+        vx, vy, vz = voxel
+        is_boundary = False
+        for dx, dy, dz in cardinal_6:
+            neighbor = (vx + dx, vy + dy, vz + dz)
+            if neighbor not in voxels:
+                is_boundary = True
+                break
+        if is_boundary:
+            distance[voxel] = 0.0
+            heapq.heappush(heap, (0.0, voxel))
+
+    # Dijkstra от границы внутрь
+    while heap:
+        dist, voxel = heapq.heappop(heap)
+        if dist > distance[voxel]:
+            continue
+
+        vx, vy, vz = voxel
+        for dx, dy, dz, weight in directions_26:
+            neighbor = (vx + dx, vy + dy, vz + dz)
+            if neighbor not in voxels:
+                continue
+
+            new_dist = dist + weight
+            if new_dist < distance[neighbor]:
+                distance[neighbor] = new_dist
+                heapq.heappush(heap, (new_dist, neighbor))
+
+    return distance
 
 
 def compute_distance_field_2d(
@@ -431,8 +514,8 @@ def watershed_split_region(
         rel_pos = world_pos - centroid
         u = float(np.dot(rel_pos, u_axis))
         v = float(np.dot(rel_pos, v_axis))
-        grid_u = int(round(u / cell_size))
-        grid_v = int(round(v / cell_size))
+        grid_u = _round_half_up(u / cell_size)
+        grid_v = _round_half_up(v / cell_size)
         voxel_to_2d[voxel] = (grid_u, grid_v)
         if (grid_u, grid_v) not in grid_2d_to_voxels:
             grid_2d_to_voxels[(grid_u, grid_v)] = []
@@ -576,8 +659,8 @@ def find_peaks_for_region(
         rel_pos = world_pos - centroid
         u = float(np.dot(rel_pos, u_axis))
         v = float(np.dot(rel_pos, v_axis))
-        grid_u = int(round(u / cell_size))
-        grid_v = int(round(v / cell_size))
+        grid_u = _round_half_up(u / cell_size)
+        grid_v = _round_half_up(v / cell_size)
         voxel_to_2d[voxel] = (grid_u, grid_v)
         if (grid_u, grid_v) not in grid_2d_to_voxels:
             grid_2d_to_voxels[(grid_u, grid_v)] = []
@@ -695,8 +778,8 @@ def compute_distance_field_for_region(
         rel_pos = world_pos - centroid
         u = float(np.dot(rel_pos, u_axis))
         v = float(np.dot(rel_pos, v_axis))
-        grid_u = int(round(u / cell_size))
-        grid_v = int(round(v / cell_size))
+        grid_u = _round_half_up(u / cell_size)
+        grid_v = _round_half_up(v / cell_size)
         voxel_to_2d[voxel] = (grid_u, grid_v)
         if (grid_u, grid_v) not in grid_2d_to_voxels:
             grid_2d_to_voxels[(grid_u, grid_v)] = []
@@ -757,6 +840,512 @@ def compute_distance_field_for_region(
             result[voxel] = 0.0
 
     return result
+
+
+@dataclass
+class EdgeContourResult:
+    """Результат извлечения контуров по рёбрам."""
+    outer: list[tuple[float, float]]
+    """Внешний контур (вершины на углах ячеек)."""
+    holes: list[list[tuple[float, float]]]
+    """Дырки (вершины на углах ячеек)."""
+
+
+def _round_half_up(x: float) -> int:
+    """Round to nearest integer, with .5 rounding up (away from zero for positive)."""
+    return int(math.floor(x + 0.5))
+
+
+def create_2d_label_map(
+    regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+    cell_size: float,
+    origin: np.ndarray,
+) -> tuple[np.ndarray, dict[tuple[int, int], int], int, int, np.ndarray, np.ndarray]:
+    """
+    Создать 2D карту меток из списка регионов.
+
+    Все регионы проецируются в единую 2D систему координат.
+    Каждая ячейка получает ID региона, которому принадлежит.
+
+    Args:
+        regions: Список (voxels, normal) для каждого региона.
+        cell_size: Размер вокселя.
+        origin: Начало координат сетки.
+
+    Returns:
+        (labels, cell_to_region, width, height, u_axis, v_axis):
+            labels: 2D массив меток (height, width). 0 = пусто, 1+ = region_id + 1.
+            cell_to_region: mapping (grid_u, grid_v) -> region_id.
+            width, height: размеры массива.
+            u_axis, v_axis: базис 2D проекции.
+    """
+    if not regions:
+        return np.array([]), {}, 0, 0, np.array([1, 0, 0]), np.array([0, 1, 0])
+
+    # Используем нормаль первого региона для построения общего базиса
+    _, first_normal = regions[0]
+    u_axis, v_axis = build_2d_basis(first_normal)
+
+    # Собираем все воксели всех регионов и вычисляем общий центроид
+    all_voxels: list[tuple[int, int, int]] = []
+    for voxels, _ in regions:
+        all_voxels.extend(voxels)
+
+    if not all_voxels:
+        return np.array([]), {}, 0, 0, u_axis, v_axis
+
+    # Общий центроид
+    centers_3d = np.array([
+        origin + (np.array(v) + 0.5) * cell_size
+        for v in all_voxels
+    ], dtype=np.float32)
+    centroid = centers_3d.mean(axis=0)
+
+    # Проецируем все воксели и определяем размеры сетки
+    # Используем floor-based rounding чтобы избежать коллизий от banker's rounding
+    all_2d: list[tuple[int, int]] = []
+    voxel_to_2d: dict[tuple[int, int, int], tuple[int, int]] = {}
+
+    for voxel in all_voxels:
+        vx, vy, vz = voxel
+        world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
+        rel_pos = world_pos - centroid
+        u = float(np.dot(rel_pos, u_axis))
+        v = float(np.dot(rel_pos, v_axis))
+        grid_u = _round_half_up(u / cell_size)
+        grid_v = _round_half_up(v / cell_size)
+        voxel_to_2d[voxel] = (grid_u, grid_v)
+        all_2d.append((grid_u, grid_v))
+
+    if not all_2d:
+        return np.array([]), {}, 0, 0, u_axis, v_axis
+
+    min_u = min(p[0] for p in all_2d)
+    max_u = max(p[0] for p in all_2d)
+    min_v = min(p[1] for p in all_2d)
+    max_v = max(p[1] for p in all_2d)
+
+    # Добавляем padding для корректной обработки границ
+    width = max_u - min_u + 3
+    height = max_v - min_v + 3
+    offset_u = -min_u + 1
+    offset_v = -min_v + 1
+
+    # Создаём массив меток (0 = пусто)
+    labels = np.zeros((height, width), dtype=np.int32)
+    cell_to_region: dict[tuple[int, int], int] = {}
+
+    # Заполняем метки: каждый воксель принадлежит одному региону
+    # Если воксель принадлежит нескольким регионам, берём первый
+    for region_idx, (voxels, _) in enumerate(regions):
+        region_id = region_idx + 1  # 1-based region IDs
+        for voxel in voxels:
+            if voxel not in voxel_to_2d:
+                continue
+            grid_u, grid_v = voxel_to_2d[voxel]
+            mask_u = grid_u + offset_u
+            mask_v = grid_v + offset_v
+            # Первый регион выигрывает (или можно выбрать по другому критерию)
+            if labels[mask_v, mask_u] == 0:
+                labels[mask_v, mask_u] = region_id
+                cell_to_region[(mask_u, mask_v)] = region_idx
+
+    return labels, cell_to_region, width, height, u_axis, v_axis
+
+
+def extract_edge_contour_for_region(
+    labels: np.ndarray,
+    region_id: int,
+) -> EdgeContourResult:
+    """
+    Извлечь контуры региона по рёбрам ячеек.
+
+    Контур идёт по границам между ячейками с разными метками.
+    Вершины находятся на углах ячеек (не центрах).
+
+    Args:
+        labels: 2D массив меток (height, width). 0 = пусто.
+        region_id: ID региона (1-based).
+
+    Returns:
+        EdgeContourResult с внешним контуром и дырками.
+    """
+    height, width = labels.shape
+
+    # Собираем все рёбра, где region_id граничит с другим значением
+    # Ребро между ячейками (u, v) и (u+1, v) - вертикальное
+    # Ребро между ячейками (u, v) и (u, v+1) - горизонтальное
+    # Каждое ребро описывается двумя концами (координаты углов)
+
+    # Рёбра храним как: ((x1, y1), (x2, y2)) где координаты - углы ячеек
+    # Углы ячейки (u, v): (u, v), (u+1, v), (u, v+1), (u+1, v+1)
+
+    edges: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+
+    for v in range(height):
+        for u in range(width):
+            if labels[v, u] != region_id:
+                continue
+
+            # Проверяем 4 соседа и добавляем рёбра где граница
+            # Правый сосед (u+1, v)
+            if u + 1 >= width or labels[v, u + 1] != region_id:
+                # Вертикальное ребро справа от (u, v)
+                # Углы: (u+1, v) -> (u+1, v+1)
+                edge = ((u + 1.0, v), (u + 1.0, v + 1.0))
+                edges.add(edge)
+
+            # Левый сосед (u-1, v)
+            if u - 1 < 0 or labels[v, u - 1] != region_id:
+                # Вертикальное ребро слева от (u, v)
+                # Углы: (u, v+1) -> (u, v)
+                edge = ((u, v + 1.0), (u, v))
+                edges.add(edge)
+
+            # Нижний сосед (u, v+1)
+            if v + 1 >= height or labels[v + 1, u] != region_id:
+                # Горизонтальное ребро снизу от (u, v)
+                # Углы: (u+1, v+1) -> (u, v+1)
+                edge = ((u + 1.0, v + 1.0), (u, v + 1.0))
+                edges.add(edge)
+
+            # Верхний сосед (u, v-1)
+            if v - 1 < 0 or labels[v - 1, u] != region_id:
+                # Горизонтальное ребро сверху от (u, v)
+                # Углы: (u, v) -> (u+1, v)
+                edge = ((u, v), (u + 1.0, v))
+                edges.add(edge)
+
+    if not edges:
+        return EdgeContourResult(outer=[], holes=[])
+
+    # Строим граф: vertex -> list of outgoing edges
+    # Каждое ребро ориентировано так, что регион справа (внешний контур CCW)
+    graph: dict[tuple[float, float], list[tuple[float, float]]] = {}
+    for (start, end) in edges:
+        if start not in graph:
+            graph[start] = []
+        graph[start].append(end)
+
+    # Находим все замкнутые контуры
+    contours: list[list[tuple[float, float]]] = []
+    used_edges: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+
+    for start_vertex in graph:
+        for next_vertex in graph[start_vertex]:
+            edge = (start_vertex, next_vertex)
+            if edge in used_edges:
+                continue
+
+            # Обходим контур
+            contour: list[tuple[float, float]] = [start_vertex]
+            current = next_vertex
+            prev = start_vertex
+
+            while current != start_vertex:
+                contour.append(current)
+                used_edges.add((prev, current))
+
+                # Находим следующее ребро
+                if current not in graph:
+                    break
+                candidates = graph[current]
+                # Выбираем ребро, поворачивая максимально вправо
+                # (для CCW обхода внешнего контура)
+                next_edge = _select_rightmost_edge(prev, current, candidates)
+                if next_edge is None:
+                    break
+                prev = current
+                current = next_edge
+
+            if current == start_vertex:
+                used_edges.add((prev, current))
+                contours.append(contour)
+
+    if not contours:
+        return EdgeContourResult(outer=[], holes=[])
+
+    # Определяем какой контур внешний (максимальная площадь, положительная)
+    # и какие - дырки (отрицательная площадь)
+    outer: list[tuple[float, float]] = []
+    holes: list[list[tuple[float, float]]] = []
+    max_area = float('-inf')
+
+    for contour in contours:
+        area = _signed_area_contour(contour)
+        if area > max_area:
+            if outer:
+                # Предыдущий outer становится дыркой
+                holes.append(outer)
+            outer = contour
+            max_area = area
+        else:
+            holes.append(contour)
+
+    # Внешний контур должен быть CCW (положительная площадь)
+    if _signed_area_contour(outer) < 0:
+        outer = list(reversed(outer))
+
+    # Дырки должны быть CW (отрицательная площадь)
+    for i in range(len(holes)):
+        if _signed_area_contour(holes[i]) > 0:
+            holes[i] = list(reversed(holes[i]))
+
+    return EdgeContourResult(outer=outer, holes=holes)
+
+
+def _select_rightmost_edge(
+    prev: tuple[float, float],
+    current: tuple[float, float],
+    candidates: list[tuple[float, float]],
+) -> tuple[float, float] | None:
+    """
+    Выбрать следующее ребро, поворачивая максимально вправо.
+
+    Это обеспечивает CCW обход внешнего контура.
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Вектор прихода
+    dx_in = current[0] - prev[0]
+    dy_in = current[1] - prev[1]
+
+    best_candidate = None
+    best_angle = float('-inf')
+
+    for candidate in candidates:
+        if candidate == prev:
+            continue
+        # Вектор ухода
+        dx_out = candidate[0] - current[0]
+        dy_out = candidate[1] - current[1]
+
+        # Угол поворота (отрицательный = вправо)
+        # Используем atan2 для определения угла между векторами
+        cross = dx_in * dy_out - dy_in * dx_out  # z-компонента векторного произведения
+        dot = dx_in * dx_out + dy_in * dy_out
+
+        angle = math.atan2(cross, dot)
+
+        # Для "правого поворота" выбираем минимальный угол (наиболее отрицательный)
+        # Но для CCW обхода нам нужен "левый поворот" - максимальный угол
+        if angle > best_angle:
+            best_angle = angle
+            best_candidate = candidate
+
+    return best_candidate
+
+
+def _signed_area_contour(contour: list[tuple[float, float]]) -> float:
+    """Вычислить знаковую площадь контура (положительная = CCW)."""
+    if len(contour) < 3:
+        return 0.0
+    area = 0.0
+    n = len(contour)
+    for i in range(n):
+        j = (i + 1) % n
+        area += contour[i][0] * contour[j][1]
+        area -= contour[j][0] * contour[i][1]
+    return area / 2.0
+
+
+def extract_edge_contours_from_regions(
+    regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+    cell_size: float,
+    origin: np.ndarray,
+) -> list[EdgeContourResult]:
+    """
+    Извлечь edge-based контуры для всех регионов.
+
+    Все регионы проецируются в единую 2D систему координат,
+    затем контуры извлекаются по рёбрам между ячейками.
+
+    Args:
+        regions: Список (voxels, normal) для каждого региона.
+        cell_size: Размер вокселя.
+        origin: Начало координат сетки.
+
+    Returns:
+        Список EdgeContourResult для каждого региона.
+    """
+    if not regions:
+        return []
+
+    labels, _, _, _, _, _ = create_2d_label_map(regions, cell_size, origin)
+
+    results: list[EdgeContourResult] = []
+    for region_idx in range(len(regions)):
+        region_id = region_idx + 1
+        result = extract_edge_contour_for_region(labels, region_id)
+        results.append(result)
+
+    return results
+
+
+@dataclass
+class SharedLabelMap:
+    """Общая карта меток для группы регионов."""
+    labels: np.ndarray
+    """2D массив меток (height, width). 0 = пусто, 1+ = region_id + 1."""
+    width: int
+    height: int
+    offset_u: int
+    offset_v: int
+    u_axis: np.ndarray
+    v_axis: np.ndarray
+    centroid: np.ndarray
+    cell_size: float
+
+
+def create_shared_label_map(
+    regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+    cell_size: float,
+    origin: np.ndarray,
+) -> SharedLabelMap | None:
+    """
+    Создать общую карту меток для группы регионов.
+
+    Args:
+        regions: Список (voxels, normal) для каждого региона.
+        cell_size: Размер вокселя.
+        origin: Начало координат сетки.
+
+    Returns:
+        SharedLabelMap или None если регионы пусты.
+    """
+    labels, _, width, height, u_axis, v_axis = create_2d_label_map(
+        regions, cell_size, origin
+    )
+
+    if labels.size == 0:
+        return None
+
+    # Вычисляем offset и centroid
+    all_voxels: list[tuple[int, int, int]] = []
+    for voxels, _ in regions:
+        all_voxels.extend(voxels)
+
+    if not all_voxels:
+        return None
+
+    centers_3d = np.array([
+        origin + (np.array(v) + 0.5) * cell_size
+        for v in all_voxels
+    ], dtype=np.float32)
+    centroid = centers_3d.mean(axis=0)
+
+    # Находим offset
+    all_2d: list[tuple[int, int]] = []
+    for voxel in all_voxels:
+        vx, vy, vz = voxel
+        world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
+        rel_pos = world_pos - centroid
+        u = float(np.dot(rel_pos, u_axis))
+        v = float(np.dot(rel_pos, v_axis))
+        grid_u = _round_half_up(u / cell_size)
+        grid_v = _round_half_up(v / cell_size)
+        all_2d.append((grid_u, grid_v))
+
+    min_u = min(p[0] for p in all_2d)
+    min_v = min(p[1] for p in all_2d)
+    offset_u = -min_u + 1
+    offset_v = -min_v + 1
+
+    return SharedLabelMap(
+        labels=labels,
+        width=width,
+        height=height,
+        offset_u=offset_u,
+        offset_v=offset_v,
+        u_axis=u_axis,
+        v_axis=v_axis,
+        centroid=centroid,
+        cell_size=cell_size,
+    )
+
+
+def extract_edge_contour_from_shared_map(
+    shared_map: SharedLabelMap,
+    region_id: int,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """
+    Извлечь edge-based контуры для региона из общей карты меток.
+
+    Args:
+        shared_map: Общая карта меток.
+        region_id: ID региона (0-based index).
+
+    Returns:
+        (outer_2d, holes_2d):
+            outer_2d: np.ndarray shape (N, 2) — внешний контур в 2D
+            holes_2d: list[np.ndarray] — дырки в 2D
+    """
+    # region_id в labels 1-based
+    result = extract_edge_contour_for_region(shared_map.labels, region_id + 1)
+
+    if not result.outer:
+        return np.array([]).reshape(0, 2), []
+
+    def corner_to_2d(corner: tuple[float, float]) -> tuple[float, float]:
+        """Преобразовать координату угла в label map в 2D координаты плоскости."""
+        mask_u, mask_v = corner
+        grid_u = mask_u - shared_map.offset_u
+        grid_v = mask_v - shared_map.offset_v
+        u_2d = grid_u * shared_map.cell_size
+        v_2d = grid_v * shared_map.cell_size
+        return (u_2d, v_2d)
+
+    # Преобразуем внешний контур
+    outer_2d_list = [corner_to_2d(corner) for corner in result.outer]
+    outer_2d = np.array(outer_2d_list, dtype=np.float32) if outer_2d_list else np.array([]).reshape(0, 2)
+
+    # Преобразуем дырки
+    holes_2d: list[np.ndarray] = []
+    for hole in result.holes:
+        hole_2d_list = [corner_to_2d(corner) for corner in hole]
+        if hole_2d_list:
+            holes_2d.append(np.array(hole_2d_list, dtype=np.float32))
+
+    return outer_2d, holes_2d
+
+
+def extract_edge_contour_single_region(
+    region_voxels: list[tuple[int, int, int]],
+    region_normal: np.ndarray,
+    cell_size: float,
+    origin: np.ndarray,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """
+    Извлечь edge-based контуры для одного региона.
+
+    Возвращает контуры в 2D координатах (после проекции на плоскость).
+    Вершины находятся на углах ячеек.
+
+    Args:
+        region_voxels: Список вокселей региона (vx, vy, vz).
+        region_normal: Нормаль региона.
+        cell_size: Размер вокселя.
+        origin: Начало координат сетки.
+
+    Returns:
+        (outer_2d, holes_2d):
+            outer_2d: np.ndarray shape (N, 2) — внешний контур в 2D
+            holes_2d: list[np.ndarray] — дырки в 2D
+    """
+    if len(region_voxels) < 1:
+        return np.array([]).reshape(0, 2), []
+
+    # Создаём shared map для одного региона
+    regions = [(region_voxels, region_normal)]
+    shared_map = create_shared_label_map(regions, cell_size, origin)
+
+    if shared_map is None:
+        return np.array([]).reshape(0, 2), []
+
+    return extract_edge_contour_from_shared_map(shared_map, region_id=0)
 
 
 def bresenham_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
@@ -1012,8 +1601,8 @@ def extract_contours_from_region(
     grid_2d_to_voxels: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
 
     for voxel, (u, v) in voxel_to_2d_float.items():
-        grid_u = int(round(u / cell_size))
-        grid_v = int(round(v / cell_size))
+        grid_u = _round_half_up(u / cell_size)
+        grid_v = _round_half_up(v / cell_size)
         voxel_to_2d[voxel] = (grid_u, grid_v)
         if (grid_u, grid_v) not in grid_2d_to_voxels:
             grid_2d_to_voxels[(grid_u, grid_v)] = []

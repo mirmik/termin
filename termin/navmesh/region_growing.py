@@ -521,6 +521,53 @@ def share_boundary_voxels(
     return result, boundary_voxels
 
 
+def find_inter_region_boundaries(
+    regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+) -> dict[int, set[tuple[int, int, int]]]:
+    """
+    Найти воксели на границах между регионами.
+
+    Воксель считается граничным, если он имеет соседа из другого региона.
+    Эти воксели должны сохраняться при упрощении контуров.
+
+    Args:
+        regions: Список (воксели, нормаль) для каждого региона.
+
+    Returns:
+        {region_idx: set of boundary voxels} — для каждого региона
+        множество его вокселей, которые граничат с другими регионами.
+    """
+    # Строим карту: воксель -> множество регионов, которым он принадлежит
+    voxel_to_regions: dict[tuple[int, int, int], set[int]] = {}
+    for region_idx, (voxels, _) in enumerate(regions):
+        for v in voxels:
+            if v not in voxel_to_regions:
+                voxel_to_regions[v] = set()
+            voxel_to_regions[v].add(region_idx)
+
+    # Для каждого региона находим воксели на границе с другими регионами
+    result: dict[int, set[tuple[int, int, int]]] = {i: set() for i in range(len(regions))}
+
+    for region_idx, (voxels, _) in enumerate(regions):
+        region_set = set(voxels)
+        for voxel in voxels:
+            vx, vy, vz = voxel
+            # Проверяем соседей по 26-связности
+            for dx, dy, dz in NEIGHBORS_26:
+                neighbor = (vx + dx, vy + dy, vz + dz)
+                if neighbor in voxel_to_regions:
+                    neighbor_regions = voxel_to_regions[neighbor]
+                    # Если сосед принадлежит другому региону
+                    if neighbor_regions - {region_idx}:
+                        result[region_idx].add(voxel)
+                        break
+
+    total_boundary = sum(len(v) for v in result.values())
+    print(f"PolygonBuilder: found {total_boundary} inter-region boundary voxels")
+
+    return result
+
+
 def expand_regions(
     regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
     surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],

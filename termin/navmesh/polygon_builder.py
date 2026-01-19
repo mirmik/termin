@@ -26,12 +26,14 @@ from termin.navmesh.region_growing import (
     filter_hanging_voxels,
     share_boundary_voxels,
     expand_regions,
+    find_inter_region_boundaries,
 )
 
 from termin.navmesh.triangulation import (
     ear_clip,
     ear_clipping_refined,
     douglas_peucker_2d,
+    douglas_peucker_2d_with_fixed,
     merge_holes_with_bridges,
     transform_to_3d,
     build_2d_basis,
@@ -42,6 +44,10 @@ from termin.navmesh.contour_extraction import (
     bresenham_line,
     extract_contours_from_mask,
     extract_contours_from_region,
+    extract_edge_contour_single_region,
+    extract_edge_contour_from_shared_map,
+    create_shared_label_map,
+    SharedLabelMap,
     compute_distance_field_for_region,
     watershed_split_region,
     WatershedResult,
@@ -118,8 +124,10 @@ class PolygonBuilder:
         self._last_distance_fields: list[dict[tuple[int, int, int], float]] = []
         self._last_peaks: set[tuple[int, int, int]] = set()
         self._last_all_local_maxima: set[tuple[int, int, int]] = set()
+        self._last_eroded_voxels: set[tuple[int, int, int]] = set()
         self._last_cell_size: float = 1.0
         self._last_origin: np.ndarray = np.zeros(3, dtype=np.float32)
+        self._shared_label_map: SharedLabelMap | None = None
 
     def build(
         self,
@@ -152,6 +160,10 @@ class PolygonBuilder:
                 origin=grid.origin.copy(),
             )
 
+        self._last_cell_size = grid.cell_size
+        self._last_origin = np.array(grid.origin, dtype=np.float32)
+        self._last_eroded_voxels = set()
+
         # Шаг 2: Region Growing — разбиваем на группы
         regions = region_growing_basic(surface_voxels, self.config.normal_threshold)
 
@@ -180,8 +192,6 @@ class PolygonBuilder:
 
         # Сохраняем исходные регионы (до watershed) для отладки
         self._last_regions = regions
-        self._last_cell_size = grid.cell_size
-        self._last_origin = np.array(grid.origin, dtype=np.float32)
 
         # Шаг 2.8: Watershed — разбиваем большие регионы на под-регионы
         # Watershed также вычисляет distance field и пики
@@ -224,25 +234,30 @@ class PolygonBuilder:
                 )
                 self._last_distance_fields.append(df)
 
-        # Шаг 2.9: Эрозия по радиусу агента
-        # Убираем воксели, у которых расстояние до границы меньше agent_radius
+        # Шаг 2.9: Эрозия по радиусу агента (после distance field, до построения полигонов)
+        # Используем 2D distance field каждого региона для фильтрации вокселей
         if self.config.agent_radius > 0:
-            min_distance = self.config.agent_radius / grid.cell_size
-            eroded_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
-            total_removed = 0
+            # Центр вокселя с distance=d находится на (d + 0.5) * cell_size от края
+            # Для агента нужно: (d + 0.5) * cell_size >= agent_radius
+            # Поэтому: d >= agent_radius / cell_size - 0.5
+            min_distance = max(0.0, self.config.agent_radius / grid.cell_size - 0.5)
 
-            # Объединяем все distance fields в один словарь для быстрого поиска
+            # Объединяем все distance fields в один словарь
             combined_df: dict[tuple[int, int, int], float] = {}
             for df in self._last_distance_fields:
                 combined_df.update(df)
 
+            eroded_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+            total_removed = 0
+
             for region_voxels, region_normal in regions:
-                # Фильтруем воксели
                 filtered_voxels = []
                 for voxel in region_voxels:
                     dist = combined_df.get(voxel, 0.0)
                     if dist >= min_distance:
                         filtered_voxels.append(voxel)
+                    else:
+                        self._last_eroded_voxels.add(voxel)
 
                 removed = len(region_voxels) - len(filtered_voxels)
                 total_removed += removed
@@ -256,6 +271,20 @@ class PolygonBuilder:
             # Обновляем watershed regions если они были
             if self._last_watershed_regions:
                 self._last_watershed_regions = regions
+
+        # Шаг 2.10: Общие граничные воксели между под-регионами
+        # После watershed/erosion добавляем граничные воксели в оба соседних региона
+        # Это необходимо для согласованного упрощения контуров
+        regions, shared_boundary = share_boundary_voxels(regions)
+
+        # Находим границы между регионами для согласованного упрощения контуров
+        # Теперь граничные воксели общие, поэтому они будут сохранены в обоих регионах
+        inter_region_boundaries = find_inter_region_boundaries(regions)
+
+        # Создаём общую карту меток для согласованного извлечения контуров
+        self._shared_label_map = create_shared_label_map(
+            regions, grid.cell_size, np.array(grid.origin, dtype=np.float32)
+        )
 
         # Для сшивки контуров: находим какие воксели в каких регионах
         voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
@@ -304,6 +333,7 @@ class PolygonBuilder:
             )
             if polygon is not None:
                 # Триангулируем полигон
+                boundary_voxels = inter_region_boundaries.get(region_idx, set())
                 vertices, triangles = self.triangulate_region(
                     region_voxels,
                     region_normal,
@@ -319,6 +349,10 @@ class PolygonBuilder:
                     use_angle_flip=self.config.use_angle_flip,
                     use_cvt_smoothing=self.config.use_cvt_smoothing,
                     use_second_pass=self.config.use_second_pass,
+                    boundary_voxels=boundary_voxels,
+                    use_edge_contours=True,
+                    shared_label_map=self._shared_label_map,
+                    region_idx=region_idx,
                 )
                 if len(vertices) > 0 and len(triangles) > 0:
                     polygon.vertices = vertices
@@ -829,12 +863,16 @@ class PolygonBuilder:
         use_angle_flip: bool = False,
         use_cvt_smoothing: bool = False,
         use_second_pass: bool = False,
+        boundary_voxels: set[tuple[int, int, int]] | None = None,
+        use_edge_contours: bool = True,
+        shared_label_map: SharedLabelMap | None = None,
+        region_idx: int = 0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Триангулировать регион: извлечь контуры, упростить, построить меш.
 
         Пайплайн:
-        1. Извлечение контуров (воксели → упорядоченные списки)
+        1. Извлечение контуров (edge-based или voxel-based)
         2. Проекция на плоскость → 2D координаты + базис
         3. Douglas-Peucker в 2D
         4. Bridge (объединение дырок) в 2D
@@ -856,66 +894,138 @@ class PolygonBuilder:
             use_angle_flip: Применить edge flipping для максимизации минимального угла.
             use_cvt_smoothing: Применить CVT (Centroidal Voronoi Tessellation) smoothing.
             use_second_pass: Повторный проход flips + smoothing после edge collapse.
+            boundary_voxels: Воксели на границе с другими регионами (не упрощаются).
+            use_edge_contours: Использовать edge-based контуры (classic algorithm).
+            shared_label_map: Общая карта меток для согласованных контуров.
+            region_idx: Индекс региона в shared_label_map.
 
         Returns:
             (vertices, triangles):
                 vertices: np.ndarray shape (N, 3) — вершины меша в 3D
                 triangles: np.ndarray shape (M, 3) — индексы треугольников
         """
-        # Шаг 1: Извлечение контуров
-        outer_voxels, holes_voxels = extract_contours_from_region(
-            region_voxels, region_normal, cell_size, origin
-        )
-
-        if len(outer_voxels) < 3:
-            return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
+        if boundary_voxels is None:
+            boundary_voxels = set()
 
         # Шаг 2: Проекция на плоскость и переход в 2D
-        u_axis, v_axis = build_2d_basis(region_normal)
-        region_normal = region_normal / np.linalg.norm(region_normal)
+        # При использовании shared_label_map берём базис и центроид из него
+        if use_edge_contours and shared_label_map is not None:
+            u_axis = shared_label_map.u_axis
+            v_axis = shared_label_map.v_axis
+            centroid = shared_label_map.centroid
+        else:
+            u_axis, v_axis = build_2d_basis(region_normal)
+            # Центроид региона
+            centers_3d = np.array([
+                origin + (np.array(v) + 0.5) * cell_size
+                for v in region_voxels
+            ], dtype=np.float32)
+            centroid = centers_3d.mean(axis=0)
 
-        # Центроид региона
-        centers_3d = np.array([
-            origin + (np.array(v) + 0.5) * cell_size
-            for v in region_voxels
-        ], dtype=np.float32)
-        centroid = centers_3d.mean(axis=0)
+        region_normal_normalized = region_normal / np.linalg.norm(region_normal)
 
-        def voxels_to_2d(voxels: list[tuple[int, int, int]]) -> np.ndarray:
-            """Проецировать воксели на плоскость и вернуть 2D координаты."""
-            if not voxels:
-                return np.array([]).reshape(0, 2)
-            points_2d = []
-            for vx, vy, vz in voxels:
-                world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
-                # Проекция на плоскость
-                to_point = world_pos - centroid
-                distance = np.dot(to_point, region_normal)
-                projected = world_pos - distance * region_normal
-                # Переход в 2D
-                rel = projected - centroid
-                u = float(np.dot(rel, u_axis))
-                v = float(np.dot(rel, v_axis))
-                points_2d.append([u, v])
-            return np.array(points_2d, dtype=np.float32)
+        if use_edge_contours:
+            # Шаг 1: Edge-based извлечение контуров (classic algorithm)
+            # Контуры уже в 2D координатах, вершины на углах ячеек
+            if shared_label_map is not None:
+                # Используем общую карту меток для согласованных границ
+                outer_2d, holes_2d = extract_edge_contour_from_shared_map(
+                    shared_label_map, region_idx
+                )
+            else:
+                # Fallback: создаём отдельную карту для одного региона
+                outer_2d, holes_2d = extract_edge_contour_single_region(
+                    region_voxels, region_normal, cell_size, origin
+                )
 
-        outer_2d = voxels_to_2d(outer_voxels)
-        holes_2d = [voxels_to_2d(h) for h in holes_voxels]
+            if len(outer_2d) < 3:
+                return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
 
-        # Гарантируем CCW ориентацию внешнего контура
-        # (ориентация может измениться в зависимости от направления нормали региона)
-        if len(outer_2d) >= 3 and signed_area_2d(outer_2d) < 0:
-            outer_2d = outer_2d[::-1].copy()
+            # Гарантируем CCW ориентацию внешнего контура
+            if signed_area_2d(outer_2d) < 0:
+                outer_2d = outer_2d[::-1].copy()
 
-        # Дырки должны быть CW (отрицательная площадь)
-        for i, hole in enumerate(holes_2d):
-            if len(hole) >= 3 and signed_area_2d(hole) > 0:
-                holes_2d[i] = hole[::-1].copy()
+            # Дырки должны быть CW (отрицательная площадь)
+            for i, hole in enumerate(holes_2d):
+                if len(hole) >= 3 and signed_area_2d(hole) > 0:
+                    holes_2d[i] = hole[::-1].copy()
 
-        # Шаг 3: Douglas-Peucker в 2D
-        if simplify_epsilon > 0:
-            outer_2d = douglas_peucker_2d(outer_2d, simplify_epsilon)
-            holes_2d = [douglas_peucker_2d(h, simplify_epsilon) for h in holes_2d if len(h) >= 3]
+            # Шаг 3: Douglas-Peucker в 2D
+            # Для edge-based контуров не нужно фиксировать граничные вершины,
+            # так как они автоматически согласованы между регионами
+            if simplify_epsilon > 0:
+                outer_2d = douglas_peucker_2d(outer_2d, simplify_epsilon)
+                holes_2d = [douglas_peucker_2d(h, simplify_epsilon) for h in holes_2d if len(h) >= 3]
+
+        else:
+            # Старый voxel-based подход
+            outer_voxels, holes_voxels = extract_contours_from_region(
+                region_voxels, region_normal, cell_size, origin
+            )
+
+            if len(outer_voxels) < 3:
+                return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3).astype(np.int32)
+
+            def voxels_to_2d(voxels: list[tuple[int, int, int]]) -> np.ndarray:
+                """Проецировать воксели на плоскость и вернуть 2D координаты."""
+                if not voxels:
+                    return np.array([]).reshape(0, 2)
+                points_2d = []
+                for vx, vy, vz in voxels:
+                    world_pos = origin + (np.array([vx, vy, vz]) + 0.5) * cell_size
+                    # Проекция на плоскость
+                    to_point = world_pos - centroid
+                    distance = np.dot(to_point, region_normal_normalized)
+                    projected = world_pos - distance * region_normal_normalized
+                    # Переход в 2D
+                    rel = projected - centroid
+                    u = float(np.dot(rel, u_axis))
+                    v = float(np.dot(rel, v_axis))
+                    points_2d.append([u, v])
+                return np.array(points_2d, dtype=np.float32)
+
+            outer_2d = voxels_to_2d(outer_voxels)
+            holes_2d = [voxels_to_2d(h) for h in holes_voxels]
+
+            # Гарантируем CCW ориентацию внешнего контура
+            if len(outer_2d) >= 3 and signed_area_2d(outer_2d) < 0:
+                outer_2d = outer_2d[::-1].copy()
+                outer_voxels = list(reversed(outer_voxels))
+
+            # Дырки должны быть CW (отрицательная площадь)
+            for i, hole in enumerate(holes_2d):
+                if len(hole) >= 3 and signed_area_2d(hole) > 0:
+                    holes_2d[i] = hole[::-1].copy()
+                    holes_voxels[i] = list(reversed(holes_voxels[i]))
+
+            # Шаг 3: Douglas-Peucker в 2D (с сохранением граничных вершин между регионами)
+            if simplify_epsilon > 0:
+                outer_fixed_indices: set[int] = set()
+                if boundary_voxels:
+                    for idx, voxel in enumerate(outer_voxels):
+                        if voxel in boundary_voxels:
+                            outer_fixed_indices.add(idx)
+
+                if outer_fixed_indices:
+                    outer_2d = douglas_peucker_2d_with_fixed(outer_2d, simplify_epsilon, outer_fixed_indices)
+                else:
+                    outer_2d = douglas_peucker_2d(outer_2d, simplify_epsilon)
+
+                simplified_holes = []
+                for hole_voxels_item, hole_2d in zip(holes_voxels, holes_2d):
+                    if len(hole_2d) < 3:
+                        continue
+                    hole_fixed_indices: set[int] = set()
+                    if boundary_voxels:
+                        for idx, voxel in enumerate(hole_voxels_item):
+                            if voxel in boundary_voxels:
+                                hole_fixed_indices.add(idx)
+                    if hole_fixed_indices:
+                        simplified = douglas_peucker_2d_with_fixed(hole_2d, simplify_epsilon, hole_fixed_indices)
+                    else:
+                        simplified = douglas_peucker_2d(hole_2d, simplify_epsilon)
+                    simplified_holes.append(simplified)
+                holes_2d = simplified_holes
 
         # Удаляем слишком маленькие дырки после упрощения
         holes_2d = [h for h in holes_2d if len(h) >= 3]

@@ -97,7 +97,7 @@
               "enabled": true,
               "navmesh_name": "Plt",
               "agent_type_name": "Human",
-              "cell_size": 0.2,
+              "cell_size": 0.15,
               "voxelize_source": 1.0,
               "normal_angle": 25.0,
               "contour_simplify": 1.0,
@@ -116,11 +116,11 @@
               "show_region_voxels": false,
               "show_simplified_contours": false,
               "show_triangulated": false,
-              "show_distance_field": true,
-              "show_local_maxima": true,
+              "show_distance_field": false,
+              "show_local_maxima": false,
               "show_peaks": false,
               "show_watershed_regions": true,
-              "color_seed": 32.0
+              "color_seed": 56.0
             }
           },
           {
@@ -9807,8 +9807,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            6.910222053527832,
-            -2.206026315689087,
+            -2.174358367919922,
+            6.508645057678223,
             0.9935950040817261
           ],
           "rotation": [
@@ -12933,17 +12933,17 @@
   "editor": {
     "camera": {
       "position": [
-        13.933103561401367,
-        4.366338729858398,
-        10.038052558898926
+        12.243253707885742,
+        -2.533304452896118,
+        9.383171081542969
       ],
       "rotation": [
-        -0.4964000990518547,
-        -0.205615686122281,
-        0.3227519772585838,
-        0.7791920767419591
+        -0.48430531926946563,
+        -0.11806094012662056,
+        0.20531426690973553,
+        0.842232761145657
       ],
-      "radius": 20.0,
+      "radius": 22.0,
       "editor_entities": {
         "camera": [
           {
@@ -12963,7 +12963,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "radius": 20.0,
+              "radius": 22.0,
               "min_radius": 1.0,
               "max_radius": 100.0
             }
@@ -13000,12 +13000,13 @@
         ]
       }
     },
+    "selected_entity": "0000000000000007",
     "expanded_entities": [
       "0000000000000007",
+      "814ba329-db24-48fe-b931-fe68ab904998",
       "0000000000000131",
-      "000000000000000a",
       "0000000000000077",
-      "814ba329-db24-48fe-b931-fe68ab904998"
+      "000000000000000a"
     ]
   },
   "resources": {
