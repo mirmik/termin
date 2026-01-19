@@ -120,6 +120,7 @@ void SkeletonInstance::update() {
     if (_bone_entities.empty() || !_skeleton || !_skeleton->bones) return;
 
     // Helper to convert row-major array to column-major Mat44
+    // (inverse_bind_matrix is stored as row-major in tc_bone)
     auto row_major_to_mat44 = [](const double* src) -> Mat44 {
         Mat44 m;
         for (int row = 0; row < 4; ++row) {
@@ -130,14 +131,23 @@ void SkeletonInstance::update() {
         return m;
     };
 
+    // Helper to copy column-major array to Mat44
+    auto col_major_to_mat44 = [](const double* src) -> Mat44 {
+        Mat44 m;
+        for (int i = 0; i < 16; ++i) {
+            m.data[i] = src[i];
+        }
+        return m;
+    };
+
     // Get inverse of skeleton root world matrix
     Mat44 skeleton_world_inv = Mat44::identity();
     Entity root = find_skeleton_root();
 
     if (root.valid()) {
         double m[16];
-        root.transform().world_matrix(m);  // row-major
-        Mat44 skeleton_world = row_major_to_mat44(m);
+        root.transform().world_matrix(m);  // column-major
+        Mat44 skeleton_world = col_major_to_mat44(m);
         skeleton_world_inv = skeleton_world.inverse();
     }
 
@@ -149,12 +159,12 @@ void SkeletonInstance::update() {
         Entity ent = _bone_entities[bone.index];
         if (!ent.valid()) continue;
 
-        // Get bone world matrix (row-major from world_matrix)
+        // Get bone world matrix (column-major from world_matrix)
         double bone_world_d[16];
         ent.transform().world_matrix(bone_world_d);
-        Mat44 bone_world = row_major_to_mat44(bone_world_d);
+        Mat44 bone_world = col_major_to_mat44(bone_world_d);
 
-        // Get inverse bind matrix (stored as row-major)
+        // Get inverse bind matrix (stored as row-major in tc_bone)
         Mat44 inv_bind = row_major_to_mat44(bone.inverse_bind_matrix);
 
         // bone_matrix = skeleton_world_inv * bone_world * inv_bind

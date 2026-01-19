@@ -35,11 +35,14 @@ class RecastNavMeshBuilderComponent : public CxxComponent, public Drawable {
 public:
     // --- Configuration fields (exposed to inspector) ---
 
+    // Agent type selection (from Navigation Settings)
+    std::string agent_type_name = "Human";
+
     // Rasterization
     float cell_size = 0.3f;
     float cell_height = 0.2f;
 
-    // Agent parameters
+    // Agent parameters (set from agent_type_name via apply_agent_type())
     float agent_height = 2.0f;
     float agent_radius = 0.5f;
     float agent_max_climb = 0.4f;
@@ -70,6 +73,7 @@ public:
     bool capture_detail_mesh = false;
 
     // Debug visualization flags
+    bool show_input_mesh = false;
     bool show_heightfield = false;
     bool show_regions = false;
     bool show_distance_field = false;
@@ -77,12 +81,9 @@ public:
     bool show_poly_mesh = false;
 
     // Inspector field declarations - Configuration
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_type_name, "Agent Type", "agent_type")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_size, "Cell Size", "float", 0.05, 2.0, 0.05)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_height, "Cell Height", "float", 0.05, 2.0, 0.05)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_height, "Agent Height", "float", 0.5, 5.0, 0.1)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_radius, "Agent Radius", "float", 0.1, 2.0, 0.05)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_max_climb, "Agent Max Climb", "float", 0.0, 2.0, 0.05)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_max_slope, "Agent Max Slope", "float", 0.0, 90.0, 1.0)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, min_region_area, "Min Region Area", "int", 0, 100, 1)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, merge_region_area, "Merge Region Area", "int", 0, 100, 1)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, max_edge_length, "Max Edge Length", "float", 0.0, 50.0, 0.5)
@@ -101,11 +102,15 @@ public:
     INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_poly_mesh, "Capture Poly Mesh (4)", "bool")
 
     // Inspector field declarations - Debug visualization
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_input_mesh, "Show Input Mesh (0)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_heightfield, "Show Heightfield (1)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_regions, "Show Regions (2)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_distance_field, "Show Distance Field (3)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_contours, "Show Contours (4)", "bool")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, show_poly_mesh, "Show Poly Mesh (5)", "bool")
+
+    // Apply agent type parameters (called from Python before build)
+    void apply_agent_type(float height, float radius, float max_climb, float max_slope);
 
     // Build from entity's MeshRenderer (called by inspector button)
     void build_from_entity();
@@ -145,6 +150,7 @@ public:
 
 private:
     // Geometry IDs for different debug layers
+    static constexpr int GEOMETRY_INPUT_MESH = 0;
     static constexpr int GEOMETRY_HEIGHTFIELD = 1;
     static constexpr int GEOMETRY_REGIONS = 2;
     static constexpr int GEOMETRY_DISTANCE_FIELD = 3;
@@ -152,6 +158,7 @@ private:
     static constexpr int GEOMETRY_POLY_MESH = 5;
 
     // Debug meshes
+    TcMesh _input_mesh;
     TcMesh _heightfield_mesh;
     TcMesh _regions_mesh;
     TcMesh _distance_field_mesh;
@@ -163,6 +170,7 @@ private:
 
     // Mesh generation from debug data
     void rebuild_debug_meshes();
+    void build_input_mesh(const float* verts, int nverts, const int* tris, int ntris);
     void build_heightfield_mesh();
     void build_regions_mesh();
     void build_distance_field_mesh();

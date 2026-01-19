@@ -46,17 +46,14 @@ inline RenderState convert_render_state(const tc_render_state& s) {
 }
 
 // Get model matrix from Entity as Mat44f.
-// GeneralTransform3::world_matrix outputs row-major double[16], Mat44f is column-major float.
+// GeneralTransform3::world_matrix outputs column-major double[16], same as Mat44f.
 Mat44f get_model_matrix(const Entity& entity) {
-    double m_row[16];
-    entity.transform().world_matrix(m_row);
+    double m[16];
+    entity.transform().world_matrix(m);
 
-    // Transpose from row-major to column-major
     Mat44f result;
-    for (int col = 0; col < 4; ++col) {
-        for (int row = 0; row < 4; ++row) {
-            result(col, row) = static_cast<float>(m_row[row * 4 + col]);
-        }
+    for (int i = 0; i < 16; ++i) {
+        result.data[i] = static_cast<float>(m[i]);
     }
     return result;
 }

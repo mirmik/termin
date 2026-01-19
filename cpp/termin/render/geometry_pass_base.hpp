@@ -128,15 +128,14 @@ protected:
         return _shader;
     }
 
+    // world_matrix outputs column-major, same as Mat44f
     static Mat44f get_model_matrix(const Entity& entity) {
-        double m_row[16];
-        entity.transform().world_matrix(m_row);
+        double m[16];
+        entity.transform().world_matrix(m);
 
         Mat44f result;
-        for (int col = 0; col < 4; ++col) {
-            for (int row = 0; row < 4; ++row) {
-                result(col, row) = static_cast<float>(m_row[row * 4 + col]);
-            }
+        for (int i = 0; i < 16; ++i) {
+            result.data[i] = static_cast<float>(m[i]);
         }
         return result;
     }

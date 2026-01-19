@@ -36,14 +36,20 @@ void bind_recast_navmesh_builder(nb::module_& m) {
     // RecastNavMeshBuilderComponent
     nb::class_<RecastNavMeshBuilderComponent, CxxComponent>(m, "RecastNavMeshBuilderComponent")
         .def(nb::init<>())
+        // Agent type selection
+        .def_rw("agent_type_name", &RecastNavMeshBuilderComponent::agent_type_name)
         // Rasterization parameters
         .def_rw("cell_size", &RecastNavMeshBuilderComponent::cell_size)
         .def_rw("cell_height", &RecastNavMeshBuilderComponent::cell_height)
-        // Agent parameters
+        // Agent parameters (internal, set via apply_agent_type)
         .def_rw("agent_height", &RecastNavMeshBuilderComponent::agent_height)
         .def_rw("agent_radius", &RecastNavMeshBuilderComponent::agent_radius)
         .def_rw("agent_max_climb", &RecastNavMeshBuilderComponent::agent_max_climb)
         .def_rw("agent_max_slope", &RecastNavMeshBuilderComponent::agent_max_slope)
+        // Apply agent type parameters
+        .def("apply_agent_type", &RecastNavMeshBuilderComponent::apply_agent_type,
+             nb::arg("height"), nb::arg("radius"), nb::arg("max_climb"), nb::arg("max_slope"),
+             "Apply agent type parameters (height, radius, max_climb, max_slope)")
         // Region building
         .def_rw("min_region_area", &RecastNavMeshBuilderComponent::min_region_area)
         .def_rw("merge_region_area", &RecastNavMeshBuilderComponent::merge_region_area)
@@ -64,6 +70,7 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def_rw("capture_poly_mesh", &RecastNavMeshBuilderComponent::capture_poly_mesh)
         .def_rw("capture_detail_mesh", &RecastNavMeshBuilderComponent::capture_detail_mesh)
         // Debug visualization flags
+        .def_rw("show_input_mesh", &RecastNavMeshBuilderComponent::show_input_mesh)
         .def_rw("show_heightfield", &RecastNavMeshBuilderComponent::show_heightfield)
         .def_rw("show_regions", &RecastNavMeshBuilderComponent::show_regions)
         .def_rw("show_distance_field", &RecastNavMeshBuilderComponent::show_distance_field)

@@ -983,34 +983,34 @@ static Vec3 quat_rotate(Quat q, Vec3 v) {
 }
 
 static void compute_world_matrix(double* m, Vec3 pos, Quat rot, Vec3 scale) {
-    // Rotation matrix from quaternion - OUTPUT ROW-MAJOR for Python compatibility
-    // Row-major layout: m[row * 4 + col]
+    // Rotation matrix from quaternion - OUTPUT COLUMN-MAJOR (OpenGL convention)
+    // Column-major layout: m[col * 4 + row]
     double xx = rot.x * rot.x, yy = rot.y * rot.y, zz = rot.z * rot.z;
     double xy = rot.x * rot.y, xz = rot.x * rot.z, yz = rot.y * rot.z;
     double wx = rot.w * rot.x, wy = rot.w * rot.y, wz = rot.w * rot.z;
 
-    // Row 0
+    // Column 0
     m[0]  = (1 - 2*(yy + zz)) * scale.x;
-    m[1]  = 2*(xy - wz) * scale.y;
-    m[2]  = 2*(xz + wy) * scale.z;
-    m[3]  = pos.x;
+    m[1]  = 2*(xy + wz) * scale.x;
+    m[2]  = 2*(xz - wy) * scale.x;
+    m[3]  = 0;
 
-    // Row 1
-    m[4]  = 2*(xy + wz) * scale.x;
+    // Column 1
+    m[4]  = 2*(xy - wz) * scale.y;
     m[5]  = (1 - 2*(xx + zz)) * scale.y;
-    m[6]  = 2*(yz - wx) * scale.z;
-    m[7]  = pos.y;
+    m[6]  = 2*(yz + wx) * scale.y;
+    m[7]  = 0;
 
-    // Row 2
-    m[8]  = 2*(xz - wy) * scale.x;
-    m[9]  = 2*(yz + wx) * scale.y;
+    // Column 2
+    m[8]  = 2*(xz + wy) * scale.z;
+    m[9]  = 2*(yz - wx) * scale.z;
     m[10] = (1 - 2*(xx + yy)) * scale.z;
-    m[11] = pos.z;
+    m[11] = 0;
 
-    // Row 3
-    m[12] = 0;
-    m[13] = 0;
-    m[14] = 0;
+    // Column 3 (translation)
+    m[12] = pos.x;
+    m[13] = pos.y;
+    m[14] = pos.z;
     m[15] = 1;
 }
 

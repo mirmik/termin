@@ -259,14 +259,16 @@ void bind_transform(nb::module_& m) {
             return vec3_to_numpy(self.left(distance));
         }, nb::arg("distance") = 1.0)
 
-        // World matrix - return 4x4 numpy array
+        // World matrix - return 4x4 numpy array (row-major for Python)
+        // world_matrix returns column-major, transpose for numpy
         .def("world_matrix", [](const GeneralTransform3& self) {
             double* data = new double[16];
             double m[16];
             self.world_matrix(m);
-            for (int i = 0; i < 4; i++)
-                for (int j = 0; j < 4; j++)
-                    data[i * 4 + j] = m[i * 4 + j];
+            // Transpose: column-major to row-major
+            for (int row = 0; row < 4; row++)
+                for (int col = 0; col < 4; col++)
+                    data[row * 4 + col] = m[col * 4 + row];
             nb::capsule owner(data, [](void* ptr) noexcept { delete[] static_cast<double*>(ptr); });
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner);

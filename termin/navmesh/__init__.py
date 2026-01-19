@@ -22,7 +22,31 @@ from termin.navmesh.registry import NavMeshRegistry
 
 # Optional C++ components (require _navmesh_native to be built)
 try:
-    from termin.navmesh._navmesh_native import RecastNavMeshBuilderComponent, RecastBuildResult
+    from termin.navmesh._navmesh_native import RecastNavMeshBuilderComponent as _RecastNavMeshBuilderComponent
+    from termin.navmesh._navmesh_native import RecastBuildResult
+
+    # Extend C++ component with auto-loading of agent type parameters
+    class RecastNavMeshBuilderComponent(_RecastNavMeshBuilderComponent):
+        """
+        C++ NavMesh builder component using Recast library.
+
+        Extends the native component with automatic agent type parameter loading.
+        Set agent_type_name to select agent type from Navigation Settings.
+        """
+
+        def build_from_entity(self) -> None:
+            """Build NavMesh from entity, auto-loading agent type parameters."""
+            manager = NavigationSettingsManager.instance()
+            agent = manager.settings.get_agent_type(self.agent_type_name)
+            if agent is not None:
+                self.apply_agent_type(
+                    agent.height,
+                    agent.radius,
+                    agent.step_height,
+                    agent.max_slope
+                )
+            super().build_from_entity()
+
 except ImportError:
     RecastNavMeshBuilderComponent = None
     RecastBuildResult = None

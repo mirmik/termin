@@ -198,11 +198,16 @@ void bind_entity_class(nb::module_& m) {
             return result;
         })
 
+        // model_matrix returns row-major for Python (numpy convention)
+        // world_matrix returns column-major, so transpose
         .def("model_matrix", [](Entity& e) {
             double m[16];
             e.transform().world_matrix(m);
             double* buf = new double[16];
-            for (int i = 0; i < 16; ++i) buf[i] = m[i];
+            // Transpose: column-major to row-major
+            for (int row = 0; row < 4; ++row)
+                for (int col = 0; col < 4; ++col)
+                    buf[row * 4 + col] = m[col * 4 + row];
             nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
             size_t shape[2] = {4, 4};
             return nb::ndarray<nb::numpy, double>(buf, 2, shape, owner);

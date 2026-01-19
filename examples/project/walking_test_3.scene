@@ -133,7 +133,7 @@
               "use_funnel": true,
               "use_los_optimization": true,
               "use_edge_centers": true,
-              "show_graph_edges": true,
+              "show_graph_edges": false,
               "show_portals": false
             }
           },
@@ -228,12 +228,8 @@
           {
             "type": "RecastNavMeshBuilderComponent",
             "data": {
-              "cell_size": 0.30000001192092896,
+              "cell_size": 0.20000000298023224,
               "cell_height": 0.20000000298023224,
-              "agent_height": 2,
-              "agent_radius": 0.5,
-              "agent_max_climb": 0.4000000059604645,
-              "agent_max_slope": 45,
               "min_region_area": 7,
               "merge_region_area": 20,
               "max_edge_length": 12,
@@ -245,11 +241,12 @@
               "capture_compact": true,
               "capture_contours": true,
               "capture_poly_mesh": true,
-              "show_heightfield": true,
-              "show_regions": true,
-              "show_distance_field": true,
-              "show_contours": true,
-              "show_poly_mesh": true
+              "show_input_mesh": false,
+              "show_heightfield": false,
+              "show_regions": false,
+              "show_distance_field": false,
+              "show_contours": false,
+              "show_poly_mesh": false
             }
           }
         ],
@@ -809,6 +806,70 @@
                   },
                   "cast_shadow": true,
                   "_override_material": false
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "611229d6-a798-44b4-b8a2-b3033efd9b9f",
+            "name": "entity1_copy_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                23.529708862304688,
+                21.541149139404297,
+                3.1220815181732178
+              ],
+              "rotation": [
+                0.11883252090883573,
+                -0.3207126602037439,
+                0.32648966789389544,
+                0.8811507920430095
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
                 }
               }
             ],
@@ -12960,17 +13021,17 @@
   "editor": {
     "camera": {
       "position": [
-        17.10161590576172,
-        0.16733694076538086,
-        8.65078353881836
+        14.555238723754883,
+        2.496791124343872,
+        15.42850399017334
       ],
       "rotation": [
-        -0.4189256873052848,
-        -0.2152985790450943,
-        0.40321838749158423,
-        0.7845780537114486
+        -0.557925137862034,
+        -0.1391063974137713,
+        0.19792837877432234,
+        0.7938471563317215
       ],
-      "radius": 22.0,
+      "radius": 27.5,
       "editor_entities": {
         "camera": [
           {
@@ -12990,7 +13051,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "radius": 22,
+              "radius": 27.5,
               "min_radius": 1,
               "max_radius": 100
             }
@@ -13027,13 +13088,12 @@
         ]
       }
     },
-    "selected_entity": "0000000000000007",
     "expanded_entities": [
-      "814ba329-db24-48fe-b931-fe68ab904998",
-      "0000000000000077",
       "0000000000000131",
+      "0000000000000007",
       "000000000000000a",
-      "0000000000000007"
+      "0000000000000077",
+      "814ba329-db24-48fe-b931-fe68ab904998"
     ]
   },
   "resources": {
