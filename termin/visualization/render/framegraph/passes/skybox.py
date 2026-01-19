@@ -140,8 +140,7 @@ class SkyBoxPass(RenderFramePass):
 
         # Draw skybox mesh
         if mesh.is_valid:
-            gpu = ctx.scene.skybox_gpu()
-            gpu.draw(render_context, mesh.mesh, mesh.version)
+            mesh.draw_gpu()
 
         # Возвращаем стандартные настройки глубины
         ctx.graphics.set_depth_func("less")

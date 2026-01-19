@@ -13,7 +13,6 @@ from termin.assets.data_asset import DataAsset
 if TYPE_CHECKING:
     from termin.loaders.mesh_spec import MeshSpec
     from termin.visualization.render.render_context import RenderContext
-    from termin.visualization.core.mesh_gpu import MeshGPU
 
 
 class MeshAsset(DataAsset[TcMesh]):
@@ -24,7 +23,7 @@ class MeshAsset(DataAsset[TcMesh]):
     not directly. This ensures proper registration and avoids duplicates.
 
     Stores TcMesh (handle to tc_mesh in C registry).
-    Does NOT handle GPU upload - that's MeshGPU's responsibility.
+    GPU upload/draw via TcMesh.draw_gpu().
 
     Can be loaded from:
     - STL/OBJ files (standalone)
@@ -41,9 +40,6 @@ class MeshAsset(DataAsset[TcMesh]):
         uuid: str | None = None,
     ):
         super().__init__(data=mesh_data, name=name, source_path=source_path, uuid=uuid)
-
-        # GPU resources (created on demand)
-        self._gpu: MeshGPU | None = None
 
         # Spec settings (parsed from spec file)
         self._scale: float = 1.0
@@ -290,16 +286,12 @@ class MeshAsset(DataAsset[TcMesh]):
 
     # --- GPU access ---
 
-    @property
-    def gpu(self) -> "MeshGPU":
-        """Get MeshGPU for rendering (created on demand)."""
-        if self._gpu is None:
-            from termin.visualization.core.mesh_gpu import MeshGPU
-            self._gpu = MeshGPU()
-        return self._gpu
+    def draw_gpu(self) -> None:
+        """Draw mesh (upload to GPU if needed)."""
+        tc_mesh = self.data
+        if tc_mesh is not None and tc_mesh.is_valid:
+            tc_mesh.draw_gpu()
 
     def delete_gpu(self) -> None:
-        """Delete GPU resources."""
-        if self._gpu is not None:
-            self._gpu.delete()
-            self._gpu = None
+        """Delete GPU resources (no-op, handled by tc_mesh)."""
+        pass

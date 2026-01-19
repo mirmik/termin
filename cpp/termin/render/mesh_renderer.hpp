@@ -11,7 +11,6 @@
 #include "termin/assets/handles.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
-#include "termin/render/mesh_gpu.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "trent/trent.h"
 #include <memory>
@@ -127,11 +126,6 @@ public:
      */
     std::set<std::string> phase_marks() const { return get_phase_marks(); }
 
-    /**
-     * Get GPU mesh cache for direct draw calls.
-     */
-    MeshGPU& mesh_gpu() { return _mesh_gpu; }
-
     // --- Rendering ---
 
     /**
@@ -159,10 +153,6 @@ public:
 
     // Create override material lazily if needed (for deserialization)
     void try_create_override_material();
-
-protected:
-    // GPU mesh cache (uploaded buffers)
-    MeshGPU _mesh_gpu;
 
 private:
     void recreate_overridden_material();

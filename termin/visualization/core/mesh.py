@@ -8,7 +8,6 @@ from termin.mesh.mesh import Mesh2, Mesh3
 from termin.mesh import TcMesh
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.mesh_asset import MeshAsset
-from termin.visualization.core.mesh_gpu import MeshGPU
 from termin.visualization.platform.backends.base import MeshHandle as GPUMeshHandle  # GPU backend mesh handle
 
 
@@ -16,8 +15,7 @@ class MeshDrawable:
     """
     Рендер-ресурс для 3D-меша.
 
-    Обёртка над MeshAsset + MeshGPU (GPU handles).
-    Сохраняет обратную совместимость с существующим API.
+    Обёртка над MeshAsset. GPU upload/draw через TcMesh.draw_gpu().
     """
 
     RESOURCE_KIND = "mesh"
@@ -51,7 +49,6 @@ class MeshDrawable:
             )
 
         self._asset: MeshAsset = asset
-        self._gpu: MeshGPU = MeshGPU()
 
     # --------- интерфейс ресурса ---------
 
@@ -111,9 +108,7 @@ class MeshDrawable:
         tc_mesh = self._asset.mesh_data
         if tc_mesh is None or not tc_mesh.is_valid:
             return
-        # MeshGPU сам проверит версию и загрузит если нужно
-        # Но upload() в старом API не рисует, поэтому просто пропускаем
-        # Реальная загрузка произойдёт при draw()
+        tc_mesh.upload_gpu()
 
     def draw(self, context: RenderContext):
         """Рисует меш."""
@@ -122,12 +117,11 @@ class MeshDrawable:
             from termin._native import log
             log.warn(f"MeshDrawable.draw: invalid mesh (asset={self._asset})")
             return
-        version = self._asset.version
-        self._gpu.draw(context, tc_mesh.mesh, version)
+        tc_mesh.draw_gpu()
 
     def delete(self):
-        """Удаляет GPU ресурсы."""
-        self._gpu.delete()
+        """Удаляет GPU ресурсы (no-op, handled by tc_mesh)."""
+        pass
 
     # --------- сериализация / десериализация ---------
 

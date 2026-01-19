@@ -7,7 +7,6 @@
 #include "../../trent/trent.h"
 #include "../../core_c/include/tc_scene.h"
 #include "termin/render/handles.hpp"
-#include "termin/render/mesh_gpu.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
 

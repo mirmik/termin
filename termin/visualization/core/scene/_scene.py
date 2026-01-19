@@ -159,10 +159,6 @@ class Scene:
         """Get skybox cube mesh (TcMesh)."""
         return self._skybox.mesh
 
-    def skybox_gpu(self):
-        """Get skybox MeshGPU."""
-        return self._skybox.gpu
-
     def skybox_material(self) -> "Material | None":
         """Get skybox material based on current skybox_type."""
         return self._skybox.material

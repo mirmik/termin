@@ -141,8 +141,12 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geomet
         }
     }
 
-    // Draw the mesh via GPU (uses inherited _mesh_gpu from MeshRenderer)
-    _mesh_gpu.draw(context, mesh.get(), mesh.version());
+    // Draw the mesh via tc_mesh GPU API
+    tc_mesh* m = mesh.get();
+    if (m) {
+        tc_mesh_upload_gpu(m);
+        tc_mesh_draw_gpu(m);
+    }
 }
 
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {

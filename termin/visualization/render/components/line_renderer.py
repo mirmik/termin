@@ -26,7 +26,7 @@ from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin._native.render import MeshGPU, TcMaterialPhase
+    from termin._native.render import TcMaterialPhase
 
 
 # Дефолтный шейдер для линий
@@ -217,7 +217,6 @@ class LineRenderer(PythonComponent):
 
         # TcMesh (always GL_LINES)
         self._mesh: TcMesh | None = None
-        self._mesh_gpu: Optional["MeshGPU"] = None
 
         # Флаг необходимости перестроения меша
         self._dirty = True
@@ -321,7 +320,6 @@ class LineRenderer(PythonComponent):
     def _rebuild_geometry(self):
         """Перестраивает меш из точек."""
         self._mesh = None
-        self._mesh_gpu = None
 
         n_points = len(self._points)
         if n_points < 2:
@@ -428,10 +426,7 @@ class LineRenderer(PythonComponent):
         if not self._raw_lines and context.current_shader is not None:
             context.current_shader.set_uniform_float("u_line_width", self._width)
 
-        if self._mesh_gpu is None:
-            from termin._native.render import MeshGPU
-            self._mesh_gpu = MeshGPU()
-        self._mesh_gpu.draw(context, mesh.mesh, mesh.version)
+        mesh.draw_gpu()
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """

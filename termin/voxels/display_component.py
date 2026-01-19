@@ -16,7 +16,6 @@ import numpy as np
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
-from termin.visualization.core.mesh_gpu import MeshGPU
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.mesh._mesh_native import TcMesh
@@ -153,7 +152,6 @@ class VoxelDisplayComponent(PythonComponent):
         self.voxel_grid: VoxelGridHandle = VoxelGridHandle()
         self._last_version: int = -1  # Версия handle для отслеживания hot-reload
         self._voxel_mesh: Optional[TcMesh] = None
-        self._gpu: Optional[MeshGPU] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
         self.active_in_editor = True  # Enable update() in editor mode
@@ -248,18 +246,8 @@ class VoxelDisplayComponent(PythonComponent):
         # Проверяем hot-reload перед отрисовкой
         self._check_hot_reload()
 
-        if self._voxel_mesh is None:
-            return
-
-        tc_mesh = self._voxel_mesh.mesh
-        if tc_mesh is None:
-            return
-
-        # Lazy create GPU resources
-        if self._gpu is None:
-            self._gpu = MeshGPU()
-
-        self._gpu.draw(context, tc_mesh, self._voxel_mesh.version)
+        if self._voxel_mesh is not None and self._voxel_mesh.is_valid:
+            self._voxel_mesh.draw_gpu()
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
@@ -317,7 +305,6 @@ class VoxelDisplayComponent(PythonComponent):
         """Перестроить меш из воксельной сетки (без фильтрации, вся сетка)."""
         # Очищаем старый меш
         self._voxel_mesh = None
-        self._gpu = None
 
         grid = self.voxel_grid.get_grid()
 
@@ -430,9 +417,6 @@ class VoxelDisplayComponent(PythonComponent):
     def destroy(self) -> None:
         """Release all resources."""
         self._voxel_mesh = None
-        if self._gpu is not None:
-            self._gpu.delete()
-            self._gpu = None
         self._material = None
 
     def update(self, dt: float) -> None:

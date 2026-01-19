@@ -1,0 +1,167 @@
+#pragma once
+
+// RecastNavMeshBuilderComponent - C++ component for building NavMesh using Recast.
+// Provides debug data capture and visualization of intermediate stages.
+
+#include "../entity/component.hpp"
+#include "../entity/component_registry.hpp"
+#include "../render/drawable.hpp"
+#include "../mesh/tc_mesh_handle.hpp"
+#include "../material/tc_material_handle.hpp"
+#include "recast_debug_data.hpp"
+#include <Recast.h>
+#include <string>
+
+namespace termin {
+
+// Result of navmesh build
+struct RecastBuildResult {
+    bool success = false;
+    std::string error;
+
+    // Resulting meshes (caller takes ownership, must call free_result)
+    rcPolyMesh* poly_mesh = nullptr;
+    rcPolyMeshDetail* detail_mesh = nullptr;
+};
+
+// NavMesh builder component using Recast library
+class RecastNavMeshBuilderComponent : public CxxComponent, public Drawable {
+public:
+    // --- Configuration fields (exposed to inspector) ---
+
+    // Rasterization
+    float cell_size = 0.3f;
+    float cell_height = 0.2f;
+
+    // Agent parameters
+    float agent_height = 2.0f;
+    float agent_radius = 0.5f;
+    float agent_max_climb = 0.4f;
+    float agent_max_slope = 45.0f;
+
+    // Region building
+    int min_region_area = 8;
+    int merge_region_area = 20;
+
+    // Polygonization
+    float max_edge_length = 12.0f;
+    float max_simplification_error = 1.3f;
+    int max_verts_per_poly = 6;
+
+    // Detail mesh
+    float detail_sample_dist = 6.0f;
+    float detail_sample_max_error = 1.0f;
+    bool build_detail_mesh = false;
+
+    // Debug capture flags (auto-enable corresponding show flags)
+    bool capture_heightfield = false;
+    bool capture_compact = false;
+    bool capture_contours = false;
+    bool capture_poly_mesh = false;
+    bool capture_detail_mesh = false;
+
+    // Debug visualization flags
+    bool show_heightfield = false;
+    bool show_regions = false;
+    bool show_distance_field = false;
+    bool show_contours = false;
+    bool show_poly_mesh = false;
+
+    // Inspector field declarations - Configuration
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_size, "Cell Size", "float", 0.05, 2.0, 0.05)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_height, "Cell Height", "float", 0.05, 2.0, 0.05)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_height, "Agent Height", "float", 0.5, 5.0, 0.1)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_radius, "Agent Radius", "float", 0.1, 2.0, 0.05)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_max_climb, "Agent Max Climb", "float", 0.0, 2.0, 0.05)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_max_slope, "Agent Max Slope", "float", 0.0, 90.0, 1.0)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, min_region_area, "Min Region Area", "int", 0, 100, 1)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, merge_region_area, "Merge Region Area", "int", 0, 100, 1)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, max_edge_length, "Max Edge Length", "float", 0.0, 50.0, 0.5)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, max_simplification_error, "Max Simplification Error", "float", 0.0, 5.0, 0.1)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, max_verts_per_poly, "Max Verts Per Poly", "int", 3, 6, 1)
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, build_detail_mesh, "Build Detail Mesh", "bool")
+
+    // Inspector field declarations - Debug capture
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_heightfield, "Capture Heightfield", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_compact, "Capture Compact", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_contours, "Capture Contours", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_poly_mesh, "Capture Poly Mesh", "bool")
+
+    // Inspector field declarations - Debug visualization
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_heightfield, "Show Heightfield", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_regions, "Show Regions", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_distance_field, "Show Distance Field", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_contours, "Show Contours", "bool")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_poly_mesh, "Show Poly Mesh", "bool")
+
+    // --- Runtime state ---
+
+    // Captured debug data (filled during build if capture flags are set)
+    RecastDebugData debug_data;
+
+    // Last build result
+    RecastBuildResult last_result;
+
+    // --- Methods ---
+
+    RecastNavMeshBuilderComponent();
+    ~RecastNavMeshBuilderComponent() override;
+
+    // Build navmesh from triangle soup
+    // verts: float[nverts * 3] - vertex positions (x, y, z)
+    // tris: int[ntris * 3] - triangle indices
+    RecastBuildResult build(const float* verts, int nverts,
+                            const int* tris, int ntris);
+
+    // Free result meshes
+    static void free_result(RecastBuildResult& result);
+
+    // Clear debug data and meshes
+    void clear_debug_data();
+
+    // --- Drawable interface ---
+
+    std::set<std::string> get_phase_marks() const override;
+    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
+    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
+
+private:
+    // Geometry IDs for different debug layers
+    static constexpr int GEOMETRY_HEIGHTFIELD = 1;
+    static constexpr int GEOMETRY_REGIONS = 2;
+    static constexpr int GEOMETRY_DISTANCE_FIELD = 3;
+    static constexpr int GEOMETRY_CONTOURS = 4;
+    static constexpr int GEOMETRY_POLY_MESH = 5;
+
+    // Debug meshes
+    TcMesh _heightfield_mesh;
+    TcMesh _regions_mesh;
+    TcMesh _distance_field_mesh;
+    TcMesh _contours_mesh;
+    TcMesh _poly_mesh_debug;
+
+    // Debug material
+    TcMaterial _debug_material;
+
+    // Mesh generation from debug data
+    void rebuild_debug_meshes();
+    void build_heightfield_mesh();
+    void build_regions_mesh();
+    void build_distance_field_mesh();
+    void build_contours_mesh();
+    void build_poly_mesh_debug();
+
+    // Get or create debug material
+    TcMaterial get_debug_material();
+
+    // Capture debug data from Recast structures
+    void capture_heightfield_data(rcHeightfield* hf);
+    void capture_compact_data(rcCompactHeightfield* chf);
+    void capture_contour_data(rcContourSet* cset);
+    void capture_poly_mesh_data(rcPolyMesh* pmesh);
+    void capture_detail_mesh_data(rcPolyMeshDetail* dmesh);
+};
+
+REGISTER_COMPONENT(RecastNavMeshBuilderComponent, Component);
+
+} // namespace termin

@@ -103,10 +103,7 @@ void bind_renderers(nb::module_& m) {
             }
             std::string pm = nb::cast<std::string>(phase_mark);
             return self.get_geometry_draws(&pm);
-        }, nb::arg("phase_mark") = nb::none())
-        .def_prop_ro("mesh_gpu", [](MeshRenderer& self) -> MeshGPU& {
-            return self.mesh_gpu();
-        }, nb::rv_policy::reference_internal);
+        }, nb::arg("phase_mark") = nb::none());
 
     // SkinnedMeshRenderer - inherits from MeshRenderer
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")

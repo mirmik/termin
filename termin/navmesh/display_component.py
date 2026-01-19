@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.navmesh.types import NavMesh
-    from termin._native.render import MeshGPU
 
 
 def _get_navmesh_choices() -> list[tuple[str, str]]:
@@ -92,9 +91,7 @@ class NavMeshDisplayComponent(PythonComponent):
         self.navmesh: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh: Optional[TcMesh] = None
-        self._mesh_gpu: Optional["MeshGPU"] = None
         self._contour_mesh: Optional[TcMesh] = None
-        self._contour_gpu: Optional["MeshGPU"] = None
         self._material: Optional[Material] = None
         self._contour_material: Optional[Material] = None
         self._needs_rebuild = True
@@ -251,17 +248,11 @@ void main() {
 
         if geometry_id == 0 or geometry_id == self.GEOMETRY_MESH:
             if self._mesh is not None and self._mesh.is_valid:
-                if self._mesh_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._mesh_gpu = MeshGPU()
-                self._mesh_gpu.draw(context, self._mesh.mesh, self._mesh.version)
+                self._mesh.draw_gpu()
 
         if geometry_id == 0 or geometry_id == self.GEOMETRY_CONTOURS:
             if self._contour_mesh is not None and self._contour_mesh.is_valid:
-                if self._contour_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._contour_gpu = MeshGPU()
-                self._contour_gpu.draw(context, self._contour_mesh.mesh, self._contour_mesh.version)
+                self._contour_mesh.draw_gpu()
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
@@ -312,9 +303,7 @@ void main() {
         """Перестроить меш из NavMesh."""
         # Очищаем старые meshes
         self._mesh = None
-        self._mesh_gpu = None
         self._contour_mesh = None
-        self._contour_gpu = None
 
         navmesh = self.navmesh.get_navmesh()
         self._last_navmesh = navmesh

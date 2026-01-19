@@ -21,9 +21,9 @@ class SkyboxRenderer(MeshRenderer):
         context.graphics.set_depth_func("lequal")
         self.material.apply(self.entity.model_matrix(), view_no_translation, context.projection)
 
-        # Draw via MeshGPU (mesh is inherited from MeshRenderer)
+        # Draw mesh (mesh is inherited from MeshRenderer)
         if self.mesh.is_valid:
-            self._mesh_gpu.draw(context, self.mesh.mesh, self.mesh.version)
+            self.mesh.draw_gpu()
 
         context.graphics.set_depth_func("less")
         context.graphics.set_depth_mask(True)

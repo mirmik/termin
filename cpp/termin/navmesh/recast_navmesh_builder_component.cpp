@@ -1,4 +1,4 @@
-#include "recast_builder.hpp"
+#include "recast_navmesh_builder_component.hpp"
 #include <cstring>
 #include <cmath>
 
@@ -17,10 +17,33 @@ protected:
     }
 };
 
-RecastBuildResult RecastNavMeshBuilder::build(const float* verts, int nverts,
-                                               const int* tris, int ntris) {
-    RecastBuildResult result;
+RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent() {
+    // Install drawable vtable
+    install_drawable_vtable(&_c);
+}
+
+RecastNavMeshBuilderComponent::~RecastNavMeshBuilderComponent() {
+    free_result(last_result);
+}
+
+void RecastNavMeshBuilderComponent::clear_debug_data() {
     debug_data.clear();
+
+    // Clear meshes (GPU resources are freed automatically via tc_mesh)
+    _heightfield_mesh = TcMesh();
+    _regions_mesh = TcMesh();
+    _distance_field_mesh = TcMesh();
+    _contours_mesh = TcMesh();
+    _poly_mesh_debug = TcMesh();
+}
+
+RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int nverts,
+                                                        const int* tris, int ntris) {
+    // Free previous result
+    free_result(last_result);
+    clear_debug_data();
+
+    RecastBuildResult result;
 
     if (verts == nullptr || nverts == 0 || tris == nullptr || ntris == 0) {
         result.error = "Invalid input: empty geometry";
@@ -37,19 +60,19 @@ RecastBuildResult RecastNavMeshBuilder::build(const float* verts, int nverts,
     rcConfig cfg;
     memset(&cfg, 0, sizeof(cfg));
 
-    cfg.cs = config.cell_size;
-    cfg.ch = config.cell_height;
-    cfg.walkableSlopeAngle = config.agent_max_slope;
-    cfg.walkableHeight = static_cast<int>(std::ceil(config.agent_height / cfg.ch));
-    cfg.walkableClimb = static_cast<int>(std::floor(config.agent_max_climb / cfg.ch));
-    cfg.walkableRadius = static_cast<int>(std::ceil(config.agent_radius / cfg.cs));
-    cfg.maxEdgeLen = static_cast<int>(config.max_edge_length / cfg.cs);
-    cfg.maxSimplificationError = config.max_simplification_error;
-    cfg.minRegionArea = config.min_region_area;
-    cfg.mergeRegionArea = config.merge_region_area;
-    cfg.maxVertsPerPoly = config.max_verts_per_poly;
-    cfg.detailSampleDist = config.detail_sample_dist < 0.9f ? 0 : cfg.cs * config.detail_sample_dist;
-    cfg.detailSampleMaxError = cfg.ch * config.detail_sample_max_error;
+    cfg.cs = cell_size;
+    cfg.ch = cell_height;
+    cfg.walkableSlopeAngle = agent_max_slope;
+    cfg.walkableHeight = static_cast<int>(std::ceil(agent_height / cfg.ch));
+    cfg.walkableClimb = static_cast<int>(std::floor(agent_max_climb / cfg.ch));
+    cfg.walkableRadius = static_cast<int>(std::ceil(agent_radius / cfg.cs));
+    cfg.maxEdgeLen = static_cast<int>(max_edge_length / cfg.cs);
+    cfg.maxSimplificationError = max_simplification_error;
+    cfg.minRegionArea = min_region_area;
+    cfg.mergeRegionArea = merge_region_area;
+    cfg.maxVertsPerPoly = max_verts_per_poly;
+    cfg.detailSampleDist = detail_sample_dist < 0.9f ? 0 : cfg.cs * detail_sample_dist;
+    cfg.detailSampleMaxError = cfg.ch * detail_sample_max_error;
 
     rcVcopy(cfg.bmin, bmin);
     rcVcopy(cfg.bmax, bmax);
@@ -185,7 +208,7 @@ RecastBuildResult RecastNavMeshBuilder::build(const float* verts, int nverts,
 
     // Stage 5: Build detail mesh (optional)
     rcPolyMeshDetail* dmesh = nullptr;
-    if (config.build_detail_mesh) {
+    if (build_detail_mesh) {
         dmesh = rcAllocPolyMeshDetail();
         if (!dmesh) {
             result.error = "Failed to allocate detail mesh";
@@ -217,10 +240,16 @@ RecastBuildResult RecastNavMeshBuilder::build(const float* verts, int nverts,
     result.poly_mesh = pmesh;
     result.detail_mesh = dmesh;
 
+    // Store as last result
+    last_result = result;
+
+    // Rebuild debug meshes
+    rebuild_debug_meshes();
+
     return result;
 }
 
-void RecastNavMeshBuilder::free_result(RecastBuildResult& result) {
+void RecastNavMeshBuilderComponent::free_result(RecastBuildResult& result) {
     if (result.poly_mesh) {
         rcFreePolyMesh(result.poly_mesh);
         result.poly_mesh = nullptr;
@@ -229,9 +258,161 @@ void RecastNavMeshBuilder::free_result(RecastBuildResult& result) {
         rcFreePolyMeshDetail(result.detail_mesh);
         result.detail_mesh = nullptr;
     }
+    result.success = false;
 }
 
-void RecastNavMeshBuilder::capture_heightfield_data(rcHeightfield* hf) {
+// --- Drawable interface ---
+
+std::set<std::string> RecastNavMeshBuilderComponent::get_phase_marks() const {
+    std::set<std::string> marks;
+
+    // Only participate in rendering if we have something to show
+    if (show_heightfield || show_regions || show_distance_field ||
+        show_contours || show_poly_mesh) {
+        marks.insert("opaque");
+    }
+
+    return marks;
+}
+
+void RecastNavMeshBuilderComponent::draw_geometry(const RenderContext& context, int geometry_id) {
+    auto draw_mesh = [](TcMesh& mesh) {
+        tc_mesh* m = mesh.get();
+        if (m) {
+            tc_mesh_upload_gpu(m);
+            tc_mesh_draw_gpu(m);
+        }
+    };
+
+    if (geometry_id == 0 || geometry_id == GEOMETRY_HEIGHTFIELD) {
+        if (show_heightfield && _heightfield_mesh.is_valid()) {
+            draw_mesh(_heightfield_mesh);
+        }
+    }
+
+    if (geometry_id == 0 || geometry_id == GEOMETRY_REGIONS) {
+        if (show_regions && _regions_mesh.is_valid()) {
+            draw_mesh(_regions_mesh);
+        }
+    }
+
+    if (geometry_id == 0 || geometry_id == GEOMETRY_DISTANCE_FIELD) {
+        if (show_distance_field && _distance_field_mesh.is_valid()) {
+            draw_mesh(_distance_field_mesh);
+        }
+    }
+
+    if (geometry_id == 0 || geometry_id == GEOMETRY_CONTOURS) {
+        if (show_contours && _contours_mesh.is_valid()) {
+            draw_mesh(_contours_mesh);
+        }
+    }
+
+    if (geometry_id == 0 || geometry_id == GEOMETRY_POLY_MESH) {
+        if (show_poly_mesh && _poly_mesh_debug.is_valid()) {
+            draw_mesh(_poly_mesh_debug);
+        }
+    }
+}
+
+std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(const std::string* phase_mark) {
+    std::vector<GeometryDrawCall> result;
+
+    // Only support opaque phase for now
+    if (phase_mark && *phase_mark != "opaque") {
+        return result;
+    }
+
+    TcMaterial mat = get_debug_material();
+    if (!mat.is_valid()) {
+        return result;
+    }
+
+    // Get phases from material
+    tc_material* m = mat.get();
+    if (!m) return result;
+
+    for (size_t i = 0; i < m->phase_count; ++i) {
+        tc_material_phase* phase = &m->phases[i];
+        if (phase_mark && phase->phase_mark != *phase_mark) {
+            continue;
+        }
+
+        if (show_heightfield && _heightfield_mesh.is_valid()) {
+            result.emplace_back(phase, GEOMETRY_HEIGHTFIELD);
+        }
+        if (show_regions && _regions_mesh.is_valid()) {
+            result.emplace_back(phase, GEOMETRY_REGIONS);
+        }
+        if (show_distance_field && _distance_field_mesh.is_valid()) {
+            result.emplace_back(phase, GEOMETRY_DISTANCE_FIELD);
+        }
+        if (show_contours && _contours_mesh.is_valid()) {
+            result.emplace_back(phase, GEOMETRY_CONTOURS);
+        }
+        if (show_poly_mesh && _poly_mesh_debug.is_valid()) {
+            result.emplace_back(phase, GEOMETRY_POLY_MESH);
+        }
+    }
+
+    return result;
+}
+
+// --- Mesh generation ---
+
+void RecastNavMeshBuilderComponent::rebuild_debug_meshes() {
+    if (debug_data.heightfield) {
+        build_heightfield_mesh();
+    }
+    if (debug_data.compact) {
+        build_regions_mesh();
+        build_distance_field_mesh();
+    }
+    if (debug_data.contours) {
+        build_contours_mesh();
+    }
+    if (debug_data.poly_mesh) {
+        build_poly_mesh_debug();
+    }
+}
+
+void RecastNavMeshBuilderComponent::build_heightfield_mesh() {
+    // TODO: Create mesh from heightfield spans (voxel boxes)
+    // Each span becomes a small box at (x * cs + bmin.x, smin * ch + bmin.y, z * cs + bmin.z)
+}
+
+void RecastNavMeshBuilderComponent::build_regions_mesh() {
+    // TODO: Create mesh showing regions (colored by region ID)
+    // Use compact heightfield spans with region coloring
+}
+
+void RecastNavMeshBuilderComponent::build_distance_field_mesh() {
+    // TODO: Create mesh showing distance field (gradient coloring)
+    // Use compact heightfield spans with distance-based colors
+}
+
+void RecastNavMeshBuilderComponent::build_contours_mesh() {
+    // TODO: Create line mesh from contours
+    // Each contour becomes a polyline
+}
+
+void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
+    // TODO: Create mesh from poly mesh (triangulated polygons)
+    // Convert rcPolyMesh polygons to triangles with region-based colors
+}
+
+TcMaterial RecastNavMeshBuilderComponent::get_debug_material() {
+    if (!_debug_material.is_valid()) {
+        // Try to find vertex_color material
+        tc_material_handle h = tc_material_find_by_name("vertex_color");
+        _debug_material = TcMaterial(h);
+    }
+    return _debug_material;
+}
+
+// --- Capture functions ---
+
+void RecastNavMeshBuilderComponent::capture_heightfield_data(rcHeightfield* hf) {
     if (!hf) return;
 
     auto& data = debug_data.heightfield.emplace();
@@ -258,7 +439,7 @@ void RecastNavMeshBuilder::capture_heightfield_data(rcHeightfield* hf) {
     }
 }
 
-void RecastNavMeshBuilder::capture_compact_data(rcCompactHeightfield* chf) {
+void RecastNavMeshBuilderComponent::capture_compact_data(rcCompactHeightfield* chf) {
     if (!chf) return;
 
     auto& data = debug_data.compact.emplace();
@@ -290,7 +471,7 @@ void RecastNavMeshBuilder::capture_compact_data(rcCompactHeightfield* chf) {
     }
 }
 
-void RecastNavMeshBuilder::capture_contour_data(rcContourSet* cset) {
+void RecastNavMeshBuilderComponent::capture_contour_data(rcContourSet* cset) {
     if (!cset) return;
 
     auto& data = debug_data.contours.emplace();
@@ -319,7 +500,7 @@ void RecastNavMeshBuilder::capture_contour_data(rcContourSet* cset) {
     }
 }
 
-void RecastNavMeshBuilder::capture_poly_mesh_data(rcPolyMesh* pmesh) {
+void RecastNavMeshBuilderComponent::capture_poly_mesh_data(rcPolyMesh* pmesh) {
     if (!pmesh) return;
 
     auto& data = debug_data.poly_mesh.emplace();
@@ -348,7 +529,7 @@ void RecastNavMeshBuilder::capture_poly_mesh_data(rcPolyMesh* pmesh) {
     memcpy(data.areas.data(), pmesh->areas, pmesh->npolys * sizeof(uint8_t));
 }
 
-void RecastNavMeshBuilder::capture_detail_mesh_data(rcPolyMeshDetail* dmesh) {
+void RecastNavMeshBuilderComponent::capture_detail_mesh_data(rcPolyMeshDetail* dmesh) {
     if (!dmesh) return;
 
     auto& data = debug_data.detail_mesh.emplace();

@@ -199,22 +199,6 @@ set(RECASTNAVIGATION_TESTS OFF CACHE BOOL "" FORCE)
 set(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation ${CMAKE_CURRENT_BINARY_DIR}/recastnavigation)
 
-# NavMesh library (RecastNavMeshBuilder)
-add_library(navmesh_lib STATIC
-    termin/navmesh/recast_builder.cpp
-)
-target_include_directories(navmesh_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation/Recast/Include
-)
-target_link_libraries(navmesh_lib PUBLIC Recast)
-target_compile_options(navmesh_lib PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-set_target_properties(navmesh_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-)
-
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
 # are the same instance across all Python extension modules.
@@ -241,6 +225,43 @@ set_target_properties(entity_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Render library (Drawable vtable, shared by components that need rendering)
+add_library(render_lib STATIC
+    termin/render/drawable.cpp
+)
+target_include_directories(render_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(render_lib PUBLIC entity_lib)
+target_include_directories(render_lib PRIVATE
+    $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
+    ${Python_INCLUDE_DIRS}
+)
+target_compile_options(render_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(render_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# NavMesh library (RecastNavMeshBuilderComponent)
+add_library(navmesh_lib STATIC
+    termin/navmesh/recast_navmesh_builder_component.cpp
+)
+target_include_directories(navmesh_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation/Recast/Include
+)
+target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
+target_include_directories(navmesh_lib PRIVATE
+    $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
+    ${Python_INCLUDE_DIRS}
+)
+target_compile_options(navmesh_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(navmesh_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
 )
 
 # Skeleton static library (linked into _skeleton_native, _animation_native, _native)
@@ -340,7 +361,6 @@ nanobind_add_module(_native
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
-    termin/bindings/render/gpu.cpp
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/sdl_bindings.cpp
@@ -360,7 +380,6 @@ nanobind_add_module(_native
     termin/render/wireframe_renderer.cpp
     termin/render/solid_primitive_renderer.cpp
     termin/render/glsl_preprocessor.cpp
-    termin/render/mesh_gpu.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
     termin/render/mesh_renderer.cpp
@@ -369,14 +388,13 @@ nanobind_add_module(_native
     termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
-    termin/render/drawable.cpp
     termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_lib skeleton_lib)
+target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_lib skeleton_lib navmesh_lib render_lib)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})

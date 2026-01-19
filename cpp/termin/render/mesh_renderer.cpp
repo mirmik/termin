@@ -204,10 +204,12 @@ std::set<std::string> MeshRenderer::get_phase_marks() const {
 }
 
 void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
-    if (!mesh.is_valid()) {
+    tc_mesh* m = mesh.get();
+    if (!m) {
         return;
     }
-    _mesh_gpu.draw(context, mesh.get(), mesh.version());
+    tc_mesh_upload_gpu(m);
+    tc_mesh_draw_gpu(m);
 }
 
 std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {

@@ -313,13 +313,7 @@ class NavMeshBuilderComponent(PythonComponent):
         self._cached_show_local_maxima: bool = False
         self._cached_show_peaks: bool = False
 
-        # GPU caches
-        from termin._native.render import MeshGPU
-        self._debug_region_voxels_gpu: Optional[MeshGPU] = None
-        self._debug_simplified_contours_gpu: Optional[MeshGPU] = None
-        self._debug_triangulated_gpu: Optional[MeshGPU] = None
-        self._debug_distance_field_gpu: Optional[MeshGPU] = None
-        self._debug_watershed_gpu: Optional[MeshGPU] = None
+        # Debug materials
         self._debug_material: Optional[Material] = None
         self._debug_line_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
@@ -445,38 +439,23 @@ class NavMeshBuilderComponent(PythonComponent):
         """Draw debug geometry."""
         if geometry_id == 0 or geometry_id == self.GEOMETRY_REGIONS:
             if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
-                if self._debug_region_voxels_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._debug_region_voxels_gpu = MeshGPU()
-                self._debug_region_voxels_gpu.draw(context, self._debug_region_voxels_mesh.mesh, self._debug_region_voxels_mesh.version)
+                self._debug_region_voxels_mesh.draw_gpu()
 
         if geometry_id == 0 or geometry_id == self.GEOMETRY_SIMPLIFIED_CONTOURS:
             if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
-                if self._debug_simplified_contours_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._debug_simplified_contours_gpu = MeshGPU()
-                self._debug_simplified_contours_gpu.draw(context, self._debug_simplified_contours_mesh.mesh, self._debug_simplified_contours_mesh.version)
+                self._debug_simplified_contours_mesh.draw_gpu()
 
         if geometry_id == 0 or geometry_id == self.GEOMETRY_TRIANGULATED:
             if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
-                if self._debug_triangulated_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._debug_triangulated_gpu = MeshGPU()
-                self._debug_triangulated_gpu.draw(context, self._debug_triangulated_mesh.mesh, self._debug_triangulated_mesh.version)
+                self._debug_triangulated_mesh.draw_gpu()
 
         if geometry_id == 0 or geometry_id == self.GEOMETRY_DISTANCE_FIELD:
             if self.show_distance_field and self._debug_distance_field_mesh is not None and self._debug_distance_field_mesh.is_valid:
-                if self._debug_distance_field_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._debug_distance_field_gpu = MeshGPU()
-                self._debug_distance_field_gpu.draw(context, self._debug_distance_field_mesh.mesh, self._debug_distance_field_mesh.version)
+                self._debug_distance_field_mesh.draw_gpu()
 
         if geometry_id == 0 or geometry_id == self.GEOMETRY_WATERSHED:
             if self.show_watershed_regions and self._debug_watershed_mesh is not None and self._debug_watershed_mesh.is_valid:
-                if self._debug_watershed_gpu is None:
-                    from termin._native.render import MeshGPU
-                    self._debug_watershed_gpu = MeshGPU()
-                self._debug_watershed_gpu.draw(context, self._debug_watershed_mesh.mesh, self._debug_watershed_mesh.version)
+                self._debug_watershed_mesh.draw_gpu()
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Return GeometryDrawCalls for debug rendering."""

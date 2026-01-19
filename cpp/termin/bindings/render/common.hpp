@@ -25,7 +25,6 @@ void bind_material(nb::module_& m);
 void bind_tc_material(nb::module_& m);
 void register_material_kind_handlers();
 void bind_drawable(nb::module_& m);
-void bind_gpu(nb::module_& m);
 void bind_renderers(nb::module_& m);
 void bind_solid_primitive(nb::module_& m);
 

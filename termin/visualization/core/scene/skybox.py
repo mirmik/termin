@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from termin.mesh import TcMesh
     from termin.visualization.core.material import Material
     from termin._native import log
-    from termin._native.render import MeshGPU
 
 
 class SkyboxManager:
@@ -25,7 +24,6 @@ class SkyboxManager:
 
     def __init__(self):
         self._skybox_mesh: Optional["TcMesh"] = None
-        self._skybox_gpu: Optional["MeshGPU"] = None
         self._skybox_material: Optional["Material"] = None
         self.skybox_type: str = "gradient"
         self.skybox_color = np.array([0.5, 0.7, 0.9], dtype=np.float32)
@@ -86,14 +84,6 @@ class SkyboxManager:
             raise
 
     @property
-    def gpu(self) -> "MeshGPU":
-        """Get or create MeshGPU for skybox."""
-        if self._skybox_gpu is None:
-            from termin._native.render import MeshGPU
-            self._skybox_gpu = MeshGPU()
-        return self._skybox_gpu
-
-    @property
     def material(self) -> "Material | None":
         """Get skybox material based on current skybox_type."""
         if self.skybox_type == "none":
@@ -139,5 +129,4 @@ class SkyboxManager:
     def destroy(self) -> None:
         """Release all resources."""
         self._skybox_mesh = None
-        self._skybox_gpu = None
         self._skybox_material = None

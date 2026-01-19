@@ -21,7 +21,6 @@ from termin.editor.inspect_field import InspectField
 if TYPE_CHECKING:
     from termin.visualization.render.render_context import RenderContext
     from termin.navmesh.types import NavMesh
-    from termin._native.render import MeshGPU
 
 
 class NavMeshFovShowerComponent(PythonComponent):
@@ -55,7 +54,6 @@ class NavMeshFovShowerComponent(PythonComponent):
         self.material: TcMaterial = TcMaterial()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh: Optional[TcMesh] = None
-        self._mesh_gpu: Optional["MeshGPU"] = None
         self._needs_rebuild = True
 
     # --- Component protocol ---
@@ -101,10 +99,7 @@ class NavMeshFovShowerComponent(PythonComponent):
         self._check_hot_reload()
 
         if self._mesh is not None and self._mesh.is_valid:
-            if self._mesh_gpu is None:
-                from termin._native.render import MeshGPU
-                self._mesh_gpu = MeshGPU()
-            self._mesh_gpu.draw(context, self._mesh.mesh, self._mesh.version)
+            self._mesh.draw_gpu()
 
     def _check_hot_reload(self) -> None:
         """Check if navmesh changed (hot-reload)."""
@@ -131,7 +126,6 @@ class NavMeshFovShowerComponent(PythonComponent):
     def _rebuild_mesh(self) -> None:
         """Rebuild mesh from NavMesh."""
         self._mesh = None
-        self._mesh_gpu = None
 
         navmesh = self.navmesh.get_navmesh()
         self._last_navmesh = navmesh

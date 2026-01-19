@@ -409,6 +409,17 @@ void bind_mesh(nb::module_& m) {
             }, &names);
             return names;
         })
+        .def("upload_gpu", [](TcMesh& h) {
+            tc_mesh* m = h.get();
+            if (m) tc_mesh_upload_gpu(m);
+        }, "Upload mesh to GPU (if not already uploaded)")
+        .def("draw_gpu", [](TcMesh& h) {
+            tc_mesh* m = h.get();
+            if (m) {
+                tc_mesh_upload_gpu(m);
+                tc_mesh_draw_gpu(m);
+            }
+        }, "Upload (if needed) and draw mesh")
         .def("__repr__", [](const TcMesh& h) {
             tc_mesh* m = h.get();
             if (!m) return std::string("<TcMesh invalid>");
