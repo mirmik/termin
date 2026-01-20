@@ -319,6 +319,58 @@ void tc_scene_before_render(tc_scene* s) {
     }
 }
 
+// Helper for iterating all components in scene
+static bool notify_editor_start_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    (void)user_data;
+    size_t count = tc_entity_pool_component_count(pool, id);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, id, i);
+        if (c && c->vtable && c->vtable->on_editor_start) {
+            c->vtable->on_editor_start(c);
+        }
+    }
+    return true;
+}
+
+void tc_scene_notify_editor_start(tc_scene* s) {
+    if (!s) return;
+    tc_entity_pool_foreach(s->pool, notify_editor_start_callback, NULL);
+}
+
+static bool notify_scene_inactive_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    (void)user_data;
+    size_t count = tc_entity_pool_component_count(pool, id);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, id, i);
+        if (c && c->vtable && c->vtable->on_scene_inactive) {
+            c->vtable->on_scene_inactive(c);
+        }
+    }
+    return true;
+}
+
+void tc_scene_notify_scene_inactive(tc_scene* s) {
+    if (!s) return;
+    tc_entity_pool_foreach(s->pool, notify_scene_inactive_callback, NULL);
+}
+
+static bool notify_scene_active_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    (void)user_data;
+    size_t count = tc_entity_pool_component_count(pool, id);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, id, i);
+        if (c && c->vtable && c->vtable->on_scene_active) {
+            c->vtable->on_scene_active(c);
+        }
+    }
+    return true;
+}
+
+void tc_scene_notify_scene_active(tc_scene* s) {
+    if (!s) return;
+    tc_entity_pool_foreach(s->pool, notify_scene_active_callback, NULL);
+}
+
 // ============================================================================
 // Fixed Timestep Configuration
 // ============================================================================
