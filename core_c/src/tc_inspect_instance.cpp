@@ -235,4 +235,45 @@ void init_cpp_inspect_vtable() {
     tc_inspect_set_lang_vtable(TC_INSPECT_LANG_CPP, &cpp_vtable);
 }
 
+// ============================================================================
+// Component field access - C API implementation
+// ============================================================================
+
+static void* get_inspect_object(tc_component* c) {
+    if (!c) return nullptr;
+    if (c->kind == TC_NATIVE_COMPONENT) {
+        return termin::CxxComponent::from_tc(c);
+    } else {
+        return c->wrapper;
+    }
+}
+
 } // namespace tc
+
+extern "C" {
+
+tc_value tc_component_inspect_get(tc_component* c, const char* path) {
+    if (!c || !path) return tc_value_nil();
+
+    const char* type_name = tc_component_type_name(c);
+    if (!type_name) return tc_value_nil();
+
+    void* obj = tc::get_inspect_object(c);
+    if (!obj) return tc_value_nil();
+
+    return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
+}
+
+void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene* scene) {
+    if (!c || !path) return;
+
+    const char* type_name = tc_component_type_name(c);
+    if (!type_name) return;
+
+    void* obj = tc::get_inspect_object(c);
+    if (!obj) return;
+
+    tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+}
+
+} // extern "C"

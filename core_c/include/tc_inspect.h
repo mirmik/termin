@@ -239,6 +239,14 @@ TC_API char* tc_value_to_json(const tc_value* v);
 TC_API tc_value tc_value_from_json(const char* json);
 
 // ============================================================================
+// Component field access (unified API for native and external components)
+// Works with tc_component* directly, handles both C++ and Python components
+// ============================================================================
+
+TC_API tc_value tc_component_inspect_get(tc_component* c, const char* path);
+TC_API void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene* scene);
+
+// ============================================================================
 // Cleanup
 // ============================================================================
 
