@@ -98,7 +98,7 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
             info.action = field_obj.attr("action");
         }
 
-        // Custom getter/setter
+        // Custom getter/setter from Python InspectField
         nb::object py_getter = nb::none();
         nb::object py_setter = nb::none();
         if (nb::hasattr(field_obj, "getter") && !field_obj.attr("getter").is_none()) {
@@ -109,33 +109,57 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
         }
 
         std::string path_copy = info.path;
+        std::string kind_copy = info.kind;
 
-        info.py_getter = [path_copy, py_getter](void* obj) -> nb::object {
-            // obj is PyObject* from get_raw_pointer for Python types
+        info.getter = [path_copy, kind_copy, py_getter](void* obj) -> tc_value {
+            // obj is PyObject* for Python types
             nb::object py_obj = nb::borrow<nb::object>(
                 nb::handle(static_cast<PyObject*>(obj)));
+
+            nb::object result;
             if (!py_getter.is_none()) {
-                return py_getter(py_obj);
+                result = py_getter(py_obj);
+            } else {
+                // Use getattr for path resolution
+                result = py_obj;
+                size_t start = 0, end;
+                while ((end = path_copy.find('.', start)) != std::string::npos) {
+                    result = nb::getattr(result, path_copy.substr(start, end - start).c_str());
+                    start = end + 1;
+                }
+                result = nb::getattr(result, path_copy.substr(start).c_str());
             }
-            // Use getattr for path resolution
-            nb::object result = py_obj;
-            size_t start = 0, end;
-            while ((end = path_copy.find('.', start)) != std::string::npos) {
-                result = nb::getattr(result, path_copy.substr(start, end - start).c_str());
-                start = end + 1;
+
+            // Serialize through kind handler if available
+            ensure_list_handler(kind_copy);
+            auto& py_reg = KindRegistryPython::instance();
+            if (py_reg.has(kind_copy)) {
+                result = py_reg.serialize(kind_copy, result);
             }
-            return nb::getattr(result, path_copy.substr(start).c_str());
+            return nb_to_tc_value(result);
         };
 
-        info.py_setter = [path_copy, py_setter](void* obj, nb::object value) {
+        info.setter = [path_copy, kind_copy, py_setter](void* obj, tc_value value, tc_scene*) {
             try {
-                // obj is PyObject* from get_raw_pointer for Python types
+                // obj is PyObject* for Python types
                 nb::object py_obj = nb::borrow<nb::object>(
                     nb::handle(static_cast<PyObject*>(obj)));
+
+                // Convert tc_value to Python object
+                nb::object py_value = tc_value_to_nb(&value);
+
+                // Deserialize through kind handler if available
+                ensure_list_handler(kind_copy);
+                auto& py_reg = KindRegistryPython::instance();
+                if (py_reg.has(kind_copy)) {
+                    py_value = py_reg.deserialize(kind_copy, py_value);
+                }
+
                 if (!py_setter.is_none()) {
-                    py_setter(py_obj, value);
+                    py_setter(py_obj, py_value);
                     return;
                 }
+
                 // Use setattr for path resolution
                 nb::object target = py_obj;
                 std::vector<std::string> parts;
@@ -149,7 +173,7 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
                 for (size_t i = 0; i < parts.size() - 1; ++i) {
                     target = nb::getattr(target, parts[i].c_str());
                 }
-                nb::setattr(target, parts.back().c_str(), value);
+                nb::setattr(target, parts.back().c_str(), py_value);
             } catch (const std::exception& e) {
                 std::cerr << "[Python setter error] path=" << path_copy
                           << " error=" << e.what() << std::endl;
