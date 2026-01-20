@@ -175,6 +175,12 @@ inline void register_builtin_cpp_kinds() {
         [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
         [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); }
     );
+
+    // agent_type (string-based, used for navmesh agent type selection)
+    reg.register_kind("agent_type",
+        [](const std::any& v) { return nos::trent(std::any_cast<std::string>(v)); },
+        [](const nos::trent& t, tc_scene*) -> std::any { return t.as_string(); }
+    );
 }
 
 // Helper to register handle types that have serialize() and deserialize_from() methods
