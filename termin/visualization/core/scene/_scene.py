@@ -721,21 +721,15 @@ class Scene:
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""
-        for entity in self.entities:
-            for component in entity.components:
-                component.on_editor_start()
+        self._tc_scene.notify_editor_start()
 
     def notify_scene_inactive(self):
         """Notify all components that scene is becoming inactive."""
-        for entity in self.entities:
-            for component in entity.components:
-                component.on_scene_inactive()
+        self._tc_scene.notify_scene_inactive()
 
     def notify_scene_active(self):
         """Notify all components that scene is becoming active (from INACTIVE)."""
-        for entity in self.entities:
-            for component in entity.components:
-                component.on_scene_active()
+        self._tc_scene.notify_scene_active()
 
     # --- Input dispatch ---
 
