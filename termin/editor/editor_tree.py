@@ -143,8 +143,7 @@ class SceneTreeModel(QAbstractItemModel):
                 # Check if entity is still valid (not destroyed)
                 if not node.obj.valid:
                     return None
-                from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
-                if node.obj.get_component(PrefabInstanceMarker) is not None:
+                if node.obj.has_component_type("PrefabInstanceMarker"):
                     return QColor(70, 130, 220)  # Steel blue
                 # Gray color for disabled entities
                 if not node.obj.enabled:
