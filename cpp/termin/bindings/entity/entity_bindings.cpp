@@ -281,6 +281,9 @@ void bind_entity_class(nb::module_& m) {
             }
             return CxxComponent::tc_to_python(tc);
         }, nb::arg("type_name"))
+        .def("has_component_type", [](Entity& e, const std::string& type_name) -> bool {
+            return e.get_component_by_type_name(type_name) != nullptr;
+        }, nb::arg("type_name"))
         .def("get_python_component", &Entity::get_python_component,
              nb::arg("type_name"))
         .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {

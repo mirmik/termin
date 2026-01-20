@@ -669,6 +669,17 @@ void bind_tc_scene(nb::module_& m) {
                 throw nb::python_error();
             }
         }, nb::arg("event"), "Dispatch key event to editor input handlers")
+
+        // Notification methods - call lifecycle hooks on all components via C API
+        .def("notify_editor_start", [](TcScene& self) {
+            tc_scene_notify_editor_start(self._s);
+        }, "Notify all components that editor has started")
+        .def("notify_scene_inactive", [](TcScene& self) {
+            tc_scene_notify_scene_inactive(self._s);
+        }, "Notify all components that scene became inactive")
+        .def("notify_scene_active", [](TcScene& self) {
+            tc_scene_notify_scene_active(self._s);
+        }, "Notify all components that scene became active")
         ;
 
     // =========================================================================
