@@ -68,10 +68,7 @@ class UIWidgetPass(RenderFramePass):
         if ctx.scene is None:
             return
 
-        # Find all UIComponent instances in the scene
-        from termin.visualization.ui.widgets.component import UIComponent
-
-        ui_components = ctx.scene.find_components(UIComponent)
+        ui_components = ctx.scene._tc_scene.get_components_of_type("UIComponent")
         if not ui_components:
             return
 
