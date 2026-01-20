@@ -12,6 +12,7 @@
 
 extern "C" {
 #include "tc_inspect.h"
+#include "tc_kind.h"
 #include "tc_log.h"
 #include "tc_scene.h"
 }
@@ -61,6 +62,9 @@ public:
         kind.serialize = std::move(serialize);
         kind.deserialize = std::move(deserialize);
         _kinds[name] = std::move(kind);
+
+        // Also register in C kind registry so tc_kind_exists/tc_kind_deserialize_any work
+        tc_kind_register_cpp(name.c_str());
     }
 
     // Get handler (returns nullptr if not found)

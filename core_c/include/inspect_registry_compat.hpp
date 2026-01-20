@@ -11,7 +11,6 @@ namespace termin {
 using TypeBackend = tc::TypeBackend;
 using EnumChoice = tc::EnumChoice;
 using InspectFieldInfo = tc::InspectFieldInfo;
-using KindHandler = tc::KindHandler;
 using InspectRegistry = tc::InspectRegistry;
 
 // Re-export registration helpers

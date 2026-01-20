@@ -85,6 +85,34 @@ TC_API tc_value tc_kind_serialize_any(const char* name, const tc_value* input);
 // Find first available language handler and deserialize
 TC_API tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_scene* scene);
 
+// ============================================================================
+// C++ kind registration helpers
+// C++ kinds use trent/std::any internally, but register via tc_value wrappers.
+// The C++ side sets callbacks that handle the conversion.
+// ============================================================================
+
+// Context for C++ kind (stores kind name for lookup)
+typedef struct tc_cpp_kind_context {
+    char kind_name[64];
+} tc_cpp_kind_context;
+
+// Allocate C++ kind context (returns stable pointer)
+TC_API tc_cpp_kind_context* tc_kind_alloc_cpp_context(const char* kind_name);
+
+// C++ callback types (set once at init, called by C wrappers)
+// These are implemented in C++ and do tc_value <-> trent conversion
+typedef tc_value (*tc_cpp_serialize_callback_fn)(const char* kind_name, const tc_value* input);
+typedef tc_value (*tc_cpp_deserialize_callback_fn)(const char* kind_name, const tc_value* input, tc_scene* scene);
+
+// Set C++ callbacks (called once at module init)
+TC_API void tc_kind_set_cpp_callbacks(
+    tc_cpp_serialize_callback_fn serialize_cb,
+    tc_cpp_deserialize_callback_fn deserialize_cb
+);
+
+// Register C++ kind (uses the callbacks set above)
+TC_API void tc_kind_register_cpp(const char* kind_name);
+
 #ifdef __cplusplus
 }
 #endif

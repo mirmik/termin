@@ -184,3 +184,68 @@ tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_sce
 
     return tc_value_nil();
 }
+
+// ============================================================================
+// C++ kind context storage
+// ============================================================================
+
+#define TC_CPP_KIND_CONTEXT_MAX 256
+
+static tc_cpp_kind_context g_cpp_contexts[TC_CPP_KIND_CONTEXT_MAX];
+static size_t g_cpp_context_count = 0;
+
+static tc_cpp_serialize_callback_fn g_cpp_serialize_cb = NULL;
+static tc_cpp_deserialize_callback_fn g_cpp_deserialize_cb = NULL;
+
+tc_cpp_kind_context* tc_kind_alloc_cpp_context(const char* kind_name) {
+    if (g_cpp_context_count >= TC_CPP_KIND_CONTEXT_MAX) {
+        tc_log(TC_LOG_ERROR, "[tc_kind] C++ context limit reached (%d)", TC_CPP_KIND_CONTEXT_MAX);
+        return NULL;
+    }
+
+    tc_cpp_kind_context* ctx = &g_cpp_contexts[g_cpp_context_count++];
+    strncpy(ctx->kind_name, kind_name, sizeof(ctx->kind_name) - 1);
+    ctx->kind_name[sizeof(ctx->kind_name) - 1] = '\0';
+
+    return ctx;
+}
+
+void tc_kind_set_cpp_callbacks(
+    tc_cpp_serialize_callback_fn serialize_cb,
+    tc_cpp_deserialize_callback_fn deserialize_cb
+) {
+    g_cpp_serialize_cb = serialize_cb;
+    g_cpp_deserialize_cb = deserialize_cb;
+}
+
+// Wrapper that calls C++ callback
+static tc_value cpp_serialize_wrapper(const tc_value* input, void* user_data) {
+    tc_cpp_kind_context* ctx = (tc_cpp_kind_context*)user_data;
+    if (g_cpp_serialize_cb && ctx) {
+        return g_cpp_serialize_cb(ctx->kind_name, input);
+    }
+    return tc_value_nil();
+}
+
+static tc_value cpp_deserialize_wrapper(const tc_value* input, tc_scene* scene, void* user_data) {
+    tc_cpp_kind_context* ctx = (tc_cpp_kind_context*)user_data;
+    if (g_cpp_deserialize_cb && ctx) {
+        return g_cpp_deserialize_cb(ctx->kind_name, input, scene);
+    }
+    return tc_value_nil();
+}
+
+void tc_kind_register_cpp(const char* kind_name) {
+    if (!kind_name) return;
+
+    tc_cpp_kind_context* ctx = tc_kind_alloc_cpp_context(kind_name);
+    if (!ctx) return;
+
+    tc_kind_register(
+        kind_name,
+        TC_KIND_LANG_CPP,
+        cpp_serialize_wrapper,
+        cpp_deserialize_wrapper,
+        ctx
+    );
+}

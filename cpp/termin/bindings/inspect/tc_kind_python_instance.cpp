@@ -5,6 +5,10 @@
 
 namespace tc {
 
+// Global callback for lazy list handler creation
+// Set by inspect_bindings.cpp at Python module init
+EnsureListHandlerFn g_ensure_list_handler = nullptr;
+
 KindRegistryPython& KindRegistryPython::instance() {
     static KindRegistryPython inst;
     return inst;

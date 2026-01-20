@@ -17,7 +17,7 @@ namespace termin {
 class CxxComponent;
 
 // The new InspectRegistry is imported via inspect_registry_compat.hpp
-// All types (EnumChoice, InspectFieldInfo, KindHandler, InspectRegistry)
+// All types (EnumChoice, InspectFieldInfo, InspectRegistry)
 // and macros (INSPECT_FIELD, INSPECT_FIELD_CALLBACK) are available.
 
 // Additional compatibility: provide old-style trent methods on InspectRegistry

@@ -64,43 +64,44 @@ void register_builtin_kind_handlers() {
     );
 }
 
-// Generate Python handlers for list[X] kinds
-// Must be called from nanobind module context
-static tc::TcKind* generate_list_handler(const std::string& kind) {
+// Ensure list[X] kind has a Python handler
+// Returns true if handler exists or was created
+static bool ensure_list_handler_impl(const std::string& kind) {
+    auto& py_reg = tc::KindRegistryPython::instance();
+
+    // Already registered?
+    if (py_reg.has(kind)) {
+        return true;
+    }
+
+    // Parse list[element] format
     char container[64], element[64];
     if (!tc_kind_parse(kind.c_str(), container, sizeof(container),
                       element, sizeof(element))) {
-        return nullptr;
+        return false;
     }
 
     if (std::string(container) != "list") {
-        return nullptr;
+        return false;
     }
 
-    auto* elem_handler = tc::KindRegistry::instance().get(element);
-    if (!elem_handler) {
-        return nullptr;
-    }
-
+    // Check element handler exists
     std::string elem_kind = element;
-    auto& list_handler = tc::KindRegistry::instance().get_or_create(kind);
-
-    // Already has Python handlers?
-    if (list_handler.has_python()) {
-        return &list_handler;
+    if (!py_reg.has(elem_kind) && !tc::KindRegistryCpp::instance().has(elem_kind)) {
+        return false;
     }
 
-    // serialize: list -> list of serialized elements
-    list_handler.python.serialize = nb::cpp_function([elem_kind](nb::object obj) -> nb::object {
+    // Create serialize function
+    nb::object serialize_fn = nb::cpp_function([elem_kind](nb::object obj) -> nb::object {
         nb::list result;
         if (obj.is_none()) {
             return result;
         }
-        auto* handler = tc::KindRegistry::instance().get(elem_kind);
+        auto& py_reg = tc::KindRegistryPython::instance();
         for (auto item : obj) {
             nb::object nb_item = nb::borrow<nb::object>(item);
-            if (handler && handler->has_python()) {
-                result.append(handler->python.serialize(nb_item));
+            if (py_reg.has(elem_kind)) {
+                result.append(py_reg.serialize(elem_kind, nb_item));
             } else {
                 result.append(nb_item);
             }
@@ -108,15 +109,15 @@ static tc::TcKind* generate_list_handler(const std::string& kind) {
         return result;
     });
 
-    // deserialize: list -> list of deserialized elements
-    list_handler.python.deserialize = nb::cpp_function([elem_kind](nb::object data) -> nb::object {
+    // Create deserialize function
+    nb::object deserialize_fn = nb::cpp_function([elem_kind](nb::object data) -> nb::object {
         nb::list result;
         if (!nb::isinstance<nb::list>(data)) return result;
-        auto* handler = tc::KindRegistry::instance().get(elem_kind);
+        auto& py_reg = tc::KindRegistryPython::instance();
         for (auto item : data) {
             nb::object nb_item = nb::borrow<nb::object>(item);
-            if (handler && handler->has_python()) {
-                result.append(handler->python.deserialize(nb_item));
+            if (py_reg.has(elem_kind)) {
+                result.append(py_reg.deserialize(elem_kind, nb_item));
             } else {
                 result.append(nb_item);
             }
@@ -125,11 +126,13 @@ static tc::TcKind* generate_list_handler(const std::string& kind) {
     });
 
     // Prevent Python GC from collecting these
-    list_handler.python.serialize.inc_ref();
-    list_handler.python.deserialize.inc_ref();
-    list_handler._has_python = true;
+    serialize_fn.inc_ref();
+    deserialize_fn.inc_ref();
 
-    return &list_handler;
+    // Register in Python registry
+    py_reg.register_kind(kind, serialize_fn, deserialize_fn);
+
+    return true;
 }
 
 void bind_inspect(nb::module_& m) {
@@ -139,8 +142,8 @@ void bind_inspect(nb::module_& m) {
     // Register Python-specific kind handlers (enum)
     register_builtin_kind_handlers();
 
-    // Set handler generator callback (runs in nanobind module context)
-    InspectRegistry::instance().set_handler_generator(generate_list_handler);
+    // Set callback for lazy list handler creation
+    tc::set_ensure_list_handler(ensure_list_handler_impl);
 
     // TypeBackend enum
     nb::enum_<TypeBackend>(m, "TypeBackend")

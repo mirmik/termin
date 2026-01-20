@@ -233,12 +233,6 @@ nos::trent nb_to_trent_compat(nb::object obj);
 nb::object trent_to_nb_compat(const nos::trent& t);
 
 // ============================================================================
-// KindHandler - alias to TcKind from tc_kind.hpp
-// ============================================================================
-
-using KindHandler = TcKind;
-
-// ============================================================================
 // InspectRegistry - main wrapper class
 // Exported from entity_lib to ensure single instance across all modules
 // ============================================================================
@@ -263,43 +257,18 @@ class TC_INSPECT_API InspectRegistry {
 
     // Type inheritance now stored in C API via tc_inspect_register_type()
 
-    // Callback for generating Python handlers (set from nanobind module)
-    std::function<KindHandler*(const std::string&)> _handler_generator;
-
 public:
     // Singleton - defined in entity_lib to ensure single instance
     static InspectRegistry& instance();
 
     // ========================================================================
-    // Kind handler access (delegates to KindRegistry)
+    // Kind handler access
     // ========================================================================
 
     bool has_kind_handler(const std::string& kind) const {
-        return KindRegistry::instance().get(kind) != nullptr
+        return KindRegistryPython::instance().has(kind)
+            || KindRegistryCpp::instance().has(kind)
             || tc_custom_type_exists(kind.c_str());
-    }
-
-    // Set callback for generating Python handlers (must be called from nanobind module)
-    void set_handler_generator(std::function<KindHandler*(const std::string&)> gen) {
-        _handler_generator = std::move(gen);
-    }
-
-    KindHandler* get_kind_handler(const std::string& kind) {
-        auto* handler = KindRegistry::instance().get(kind);
-
-        // Check if Python vtable exists, not just the kind itself
-        if (handler && handler->has_python()) {
-            return handler;
-        }
-
-        // Try to auto-generate Python handler via callback (runs in nanobind context)
-        if (_handler_generator) {
-            auto* generated = _handler_generator(kind);
-            if (generated) return generated;
-        }
-
-        // Return existing handler even without Python vtable (for C++ usage)
-        return handler;
     }
 
     // ========================================================================
@@ -547,9 +516,10 @@ public:
                 if (f.py_getter) {
                     nb::object val = f.py_getter(obj);
                     // Serialize Python value to dict format
-                    auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
-                    if (handler && handler->has_python()) {
-                        return handler->python.serialize(val);
+                    ensure_list_handler(f.kind);
+                    auto& py_reg = KindRegistryPython::instance();
+                    if (py_reg.has(f.kind)) {
+                        return py_reg.serialize(f.kind, val);
                     }
                     return val;
                 }
@@ -571,9 +541,10 @@ public:
             if (f.path == field_path) {
                 if (f.py_setter) {
                     // Deserialize dict to Python value
-                    auto* handler = get_kind_handler(f.kind);
-                    if (handler && handler->has_python()) {
-                        nb::object deserialized = handler->python.deserialize(value);
+                    ensure_list_handler(f.kind);
+                    auto& py_reg = KindRegistryPython::instance();
+                    if (py_reg.has(f.kind)) {
+                        nb::object deserialized = py_reg.deserialize(f.kind, value);
                         f.py_setter(obj, deserialized);
                     } else {
                         f.py_setter(obj, value);
@@ -618,8 +589,9 @@ public:
 
             if (f.py_getter) {
                 nb::object val = f.py_getter(obj);
-                auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
-                if (handler && handler->has_python()) {
+                ensure_list_handler(f.kind);
+                auto& py_reg = KindRegistryPython::instance();
+                if (py_reg.has(f.kind)) {
                     // Warn if py_getter returned a dict - likely means inspector
                     // set a dict instead of the proper type
                     if (nb::isinstance<nb::dict>(val)) {
@@ -628,7 +600,7 @@ public:
                             "returned dict - inspector may have set wrong type",
                             type_name.c_str(), f.path.c_str(), f.kind.c_str());
                     }
-                    nb::object serialized = handler->python.serialize(val);
+                    nb::object serialized = py_reg.serialize(f.kind, val);
                     result[f.path] = nb_to_trent_compat(serialized);
                 } else {
                     result[f.path] = nb_to_trent_compat(val);
@@ -688,9 +660,10 @@ public:
                 }
 
                 nb::object val;
-                auto* handler = get_kind_handler(f.kind);
-                if (handler && handler->has_python()) {
-                    val = handler->python.deserialize(field_data);
+                ensure_list_handler(f.kind);
+                auto& py_reg = KindRegistryPython::instance();
+                if (py_reg.has(f.kind)) {
+                    val = py_reg.deserialize(f.kind, field_data);
                 } else {
                     val = field_data;
                 }
@@ -722,9 +695,10 @@ public:
             }
 
             nb::object val;
-            auto* handler = get_kind_handler(f.kind);
-            if (handler && handler->has_python()) {
-                val = handler->python.deserialize(field_data);
+            ensure_list_handler(f.kind);
+            auto& py_reg = KindRegistryPython::instance();
+            if (py_reg.has(f.kind)) {
+                val = py_reg.deserialize(f.kind, field_data);
             } else {
                 val = field_data;
             }
