@@ -139,6 +139,12 @@ void bind_inspect(nb::module_& m) {
     // Register C++ builtin kinds (bool, int, float, string, etc.)
     tc::register_builtin_kinds();
 
+    // Register C++ inspect vtable in C dispatcher
+    tc::init_cpp_inspect_vtable();
+
+    // Register Python language vtable in C kind dispatcher
+    tc::init_python_lang_vtable();
+
     // Register Python-specific kind handlers (enum)
     register_builtin_kind_handlers();
 

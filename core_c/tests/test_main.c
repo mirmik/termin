@@ -267,94 +267,10 @@ static int test_tc_value(void) {
 }
 
 // ============================================================================
-// tc_inspect tests
-// ============================================================================
-
-typedef struct {
-    float speed;
-    int health;
-    bool active;
-} TestComponentData;
-
-static tc_value test_getter(void* obj, const tc_field_desc* field, void* user_data) {
-    (void)user_data;
-    TestComponentData* data = (TestComponentData*)obj;
-
-    if (strcmp(field->path, "speed") == 0) return tc_value_float(data->speed);
-    if (strcmp(field->path, "health") == 0) return tc_value_int(data->health);
-    if (strcmp(field->path, "active") == 0) return tc_value_bool(data->active);
-
-    return tc_value_nil();
-}
-
-static void test_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
-    (void)user_data;
-    TestComponentData* data = (TestComponentData*)obj;
-
-    if (strcmp(field->path, "speed") == 0 && value.type == TC_VALUE_FLOAT) {
-        data->speed = value.data.f;
-    } else if (strcmp(field->path, "health") == 0 && value.type == TC_VALUE_INT) {
-        data->health = (int)value.data.i;
-    } else if (strcmp(field->path, "active") == 0 && value.type == TC_VALUE_BOOL) {
-        data->active = value.data.b;
-    }
-}
-
-static int test_inspect(void) {
-    printf("Testing tc_inspect...\n");
-
-    // Register type first
-    tc_inspect_register_type("TestComponent", NULL);
-
-    // Create field vtable
-    static const tc_field_vtable test_vtable = {
-        .get = test_getter,
-        .set = test_setter,
-        .action = NULL,
-        .user_data = NULL,
-    };
-
-    // Add fields with vtable
-    tc_field_desc speed_desc = { .path = "speed",  .label = "Speed",  .kind = "float", .min = 0, .max = 100, .step = 0.1, .is_serializable = true };
-    tc_field_desc health_desc = { .path = "health", .label = "Health", .kind = "int",   .min = 0, .max = 100, .step = 1, .is_serializable = true };
-    tc_field_desc active_desc = { .path = "active", .label = "Active", .kind = "bool", .is_serializable = true };
-
-    tc_inspect_add_field("TestComponent", &speed_desc);
-    tc_inspect_add_field("TestComponent", &health_desc);
-    tc_inspect_add_field("TestComponent", &active_desc);
-
-    // Set vtables for each field (using C language slot)
-    tc_inspect_set_field_vtable("TestComponent", "speed", TC_INSPECT_LANG_C, &test_vtable);
-    tc_inspect_set_field_vtable("TestComponent", "health", TC_INSPECT_LANG_C, &test_vtable);
-    tc_inspect_set_field_vtable("TestComponent", "active", TC_INSPECT_LANG_C, &test_vtable);
-
-    TEST_ASSERT(tc_inspect_has_type("TestComponent"), "type registered");
-    TEST_ASSERT(tc_inspect_field_count("TestComponent") == 3, "field count");
-
-    tc_field_desc* speed_field = tc_inspect_find_field("TestComponent", "speed");
-    TEST_ASSERT(speed_field != NULL, "find field");
-    TEST_ASSERT(strcmp(speed_field->label, "Speed") == 0, "field label");
-
-    TestComponentData data = { .speed = 5.0f, .health = 100, .active = true };
-
-    tc_value v = tc_inspect_get(&data, "TestComponent", "speed");
-    TEST_ASSERT(v.type == TC_VALUE_FLOAT, "get returns float");
-    TEST_ASSERT(fabs(v.data.f - 5.0f) < 0.001f, "get value");
-
-    tc_inspect_set(&data, "TestComponent", "health", tc_value_int(50), NULL);
-    TEST_ASSERT(data.health == 50, "set value");
-
-    tc_value serialized = tc_inspect_serialize(&data, "TestComponent");
-    TEST_ASSERT(serialized.type == TC_VALUE_DICT, "serialize returns dict");
-    TEST_ASSERT(tc_value_dict_has(&serialized, "speed"), "serialized has speed");
-    tc_value_free(&serialized);
-
-    tc_inspect_unregister_type("TestComponent");
-    TEST_ASSERT(!tc_inspect_has_type("TestComponent"), "type unregistered");
-
-    printf("  tc_inspect: PASS\n");
-    return 0;
-}
+// tc_inspect tests - DISABLED
+// Old C-based type registration API removed. C is now dispatcher only.
+// Types are owned by C++ (InspectRegistry) or Python.
+// Test can be rewritten when C-based registry is needed.
 
 // ============================================================================
 // Kind handler tests
@@ -535,7 +451,8 @@ int main(void) {
     result |= test_entity_hierarchy();
     result |= test_uuid();
     result |= test_tc_value();
-    result |= test_inspect();
+    // test_inspect() disabled - old C-based type registration API removed
+    // C is now dispatcher only, types owned by C++ or Python
     result |= test_kind_handler();
     result |= test_resource_map();
     result |= test_vertex_layout();

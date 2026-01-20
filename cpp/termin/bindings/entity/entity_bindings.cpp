@@ -567,7 +567,7 @@ void bind_entity_class(nb::module_& m) {
                                     void* raw_ptr = nb::inst_ptr<void>(comp);
                                     // Use C API for deserialization
                                     tc_value tc_data = tc::nb_to_tc_value(data_dict);
-                                    tc_inspect_deserialize_with_scene(raw_ptr, type_name.c_str(), &tc_data, c_scene);
+                                    tc_inspect_deserialize(raw_ptr, type_name.c_str(), &tc_data, c_scene);
                                     tc_value_free(&tc_data);
                                 }
                             } else {
@@ -772,7 +772,7 @@ void bind_entity_class(nb::module_& m) {
                                 void* raw_ptr = nb::inst_ptr<void>(comp);
                                 // Use C API for deserialization
                                 tc_value tc_data = tc::nb_to_tc_value(data_dict);
-                                tc_inspect_deserialize_with_scene(raw_ptr, type_name.c_str(), &tc_data, c_scene);
+                                tc_inspect_deserialize(raw_ptr, type_name.c_str(), &tc_data, c_scene);
                                 tc_value_free(&tc_data);
                             }
                         } else {

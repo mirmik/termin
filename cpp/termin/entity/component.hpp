@@ -112,7 +112,7 @@ public:
 
     virtual void deserialize_data(const nos::trent& data, tc_scene* scene = nullptr) {
         tc_value v = tc::trent_to_tc_value(data);
-        tc_inspect_deserialize_with_scene(
+        tc_inspect_deserialize(
             static_cast<void*>(this),
             type_name(),
             &v,

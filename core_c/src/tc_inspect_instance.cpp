@@ -1,4 +1,4 @@
-// tc_inspect_instance.cpp - InspectRegistry singleton and methods needing Component
+// tc_inspect_instance.cpp - InspectRegistry singleton, vtable callbacks, and methods needing Component
 // This file must be compiled into entity_lib to ensure single instance across all modules
 
 #include "../../cpp/trent/trent.h"
@@ -7,17 +7,24 @@
 #include "../../cpp/termin/entity/component.hpp"
 
 #include "../include/tc_inspect.hpp"
-#include "../../cpp/termin/inspect/tc_inspect_python.hpp"
 
 namespace tc {
+
+// ============================================================================
+// InspectRegistry singleton
+// ============================================================================
 
 InspectRegistry& InspectRegistry::instance() {
     static InspectRegistry reg;
     return reg;
 }
 
+// ============================================================================
+// Python field registration
+// ============================================================================
+
 void InspectRegistry::register_python_fields(const std::string& type_name, nb::dict fields_dict) {
-    _py_fields.erase(type_name);
+    _fields.erase(type_name);
 
     for (auto item : fields_dict) {
         std::string field_name = nb::cast<std::string>(item.first);
@@ -149,13 +156,83 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
             }
         };
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
     }
 
     _type_backends[type_name] = TypeBackend::Python;
+}
 
-    // Also register in C API for vtable-based access
-    InspectPython::register_fields_from_dict(type_name.c_str(), fields_dict);
+// ============================================================================
+// C++ vtable callbacks for C dispatcher
+// ============================================================================
+
+static bool cpp_has_type(const char* type_name, void* ctx) {
+    (void)ctx;
+    return InspectRegistry::instance().has_type(type_name);
+}
+
+static const char* cpp_get_parent(const char* type_name, void* ctx) {
+    (void)ctx;
+    static std::string parent;  // Static to keep string alive
+    parent = InspectRegistry::instance().get_type_parent(type_name);
+    return parent.empty() ? nullptr : parent.c_str();
+}
+
+static size_t cpp_field_count(const char* type_name, void* ctx) {
+    (void)ctx;
+    return InspectRegistry::instance().all_fields_count(type_name);
+}
+
+static bool cpp_get_field(const char* type_name, size_t index, tc_field_info* out, void* ctx) {
+    (void)ctx;
+    const InspectFieldInfo* info = InspectRegistry::instance().get_field_by_index(type_name, index);
+    if (!info) return false;
+    info->fill_c_info(out);
+    return true;
+}
+
+static bool cpp_find_field(const char* type_name, const char* path, tc_field_info* out, void* ctx) {
+    (void)ctx;
+    const InspectFieldInfo* info = InspectRegistry::instance().find_field(type_name, path);
+    if (!info) return false;
+    info->fill_c_info(out);
+    return true;
+}
+
+static tc_value cpp_get(void* obj, const char* type_name, const char* path, void* ctx) {
+    (void)ctx;
+    return InspectRegistry::instance().get_tc_value(obj, type_name, path);
+}
+
+static void cpp_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene, void* ctx) {
+    (void)ctx;
+    InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+}
+
+static void cpp_action(void* obj, const char* type_name, const char* path, void* ctx) {
+    (void)ctx;
+    InspectRegistry::instance().action_field(obj, type_name, path);
+}
+
+static bool g_cpp_vtable_initialized = false;
+
+void init_cpp_inspect_vtable() {
+    if (g_cpp_vtable_initialized) return;
+    g_cpp_vtable_initialized = true;
+
+    static tc_inspect_lang_vtable cpp_vtable = {
+        cpp_has_type,
+        cpp_get_parent,
+        cpp_field_count,
+        cpp_get_field,
+        cpp_find_field,
+        cpp_get,
+        cpp_set,
+        cpp_action,
+        nullptr  // ctx
+    };
+
+    tc_inspect_set_lang_vtable(TC_INSPECT_LANG_CPP, &cpp_vtable);
 }
 
 } // namespace tc

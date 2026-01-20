@@ -1,4 +1,6 @@
 // tc_inspect.hpp - C++ wrapper for tc_inspect with nanobind support
+// InspectRegistry is the source of truth for C++ types.
+// Registers vtable with C dispatcher.
 #pragma once
 
 #include "tc_inspect.h"
@@ -14,10 +16,7 @@
 #include <memory>
 
 #include "trent/trent.h"
-// tc_kind.hpp has been moved to cpp/termin/inspect/
-// Include via proper path from projects that need both C++ and Python kind support
 #include "../../cpp/termin/inspect/tc_kind.hpp"
-#include "../../cpp/termin/inspect/tc_inspect_cpp.hpp"
 
 namespace nb = nanobind;
 
@@ -189,7 +188,8 @@ struct EnumChoice {
 };
 
 // ============================================================================
-// InspectFieldInfo - mirrors tc_field_desc with Python integration
+// InspectFieldInfo - field metadata + callbacks
+// This is the source of truth for C++ type fields
 // ============================================================================
 
 struct InspectFieldInfo {
@@ -221,6 +221,21 @@ struct InspectFieldInfo {
     // Returns/accepts trent directly, bypassing kind handlers
     std::function<nos::trent(void*)> trent_getter;
     std::function<void(void*, const nos::trent&)> trent_setter;
+
+    // Fill tc_field_info from this InspectFieldInfo
+    void fill_c_info(tc_field_info* out) const {
+        out->path = path.c_str();
+        out->label = label.c_str();
+        out->kind = kind.c_str();
+        out->min = min;
+        out->max = max;
+        out->step = step;
+        out->is_serializable = is_serializable;
+        out->is_inspectable = is_inspectable;
+        // Note: choices are stored in InspectFieldInfo, not exposed to C
+        out->choices = nullptr;
+        out->choice_count = 0;
+    }
 };
 
 // ============================================================================
@@ -234,7 +249,7 @@ nb::object trent_to_nb_compat(const nos::trent& t);
 
 // ============================================================================
 // InspectRegistry - main wrapper class
-// Exported from entity_lib to ensure single instance across all modules
+// Source of truth for C++ component fields
 // ============================================================================
 
 // DLL export/import macros
@@ -249,13 +264,14 @@ nb::object trent_to_nb_compat(const nos::trent& t);
 #endif
 
 class TC_INSPECT_API InspectRegistry {
-    // Python-specific storage (for fields registered from Python)
-    std::unordered_map<std::string, std::vector<InspectFieldInfo>> _py_fields;
+    // Field storage (source of truth for C++ types)
+    std::unordered_map<std::string, std::vector<InspectFieldInfo>> _fields;
 
     // Type backend registry
     std::unordered_map<std::string, TypeBackend> _type_backends;
 
-    // Type inheritance now stored in C API via tc_inspect_register_type()
+    // Type parent registry
+    std::unordered_map<std::string, std::string> _type_parents;
 
 public:
     // Singleton - defined in entity_lib to ensure single instance
@@ -293,13 +309,19 @@ public:
     }
 
     void set_type_parent(const std::string& type_name, const std::string& parent_name) {
-        // Register/update type with parent in C API
-        tc_inspect_register_type(type_name.c_str(), parent_name.empty() ? nullptr : parent_name.c_str());
+        if (!parent_name.empty()) {
+            _type_parents[type_name] = parent_name;
+            // Register type as C++ so has_type() returns true even for types
+            // with only inherited fields (no own fields)
+            if (_type_backends.find(type_name) == _type_backends.end()) {
+                _type_backends[type_name] = TypeBackend::Cpp;
+            }
+        }
     }
 
     std::string get_type_parent(const std::string& type_name) const {
-        const char* base = tc_inspect_get_base_type(type_name.c_str());
-        return base ? base : "";
+        auto it = _type_parents.find(type_name);
+        return it != _type_parents.end() ? it->second : "";
     }
 
     // ========================================================================
@@ -329,7 +351,7 @@ public:
             static_cast<C*>(obj)->*member = std::any_cast<T>(val);
         };
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
@@ -357,7 +379,7 @@ public:
             setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
         };
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
@@ -386,7 +408,7 @@ public:
             setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
         };
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
@@ -411,18 +433,18 @@ public:
             static_cast<C*>(obj)->*member = std::any_cast<H>(val);
         };
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
     // Add a serializable-only field (for SERIALIZABLE_FIELD macro)
     void add_serializable_field(const std::string& type_name, InspectFieldInfo&& info) {
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
     }
 
     // Add a field with choices (for INSPECT_FIELD_CHOICES macro)
     void add_field_with_choices(const std::string& type_name, InspectFieldInfo&& info) {
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
@@ -439,7 +461,7 @@ public:
         info.is_inspectable = true;
         info.action = std::move(action);
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
     }
 
     // Add a button field with C++ callback (no Python dependency at registration time)
@@ -459,7 +481,7 @@ public:
         info.cpp_action = action_fn;  // Store C++ callback
         // info.action will be created lazily
 
-        _py_fields[type_name].push_back(std::move(info));
+        _fields[type_name].push_back(std::move(info));
     }
 
     // ========================================================================
@@ -475,8 +497,8 @@ public:
 
     const std::vector<InspectFieldInfo>& fields(const std::string& type_name) const {
         static std::vector<InspectFieldInfo> empty;
-        auto it = _py_fields.find(type_name);
-        return it != _py_fields.end() ? it->second : empty;
+        auto it = _fields.find(type_name);
+        return it != _fields.end() ? it->second : empty;
     }
 
     std::vector<InspectFieldInfo> all_fields(const std::string& type_name) const {
@@ -490,16 +512,68 @@ public:
         }
 
         // Add own fields
-        auto it = _py_fields.find(type_name);
-        if (it != _py_fields.end()) {
+        auto it = _fields.find(type_name);
+        if (it != _fields.end()) {
             result.insert(result.end(), it->second.begin(), it->second.end());
         }
         return result;
     }
 
+    size_t all_fields_count(const std::string& type_name) const {
+        size_t count = 0;
+        std::string parent = get_type_parent(type_name);
+        if (!parent.empty()) {
+            count += all_fields_count(parent);
+        }
+        auto it = _fields.find(type_name);
+        if (it != _fields.end()) {
+            count += it->second.size();
+        }
+        return count;
+    }
+
+    // Get field info by index (for vtable callback)
+    const InspectFieldInfo* get_field_by_index(const std::string& type_name, size_t index) const {
+        // First check parent
+        std::string parent = get_type_parent(type_name);
+        if (!parent.empty()) {
+            size_t parent_count = all_fields_count(parent);
+            if (index < parent_count) {
+                return get_field_by_index(parent, index);
+            }
+            index -= parent_count;
+        }
+
+        // Then own fields
+        auto it = _fields.find(type_name);
+        if (it != _fields.end() && index < it->second.size()) {
+            return &it->second[index];
+        }
+        return nullptr;
+    }
+
+    // Find field by path
+    const InspectFieldInfo* find_field(const std::string& type_name, const std::string& path) const {
+        // Search own fields first
+        auto it = _fields.find(type_name);
+        if (it != _fields.end()) {
+            for (const auto& f : it->second) {
+                if (f.path == path) return &f;
+            }
+        }
+
+        // Search parent
+        std::string parent = get_type_parent(type_name);
+        if (!parent.empty()) {
+            return find_field(parent, path);
+        }
+
+        return nullptr;
+    }
+
     std::vector<std::string> types() const {
         std::vector<std::string> result;
-        for (const auto& [name, _] : _py_fields) {
+        for (const auto& [name, _] : _fields) {
             result.push_back(name);
         }
         return result;
@@ -511,60 +585,135 @@ public:
 
     // Get field value as serialized dict (for inspector widgets)
     nb::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
-        for (const auto& f : all_fields(type_name)) {
-            if (f.path == field_path) {
-                if (f.py_getter) {
-                    nb::object val = f.py_getter(obj);
-                    // Serialize Python value to dict format
-                    ensure_list_handler(f.kind);
-                    auto& py_reg = KindRegistryPython::instance();
-                    if (py_reg.has(f.kind)) {
-                        return py_reg.serialize(f.kind, val);
-                    }
-                    return val;
-                }
-                if (f.cpp_getter) {
-                    std::any val = f.cpp_getter(obj);
-                    // Serialize C++ value to trent, then convert to Python dict
-                    nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
-                    return trent_to_nb_compat(t);
-                }
-                throw nb::type_error(("No getter for field: " + field_path).c_str());
-            }
+        const InspectFieldInfo* f = find_field(type_name, field_path);
+        if (!f) {
+            throw nb::attribute_error(("Field not found: " + field_path).c_str());
         }
-        throw nb::attribute_error(("Field not found: " + field_path).c_str());
+
+        if (f->py_getter) {
+            nb::object val = f->py_getter(obj);
+            // Serialize Python value to dict format
+            ensure_list_handler(f->kind);
+            auto& py_reg = KindRegistryPython::instance();
+            if (py_reg.has(f->kind)) {
+                return py_reg.serialize(f->kind, val);
+            }
+            return val;
+        }
+        if (f->cpp_getter) {
+            std::any val = f->cpp_getter(obj);
+            // Serialize C++ value to trent, then convert to Python dict
+            nos::trent t = KindRegistry::instance().serialize_cpp(f->kind, val);
+            return trent_to_nb_compat(t);
+        }
+        throw nb::type_error(("No getter for field: " + field_path).c_str());
     }
 
     // Set field value from serialized dict (from inspector widgets)
     void set(void* obj, const std::string& type_name, const std::string& field_path, nb::object value, tc_scene* scene = nullptr) {
-        for (const auto& f : all_fields(type_name)) {
-            if (f.path == field_path) {
-                if (f.py_setter) {
-                    // Deserialize dict to Python value
-                    ensure_list_handler(f.kind);
-                    auto& py_reg = KindRegistryPython::instance();
-                    if (py_reg.has(f.kind)) {
-                        nb::object deserialized = py_reg.deserialize(f.kind, value);
-                        f.py_setter(obj, deserialized);
-                    } else {
-                        f.py_setter(obj, value);
-                    }
-                    return;
-                }
-                if (f.cpp_setter) {
-                    // Convert Python dict to trent, then deserialize to C++ value
-                    nos::trent t = nb_to_trent_compat(value);
-                    std::any val = KindRegistry::instance().deserialize_cpp(f.kind, t, scene);
-                    if (val.has_value()) {
-                        f.cpp_setter(obj, val);
-                        return;
-                    }
-                    throw nb::type_error(("deserialize_cpp failed for kind: " + f.kind).c_str());
-                }
-                throw nb::type_error(("No setter for field: " + field_path).c_str());
-            }
+        const InspectFieldInfo* f = find_field(type_name, field_path);
+        if (!f) {
+            throw nb::attribute_error(("Field not found: " + field_path).c_str());
         }
-        throw nb::attribute_error(("Field not found: " + field_path).c_str());
+
+        if (f->py_setter) {
+            // Deserialize dict to Python value
+            ensure_list_handler(f->kind);
+            auto& py_reg = KindRegistryPython::instance();
+            if (py_reg.has(f->kind)) {
+                nb::object deserialized = py_reg.deserialize(f->kind, value);
+                f->py_setter(obj, deserialized);
+            } else {
+                f->py_setter(obj, value);
+            }
+            return;
+        }
+        if (f->cpp_setter) {
+            // Convert Python dict to trent, then deserialize to C++ value
+            nos::trent t = nb_to_trent_compat(value);
+            std::any val = KindRegistry::instance().deserialize_cpp(f->kind, t, scene);
+            if (val.has_value()) {
+                f->cpp_setter(obj, val);
+                return;
+            }
+            throw nb::type_error(("deserialize_cpp failed for kind: " + f->kind).c_str());
+        }
+        throw nb::type_error(("No setter for field: " + field_path).c_str());
+    }
+
+    // ========================================================================
+    // Field access via tc_value (for C vtable)
+    // ========================================================================
+
+    tc_value get_tc_value(void* obj, const std::string& type_name, const std::string& field_path) const {
+        const InspectFieldInfo* f = find_field(type_name, field_path);
+        if (!f) return tc_value_nil();
+
+        if (f->trent_getter) {
+            nos::trent t = f->trent_getter(obj);
+            return trent_to_tc_value(t);
+        }
+
+        if (f->cpp_getter) {
+            std::any val = f->cpp_getter(obj);
+            nos::trent t = KindRegistry::instance().serialize_cpp(f->kind, val);
+            return trent_to_tc_value(t);
+        }
+
+        if (f->py_getter) {
+            nb::object val = f->py_getter(obj);
+            ensure_list_handler(f->kind);
+            auto& py_reg = KindRegistryPython::instance();
+            if (py_reg.has(f->kind)) {
+                val = py_reg.serialize(f->kind, val);
+            }
+            return nb_to_tc_value(val);
+        }
+
+        return tc_value_nil();
+    }
+
+    void set_tc_value(void* obj, const std::string& type_name, const std::string& field_path, tc_value value, tc_scene* scene) {
+        const InspectFieldInfo* f = find_field(type_name, field_path);
+        if (!f) return;
+
+        if (f->trent_setter) {
+            nos::trent t = tc_value_to_trent(&value);
+            f->trent_setter(obj, t);
+            return;
+        }
+
+        if (f->cpp_setter) {
+            nos::trent t = tc_value_to_trent(&value);
+            std::any val = KindRegistry::instance().deserialize_cpp(f->kind, t, scene);
+            if (val.has_value()) {
+                f->cpp_setter(obj, val);
+            }
+            return;
+        }
+
+        if (f->py_setter) {
+            nb::object py_val = tc_value_to_nb(&value);
+            ensure_list_handler(f->kind);
+            auto& py_reg = KindRegistryPython::instance();
+            if (py_reg.has(f->kind)) {
+                py_val = py_reg.deserialize(f->kind, py_val);
+            }
+            f->py_setter(obj, py_val);
+        }
+    }
+
+    void action_field(void* obj, const std::string& type_name, const std::string& field_path) {
+        const InspectFieldInfo* f = find_field(type_name, field_path);
+        if (!f) return;
+
+        if (f->cpp_action) {
+            f->cpp_action(obj);
+        } else if (f->action.ptr() && !f->action.is_none()) {
+            // Call Python action with the object
+            // Note: this requires the object to be accessible from Python
+            // For C++ objects, we'd need to wrap them first
+        }
     }
 
     // ========================================================================
@@ -746,134 +895,22 @@ public:
 };
 
 // ============================================================================
-// Static registration helpers (for C++ components)
-// Uses new C API via tc_inspect_cpp.hpp
+// C++ vtable callbacks - implemented in tc_inspect_instance.cpp
 // ============================================================================
 
-// Context for C++ field vtable (stores member pointer and kind for KindRegistry)
-template<typename C, typename T>
-struct CppFieldContext {
-    T C::* member;
-    std::string kind;
-};
+TC_INSPECT_API void init_cpp_inspect_vtable();
 
-// Storage for C++ field contexts (must outlive vtable registrations)
-class CppFieldContextStorage {
-    std::vector<std::unique_ptr<void, void(*)(void*)>> contexts_;
-public:
-    static CppFieldContextStorage& instance() {
-        static CppFieldContextStorage storage;
-        return storage;
-    }
-
-    template<typename C, typename T>
-    CppFieldContext<C, T>* store(T C::* member, const std::string& kind) {
-        auto* ctx = new CppFieldContext<C, T>{member, kind};
-        contexts_.emplace_back(ctx, [](void* p) { delete static_cast<CppFieldContext<C, T>*>(p); });
-        return ctx;
-    }
-};
-
-// Context for SERIALIZABLE_FIELD (stores trent getter/setter functions)
-template<typename C>
-struct SerializableFieldTrentContext {
-    std::function<nos::trent(C*)> getter;
-    std::function<void(C*, const nos::trent&)> setter;
-};
-
-// Storage for serializable field contexts
-class SerializableFieldContextStorage {
-    std::vector<std::unique_ptr<void, void(*)(void*)>> contexts_;
-public:
-    static SerializableFieldContextStorage& instance() {
-        static SerializableFieldContextStorage storage;
-        return storage;
-    }
-
-    template<typename C>
-    SerializableFieldTrentContext<C>* store(
-        std::function<nos::trent(C*)> getter,
-        std::function<void(C*, const nos::trent&)> setter
-    ) {
-        auto* ctx = new SerializableFieldTrentContext<C>{std::move(getter), std::move(setter)};
-        contexts_.emplace_back(ctx, [](void* p) { delete static_cast<SerializableFieldTrentContext<C>*>(p); });
-        return ctx;
-    }
-};
-
-// Getter for SERIALIZABLE_FIELD (uses trent getter → tc_value)
-template<typename C>
-static tc_value serializable_field_getter(void* obj, const tc_field_desc* field, void* user_data) {
-    (void)field;
-    auto* ctx = static_cast<SerializableFieldTrentContext<C>*>(user_data);
-    C* instance = static_cast<C*>(obj);
-    nos::trent t = ctx->getter(instance);
-    return trent_to_tc_value(t);
-}
-
-// Setter for SERIALIZABLE_FIELD (uses tc_value → trent setter)
-template<typename C>
-static void serializable_field_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data, tc_scene* scene) {
-    (void)field;
-    (void)scene;
-    auto* ctx = static_cast<SerializableFieldTrentContext<C>*>(user_data);
-    C* instance = static_cast<C*>(obj);
-    nos::trent t = tc_value_to_trent(&value);
-    ctx->setter(instance, t);
-}
-
-// Getter via KindRegistry (converts C++ value → trent → tc_value)
-template<typename C, typename T>
-static tc_value cpp_field_getter_via_kind(void* obj, const tc_field_desc* field, void* user_data) {
-    (void)field;
-    auto* ctx = static_cast<CppFieldContext<C, T>*>(user_data);
-    C* instance = static_cast<C*>(obj);
-    T& value = instance->*(ctx->member);
-
-    // Serialize via KindRegistry
-    nos::trent t = KindRegistry::instance().serialize_cpp(ctx->kind, value);
-    return trent_to_tc_value(t);
-}
-
-// Setter via KindRegistry (converts tc_value → trent → C++ value)
-template<typename C, typename T>
-static void cpp_field_setter_via_kind(void* obj, const tc_field_desc* field, tc_value value, void* user_data, tc_scene* scene) {
-    (void)field;
-    auto* ctx = static_cast<CppFieldContext<C, T>*>(user_data);
-    C* instance = static_cast<C*>(obj);
-
-    // Deserialize via KindRegistry with scene
-    nos::trent t = tc_value_to_trent(&value);
-    std::any result = KindRegistry::instance().deserialize_cpp(ctx->kind, t, scene);
-    if (result.has_value()) {
-        try {
-            instance->*(ctx->member) = std::any_cast<T>(result);
-        } catch (const std::bad_any_cast& e) {
-            tc_log_error("cpp_field_setter_via_kind: bad_any_cast for kind=%s: %s",
-                ctx->kind.c_str(), e.what());
-        }
-    }
-}
+// ============================================================================
+// Static registration helpers (for C++ components)
+// ============================================================================
 
 template<typename C, typename T>
 struct InspectFieldRegistrar {
     InspectFieldRegistrar(T C::*member, const char* type_name,
                           const char* path, const char* label, const char* kind,
                           double min = 0.0, double max = 1.0, double step = 0.01) {
-        // Use new API from tc_inspect_cpp.hpp
-        InspectCpp::register_field<C, T>(type_name, member, path, label, kind, min, max, step);
-        // Also register in legacy InspectRegistry for backward compatibility during migration
+        // Register in InspectRegistry only - no C API duplication
         InspectRegistry::instance().add<C, T>(type_name, member, path, label, kind, min, max, step);
-
-        // Set up C++ vtable for C API access
-        auto* ctx = CppFieldContextStorage::instance().store<C, T>(member, kind);
-
-        tc_field_vtable vtable = {};
-        vtable.get = cpp_field_getter_via_kind<C, T>;
-        vtable.set = cpp_field_setter_via_kind<C, T>;
-        vtable.user_data = ctx;
-
-        tc_inspect_set_field_vtable(type_name, path, TC_INSPECT_LANG_CPP, &vtable);
     }
 };
 
@@ -928,25 +965,6 @@ struct InspectFieldChoicesRegistrar {
         };
 
         InspectRegistry::instance().add_field_with_choices(type_name, std::move(info));
-
-        // Register field in C API
-        tc_field_desc desc = {};
-        desc.path = path;
-        desc.label = label;
-        desc.kind = kind;
-        desc.is_serializable = true;
-        desc.is_inspectable = true;
-        tc_inspect_add_field(type_name, &desc);
-
-        // Set up C++ vtable for C API access (for serialization)
-        auto* ctx = CppFieldContextStorage::instance().store<C, T>(member, kind);
-
-        tc_field_vtable vtable = {};
-        vtable.get = cpp_field_getter_via_kind<C, T>;
-        vtable.set = cpp_field_setter_via_kind<C, T>;
-        vtable.user_data = ctx;
-
-        tc_inspect_set_field_vtable(type_name, path, TC_INSPECT_LANG_CPP, &vtable);
     }
 };
 
@@ -976,26 +994,7 @@ struct SerializableFieldRegistrar {
             setter(static_cast<C*>(obj), val);
         };
 
-        // Access private member via friend-like workaround: add to _py_fields directly
-        // Note: We need to add a method for this in InspectRegistry
         InspectRegistry::instance().add_serializable_field(type_name, std::move(info));
-
-        // Also register with C API for tc_inspect_serialize/deserialize
-        tc_field_desc desc = {};
-        desc.path = path;
-        desc.label = "";
-        desc.kind = "";
-        desc.is_serializable = true;
-        desc.is_inspectable = false;
-        tc_inspect_add_field(type_name, &desc);
-
-        // Set up vtable for C API
-        auto* ctx = SerializableFieldContextStorage::instance().store<C>(getter, setter);
-        tc_field_vtable vtable = {};
-        vtable.get = serializable_field_getter<C>;
-        vtable.set = serializable_field_setter<C>;
-        vtable.user_data = ctx;
-        tc_inspect_set_field_vtable(type_name, path, TC_INSPECT_LANG_CPP, &vtable);
     }
 };
 

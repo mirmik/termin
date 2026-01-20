@@ -1,4 +1,5 @@
 // tc_inspect.c - Field inspection/serialization implementation
+// C is a dispatcher only - routes calls to language-specific vtables
 #include "../include/tc_inspect.h"
 #include "../include/tc_kind.h"
 #include "../include/tc_log.h"
@@ -359,331 +360,112 @@ bool tc_kind_parse(const char* kind, char* container, size_t container_size,
 }
 
 // ============================================================================
-// Type registry
+// Language vtable dispatcher
 // ============================================================================
 
-#define MAX_TYPES 128
-#define MAX_FIELDS_PER_TYPE 64
+static tc_inspect_lang_vtable g_vtables[TC_INSPECT_LANG_COUNT] = {0};
 
-typedef struct {
-    char type_name[128];
-    char base_type[128];
-    tc_field_desc fields[MAX_FIELDS_PER_TYPE];
-    size_t field_count;
-} tc_type_entry;
+void tc_inspect_set_lang_vtable(tc_inspect_lang lang, const tc_inspect_lang_vtable* vtable) {
+    if (lang >= 0 && lang < TC_INSPECT_LANG_COUNT && vtable) {
+        g_vtables[lang] = *vtable;
+    }
+}
 
-static struct {
-    tc_type_entry types[MAX_TYPES];
-    size_t count;
-} g_type_registry = {{{0}}, 0};
-
-// Find type entry (internal)
-static tc_type_entry* find_type_entry(const char* type_name) {
-    if (!type_name) return NULL;
-    for (size_t i = 0; i < g_type_registry.count; i++) {
-        if (strcmp(g_type_registry.types[i].type_name, type_name) == 0) {
-            return &g_type_registry.types[i];
+const tc_inspect_lang_vtable* tc_inspect_get_lang_vtable(tc_inspect_lang lang) {
+    if (lang >= 0 && lang < TC_INSPECT_LANG_COUNT) {
+        if (g_vtables[lang].has_type) {
+            return &g_vtables[lang];
         }
     }
     return NULL;
 }
 
-void tc_inspect_register_type(const char* type_name, const char* base_type) {
-    if (!type_name) return;
-    if (g_type_registry.count >= MAX_TYPES) return;
-
-    // Check if already exists
-    tc_type_entry* existing = find_type_entry(type_name);
-    if (existing) {
-        // Update base_type
-        if (base_type) {
-            strncpy(existing->base_type, base_type, sizeof(existing->base_type) - 1);
-        } else {
-            existing->base_type[0] = '\0';
-        }
-        return;
-    }
-
-    // Create new entry
-    tc_type_entry* entry = &g_type_registry.types[g_type_registry.count++];
-    memset(entry, 0, sizeof(tc_type_entry));
-    strncpy(entry->type_name, type_name, sizeof(entry->type_name) - 1);
-    if (base_type) {
-        strncpy(entry->base_type, base_type, sizeof(entry->base_type) - 1);
-    }
-}
-
-void tc_inspect_unregister_type(const char* type_name) {
-    if (!type_name) return;
-
-    for (size_t i = 0; i < g_type_registry.count; i++) {
-        if (strcmp(g_type_registry.types[i].type_name, type_name) == 0) {
-            // Shift remaining
-            for (size_t j = i; j < g_type_registry.count - 1; j++) {
-                g_type_registry.types[j] = g_type_registry.types[j + 1];
-            }
-            g_type_registry.count--;
-            return;
-        }
-    }
-}
+// ============================================================================
+// Type queries
+// ============================================================================
 
 bool tc_inspect_has_type(const char* type_name) {
-    return find_type_entry(type_name) != NULL;
+    if (!type_name) return false;
+    for (int i = 0; i < TC_INSPECT_LANG_COUNT; i++) {
+        if (g_vtables[i].has_type && g_vtables[i].has_type(type_name, g_vtables[i].ctx)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+tc_inspect_lang tc_inspect_type_lang(const char* type_name) {
+    if (!type_name) return TC_INSPECT_LANG_COUNT;
+    for (int i = 0; i < TC_INSPECT_LANG_COUNT; i++) {
+        if (g_vtables[i].has_type && g_vtables[i].has_type(type_name, g_vtables[i].ctx)) {
+            return (tc_inspect_lang)i;
+        }
+    }
+    return TC_INSPECT_LANG_COUNT;
 }
 
 const char* tc_inspect_get_base_type(const char* type_name) {
-    tc_type_entry* entry = find_type_entry(type_name);
-    if (!entry || entry->base_type[0] == '\0') return NULL;
-    return entry->base_type;
-}
-
-size_t tc_inspect_type_count(void) {
-    return g_type_registry.count;
-}
-
-const char* tc_inspect_type_at(size_t index) {
-    if (index >= g_type_registry.count) return NULL;
-    return g_type_registry.types[index].type_name;
-}
-
-// ============================================================================
-// Field registry
-// ============================================================================
-
-void tc_inspect_add_field(const char* type_name, const tc_field_desc* field) {
-    if (!type_name || !field || !field->path) return;
-
-    tc_type_entry* entry = find_type_entry(type_name);
-    if (!entry) {
-        // Auto-create type if not exists
-        tc_inspect_register_type(type_name, NULL);
-        entry = find_type_entry(type_name);
-    }
-    if (!entry || entry->field_count >= MAX_FIELDS_PER_TYPE) return;
-
-    // Check if field already exists
-    for (size_t i = 0; i < entry->field_count; i++) {
-        if (strcmp(entry->fields[i].path, field->path) == 0) {
-            // Update existing field (preserve vtables)
-            tc_field_vtable saved_vtables[TC_INSPECT_LANG_COUNT];
-            memcpy(saved_vtables, entry->fields[i].lang, sizeof(saved_vtables));
-            entry->fields[i] = *field;
-            memcpy(entry->fields[i].lang, saved_vtables, sizeof(saved_vtables));
-            return;
-        }
-    }
-
-    // Add new field
-    entry->fields[entry->field_count++] = *field;
-}
-
-void tc_inspect_set_field_vtable(
-    const char* type_name,
-    const char* field_path,
-    tc_inspect_lang lang,
-    const tc_field_vtable* vtable
-) {
-    if (!type_name || !field_path || lang < 0 || lang >= TC_INSPECT_LANG_COUNT) return;
-
-    tc_field_desc* field = tc_inspect_find_field(type_name, field_path);
-    if (!field) return;
-
-    if (vtable) {
-        field->lang[lang] = *vtable;
-    } else {
-        memset(&field->lang[lang], 0, sizeof(tc_field_vtable));
-    }
-}
-
-const tc_field_vtable* tc_inspect_get_field_vtable(
-    const char* type_name,
-    const char* field_path,
-    tc_inspect_lang lang
-) {
-    if (lang < 0 || lang >= TC_INSPECT_LANG_COUNT) return NULL;
-
-    tc_field_desc* field = tc_inspect_find_field(type_name, field_path);
-    if (!field) return NULL;
-
-    if (field->lang[lang].get || field->lang[lang].set) {
-        return &field->lang[lang];
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].get_parent) {
+        return g_vtables[lang].get_parent(type_name, g_vtables[lang].ctx);
     }
     return NULL;
 }
 
 // ============================================================================
-// Field queries (with inheritance)
+// Field queries
 // ============================================================================
-
-// Count own fields (not inherited)
-static size_t count_own_fields(const char* type_name) {
-    tc_type_entry* entry = find_type_entry(type_name);
-    return entry ? entry->field_count : 0;
-}
 
 size_t tc_inspect_field_count(const char* type_name) {
-    tc_type_entry* entry = find_type_entry(type_name);
-    if (!entry) return 0;
-
-    size_t count = entry->field_count;
-
-    // Add base type fields
-    if (entry->base_type[0] != '\0') {
-        count += tc_inspect_field_count(entry->base_type);
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].field_count) {
+        return g_vtables[lang].field_count(type_name, g_vtables[lang].ctx);
     }
-
-    return count;
+    return 0;
 }
 
-const tc_field_desc* tc_inspect_field_at(const char* type_name, size_t index) {
-    tc_type_entry* entry = find_type_entry(type_name);
-    if (!entry) return NULL;
-
-    // First return base type fields
-    if (entry->base_type[0] != '\0') {
-        size_t base_count = tc_inspect_field_count(entry->base_type);
-        if (index < base_count) {
-            return tc_inspect_field_at(entry->base_type, index);
-        }
-        index -= base_count;
+bool tc_inspect_get_field_info(const char* type_name, size_t index, tc_field_info* out) {
+    if (!out) return false;
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].get_field) {
+        return g_vtables[lang].get_field(type_name, index, out, g_vtables[lang].ctx);
     }
-
-    // Then own fields
-    if (index < entry->field_count) {
-        return &entry->fields[index];
-    }
-
-    return NULL;
+    return false;
 }
 
-tc_field_desc* tc_inspect_find_field(const char* type_name, const char* path) {
-    if (!type_name || !path) return NULL;
-
-    tc_type_entry* entry = find_type_entry(type_name);
-    if (!entry) return NULL;
-
-    // Search own fields first
-    for (size_t i = 0; i < entry->field_count; i++) {
-        if (strcmp(entry->fields[i].path, path) == 0) {
-            return &entry->fields[i];
-        }
+bool tc_inspect_find_field_info(const char* type_name, const char* path, tc_field_info* out) {
+    if (!out) return false;
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].find_field) {
+        return g_vtables[lang].find_field(type_name, path, out, g_vtables[lang].ctx);
     }
-
-    // Search base type
-    if (entry->base_type[0] != '\0') {
-        return tc_inspect_find_field(entry->base_type, path);
-    }
-
-    return NULL;
+    return false;
 }
 
 // ============================================================================
-// Field access (per-field vtable)
+// Field access
 // ============================================================================
-
-// Find first available vtable for a field
-static const tc_field_vtable* find_any_vtable(const tc_field_desc* field) {
-    if (!field) return NULL;
-    for (int lang = 0; lang < TC_INSPECT_LANG_COUNT; lang++) {
-        if (field->lang[lang].get || field->lang[lang].set) {
-            return &field->lang[lang];
-        }
-    }
-    return NULL;
-}
 
 tc_value tc_inspect_get(void* obj, const char* type_name, const char* path) {
-    tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) return tc_value_nil();
-
-    const tc_field_vtable* vtable = find_any_vtable(field);
-    if (!vtable || !vtable->get) return tc_value_nil();
-
-    return vtable->get(obj, field, vtable->user_data);
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].get) {
+        return g_vtables[lang].get(obj, type_name, path, g_vtables[lang].ctx);
+    }
+    return tc_value_nil();
 }
 
 void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene) {
-    tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) {
-        tc_log(TC_LOG_WARN, "[tc_inspect_set] field not found: %s.%s", type_name, path);
-        return;
-    }
-
-    const tc_field_vtable* vtable = find_any_vtable(field);
-    if (!vtable || !vtable->set) {
-        tc_log(TC_LOG_WARN, "[tc_inspect_set] no vtable/setter for %s.%s", type_name, path);
-        return;
-    }
-
-    // Apply convert if custom type handler exists
-    const tc_custom_type_handler* h = tc_custom_type_get(field->kind);
-    if (h && h->convert) {
-        tc_value converted = h->convert(&value);
-        vtable->set(obj, field, converted, vtable->user_data, scene);
-        if (converted.type != value.type || converted.data.custom != value.data.custom) {
-            tc_value_free(&converted);
-        }
-    } else {
-        vtable->set(obj, field, value, vtable->user_data, scene);
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].set) {
+        g_vtables[lang].set(obj, type_name, path, value, scene, g_vtables[lang].ctx);
     }
 }
 
 void tc_inspect_action(void* obj, const char* type_name, const char* path) {
-    tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) return;
-
-    const tc_field_vtable* vtable = find_any_vtable(field);
-    if (!vtable || !vtable->action) return;
-
-    vtable->action(obj, field, vtable->user_data);
-}
-
-// Language-specific access
-tc_value tc_inspect_get_lang(void* obj, const char* type_name, const char* path, tc_inspect_lang lang) {
-    if (lang < 0 || lang >= TC_INSPECT_LANG_COUNT) return tc_value_nil();
-
-    tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) return tc_value_nil();
-
-    const tc_field_vtable* vtable = &field->lang[lang];
-    if (!vtable->get) return tc_value_nil();
-
-    return vtable->get(obj, field, vtable->user_data);
-}
-
-void tc_inspect_set_lang(void* obj, const char* type_name, const char* path, tc_value value, tc_inspect_lang lang, tc_scene* scene) {
-    if (lang < 0 || lang >= TC_INSPECT_LANG_COUNT) return;
-
-    tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) return;
-
-    const tc_field_vtable* vtable = &field->lang[lang];
-    if (!vtable->set) return;
-
-    // Apply convert if custom type handler exists
-    const tc_custom_type_handler* h = tc_custom_type_get(field->kind);
-    if (h && h->convert) {
-        tc_value converted = h->convert(&value);
-        vtable->set(obj, field, converted, vtable->user_data, scene);
-        if (converted.type != value.type || converted.data.custom != value.data.custom) {
-            tc_value_free(&converted);
-        }
-    } else {
-        vtable->set(obj, field, value, vtable->user_data, scene);
+    tc_inspect_lang lang = tc_inspect_type_lang(type_name);
+    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].action) {
+        g_vtables[lang].action(obj, type_name, path, g_vtables[lang].ctx);
     }
-}
-
-void tc_inspect_action_lang(void* obj, const char* type_name, const char* path, tc_inspect_lang lang) {
-    if (lang < 0 || lang >= TC_INSPECT_LANG_COUNT) return;
-
-    tc_field_desc* field = tc_inspect_find_field(type_name, path);
-    if (!field) return;
-
-    const tc_field_vtable* vtable = &field->lang[lang];
-    if (!vtable->action) return;
-
-    vtable->action(obj, field, vtable->user_data);
 }
 
 // ============================================================================
@@ -695,71 +477,69 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
 
     size_t count = tc_inspect_field_count(type_name);
     for (size_t i = 0; i < count; i++) {
-        const tc_field_desc* f = tc_inspect_field_at(type_name, i);
-        if (!f || !f->is_serializable) continue;
+        tc_field_info f;
+        if (!tc_inspect_get_field_info(type_name, i, &f)) continue;
+        if (!f.is_serializable) continue;
 
-        tc_value val = tc_inspect_get(obj, type_name, f->path);
+        tc_value val = tc_inspect_get(obj, type_name, f.path);
         if (val.type == TC_VALUE_NIL) continue;
 
-        // Try tc_kind serialization first (language-agnostic)
-        if (tc_kind_exists(f->kind)) {
-            tc_value serialized = tc_kind_serialize_any(f->kind, &val);
+        // Try tc_kind serialization first
+        if (tc_kind_exists(f.kind)) {
+            tc_value serialized = tc_kind_serialize_any(f.kind, &val);
             if (serialized.type != TC_VALUE_NIL) {
-                tc_value_dict_set(&result, f->path, serialized);
+                tc_value_dict_set(&result, f.path, serialized);
                 tc_value_free(&val);
                 continue;
             }
         }
 
-        // Fallback to tc_custom_type_handler (for TC_VALUE_CUSTOM memory management)
-        const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
+        // Fallback to tc_custom_type_handler
+        const tc_custom_type_handler* h = tc_custom_type_get(f.kind);
         if (h && h->serialize) {
             tc_value serialized = h->serialize(&val);
-            tc_value_dict_set(&result, f->path, serialized);
+            tc_value_dict_set(&result, f.path, serialized);
             tc_value_free(&val);
         } else {
             // No serializer - store value as-is
-            tc_value_dict_set(&result, f->path, val);
+            tc_value_dict_set(&result, f.path, val);
         }
     }
 
     return result;
 }
 
-void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data) {
-    tc_inspect_deserialize_with_scene(obj, type_name, data, NULL);
-}
-
-void tc_inspect_deserialize_with_scene(void* obj, const char* type_name, const tc_value* data, tc_scene* scene) {
+void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, tc_scene* scene) {
     if (!data || data->type != TC_VALUE_DICT) return;
 
     size_t count = tc_inspect_field_count(type_name);
     for (size_t i = 0; i < count; i++) {
-        const tc_field_desc* f = tc_inspect_field_at(type_name, i);
-        if (!f || !f->is_serializable) continue;
+        tc_field_info f;
+        if (!tc_inspect_get_field_info(type_name, i, &f)) continue;
+        if (!f.is_serializable) continue;
 
-        tc_value* field_data = tc_value_dict_get((tc_value*)data, f->path);
+        tc_value* field_data = tc_value_dict_get((tc_value*)data, f.path);
         if (!field_data || field_data->type == TC_VALUE_NIL) continue;
 
-        // Try tc_kind deserialization first (language-agnostic)
-        if (tc_kind_exists(f->kind)) {
-            tc_value deserialized = tc_kind_deserialize_any(f->kind, field_data, scene);
+        // Try tc_kind deserialization first
+        if (tc_kind_exists(f.kind)) {
+            tc_value deserialized = tc_kind_deserialize_any(f.kind, field_data, scene);
             if (deserialized.type != TC_VALUE_NIL) {
-                tc_inspect_set(obj, type_name, f->path, deserialized, scene);
+                tc_inspect_set(obj, type_name, f.path, deserialized, scene);
                 tc_value_free(&deserialized);
                 continue;
             }
         }
 
         // Fallback to tc_custom_type_handler
-        const tc_custom_type_handler* h = tc_custom_type_get(f->kind);
+        const tc_custom_type_handler* h = tc_custom_type_get(f.kind);
         if (h && h->deserialize) {
             tc_value deserialized = h->deserialize(field_data);
-            tc_inspect_set(obj, type_name, f->path, deserialized, scene);
+            tc_inspect_set(obj, type_name, f.path, deserialized, scene);
             tc_value_free(&deserialized);
         } else {
             // No deserializer - set value as-is
-            tc_inspect_set(obj, type_name, f->path, *field_data, scene);
+            tc_inspect_set(obj, type_name, f.path, *field_data, scene);
         }
     }
 }
@@ -769,5 +549,6 @@ void tc_inspect_deserialize_with_scene(void* obj, const char* type_name, const t
 // ============================================================================
 
 void tc_inspect_cleanup(void) {
-    g_type_registry.count = 0;
+    // Nothing to clean up - languages manage their own storage
+    memset(g_vtables, 0, sizeof(g_vtables));
 }
