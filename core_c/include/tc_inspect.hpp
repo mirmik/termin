@@ -261,8 +261,7 @@ class TC_INSPECT_API InspectRegistry {
     // Type backend registry
     std::unordered_map<std::string, TypeBackend> _type_backends;
 
-    // Type inheritance (child -> parent)
-    std::unordered_map<std::string, std::string> _type_parents;
+    // Type inheritance now stored in C API via tc_inspect_register_type()
 
     // Callback for generating Python handlers (set from nanobind module)
     std::function<KindHandler*(const std::string&)> _handler_generator;
@@ -325,12 +324,13 @@ public:
     }
 
     void set_type_parent(const std::string& type_name, const std::string& parent_name) {
-        _type_parents[type_name] = parent_name;
+        // Register/update type with parent in C API
+        tc_inspect_register_type(type_name.c_str(), parent_name.empty() ? nullptr : parent_name.c_str());
     }
 
     std::string get_type_parent(const std::string& type_name) const {
-        auto it = _type_parents.find(type_name);
-        return it != _type_parents.end() ? it->second : "";
+        const char* base = tc_inspect_get_base_type(type_name.c_str());
+        return base ? base : "";
     }
 
     // ========================================================================
