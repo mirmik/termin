@@ -144,8 +144,8 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
     c->wrapper = py_self;
     c->externally_managed = true;
 
-    // Set instance type name (overrides vtable->type_name)
-    c->type_name = type_name;
+    // Set instance type name (owned copy)
+    c->type_name = type_name ? strdup(type_name) : NULL;
 
     // Python components
     c->kind = TC_EXTERNAL_COMPONENT;
@@ -155,7 +155,10 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
 
 void tc_component_free_python(tc_component* c) {
     if (c) {
-        // Don't free c->wrapper - Python manages its own objects
+        // Free owned type_name
+        if (c->type_name) {
+            free((void*)c->type_name);
+        }
         free(c);
     }
 }

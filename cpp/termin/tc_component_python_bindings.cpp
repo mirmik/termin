@@ -328,6 +328,26 @@ static void py_input_cb_on_key(void* py_self, void* event) {
 }
 
 // ============================================================================
+// Reference counting callbacks
+// ============================================================================
+
+static void py_cb_incref(void* py_obj) {
+    if (py_obj) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        Py_INCREF((PyObject*)py_obj);
+        PyGILState_Release(gstate);
+    }
+}
+
+static void py_cb_decref(void* py_obj) {
+    if (py_obj) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        Py_DECREF((PyObject*)py_obj);
+        PyGILState_Release(gstate);
+    }
+}
+
+// ============================================================================
 // Initialization - called once to set up Python callbacks
 // ============================================================================
 
@@ -348,6 +368,8 @@ static void ensure_callbacks_initialized() {
         .on_scene_inactive = py_cb_on_scene_inactive,
         .on_scene_active = py_cb_on_scene_active,
         .on_editor_start = py_cb_on_editor_start,
+        .incref = py_cb_incref,
+        .decref = py_cb_decref,
     };
     tc_component_set_python_callbacks(&callbacks);
 
@@ -378,25 +400,22 @@ static void ensure_callbacks_initialized() {
 class TcComponent {
 public:
     tc_component* _c = nullptr;
-    nb::object _py_self;  // Strong reference to Python object
-    std::string _interned_type_name;  // Keep type name alive
 
     // Create a new TcComponent wrapping a Python object
     TcComponent(nb::object py_self, const std::string& type_name) {
         ensure_callbacks_initialized();
 
-        // Keep Python object alive
-        _py_self = py_self;
+        // Create C component with Python vtable (owns type_name copy)
+        _c = tc_component_new_python(py_self.ptr(), type_name.c_str());
 
-        // Intern type name
-        _interned_type_name = type_name;
-
-        // Create C component with Python vtable
-        _c = tc_component_new_python(py_self.ptr(), _interned_type_name.c_str());
+        // Increment Python refcount via vtable (keeps Python object alive)
+        tc_component_retain(_c);
     }
 
     ~TcComponent() {
         if (_c) {
+            // Decrement Python refcount via vtable
+            tc_component_release(_c);
             tc_component_free_python(_c);
             _c = nullptr;
         }
