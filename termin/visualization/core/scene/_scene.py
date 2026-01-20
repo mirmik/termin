@@ -739,6 +739,48 @@ class Scene:
 
     # --- Input dispatch ---
 
+    def dispatch_mouse_button(self, event) -> None:
+        """Dispatch mouse button event to all input handler components."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_mouse_button(event)
+
+    def dispatch_mouse_move(self, event) -> None:
+        """Dispatch mouse move event to all input handler components."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_mouse_move(event)
+
+    def dispatch_scroll(self, event) -> None:
+        """Dispatch scroll event to all input handler components."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_scroll(event)
+
+    def dispatch_key(self, event) -> None:
+        """Dispatch key event to all input handler components."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_key(event)
+
+    # --- Editor dispatch methods (with active_in_editor filter) ---
+
+    def dispatch_mouse_button_editor(self, event) -> None:
+        """Dispatch mouse button event to input handlers with active_in_editor=True."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_mouse_button_editor(event)
+
+    def dispatch_mouse_move_editor(self, event) -> None:
+        """Dispatch mouse move event to input handlers with active_in_editor=True."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_mouse_move_editor(event)
+
+    def dispatch_scroll_editor(self, event) -> None:
+        """Dispatch scroll event to input handlers with active_in_editor=True."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_scroll_editor(event)
+
+    def dispatch_key_editor(self, event) -> None:
+        """Dispatch key event to input handlers with active_in_editor=True."""
+        if self._tc_scene is not None:
+            self._tc_scene.dispatch_key_editor(event)
+
     def dispatch_input(self, event_name: str, event, filter_fn: Callable[[InputComponent], bool] | None = None):
         """Dispatch input event to InputComponents.
 
@@ -747,12 +789,28 @@ class Scene:
             event: Event object to dispatch.
             filter_fn: Optional filter function. If provided, only components
                        for which filter_fn(component) returns True receive the event.
+
+        Note: For best performance without filter_fn, use the specific dispatch methods
+        (dispatch_mouse_button, dispatch_mouse_move, dispatch_scroll, dispatch_key).
         """
         if self._tc_scene is None:
             return
 
+        # Fast path: use C-level dispatch when no filter is needed
+        if filter_fn is None:
+            if event_name == "on_mouse_button":
+                self._tc_scene.dispatch_mouse_button(event)
+            elif event_name == "on_mouse_move":
+                self._tc_scene.dispatch_mouse_move(event)
+            elif event_name == "on_scroll":
+                self._tc_scene.dispatch_scroll(event)
+            elif event_name == "on_key":
+                self._tc_scene.dispatch_key(event)
+            return
+
+        # Slow path with filter: iterate components and call methods
         def dispatch_to_component(component):
-            if filter_fn is not None and not filter_fn(component):
+            if not filter_fn(component):
                 return True
             handler = getattr(component, event_name, None)
             if handler:

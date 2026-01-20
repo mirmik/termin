@@ -110,9 +110,10 @@ TC_API void tc_scene_foreach_component_of_type(
 // Filter flags for drawable iteration
 typedef enum tc_drawable_filter_flags {
     TC_DRAWABLE_FILTER_NONE = 0,
-    TC_DRAWABLE_FILTER_ENABLED = 1 << 0,       // Only enabled components
-    TC_DRAWABLE_FILTER_VISIBLE = 1 << 1,       // Only visible entities
-    TC_DRAWABLE_FILTER_ENTITY_ENABLED = 1 << 2 // Only enabled entities
+    TC_DRAWABLE_FILTER_ENABLED = 1 << 0,        // Only enabled components
+    TC_DRAWABLE_FILTER_VISIBLE = 1 << 1,        // Only visible entities
+    TC_DRAWABLE_FILTER_ENTITY_ENABLED = 1 << 2, // Only enabled entities
+    TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR = 1 << 3 // Only components with active_in_editor=true
 } tc_drawable_filter_flags;
 
 // Iterate all drawable components in scene with optional filtering
@@ -124,6 +125,19 @@ TC_API void tc_scene_foreach_drawable(
     void* user_data,
     int filter_flags,
     uint64_t layer_mask
+);
+
+// ============================================================================
+// Input Handler Component Iteration
+// ============================================================================
+
+// Iterate all input handler components in scene
+// filter_flags: combination of tc_drawable_filter_flags (reused for consistency)
+TC_API void tc_scene_foreach_input_handler(
+    tc_scene* s,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags
 );
 
 // ============================================================================

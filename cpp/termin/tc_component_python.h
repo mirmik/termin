@@ -85,6 +85,29 @@ TC_API void tc_component_set_python_drawable_callbacks(const tc_python_drawable_
 // Call this when the Python component implements Drawable protocol.
 TC_API void tc_component_install_python_drawable_vtable(tc_component* c);
 
+// ============================================================================
+// Python Input Handler callbacks
+// ============================================================================
+
+typedef void (*tc_py_input_on_mouse_button_fn)(void* py_self, void* event);
+typedef void (*tc_py_input_on_mouse_move_fn)(void* py_self, void* event);
+typedef void (*tc_py_input_on_scroll_fn)(void* py_self, void* event);
+typedef void (*tc_py_input_on_key_fn)(void* py_self, void* event);
+
+typedef struct {
+    tc_py_input_on_mouse_button_fn on_mouse_button;
+    tc_py_input_on_mouse_move_fn on_mouse_move;
+    tc_py_input_on_scroll_fn on_scroll;
+    tc_py_input_on_key_fn on_key;
+} tc_python_input_callbacks;
+
+// Set the global Python input callbacks.
+TC_API void tc_component_set_python_input_callbacks(const tc_python_input_callbacks* callbacks);
+
+// Install input vtable on a Python component.
+// Call this when the Python component implements InputHandler protocol.
+TC_API void tc_component_install_python_input_vtable(tc_component* c);
+
 #ifdef __cplusplus
 }
 #endif

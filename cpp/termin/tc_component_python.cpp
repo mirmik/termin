@@ -7,6 +7,7 @@
 // Global Python callbacks (set once at initialization)
 static tc_python_callbacks g_py_callbacks = {0};
 static tc_python_drawable_callbacks g_py_drawable_callbacks = {0};
+static tc_python_input_callbacks g_py_input_callbacks = {0};
 
 // ============================================================================
 // Python vtable callbacks - these dispatch to global Python callbacks
@@ -199,5 +200,53 @@ void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbac
 void tc_component_install_python_drawable_vtable(tc_component* c) {
     if (c) {
         c->drawable_vtable = &g_python_drawable_vtable;
+    }
+}
+
+// ============================================================================
+// Python input vtable callbacks
+// ============================================================================
+
+static void py_input_on_mouse_button(tc_component* c, void* event) {
+    if (g_py_input_callbacks.on_mouse_button && c->wrapper) {
+        g_py_input_callbacks.on_mouse_button(c->wrapper, event);
+    }
+}
+
+static void py_input_on_mouse_move(tc_component* c, void* event) {
+    if (g_py_input_callbacks.on_mouse_move && c->wrapper) {
+        g_py_input_callbacks.on_mouse_move(c->wrapper, event);
+    }
+}
+
+static void py_input_on_scroll(tc_component* c, void* event) {
+    if (g_py_input_callbacks.on_scroll && c->wrapper) {
+        g_py_input_callbacks.on_scroll(c->wrapper, event);
+    }
+}
+
+static void py_input_on_key(tc_component* c, void* event) {
+    if (g_py_input_callbacks.on_key && c->wrapper) {
+        g_py_input_callbacks.on_key(c->wrapper, event);
+    }
+}
+
+// Python input vtable (shared by all Python input handler components)
+static const tc_input_vtable g_python_input_vtable = {
+    .on_mouse_button = py_input_on_mouse_button,
+    .on_mouse_move = py_input_on_mouse_move,
+    .on_scroll = py_input_on_scroll,
+    .on_key = py_input_on_key,
+};
+
+void tc_component_set_python_input_callbacks(const tc_python_input_callbacks* callbacks) {
+    if (callbacks) {
+        g_py_input_callbacks = *callbacks;
+    }
+}
+
+void tc_component_install_python_input_vtable(tc_component* c) {
+    if (c) {
+        c->input_vtable = &g_python_input_vtable;
     }
 }

@@ -127,6 +127,19 @@ TC_API void tc_scene_foreach_drawable(
 );
 
 // ============================================================================
+// Input Handler Component Iteration
+// ============================================================================
+
+// Iterate all input handler components in scene
+// filter_flags: combination of tc_drawable_filter_flags (reused for consistency)
+TC_API void tc_scene_foreach_input_handler(
+    tc_scene* s,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags
+);
+
+// ============================================================================
 // Component Type Enumeration
 // ============================================================================
 

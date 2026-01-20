@@ -131,7 +131,15 @@ class EditorDisplayInputManager:
         scene = viewport.scene
         if scene is None:
             return
-        scene.dispatch_input(event_name, event, lambda c: c.active_in_editor)
+        # Use fast-path C-level dispatch with active_in_editor filter
+        if event_name == "on_mouse_button":
+            scene.dispatch_mouse_button_editor(event)
+        elif event_name == "on_mouse_move":
+            scene.dispatch_mouse_move_editor(event)
+        elif event_name == "on_scroll":
+            scene.dispatch_scroll_editor(event)
+        elif event_name == "on_key":
+            scene.dispatch_key_editor(event)
 
     def _request_update(self) -> None:
         """Запрашивает перерисовку."""

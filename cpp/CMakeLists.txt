@@ -208,6 +208,7 @@ add_library(entity_lib SHARED
     termin/entity/component.cpp
     termin/entity/component_registry.cpp
     termin/entity/vtable_utils.cpp
+    termin/entity/input_handler.cpp
     termin/entity/components/rotator_component.cpp
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp

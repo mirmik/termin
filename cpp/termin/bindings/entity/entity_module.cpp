@@ -176,7 +176,19 @@ NB_MODULE(_entity_native, m) {
         .def("clear", &ComponentRegistry::clear)
         .def_static("set_drawable", &ComponentRegistry::set_drawable,
             nb::arg("name"), nb::arg("is_drawable"),
-            "Mark a component type as drawable (can render geometry)");
+            "Mark a component type as drawable (can render geometry)")
+        .def_static("set_input_handler", &ComponentRegistry::set_input_handler,
+            nb::arg("name"), nb::arg("is_input_handler"),
+            "Mark a component type as input handler")
+        .def_static("get_input_handler_types", []() {
+            const char* types[64];
+            size_t count = tc_component_registry_get_input_handler_types(types, 64);
+            std::vector<std::string> result;
+            for (size_t i = 0; i < count; i++) {
+                result.push_back(types[i]);
+            }
+            return result;
+        }, "Get all input handler type names");
 
     // --- Entity (in separate file for faster compilation) ---
     bind_entity_class(m);

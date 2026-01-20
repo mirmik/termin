@@ -187,4 +187,8 @@ void ComponentRegistry::set_drawable(const std::string& name, bool is_drawable) 
     tc_component_registry_set_drawable(name.c_str(), is_drawable);
 }
 
+void ComponentRegistry::set_input_handler(const std::string& name, bool is_input_handler) {
+    tc_component_registry_set_input_handler(name.c_str(), is_input_handler);
+}
+
 } // namespace termin

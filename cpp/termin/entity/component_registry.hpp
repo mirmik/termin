@@ -9,6 +9,7 @@
 
 #include "component.hpp"
 #include "vtable_utils.hpp"
+#include "input_handler.hpp"
 #include "../../../core_c/include/tc_inspect.hpp"
 #include "../render/drawable.hpp"
 
@@ -67,6 +68,9 @@ public:
     // Mark a component type as drawable
     static void set_drawable(const std::string& name, bool is_drawable);
 
+    // Mark a component type as input handler
+    static void set_input_handler(const std::string& name, bool is_input_handler);
+
 private:
     ComponentRegistry() = default;
     ComponentRegistry(const ComponentRegistry&) = delete;
@@ -108,6 +112,11 @@ struct ComponentRegistrar {
         // Mark as drawable if component inherits from Drawable
         if constexpr (std::is_base_of_v<Drawable, T>) {
             ComponentRegistry::set_drawable(name, true);
+        }
+
+        // Mark as input handler if component inherits from InputHandler
+        if constexpr (std::is_base_of_v<InputHandler, T>) {
+            ComponentRegistry::set_input_handler(name, true);
         }
     }
 };

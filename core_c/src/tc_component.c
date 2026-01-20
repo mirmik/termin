@@ -18,7 +18,8 @@ typedef struct tc_component_type_entry {
     int* descendant_indices;
     size_t descendant_count;
     size_t descendant_capacity;
-    bool is_drawable;  // True if this component type can render geometry
+    bool is_drawable;       // True if this component type can render geometry
+    bool is_input_handler;  // True if this component type handles input events
 } tc_component_type_entry;
 
 typedef struct tc_component_registry {
@@ -114,6 +115,7 @@ void tc_component_registry_register_with_parent(
     entry->descendant_count = 0;
     entry->descendant_capacity = 0;
     entry->is_drawable = false;
+    entry->is_input_handler = false;
     g_component_registry.count++;
 
     // Add this type to all ancestors' descendant lists
@@ -236,6 +238,36 @@ size_t tc_component_registry_get_drawable_types(const char** out_names, size_t m
     size_t count = 0;
     for (size_t i = 0; i < g_component_registry.count && count < max_count; i++) {
         if (g_component_registry.entries[i].is_drawable) {
+            out_names[count++] = g_component_registry.entries[i].type_name;
+        }
+    }
+    return count;
+}
+
+void tc_component_registry_set_input_handler(const char* type_name, bool is_input_handler) {
+    if (!type_name) return;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return;
+
+    g_component_registry.entries[idx].is_input_handler = is_input_handler;
+}
+
+bool tc_component_registry_is_input_handler(const char* type_name) {
+    if (!type_name) return false;
+
+    int idx = tc_component_registry_find_index(type_name);
+    if (idx < 0) return false;
+
+    return g_component_registry.entries[idx].is_input_handler;
+}
+
+size_t tc_component_registry_get_input_handler_types(const char** out_names, size_t max_count) {
+    if (!out_names || max_count == 0) return 0;
+
+    size_t count = 0;
+    for (size_t i = 0; i < g_component_registry.count && count < max_count; i++) {
+        if (g_component_registry.entries[i].is_input_handler) {
             out_names[count++] = g_component_registry.entries[i].type_name;
         }
     }

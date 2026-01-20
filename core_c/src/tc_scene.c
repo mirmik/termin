@@ -469,6 +469,49 @@ void tc_scene_foreach_drawable(
     }
 }
 
+void tc_scene_foreach_input_handler(
+    tc_scene* s,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags
+) {
+    if (!s || !callback) return;
+
+    // Get all input handler types from registry
+    const char* input_types[64];
+    size_t input_count = tc_component_registry_get_input_handler_types(input_types, 64);
+    if (input_count == 0) return;
+
+    bool check_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENABLED) != 0;
+    bool check_entity_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENTITY_ENABLED) != 0;
+    bool check_active_in_editor = (filter_flags & TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR) != 0;
+
+    // Iterate over all input handler types
+    for (size_t t = 0; t < input_count; t++) {
+        for (tc_component* c = tc_scene_first_component_of_type(s, input_types[t]);
+             c != NULL; c = c->type_next) {
+
+            // Apply filters
+            if (check_enabled && !c->enabled) {
+                continue;
+            }
+
+            if (check_active_in_editor && !c->active_in_editor) {
+                continue;
+            }
+
+            // Entity-level filters require valid owner
+            if (c->owner_pool && check_entity_enabled) {
+                if (!tc_entity_pool_enabled(c->owner_pool, c->owner_entity_id)) {
+                    continue;
+                }
+            }
+
+            if (!callback(c, user_data)) return;
+        }
+    }
+}
+
 // ============================================================================
 // Component Type Enumeration
 // ============================================================================

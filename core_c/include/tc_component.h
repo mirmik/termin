@@ -60,6 +60,30 @@ struct tc_drawable_vtable {
 };
 
 // ============================================================================
+// Input VTable - for components that handle input events
+// ============================================================================
+
+// Forward declarations for input event types (opaque pointers)
+typedef struct tc_mouse_button_event tc_mouse_button_event;
+typedef struct tc_mouse_move_event tc_mouse_move_event;
+typedef struct tc_scroll_event tc_scroll_event;
+typedef struct tc_key_event tc_key_event;
+
+struct tc_input_vtable {
+    // Mouse button press/release
+    void (*on_mouse_button)(tc_component* self, void* event);
+
+    // Mouse movement
+    void (*on_mouse_move)(tc_component* self, void* event);
+
+    // Scroll wheel
+    void (*on_scroll)(tc_component* self, void* event);
+
+    // Keyboard input
+    void (*on_key)(tc_component* self, void* event);
+};
+
+// ============================================================================
 // Component VTable - virtual method table for components
 // ============================================================================
 
@@ -116,6 +140,9 @@ struct tc_component {
     // Drawable vtable (NULL if component is not drawable)
     const tc_drawable_vtable* drawable_vtable;
 
+    // Input vtable (NULL if component doesn't handle input)
+    const tc_input_vtable* input_vtable;
+
     // Owner entity (set by entity_add_component) - DEPRECATED, use owner_entity_id
     tc_entity* entity;
 
@@ -159,6 +186,7 @@ struct tc_component {
 static inline void tc_component_init(tc_component* c, const tc_component_vtable* vtable) {
     c->vtable = vtable;
     c->drawable_vtable = NULL;
+    c->input_vtable = NULL;
     c->entity = NULL;
 #ifdef __cplusplus
     c->owner_entity_id = tc_entity_id{0xFFFFFFFF, 0};  // invalid
@@ -314,6 +342,38 @@ static inline tc_shader_handle tc_component_override_shader(tc_component* c, con
 }
 
 // ============================================================================
+// Input dispatch (null-safe vtable dispatch)
+// ============================================================================
+
+static inline bool tc_component_is_input_handler(const tc_component* c) {
+    return c && c->input_vtable != NULL;
+}
+
+static inline void tc_component_on_mouse_button(tc_component* c, void* event) {
+    if (c && c->enabled && c->input_vtable && c->input_vtable->on_mouse_button) {
+        c->input_vtable->on_mouse_button(c, event);
+    }
+}
+
+static inline void tc_component_on_mouse_move(tc_component* c, void* event) {
+    if (c && c->enabled && c->input_vtable && c->input_vtable->on_mouse_move) {
+        c->input_vtable->on_mouse_move(c, event);
+    }
+}
+
+static inline void tc_component_on_scroll(tc_component* c, void* event) {
+    if (c && c->enabled && c->input_vtable && c->input_vtable->on_scroll) {
+        c->input_vtable->on_scroll(c, event);
+    }
+}
+
+static inline void tc_component_on_key(tc_component* c, void* event) {
+    if (c && c->enabled && c->input_vtable && c->input_vtable->on_key) {
+        c->input_vtable->on_key(c, event);
+    }
+}
+
+// ============================================================================
 // Component Registry
 // ============================================================================
 
@@ -363,6 +423,20 @@ TC_API bool tc_component_registry_is_drawable(const char* type_name);
 // Get all drawable type names
 // Returns count, fills out_names array (caller provides buffer)
 TC_API size_t tc_component_registry_get_drawable_types(
+    const char** out_names,
+    size_t max_count
+);
+
+// Input handler type management
+// Mark a component type as input handler
+TC_API void tc_component_registry_set_input_handler(const char* type_name, bool is_input_handler);
+
+// Check if a component type is an input handler
+TC_API bool tc_component_registry_is_input_handler(const char* type_name);
+
+// Get all input handler type names
+// Returns count, fills out_names array (caller provides buffer)
+TC_API size_t tc_component_registry_get_input_handler_types(
     const char** out_names,
     size_t max_count
 );

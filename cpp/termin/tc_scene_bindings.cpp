@@ -165,11 +165,10 @@ private:
                 }
             } else if (tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
                 // Python component - update via Python attribute
+                // All Python components have 'entity' field declared in base class
                 nb::gil_scoped_acquire gil;
                 nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->wrapper);
-                if (nb::hasattr(py_comp, "entity")) {
-                    py_comp.attr("entity") = nb::cast(ent);
-                }
+                py_comp.attr("entity") = nb::cast(ent);
             }
         }
 
@@ -411,6 +410,265 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("type_name"), nb::arg("callback"),
            "Iterate components of type with callback(component) -> bool. Return False to stop.")
+
+        // Input dispatch methods - dispatch to all input handler components via vtable
+        .def("dispatch_mouse_button", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        // All input handlers must have input_vtable set
+                        if (c->input_vtable && c->input_vtable->on_mouse_button) {
+                            c->input_vtable->on_mouse_button(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch mouse button event to all input handlers")
+
+        .def("dispatch_mouse_move", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_mouse_move) {
+                            c->input_vtable->on_mouse_move(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch mouse move event to all input handlers")
+
+        .def("dispatch_scroll", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_scroll) {
+                            c->input_vtable->on_scroll(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch scroll event to all input handlers")
+
+        .def("dispatch_key", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_key) {
+                            c->input_vtable->on_key(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch key event to all input handlers")
+
+        // Editor dispatch methods (with active_in_editor filter)
+        .def("dispatch_mouse_button_editor", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_mouse_button) {
+                            c->input_vtable->on_mouse_button(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch mouse button event to editor input handlers")
+
+        .def("dispatch_mouse_move_editor", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_mouse_move) {
+                            c->input_vtable->on_mouse_move(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch mouse move event to editor input handlers")
+
+        .def("dispatch_scroll_editor", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_scroll) {
+                            c->input_vtable->on_scroll(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch scroll event to editor input handlers")
+
+        .def("dispatch_key_editor", [](TcScene& self, nb::object event) {
+            struct DispatchData {
+                PyObject* event_ptr;
+                bool had_exception = false;
+            };
+            DispatchData data{event.ptr()};
+
+            tc_scene_foreach_input_handler(
+                self._s,
+                [](tc_component* c, void* user_data) -> bool {
+                    auto* data = static_cast<DispatchData*>(user_data);
+                    if (data->had_exception) return false;
+
+                    try {
+                        if (c->input_vtable && c->input_vtable->on_key) {
+                            c->input_vtable->on_key(c, data->event_ptr);
+                        }
+                        return true;
+                    } catch (...) {
+                        data->had_exception = true;
+                        return false;
+                    }
+                },
+                &data,
+                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
+            );
+
+            if (data.had_exception) {
+                throw nb::python_error();
+            }
+        }, nb::arg("event"), "Dispatch key event to editor input handlers")
         ;
 
     // =========================================================================

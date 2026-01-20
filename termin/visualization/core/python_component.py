@@ -107,8 +107,12 @@ class PythonComponent:
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
 
         # Mark as drawable if class has is_drawable = True
-        if cls.is_drawable:
+        if getattr(cls, 'is_drawable', False):
             ComponentRegistry.set_drawable(cls.__name__, True)
+
+        # Mark as input handler if class has is_input_handler = True
+        if getattr(cls, 'is_input_handler', False):
+            ComponentRegistry.set_input_handler(cls.__name__, True)
 
     # =========================================================================
     # Properties (delegate to TcComponent)
@@ -302,9 +306,14 @@ class PythonComponent:
 class InputComponent(PythonComponent):
     """Component capable of handling input events."""
 
+    # Class-level flag for input handler detection
+    is_input_handler: bool = True
+
     def __init__(self, enabled: bool = True, active_in_editor: bool = False):
         super().__init__(enabled=enabled)
         self.active_in_editor = active_in_editor
+        # Install input vtable for C-level dispatch
+        self._tc.install_input_vtable()
 
     def on_mouse_button(self, event):
         pass

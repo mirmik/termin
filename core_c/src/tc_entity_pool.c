@@ -1240,6 +1240,9 @@ tc_entity_id tc_entity_pool_migrate(
     ComponentArray* src_comps = &src_pool->components[src_idx];
     for (size_t i = 0; i < src_comps->count; i++) {
         tc_component* c = src_comps->items[i];
+        // Update component's owner to new pool/entity
+        c->owner_pool = dst_pool;
+        c->owner_entity_id = dst_id;
         // Add to dst without incrementing refcount (we're transferring ownership)
         component_array_push(&dst_pool->components[dst_idx], c);
     }
