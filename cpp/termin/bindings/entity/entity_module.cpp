@@ -265,7 +265,7 @@ NB_MODULE(_entity_native, m) {
         .def_rw("speed", &CXXRotatorComponent::speed);
 
     // Register CxxComponent::enabled in InspectRegistry
-    InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
+    tc::InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
         "Component", "enabled", "Enabled", "bool",
         [](CxxComponent* c) { return c->enabled(); },
         [](CxxComponent* c, bool v) { c->set_enabled(v); }

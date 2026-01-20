@@ -3,7 +3,6 @@
 
 #include "termin/mesh_bindings.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 

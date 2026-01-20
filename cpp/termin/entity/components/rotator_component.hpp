@@ -4,7 +4,6 @@
 #include "../component_registry.hpp"
 #include "../entity.hpp"
 #include "../../geom/geom.hpp"
-#include "../../inspect/inspect_registry.hpp"
 #include "../../colliders/collider.hpp"
 #include <tc_log.hpp>
 

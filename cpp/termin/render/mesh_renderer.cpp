@@ -1,5 +1,4 @@
 #include "mesh_renderer.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 
 #include <algorithm>
 #include <cstring>

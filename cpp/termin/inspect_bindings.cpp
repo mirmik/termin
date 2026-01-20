@@ -2,7 +2,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "inspect/inspect_registry.hpp"
+#include "../../core_c/include/tc_inspect.hpp"
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
 #include "render/frame_pass.hpp"
@@ -12,6 +12,12 @@
 namespace nb = nanobind;
 
 namespace termin {
+
+// Import tc:: types for bindings
+using tc::TypeBackend;
+using tc::EnumChoice;
+using tc::InspectFieldInfo;
+using tc::InspectRegistry;
 
 // Helper to extract short type name from full qualified name
 // "termin._native.render.MeshRenderer" -> "MeshRenderer"

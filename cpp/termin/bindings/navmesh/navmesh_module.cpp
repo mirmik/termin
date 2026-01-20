@@ -3,7 +3,6 @@
 #include "common.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/entity/component.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 
 namespace termin {
 

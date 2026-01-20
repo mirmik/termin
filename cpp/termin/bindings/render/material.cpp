@@ -5,7 +5,6 @@
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/render_state.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 extern "C" {

@@ -8,7 +8,6 @@
 #include "termin/entity/component_registry.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 
 namespace termin {
 

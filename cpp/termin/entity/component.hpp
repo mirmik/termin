@@ -6,7 +6,6 @@
 #include <unordered_set>
 #include <nanobind/nanobind.h>
 #include "../../trent/trent.h"
-#include "../inspect/inspect_registry.hpp"
 #include "../../../core_c/include/tc_component.h"
 #include "../../../core_c/include/tc_inspect.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"

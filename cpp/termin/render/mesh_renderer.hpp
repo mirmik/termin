@@ -11,7 +11,6 @@
 #include "termin/assets/handles.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 #include "trent/trent.h"
 #include <memory>
 

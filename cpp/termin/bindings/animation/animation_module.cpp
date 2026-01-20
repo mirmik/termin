@@ -5,7 +5,6 @@
 
 #include "termin/animation/animation_player.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
-#include "termin/inspect/inspect_registry.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 
