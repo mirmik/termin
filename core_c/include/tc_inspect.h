@@ -25,7 +25,7 @@ typedef enum tc_inspect_lang {
 
 // ============================================================================
 // Value type - tagged union for field values
-// Core types only. Extensions use TC_VALUE_CUSTOM with kind string.
+// Core types only. No complex/custom types allowed.
 // ============================================================================
 
 typedef enum tc_value_type {
@@ -39,7 +39,6 @@ typedef enum tc_value_type {
     TC_VALUE_QUAT,
     TC_VALUE_LIST,
     TC_VALUE_DICT,
-    TC_VALUE_CUSTOM,    // Extension point: data is opaque, kind identifies type
 } tc_value_type;
 
 typedef struct tc_value tc_value;
@@ -65,7 +64,6 @@ struct tc_value_dict {
 
 struct tc_value {
     tc_value_type type;
-    const char* kind;   // For CUSTOM: registered kind name (interned)
     union {
         bool b;
         int64_t i;
@@ -76,7 +74,6 @@ struct tc_value {
         tc_quat q;
         tc_value_list list;
         tc_value_dict dict;
-        void* custom;      // For CUSTOM: opaque pointer, handler manages lifetime
     } data;
 };
 
@@ -95,9 +92,6 @@ TC_API tc_value tc_value_quat(tc_quat q);
 TC_API tc_value tc_value_list_new(void);
 TC_API tc_value tc_value_dict_new(void);
 
-// Custom value - kind must be registered
-TC_API tc_value tc_value_custom(const char* kind, void* data);
-
 // ============================================================================
 // Value operations
 // ============================================================================
@@ -115,46 +109,6 @@ TC_API size_t tc_value_list_count(const tc_value* list);
 TC_API void tc_value_dict_set(tc_value* dict, const char* key, tc_value item);
 TC_API tc_value* tc_value_dict_get(tc_value* dict, const char* key);
 TC_API bool tc_value_dict_has(const tc_value* dict, const char* key);
-
-// ============================================================================
-// Custom type handler - for TC_VALUE_CUSTOM memory management
-// (Separate from tc_kind.h which handles language-specific serialization)
-// ============================================================================
-
-typedef struct tc_custom_type_handler {
-    // Kind name (e.g., "mesh_handle", "entity_handle")
-    const char* kind;
-
-    // Serialize value to JSON-compatible tc_value (string, dict, etc.)
-    // Returns new value, caller owns it
-    tc_value (*serialize)(const tc_value* v);
-
-    // Deserialize from JSON-compatible tc_value
-    // Returns new value with type=TC_VALUE_CUSTOM, caller owns it
-    tc_value (*deserialize)(const tc_value* v);
-
-    // Free custom data (called when value is freed)
-    void (*free_data)(void* custom_data);
-
-    // Copy custom data (for tc_value_copy)
-    void* (*copy_data)(const void* custom_data);
-
-    // Convert for setter (e.g., None → empty handle)
-    // Can return same value if no conversion needed
-    tc_value (*convert)(const tc_value* v);
-} tc_custom_type_handler;
-
-// Register a custom type handler
-TC_API void tc_custom_type_register(const tc_custom_type_handler* handler);
-
-// Unregister a custom type handler
-TC_API void tc_custom_type_unregister(const char* kind);
-
-// Get handler for a custom type (returns NULL if not registered)
-TC_API const tc_custom_type_handler* tc_custom_type_get(const char* kind);
-
-// Check if custom type is registered
-TC_API bool tc_custom_type_exists(const char* kind);
 
 // ============================================================================
 // Field info - metadata for one inspectable field

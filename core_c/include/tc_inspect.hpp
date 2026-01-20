@@ -146,18 +146,6 @@ inline nb::object tc_value_to_nb(const tc_value* v) {
         return d;
     }
 
-    case TC_VALUE_CUSTOM: {
-        // Custom types need custom type handler to convert
-        const tc_custom_type_handler* h = tc_custom_type_get(v->kind);
-        if (h && h->serialize) {
-            tc_value serialized = h->serialize(v);
-            nb::object result = tc_value_to_nb(&serialized);
-            tc_value_free(&serialized);
-            return result;
-        }
-        return nb::none();
-    }
-
     default:
         return nb::none();
     }
@@ -283,8 +271,7 @@ public:
 
     bool has_kind_handler(const std::string& kind) const {
         return KindRegistryPython::instance().has(kind)
-            || KindRegistryCpp::instance().has(kind)
-            || tc_custom_type_exists(kind.c_str());
+            || KindRegistryCpp::instance().has(kind);
     }
 
     // ========================================================================
