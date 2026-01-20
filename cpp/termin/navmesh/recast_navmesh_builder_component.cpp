@@ -309,6 +309,22 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
             return result;
         }
 
+        tc_log_info("[NavMesh] DetailMesh built: %d meshes, %d verts, %d tris",
+            dmesh->nmeshes, dmesh->nverts, dmesh->ntris);
+        tc_log_info("[NavMesh] DetailMesh params: sampleDist=%.2f, sampleMaxError=%.2f",
+            cfg.detailSampleDist, cfg.detailSampleMaxError);
+
+        // Log first few detail verts vs poly verts for comparison
+        if (dmesh->nverts > 0 && pmesh->nverts > 0) {
+            tc_log_info("[NavMesh] PolyMesh vert[0] (voxel): (%d, %d, %d) -> world: (%.2f, %.2f, %.2f)",
+                pmesh->verts[0], pmesh->verts[1], pmesh->verts[2],
+                pmesh->bmin[0] + pmesh->verts[0] * pmesh->cs,
+                pmesh->bmin[1] + pmesh->verts[1] * pmesh->ch,
+                pmesh->bmin[2] + pmesh->verts[2] * pmesh->cs);
+            tc_log_info("[NavMesh] DetailMesh vert[0] (float): (%.2f, %.2f, %.2f)",
+                dmesh->verts[0], dmesh->verts[1], dmesh->verts[2]);
+        }
+
         // Capture detail mesh debug data
         if (capture_detail_mesh) {
             capture_detail_mesh_data(dmesh);
@@ -1112,7 +1128,8 @@ void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
         }
         if (nv < 3) continue;
 
-        auto color = region_color(region);
+        // Color by polygon index to see individual polygons (not by region)
+        auto color = region_color(static_cast<uint16_t>(p + 1));
 
         // Add vertices for this polygon
         uint32_t base_vertex = static_cast<uint32_t>(vertices.size());
