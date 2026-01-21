@@ -129,6 +129,46 @@ public:
         tc_value_free(&v);
     }
 
+    // Get field value by name
+    nb::object get_field(const std::string& field_name) const {
+        if (!_c) return nb::none();
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return nb::none();
+
+        try {
+            return tc::InspectRegistry::instance().get(
+                obj_ptr, tc_component_type_name(_c), field_name);
+        } catch (...) {
+            return nb::none();
+        }
+    }
+
+    // Set field value by name
+    void set_field(const std::string& field_name, nb::object value, TcSceneRef scene_ref = TcSceneRef()) {
+        if (!_c || value.is_none()) return;
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return;
+
+        try {
+            tc::InspectRegistry::instance().set(
+                obj_ptr, tc_component_type_name(_c), field_name, value, scene_ref.ptr());
+        } catch (...) {
+            // Field not found or setter failed
+        }
+    }
+
     // Comparison
     bool operator==(const TcComponentRef& other) const { return _c == other._c; }
     bool operator!=(const TcComponentRef& other) const { return _c != other._c; }
@@ -191,7 +231,13 @@ void bind_entity_class(nb::module_& m) {
             "Serialize component data (fields only) to dict.")
         .def("deserialize_data", &TcComponentRef::deserialize_data,
             nb::arg("data"), nb::arg("scene") = TcSceneRef(),
-            "Deserialize data dict into component fields. Pass scene for handle resolution.");
+            "Deserialize data dict into component fields. Pass scene for handle resolution.")
+        .def("get_field", &TcComponentRef::get_field,
+            nb::arg("field_name"),
+            "Get field value by name. Returns None if field not found.")
+        .def("set_field", &TcComponentRef::set_field,
+            nb::arg("field_name"), nb::arg("value"), nb::arg("scene") = TcSceneRef(),
+            "Set field value by name.");
 
     nb::class_<Entity>(m, "Entity")
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {

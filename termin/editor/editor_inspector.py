@@ -83,21 +83,21 @@ class ComponentsPanel(QWidget):
         if ent is None:
             self._list.blockSignals(False)
             return
-        for comp in ent.components:
-            name = self._get_component_display_name(comp)
+        for ref in ent.tc_components:
+            name = self._get_component_display_name_ref(ref)
             item = QListWidgetItem(name)
             self._list.addItem(item)
         # Clear selection after populating
         self._list.setCurrentRow(-1)
         self._list.blockSignals(False)
 
-    def _get_component_display_name(self, comp: Component) -> str:
-        """Get display name for component: 'display_name (ClassName)' or just 'ClassName'."""
-        class_name = comp.__class__.__name__
-        display_name = getattr(comp, "display_name", "")
+    def _get_component_display_name_ref(self, ref) -> str:
+        """Get display name for component: 'display_name (type_name)' or just 'type_name'."""
+        type_name = ref.type_name
+        display_name = ref.get_field("display_name")
         if display_name:
-            return f"{display_name} ({class_name})"
-        return class_name
+            return f"{display_name} ({type_name})"
+        return type_name
 
     def current_component(self) -> Optional[Component]:
         if self._entity is None:
@@ -180,12 +180,12 @@ class ComponentsPanel(QWidget):
     def _rename_current_component(self) -> None:
         if self._entity is None:
             return
-        comp = self.current_component()
-        if comp is None:
+        ref = self.current_component_ref()
+        if ref is None or not ref.valid:
             return
 
         # Get current display name
-        current_name = getattr(comp, "display_name", "") or ""
+        current_name = ref.get_field("display_name") or ""
 
         # Show input dialog
         new_name, ok = QInputDialog.getText(
@@ -197,12 +197,12 @@ class ComponentsPanel(QWidget):
 
         if ok:
             # Set new display name (empty string clears custom name)
-            comp.display_name = new_name.strip()
+            ref.set_field("display_name", new_name.strip())
             # Update list item
             row = self._list.currentRow()
             item = self._list.item(row)
             if item is not None:
-                item.setText(self._get_component_display_name(comp))
+                item.setText(self._get_component_display_name_ref(ref))
             self.components_changed.emit()
 
     def _remove_current_component(self) -> None:
