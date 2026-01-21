@@ -4,6 +4,7 @@
 
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
+#include "tc_scene_ref.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_scene_registry.h"
 #include "scene_bindings.hpp"
@@ -30,6 +31,11 @@ public:
             tc_scene_free(_s);
             _s = nullptr;
         }
+    }
+
+    // Get non-owning reference to this scene
+    TcSceneRef scene_ref() const {
+        return TcSceneRef(_s);
     }
 
     // Disable copy
@@ -265,6 +271,7 @@ void bind_tc_scene(nb::module_& m) {
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
         .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
+        .def("scene_ref", &TcScene::scene_ref, "Get non-owning reference to this scene")
 
         // Entity management
         .def("add_entity", &TcScene::add_entity, nb::arg("entity"))

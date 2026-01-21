@@ -181,8 +181,8 @@ class EditorCameraManager:
             try:
                 # Serialize only components (not the entity itself)
                 components_data = []
-                for comp in ent.components:
-                    comp_data = comp.serialize()
+                for ref in ent.tc_components:
+                    comp_data = ref.serialize()
                     if comp_data:
                         components_data.append(comp_data)
                 if components_data:
@@ -246,10 +246,9 @@ class EditorCameraManager:
                 comp_data_inner = comp_data.get("data", {})
 
                 # Find matching component by type
-                for comp in ent.components:
-                    if comp.type_name() == comp_type:
-                        comp.deserialize_data(comp_data_inner)
-                        break
+                ref = ent.get_tc_component(comp_type)
+                if ref:
+                    ref.deserialize_data(comp_data_inner)
 
     def recreate_in_scene(self, new_scene: "Scene") -> None:
         """

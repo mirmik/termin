@@ -18,6 +18,8 @@
 #include "termin/geom/pose3.hpp"
 #include "../../../../core_c/include/tc_scene.h"
 #include "../../../../core_c/include/tc_inspect.hpp"
+#include "../tc_value_helpers.hpp"
+#include "../../tc_scene_ref.hpp"
 
 namespace nb = nanobind;
 
@@ -80,6 +82,53 @@ public:
         return Entity(_c->owner_pool, _c->owner_entity_id);
     }
 
+    // Serialize component data using tc_inspect
+    nb::object serialize_data() const {
+        if (!_c) return nb::none();
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            // For C++ components, get CxxComponent pointer
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            // For external (Python) components, wrapper holds the object
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return nb::none();
+
+        tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
+        nb::object result = tc_value_to_py(&v);
+        tc_value_free(&v);
+        return result;
+    }
+
+    // Full serialize (type + data) - returns dict with "type" and "data"
+    nb::object serialize() const {
+        if (!_c) return nb::none();
+
+        nb::dict result;
+        result["type"] = type_name();
+        result["data"] = serialize_data();
+        return result;
+    }
+
+    // Deserialize data into component with explicit scene context
+    void deserialize_data(nb::object data, TcSceneRef scene_ref = TcSceneRef()) {
+        if (!_c || data.is_none()) return;
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return;
+
+        tc_value v = py_to_tc_value(data);
+        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene_ref.ptr());
+        tc_value_free(&v);
+    }
+
     // Comparison
     bool operator==(const TcComponentRef& other) const { return _c == other._c; }
     bool operator!=(const TcComponentRef& other) const { return _c != other._c; }
@@ -108,6 +157,15 @@ void bind_entity_class(nb::module_& m) {
         .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })
         .def("__next__", &EntityAncestorIterator::next);
 
+    // Non-owning scene reference - for passing scene context
+    nb::class_<TcSceneRef>(m, "TcSceneRef")
+        .def(nb::init<>())
+        .def("__bool__", &TcSceneRef::valid)
+        .def("__repr__", [](const TcSceneRef& self) {
+            if (!self.valid()) return std::string("<TcSceneRef: invalid>");
+            return std::string("<TcSceneRef: valid>");
+        });
+
     // Non-owning component reference - works with any component regardless of language bindings
     nb::class_<TcComponentRef>(m, "TcComponentRef")
         .def(nb::init<>())
@@ -126,7 +184,14 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_ro("kind", &TcComponentRef::kind)
         .def_prop_ro("entity", &TcComponentRef::entity)
         .def("to_python", &TcComponentRef::to_python,
-            "Try to get typed Python component object. Returns None if no bindings available.");
+            "Try to get typed Python component object. Returns None if no bindings available.")
+        .def("serialize", &TcComponentRef::serialize,
+            "Serialize component to dict with 'type' and 'data' keys.")
+        .def("serialize_data", &TcComponentRef::serialize_data,
+            "Serialize component data (fields only) to dict.")
+        .def("deserialize_data", &TcComponentRef::deserialize_data,
+            nb::arg("data"), nb::arg("scene") = TcSceneRef(),
+            "Deserialize data dict into component fields. Pass scene for handle resolution.");
 
     nb::class_<Entity>(m, "Entity")
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
