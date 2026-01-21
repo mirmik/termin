@@ -13,31 +13,29 @@ namespace {
 void register_tc_mesh_kind() {
     // C++ handler for tc_mesh kind
     tc::KindRegistry::instance().register_cpp("tc_mesh",
-        // serialize: std::any(TcMesh) → trent
-        [](const std::any& value) -> nos::trent {
+        // serialize: std::any(TcMesh) → tc_value
+        [](const std::any& value) -> tc_value {
             const termin::TcMesh& m = std::any_cast<const termin::TcMesh&>(value);
-            nos::trent result;
-            result.init(nos::trent_type::dict);
+            tc_value result = tc_value_dict_new();
             if (m.is_valid()) {
-                result["uuid"] = std::string(m.uuid());
-                result["name"] = std::string(m.name());
+                tc_value_dict_set(&result, "uuid", tc_value_string(m.uuid()));
+                tc_value_dict_set(&result, "name", tc_value_string(m.name()));
             }
             return result;
         },
-        // deserialize: trent, scene → std::any(TcMesh)
-        [](const nos::trent& t, tc_scene*) -> std::any {
-            if (!t.is_dict()) return termin::TcMesh();
-            auto& dict = t.as_dict();
-            auto it = dict.find("uuid");
-            if (it == dict.end() || !it->second.is_string()) {
+        // deserialize: tc_value, scene → std::any(TcMesh)
+        [](const tc_value* v, tc_scene*) -> std::any {
+            if (!v || v->type != TC_VALUE_DICT) return termin::TcMesh();
+            tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(v), "uuid");
+            if (!uuid_val || uuid_val->type != TC_VALUE_STRING || !uuid_val->data.s) {
                 return termin::TcMesh();
             }
-            std::string uuid = it->second.as_string();
+            std::string uuid = uuid_val->data.s;
             termin::TcMesh mesh = termin::TcMesh::from_uuid(uuid);
             if (!mesh.is_valid()) {
-                auto name_it = dict.find("name");
-                std::string name = (name_it != dict.end() && name_it->second.is_string())
-                    ? name_it->second.as_string() : "";
+                tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(v), "name");
+                std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
+                    ? name_val->data.s : "";
                 tc::Log::warn("tc_mesh deserialize: mesh not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
             } else {
                 // Trigger lazy load if mesh is declared but not loaded

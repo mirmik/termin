@@ -81,15 +81,15 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const nb::dict& data) {
     return VoxelGridHandle();
 }
 
-inline void VoxelGridHandle::deserialize_from(const nos::trent& data, tc_scene*) {
-    if (!data.is_dict()) {
+inline void VoxelGridHandle::deserialize_from(const tc_value* data, tc_scene*) {
+    if (!data || data->type != TC_VALUE_DICT) {
         asset = nb::none();
         return;
     }
 
-    if (data.contains("uuid")) {
+    std::string uuid = tc_value_dict_get_string(data, "uuid");
+    if (!uuid.empty()) {
         try {
-            std::string uuid = data["uuid"].as_string();
             nb::object rm_module = nb::module_::import_("termin.assets.resources");
             nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
             nb::object found = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
@@ -102,13 +102,13 @@ inline void VoxelGridHandle::deserialize_from(const nos::trent& data, tc_scene*)
         }
     }
 
-    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+    std::string type = tc_value_dict_get_string(data, "type", "none");
 
     if (type == "named") {
-        std::string name = data["name"].as_string();
+        std::string name = tc_value_dict_get_string(data, "name");
         asset = from_name(name).asset;
     } else if (type == "path") {
-        std::string path = data["path"].as_string();
+        std::string path = tc_value_dict_get_string(data, "path");
         size_t last_slash = path.find_last_of("/\\");
         std::string filename = (last_slash != std::string::npos)
             ? path.substr(last_slash + 1) : path;

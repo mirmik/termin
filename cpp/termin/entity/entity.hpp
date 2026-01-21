@@ -5,9 +5,12 @@
 #include <cstdint>
 #include <nanobind/nanobind.h>
 #include "../geom/general_transform3.hpp"
-#include "../../trent/trent.h"
 #include "../../../core_c/include/tc_entity_pool.h"
 #include "../../../core_c/include/tc_component.h"
+
+extern "C" {
+#include "../../../core_c/include/tc_value.h"
+}
 
 #include "../export.hpp"
 
@@ -148,8 +151,9 @@ public:
 
     // --- Serialization ---
 
-    nos::trent serialize_base() const;
-    static Entity deserialize(tc_entity_pool* pool, const nos::trent& data);
+    // Serialize base entity data (returns tc_value dict, caller must free)
+    tc_value serialize_base() const;
+    static Entity deserialize(tc_entity_pool* pool, const tc_value* data);
 
     // For register_cpp_handle_kind compatibility
     nb::dict serialize() const {
@@ -160,8 +164,8 @@ public:
         return d;
     }
 
-    // Deserialize from trent with scene context for entity resolution
-    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
+    // Deserialize from tc_value with scene context for entity resolution
+    void deserialize_from(const tc_value* data, tc_scene* scene = nullptr);
 
     // --- Pool/ID access ---
 

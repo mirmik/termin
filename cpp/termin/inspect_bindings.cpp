@@ -8,6 +8,7 @@
 #include "render/frame_pass.hpp"
 #include "inspect/tc_kind.hpp"
 #include "inspect_bindings.hpp"
+#include "bindings/tc_value_helpers.hpp"
 
 namespace nb = nanobind;
 
@@ -249,8 +250,10 @@ void bind_inspect(nb::module_& m) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
-            nos::trent t = self.serialize_all(ptr, type_name);
-            return InspectRegistry::trent_to_py(t);
+            tc_value v = self.serialize_all(ptr, type_name);
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return result;
         }, nb::arg("obj"),
            "Serialize all fields of object to dict")
 

@@ -156,8 +156,8 @@ public:
     // Register C++ handler (delegates to KindRegistryCpp)
     void register_cpp(
         const std::string& name,
-        std::function<nos::trent(const std::any&)> serialize,
-        std::function<std::any(const nos::trent&, tc_scene*)> deserialize
+        std::function<tc_value(const std::any&)> serialize,
+        std::function<std::any(const tc_value*, tc_scene*)> deserialize
     ) {
         KindRegistryCpp::instance().register_kind(name, serialize, deserialize);
     }
@@ -171,13 +171,13 @@ public:
         KindRegistryPython::instance().register_kind(name, serialize, deserialize);
     }
 
-    // Serialize using C++ handler
-    nos::trent serialize_cpp(const std::string& kind_name, const std::any& value) const {
+    // Serialize using C++ handler (caller owns returned tc_value)
+    tc_value serialize_cpp(const std::string& kind_name, const std::any& value) const {
         return KindRegistryCpp::instance().serialize(kind_name, value);
     }
 
     // Deserialize using C++ handler
-    std::any deserialize_cpp(const std::string& kind_name, const nos::trent& data, tc_scene* scene = nullptr) const {
+    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene* scene = nullptr) const {
         return KindRegistryCpp::instance().deserialize(kind_name, data, scene);
     }
 

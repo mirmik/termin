@@ -103,49 +103,61 @@ void MeshRenderer::try_create_override_material() {
     }
 }
 
+// Helper to get double from tc_value
+static double tc_val_as_double(const tc_value* v) {
+    if (!v) return 0.0;
+    switch (v->type) {
+        case TC_VALUE_INT: return static_cast<double>(v->data.i);
+        case TC_VALUE_FLOAT: return static_cast<double>(v->data.f);
+        case TC_VALUE_DOUBLE: return v->data.d;
+        default: return 0.0;
+    }
+}
+
 void MeshRenderer::apply_pending_override_data() {
-    if (!_pending_override_data || !_overridden_material.is_valid()) return;
+    if (_pending_override_data.type == TC_VALUE_NIL || !_overridden_material.is_valid()) return;
 
     tc_material* mat = _overridden_material.get();
     if (!mat) return;
 
-    const nos::trent& override_data = *_pending_override_data;
-
     // Apply uniforms
-    if (override_data.contains("phases_uniforms")) {
-        const nos::trent& phases_uniforms = override_data["phases_uniforms"];
-        if (phases_uniforms.is_list()) {
-            size_t phase_count = std::min(phases_uniforms.as_list().size(), mat->phase_count);
-            for (size_t i = 0; i < phase_count; ++i) {
-                const nos::trent& phase_uniforms = phases_uniforms.at(i);
-                if (!phase_uniforms.is_dict()) continue;
+    tc_value* phases_uniforms = tc_value_dict_get(&_pending_override_data, "phases_uniforms");
+    if (phases_uniforms && phases_uniforms->type == TC_VALUE_LIST) {
+        size_t phase_count = std::min(tc_value_list_size(phases_uniforms), mat->phase_count);
+        for (size_t i = 0; i < phase_count; ++i) {
+            tc_value* phase_uniforms = tc_value_list_get(phases_uniforms, i);
+            if (!phase_uniforms || phase_uniforms->type != TC_VALUE_DICT) continue;
 
-                tc_material_phase* phase = &mat->phases[i];
-                for (const auto& [key, val] : phase_uniforms.as_dict()) {
-                    if (val.is_bool()) {
-                        int v = val.as_bool() ? 1 : 0;
-                        tc_material_phase_set_uniform(phase, key.c_str(), TC_UNIFORM_INT, &v);
-                    } else if (val.is_numer()) {
-                        float v = static_cast<float>(val.as_numer());
-                        tc_material_phase_set_uniform(phase, key.c_str(), TC_UNIFORM_FLOAT, &v);
-                    } else if (val.is_list()) {
-                        const auto& lst = val.as_list();
-                        if (lst.size() == 3) {
-                            float v[3] = {
-                                static_cast<float>(lst[0].as_numer()),
-                                static_cast<float>(lst[1].as_numer()),
-                                static_cast<float>(lst[2].as_numer())
-                            };
-                            tc_material_phase_set_uniform(phase, key.c_str(), TC_UNIFORM_VEC3, v);
-                        } else if (lst.size() == 4) {
-                            float v[4] = {
-                                static_cast<float>(lst[0].as_numer()),
-                                static_cast<float>(lst[1].as_numer()),
-                                static_cast<float>(lst[2].as_numer()),
-                                static_cast<float>(lst[3].as_numer())
-                            };
-                            tc_material_phase_set_uniform(phase, key.c_str(), TC_UNIFORM_VEC4, v);
-                        }
+            tc_material_phase* phase = &mat->phases[i];
+            size_t uniform_count = tc_value_dict_size(phase_uniforms);
+            for (size_t j = 0; j < uniform_count; ++j) {
+                const char* key = nullptr;
+                tc_value* val = tc_value_dict_get_at(phase_uniforms, j, &key);
+                if (!key || !val) continue;
+
+                if (val->type == TC_VALUE_BOOL) {
+                    int v = val->data.b ? 1 : 0;
+                    tc_material_phase_set_uniform(phase, key, TC_UNIFORM_INT, &v);
+                } else if (val->type == TC_VALUE_INT || val->type == TC_VALUE_FLOAT || val->type == TC_VALUE_DOUBLE) {
+                    float v = static_cast<float>(tc_val_as_double(val));
+                    tc_material_phase_set_uniform(phase, key, TC_UNIFORM_FLOAT, &v);
+                } else if (val->type == TC_VALUE_LIST) {
+                    size_t lst_size = tc_value_list_size(val);
+                    if (lst_size == 3) {
+                        float v[3] = {
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 0))),
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 1))),
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 2)))
+                        };
+                        tc_material_phase_set_uniform(phase, key, TC_UNIFORM_VEC3, v);
+                    } else if (lst_size == 4) {
+                        float v[4] = {
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 0))),
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 1))),
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 2))),
+                            static_cast<float>(tc_val_as_double(tc_value_list_get(val, 3)))
+                        };
+                        tc_material_phase_set_uniform(phase, key, TC_UNIFORM_VEC4, v);
                     }
                 }
             }
@@ -153,28 +165,32 @@ void MeshRenderer::apply_pending_override_data() {
     }
 
     // Apply textures
-    if (override_data.contains("phases_textures")) {
-        const nos::trent& phases_textures = override_data["phases_textures"];
-        if (phases_textures.is_list()) {
-            size_t phase_count = std::min(phases_textures.as_list().size(), mat->phase_count);
-            for (size_t i = 0; i < phase_count; ++i) {
-                const nos::trent& phase_textures = phases_textures.at(i);
-                if (!phase_textures.is_dict()) continue;
+    tc_value* phases_textures = tc_value_dict_get(&_pending_override_data, "phases_textures");
+    if (phases_textures && phases_textures->type == TC_VALUE_LIST) {
+        size_t phase_count = std::min(tc_value_list_size(phases_textures), mat->phase_count);
+        for (size_t i = 0; i < phase_count; ++i) {
+            tc_value* phase_textures = tc_value_list_get(phases_textures, i);
+            if (!phase_textures || phase_textures->type != TC_VALUE_DICT) continue;
 
-                tc_material_phase* phase = &mat->phases[i];
-                for (const auto& [key, val] : phase_textures.as_dict()) {
-                    if (!val.is_dict()) continue;
+            tc_material_phase* phase = &mat->phases[i];
+            size_t tex_count = tc_value_dict_size(phase_textures);
+            for (size_t j = 0; j < tex_count; ++j) {
+                const char* key = nullptr;
+                tc_value* val = tc_value_dict_get_at(phase_textures, j, &key);
+                if (!key || !val || val->type != TC_VALUE_DICT) continue;
 
-                    if (val.contains("uuid")) {
-                        std::string uuid = val["uuid"].as_string();
-                        tc_texture_handle tex_h = tc_texture_find(uuid.c_str());
-                        if (!tc_texture_handle_is_invalid(tex_h)) {
-                            tc_material_phase_set_texture(phase, key.c_str(), tex_h);
-                        } else {
-                            std::string name = val.contains("name") ? val["name"].as_string() : "";
-                            tc::Log::warn("[MeshRenderer] Texture not found: uuid=%s name=%s uniform=%s",
-                                         uuid.c_str(), name.c_str(), key.c_str());
-                        }
+                tc_value* uuid_val = tc_value_dict_get(val, "uuid");
+                if (uuid_val && uuid_val->type == TC_VALUE_STRING && uuid_val->data.s) {
+                    std::string uuid = uuid_val->data.s;
+                    tc_texture_handle tex_h = tc_texture_find(uuid.c_str());
+                    if (!tc_texture_handle_is_invalid(tex_h)) {
+                        tc_material_phase_set_texture(phase, key, tex_h);
+                    } else {
+                        tc_value* name_val = tc_value_dict_get(val, "name");
+                        std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
+                            ? name_val->data.s : "";
+                        tc::Log::warn("[MeshRenderer] Texture not found: uuid=%s name=%s uniform=%s",
+                                     uuid.c_str(), name.c_str(), key);
                     }
                 }
             }
@@ -182,7 +198,8 @@ void MeshRenderer::apply_pending_override_data() {
     }
 
     // Clear pending data after applying
-    _pending_override_data.reset();
+    tc_value_free(&_pending_override_data);
+    _pending_override_data = tc_value_nil();
 }
 
 std::set<std::string> MeshRenderer::get_phase_marks() const {
@@ -262,101 +279,92 @@ std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string
     return result;
 }
 
-nos::trent MeshRenderer::get_override_data() const {
+tc_value MeshRenderer::get_override_data() const {
     // Return nil if override is not enabled or no overridden material
     if (!_override_material || !_overridden_material.is_valid()) {
-        return nos::trent::nil();
+        return tc_value_nil();
     }
 
     tc_material* mat = _overridden_material.get();
-    if (!mat) return nos::trent::nil();
+    if (!mat) return tc_value_nil();
 
-    nos::trent override_data;
-    override_data.init(nos::trent_type::dict);
-
-    nos::trent phases_uniforms;
-    phases_uniforms.init(nos::trent_type::list);
-
-    nos::trent phases_textures;
-    phases_textures.init(nos::trent_type::list);
+    tc_value override_data = tc_value_dict_new();
+    tc_value phases_uniforms = tc_value_list_new();
+    tc_value phases_textures = tc_value_list_new();
 
     for (size_t i = 0; i < mat->phase_count; i++) {
         const tc_material_phase* phase = &mat->phases[i];
 
         // Serialize uniforms
-        nos::trent phase_uniforms;
-        phase_uniforms.init(nos::trent_type::dict);
+        tc_value phase_uniforms = tc_value_dict_new();
 
         for (size_t j = 0; j < phase->uniform_count; j++) {
             const tc_uniform_value* u = &phase->uniforms[j];
             switch (u->type) {
                 case TC_UNIFORM_BOOL:
                 case TC_UNIFORM_INT:
-                    phase_uniforms[u->name] = static_cast<int64_t>(u->data.i);
+                    tc_value_dict_set(&phase_uniforms, u->name, tc_value_int(u->data.i));
                     break;
                 case TC_UNIFORM_FLOAT:
-                    phase_uniforms[u->name] = static_cast<double>(u->data.f);
+                    tc_value_dict_set(&phase_uniforms, u->name, tc_value_double(static_cast<double>(u->data.f)));
                     break;
                 case TC_UNIFORM_VEC3: {
-                    nos::trent vec;
-                    vec.init(nos::trent_type::list);
-                    vec.as_list().push_back(static_cast<double>(u->data.v3[0]));
-                    vec.as_list().push_back(static_cast<double>(u->data.v3[1]));
-                    vec.as_list().push_back(static_cast<double>(u->data.v3[2]));
-                    phase_uniforms[u->name] = std::move(vec);
+                    tc_value vec = tc_value_list_new();
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v3[0])));
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v3[1])));
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v3[2])));
+                    tc_value_dict_set(&phase_uniforms, u->name, vec);
                     break;
                 }
                 case TC_UNIFORM_VEC4: {
-                    nos::trent vec;
-                    vec.init(nos::trent_type::list);
-                    vec.as_list().push_back(static_cast<double>(u->data.v4[0]));
-                    vec.as_list().push_back(static_cast<double>(u->data.v4[1]));
-                    vec.as_list().push_back(static_cast<double>(u->data.v4[2]));
-                    vec.as_list().push_back(static_cast<double>(u->data.v4[3]));
-                    phase_uniforms[u->name] = std::move(vec);
+                    tc_value vec = tc_value_list_new();
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[0])));
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[1])));
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[2])));
+                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[3])));
+                    tc_value_dict_set(&phase_uniforms, u->name, vec);
                     break;
                 }
                 default:
                     break;
             }
         }
-        phases_uniforms.as_list().push_back(std::move(phase_uniforms));
+        tc_value_list_push(&phases_uniforms, phase_uniforms);
 
         // Serialize textures
-        nos::trent phase_textures;
-        phase_textures.init(nos::trent_type::dict);
+        tc_value phase_textures = tc_value_dict_new();
 
         for (size_t j = 0; j < phase->texture_count; j++) {
             const tc_material_texture* tex = &phase->textures[j];
             tc_texture* t = tc_texture_get(tex->texture);
             if (!t) continue;
 
-            nos::trent tex_data;
-            tex_data.init(nos::trent_type::dict);
-            tex_data["uuid"] = t->header.uuid;
+            tc_value tex_data = tc_value_dict_new();
+            tc_value_dict_set(&tex_data, "uuid", tc_value_string(t->header.uuid));
             if (t->header.name) {
-                tex_data["name"] = t->header.name;
+                tc_value_dict_set(&tex_data, "name", tc_value_string(t->header.name));
             }
             if (t->source_path && t->source_path[0] != '\0') {
-                tex_data["type"] = "path";
-                tex_data["path"] = t->source_path;
+                tc_value_dict_set(&tex_data, "type", tc_value_string("path"));
+                tc_value_dict_set(&tex_data, "path", tc_value_string(t->source_path));
             } else {
-                tex_data["type"] = "named";
+                tc_value_dict_set(&tex_data, "type", tc_value_string("named"));
             }
-            phase_textures[tex->name] = std::move(tex_data);
+            tc_value_dict_set(&phase_textures, tex->name, tex_data);
         }
-        phases_textures.as_list().push_back(std::move(phase_textures));
+        tc_value_list_push(&phases_textures, phase_textures);
     }
 
-    override_data["phases_uniforms"] = std::move(phases_uniforms);
-    override_data["phases_textures"] = std::move(phases_textures);
+    tc_value_dict_set(&override_data, "phases_uniforms", phases_uniforms);
+    tc_value_dict_set(&override_data, "phases_textures", phases_textures);
     return override_data;
 }
 
-void MeshRenderer::set_override_data(const nos::trent& val) {
+void MeshRenderer::set_override_data(const tc_value* val) {
     // Save data for lazy application (base material may not be loaded yet)
-    if (!val.is_nil()) {
-        _pending_override_data = std::make_unique<nos::trent>(val);
+    if (val && val->type != TC_VALUE_NIL) {
+        tc_value_free(&_pending_override_data);
+        _pending_override_data = tc_value_copy(val);
     }
 
     // If override flag is already set (from deserialization), create the override material now

@@ -50,8 +50,8 @@ inline bool check_heap_entity() { return true; }
 #include "termin/entity/components/rotator_component.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/pose3.hpp"
-#include "trent/trent.h"
 #include "termin/inspect/tc_kind.hpp"
+#include "termin/bindings/tc_value_helpers.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
@@ -139,16 +139,21 @@ NB_MODULE(_entity_native, m) {
             return reinterpret_cast<uintptr_t>(c.c_component());
         })
         .def("serialize", [](CxxComponent& c) -> nb::dict {
-            nos::trent t = c.serialize();
-            return nb::cast<nb::dict>(trent_to_py(t));
+            tc_value v = c.serialize();
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return nb::cast<nb::dict>(result);
         })
         .def("serialize_data", [](CxxComponent& c) -> nb::dict {
-            nos::trent t = c.serialize_data();
-            return nb::cast<nb::dict>(trent_to_py(t));
+            tc_value v = c.serialize_data();
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return nb::cast<nb::dict>(result);
         })
         .def("deserialize_data", [](CxxComponent& c, nb::dict data) {
-            nos::trent t = py_to_trent(data);
-            c.deserialize_data(t);
+            tc_value v = py_to_tc_value(data);
+            c.deserialize_data(&v);
+            tc_value_free(&v);
         }, nb::arg("data"));
 
     // --- ComponentRegistry ---

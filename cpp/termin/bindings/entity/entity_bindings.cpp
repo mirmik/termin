@@ -374,11 +374,12 @@ void bind_entity_class(nb::module_& m) {
             [](const Entity& e) { return e.serializable(); },
             [](Entity& e, bool v) { e.set_serializable(v); })
         .def("serialize", [](Entity& e) -> nb::object {
-            nos::trent data = e.serialize_base();
-            if (data.is_nil()) {
+            tc_value data = e.serialize_base();
+            if (data.type == TC_VALUE_NIL) {
                 return nb::none();
             }
-            nb::dict result = nb::cast<nb::dict>(trent_to_py(data));
+            nb::dict result = nb::cast<nb::dict>(tc_value_to_py(&data));
+            tc_value_free(&data);
 
             nb::list comp_list;
             size_t count = e.component_count();

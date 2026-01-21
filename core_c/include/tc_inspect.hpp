@@ -15,7 +15,6 @@
 #include <any>
 #include <memory>
 
-#include "trent/trent.h"
 #include "../../cpp/termin/inspect/tc_kind.hpp"
 
 namespace nb = nanobind;
@@ -215,15 +214,6 @@ struct InspectFieldInfo {
 };
 
 // ============================================================================
-// Forward declarations for trent
-// ============================================================================
-
-tc_value trent_to_tc_value(const nos::trent& t);
-nos::trent tc_value_to_trent(const tc_value* v);
-nos::trent nb_to_trent_compat(nb::object obj);
-nb::object trent_to_nb_compat(const nos::trent& t);
-
-// ============================================================================
 // InspectRegistry - main wrapper class
 // Source of truth for C++ component fields
 // ============================================================================
@@ -321,13 +311,11 @@ public:
 
         info.getter = [member, kind_copy](void* obj) -> tc_value {
             T val = static_cast<C*>(obj)->*member;
-            nos::trent t = KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
-            return trent_to_tc_value(t);
+            return KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
         };
 
         info.setter = [member, kind_copy](void* obj, tc_value value, tc_scene* scene) {
-            nos::trent t = tc_value_to_trent(&value);
-            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, t, scene);
+            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, &value, scene);
             if (val.has_value()) {
                 static_cast<C*>(obj)->*member = std::any_cast<T>(val);
             }
@@ -356,13 +344,11 @@ public:
 
         info.getter = [getter_fn, kind_copy](void* obj) -> tc_value {
             T val = getter_fn(static_cast<C*>(obj));
-            nos::trent t = KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
-            return trent_to_tc_value(t);
+            return KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
         };
 
         info.setter = [setter_fn, kind_copy](void* obj, tc_value value, tc_scene* scene) {
-            nos::trent t = tc_value_to_trent(&value);
-            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, t, scene);
+            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, &value, scene);
             if (val.has_value()) {
                 setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
             }
@@ -392,13 +378,11 @@ public:
 
         info.getter = [getter_fn, kind_copy](void* obj) -> tc_value {
             T val = getter_fn(static_cast<C*>(obj));
-            nos::trent t = KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
-            return trent_to_tc_value(t);
+            return KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
         };
 
         info.setter = [setter_fn, kind_copy](void* obj, tc_value value, tc_scene* scene) {
-            nos::trent t = tc_value_to_trent(&value);
-            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, t, scene);
+            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, &value, scene);
             if (val.has_value()) {
                 setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
             }
@@ -424,13 +408,11 @@ public:
 
         info.getter = [member, kind_copy](void* obj) -> tc_value {
             H val = static_cast<C*>(obj)->*member;
-            nos::trent t = KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
-            return trent_to_tc_value(t);
+            return KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
         };
 
         info.setter = [member, kind_copy](void* obj, tc_value value, tc_scene* scene) {
-            nos::trent t = tc_value_to_trent(&value);
-            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, t, scene);
+            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, &value, scene);
             if (val.has_value()) {
                 static_cast<C*>(obj)->*member = std::any_cast<H>(val);
             }
@@ -644,9 +626,8 @@ public:
     // Serialization
     // ========================================================================
 
-    nos::trent serialize_all(void* obj, const std::string& type_name) const {
-        nos::trent result;
-        result.init(nos::trent_type::dict);
+    tc_value serialize_all(void* obj, const std::string& type_name) const {
+        tc_value result = tc_value_dict_new();
 
         for (const auto& f : all_fields(type_name)) {
             if (!f.is_serializable) continue;
@@ -654,9 +635,10 @@ public:
 
             tc_value val = f.getter(obj);
             if (val.type != TC_VALUE_NIL) {
-                result[f.path] = tc_value_to_trent(&val);
+                tc_value_dict_set(&result, f.path.c_str(), val);
+            } else {
+                tc_value_free(&val);
             }
-            tc_value_free(&val);
         }
 
         return result;
@@ -694,33 +676,6 @@ public:
         void* target = (get_type_backend(type_name) == TypeBackend::Cpp) ? ptr : obj.ptr();
         deserialize_all(target, type_name, data, scene);
     }
-
-
-    // Compatibility static methods
-    static nb::object trent_to_py(const nos::trent& t) {
-        return trent_to_nb_compat(t);
-    }
-
-    static nb::dict trent_to_py_dict(const nos::trent& t) {
-        nb::object result = trent_to_nb_compat(t);
-        if (nb::isinstance<nb::dict>(result)) {
-            return nb::cast<nb::dict>(result);
-        }
-        return nb::dict();
-    }
-
-    static nos::trent py_to_trent(nb::object obj) {
-        return nb_to_trent_compat(obj);
-    }
-
-    static nos::trent py_dict_to_trent(nb::dict d) {
-        return nb_to_trent_compat(d);
-    }
-
-    static nos::trent py_list_to_trent(nb::list lst) {
-        return nb_to_trent_compat(lst);
-    }
-
 };
 
 // ============================================================================
@@ -788,13 +743,11 @@ struct InspectFieldChoicesRegistrar {
 
         info.getter = [member, kind_copy](void* obj) -> tc_value {
             T val = static_cast<C*>(obj)->*member;
-            nos::trent t = KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
-            return trent_to_tc_value(t);
+            return KindRegistry::instance().serialize_cpp(kind_copy, std::any(val));
         };
 
         info.setter = [member, kind_copy](void* obj, tc_value value, tc_scene* scene) {
-            nos::trent t = tc_value_to_trent(&value);
-            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, t, scene);
+            std::any val = KindRegistry::instance().deserialize_cpp(kind_copy, &value, scene);
             if (val.has_value()) {
                 static_cast<C*>(obj)->*member = std::any_cast<T>(val);
             }
@@ -810,8 +763,8 @@ struct SerializableFieldRegistrar {
     SerializableFieldRegistrar(
         const char* type_name,
         const char* path,
-        std::function<nos::trent(C*)> trent_getter,
-        std::function<void(C*, const nos::trent&)> trent_setter
+        std::function<tc_value(C*)> tc_getter,
+        std::function<void(C*, const tc_value*)> tc_setter
     ) {
         InspectFieldInfo info;
         info.type_name = type_name;
@@ -821,14 +774,12 @@ struct SerializableFieldRegistrar {
         info.is_inspectable = false;  // Not shown in inspector
         info.is_serializable = true;
 
-        info.getter = [trent_getter](void* obj) -> tc_value {
-            nos::trent t = trent_getter(static_cast<C*>(obj));
-            return trent_to_tc_value(t);
+        info.getter = [tc_getter](void* obj) -> tc_value {
+            return tc_getter(static_cast<C*>(obj));
         };
 
-        info.setter = [trent_setter](void* obj, tc_value value, tc_scene*) {
-            nos::trent t = tc_value_to_trent(&value);
-            trent_setter(static_cast<C*>(obj), t);
+        info.setter = [tc_setter](void* obj, tc_value value, tc_scene*) {
+            tc_setter(static_cast<C*>(obj), &value);
         };
 
         InspectRegistry::instance().add_serializable_field(type_name, std::move(info));
@@ -863,114 +814,6 @@ struct InspectButtonRegistrar {
     }
 };
 
-// ============================================================================
-// Trent compatibility functions
-// ============================================================================
-
-inline tc_value trent_to_tc_value(const nos::trent& t) {
-    switch (t.get_type()) {
-    case nos::trent_type::nil:
-        return tc_value_nil();
-    case nos::trent_type::boolean:
-        return tc_value_bool(t.as_bool());
-    case nos::trent_type::numer: {
-        double val = t.as_numer();
-        if (val == static_cast<int64_t>(val)) {
-            return tc_value_int(static_cast<int64_t>(val));
-        }
-        return tc_value_double(val);
-    }
-    case nos::trent_type::string:
-        return tc_value_string(t.as_string().c_str());
-    case nos::trent_type::list: {
-        tc_value list = tc_value_list_new();
-        for (const auto& item : t.as_list()) {
-            tc_value_list_push(&list, trent_to_tc_value(item));
-        }
-        return list;
-    }
-    case nos::trent_type::dict: {
-        tc_value dict = tc_value_dict_new();
-        for (const auto& [key, val] : t.as_dict()) {
-            tc_value_dict_set(&dict, key.c_str(), trent_to_tc_value(val));
-        }
-        return dict;
-    }
-    default:
-        return tc_value_nil();
-    }
-}
-
-inline nos::trent tc_value_to_trent(const tc_value* v) {
-    if (!v) return nos::trent::nil();
-
-    switch (v->type) {
-    case TC_VALUE_NIL:
-        return nos::trent::nil();
-    case TC_VALUE_BOOL:
-        return nos::trent(v->data.b);
-    case TC_VALUE_INT:
-        return nos::trent(static_cast<nos::trent::numer_type>(v->data.i));
-    case TC_VALUE_FLOAT:
-        return nos::trent(static_cast<nos::trent::numer_type>(v->data.f));
-    case TC_VALUE_DOUBLE:
-        return nos::trent(static_cast<nos::trent::numer_type>(v->data.d));
-    case TC_VALUE_STRING:
-        return v->data.s ? nos::trent(std::string(v->data.s)) : nos::trent::nil();
-    case TC_VALUE_VEC3: {
-        nos::trent list;
-        list.init(nos::trent_type::list);
-        list.push_back(nos::trent(v->data.v3.x));
-        list.push_back(nos::trent(v->data.v3.y));
-        list.push_back(nos::trent(v->data.v3.z));
-        return list;
-    }
-    case TC_VALUE_QUAT: {
-        nos::trent list;
-        list.init(nos::trent_type::list);
-        list.push_back(nos::trent(v->data.q.x));
-        list.push_back(nos::trent(v->data.q.y));
-        list.push_back(nos::trent(v->data.q.z));
-        list.push_back(nos::trent(v->data.q.w));
-        return list;
-    }
-    case TC_VALUE_LIST: {
-        nos::trent list;
-        list.init(nos::trent_type::list);
-        for (size_t i = 0; i < v->data.list.count; i++) {
-            list.push_back(tc_value_to_trent(&v->data.list.items[i]));
-        }
-        return list;
-    }
-    case TC_VALUE_DICT: {
-        nos::trent dict;
-        dict.init(nos::trent_type::dict);
-        for (size_t i = 0; i < v->data.dict.count; i++) {
-            dict[v->data.dict.entries[i].key] =
-                tc_value_to_trent(v->data.dict.entries[i].value);
-        }
-        return dict;
-    }
-    default:
-        return nos::trent::nil();
-    }
-}
-
-// nb::object <-> trent (for backward compatibility)
-inline nos::trent nb_to_trent_compat(nb::object obj) {
-    tc_value v = nb_to_tc_value(obj);
-    nos::trent result = tc_value_to_trent(&v);
-    tc_value_free(&v);
-    return result;
-}
-
-inline nb::object trent_to_nb_compat(const nos::trent& t) {
-    tc_value v = trent_to_tc_value(t);
-    nb::object result = tc_value_to_nb(&v);
-    tc_value_free(&v);
-    return result;
-}
-
 } // namespace tc
 
 // ============================================================================
@@ -985,16 +828,16 @@ inline nb::object trent_to_nb_compat(const nos::trent& t) {
     inline static ::tc::InspectFieldCallbackRegistrar<cls, type> \
         _inspect_reg_##cls##_##name{#cls, #name, label, kind, getter_fn, setter_fn};
 
-// SERIALIZABLE_FIELD - serialize-only field with custom trent getter/setter
+// SERIALIZABLE_FIELD - serialize-only field with custom tc_value getter/setter
 // Not shown in inspector, only used for serialization/deserialization
 // Usage: SERIALIZABLE_FIELD(MyClass, field_key, get_data(), set_data(val))
-//   - getter expression receives 'this' implicitly, returns nos::trent
-//   - setter expression receives 'this' and 'val' (const nos::trent&)
+//   - getter expression receives 'this' implicitly, returns tc_value
+//   - setter expression receives 'this' and 'val' (const tc_value*)
 #define SERIALIZABLE_FIELD(cls, name, getter_expr, setter_expr) \
     inline static ::tc::SerializableFieldRegistrar<cls> \
         _serialize_reg_##cls##_##name{#cls, #name, \
-            [](cls* self) -> nos::trent { return self->getter_expr; }, \
-            [](cls* self, const nos::trent& val) { self->setter_expr; }};
+            [](cls* self) -> tc_value { return self->getter_expr; }, \
+            [](cls* self, const tc_value* val) { self->setter_expr; }};
 
 // INSPECT_FIELD_CHOICES - field with enum-like choices (variadic)
 // Usage: INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",

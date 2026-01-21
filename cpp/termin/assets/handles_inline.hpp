@@ -8,10 +8,17 @@
 // Note: MaterialHandle methods that access Material members are NOT inline
 // because they would create circular dependencies. They are in handles.cpp.
 
-#include "termin/bindings/trent_helpers.hpp"
 #include "tc_log.hpp"
 
 namespace termin {
+
+// Helper to get string from tc_value dict by key
+inline std::string tc_value_dict_get_string(const tc_value* dict, const char* key, const char* default_val = "") {
+    if (!dict || dict->type != TC_VALUE_DICT) return default_val;
+    tc_value* v = tc_value_dict_get(const_cast<tc_value*>(dict), key);
+    if (!v || v->type != TC_VALUE_STRING || !v->data.s) return default_val;
+    return v->data.s;
+}
 
 // ========== TextureHandle inline implementations ==========
 
@@ -109,17 +116,17 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
     return TextureHandle();
 }
 
-inline void TextureHandle::deserialize_from(const nos::trent& data, tc_scene*) {
+inline void TextureHandle::deserialize_from(const tc_value* data, tc_scene*) {
     _direct = TcTexture();
 
-    if (!data.is_dict()) {
+    if (!data || data->type != TC_VALUE_DICT) {
         asset = nb::none();
         return;
     }
 
-    if (data.contains("uuid")) {
+    std::string uuid = tc_value_dict_get_string(data, "uuid");
+    if (!uuid.empty()) {
         try {
-            std::string uuid = data["uuid"].as_string();
             nb::object rm_module = nb::module_::import_("termin.assets.resources");
             nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
             nb::object found = rm.attr("get_texture_asset_by_uuid")(uuid);
@@ -132,13 +139,13 @@ inline void TextureHandle::deserialize_from(const nos::trent& data, tc_scene*) {
         }
     }
 
-    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+    std::string type = tc_value_dict_get_string(data, "type", "none");
 
     if (type == "named") {
-        std::string name = data["name"].as_string();
+        std::string name = tc_value_dict_get_string(data, "name");
         asset = from_name(name).asset;
     } else if (type == "path") {
-        std::string path = data["path"].as_string();
+        std::string path = tc_value_dict_get_string(data, "path");
         size_t last_slash = path.find_last_of("/\\");
         std::string filename = (last_slash != std::string::npos)
             ? path.substr(last_slash + 1) : path;

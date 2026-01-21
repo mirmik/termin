@@ -4,7 +4,7 @@
 #ifndef TC_INSPECT_H
 #define TC_INSPECT_H
 
-#include "tc_types.h"
+#include "tc_value.h"
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -22,93 +22,6 @@ typedef enum tc_inspect_lang {
     TC_INSPECT_LANG_PYTHON = 2,
     TC_INSPECT_LANG_COUNT = 3
 } tc_inspect_lang;
-
-// ============================================================================
-// Value type - tagged union for field values
-// Core types only. No complex/custom types allowed.
-// ============================================================================
-
-typedef enum tc_value_type {
-    TC_VALUE_NIL = 0,
-    TC_VALUE_BOOL,
-    TC_VALUE_INT,
-    TC_VALUE_FLOAT,
-    TC_VALUE_DOUBLE,
-    TC_VALUE_STRING,
-    TC_VALUE_VEC3,
-    TC_VALUE_QUAT,
-    TC_VALUE_LIST,
-    TC_VALUE_DICT,
-} tc_value_type;
-
-typedef struct tc_value tc_value;
-typedef struct tc_value_list tc_value_list;
-typedef struct tc_value_dict tc_value_dict;
-
-struct tc_value_list {
-    tc_value* items;
-    size_t count;
-    size_t capacity;
-};
-
-typedef struct tc_value_dict_entry {
-    char* key;
-    tc_value* value;
-} tc_value_dict_entry;
-
-struct tc_value_dict {
-    tc_value_dict_entry* entries;
-    size_t count;
-    size_t capacity;
-};
-
-struct tc_value {
-    tc_value_type type;
-    union {
-        bool b;
-        int64_t i;
-        float f;
-        double d;
-        char* s;           // owned string
-        tc_vec3 v3;
-        tc_quat q;
-        tc_value_list list;
-        tc_value_dict dict;
-    } data;
-};
-
-// ============================================================================
-// Value constructors (core types)
-// ============================================================================
-
-TC_API tc_value tc_value_nil(void);
-TC_API tc_value tc_value_bool(bool v);
-TC_API tc_value tc_value_int(int64_t v);
-TC_API tc_value tc_value_float(float v);
-TC_API tc_value tc_value_double(double v);
-TC_API tc_value tc_value_string(const char* s);
-TC_API tc_value tc_value_vec3(tc_vec3 v);
-TC_API tc_value tc_value_quat(tc_quat q);
-TC_API tc_value tc_value_list_new(void);
-TC_API tc_value tc_value_dict_new(void);
-
-// ============================================================================
-// Value operations
-// ============================================================================
-
-TC_API void tc_value_free(tc_value* v);
-TC_API tc_value tc_value_copy(const tc_value* v);
-TC_API bool tc_value_equals(const tc_value* a, const tc_value* b);
-
-// List operations
-TC_API void tc_value_list_push(tc_value* list, tc_value item);
-TC_API tc_value* tc_value_list_get(tc_value* list, size_t index);
-TC_API size_t tc_value_list_count(const tc_value* list);
-
-// Dict operations
-TC_API void tc_value_dict_set(tc_value* dict, const char* key, tc_value item);
-TC_API tc_value* tc_value_dict_get(tc_value* dict, const char* key);
-TC_API bool tc_value_dict_has(const tc_value* dict, const char* key);
 
 // ============================================================================
 // Field info - metadata for one inspectable field

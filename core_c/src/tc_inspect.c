@@ -248,6 +248,23 @@ bool tc_value_dict_has(const tc_value* dict, const char* key) {
     return false;
 }
 
+size_t tc_value_list_size(const tc_value* list) {
+    if (!list || list->type != TC_VALUE_LIST) return 0;
+    return list->data.list.count;
+}
+
+size_t tc_value_dict_size(const tc_value* dict) {
+    if (!dict || dict->type != TC_VALUE_DICT) return 0;
+    return dict->data.dict.count;
+}
+
+tc_value* tc_value_dict_get_at(tc_value* dict, size_t index, const char** out_key) {
+    if (!dict || dict->type != TC_VALUE_DICT) return NULL;
+    if (index >= dict->data.dict.count) return NULL;
+    if (out_key) *out_key = dict->data.dict.entries[index].key;
+    return dict->data.dict.entries[index].value;
+}
+
 // ============================================================================
 // Parse parameterized kind
 // ============================================================================
