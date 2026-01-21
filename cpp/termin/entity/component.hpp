@@ -186,6 +186,11 @@ private:
     static void _cb_on_scene_active(tc_component* c);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
+
+    // Memory management callbacks
+    static void _cb_drop(tc_component* c);
+    static void _cb_retain(tc_component* c);
+    static void _cb_release(tc_component* c);
 };
 
 // Alias for backward compatibility during migration

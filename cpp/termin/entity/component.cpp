@@ -25,8 +25,11 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     // Editor
     CxxComponent::_cb_on_editor_start,
     CxxComponent::_cb_setup_editor_defaults,
-    // Memory management - NULL since CxxComponent is managed by C++/Python
-    nullptr,
+    // Memory management
+    CxxComponent::_cb_drop,
+    // Reference counting - for Python wrapper
+    CxxComponent::_cb_retain,
+    CxxComponent::_cb_release,
     // Serialization - NULL, handled by InspectRegistry
     nullptr,
     nullptr
@@ -154,6 +157,28 @@ void CxxComponent::_cb_setup_editor_defaults(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->setup_editor_defaults();
+    }
+}
+
+// Memory management callbacks
+void CxxComponent::_cb_drop(tc_component* c) {
+    auto* self = from_tc(c);
+    if (self) {
+        delete self;
+    }
+}
+
+void CxxComponent::_cb_retain(tc_component* c) {
+    if (c && c->wrapper) {
+        nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
+        py_wrapper.inc_ref();
+    }
+}
+
+void CxxComponent::_cb_release(tc_component* c) {
+    if (c && c->wrapper) {
+        nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
+        py_wrapper.dec_ref();
     }
 }
 

@@ -109,6 +109,9 @@ tc_scene* tc_scene_new(void) {
 void tc_scene_free(tc_scene* s) {
     if (!s) return;
 
+    tc_log_debug("[tc_scene_free] scene=%p, pool entity_count=%zu",
+        (void*)s, tc_entity_pool_count(s->pool));
+
     // Unregister from global scene registry
     tc_scene_registry_remove(s);
 
@@ -119,6 +122,8 @@ void tc_scene_free(tc_scene* s) {
     tc_resource_map_free(s->type_heads);
     tc_entity_pool_destroy(s->pool);
     free(s);
+
+    tc_log_debug("[tc_scene_free] done");
 }
 
 
