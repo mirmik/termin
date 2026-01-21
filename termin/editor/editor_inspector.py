@@ -107,6 +107,16 @@ class ComponentsPanel(QWidget):
             return None
         return self._entity.components[row]
 
+    def current_component_ref(self):
+        """Get current component as TcComponentRef."""
+        if self._entity is None:
+            return None
+        row = self._list.currentRow()
+        tc_components = self._entity.tc_components
+        if row < 0 or row >= len(tc_components):
+            return None
+        return tc_components[row]
+
     def _get_component_library(self) -> list[str]:
         from termin.entity import ComponentRegistry
         # Import native modules to trigger static component registration
@@ -198,15 +208,17 @@ class ComponentsPanel(QWidget):
     def _remove_current_component(self) -> None:
         if self._entity is None:
             return
-        comp = self.current_component()
-        if comp is None:
+        ref = self.current_component_ref()
+        if ref is None or not ref.valid:
             return
 
+        type_name = ref.type_name
+
         if self._push_undo_command is not None:
-            cmd = RemoveComponentCommand(self._entity, comp)
+            cmd = RemoveComponentCommand(self._entity, type_name)
             self._push_undo_command(cmd, False)
         else:
-            self._entity.remove_component(comp)
+            self._entity.remove_component_ref(ref)
 
         self.set_entity(self._entity)
         self.components_changed.emit()
@@ -215,23 +227,16 @@ class ComponentsPanel(QWidget):
         if self._entity is None:
             return
 
-        from termin.entity import ComponentRegistry
-
         try:
-            comp = ComponentRegistry.instance().create(name)
+            ref = self._entity.add_component_by_name(name)
         except Exception:
             logger.exception("Failed to create component %s", name)
             return
 
-        # Apply editor defaults (e.g. default mesh/material for MeshRenderer)
-        if hasattr(comp, 'setup_editor_defaults'):
-            comp.setup_editor_defaults()
-
+        # Register undo command (component already added, but undo will remove it)
         if self._push_undo_command is not None:
-            cmd = AddComponentCommand(self._entity, comp)
+            cmd = AddComponentCommand(self._entity, name, ref)
             self._push_undo_command(cmd, False)
-        else:
-            self._entity.add_component(comp)
 
         self.set_entity(self._entity)
 

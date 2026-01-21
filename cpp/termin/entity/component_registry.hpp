@@ -52,6 +52,10 @@ public:
     // Only works for native C++ components
     CxxComponent* create_component(const std::string& name) const;
 
+    // Creation - returns tc_component* (unified API for any component type)
+    // Works for both C++ and Python components
+    tc_component* create_tc_component(const std::string& name) const;
+
     // Queries
     bool has(const std::string& name) const;
     const ComponentInfo* get_info(const std::string& name) const;

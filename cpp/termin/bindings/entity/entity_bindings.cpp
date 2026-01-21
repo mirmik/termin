@@ -391,6 +391,18 @@ void bind_entity_class(nb::module_& m) {
 
             throw std::runtime_error("add_component requires Component or PythonComponent");
         }, nb::arg("component"))
+
+        // Create component by type name and add to entity, returns TcComponentRef
+        .def("add_component_by_name", [](Entity& e, const std::string& type_name) -> TcComponentRef {
+            tc_component* tc = ComponentRegistry::instance().create_tc_component(type_name);
+            if (!tc) {
+                throw std::runtime_error("Failed to create component: " + type_name);
+            }
+            e.add_component_ptr(tc);
+            return TcComponentRef(tc);
+        }, nb::arg("type_name"),
+           "Create component by type name and add to entity. Returns TcComponentRef.")
+
         .def("remove_component", [](Entity& e, nb::object component) {
             if (nb::isinstance<Component>(component)) {
                 e.remove_component(nb::cast<Component*>(component));
@@ -405,6 +417,21 @@ void bind_entity_class(nb::module_& m) {
 
             throw std::runtime_error("remove_component requires Component or PythonComponent");
         }, nb::arg("component"))
+
+        // TcComponentRef-based methods (work without Python wrappers)
+        .def("remove_component_ref", [](Entity& e, TcComponentRef ref) {
+            if (!ref.valid()) return;
+            e.remove_component_ptr(ref._c);
+        }, nb::arg("ref"), "Remove component by TcComponentRef.")
+
+        .def("has_component_ref", [](Entity& e, TcComponentRef ref) -> bool {
+            if (!ref.valid()) return false;
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                if (e.component_at(i) == ref._c) return true;
+            }
+            return false;
+        }, nb::arg("ref"), "Check if entity has this component.")
         .def("get_component_by_type", [](Entity& e, const std::string& type_name) -> nb::object {
             tc_component* tc = e.get_component_by_type_name(type_name);
             if (!tc) {

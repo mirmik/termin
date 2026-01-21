@@ -86,6 +86,29 @@ CxxComponent* ComponentRegistry::create_component(const std::string& name) const
     }
 }
 
+tc_component* ComponentRegistry::create_tc_component(const std::string& name) const {
+    auto it = registry_.find(name);
+    if (it == registry_.end()) {
+        return nullptr;
+    }
+
+    const auto& info = it->second;
+
+    if (info.kind == TC_CXX_COMPONENT) {
+        // For C++ components, create directly without Python wrapper
+        CxxComponent* comp = info.native_factory();
+        return comp ? comp->c_component() : nullptr;
+    } else {
+        // For Python components, create Python object and extract tc_component*
+        nb::object py_obj = info.python_class();
+        if (nb::hasattr(py_obj, "c_component_ptr")) {
+            uintptr_t ptr = nb::cast<uintptr_t>(py_obj.attr("c_component_ptr")());
+            return reinterpret_cast<tc_component*>(ptr);
+        }
+        return nullptr;
+    }
+}
+
 bool ComponentRegistry::has(const std::string& name) const {
     return registry_.count(name) > 0;
 }

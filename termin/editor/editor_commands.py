@@ -8,6 +8,7 @@ from termin.editor.undo_stack import UndoCommand
 from termin.geombase import GeneralPose3
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
+from termin.entity import TcComponentRef
 from termin.editor.inspect_field import InspectField
 
 
@@ -126,57 +127,83 @@ class AddComponentCommand(UndoCommand):
     """
     Добавление компонента к сущности.
 
-    В do() компонент добавляется, в undo() — удаляется.
-    Позиция компонента в списке может немного "плавать", если
-    между командами сильно менялась структура, но базовый сценарий
-    (откат сразу после добавления) поддерживается корректно.
+    Работает через TcComponentRef - не требует Python wrapper.
+    Хранит type_name и сериализованные данные для redo.
     """
 
     def __init__(
         self,
         entity: Entity,
-        component: Component,
+        type_name: str,
+        ref: TcComponentRef | None = None,
         text: str = "Add component",
     ) -> None:
         super().__init__(text)
         self._entity = entity
-        self._component = component
+        self._type_name = type_name
+        self._ref = ref
+        self._data: dict | None = None
 
     def do(self) -> None:
-        # Entity.components возвращает копию списка, поэтому
-        # проверка "компонент уже добавлен" безопасна.
-        if self._component not in self._entity.components:
-            self._entity.add_component(self._component)
+        # Проверяем, есть ли уже компонент этого типа
+        if self._entity.has_tc_component(self._type_name):
+            return
+
+        # Создаём и добавляем компонент
+        self._ref = self._entity.add_component_by_name(self._type_name)
+
+        # Применяем сохранённые данные (при redo)
+        if self._data is not None and self._ref.valid:
+            self._ref.deserialize_data(self._data)
 
     def undo(self) -> None:
-        self._entity.remove_component(self._component)
+        if self._ref is None or not self._ref.valid:
+            self._ref = self._entity.get_tc_component(self._type_name)
+
+        if self._ref is not None and self._ref.valid:
+            # Сохраняем данные перед удалением (для redo)
+            self._data = self._ref.serialize_data()
+            self._entity.remove_component_ref(self._ref)
+            self._ref = None
 
 
 class RemoveComponentCommand(UndoCommand):
     """
     Удаление компонента из сущности.
 
-    В do() компонент удаляется, в undo() — добавляется обратно.
+    Работает через TcComponentRef - не требует Python wrapper.
+    Хранит type_name и сериализованные данные для undo.
     """
 
     def __init__(
         self,
         entity: Entity,
-        component: Component,
+        type_name: str,
         text: str = "Remove component",
     ) -> None:
         super().__init__(text)
         self._entity = entity
-        self._component = component
+        self._type_name = type_name
+        self._data: dict | None = None
 
     def do(self) -> None:
-        self._entity.remove_component(self._component)
+        ref = self._entity.get_tc_component(self._type_name)
+        if ref is not None and ref.valid:
+            # Сохраняем данные перед удалением (для undo)
+            self._data = ref.serialize_data()
+            self._entity.remove_component_ref(ref)
 
     def undo(self) -> None:
-        # Если кто-то уже вернул компонент руками — лишний раз
-        # не добавляем.
-        if self._component not in self._entity.components:
-            self._entity.add_component(self._component)
+        # Проверяем, что компонента нет
+        if self._entity.has_tc_component(self._type_name):
+            return
+
+        # Создаём компонент заново
+        ref = self._entity.add_component_by_name(self._type_name)
+
+        # Восстанавливаем данные
+        if self._data is not None and ref.valid:
+            ref.deserialize_data(self._data)
 
 
 class AddEntityCommand(UndoCommand):
