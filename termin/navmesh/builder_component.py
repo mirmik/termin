@@ -657,14 +657,13 @@ void main() {
 
         result: List[tuple[TcMesh, np.ndarray]] = []
 
-        for comp in entity.components:
-            if isinstance(comp, MeshRenderer):
-                mesh = comp.mesh
-                if mesh is not None and mesh.is_valid:
-                    world_matrix = entity.model_matrix()
-                    local_matrix = root_transform_inv @ world_matrix
-                    result.append((mesh, local_matrix))
-                break
+        comp = entity.get_component(MeshRenderer)
+        if comp is not None:
+            mesh = comp.mesh
+            if mesh is not None and mesh.is_valid:
+                world_matrix = entity.model_matrix()
+                local_matrix = root_transform_inv @ world_matrix
+                result.append((mesh, local_matrix))
 
         if recurse:
             for child in entity.transform.children:

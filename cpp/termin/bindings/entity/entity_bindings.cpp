@@ -7,6 +7,7 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/ndarray.h>
 #include <functional>
+#include <cstring>
 
 #include "tc_log.hpp"
 #include "termin/entity/component.hpp"
@@ -39,6 +40,51 @@ public:
     }
 };
 
+// Non-owning reference to a tc_component - allows working with components
+// without requiring Python bindings for their specific type
+class TcComponentRef {
+public:
+    tc_component* _c = nullptr;
+
+    TcComponentRef() = default;
+    explicit TcComponentRef(tc_component* c) : _c(c) {}
+
+    bool valid() const { return _c != nullptr; }
+
+    const char* type_name() const {
+        return _c ? tc_component_type_name(_c) : "";
+    }
+
+    bool enabled() const { return _c ? _c->enabled : false; }
+    void set_enabled(bool v) { if (_c) _c->enabled = v; }
+
+    bool active_in_editor() const { return _c ? _c->active_in_editor : false; }
+    void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
+
+    bool is_drawable() const { return tc_component_is_drawable(_c); }
+    bool is_input_handler() const { return tc_component_is_input_handler(_c); }
+
+    tc_component_kind kind() const {
+        return _c ? _c->kind : TC_NATIVE_COMPONENT;
+    }
+
+    // Try to get typed Python object (may return None if no bindings available)
+    nb::object to_python() const {
+        if (!_c) return nb::none();
+        return CxxComponent::tc_to_python(_c);
+    }
+
+    // Get owner entity
+    Entity entity() const {
+        if (!_c || !_c->owner_pool) return Entity();
+        return Entity(_c->owner_pool, _c->owner_entity_id);
+    }
+
+    // Comparison
+    bool operator==(const TcComponentRef& other) const { return _c == other._c; }
+    bool operator!=(const TcComponentRef& other) const { return _c != other._c; }
+};
+
 // Helper: register component with Python Scene if entity is in a scene's pool
 static void register_component_with_scene(Entity& e, nb::object component) {
     tc_entity_pool* pool = e.pool();
@@ -61,6 +107,26 @@ void bind_entity_class(nb::module_& m) {
     nb::class_<EntityAncestorIterator>(m, "_EntityAncestorIterator")
         .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })
         .def("__next__", &EntityAncestorIterator::next);
+
+    // Non-owning component reference - works with any component regardless of language bindings
+    nb::class_<TcComponentRef>(m, "TcComponentRef")
+        .def(nb::init<>())
+        .def("__bool__", &TcComponentRef::valid)
+        .def("__eq__", &TcComponentRef::operator==)
+        .def("__ne__", &TcComponentRef::operator!=)
+        .def("__repr__", [](const TcComponentRef& self) {
+            if (!self.valid()) return std::string("<TcComponentRef: invalid>");
+            return std::string("<TcComponentRef: ") + self.type_name() + ">";
+        })
+        .def_prop_ro("type_name", &TcComponentRef::type_name)
+        .def_prop_rw("enabled", &TcComponentRef::enabled, &TcComponentRef::set_enabled)
+        .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
+        .def_prop_ro("is_drawable", &TcComponentRef::is_drawable)
+        .def_prop_ro("is_input_handler", &TcComponentRef::is_input_handler)
+        .def_prop_ro("kind", &TcComponentRef::kind)
+        .def_prop_ro("entity", &TcComponentRef::entity)
+        .def("to_python", &TcComponentRef::to_python,
+            "Try to get typed Python component object. Returns None if no bindings available.");
 
     nb::class_<Entity>(m, "Entity")
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
@@ -331,6 +397,46 @@ void bind_entity_class(nb::module_& m) {
             }
             return result;
         })
+
+        // tc_components - returns all components as TcComponentRef (works with any language)
+        .def_prop_ro("tc_components", [](Entity& e) {
+            nb::list result;
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (tc) {
+                    result.append(TcComponentRef(tc));
+                }
+            }
+            return result;
+        })
+
+        // get_tc_component - get component ref by type name
+        .def("get_tc_component", [](Entity& e, const std::string& type_name) -> TcComponentRef {
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+                if (tc_component_type_name(tc) == type_name ||
+                    strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) {
+                    return TcComponentRef(tc);
+                }
+            }
+            return TcComponentRef();
+        }, nb::arg("type_name"))
+
+        // has_tc_component - check if entity has component with given type name
+        .def("has_tc_component", [](Entity& e, const std::string& type_name) -> bool {
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+                if (strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) {
+                    return true;
+                }
+            }
+            return false;
+        }, nb::arg("type_name"))
 
         // Hierarchy
         .def("set_parent", [](Entity& e, nb::object parent_obj) {

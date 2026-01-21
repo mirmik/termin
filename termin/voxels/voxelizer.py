@@ -249,9 +249,9 @@ class SceneVoxelizer:
         for entity in scene.entities:
             if not entity.visible or not entity.enabled:
                 continue
-            for comp in entity.components:
-                if isinstance(comp, MeshRenderer):
-                    mesh_entities.append((entity, comp))
+            comp = entity.get_component(MeshRenderer)
+            if comp is not None:
+                mesh_entities.append((entity, comp))
 
         total = len(mesh_entities)
         total_voxels = 0

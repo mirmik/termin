@@ -75,17 +75,17 @@ class HumanModelCollider(PythonComponent):
         from termin._native.render import SkeletonController
 
         # Check this entity
-        for comp in self.entity.components:
-            if isinstance(comp, SkeletonController):
-                return comp
+        comp = self.entity.get_component(SkeletonController)
+        if comp is not None:
+            return comp
 
         # Check parent
         parent_transform = self.entity.transform.parent
         if parent_transform is not None and parent_transform.entity is not None:
             parent_entity = parent_transform.entity
-            for comp in parent_entity.components:
-                if isinstance(comp, SkeletonController):
-                    return comp
+            comp = parent_entity.get_component(SkeletonController)
+            if comp is not None:
+                return comp
 
         return None
 
