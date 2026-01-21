@@ -968,7 +968,9 @@ void bind_entity_class(nb::module_& m) {
                 if (py_entity.is_none() || data.is_none()) return;
 
                 Entity ent = nb::cast<Entity>(py_entity);
-                if (!ent.valid()) return;
+                if (!ent.valid()) {
+                    return;
+                }
 
                 nb::dict dict_data = nb::cast<nb::dict>(data);
                 if (!dict_data.contains("components")) return;
@@ -1018,7 +1020,6 @@ void bind_entity_class(nb::module_& m) {
                             if (nb::isinstance<nb::dict>(data_field)) {
                                 nb::dict data_dict = nb::cast<nb::dict>(data_field);
                                 void* raw_ptr = nb::inst_ptr<void>(comp);
-                                // Use C API for deserialization
                                 tc_value tc_data = tc::nb_to_tc_value(data_dict);
                                 tc_inspect_deserialize(raw_ptr, type_name.c_str(), &tc_data, c_scene);
                                 tc_value_free(&tc_data);

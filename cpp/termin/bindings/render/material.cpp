@@ -176,11 +176,11 @@ void bind_tc_material(nb::module_& m) {
         .def(nb::init<>())
         // kwargs constructor for Material API compatibility
         .def("__init__", [](TcMaterial* self, nb::kwargs kwargs) {
-            // Create material
-            std::string mat_name = "";
-            if (kwargs.contains("name")) {
-                mat_name = nb::cast<std::string>(kwargs["name"]);
+            // Create material - name is required
+            if (!kwargs.contains("name")) {
+                throw std::runtime_error("TcMaterial requires 'name' argument");
             }
+            std::string mat_name = nb::cast<std::string>(kwargs["name"]);
 
             TcMaterial mat = TcMaterial::create(mat_name, "");
             if (!mat.is_valid()) {
@@ -309,9 +309,9 @@ void bind_tc_material(nb::module_& m) {
         })
         .def_static("from_uuid", &TcMaterial::from_uuid, nb::arg("uuid"))
         .def_static("from_name", &TcMaterial::from_name, nb::arg("name"))
-        .def_static("get_or_create", &TcMaterial::get_or_create, nb::arg("uuid"))
+        .def_static("get_or_create", &TcMaterial::get_or_create, nb::arg("uuid"), nb::arg("name"))
         .def_static("create", &TcMaterial::create,
-            nb::arg("name") = "", nb::arg("uuid_hint") = "")
+            nb::arg("name"), nb::arg("uuid_hint") = "")
         .def("copy", [](const TcMaterial& self, const std::string& new_uuid) {
             return TcMaterial::copy(self, new_uuid);
         }, nb::arg("new_uuid") = "")

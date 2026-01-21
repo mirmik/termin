@@ -10,6 +10,10 @@ MeshRenderer::MeshRenderer() {
     install_drawable_vtable(&_c);
 }
 
+MeshRenderer::~MeshRenderer() {
+    tc_value_free(&_pending_override_data);
+}
+
 void MeshRenderer::set_mesh(const TcMesh& m) {
     mesh = m;
 }
@@ -89,8 +93,12 @@ void MeshRenderer::recreate_overridden_material() {
 }
 
 void MeshRenderer::try_create_override_material() {
-    if (_overridden_material.is_valid()) return;
-    if (!material.is_valid()) return;
+    if (_overridden_material.is_valid()) {
+        return;
+    }
+    if (!material.is_valid()) {
+        return;
+    }
 
     // Create override material from base
     _overridden_material = TcMaterial::copy(material);

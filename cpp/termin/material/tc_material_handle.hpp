@@ -457,28 +457,26 @@ public:
         return TcMaterial(h);
     }
 
-    // Get or create by UUID
-    static TcMaterial get_or_create(const std::string& uuid) {
-        tc_material_handle h = tc_material_get_or_create(uuid.c_str());
+    // Get or create by UUID (name required if creating)
+    static TcMaterial get_or_create(const std::string& uuid, const std::string& name) {
+        tc_material_handle h = tc_material_get_or_create(uuid.c_str(), name.c_str());
         if (tc_material_handle_is_invalid(h)) {
             return TcMaterial();
         }
         return TcMaterial(h);
     }
 
-    // Create new material
-    static TcMaterial create(const std::string& name = "", const std::string& uuid_hint = "") {
+    // Create new material (name is required)
+    static TcMaterial create(const std::string& name, const std::string& uuid_hint = "") {
+        if (name.empty()) {
+            tc_log_error("[TcMaterial::create] name is required");
+            return TcMaterial();
+        }
         const char* uuid = uuid_hint.empty() ? nullptr : uuid_hint.c_str();
-        tc_material_handle h = tc_material_create(uuid);
+        tc_material_handle h = tc_material_create(uuid, name.c_str());
         if (tc_material_handle_is_invalid(h)) {
             return TcMaterial();
         }
-
-        tc_material* m = tc_material_get(h);
-        if (m && !name.empty()) {
-            m->header.name = tc_intern_string(name.c_str());
-        }
-
         return TcMaterial(h);
     }
 

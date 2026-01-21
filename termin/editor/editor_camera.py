@@ -268,7 +268,10 @@ class EditorCameraManager:
 
     def destroy_editor_entities(self) -> None:
         """Remove EditorEntities from scene."""
+        from termin._native import log
+
         if self._scene is None or self._scene._tc_scene is None:
+            log.warn("[EditorCameraManager] destroy_editor_entities: scene or tc_scene is None, cannot remove entities!")
             return
         if self.editor_entities is None:
             return

@@ -7,6 +7,8 @@
 #include "tc_scene_ref.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_scene_registry.h"
+#include "../../core_c/include/tc_entity_pool.h"
+#include "../../core_c/include/tc_log.h"
 #include "scene_bindings.hpp"
 
 namespace nb = nanobind;

@@ -54,7 +54,7 @@ class SkyboxManager:
             "",
             "SkyboxGradient",
         )
-        material = Material(shader=shader)
+        material = Material(name="SkyboxGradient", shader=shader)
         # Note: color is already None/unset by default
         return material
 
@@ -69,7 +69,7 @@ class SkyboxManager:
             "",
             "SkyboxSolid",
         )
-        material = Material(shader=shader)
+        material = Material(name="SkyboxSolid", shader=shader)
         # Note: color is already None/unset by default
         return material
 

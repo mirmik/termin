@@ -48,7 +48,7 @@ public:
     INSPECT_FIELD(MeshRenderer, _override_material, "Override Material", "bool")
 
     MeshRenderer();
-    virtual ~MeshRenderer() = default;
+    virtual ~MeshRenderer();
 
     // --- Mesh ---
 

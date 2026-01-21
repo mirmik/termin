@@ -109,7 +109,7 @@ def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, Perspec
         name="mesh",
     )
     shader_prog = TcShader.from_sources(vert, frag, "", "MeshViewerShader")
-    material = Material(shader=shader_prog, color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
+    material = Material(name="MeshViewerMaterial", shader=shader_prog, color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
     entity = Entity(pose=Pose3.identity(), name="cube")
     entity.add_component(MeshRenderer(mesh_tc, material))
     

@@ -574,7 +574,9 @@ public:
 
     void set_tc_value(void* obj, const std::string& type_name, const std::string& field_path, tc_value value, tc_scene* scene) {
         const InspectFieldInfo* f = find_field(type_name, field_path);
-        if (!f || !f->setter) return;
+        if (!f || !f->setter) {
+            return;
+        }
         f->setter(obj, value, scene);
     }
 

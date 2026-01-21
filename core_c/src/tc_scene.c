@@ -90,7 +90,7 @@ tc_scene* tc_scene_new(void) {
     tc_scene* s = (tc_scene*)calloc(1, sizeof(tc_scene));
     if (!s) return NULL;
 
-    s->pool = tc_entity_pool_create(256);
+    s->pool = tc_entity_pool_create(512);
     tc_entity_pool_set_scene(s->pool, s);
     list_init(&s->pending_start);
     list_init(&s->update_list);
