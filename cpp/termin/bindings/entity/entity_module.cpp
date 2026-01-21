@@ -43,7 +43,7 @@ inline bool check_heap_entity() { return true; }
 #endif
 
 #include "termin/entity/component.hpp"
-#include "termin/entity/component_registry.hpp"
+#include "termin/entity/component_registry_python.hpp"
 #include "termin/entity/vtable_utils.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/entity_registry.hpp"
@@ -163,23 +163,27 @@ NB_MODULE(_entity_native, m) {
         .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
         .def("register_native", &ComponentRegistry::register_native,
              nb::arg("name"), nb::arg("factory"), nb::arg("parent") = nullptr)
-        .def("register_python", [](ComponentRegistry& reg, const std::string& name, nb::object cls, nb::object parent) {
+        .def("register_python", [](ComponentRegistry&, const std::string& name, nb::object cls, nb::object parent) {
             if (parent.is_none()) {
-                reg.register_python(name, cls, nullptr);
+                ComponentRegistryPython::register_python(name, cls, nullptr);
             } else {
                 std::string parent_str = nb::cast<std::string>(parent);
-                reg.register_python(name, cls, parent_str.c_str());
+                ComponentRegistryPython::register_python(name, cls, parent_str.c_str());
             }
         }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
-        .def("create", &ComponentRegistry::create, nb::arg("name"))
+        .def("create", [](ComponentRegistry&, const std::string& name) {
+            return ComponentRegistryPython::create(name);
+        }, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def_prop_ro("component_names", [](ComponentRegistry& reg) {
             return reg.list_all();
         })
         .def("list_all", &ComponentRegistry::list_all)
         .def("list_native", &ComponentRegistry::list_native)
-        .def("list_python", &ComponentRegistry::list_python)
+        .def("list_python", []() {
+            return ComponentRegistryPython::list_python();
+        })
         .def("clear", &ComponentRegistry::clear)
         .def_static("set_drawable", &ComponentRegistry::set_drawable,
             nb::arg("name"), nb::arg("is_drawable"),

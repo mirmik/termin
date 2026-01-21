@@ -478,6 +478,7 @@ endif()
 install(TARGETS trent entity_lib termin_core
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows
 )
 
 # Set RPATH for shared libraries to find each other in the same directory

@@ -11,7 +11,7 @@
 
 #include "tc_log.hpp"
 #include "termin/entity/component.hpp"
-#include "termin/entity/component_registry.hpp"
+#include "termin/entity/component_registry_python.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
@@ -178,7 +178,7 @@ public:
         if (!obj_ptr) return nb::none();
 
         try {
-            return tc::InspectRegistry::instance().get(
+            return tc::InspectRegistry_get(tc::InspectRegistry::instance(),
                 obj_ptr, tc_component_type_name(_c), field_name);
         } catch (...) {
             return nb::none();
@@ -198,7 +198,7 @@ public:
         if (!obj_ptr) return;
 
         try {
-            tc::InspectRegistry::instance().set(
+            tc::InspectRegistry_set(tc::InspectRegistry::instance(),
                 obj_ptr, tc_component_type_name(_c), field_name, value, scene_ref.ptr());
         } catch (...) {
             // Field not found or setter failed
@@ -476,7 +476,7 @@ void bind_entity_class(nb::module_& m) {
 
         // Create component by type name and add to entity, returns TcComponentRef
         .def("add_component_by_name", [](Entity& e, const std::string& type_name) -> TcComponentRef {
-            tc_component* tc = ComponentRegistry::instance().create_tc_component(type_name);
+            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
             if (!tc) {
                 throw std::runtime_error("Failed to create component: " + type_name);
             }
@@ -831,8 +831,6 @@ void bind_entity_class(nb::module_& m) {
                     }
                     nb::list components = nb::cast<nb::list>(comp_list_obj);
 
-                    auto& registry = ComponentRegistry::instance();
-
                     for (size_t i = 0; i < nb::len(components); ++i) {
                         nb::object comp_data_item = components[i];
                         if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
@@ -842,13 +840,13 @@ void bind_entity_class(nb::module_& m) {
 
                         std::string type_name = nb::cast<std::string>(comp_data["type"]);
 
-                        if (!registry.has(type_name)) {
+                        if (!ComponentRegistry::instance().has(type_name)) {
                             tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
                             continue;
                         }
 
                         try {
-                            nb::object comp = registry.create(type_name);
+                            nb::object comp = ComponentRegistryPython::create(type_name);
                             if (comp.is_none()) continue;
 
                             nb::object data_field;
@@ -858,7 +856,7 @@ void bind_entity_class(nb::module_& m) {
                                 data_field = nb::dict();
                             }
 
-                            const auto* info = registry.get_info(type_name);
+                            const auto* info = ComponentRegistryPython::get_info(type_name);
                             if (info && info->kind == TC_CXX_COMPONENT) {
                                 if (nb::isinstance<nb::dict>(data_field)) {
                                     nb::dict data_dict = nb::cast<nb::dict>(data_field);
@@ -1039,8 +1037,6 @@ void bind_entity_class(nb::module_& m) {
                     }
                 }
 
-                auto& registry = ComponentRegistry::instance();
-
                 for (size_t i = 0; i < nb::len(components); ++i) {
                     nb::object comp_data_item = components[i];
                     if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
@@ -1049,13 +1045,13 @@ void bind_entity_class(nb::module_& m) {
                     if (!comp_data.contains("type")) continue;
                     std::string type_name = nb::cast<std::string>(comp_data["type"]);
 
-                    if (!registry.has(type_name)) {
+                    if (!ComponentRegistry::instance().has(type_name)) {
                         tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
                         continue;
                     }
 
                     try {
-                        nb::object comp = registry.create(type_name);
+                        nb::object comp = ComponentRegistryPython::create(type_name);
                         if (comp.is_none()) continue;
 
                         nb::object data_field;
@@ -1065,7 +1061,7 @@ void bind_entity_class(nb::module_& m) {
                             data_field = nb::dict();
                         }
 
-                        const auto* info = registry.get_info(type_name);
+                        const auto* info = ComponentRegistryPython::get_info(type_name);
                         if (info && info->kind == TC_CXX_COMPONENT) {
                             if (nb::isinstance<nb::dict>(data_field)) {
                                 nb::dict data_dict = nb::cast<nb::dict>(data_field);

@@ -111,6 +111,8 @@ if __name__ == "__main__":
                 "*.dll",
                 "*.so",
                 "*.dylib",
+                # Import libraries for external modules (Windows)
+                "lib/*.lib",
                 # Subpackages
                 "ga201/*",
                 "physics/*",

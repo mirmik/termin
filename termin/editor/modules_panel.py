@@ -262,12 +262,39 @@ class ModulesPanel(QtWidgets.QDockWidget):
 
                 termin_path = os.path.dirname(termin.__file__)
                 project_root = os.path.normpath(os.path.join(termin_path, ".."))
-                core_c = os.path.join(project_root, "core_c", "include")
-                core_cpp = os.path.join(project_root, "cpp")
-                lib_dir = os.path.join(project_root, "cpp", "build", "bin")
 
-                if os.path.exists(core_c) and os.path.exists(core_cpp):
-                    loader.set_engine_paths(core_c, core_cpp, lib_dir)
+                # Try development paths first (source checkout)
+                core_c_dev = os.path.join(project_root, "core_c", "include")
+                core_cpp_dev = os.path.join(project_root, "cpp")
+
+                # Check for pip install -e . (editable install) with build dir
+                lib_dir_build = os.path.join(
+                    project_root, "build", "temp.win-amd64-cpython-312", "Release", "bin"
+                )
+                if not os.path.exists(lib_dir_build):
+                    lib_dir_build = os.path.join(project_root, "cpp", "build", "bin")
+
+                # Installed package paths
+                core_c_pkg = os.path.join(termin_path, "include", "core_c")
+                core_cpp_pkg = os.path.join(termin_path, "include", "cpp")
+                lib_dir_pkg = os.path.join(termin_path, "lib")
+
+                # Use development paths if available, otherwise installed package
+                if os.path.exists(core_c_dev) and os.path.exists(core_cpp_dev):
+                    core_c = core_c_dev
+                    core_cpp = core_cpp_dev
+                    lib_dir = lib_dir_build
+                elif os.path.exists(core_c_pkg) and os.path.exists(core_cpp_pkg):
+                    core_c = core_c_pkg
+                    core_cpp = core_cpp_pkg
+                    lib_dir = lib_dir_pkg
+                else:
+                    self._append_output("Warning: Could not find engine include paths")
+                    core_c = core_c_dev
+                    core_cpp = core_cpp_dev
+                    lib_dir = lib_dir_build
+
+                loader.set_engine_paths(core_c, core_cpp, lib_dir)
 
             success = loader.load_module(file_path)
 

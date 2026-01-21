@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <unordered_set>
 #include "../../../core_c/include/tc_component.h"
-#include "../../../core_c/include/tc_inspect.hpp"
+#include "../../../core_c/include/tc_inspect_cpp.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
 #include "../tc_scene_ref.hpp"
 #include "entity.hpp"

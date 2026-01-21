@@ -1,6 +1,7 @@
 // tc_scene_bindings.cpp - Direct bindings for tc_scene C API
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 
 #include "entity/entity.hpp"
 #include "entity/component.hpp"

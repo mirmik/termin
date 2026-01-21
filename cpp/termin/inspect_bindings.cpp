@@ -182,21 +182,22 @@ void bind_inspect(nb::module_& m) {
         .def_ro("is_inspectable", &InspectFieldInfo::is_inspectable)
         .def_ro("choices", &InspectFieldInfo::choices)
         .def_prop_ro("action", [](InspectFieldInfo& self) -> nb::object {
-            // If we have a Python action, return it
-            if (self.action.ptr() != nullptr && !self.action.is_none()) {
-                return self.action;
+            // If we have a Python action (stored as void* -> nb::object*), return it
+            if (self.py_action != nullptr) {
+                nb::object* py_obj = static_cast<nb::object*>(self.py_action);
+                if (py_obj->ptr() != nullptr && !py_obj->is_none()) {
+                    return *py_obj;
+                }
             }
-            // If we have a C++ action callback, lazily create nb::cpp_function
+            // If we have a C++ action callback, wrap it as nb::cpp_function
             if (self.cpp_action) {
                 auto cpp_fn = self.cpp_action;
-                self.action = nb::cpp_function([cpp_fn](nb::object obj) {
-                    // Cast to Component* and call C++ callback
+                return nb::cpp_function([cpp_fn](nb::object obj) {
                     void* ptr = static_cast<void*>(nb::cast<Component*>(obj));
                     if (ptr) {
                         cpp_fn(ptr);
                     }
                 });
-                return self.action;
             }
             return nb::none();
         });
@@ -214,9 +215,10 @@ void bind_inspect(nb::module_& m) {
              "Get all fields including inherited Component fields")
         .def("types", &InspectRegistry::types,
              "Get all registered type names")
-        .def("register_python_fields", &InspectRegistry::register_python_fields,
-             nb::arg("type_name"), nb::arg("fields_dict"),
-             "Register fields from Python inspect_fields dict")
+        .def("register_python_fields", [](InspectRegistry& self, const std::string& type_name, nb::dict fields_dict) {
+            tc::InspectRegistry_register_python_fields(self, type_name, std::move(fields_dict));
+        }, nb::arg("type_name"), nb::arg("fields_dict"),
+           "Register fields from Python inspect_fields dict")
         .def("get_type_backend", &InspectRegistry::get_type_backend,
              nb::arg("type_name"),
              "Get the backend (Cpp/Python/Rust) for a type")
@@ -234,7 +236,7 @@ void bind_inspect(nb::module_& m) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
-            return self.get(ptr, type_name, field_path);
+            return tc::InspectRegistry_get(self, ptr, type_name, field_path);
         }, nb::arg("obj"), nb::arg("field"),
            "Get field value from object")
 
@@ -242,7 +244,7 @@ void bind_inspect(nb::module_& m) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
-            self.set(ptr, type_name, field_path, value);
+            tc::InspectRegistry_set(self, ptr, type_name, field_path, std::move(value));
         }, nb::arg("obj"), nb::arg("field"), nb::arg("value"),
            "Set field value on object")
 
@@ -262,13 +264,15 @@ void bind_inspect(nb::module_& m) {
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
             nb::dict py_data = nb::cast<nb::dict>(data);
-            self.deserialize_component_fields_over_python(ptr, obj, type_name, py_data);
+            tc::InspectRegistry_deserialize_component_fields_over_python(self, ptr, obj, type_name, py_data);
         }, nb::arg("obj"), nb::arg("data"),
            "Deserialize all fields from dict to object")
 
-        .def("add_button", &InspectRegistry::add_button,
-             nb::arg("type_name"), nb::arg("path"), nb::arg("label"), nb::arg("action"),
-             "Add a button field to a type");
+        .def("add_button", [](InspectRegistry& self, const std::string& type_name,
+                              const std::string& path, const std::string& label, nb::object action) {
+            tc::InspectRegistry_add_button(self, type_name, path, label, std::move(action));
+        }, nb::arg("type_name"), nb::arg("path"), nb::arg("label"), nb::arg("action"),
+           "Add a button field to a type");
 }
 
 } // namespace termin

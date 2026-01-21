@@ -1,8 +1,10 @@
 #include "spin_component.hpp"
+#include <iostream>
 
 namespace game {
 
 void SpinComponent::update(float dt) {
+    std::cout << "[SpinComponent::update] dt=" << dt << std::endl;
     if (!entity.valid() || !entity.transform().valid()) return;
 
     termin::GeneralPose3 pose = entity.transform().local_pose();

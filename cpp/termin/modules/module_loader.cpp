@@ -241,14 +241,18 @@ bool ModuleLoader::generate_cmake(const ModuleDescriptor& desc, const std::strin
     cmake << ")\n\n";
 
     // Link libraries
-    std::string lib_path = _lib_dir + "/entity_lib";
+    std::string entity_lib_path = _lib_dir + "/entity_lib";
+    std::string termin_core_path = _lib_dir + "/termin_core";
 #ifdef _WIN32
-    lib_path += ".lib";
+    entity_lib_path += ".lib";
+    termin_core_path += ".lib";
 #else
-    lib_path = _lib_dir + "/libentity_lib.so";
+    entity_lib_path = _lib_dir + "/libentity_lib.so";
+    termin_core_path = _lib_dir + "/libtermin_core.so";
 #endif
     cmake << "target_link_libraries(" << desc.name << " PRIVATE\n";
-    cmake << "    \"" << to_cmake_path(lib_path) << "\"\n";
+    cmake << "    \"" << to_cmake_path(entity_lib_path) << "\"\n";
+    cmake << "    \"" << to_cmake_path(termin_core_path) << "\"\n";
     cmake << ")\n\n";
 
     // Windows export settings

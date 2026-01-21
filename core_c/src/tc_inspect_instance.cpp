@@ -20,11 +20,27 @@ InspectRegistry& InspectRegistry::instance() {
 }
 
 // ============================================================================
-// Python field registration
+// InspectRegistryPythonExt implementation
 // ============================================================================
 
-void InspectRegistry::register_python_fields(const std::string& type_name, nb::dict fields_dict) {
-    _fields.erase(type_name);
+void InspectRegistryPythonExt::add_button(InspectRegistry& reg, const std::string& type_name,
+                                          const std::string& path, const std::string& label,
+                                          nb::object action) {
+    InspectFieldInfo info;
+    info.type_name = type_name;
+    info.path = path;
+    info.label = label;
+    info.kind = "button";
+    info.is_serializable = false;
+    info.is_inspectable = true;
+    info.py_action = new nb::object(std::move(action));
+
+    reg._fields[type_name].push_back(std::move(info));
+}
+
+void InspectRegistryPythonExt::register_python_fields(InspectRegistry& reg, const std::string& type_name,
+                                                       nb::dict fields_dict) {
+    reg._fields.erase(type_name);
 
     for (auto item : fields_dict) {
         std::string field_name = nb::cast<std::string>(item.first);
@@ -95,7 +111,7 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
 
         // Action for button
         if (nb::hasattr(field_obj, "action") && !field_obj.attr("action").is_none()) {
-            info.action = field_obj.attr("action");
+            info.py_action = new nb::object(field_obj.attr("action"));
         }
 
         // Custom getter/setter from Python InspectField
@@ -180,10 +196,66 @@ void InspectRegistry::register_python_fields(const std::string& type_name, nb::d
             }
         };
 
-        _fields[type_name].push_back(std::move(info));
+        reg._fields[type_name].push_back(std::move(info));
     }
 
-    _type_backends[type_name] = TypeBackend::Python;
+    reg._type_backends[type_name] = TypeBackend::Python;
+}
+
+nb::object InspectRegistryPythonExt::get(InspectRegistry& reg, void* obj,
+                                         const std::string& type_name, const std::string& field_path) {
+    const InspectFieldInfo* f = reg.find_field(type_name, field_path);
+    if (!f) {
+        throw nb::attribute_error(("Field not found: " + field_path).c_str());
+    }
+    if (!f->getter) {
+        throw nb::type_error(("No getter for field: " + field_path).c_str());
+    }
+    tc_value val = f->getter(obj);
+    nb::object result = tc_value_to_nb(&val);
+    tc_value_free(&val);
+    return result;
+}
+
+void InspectRegistryPythonExt::set(InspectRegistry& reg, void* obj, const std::string& type_name,
+                                   const std::string& field_path, nb::object value, tc_scene* scene) {
+    const InspectFieldInfo* f = reg.find_field(type_name, field_path);
+    if (!f) {
+        throw nb::attribute_error(("Field not found: " + field_path).c_str());
+    }
+    if (!f->setter) {
+        throw nb::type_error(("No setter for field: " + field_path).c_str());
+    }
+    tc_value val = nb_to_tc_value(value);
+    f->setter(obj, val, scene);
+    tc_value_free(&val);
+}
+
+void InspectRegistryPythonExt::deserialize_all_py(InspectRegistry& reg, void* obj,
+                                                   const std::string& type_name,
+                                                   const nb::dict& data, tc_scene* scene) {
+    for (const auto& f : reg.all_fields(type_name)) {
+        if (!f.is_serializable) continue;
+        if (!f.setter) continue;
+
+        nb::str key(f.path.c_str());
+        if (!data.contains(key)) continue;
+
+        nb::object field_data = data[key];
+        if (field_data.is_none()) continue;
+
+        tc_value val = nb_to_tc_value(field_data);
+        f.setter(obj, val, scene);
+        tc_value_free(&val);
+    }
+}
+
+void InspectRegistryPythonExt::deserialize_component_fields_over_python(
+    InspectRegistry& reg, void* ptr, nb::object obj, const std::string& type_name,
+    const nb::dict& data, tc_scene* scene) {
+    // For C++ components ptr is the object, for Python components obj.ptr() is used
+    void* target = (reg.get_type_backend(type_name) == TypeBackend::Cpp) ? ptr : obj.ptr();
+    deserialize_all_py(reg, target, type_name, data, scene);
 }
 
 // ============================================================================
