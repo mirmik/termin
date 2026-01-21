@@ -4,14 +4,11 @@
 #include <cstdint>
 #include <cstddef>
 #include <unordered_set>
-#include <nanobind/nanobind.h>
 #include "../../../core_c/include/tc_component.h"
 #include "../../../core_c/include/tc_inspect.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
+#include "../tc_scene_ref.hpp"
 #include "entity.hpp"
-
-
-namespace nb = nanobind;
 
 namespace termin {
 
@@ -93,7 +90,7 @@ public:
     virtual void on_removed_from_entity() {}
 
     // Called when entity is added/removed from scene
-    virtual void on_added(nb::object scene) { (void)scene; }
+    virtual void on_added(TcSceneRef scene) { (void)scene; }
     virtual void on_removed() {}
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
@@ -130,43 +127,6 @@ public:
     // Access to underlying C component (for Scene integration)
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
-
-    // Get Python wrapper for this component (cached in _c.wrapper)
-    nb::object to_python() {
-        if (!_c.wrapper) {
-            nb::object py_wrapper = nb::cast(this, nb::rv_policy::reference);
-            _c.wrapper = py_wrapper.inc_ref().ptr();
-        }
-        return nb::borrow<nb::object>(
-            reinterpret_cast<PyObject*>(_c.wrapper)
-        );
-    }
-
-    // Set cached Python wrapper (called from bindings when component is created)
-    void set_wrapper(nb::object self) {
-        if (_c.wrapper) {
-            nb::handle old(reinterpret_cast<PyObject*>(_c.wrapper));
-            old.dec_ref();
-        }
-        _c.wrapper = self.inc_ref().ptr();
-    }
-
-    // Convert any tc_component to Python object
-    static nb::object tc_to_python(tc_component* c) {
-        if (!c) return nb::none();
-
-        if (c->kind == TC_NATIVE_COMPONENT) {
-            CxxComponent* cxx = from_tc(c);
-            if (!cxx) return nb::none();
-            return cxx->to_python();
-        } else {
-            // TC_EXTERNAL_COMPONENT: wrapper holds the Python object
-            if (!c->wrapper) return nb::none();
-            return nb::borrow<nb::object>(
-                reinterpret_cast<PyObject*>(c->wrapper)
-            );
-        }
-    }
 
 protected:
     CxxComponent();

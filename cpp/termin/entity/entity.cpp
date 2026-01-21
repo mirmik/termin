@@ -123,21 +123,6 @@ tc_component* Entity::get_component_by_type_name(const std::string& type_name) {
     return nullptr;
 }
 
-nb::object Entity::get_python_component(const std::string& type_name) {
-    size_t count = component_count();
-    for (size_t i = 0; i < count; i++) {
-        tc_component* tc = component_at(i);
-        if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
-            const char* comp_type = tc->type_name ? tc->type_name :
-                                    (tc->vtable ? tc->vtable->type_name : nullptr);
-            if (comp_type && type_name == comp_type) {
-                return nb::borrow((PyObject*)tc->wrapper);
-            }
-        }
-    }
-    return nb::none();
-}
-
 void Entity::set_parent(const Entity& parent_entity) {
     if (!valid()) return;
 
@@ -202,8 +187,8 @@ void Entity::update(float dt) {
     }
 }
 
-void Entity::on_added_to_scene(nb::object scene) {
-    // Nothing needed - pool manages lifetime
+void Entity::on_added_to_scene(tc_scene* scene) {
+    (void)scene;  // Pool manages lifetime
 }
 
 void Entity::on_removed_from_scene() {

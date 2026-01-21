@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <stdexcept>
 #include "general_pose3.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
 

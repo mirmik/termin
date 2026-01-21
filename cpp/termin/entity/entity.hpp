@@ -3,18 +3,16 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <nanobind/nanobind.h>
 #include "../geom/general_transform3.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
 #include "../../../core_c/include/tc_component.h"
+#include "../../../core_c/include/tc_scene.h"
 
 extern "C" {
 #include "../../../core_c/include/tc_value.h"
 }
 
 #include "../export.hpp"
-
-namespace nb = nanobind;
 
 namespace termin {
 
@@ -129,9 +127,6 @@ public:
     // Get any component (C++ or Python) by type name - returns tc_component*
     tc_component* get_component_by_type_name(const std::string& type_name);
 
-    // Get Python component by type name (returns nb::object, or nb::none() if not found)
-    nb::object get_python_component(const std::string& type_name);
-
     // Note: get_component<T>() is defined in component.hpp after CxxComponent is fully defined
     template<typename T>
     T* get_component();
@@ -146,23 +141,23 @@ public:
     // --- Lifecycle ---
 
     void update(float dt);
-    void on_added_to_scene(nb::object scene);
+    void on_added_to_scene(tc_scene* scene);
     void on_removed_from_scene();
 
     // --- Serialization ---
 
-    // Serialize base entity data (returns tc_value dict, caller must free)
-    tc_value serialize_base() const;
-    static Entity deserialize(tc_entity_pool* pool, const tc_value* data);
-
-    // For register_cpp_handle_kind compatibility
-    nb::dict serialize() const {
-        nb::dict d;
+    // Serialize for kind registry (uuid only)
+    tc_value serialize_to_value() const {
+        tc_value d = tc_value_dict_new();
         if (valid()) {
-            d["uuid"] = std::string(uuid());
+            tc_value_dict_set(&d, "uuid", tc_value_string(uuid()));
         }
         return d;
     }
+
+    // Serialize base entity data (returns tc_value dict, caller must free)
+    tc_value serialize_base() const;
+    static Entity deserialize(tc_entity_pool* pool, const tc_value* data);
 
     // Deserialize from tc_value with scene context for entity resolution
     void deserialize_from(const tc_value* data, tc_scene* scene = nullptr);

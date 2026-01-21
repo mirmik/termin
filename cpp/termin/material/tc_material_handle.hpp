@@ -388,7 +388,20 @@ public:
         return m->phases[phase_index].state;
     }
 
-    // Serialize for scene saving (returns nanobind dict)
+    // Serialize for kind registry (returns tc_value)
+    tc_value serialize_to_value() const {
+        tc_value d = tc_value_dict_new();
+        if (!is_valid()) {
+            tc_value_dict_set(&d, "type", tc_value_string("none"));
+            return d;
+        }
+        tc_value_dict_set(&d, "uuid", tc_value_string(uuid()));
+        tc_value_dict_set(&d, "name", tc_value_string(name()));
+        tc_value_dict_set(&d, "type", tc_value_string("uuid"));
+        return d;
+    }
+
+    // Serialize for scene saving (returns nanobind dict) - for Python bindings
     nb::dict serialize() const {
         nb::dict d;
         if (!is_valid()) {

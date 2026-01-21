@@ -202,7 +202,7 @@ inline void register_builtin_cpp_kinds() {
     );
 }
 
-// Helper to register handle types that have serialize() and deserialize_from() methods
+// Helper to register handle types that have serialize_to_value() and deserialize_from() methods
 template<typename H>
 void register_cpp_handle_kind(const std::string& kind_name);
 

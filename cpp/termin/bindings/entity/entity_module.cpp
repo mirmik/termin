@@ -52,6 +52,8 @@ inline bool check_heap_entity() { return true; }
 #include "termin/geom/pose3.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
+#include "termin/modules/module_loader.hpp"
+#include "termin/tc_scene_ref.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
@@ -86,7 +88,7 @@ public:
     void on_removed_from_entity() override {
         NB_OVERRIDE(on_removed_from_entity);
     }
-    void on_added(nb::object scene) override {
+    void on_added(TcSceneRef scene) override {
         NB_OVERRIDE(on_added, scene);
     }
     void on_removed() override {
@@ -111,7 +113,7 @@ NB_MODULE(_entity_native, m) {
         .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
         .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
         .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
-        .def("on_added", &CxxComponent::on_added)
+        .def("on_added", &CxxComponent::on_added, nb::arg("scene"))
         .def("on_removed", &CxxComponent::on_removed)
         .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
         .def("on_scene_active", &CxxComponent::on_scene_active)
@@ -323,6 +325,62 @@ NB_MODULE(_entity_native, m) {
     m.def("component_registry_type_count", []() {
         return tc_component_registry_type_count();
     });
+
+    // --- ModuleLoader (hot-reload system for C++ modules) ---
+    nb::class_<ModuleDescriptor>(m, "ModuleDescriptor")
+        .def_ro("name", &ModuleDescriptor::name)
+        .def_ro("path", &ModuleDescriptor::path)
+        .def_ro("sources", &ModuleDescriptor::sources)
+        .def_ro("include_dirs", &ModuleDescriptor::include_dirs)
+        .def_ro("components", &ModuleDescriptor::components);
+
+    nb::class_<LoadedModule>(m, "LoadedModule")
+        .def_ro("name", &LoadedModule::name)
+        .def_ro("dll_path", &LoadedModule::dll_path)
+        .def_ro("descriptor", &LoadedModule::descriptor)
+        .def_ro("registered_components", &LoadedModule::registered_components);
+
+    nb::class_<ModuleLoader>(m, "ModuleLoader")
+        .def_static("instance", &ModuleLoader::instance, nb::rv_policy::reference)
+        .def("load_module", &ModuleLoader::load_module, nb::arg("module_path"),
+             "Load a module from .module descriptor file")
+        .def("unload_module", &ModuleLoader::unload_module, nb::arg("name"),
+             "Unload a module by name")
+        .def("reload_module", &ModuleLoader::reload_module, nb::arg("name"),
+             "Reload a module (unload + compile + load)")
+        .def("compile_module", &ModuleLoader::compile_module, nb::arg("name"),
+             "Compile a module, returns path to DLL or empty string on error")
+        .def_prop_ro("last_error", &ModuleLoader::last_error,
+             "Get last error message")
+        .def_prop_ro("compiler_output", &ModuleLoader::compiler_output,
+             "Get compiler output from last compilation")
+        .def("list_modules", &ModuleLoader::list_modules,
+             "Get list of loaded module names")
+        .def("get_module", &ModuleLoader::get_module, nb::arg("name"),
+             nb::rv_policy::reference,
+             "Get module info by name")
+        .def("is_loaded", &ModuleLoader::is_loaded, nb::arg("name"),
+             "Check if a module is loaded")
+        .def("set_event_callback", [](ModuleLoader& loader, nb::object callback) {
+            if (callback.is_none()) {
+                loader.set_event_callback(nullptr);
+            } else {
+                loader.set_event_callback([callback](const std::string& module_name, const std::string& event) {
+                    nb::gil_scoped_acquire gil;
+                    callback(module_name, event);
+                });
+            }
+        }, nb::arg("callback"),
+             "Set callback for module events (loading, loaded, unloading, etc.)")
+        .def_prop_ro("core_c", &ModuleLoader::get_core_c,
+             "Get C API include directory")
+        .def_prop_ro("core_cpp", &ModuleLoader::get_core_cpp,
+             "Get C++ include directory")
+        .def_prop_ro("lib_dir", &ModuleLoader::get_lib_dir,
+             "Get library directory")
+        .def("set_engine_paths", &ModuleLoader::set_engine_paths,
+             nb::arg("core_c"), nb::arg("core_cpp"), nb::arg("lib_dir"),
+             "Set engine paths for module compilation");
 
     // Register atexit handler
     nb::object atexit_mod = nb::module_::import_("atexit");

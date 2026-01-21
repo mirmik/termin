@@ -1,6 +1,9 @@
 // component.cpp - CxxComponent implementation
 #include "component.hpp"
 #include "tc_log.hpp"
+#include <nanobind/nanobind.h>
+
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -110,18 +113,9 @@ void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
 }
 
 void CxxComponent::_cb_on_added(tc_component* c, void* scene) {
-    (void)scene;  // Ignore - might be tc_scene* or PyObject*
     auto* self = from_tc(c);
     if (self) {
-        // Get Python scene from global current_scene
-        try {
-            nb::module_ scene_mod = nb::module_::import_("termin.visualization.core.scene");
-            nb::object py_scene = scene_mod.attr("get_current_scene")();
-            self->on_added(py_scene);
-        } catch (const nb::python_error& e) {
-            // Module not available or scene not set during initialization - debug level
-            tc::Log::debug(e, "CxxComponent::on_added get_current_scene");
-        }
+        self->on_added(TcSceneRef(static_cast<tc_scene*>(scene)));
     }
 }
 

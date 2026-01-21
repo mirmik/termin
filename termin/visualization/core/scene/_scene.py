@@ -661,14 +661,12 @@ class Scene:
                 component.has_fixed_update = True
 
         # Register with TcScene (adds to type lists automatically)
+        # on_added callback is called by C code in tc_scene_register_component
         if is_python:
             ptr = component.c_component_ptr()
             self._tc_scene.register_component_ptr(ptr)
         else:
             self._tc_scene.register_component(component)
-
-        # Notify component it was added to scene
-        component.on_added(self)
 
     def unregister_component(self, component: Component):
         """Unregister component from tc_scene.

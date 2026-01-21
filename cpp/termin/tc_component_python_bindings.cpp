@@ -6,6 +6,7 @@
 
 #include "tc_component_python.h"
 #include "../../core_c/include/tc_material.h"
+#include "../../core_c/include/tc_scene.h"
 #include "tc_log.hpp"
 #include "render/drawable.hpp"
 #include "render/render_context.hpp"
@@ -106,15 +107,17 @@ static void py_cb_on_removed_from_entity(void* py_self) {
 }
 
 static void py_cb_on_added(void* py_self, void* scene) {
-    (void)scene;  // tc_scene* - not used, we use get_current_scene() instead
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
         if (nb::hasattr(self, "on_added")) {
-            // Get Python Scene from get_current_scene()
-            nb::object scene_module = nb::module_::import_("termin.visualization.core.scene._scene");
-            nb::object py_scene = scene_module.attr("get_current_scene")();
-            self.attr("on_added")(py_scene);
+            // Get Python Scene from tc_scene's py_wrapper
+            tc_scene* tc_s = static_cast<tc_scene*>(scene);
+            void* py_wrapper = tc_s ? tc_scene_get_py_wrapper(tc_s) : nullptr;
+            if (py_wrapper) {
+                nb::handle py_scene((PyObject*)py_wrapper);
+                self.attr("on_added")(py_scene);
+            }
         }
     } catch (const std::exception& e) {
         tc::Log::error(e, "PythonComponent::on_added");

@@ -6,6 +6,9 @@
 #include "../../geom/geom.hpp"
 #include "../../colliders/collider.hpp"
 #include <tc_log.hpp>
+#include <nanobind/nanobind.h>
+
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -20,9 +23,10 @@ public:
     INSPECT_FIELD(CXXRotatorComponent, speed, "Speed", "float", 0.0, 10.0, 0.1)
 
     void start() override {
-        collider_component = entity.get_python_component("ColliderComponent");
-        if (!collider_component.is_none()) {
-            // collider_component.attached_collider
+        // Get Python component by type name
+        tc_component* tc = entity.get_component_by_type_name("ColliderComponent");
+        if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
+            collider_component = nb::borrow((PyObject*)tc->wrapper);
             nb::object collider_obj = collider_component.attr("attached_collider");
             collider = nb::cast<termin::colliders::Collider*>(collider_obj);
         }

@@ -289,6 +289,13 @@ public:
         return it != _type_parents.end() ? it->second : "";
     }
 
+    // Unregister a type (for hot-reload)
+    void unregister_type(const std::string& type_name) {
+        _fields.erase(type_name);
+        _type_backends.erase(type_name);
+        _type_parents.erase(type_name);
+    }
+
     // ========================================================================
     // Field registration (C++ types via template)
     // ========================================================================

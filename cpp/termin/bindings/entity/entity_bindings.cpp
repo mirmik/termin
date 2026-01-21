@@ -25,6 +25,42 @@ namespace nb = nanobind;
 
 namespace termin {
 
+// Python-specific helper functions for CxxComponent
+// (moved from component.hpp to avoid nanobind dependency in public headers)
+
+inline nb::object component_to_python(CxxComponent* cxx) {
+    if (!cxx) return nb::none();
+    tc_component* c = cxx->c_component();
+    if (!c->wrapper) {
+        nb::object py_wrapper = nb::cast(cxx, nb::rv_policy::reference);
+        c->wrapper = py_wrapper.inc_ref().ptr();
+    }
+    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
+}
+
+inline void component_set_wrapper(CxxComponent* cxx, nb::object self) {
+    tc_component* c = cxx->c_component();
+    if (c->wrapper) {
+        nb::handle old(reinterpret_cast<PyObject*>(c->wrapper));
+        old.dec_ref();
+    }
+    c->wrapper = self.inc_ref().ptr();
+}
+
+inline nb::object tc_component_to_python(tc_component* c) {
+    if (!c) return nb::none();
+
+    if (c->kind == TC_NATIVE_COMPONENT) {
+        CxxComponent* cxx = CxxComponent::from_tc(c);
+        if (!cxx) return nb::none();
+        return component_to_python(cxx);
+    } else {
+        // TC_EXTERNAL_COMPONENT: wrapper holds the Python object
+        if (!c->wrapper) return nb::none();
+        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
+    }
+}
+
 // Iterator for traversing ancestor entities
 class EntityAncestorIterator {
 public:
@@ -73,7 +109,7 @@ public:
     // Try to get typed Python object (may return None if no bindings available)
     nb::object to_python() const {
         if (!_c) return nb::none();
-        return CxxComponent::tc_to_python(_c);
+        return tc_component_to_python(_c);
     }
 
     // Get owner entity
@@ -416,7 +452,7 @@ void bind_entity_class(nb::module_& m) {
         .def("add_component", [](Entity& e, nb::object component) -> nb::object {
             if (nb::isinstance<Component>(component)) {
                 Component* c = nb::cast<Component*>(component);
-                c->set_wrapper(component);
+                component_set_wrapper(c, component);
                 e.add_component(c);
                 register_component_with_scene(e, component);
                 return component;
@@ -483,13 +519,25 @@ void bind_entity_class(nb::module_& m) {
             if (!tc) {
                 return nb::none();
             }
-            return CxxComponent::tc_to_python(tc);
+            return tc_component_to_python(tc);
         }, nb::arg("type_name"))
         .def("has_component_type", [](Entity& e, const std::string& type_name) -> bool {
             return e.get_component_by_type_name(type_name) != nullptr;
         }, nb::arg("type_name"))
-        .def("get_python_component", &Entity::get_python_component,
-             nb::arg("type_name"))
+        .def("get_python_component", [](Entity& e, const std::string& type_name) -> nb::object {
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
+                    const char* comp_type = tc->type_name ? tc->type_name :
+                                            (tc->vtable ? tc->vtable->type_name : nullptr);
+                    if (comp_type && type_name == comp_type) {
+                        return nb::borrow((PyObject*)tc->wrapper);
+                    }
+                }
+            }
+            return nb::none();
+        }, nb::arg("type_name"))
         .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {
             if (!e.valid()) {
                 return nb::none();
@@ -499,7 +547,7 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
 
                 if (nb::isinstance(py_comp, type_class)) {
                     return py_comp;
@@ -513,7 +561,7 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
 
                 if (nb::isinstance(py_comp, type_class)) {
                     return py_comp;
@@ -528,7 +576,7 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
                 if (!py_comp.is_none()) {
                     result.append(py_comp);
                 }
@@ -601,10 +649,12 @@ void bind_entity_class(nb::module_& m) {
 
         // Lifecycle
         .def("update", &Entity::update, nb::arg("dt"))
-        .def("on_added_to_scene", &Entity::on_added_to_scene, nb::arg("scene"))
+        .def("on_added_to_scene", [](Entity& e, TcSceneRef scene_ref) {
+            e.on_added_to_scene(scene_ref.ptr());
+        }, nb::arg("scene"))
         .def("on_removed_from_scene", &Entity::on_removed_from_scene)
-        .def("on_added", [](Entity& e, nb::object scene) {
-            e.on_added_to_scene(scene);
+        .def("on_added", [](Entity& e, TcSceneRef scene_ref) {
+            e.on_added_to_scene(scene_ref.ptr());
         }, nb::arg("scene"))
         .def("on_removed", [](Entity& e) {
             e.on_removed_from_scene();
@@ -631,7 +681,7 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
 
                 if (nb::hasattr(py_comp, "serialize")) {
                     nb::object comp_data = py_comp.attr("serialize")();

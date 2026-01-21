@@ -114,12 +114,14 @@ if(WIN32)
         trent/trent.cpp
         trent/trent_path.cpp
         trent/string_ext.cpp
+        trent/yaml.cpp
     )
 else()
     add_library(trent SHARED
         trent/trent.cpp
         trent/trent_path.cpp
         trent/string_ext.cpp
+        trent/yaml.cpp
     )
 endif()
 target_compile_options(trent PRIVATE
@@ -214,6 +216,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_inspect_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/bindings/inspect/tc_kind_python_instance.cpp
+    termin/modules/module_loader.cpp
 )
 target_include_directories(entity_lib PUBLIC ../core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)

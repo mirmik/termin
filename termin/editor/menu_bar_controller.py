@@ -58,6 +58,7 @@ class MenuBarController:
         on_show_navmesh_registry_viewer: Callable,
         on_show_scene_manager_viewer: Callable,
         on_toggle_profiler: Callable,
+        on_toggle_modules: Callable,
         on_toggle_fullscreen: Callable,
         on_show_agent_types: Callable,
         # State getters
@@ -65,17 +66,20 @@ class MenuBarController:
         can_redo: Callable[[], bool],
         is_fullscreen: Callable[[], bool],
         is_profiler_visible: Callable[[], bool],
+        is_modules_visible: Callable[[], bool],
     ):
         self._can_undo = can_undo
         self._can_redo = can_redo
         self._is_fullscreen = is_fullscreen
         self._is_profiler_visible = is_profiler_visible
+        self._is_modules_visible = is_modules_visible
 
         self._action_undo: QAction | None = None
         self._action_redo: QAction | None = None
         self._action_play: QAction | None = None
         self._action_fullscreen: QAction | None = None
         self._action_profiler: QAction | None = None
+        self._action_modules: QAction | None = None
 
         self._setup_menu_bar(
             menu_bar,
@@ -109,6 +113,7 @@ class MenuBarController:
             on_show_navmesh_registry_viewer=on_show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=on_show_scene_manager_viewer,
             on_toggle_profiler=on_toggle_profiler,
+            on_toggle_modules=on_toggle_modules,
             on_toggle_fullscreen=on_toggle_fullscreen,
             on_show_agent_types=on_show_agent_types,
         )
@@ -146,6 +151,7 @@ class MenuBarController:
         on_show_navmesh_registry_viewer: Callable,
         on_show_scene_manager_viewer: Callable,
         on_toggle_profiler: Callable,
+        on_toggle_modules: Callable,
         on_toggle_fullscreen: Callable,
         on_show_agent_types: Callable,
     ) -> None:
@@ -265,6 +271,11 @@ class MenuBarController:
         self._action_profiler.setCheckable(True)
         self._action_profiler.triggered.connect(on_toggle_profiler)
 
+        self._action_modules = debug_menu.addAction("Modules")
+        self._action_modules.setShortcut("F8")
+        self._action_modules.setCheckable(True)
+        self._action_modules.triggered.connect(on_toggle_modules)
+
         debug_menu.addSeparator()
 
         debug_action = debug_menu.addAction("Undo/Redo Stack...")
@@ -317,3 +328,8 @@ class MenuBarController:
         """Update profiler action checked state."""
         if self._action_profiler is not None:
             self._action_profiler.setChecked(self._is_profiler_visible())
+
+    def update_modules_action(self) -> None:
+        """Update modules action checked state."""
+        if self._action_modules is not None:
+            self._action_modules.setChecked(self._is_modules_visible())

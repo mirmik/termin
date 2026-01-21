@@ -8,24 +8,7 @@
 
 namespace tc {
 
-// Helper: convert nb::dict to tc_value dict
-inline tc_value nb_dict_to_tc_value(const nb::dict& d) {
-    tc_value result = tc_value_dict_new();
-    for (auto item : d) {
-        std::string key = nb::cast<std::string>(nb::str(item.first));
-        nb::object val = nb::borrow<nb::object>(item.second);
-        if (nb::isinstance<nb::str>(val)) {
-            tc_value_dict_set(&result, key.c_str(), tc_value_string(nb::cast<std::string>(val).c_str()));
-        } else if (nb::isinstance<nb::int_>(val)) {
-            tc_value_dict_set(&result, key.c_str(), tc_value_int(nb::cast<int64_t>(val)));
-        } else if (nb::isinstance<nb::float_>(val)) {
-            tc_value_dict_set(&result, key.c_str(), tc_value_double(nb::cast<double>(val)));
-        }
-    }
-    return result;
-}
-
-// Register handle types that have serialize() and deserialize_from() methods
+// Register handle types that have serialize_to_value() and deserialize_from() methods
 template<typename H>
 void register_cpp_handle_kind(const std::string& kind_name) {
     // Register C++ handler
@@ -33,8 +16,7 @@ void register_cpp_handle_kind(const std::string& kind_name) {
         // serialize: std::any(H) → tc_value
         [](const std::any& value) -> tc_value {
             const H& h = std::any_cast<const H&>(value);
-            nb::dict d = h.serialize();
-            return nb_dict_to_tc_value(d);
+            return h.serialize_to_value();
         },
         // deserialize: tc_value, scene → std::any(H)
         [](const tc_value* v, tc_scene* scene) -> std::any {
@@ -52,13 +34,12 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             const auto& vec = std::any_cast<const std::vector<H>&>(value);
             tc_value result = tc_value_list_new();
             for (const auto& h : vec) {
-                nb::dict d = h.serialize();
-                tc_value_list_push(&result, nb_dict_to_tc_value(d));
+                tc_value_list_push(&result, h.serialize_to_value());
             }
             return result;
         },
         // deserialize: tc_value, scene → std::any(vector<H>)
-        [list_kind](const tc_value* v, tc_scene* scene) -> std::any {
+        [](const tc_value* v, tc_scene* scene) -> std::any {
             std::vector<H> vec;
             if (v->type == TC_VALUE_LIST) {
                 for (size_t i = 0; i < v->data.list.count; i++) {

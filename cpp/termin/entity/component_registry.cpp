@@ -45,6 +45,8 @@ void ComponentRegistry::register_python(const std::string& name, nb::object cls,
 
 void ComponentRegistry::unregister(const std::string& name) {
     registry_.erase(name);
+    // Also unregister from C registry
+    tc_component_registry_unregister(name.c_str());
 }
 
 nb::object ComponentRegistry::create(const std::string& name) const {
