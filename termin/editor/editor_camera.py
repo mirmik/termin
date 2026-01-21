@@ -236,6 +236,9 @@ class EditorCameraManager:
         entities = []
         self._collect_hierarchy(self.editor_entities, entities)
 
+        # Get scene ref for handle resolution during deserialization
+        scene_ref = self._scene._tc_scene.scene_ref() if self._scene else None
+
         for ent in entities:
             components_data = data.get(ent.name)
             if not components_data:
@@ -248,7 +251,7 @@ class EditorCameraManager:
                 # Find matching component by type
                 ref = ent.get_tc_component(comp_type)
                 if ref:
-                    ref.deserialize_data(comp_data_inner)
+                    ref.deserialize_data(comp_data_inner, scene_ref)
 
     def recreate_in_scene(self, new_scene: "Scene") -> None:
         """
