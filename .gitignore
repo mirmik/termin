@@ -158,3 +158,19 @@ entity_lib.lib
 
 tmpclaude*
 build_test*
+
+# C# build artifacts
+csharp/**/bin/
+csharp/**/obj/
+csharp/Termin.Native/runtimes/
+
+# SWIG generated files
+csharp/termin_wrap.cxx
+csharp/termin_wrap.h
+csharp/Termin.Native/Generated/
+
+# CMake C# build directory
+build_csharp/
+
+# Allow C# solution file
+!csharp/Termin.sln

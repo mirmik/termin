@@ -559,3 +559,27 @@ install(TARGETS _texture_native DESTINATION ${CMAKE_INSTALL_PREFIX}/texture)
 install(TARGETS _graphics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/graphics)
 install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+# ============== C# SWIG Bindings ==============
+option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
+
+if(BUILD_CSHARP_BINDINGS)
+    # SWIG wrapper library for C# bindings
+    # This creates termin.dll that C# P/Invoke calls
+    add_library(termin SHARED
+        ${CMAKE_CURRENT_SOURCE_DIR}/../csharp/termin_wrap.cxx
+    )
+    target_include_directories(termin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(termin PRIVATE SWIG_CSHARP)
+    if(WIN32)
+        # Export all symbols on Windows
+        set_target_properties(termin PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
+    target_compile_options(termin PRIVATE
+        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+    )
+    install(TARGETS termin
+        RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/../csharp/Termin.Native/runtimes/win-x64/native
+        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/../csharp/Termin.Native/runtimes/linux-x64/native
+    )
+endif()

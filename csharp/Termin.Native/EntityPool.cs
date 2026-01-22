@@ -1,0 +1,136 @@
+using System.Numerics;
+using System.Runtime.InteropServices;
+
+namespace Termin.Native;
+
+/// <summary>
+/// High-level wrapper for tc_entity_pool.
+/// </summary>
+public class EntityPool : IDisposable
+{
+    private IntPtr _handle;
+    private readonly bool _ownsHandle;
+    private bool _disposed;
+
+    public IntPtr Handle => _handle;
+
+    public EntityPool(IntPtr handle, bool ownsHandle = true)
+    {
+        _handle = handle;
+        _ownsHandle = ownsHandle;
+    }
+
+    public int Count => (int)TerminCore.EntityPoolCount(_handle);
+
+    public TcEntityId CreateEntity(string name)
+    {
+        return TerminCore.EntityPoolAlloc(_handle, name);
+    }
+
+    public TcEntityId CreateEntity(string name, string uuid)
+    {
+        return TerminCore.EntityPoolAllocWithUuid(_handle, name, uuid);
+    }
+
+    public void DestroyEntity(TcEntityId id)
+    {
+        TerminCore.EntityPoolFree(_handle, id);
+    }
+
+    public bool IsAlive(TcEntityId id)
+    {
+        return TerminCore.EntityPoolAlive(_handle, id);
+    }
+
+    public string? GetName(TcEntityId id)
+    {
+        var ptr = TerminCore.EntityPoolName(_handle, id);
+        return Marshal.PtrToStringUTF8(ptr);
+    }
+
+    public void SetName(TcEntityId id, string name)
+    {
+        TerminCore.EntityPoolSetName(_handle, id, name);
+    }
+
+    // Transform
+    public Vector3 GetPosition(TcEntityId id)
+    {
+        var xyz = new double[3];
+        TerminCore.EntityPoolGetLocalPosition(_handle, id, xyz);
+        return new Vector3((float)xyz[0], (float)xyz[1], (float)xyz[2]);
+    }
+
+    public void SetPosition(TcEntityId id, Vector3 pos)
+    {
+        var xyz = new double[] { pos.X, pos.Y, pos.Z };
+        TerminCore.EntityPoolSetLocalPosition(_handle, id, xyz);
+    }
+
+    public Quaternion GetRotation(TcEntityId id)
+    {
+        var xyzw = new double[4];
+        TerminCore.EntityPoolGetLocalRotation(_handle, id, xyzw);
+        return new Quaternion((float)xyzw[0], (float)xyzw[1], (float)xyzw[2], (float)xyzw[3]);
+    }
+
+    public void SetRotation(TcEntityId id, Quaternion rot)
+    {
+        var xyzw = new double[] { rot.X, rot.Y, rot.Z, rot.W };
+        TerminCore.EntityPoolSetLocalRotation(_handle, id, xyzw);
+    }
+
+    public Vector3 GetScale(TcEntityId id)
+    {
+        var xyz = new double[3];
+        TerminCore.EntityPoolGetLocalScale(_handle, id, xyz);
+        return new Vector3((float)xyz[0], (float)xyz[1], (float)xyz[2]);
+    }
+
+    public void SetScale(TcEntityId id, Vector3 scale)
+    {
+        var xyz = new double[] { scale.X, scale.Y, scale.Z };
+        TerminCore.EntityPoolSetLocalScale(_handle, id, xyz);
+    }
+
+    public Matrix4x4 GetWorldMatrix(TcEntityId id)
+    {
+        var m = new double[16];
+        TerminCore.EntityPoolGetWorldMatrix(_handle, id, m);
+        return new Matrix4x4(
+            (float)m[0], (float)m[1], (float)m[2], (float)m[3],
+            (float)m[4], (float)m[5], (float)m[6], (float)m[7],
+            (float)m[8], (float)m[9], (float)m[10], (float)m[11],
+            (float)m[12], (float)m[13], (float)m[14], (float)m[15]
+        );
+    }
+
+    public void UpdateTransforms()
+    {
+        TerminCore.EntityPoolUpdateTransforms(_handle);
+    }
+
+    // Flags
+    public bool IsVisible(TcEntityId id) => TerminCore.EntityPoolVisible(_handle, id);
+    public void SetVisible(TcEntityId id, bool v) => TerminCore.EntityPoolSetVisible(_handle, id, v);
+
+    public bool IsEnabled(TcEntityId id) => TerminCore.EntityPoolEnabled(_handle, id);
+    public void SetEnabled(TcEntityId id, bool v) => TerminCore.EntityPoolSetEnabled(_handle, id, v);
+
+    // Hierarchy
+    public TcEntityId GetParent(TcEntityId id) => TerminCore.EntityPoolParent(_handle, id);
+    public void SetParent(TcEntityId id, TcEntityId parent) => TerminCore.EntityPoolSetParent(_handle, id, parent);
+
+    public void Dispose()
+    {
+        if (!_disposed && _ownsHandle)
+        {
+            // EntityPool is usually owned by Scene, so we don't destroy it here
+            _handle = IntPtr.Zero;
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    ~EntityPool() => Dispose();
+}
