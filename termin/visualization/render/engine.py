@@ -55,64 +55,54 @@ try:
         tc_frame_graph_get_alias_groups,
         TcFrameGraphError,
     )
-    _HAS_TC_FRAME_GRAPH = True
-except ImportError:
-    _HAS_TC_FRAME_GRAPH = False
-
-# Use C frame graph
-_HAS_TC_FRAME_GRAPH = True
+except ImportError as e:
+    raise ImportError(f"tc_frame_graph bindings required: {e}") from e
 
 
 def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
     """
-    Build pass schedule and alias_groups using tc_frame_graph if available,
-    else fall back to Python FrameGraph.
+    Build pass schedule and alias_groups using tc_frame_graph.
 
     Returns: (schedule, alias_groups)
     """
     from termin._native import log
 
-    # Try to use C frame graph for both schedule and alias_groups
-    tc_pipeline = getattr(pipeline, '_tc_pipeline', None)
-    all_passes_have_tc = all(getattr(p, '_tc_pass', None) is not None for p in frame_passes)
+    tc_pipeline = pipeline._tc_pipeline
 
-    if _HAS_TC_FRAME_GRAPH and tc_pipeline is not None and all_passes_have_tc:
-        if tc_pipeline.pass_count == len(frame_passes):
-            fg = tc_frame_graph_build(tc_pipeline)
-            try:
-                error = tc_frame_graph_get_error(fg)
-                if error == TcFrameGraphError.OK:
-                    # Get schedule from C frame graph
-                    tc_schedule = tc_frame_graph_get_schedule(fg)
-                    pass_map = {p.pass_name: p for p in frame_passes}
-                    schedule = []
-                    for tc_pass in tc_schedule:
-                        py_pass = pass_map.get(tc_pass.pass_name)
-                        if py_pass is not None:
-                            schedule.append(py_pass)
+    if tc_pipeline.pass_count != len(frame_passes):
+        raise RuntimeError(
+            f"tc_pipeline.pass_count={tc_pipeline.pass_count} != len(frame_passes)={len(frame_passes)}"
+        )
 
-                    if len(schedule) == len(frame_passes):
-                        # Get alias_groups from C frame graph
-                        # Returns dict: {canonical: [aliases...]}
-                        c_alias_groups = tc_frame_graph_get_alias_groups(fg)
-                        # Convert to {canonical: set(aliases)}
-                        alias_groups = {k: set(v) for k, v in c_alias_groups.items()}
-                        log.info(f"[engine] Using C frame graph schedule: {[p.pass_name for p in schedule]}")
-                        log.info(f"[engine] C alias_groups: {alias_groups}")
-                        return schedule, alias_groups
-                    else:
-                        log.warn(f"[engine] tc_frame_graph schedule mismatch: got {len(schedule)}, expected {len(frame_passes)}")
-            finally:
-                tc_frame_graph_destroy(fg)
-        else:
-            log.warn(f"[engine] tc_pipeline.pass_count={tc_pipeline.pass_count} != len(frame_passes)={len(frame_passes)}")
+    fg = tc_frame_graph_build(tc_pipeline)
+    try:
+        error = tc_frame_graph_get_error(fg)
+        if error != TcFrameGraphError.OK:
+            msg = tc_frame_graph_get_error_message(fg)
+            raise RuntimeError(f"tc_frame_graph error: {msg}")
 
-    # Fall back to Python FrameGraph
-    from termin.visualization.render.framegraph import FrameGraph
-    graph = FrameGraph(frame_passes)
-    alias_groups = graph.fbo_alias_groups()
-    schedule = graph.build_schedule()
-    return schedule, alias_groups
+        # Get schedule from C frame graph
+        tc_schedule = tc_frame_graph_get_schedule(fg)
+        pass_map = {p.pass_name: p for p in frame_passes}
+        schedule = []
+        for tc_pass in tc_schedule:
+            py_pass = pass_map.get(tc_pass.pass_name)
+            if py_pass is not None:
+                schedule.append(py_pass)
+
+        if len(schedule) != len(frame_passes):
+            raise RuntimeError(
+                f"tc_frame_graph schedule mismatch: got {len(schedule)}, expected {len(frame_passes)}"
+            )
+
+        # Get alias_groups from C frame graph
+        c_alias_groups = tc_frame_graph_get_alias_groups(fg)
+        alias_groups = {k: set(v) for k, v in c_alias_groups.items()}
+        log.info(f"[engine] C frame graph schedule: {[p.pass_name for p in schedule]}")
+        log.info(f"[engine] C alias_groups: {alias_groups}")
+        return schedule, alias_groups
+    finally:
+        tc_frame_graph_destroy(fg)
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (

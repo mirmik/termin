@@ -326,6 +326,14 @@ class FrameGraphCycleError(FrameGraphError):
 
 class FrameGraph:
     """
+    DEPRECATED: Используйте tc_frame_graph из termin._native.render.
+
+    Текущая версия RenderEngine использует C реализацию (tc_frame_graph).
+    Этот класс оставлен для обратной совместимости с framegraph_debugger,
+    pipeline_runner и nodegraph/compiler. Будет удалён после их миграции.
+
+    ---
+
     Простейший frame graph: на вход – набор FramePass,
     на выход – топологически отсортированный список пассов.
 
