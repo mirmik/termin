@@ -53,6 +53,7 @@ try:
         tc_frame_graph_get_error_message,
         tc_frame_graph_get_schedule,
         tc_frame_graph_get_alias_groups,
+        tc_resources_allocate_dict,
         TcFrameGraphError,
     )
 except ImportError as e:
@@ -103,6 +104,108 @@ def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
         return schedule, alias_groups
     finally:
         tc_frame_graph_destroy(fg)
+
+
+def _allocate_pipeline_resources(
+    engine: "RenderEngine",
+    state: "ViewportRenderState",
+    alias_groups: Dict[str, Any],
+    resource_specs_map: Dict[str, Any],
+    target_fbo: "FramebufferHandle",
+    size: Tuple[int, int],
+) -> Dict[str, Any]:
+    """
+    Allocate FBOs and other resources based on alias_groups.
+
+    Returns dict mapping resource names to FBO handles (or other resource objects).
+    """
+    pw, ph = size
+    resources = state.fbos
+
+    # OUTPUT/DISPLAY point to target
+    resources["OUTPUT"] = target_fbo
+    resources["DISPLAY"] = target_fbo
+
+    for canon, names in alias_groups.items():
+        # Skip DISPLAY/OUTPUT - already set
+        if canon in ("DISPLAY", "OUTPUT"):
+            for name in names:
+                resources[name] = target_fbo
+            continue
+
+        # Find spec for this canonical resource
+        spec = resource_specs_map.get(canon)
+        if spec is None:
+            for name in names:
+                if name in resource_specs_map:
+                    spec = resource_specs_map[name]
+                    break
+
+        resource_type = spec.resource_type if spec else "fbo"
+
+        # Handle shadow_map_array
+        if resource_type == "shadow_map_array":
+            resolution = spec.size[0] if spec and spec.size else 1024
+            shadow_array = state.get_shadow_map_array(canon)
+            if shadow_array is None or shadow_array.resolution != resolution:
+                shadow_array = ShadowMapArrayResource(resolution=resolution)
+                state.set_shadow_map_array(canon, shadow_array)
+            for name in names:
+                resources[name] = shadow_array
+            continue
+
+        # Skip unknown resource types
+        if resource_type != "fbo":
+            for name in names:
+                if name not in resources:
+                    resources[name] = None
+            continue
+
+        # FBO resource - determine size/samples/format
+        resource_size = (pw, ph)
+        resource_samples = 1
+        resource_format = ""
+        if spec:
+            if spec.size:
+                resource_size = spec.size
+            resource_samples = spec.samples
+            if spec.format:
+                resource_format = spec.format
+
+        fb = engine._ensure_fbo(state, canon, resource_size, resource_samples, resource_format)
+        for name in names:
+            resources[name] = fb
+
+    return resources
+
+
+def _clear_resources_by_spec(
+    graphics: "GraphicsBackend",
+    resources: Dict[str, Any],
+    resource_specs_map: Dict[str, Any],
+    default_size: Tuple[int, int],
+) -> None:
+    """Clear FBO resources according to their specs."""
+    pw, ph = default_size
+    for resource_name, spec in resource_specs_map.items():
+        if spec.resource_type != "fbo":
+            continue
+        if spec.clear_color is None and spec.clear_depth is None:
+            continue
+        fb = resources.get(resource_name)
+        if fb is None:
+            continue
+
+        graphics.bind_framebuffer(fb)
+        fb_size = spec.size if spec.size else (pw, ph)
+        graphics.set_viewport(0, 0, fb_size[0], fb_size[1])
+
+        if spec.clear_color is not None and spec.clear_depth is not None:
+            graphics.clear_color_depth(spec.clear_color)
+        elif spec.clear_color is not None:
+            graphics.clear_color(spec.clear_color)
+        elif spec.clear_depth is not None:
+            graphics.clear_depth(spec.clear_depth)
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
@@ -340,84 +443,13 @@ class RenderEngine:
             for spec in pipeline.pipeline_specs:
                 resource_specs_map[spec.resource] = spec
 
-        log.info(f"[engine] render_view_to_fbo: alias_groups={list(alias_groups.keys())}")
-        log.info(f"[engine] render_view_to_fbo: resource_specs_map keys={list(resource_specs_map.keys())}")
-        for k, v in resource_specs_map.items():
-            log.info(f"[engine]   spec '{k}': type={v.resource_type}")
+        # Allocate resources based on alias_groups
+        resources = _allocate_pipeline_resources(
+            self, state, alias_groups, resource_specs_map, target_fbo, size
+        )
 
-        # Управляем пулом ресурсов
-        resources = state.fbos
-        # OUTPUT = target_fbo (вместо DISPLAY)
-        resources["OUTPUT"] = target_fbo
-        resources["DISPLAY"] = target_fbo  # Для совместимости со старыми пайплайнами
-
-        for canon, names in alias_groups.items():
-            if canon in ("DISPLAY", "OUTPUT"):
-                for name in names:
-                    resources[name] = target_fbo
-                continue
-
-            spec = resource_specs_map.get(canon)
-            if spec is None:
-                for name in names:
-                    if name in resource_specs_map:
-                        spec = resource_specs_map[name]
-                        break
-
-            resource_type = "fbo"
-            if spec is not None:
-                resource_type = spec.resource_type
-
-            if resource_type == "shadow_map_array":
-                resolution = 1024
-                if spec is not None and spec.size is not None:
-                    resolution = spec.size[0]
-                shadow_array = state.get_shadow_map_array(canon)
-                if shadow_array is None or shadow_array.resolution != resolution:
-                    shadow_array = ShadowMapArrayResource(resolution=resolution)
-                    state.set_shadow_map_array(canon, shadow_array)
-                for name in names:
-                    resources[name] = shadow_array
-                continue
-
-            if resource_type != "fbo":
-                for name in names:
-                    if name not in resources:
-                        resources[name] = None
-                continue
-
-            resource_size = (pw, ph)
-            resource_samples = 1
-            resource_format = ""
-            if spec is not None:
-                if spec.size is not None:
-                    resource_size = spec.size
-                resource_samples = spec.samples
-                if spec.format is not None:
-                    resource_format = spec.format
-
-            fb = self._ensure_fbo(state, canon, resource_size, resource_samples, resource_format)
-            for name in names:
-                resources[name] = fb
-
-        # Очистка ресурсов согласно ResourceSpec
-        for resource_name, spec in resource_specs_map.items():
-            if spec.resource_type != "fbo":
-                continue
-            if spec.clear_color is None and spec.clear_depth is None:
-                continue
-            fb = resources.get(resource_name)
-            if fb is None:
-                continue
-            self.graphics.bind_framebuffer(fb)
-            fb_size = spec.size if spec.size is not None else (pw, ph)
-            self.graphics.set_viewport(0, 0, fb_size[0], fb_size[1])
-            if spec.clear_color is not None and spec.clear_depth is not None:
-                self.graphics.clear_color_depth(spec.clear_color)
-            elif spec.clear_color is not None:
-                self.graphics.clear_color(spec.clear_color)
-            elif spec.clear_depth is not None:
-                self.graphics.clear_depth(spec.clear_depth)
+        # Clear resources according to specs
+        _clear_resources_by_spec(self.graphics, resources, resource_specs_map, size)
 
         # Выполняем пассы
         scene = view.scene
@@ -534,85 +566,18 @@ class RenderEngine:
             for spec in pipeline.pipeline_specs:
                 resource_specs_map[spec.resource] = spec
 
-        # Управляем пулом ресурсов
-        resources = shared_state.fbos
-
         # Для scene pipeline используем размер default viewport
         default_pw, default_ph = default_ctx.rect[2], default_ctx.rect[3]
+        default_size = (default_pw, default_ph)
+        target_fbo = default_ctx.output_fbo
 
-        # OUTPUT/DISPLAY = default viewport's output_fbo
-        if default_ctx.output_fbo is not None:
-            resources["OUTPUT"] = default_ctx.output_fbo
-            resources["DISPLAY"] = default_ctx.output_fbo
+        # Allocate resources based on alias_groups
+        resources = _allocate_pipeline_resources(
+            self, shared_state, alias_groups, resource_specs_map, target_fbo, default_size
+        )
 
-        for canon, names in alias_groups.items():
-            if canon in ("DISPLAY", "OUTPUT"):
-                target_fbo = default_ctx.output_fbo if default_ctx.output_fbo else None
-                for name in names:
-                    resources[name] = target_fbo
-                continue
-
-            spec = resource_specs_map.get(canon)
-            if spec is None:
-                for name in names:
-                    if name in resource_specs_map:
-                        spec = resource_specs_map[name]
-                        break
-
-            resource_type = "fbo"
-            if spec is not None:
-                resource_type = spec.resource_type
-
-            if resource_type == "shadow_map_array":
-                resolution = 1024
-                if spec is not None and spec.size is not None:
-                    resolution = spec.size[0]
-                shadow_array = shared_state.get_shadow_map_array(canon)
-                if shadow_array is None or shadow_array.resolution != resolution:
-                    shadow_array = ShadowMapArrayResource(resolution=resolution)
-                    shared_state.set_shadow_map_array(canon, shadow_array)
-                for name in names:
-                    resources[name] = shadow_array
-                continue
-
-            if resource_type != "fbo":
-                for name in names:
-                    if name not in resources:
-                        resources[name] = None
-                continue
-
-            resource_size = (default_pw, default_ph)
-            resource_samples = 1
-            resource_format = ""
-            if spec is not None:
-                if spec.size is not None:
-                    resource_size = spec.size
-                resource_samples = spec.samples
-                if spec.format is not None:
-                    resource_format = spec.format
-
-            fb = self._ensure_fbo(shared_state, canon, resource_size, resource_samples, resource_format)
-            for name in names:
-                resources[name] = fb
-
-        # Очистка ресурсов
-        for resource_name, spec in resource_specs_map.items():
-            if spec.resource_type != "fbo":
-                continue
-            if spec.clear_color is None and spec.clear_depth is None:
-                continue
-            fb = resources.get(resource_name)
-            if fb is None:
-                continue
-            self.graphics.bind_framebuffer(fb)
-            fb_size = spec.size if spec.size is not None else (default_pw, default_ph)
-            self.graphics.set_viewport(0, 0, fb_size[0], fb_size[1])
-            if spec.clear_color is not None and spec.clear_depth is not None:
-                self.graphics.clear_color_depth(spec.clear_color)
-            elif spec.clear_color is not None:
-                self.graphics.clear_color(spec.clear_color)
-            elif spec.clear_depth is not None:
-                self.graphics.clear_depth(spec.clear_depth)
+        # Clear resources according to specs
+        _clear_resources_by_spec(self.graphics, resources, resource_specs_map, default_size)
 
         # Выполняем пассы
         lights = scene.build_lights()

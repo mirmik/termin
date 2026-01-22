@@ -9,6 +9,7 @@ extern "C" {
 #include "tc_pass.h"
 #include "tc_pipeline.h"
 #include "tc_frame_graph.h"
+#include "tc_render.h"
 #include "tc_log.h"
 }
 
@@ -461,6 +462,180 @@ void bind_tc_pass(nb::module_& m) {
     m.def("tc_pass_set_name", [](tc_pass* p, const std::string& name) {
         if (p->pass_name) free(p->pass_name);
         p->pass_name = strdup(name.c_str());
+    });
+
+    // ========================================================================
+    // tc_fbo_pool bindings
+    // ========================================================================
+
+    // tc_fbo_pool as opaque handle
+    m.def("tc_fbo_pool_create", []() -> intptr_t {
+        return reinterpret_cast<intptr_t>(tc_fbo_pool_create());
+    });
+
+    m.def("tc_fbo_pool_destroy", [](intptr_t pool_ptr) {
+        tc_fbo_pool_destroy(reinterpret_cast<tc_fbo_pool*>(pool_ptr));
+    });
+
+    // Set FBO for key (stores Python object as void*)
+    m.def("tc_fbo_pool_set", [](intptr_t pool_ptr, const std::string& key, nb::object fbo) {
+        tc_fbo_pool* pool = reinterpret_cast<tc_fbo_pool*>(pool_ptr);
+        // Store Python object pointer (caller must keep fbo alive)
+        tc_fbo_pool_set(pool, key.c_str(), fbo.ptr());
+    });
+
+    // Get FBO for key (returns Python object or None)
+    m.def("tc_fbo_pool_get", [](intptr_t pool_ptr, const std::string& key) -> nb::object {
+        tc_fbo_pool* pool = reinterpret_cast<tc_fbo_pool*>(pool_ptr);
+        void* fbo = tc_fbo_pool_get(pool, key.c_str());
+        if (fbo == nullptr) {
+            return nb::none();
+        }
+        return nb::borrow<nb::object>(static_cast<PyObject*>(fbo));
+    });
+
+    m.def("tc_fbo_pool_clear", [](intptr_t pool_ptr) {
+        tc_fbo_pool_clear(reinterpret_cast<tc_fbo_pool*>(pool_ptr));
+    });
+
+    // ========================================================================
+    // tc_resources bindings
+    // ========================================================================
+
+    // Allocate resources based on frame graph alias groups
+    // Returns dict: {resource_name: fbo_object}
+    m.def("tc_resources_allocate_dict", [](
+        intptr_t fg_ptr,
+        nb::dict specs_dict,
+        nb::object target_fbo,
+        int width,
+        int height
+    ) -> nb::dict {
+        tc_frame_graph* fg = reinterpret_cast<tc_frame_graph*>(fg_ptr);
+        nb::dict result;
+
+        // Get canonical resources
+        const char* canonical_names[256];
+        size_t canon_count = tc_frame_graph_get_canonical_resources(fg, canonical_names, 256);
+
+        // Set OUTPUT and DISPLAY to target
+        result["OUTPUT"] = target_fbo;
+        result["DISPLAY"] = target_fbo;
+
+        for (size_t i = 0; i < canon_count; i++) {
+            const char* canon = canonical_names[i];
+
+            // Get all aliases for this canonical resource
+            const char* alias_names[64];
+            size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, alias_names, 64);
+
+            // Check if DISPLAY or OUTPUT
+            bool is_display = (strcmp(canon, "DISPLAY") == 0 || strcmp(canon, "OUTPUT") == 0);
+            if (is_display) {
+                for (size_t j = 0; j < alias_count; j++) {
+                    result[nb::str(alias_names[j])] = target_fbo;
+                }
+                continue;
+            }
+
+            // Look up spec by canonical name or aliases
+            nb::object spec = nb::none();
+            if (specs_dict.contains(canon)) {
+                spec = specs_dict[canon];
+            } else {
+                for (size_t j = 0; j < alias_count; j++) {
+                    if (specs_dict.contains(alias_names[j])) {
+                        spec = specs_dict[alias_names[j]];
+                        break;
+                    }
+                }
+            }
+
+            // Determine resource type
+            std::string resource_type = "fbo";
+            if (!spec.is_none() && nb::hasattr(spec, "resource_type")) {
+                nb::object rt = spec.attr("resource_type");
+                if (!rt.is_none()) {
+                    resource_type = nb::cast<std::string>(rt);
+                }
+            }
+
+            // For non-fbo resources, set canonical name as key with None
+            // Python side will handle special resources like shadow_map_array
+            if (resource_type != "fbo") {
+                for (size_t j = 0; j < alias_count; j++) {
+                    result[nb::str(alias_names[j])] = nb::none();
+                }
+                continue;
+            }
+
+            // For fbo resources, set canonical name - Python side will ensure FBO
+            // We store the canonical name so Python can create one FBO per group
+            nb::dict fbo_info;
+            fbo_info["canonical"] = nb::str(canon);
+            fbo_info["width"] = width;
+            fbo_info["height"] = height;
+            fbo_info["samples"] = 1;
+            fbo_info["format"] = nb::str("");
+
+            if (!spec.is_none()) {
+                if (nb::hasattr(spec, "size") && !spec.attr("size").is_none()) {
+                    nb::tuple size = nb::cast<nb::tuple>(spec.attr("size"));
+                    fbo_info["width"] = size[0];
+                    fbo_info["height"] = size[1];
+                }
+                if (nb::hasattr(spec, "samples")) {
+                    fbo_info["samples"] = spec.attr("samples");
+                }
+                if (nb::hasattr(spec, "format") && !spec.attr("format").is_none()) {
+                    fbo_info["format"] = spec.attr("format");
+                }
+            }
+
+            // Store info for all aliases
+            for (size_t j = 0; j < alias_count; j++) {
+                result[nb::str(alias_names[j])] = fbo_info;
+            }
+        }
+
+        return result;
+    });
+
+    // Collect resource specs from pipeline passes
+    m.def("tc_pipeline_collect_specs", [](tc_pipeline* pipeline) -> nb::dict {
+        nb::dict result;
+
+        tc_resource_spec specs[128];
+        size_t count = tc_pipeline_collect_specs(pipeline, specs, 128);
+
+        for (size_t i = 0; i < count; i++) {
+            nb::dict spec_dict;
+            spec_dict["resource"] = nb::str(specs[i].resource);
+            spec_dict["resource_type"] = nb::str(specs[i].resource_type);
+            spec_dict["fixed_width"] = specs[i].fixed_width;
+            spec_dict["fixed_height"] = specs[i].fixed_height;
+            spec_dict["samples"] = specs[i].samples;
+            spec_dict["has_clear_color"] = specs[i].has_clear_color;
+            spec_dict["has_clear_depth"] = specs[i].has_clear_depth;
+            if (specs[i].has_clear_color) {
+                spec_dict["clear_color"] = nb::make_tuple(
+                    specs[i].clear_color[0],
+                    specs[i].clear_color[1],
+                    specs[i].clear_color[2],
+                    specs[i].clear_color[3]
+                );
+            }
+            if (specs[i].has_clear_depth) {
+                spec_dict["clear_depth"] = specs[i].clear_depth;
+            }
+            if (specs[i].format) {
+                spec_dict["format"] = nb::str(specs[i].format);
+            }
+
+            result[nb::str(specs[i].resource)] = spec_dict;
+        }
+
+        return result;
     });
 }
 

@@ -53,8 +53,10 @@ struct tc_execute_context {
 
 struct tc_resource_spec {
     const char* resource;        // Resource name
+    char resource_type[32];      // "fbo" (default), "shadow_map_array", etc.
     int fixed_width;             // 0 = use viewport size
     int fixed_height;            // 0 = use viewport size
+    int samples;                 // MSAA samples (1 = no MSAA)
     float clear_color[4];        // RGBA clear color
     float clear_depth;           // Depth clear value
     bool has_clear_color;        // Whether to clear color
