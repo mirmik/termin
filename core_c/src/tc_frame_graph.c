@@ -388,20 +388,17 @@ const char* tc_frame_graph_canonical_resource(tc_frame_graph* fg, const char* na
 
 size_t tc_frame_graph_get_alias_group(
     tc_frame_graph* fg,
-    const char* resource,
+    const char* canonical_name,
     const char** out_names,
     size_t max_count
 ) {
-    if (!fg || !resource || !out_names) return 0;
+    if (!fg || !canonical_name || !out_names) return 0;
 
-    tc_fg_resource* res = find_resource(fg, resource);
-    if (!res) return 0;
-
-    const char* canonical = res->canonical;
+    // Use the passed string directly as the canonical value to match
     size_t count = 0;
 
     for (size_t i = 0; i < fg->resource_count && count < max_count; i++) {
-        if (strcmp(fg->resources[i].canonical, canonical) == 0) {
+        if (strcmp(fg->resources[i].canonical, canonical_name) == 0) {
             out_names[count++] = fg->resources[i].name;
         }
     }
@@ -418,10 +415,21 @@ size_t tc_frame_graph_get_canonical_resources(
 
     size_t count = 0;
 
+    // Collect all unique canonical values (not just where name==canonical)
     for (size_t i = 0; i < fg->resource_count && count < max_count; i++) {
-        // Check if this is the canonical version
-        if (strcmp(fg->resources[i].name, fg->resources[i].canonical) == 0) {
-            out_names[count++] = fg->resources[i].name;
+        const char* canonical = fg->resources[i].canonical;
+
+        // Check if this canonical is already in the output
+        bool already_added = false;
+        for (size_t j = 0; j < count; j++) {
+            if (strcmp(out_names[j], canonical) == 0) {
+                already_added = true;
+                break;
+            }
+        }
+
+        if (!already_added) {
+            out_names[count++] = canonical;
         }
     }
 

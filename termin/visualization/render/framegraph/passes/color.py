@@ -9,6 +9,13 @@ from termin._native.render import ColorPass as _ColorPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.editor.inspect_field import InspectField
 
+# Import tc_pass functions for external pass creation
+try:
+    from termin._native.render import tc_pass_new_external, tc_pass_set_name
+    _HAS_TC_PASS = True
+except ImportError:
+    _HAS_TC_PASS = False
+
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
@@ -106,6 +113,12 @@ class ColorPass(_ColorPassNative):
         self._cached_camera_name: str | None = None
         self._cached_camera_component = None
 
+        # Replace C++ native tc_pass with external tc_pass that calls Python methods
+        if _HAS_TC_PASS:
+            self._tc_pass = tc_pass_new_external(self, self.__class__.__name__)
+            if self._tc_pass is not None:
+                tc_pass_set_name(self._tc_pass, pass_name)
+
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
@@ -114,9 +127,8 @@ class ColorPass(_ColorPassNative):
             camera_name=data.get("data", {}).get("camera_name", ""),
         )
 
-    @property
-    def reads(self) -> Set[str]:
-        """Compute read resources dynamically (overrides C++ member)."""
+    def compute_reads(self) -> Set[str]:
+        """Compute read resources dynamically."""
         result = {self.input_res}
         if self.shadow_res:
             result.add(self.shadow_res)
@@ -125,10 +137,19 @@ class ColorPass(_ColorPassNative):
             result.add(resource_name)
         return result
 
+    def compute_writes(self) -> Set[str]:
+        """Compute write resources dynamically."""
+        return {self.output_res}
+
+    @property
+    def reads(self) -> Set[str]:
+        """Property alias for compute_reads."""
+        return self.compute_reads()
+
     @property
     def writes(self) -> Set[str]:
-        """Compute write resources dynamically (overrides C++ member)."""
-        return {self.output_res}
+        """Property alias for compute_writes."""
+        return self.compute_writes()
 
     def serialize_data(self) -> dict:
         """Serialize fields via InspectRegistry (C++ INSPECT_FIELD) + Python fields."""

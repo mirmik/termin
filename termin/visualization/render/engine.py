@@ -44,6 +44,76 @@ from termin.visualization.render.framegraph.execute_context import ExecuteContex
 # Import to ensure GLSL preprocessor fallback loader is set up before any shader compilation
 import termin.visualization.render.glsl_preprocessor  # noqa: F401
 
+# Import tc_frame_graph functions for C-based scheduling
+try:
+    from termin._native.render import (
+        tc_frame_graph_build,
+        tc_frame_graph_destroy,
+        tc_frame_graph_get_error,
+        tc_frame_graph_get_error_message,
+        tc_frame_graph_get_schedule,
+        tc_frame_graph_get_alias_groups,
+        TcFrameGraphError,
+    )
+    _HAS_TC_FRAME_GRAPH = True
+except ImportError:
+    _HAS_TC_FRAME_GRAPH = False
+
+# Use C frame graph
+_HAS_TC_FRAME_GRAPH = True
+
+
+def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
+    """
+    Build pass schedule and alias_groups using tc_frame_graph if available,
+    else fall back to Python FrameGraph.
+
+    Returns: (schedule, alias_groups)
+    """
+    from termin._native import log
+
+    # Try to use C frame graph for both schedule and alias_groups
+    tc_pipeline = getattr(pipeline, '_tc_pipeline', None)
+    all_passes_have_tc = all(getattr(p, '_tc_pass', None) is not None for p in frame_passes)
+
+    if _HAS_TC_FRAME_GRAPH and tc_pipeline is not None and all_passes_have_tc:
+        if tc_pipeline.pass_count == len(frame_passes):
+            fg = tc_frame_graph_build(tc_pipeline)
+            try:
+                error = tc_frame_graph_get_error(fg)
+                if error == TcFrameGraphError.OK:
+                    # Get schedule from C frame graph
+                    tc_schedule = tc_frame_graph_get_schedule(fg)
+                    pass_map = {p.pass_name: p for p in frame_passes}
+                    schedule = []
+                    for tc_pass in tc_schedule:
+                        py_pass = pass_map.get(tc_pass.pass_name)
+                        if py_pass is not None:
+                            schedule.append(py_pass)
+
+                    if len(schedule) == len(frame_passes):
+                        # Get alias_groups from C frame graph
+                        # Returns dict: {canonical: [aliases...]}
+                        c_alias_groups = tc_frame_graph_get_alias_groups(fg)
+                        # Convert to {canonical: set(aliases)}
+                        alias_groups = {k: set(v) for k, v in c_alias_groups.items()}
+                        log.info(f"[engine] Using C frame graph schedule: {[p.pass_name for p in schedule]}")
+                        log.info(f"[engine] C alias_groups: {alias_groups}")
+                        return schedule, alias_groups
+                    else:
+                        log.warn(f"[engine] tc_frame_graph schedule mismatch: got {len(schedule)}, expected {len(frame_passes)}")
+            finally:
+                tc_frame_graph_destroy(fg)
+        else:
+            log.warn(f"[engine] tc_pipeline.pass_count={tc_pipeline.pass_count} != len(frame_passes)={len(frame_passes)}")
+
+    # Fall back to Python FrameGraph
+    from termin.visualization.render.framegraph import FrameGraph
+    graph = FrameGraph(frame_passes)
+    alias_groups = graph.fbo_alias_groups()
+    schedule = graph.build_schedule()
+    return schedule, alias_groups
+
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
         FramebufferHandle,
@@ -115,6 +185,7 @@ class RenderEngine:
             views: Итератор пар (RenderView, ViewportRenderState).
             present: Вызывать ли surface.present() после рендера.
         """
+        print("[RenderEngine] render_views called")
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
@@ -128,9 +199,16 @@ class RenderEngine:
 
             # Регистрируем контекст для корректного удаления GPU ресурсов
             from termin.visualization.platform.backends import register_context
+            from termin._native import log
             register_context(context_key, surface.make_current)
 
-            for view, state in views:
+            views_list = list(views)
+            log.info(f"[engine] render_views: {len(views_list)} views, size={width}x{height}")
+            if not views_list:
+                log.warn("[engine] render_views: views list is empty!")
+
+            for view, state in views_list:
+                log.info(f"[engine] render_views: processing view '{view.pipeline.name if view.pipeline else 'no_pipeline'}'")
                 try:
                     self._render_single_view(
                         view=view,
@@ -140,13 +218,11 @@ class RenderEngine:
                         context_key=context_key,
                     )
                 except Exception as e:
-                    error_msg = str(e)
-                    if error_msg not in self._logged_errors:
-                        self._logged_errors.add(error_msg)
-                        from termin._native import log
-                        import traceback
-                        tb = traceback.format_exc()
-                        log.error(f"Pipeline error: {e}\n{tb}")
+                    # Always log errors (removed duplicate filtering for debugging)
+                    from termin._native import log
+                    import traceback
+                    tb = traceback.format_exc()
+                    log.error(f"Pipeline error: {e}\n{tb}")
 
             if present:
                 surface.present()
@@ -192,13 +268,18 @@ class RenderEngine:
             context_key: Ключ контекста для кэширования.
         """
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
+        from termin._native import log
+
+        log.info(f"[engine] _render_single_view called")
 
         pipeline = view.pipeline
         if pipeline is None:
+            log.warn("[engine] _render_single_view: pipeline is None")
             return
 
         frame_passes = pipeline.passes
         if not frame_passes:
+            log.warn(f"[engine] _render_single_view: no passes in '{pipeline.name}'")
             return
 
         # Вычисляем пиксельный rect для view
@@ -213,10 +294,8 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Строим framegraph schedule
-        graph = FrameGraph(frame_passes)
-        schedule = graph.build_schedule()
-        alias_groups = graph.fbo_alias_groups()
+        # Строим framegraph schedule (using tc_frame_graph if available)
+        schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
 
         # Есть две механики передачи спеков. Спеки может объявить тот, кто собирал pipeline,
         # или каждый pass может объявить свои спеки. Собираем все спеки в одну мапу.
@@ -327,6 +406,9 @@ class RenderEngine:
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
+        from termin._native import log
+        log.info(f"[engine] _render_single_view: schedule has {len(schedule)} passes, pipeline={pipeline.name}")
+        _first_frame_logged = not hasattr(self, '_first_frame_done')
         for render_pass in schedule:
             # Сброс GL-состояния перед каждым пассом
             self.graphics.reset_state()
@@ -336,6 +418,16 @@ class RenderEngine:
 
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
+
+            # Debug first frame
+            if _first_frame_logged:
+                log.info(f"[engine] Exec '{render_pass.pass_name}': reads={list(pass_reads.keys())}, writes={list(pass_writes.keys())}")
+                missing_reads = [k for k, v in pass_reads.items() if v is None]
+                missing_writes = [k for k, v in pass_writes.items() if v is None]
+                if missing_reads:
+                    log.warn(f"[engine] '{render_pass.pass_name}' missing reads: {missing_reads}")
+                if missing_writes:
+                    log.warn(f"[engine] '{render_pass.pass_name}' missing writes: {missing_writes}")
 
             ctx = ExecuteContext(
                 graphics=self.graphics,
@@ -361,6 +453,9 @@ class RenderEngine:
             for name in render_pass.writes:
                 if name in pass_writes and pass_writes[name] is not None:
                     resources[name] = pass_writes[name]
+
+        if _first_frame_logged:
+            self._first_frame_done = True
 
     def render_scene_pipeline(
         self,
@@ -391,6 +486,8 @@ class RenderEngine:
         from termin.core.profiler import Profiler
         from termin._native import log
 
+        log.info(f"[engine] render_scene_pipeline called: pipeline='{pipeline.name}', viewports={list(viewport_contexts.keys())}")
+
         profiler = Profiler.instance()
 
         with profiler.section("RenderScenePipeline"):
@@ -416,12 +513,10 @@ class RenderEngine:
                     context_key=context_key,
                 )
             except Exception as e:
-                error_msg = str(e)
-                if error_msg not in self._logged_errors:
-                    self._logged_errors.add(error_msg)
-                    import traceback
-                    tb = traceback.format_exc()
-                    log.error(f"Scene pipeline error: {e}\n{tb}")
+                # Always log errors for debugging (removed duplicate filtering)
+                import traceback
+                tb = traceback.format_exc()
+                log.error(f"Scene pipeline error: {e}\n{tb}")
 
             if present:
                 surface.present()
@@ -453,8 +548,11 @@ class RenderEngine:
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
         from termin._native import log
 
+        log.info(f"[engine] _execute_scene_pipeline called: pipeline='{pipeline.name}', {len(viewport_contexts)} viewports")
+
         frame_passes = pipeline.passes
         if not frame_passes:
+            log.warn(f"[engine] _execute_scene_pipeline: no passes in '{pipeline.name}'")
             return
 
         # Выбираем первый доступный viewport как default, если не указан
@@ -479,10 +577,8 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Строим framegraph schedule
-        graph = FrameGraph(frame_passes)
-        schedule = graph.build_schedule()
-        alias_groups = graph.fbo_alias_groups()
+        # Строим framegraph schedule (using tc_frame_graph if available)
+        schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
 
         # Собираем ResourceSpecs
         resource_specs_map = {}
@@ -574,6 +670,8 @@ class RenderEngine:
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
+        log.info(f"[engine] _execute_scene_pipeline: schedule has {len(schedule)} passes")
+        _exec_count = 0
         for render_pass in schedule:
             self.graphics.reset_state()
             self._clear_gl_errors()
@@ -586,6 +684,16 @@ class RenderEngine:
 
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
+
+            # Debug: log first frame execution
+            if _exec_count == 0:
+                log.info(f"[engine] Executing pass '{render_pass.pass_name}': reads={list(pass_reads.keys())}, writes={list(pass_writes.keys())}")
+                missing_reads = [k for k, v in pass_reads.items() if v is None]
+                missing_writes = [k for k, v in pass_writes.items() if v is None]
+                if missing_reads:
+                    log.warn(f"[engine] Pass '{render_pass.pass_name}' missing read FBOs: {missing_reads}")
+                if missing_writes:
+                    log.warn(f"[engine] Pass '{render_pass.pass_name}' missing write FBOs: {missing_writes}")
 
             exec_ctx = ExecuteContext(
                 graphics=self.graphics,
@@ -608,6 +716,8 @@ class RenderEngine:
             for name in render_pass.writes:
                 if name in pass_writes and pass_writes[name] is not None:
                     resources[name] = pass_writes[name]
+
+            _exec_count += 1
 
     def _clear_gl_errors(self) -> None:
         """Очищает все pending GL ошибки."""
@@ -700,17 +810,23 @@ class RenderEngine:
             context_key: Ключ контекста для кэширования.
         """
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
+        from termin._native import log
+
+        log.info(f"[engine] render_view_to_fbo called, size={size}")
 
         pipeline = view.pipeline
         if pipeline is None:
+            log.warn("[engine] render_view_to_fbo: pipeline is None")
             return
 
         frame_passes = pipeline.passes
         if not frame_passes:
+            log.warn(f"[engine] render_view_to_fbo: no passes in '{pipeline.name}'")
             return
 
         scene = view.scene
         if scene is None or scene.is_destroyed:
+            log.warn("[engine] render_view_to_fbo: scene is None or destroyed")
             return
 
         pw, ph = size
@@ -723,10 +839,13 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Строим framegraph schedule
-        graph = FrameGraph(frame_passes)
-        schedule = graph.build_schedule()
-        alias_groups = graph.fbo_alias_groups()
+        # Debug: log what each pass reports
+        log.info(f"[engine] render_view_to_fbo: passes reads/writes:")
+        for p in frame_passes:
+            log.info(f"[engine]   {p.pass_name}: reads={p.reads}, writes={p.writes}, tc_pass={getattr(p, '_tc_pass', None) is not None}")
+
+        # Строим framegraph schedule (using tc_frame_graph if available)
+        schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
 
         # Собираем ResourceSpecs
         resource_specs_map = {}
@@ -736,6 +855,11 @@ class RenderEngine:
         if pipeline.pipeline_specs:
             for spec in pipeline.pipeline_specs:
                 resource_specs_map[spec.resource] = spec
+
+        log.info(f"[engine] render_view_to_fbo: alias_groups={list(alias_groups.keys())}")
+        log.info(f"[engine] render_view_to_fbo: resource_specs_map keys={list(resource_specs_map.keys())}")
+        for k, v in resource_specs_map.items():
+            log.info(f"[engine]   spec '{k}': type={v.resource_type}")
 
         # Управляем пулом ресурсов
         resources = state.fbos
@@ -818,12 +942,24 @@ class RenderEngine:
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
+        log.info(f"[engine] render_view_to_fbo: executing {len(schedule)} passes: {[p.pass_name for p in schedule]}")
+        _first_pass = True
         for render_pass in schedule:
             self.graphics.reset_state()
             self._clear_gl_errors()
 
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
+
+            if _first_pass:
+                log.info(f"[engine] render_view_to_fbo: first pass '{render_pass.pass_name}' reads={list(pass_reads.keys())}, writes={list(pass_writes.keys())}")
+                missing_reads = [k for k, v in pass_reads.items() if v is None]
+                missing_writes = [k for k, v in pass_writes.items() if v is None]
+                if missing_reads:
+                    log.warn(f"[engine] render_view_to_fbo: '{render_pass.pass_name}' missing reads: {missing_reads}")
+                if missing_writes:
+                    log.warn(f"[engine] render_view_to_fbo: '{render_pass.pass_name}' missing writes: {missing_writes}")
+                _first_pass = False
 
             ctx = ExecuteContext(
                 graphics=self.graphics,
@@ -902,10 +1038,8 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Строим framegraph
-        graph = FrameGraph(frame_passes)
-        schedule = graph.build_schedule()
-        alias_groups = graph.fbo_alias_groups()
+        # Строим framegraph schedule (using tc_frame_graph if available)
+        schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
 
         # Собираем ResourceSpecs
         resource_specs_map = {}

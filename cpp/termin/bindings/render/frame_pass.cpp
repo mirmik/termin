@@ -1,6 +1,11 @@
 #include "common.hpp"
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/unordered_map.h>
+
+extern "C" {
+#include "tc_pass.h"
+}
+
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
@@ -43,6 +48,18 @@ void bind_frame_pass(nb::module_& m) {
         .def("clear_debug_internal_point", &FramePass::clear_debug_internal_point)
         .def("get_debug_internal_point", &FramePass::get_debug_internal_point)
         .def("required_resources", &FramePass::required_resources)
+        // Expose tc_pass handle to Python for frame graph integration
+        // Writable to allow Python subclasses to replace with external tc_pass
+        .def_prop_rw("_tc_pass",
+            [](FramePass& p) -> tc_pass* {
+                return p.tc_pass_handle();
+            },
+            [](FramePass& p, tc_pass* new_pass) {
+                // Note: This leaks the old native tc_pass, but allows Python
+                // subclasses to replace it with an external tc_pass
+                p._tc_pass = new_pass;
+            },
+            nb::rv_policy::reference)
         .def("__repr__", [](const FramePass& p) {
             return "<FramePass '" + p.pass_name + "'>";
         });

@@ -16,6 +16,18 @@ from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.core import FramePass
 
+# Import tc_pipeline functions from native module
+try:
+    from termin._native.render import (
+        tc_pipeline_create,
+        tc_pipeline_destroy,
+        tc_pipeline_add_pass,
+        TcPipeline,
+    )
+    _HAS_TC_PIPELINE = True
+except ImportError:
+    _HAS_TC_PIPELINE = False
+
 
 @dataclass
 class RenderPipeline:
@@ -32,6 +44,33 @@ class RenderPipeline:
     name: str = "default"
     passes: List["FramePass"] = field(default_factory=list)
     pipeline_specs: List[ResourceSpec] = field(default_factory=list)
+
+    # C handle for tc_pipeline (set in __post_init__)
+    _tc_pipeline: "TcPipeline | None" = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self):
+        """Create tc_pipeline and add existing passes."""
+        from termin._native import log
+        if _HAS_TC_PIPELINE:
+            self._tc_pipeline = tc_pipeline_create(self.name)
+            # Add existing passes to tc_pipeline
+            added = 0
+            for p in self.passes:
+                tc_pass = getattr(p, '_tc_pass', None)
+                if tc_pass is not None:
+                    tc_pipeline_add_pass(self._tc_pipeline, tc_pass)
+                    added += 1
+                else:
+                    log.warn(f"[RenderPipeline] pass '{p.pass_name}' has no _tc_pass")
+            log.info(f"[RenderPipeline] created '{self.name}' with {added}/{len(self.passes)} passes in tc_pipeline")
+
+    def add_pass(self, frame_pass: "FramePass") -> None:
+        """Add a pass to the pipeline."""
+        self.passes.append(frame_pass)
+        if _HAS_TC_PIPELINE and self._tc_pipeline is not None:
+            tc_pass = getattr(frame_pass, '_tc_pass', None)
+            if tc_pass is not None:
+                tc_pipeline_add_pass(self._tc_pipeline, tc_pass)
 
     def serialize(self) -> dict:
         """Сериализует RenderPipeline в словарь."""
@@ -92,6 +131,11 @@ class RenderPipeline:
         """
         for render_pass in self.passes:
             render_pass.destroy()
+
+        # Destroy tc_pipeline
+        if _HAS_TC_PIPELINE and self._tc_pipeline is not None:
+            tc_pipeline_destroy(self._tc_pipeline)
+            self._tc_pipeline = None
 
     def get_pass(self, name: str) -> "FramePass | None":
         """

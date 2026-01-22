@@ -27,5 +27,6 @@ void register_material_kind_handlers();
 void bind_drawable(nb::module_& m);
 void bind_renderers(nb::module_& m);
 void bind_solid_primitive(nb::module_& m);
+void bind_tc_pass(nb::module_& m);
 
 } // namespace termin

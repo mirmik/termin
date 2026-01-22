@@ -41,6 +41,9 @@ void bind_render(nb::module_& m) {
     // FramePass, FrameGraph, RenderContext
     bind_frame_pass(m);
 
+    // tc_pass, tc_pipeline, tc_frame_graph (C API bindings)
+    bind_tc_pass(m);
+
     // MaterialPhase, Material
     bind_material(m);
 

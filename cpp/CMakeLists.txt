@@ -232,6 +232,8 @@ set_target_properties(entity_lib PROPERTIES
 add_library(render_lib STATIC
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
+    termin/render/cxx_pass.cpp
+    termin/render/frame_pass.cpp
 )
 target_include_directories(render_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(render_lib PUBLIC entity_lib trent)
@@ -370,6 +372,7 @@ nanobind_add_module(_native
     termin/bindings/render/immediate.cpp
     termin/bindings/render/wireframe.cpp
     termin/bindings/render/frame_pass.cpp
+    termin/bindings/render/tc_pass_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp

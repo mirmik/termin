@@ -8,6 +8,13 @@ import numpy as np
 from termin._native.render import DepthPass as _DepthPassNative
 from termin.editor.inspect_field import InspectField
 
+# Import tc_pass functions for external pass creation
+try:
+    from termin._native.render import tc_pass_new_external, tc_pass_set_name
+    _HAS_TC_PASS = True
+except ImportError:
+    _HAS_TC_PASS = False
+
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
@@ -63,6 +70,12 @@ class DepthPass(_DepthPassNative):
         )
         self.camera_name = camera_name
 
+        # Replace C++ native tc_pass with external tc_pass that calls Python methods
+        if _HAS_TC_PASS:
+            self._tc_pass = tc_pass_new_external(self, self.__class__.__name__)
+            if self._tc_pass is not None:
+                tc_pass_set_name(self._tc_pass, pass_name)
+
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "DepthPass":
         return cls(
@@ -70,15 +83,23 @@ class DepthPass(_DepthPassNative):
             camera_name=data.get("data", {}).get("camera_name", ""),
         )
 
-    @property
-    def reads(self) -> Set[str]:
+    def compute_reads(self) -> Set[str]:
         """Compute read resources dynamically."""
         return {self.input_res}
 
-    @property
-    def writes(self) -> Set[str]:
+    def compute_writes(self) -> Set[str]:
         """Compute write resources dynamically."""
         return {self.output_res}
+
+    @property
+    def reads(self) -> Set[str]:
+        """Property alias for compute_reads."""
+        return self.compute_reads()
+
+    @property
+    def writes(self) -> Set[str]:
+        """Property alias for compute_writes."""
+        return self.compute_writes()
 
     def serialize_data(self) -> dict:
         """Serialize fields via InspectRegistry (C++ INSPECT_FIELD) + Python fields."""

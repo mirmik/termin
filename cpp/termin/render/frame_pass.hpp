@@ -6,8 +6,16 @@
 #include <utility>
 #include <functional>
 #include <any>
+#include <cstring>
+
+extern "C" {
+#include "tc_pass.h"
+}
 
 namespace termin {
+
+// Forward declaration
+class FramePass;
 
 /**
  * Base class for frame passes in the render graph.
@@ -33,7 +41,12 @@ public:
     // Debug configuration
     std::string debug_internal_symbol;
 
-    FramePass() = default;
+    // tc_pass handle for C frame graph integration
+    tc_pass* _tc_pass = nullptr;
+
+    FramePass() {
+        _init_tc_pass();
+    }
 
     FramePass(
         std::string name,
@@ -41,9 +54,63 @@ public:
         std::set<std::string> writes_set = {}
     ) : pass_name(std::move(name)),
         reads(std::move(reads_set)),
-        writes(std::move(writes_set)) {}
+        writes(std::move(writes_set)) {
+        _init_tc_pass();
+    }
 
-    virtual ~FramePass() = default;
+private:
+    // Cached strings for tc_pass callbacks (avoid dangling pointers)
+    mutable std::vector<std::string> _cached_reads;
+    mutable std::vector<std::string> _cached_writes;
+    mutable std::vector<std::string> _cached_aliases;
+    mutable std::vector<std::string> _cached_symbols;
+
+    // Static vtable for C++ FramePass objects
+    static const tc_pass_vtable _cpp_vtable;
+
+    // Static callbacks for vtable
+    static size_t _cb_get_reads(tc_pass* p, const char** out, size_t max);
+    static size_t _cb_get_writes(tc_pass* p, const char** out, size_t max);
+    static size_t _cb_get_inplace_aliases(tc_pass* p, const char** out, size_t max);
+    static size_t _cb_get_internal_symbols(tc_pass* p, const char** out, size_t max);
+    static void _cb_destroy(tc_pass* p);
+
+    void _init_tc_pass() {
+        _tc_pass = static_cast<tc_pass*>(malloc(sizeof(tc_pass)));
+        tc_pass_init(_tc_pass, &_cpp_vtable);
+        _tc_pass->kind = TC_NATIVE_PASS;
+        _tc_pass->wrapper = this;  // Store C++ object pointer
+    }
+
+    void _sync_tc_pass() const {
+        if (_tc_pass) {
+            // Sync pass_name
+            if (_tc_pass->pass_name) free(_tc_pass->pass_name);
+            _tc_pass->pass_name = pass_name.empty() ? nullptr : strdup(pass_name.c_str());
+            _tc_pass->enabled = enabled;
+            // Sync viewport_name
+            if (_tc_pass->viewport_name) free(_tc_pass->viewport_name);
+            _tc_pass->viewport_name = viewport_name.empty() ? nullptr : strdup(viewport_name.c_str());
+        }
+    }
+
+public:
+
+    virtual ~FramePass() {
+        if (_tc_pass) {
+            if (_tc_pass->pass_name) free(_tc_pass->pass_name);
+            if (_tc_pass->viewport_name) free(_tc_pass->viewport_name);
+            if (_tc_pass->debug_internal_symbol) free(_tc_pass->debug_internal_symbol);
+            free(_tc_pass);
+            _tc_pass = nullptr;
+        }
+    }
+
+    // Get tc_pass handle (syncs state first)
+    tc_pass* tc_pass_handle() const {
+        _sync_tc_pass();
+        return _tc_pass;
+    }
 
     /**
      * Returns list of inplace aliases: pairs of (read_name, write_name)

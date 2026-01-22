@@ -16,6 +16,7 @@ set(TC_SOURCES
     src/tc_component.c
     src/tc_core.c
     src/tc_entity_pool.c
+    src/tc_frame_graph.c
     src/tc_gpu.c
     src/tc_hash_map.c
     src/tc_inspect.c
@@ -24,6 +25,7 @@ set(TC_SOURCES
     src/tc_material_registry.c
     src/tc_mesh.c
     src/tc_mesh_registry.c
+    src/tc_pass.c
     src/tc_pool.c
     src/tc_profiler.c
     src/tc_resource_map.c
@@ -40,6 +42,7 @@ set(TC_HEADERS
     include/tc_animation_registry.h
     include/tc_component.h
     include/tc_entity_pool.h
+    include/tc_frame_graph.h
     include/tc_gpu.h
     include/tc_handle.h
     include/tc_hash_map.h
@@ -50,6 +53,8 @@ set(TC_HEADERS
     include/tc_material_registry.h
     include/tc_mesh.h
     include/tc_mesh_registry.h
+    include/tc_pass.h
+    include/tc_pipeline.h
     include/tc_pool.h
     include/tc_pose.h
     include/tc_profiler.h

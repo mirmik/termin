@@ -215,7 +215,8 @@ class MaterialPostEffect(PostEffect):
         # Bind material textures (starting from next available unit)
         for tex_name, tex_handle in phase.textures.items():
             if tex_handle is not None:
-                tex_handle.bind(texture_unit)
+                tex_handle.upload_gpu()
+                tex_handle.bind_gpu(texture_unit)
                 shader.set_uniform_int(tex_name, texture_unit)
                 texture_unit += 1
         gfx.check_gl_error(f"MaterialPostEffect({self.name}): after material textures")

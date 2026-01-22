@@ -224,6 +224,7 @@ class ResolvePass(RenderFramePass):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
+        from termin._native import log
 
         if isinstance(ctx.graphics, NOPGraphicsBackend):
             return
@@ -233,9 +234,11 @@ class ResolvePass(RenderFramePass):
         fb_in = ctx.reads_fbos.get(self.input_res)
         fb_out = ctx.writes_fbos.get(self.output_res)
         if fb_in is None or fb_out is None:
+            log.warn(f"[ResolvePass] Missing FBO: input={fb_in is not None}, output={fb_out is not None}, input_res='{self.input_res}', output_res='{self.output_res}'")
             return
 
         src_size = fb_in.get_size()
+        log.info(f"[ResolvePass] Blitting from '{self.input_res}' ({src_size[0]}x{src_size[1]}) to '{self.output_res}' ({pw}x{ph})")
         ctx.graphics.blit_framebuffer(
             fb_in,
             fb_out,

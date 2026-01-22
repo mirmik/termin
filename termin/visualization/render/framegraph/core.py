@@ -6,6 +6,18 @@ from collections import deque
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import FramebufferHandle
 
+# Import tc_pass functions from native module
+try:
+    from termin._native.render import (
+        tc_pass_new_external,
+        tc_pass_free_external,
+        tc_pass_set_name,
+        TcPass,
+    )
+    _HAS_TC_PASS = True
+except ImportError:
+    _HAS_TC_PASS = False
+
 
 class FramePass:
     """
@@ -61,6 +73,13 @@ class FramePass:
         self._depth_capture_callback: "Callable[[Any], None] | None" = None
         # Callback для сообщения об ошибке чтения depth: (str) -> None
         self._depth_error_callback: "Callable[[str], None] | None" = None
+
+        # C handle for tc_pass system
+        self._tc_pass: "TcPass | None" = None
+        if _HAS_TC_PASS:
+            self._tc_pass = tc_pass_new_external(self, self.__class__.__name__)
+            if self._tc_pass is not None:
+                tc_pass_set_name(self._tc_pass, pass_name)
 
     # ---- reads/writes как вычисляемые свойства --------------------------------
 

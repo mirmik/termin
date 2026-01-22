@@ -683,6 +683,7 @@ class RenderingManager:
             present: Whether to present (swap buffers) after rendering.
         """
         from termin._native import log
+        print(f"[RenderingManager] render_display: {display.name}")
 
         if self._graphics is None:
             log.warn("[render_display] _graphics is None")
@@ -826,6 +827,7 @@ class RenderingManager:
             present: Whether to present after rendering.
         """
         from termin._native import log
+        print("[RenderingManager] render_all called")
 
         if self._use_offscreen_rendering:
             self.render_all_offscreen()
@@ -844,6 +846,8 @@ class RenderingManager:
         are rendered in a single pass. Scene pipelines can span multiple displays.
         """
         from termin._native import log
+        print("[RenderingManager] render_all_offscreen called")
+
 
         if self._offscreen_context is None:
             log.warn("[render_all_offscreen] OffscreenContext not initialized, call initialize() first")
@@ -906,6 +910,8 @@ class RenderingManager:
         """Render a scene pipeline to viewport output_fbos."""
         from termin._native import log
         from termin.visualization.render.engine import ViewportContext
+
+        print(f"[RenderingManager] _render_scene_pipeline_offscreen: scene={scene.name}, pipeline={pipeline_name}")
 
         if scene.is_destroyed:
             return
@@ -983,6 +989,8 @@ class RenderingManager:
         scene = viewport.scene
         if scene is None or scene.is_destroyed:
             return
+
+        print(f"[RenderingManager] _render_viewport_offscreen: viewport={viewport.name}, scene={scene.name}")
 
         # Compute output size
         width, height = display.surface.get_size()

@@ -459,7 +459,9 @@ class MaterialPass(PostEffectPass):
             if tex_name in bound_uniforms:
                 continue
             if tex_handle is not None:
-                tex_handle.bind(graphics, texture_unit, context_key)
+                # TcTexture uses bind_gpu(unit) instead of bind(graphics, unit, context_key)
+                tex_handle.upload_gpu()
+                tex_handle.bind_gpu(texture_unit)
                 shader.set_uniform_int(tex_name, texture_unit)
                 texture_unit += 1
 
