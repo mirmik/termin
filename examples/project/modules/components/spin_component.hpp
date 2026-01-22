@@ -14,10 +14,7 @@ public:
 
     INSPECT_FIELD(SpinComponent, speed, "Speed", "float", -360.0, 360.0, 1.0)
 
-    SpinComponent() {
-        printf("[SpinComponent] created, has_update=%d\n", has_update());
-        set_active_in_editor(true);  // Run in editor mode
-    }
+    SpinComponent() {}
 
     void update(float dt) override;
 };
