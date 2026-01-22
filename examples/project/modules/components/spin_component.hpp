@@ -16,6 +16,7 @@ public:
 
     SpinComponent() {
         printf("[SpinComponent] created, has_update=%d\n", has_update());
+        set_active_in_editor(true);  // Run in editor mode
     }
 
     void update(float dt) override;

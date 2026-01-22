@@ -12,8 +12,6 @@ MeshRenderer::MeshRenderer() {
 }
 
 MeshRenderer::~MeshRenderer() {
-    tc::Log::debug("[~MeshRenderer] destroying, _overridden_material.is_valid=%d",
-        _overridden_material.is_valid() ? 1 : 0);
     tc_value_free(&_pending_override_data);
 }
 

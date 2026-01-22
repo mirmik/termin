@@ -481,6 +481,16 @@ void bind_entity_class(nb::module_& m) {
                 throw std::runtime_error("Failed to create component: " + type_name);
             }
             e.add_component_ptr(tc);
+
+            // Register with scene if entity is in one
+            tc_entity_pool* pool = e.pool();
+            if (pool) {
+                tc_scene* scene = tc_entity_pool_get_scene(pool);
+                if (scene) {
+                    tc_scene_register_component(scene, tc);
+                }
+            }
+
             return TcComponentRef(tc);
         }, nb::arg("type_name"),
            "Create component by type name and add to entity. Returns TcComponentRef.")
@@ -681,13 +691,11 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = tc_component_to_python(tc);
-
-                if (nb::hasattr(py_comp, "serialize")) {
-                    nb::object comp_data = py_comp.attr("serialize")();
-                    if (!comp_data.is_none()) {
-                        comp_list.append(comp_data);
-                    }
+                // Use TcComponentRef for unified serialization (works for all component types)
+                TcComponentRef ref(tc);
+                nb::object comp_data = ref.serialize();
+                if (!comp_data.is_none()) {
+                    comp_list.append(comp_data);
                 }
             }
             result["components"] = comp_list;
@@ -1027,13 +1035,13 @@ void bind_entity_class(nb::module_& m) {
                 if (!nb::isinstance<nb::list>(comp_list_obj)) return;
                 nb::list components = nb::cast<nb::list>(comp_list_obj);
 
-                // Get scene pointer for entity reference resolution
-                tc_scene* c_scene = nullptr;
+                // Get scene ref for entity reference resolution
+                TcSceneRef scene_ref;
                 if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
                     nb::object tc_scene_obj = scene.attr("_tc_scene");
                     if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
                         uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                        c_scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                        scene_ref = TcSceneRef(reinterpret_cast<tc_scene*>(scene_ptr));
                     }
                 }
 
@@ -1051,8 +1059,7 @@ void bind_entity_class(nb::module_& m) {
                     }
 
                     try {
-                        nb::object comp = ComponentRegistryPython::create(type_name);
-                        if (comp.is_none()) continue;
+                        const auto* info = ComponentRegistryPython::get_info(type_name);
 
                         nb::object data_field;
                         if (comp_data.contains("data")) {
@@ -1061,22 +1068,38 @@ void bind_entity_class(nb::module_& m) {
                             data_field = nb::dict();
                         }
 
-                        const auto* info = ComponentRegistryPython::get_info(type_name);
                         if (info && info->kind == TC_CXX_COMPONENT) {
-                            if (nb::isinstance<nb::dict>(data_field)) {
-                                nb::dict data_dict = nb::cast<nb::dict>(data_field);
-                                void* raw_ptr = nb::inst_ptr<void>(comp);
-                                tc_value tc_data = tc::nb_to_tc_value(data_dict);
-                                tc_inspect_deserialize(raw_ptr, type_name.c_str(), &tc_data, c_scene);
-                                tc_value_free(&tc_data);
+                            // C++ components: create via registry, add, deserialize via TcComponentRef
+                            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+                            if (!tc) {
+                                tc::Log::warn("Failed to create C++ component: %s", type_name.c_str());
+                                continue;
                             }
+
+                            ent.add_component_ptr(tc);
+
+                            // Register with scene
+                            tc_entity_pool* pool = ent.pool();
+                            if (pool) {
+                                tc_scene* c_scene = tc_entity_pool_get_scene(pool);
+                                if (c_scene) {
+                                    tc_scene_register_component(c_scene, tc);
+                                }
+                            }
+
+                            TcComponentRef ref(tc);
+                            ref.deserialize_data(data_field, scene_ref);
                         } else {
+                            // Python components: create Python object, deserialize, add via Python
+                            nb::object comp = ComponentRegistryPython::create(type_name);
+                            if (comp.is_none()) continue;
+
                             if (nb::hasattr(comp, "deserialize_data")) {
                                 comp.attr("deserialize_data")(data_field, context);
                             }
-                        }
 
-                        py_entity.attr("add_component")(comp);
+                            py_entity.attr("add_component")(comp);
+                        }
 
                         if (!ent.validate_components()) {
                             tc::Log::error("Component validation failed after adding %s", type_name.c_str());

@@ -109,9 +109,6 @@ tc_scene* tc_scene_new(void) {
 void tc_scene_free(tc_scene* s) {
     if (!s) return;
 
-    tc_log_debug("[tc_scene_free] scene=%p, pool entity_count=%zu",
-        (void*)s, tc_entity_pool_count(s->pool));
-
     // Unregister from global scene registry
     tc_scene_registry_remove(s);
 
@@ -122,8 +119,6 @@ void tc_scene_free(tc_scene* s) {
     tc_resource_map_free(s->type_heads);
     tc_entity_pool_destroy(s->pool);
     free(s);
-
-    tc_log_debug("[tc_scene_free] done");
 }
 
 
@@ -138,6 +133,9 @@ tc_entity_pool* tc_scene_entity_pool(tc_scene* s) {
 void tc_scene_register_component(tc_scene* s, tc_component* c) {
     if (!s || !c) return;
 
+    printf("[tc_scene_register_component] type=%s has_update=%d has_fixed_update=%d\n",
+        tc_component_type_name(c), c->has_update, c->has_fixed_update);
+
     // Add to pending_start if not started
     if (!c->_started && !list_contains(&s->pending_start, c)) {
         list_push(&s->pending_start, c);
@@ -146,6 +144,7 @@ void tc_scene_register_component(tc_scene* s, tc_component* c) {
     // Add to update lists based on flags
     if (c->has_update && !list_contains(&s->update_list, c)) {
         list_push(&s->update_list, c);
+        printf("[tc_scene_register_component] Added to update_list\n");
     }
     if (c->has_fixed_update && !list_contains(&s->fixed_update_list, c)) {
         list_push(&s->fixed_update_list, c);

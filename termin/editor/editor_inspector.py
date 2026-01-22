@@ -311,14 +311,23 @@ class ComponentInspectorPanel(QWidget):
     def _update_material_props_editor(self) -> None:
         """Update material properties editor visibility and content."""
         from termin._native.render import MeshRenderer  # SkinnedMeshRenderer inherits from this
+        from termin.entity import TcComponentRef
 
-        if isinstance(self._component, MeshRenderer) and self._component.override_material:
-            mat = self._component.get_overridden_material()
+        # For TcComponentRef, try to get Python object for MeshRenderer
+        comp = self._component
+        if isinstance(comp, TcComponentRef):
+            if comp.type_name in ('MeshRenderer', 'SkinnedMeshRenderer'):
+                comp = comp.to_python()
+            else:
+                comp = None
+
+        if isinstance(comp, MeshRenderer) and comp.override_material:
+            mat = comp.get_overridden_material()
             # If override enabled but material not created (e.g. after scene load), recreate it
             if mat is None:
-                self._component._override_material = False
-                self._component.set_override_material(True)
-                mat = self._component.get_overridden_material()
+                comp._override_material = False
+                comp.set_override_material(True)
+                mat = comp.get_overridden_material()
             self._material_props_editor.set_material(mat)
             self._material_props_editor.setVisible(True)
         else:
@@ -348,10 +357,17 @@ class ComponentInspectorPanel(QWidget):
         # If override_material changed, call the setter to create/delete the override copy
         if key == "_override_material":
             from termin._native.render import MeshRenderer
-            if isinstance(self._component, MeshRenderer):
+            from termin.entity import TcComponentRef
+            comp = self._component
+            if isinstance(comp, TcComponentRef):
+                if comp.type_name in ('MeshRenderer', 'SkinnedMeshRenderer'):
+                    comp = comp.to_python()
+                else:
+                    comp = None
+            if isinstance(comp, MeshRenderer):
                 # Force setter to run by resetting field first (setter has early-return check)
-                self._component._override_material = not new_value
-                self._component.set_override_material(new_value)
+                comp._override_material = not new_value
+                comp.set_override_material(new_value)
             self._update_material_props_editor()
 
         self.field_changed.emit(self._component, key, new_value)
@@ -444,8 +460,9 @@ class EntityInspector(QWidget):
 
         if ent is not None:
             row = self._components_panel._list.currentRow()
-            if 0 <= row < len(ent.components):
-                self._component_inspector.set_component(ent.components[row])
+            tc_components = ent.tc_components
+            if 0 <= row < len(tc_components):
+                self._component_inspector.set_component(tc_components[row])
             else:
                 self._component_inspector.set_component(None)
         else:
@@ -478,8 +495,12 @@ class EntityInspector(QWidget):
         if self._entity is None or row < 0:
             self._component_inspector.set_component(None)
             return
-        comp = self._entity.components[row]
-        self._component_inspector.set_component(comp)
+        tc_components = self._entity.tc_components
+        if row >= len(tc_components):
+            self._component_inspector.set_component(None)
+            return
+        ref = tc_components[row]
+        self._component_inspector.set_component(ref)
 
     def refresh_transform(self) -> None:
         """Refresh TransformInspector values from the current transform."""

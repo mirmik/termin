@@ -442,6 +442,7 @@ struct InspectFieldRegistrar {
     InspectFieldRegistrar(T C::*member, const char* type_name,
                           const char* path, const char* label, const char* kind,
                           double min = 0.0, double max = 1.0, double step = 0.01) {
+        printf("[InspectFieldRegistrar] Registering field: %s.%s (kind=%s)\n", type_name, path, kind);
         InspectRegistry::instance().add<C, T>(type_name, member, path, label, kind, min, max, step);
     }
 };

@@ -947,12 +947,9 @@ class Scene:
         from termin._native import log
 
         if self._destroyed:
-            log.debug("[Scene.destroy] already destroyed")
             return
         self._destroyed = True
 
-        entity_count = len(list(self.entities))
-        log.debug(f"[Scene.destroy] destroying scene with {entity_count} entities")
 
         # Destroy all components in all entities
         for entity in self.entities:
@@ -982,8 +979,5 @@ class Scene:
 
         # Release C core scene
         if self._tc_scene is not None:
-            log.debug("[Scene.destroy] calling _tc_scene.destroy()")
             self._tc_scene.destroy()
             self._tc_scene = None
-
-        log.debug("[Scene.destroy] done")

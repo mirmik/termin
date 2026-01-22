@@ -9,6 +9,7 @@
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/inspect/tc_kind.hpp"
+#include "../skeleton/tc_skeleton_handle.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -98,7 +99,64 @@ void register_kind_handlers() {
         })
     );
 
-    // Note: tc_skeleton kind is registered in _skeleton_native module
+    // ===== tc_skeleton kind =====
+    // C++ handler
+    tc::KindRegistryCpp::instance().register_kind("tc_skeleton",
+        // serialize: std::any(TcSkeleton) → tc_value
+        [](const std::any& value) -> tc_value {
+            const TcSkeleton& s = std::any_cast<const TcSkeleton&>(value);
+            tc_value result = tc_value_dict_new();
+            if (s.is_valid()) {
+                tc_value_dict_set(&result, "uuid", tc_value_string(s.uuid()));
+                tc_value_dict_set(&result, "name", tc_value_string(s.name()));
+            }
+            return result;
+        },
+        // deserialize: tc_value, scene → std::any(TcSkeleton)
+        [](const tc_value* v, tc_scene*) -> std::any {
+            if (!v || v->type != TC_VALUE_DICT) return TcSkeleton();
+            tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(v), "uuid");
+            if (!uuid_val || uuid_val->type != TC_VALUE_STRING || !uuid_val->data.s) {
+                return TcSkeleton();
+            }
+            std::string uuid = uuid_val->data.s;
+            TcSkeleton skel = TcSkeleton::from_uuid(uuid);
+            if (!skel.is_valid()) {
+                tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(v), "name");
+                std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
+                    ? name_val->data.s : "";
+                tc::Log::warn("tc_skeleton deserialize: skeleton not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
+            } else {
+                skel.ensure_loaded();
+            }
+            return skel;
+        }
+    );
+
+    // Python handler for tc_skeleton kind
+    tc::KindRegistry::instance().register_python(
+        "tc_skeleton",
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            TcSkeleton skel = nb::cast<TcSkeleton>(obj);
+            nb::dict d;
+            if (skel.is_valid()) {
+                d["uuid"] = nb::str(skel.uuid());
+                d["name"] = nb::str(skel.name());
+            }
+            return d;
+        }),
+        nb::cpp_function([](nb::object data) -> nb::object {
+            if (!nb::isinstance<nb::dict>(data)) {
+                return nb::cast(TcSkeleton());
+            }
+            nb::dict d = nb::cast<nb::dict>(data);
+            if (!d.contains("uuid")) {
+                return nb::cast(TcSkeleton());
+            }
+            std::string uuid = nb::cast<std::string>(d["uuid"]);
+            return nb::cast(TcSkeleton::from_uuid(uuid));
+        })
+    );
 
     // ===== entity kind =====
     tc::register_cpp_handle_kind<Entity>("entity");

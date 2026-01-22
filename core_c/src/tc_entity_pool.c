@@ -300,9 +300,8 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
 
     size_t total_components = 0;
     size_t released_components = 0;
-
-    tc_log_debug("[tc_entity_pool_destroy] pool=%p, capacity=%zu, count=%zu",
-        (void*)pool, pool->capacity, tc_entity_pool_count(pool));
+    (void)total_components;
+    (void)released_components;
 
     // Free strings, release Python refs, and free dynamic arrays
     for (size_t i = 0; i < pool->capacity; i++) {
@@ -319,23 +318,16 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
 
             if (c->wrapper) {
                 // Has Python wrapper - release via reference counting
-                tc_log_debug("[tc_entity_pool_destroy] releasing component type='%s' wrapper=%p",
-                    c->vtable ? c->vtable->type_name : "(null)", c->wrapper);
                 tc_component_release(c);
                 released_components++;
             } else if (c->vtable && c->vtable->drop) {
                 // No wrapper but has drop - destroy directly
-                tc_log_debug("[tc_entity_pool_destroy] dropping component type='%s'",
-                    c->vtable->type_name);
                 c->vtable->drop(c);
                 released_components++;
             }
         }
         component_array_free(&pool->components[i]);
     }
-
-    tc_log_debug("[tc_entity_pool_destroy] released %zu/%zu components",
-        released_components, total_components);
 
     free(pool->free_stack);
     free(pool->generations);

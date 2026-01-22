@@ -401,8 +401,23 @@ bool ModuleLoader::load_module(const std::string& module_path) {
     dll_path = module_dir / "build" / "build" / ("lib" + desc.name + ".so");
 #endif
 
-    if (!fs::exists(dll_path)) {
-        // Need to compile first
+    bool needs_compile = !fs::exists(dll_path);
+
+    // Check if sources are newer than DLL
+    if (!needs_compile && fs::exists(dll_path)) {
+        auto dll_time = fs::last_write_time(dll_path);
+        for (const auto& src : desc.sources) {
+            fs::path src_path = module_dir / src;
+            if (fs::exists(src_path) && fs::last_write_time(src_path) > dll_time) {
+                tc::Log::info("Source file '%s' is newer than DLL, recompiling...", src.c_str());
+                needs_compile = true;
+                break;
+            }
+        }
+    }
+
+    if (needs_compile) {
+        // Need to compile
         LoadedModule temp;
         temp.name = desc.name;
         temp.descriptor = desc;

@@ -27,12 +27,53 @@ if TYPE_CHECKING:
 def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
     """Collect inspect_fields from InspectRegistry."""
     result = {}
-    cls = obj.__class__
-    type_name = cls.__name__
 
     try:
         from termin._native.inspect import InspectRegistry, TypeBackend
+        from termin.entity import TcComponentRef
         registry = InspectRegistry.instance()
+
+        # Check if obj is TcComponentRef (C++ component wrapper)
+        if isinstance(obj, TcComponentRef):
+            type_name = obj.type_name
+            cpp_fields = registry.all_fields(type_name)
+            for info in cpp_fields:
+                if not info.is_inspectable:
+                    continue
+
+                choices = None
+                if info.choices:
+                    choices = [(c.value, c.label) for c in info.choices]
+
+                action = info.action if info.action is not None else None
+
+                def make_getter(path):
+                    def getter(o):
+                        return o.get_field(path)
+                    return getter
+
+                def make_setter(path):
+                    def setter(o, v):
+                        o.set_field(path, v)
+                    return setter
+
+                result[info.path] = InspectField(
+                    path=info.path,
+                    label=info.label,
+                    kind=info.kind,
+                    min=info.min,
+                    max=info.max,
+                    step=info.step,
+                    choices=choices,
+                    action=action,
+                    getter=make_getter(info.path),
+                    setter=make_setter(info.path),
+                )
+            return result
+
+        # For Python objects, use class name
+        cls = obj.__class__
+        type_name = cls.__name__
 
         # For Python types, collect from full class hierarchy
         if registry.has_type(type_name):

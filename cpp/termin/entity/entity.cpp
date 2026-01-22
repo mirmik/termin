@@ -74,6 +74,14 @@ void Entity::add_component(Component* component) {
 void Entity::add_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
 
+    // For CxxComponents, set the entity reference
+    if (c->kind == TC_NATIVE_COMPONENT) {
+        CxxComponent* cxx = CxxComponent::from_tc(c);
+        if (cxx) {
+            cxx->entity = *this;
+        }
+    }
+
     tc_entity_pool_add_component(_pool, _id, c);
     tc_component_on_added_to_entity(c);
 }
