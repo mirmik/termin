@@ -672,18 +672,15 @@ class RenderingManager:
 
     def render_display(self, display: "Display", present: bool = True) -> None:
         """
-        Render a single display.
+        Render a single display (simple path for player/examples).
 
-        Rendering order:
-        1. Execute scene pipelines for attached scenes (renders managed viewports)
-        2. Render unmanaged viewports with their own pipelines
+        For editor with scene pipelines, use render_all_offscreen() instead.
 
         Args:
             display: Display to render.
             present: Whether to present (swap buffers) after rendering.
         """
         from termin._native import log
-        print(f"[RenderingManager] render_display: {display.name}")
 
         if self._graphics is None:
             log.warn("[render_display] _graphics is None")
@@ -695,92 +692,22 @@ class RenderingManager:
             self._render_engine = RenderEngine(self._graphics)
 
         from termin.visualization.render.view import RenderView
-        from termin.visualization.render.engine import ViewportContext
 
         surface = display.surface
         if surface is None:
             log.warn(f"[render_display] surface is None for display={display.name}")
             return
 
-        # Build viewport lookup by name (for scene pipeline target resolution)
-        viewport_by_name: Dict[str, "Viewport"] = {}
-        for vp in display.viewports:
-            if vp.name:
-                viewport_by_name[vp.name] = vp
-
-        width, height = surface.get_size()
         sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
-        rendered_something = False
 
-        # 1. Execute scene pipelines (renders managed viewports)
-        for scene in self._attached_scenes:
-            for pipeline_name, pipeline in scene.compiled_pipelines.items():
-                target_viewports = scene.get_pipeline_targets(pipeline_name)
-
-                # Collect viewport contexts for this pipeline
-                viewport_contexts: Dict[str, ViewportContext] = {}
-                first_viewport = None
-
-                for viewport_name in target_viewports:
-                    viewport = viewport_by_name.get(viewport_name)
-                    if viewport is None:
-                        continue
-                    if not viewport.enabled:
-                        continue
-                    if viewport.scene is None or viewport.camera is None:
-                        continue
-
-                    if first_viewport is None:
-                        first_viewport = viewport
-
-                    # Compute pixel rect for viewport
-                    vx, vy, vw, vh = viewport.rect
-                    px = int(vx * width)
-                    py = int(vy * height)
-                    pw = max(1, int(vw * width))
-                    ph = max(1, int(vh * height))
-
-                    viewport_contexts[viewport_name] = ViewportContext(
-                        name=viewport_name,
-                        camera=viewport.camera,
-                        rect=(px, py, pw, ph),
-                        canvas=viewport.canvas,
-                        layer_mask=viewport.effective_layer_mask,
-                    )
-
-                if not viewport_contexts or first_viewport is None:
-                    continue
-
-                # Use first viewport's state for the scene pipeline
-                state = self.get_or_create_viewport_state(first_viewport)
-
-                self._render_engine.render_scene_pipeline(
-                    surface=surface,
-                    pipeline=pipeline,
-                    scene=scene,
-                    viewport_contexts=viewport_contexts,
-                    state=state,
-                    default_viewport=target_viewports[0] if target_viewports else "",
-                    present=False,
-                )
-                rendered_something = True
-
-        # 2. Render unmanaged viewports (those without managed_by_scene_pipeline)
+        # Collect all viewports as views
         views_and_states = []
-        unmanaged_count = 0
         for viewport in sorted_viewports:
-            # Skip disabled viewports
             if not viewport.enabled:
                 continue
-
-            # Skip managed viewports - already rendered by scene pipeline
-            if viewport.managed_by_scene_pipeline:
-                continue
-
             if viewport.pipeline is None or viewport.scene is None:
                 continue
 
-            unmanaged_count += 1
             state = self.get_or_create_viewport_state(viewport)
             view = RenderView(
                 scene=viewport.scene,
@@ -792,51 +719,35 @@ class RenderingManager:
             )
             views_and_states.append((view, state))
 
-        # Render unmanaged viewports
+        # Render all viewports
         if views_and_states:
             self._render_engine.render_views(
                 surface=surface,
                 views=views_and_states,
-                present=False,
+                present=present,
             )
-            rendered_something = True
-
-        # Present if needed
-        if rendered_something:
-            if present:
-                surface.present()
-        else:
-            # No viewports - clear screen
+        elif present:
+            # No viewports - clear and present
             from OpenGL import GL as gl
-            gl.glClearColor(0.1, 0.7, 0.7, 1.0)
+            gl.glClearColor(0.1, 0.1, 0.1, 1.0)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-            if present:
-                surface.present()
+            surface.present()
 
     def render_all(self, present: bool = True) -> None:
         """
-        Render all viewports.
+        Render all viewports using offscreen rendering.
 
-        If offscreen rendering is enabled (via initialize()):
-        - Phase 1: render_all_offscreen() - renders to output_fbos
-        - Phase 2: present_all() - blits to displays
+        Phase 1: render_all_offscreen() - renders to output_fbos
+        Phase 2: present_all() - blits to displays
 
-        Otherwise falls back to legacy per-display rendering.
-
-        Args:
-            present: Whether to present after rendering.
+        Requires initialize() to be called first.
         """
-        from termin._native import log
-        print("[RenderingManager] render_all called")
+        if not self._use_offscreen_rendering:
+            raise RuntimeError("RenderingManager.initialize() must be called before render_all()")
 
-        if self._use_offscreen_rendering:
-            self.render_all_offscreen()
-            if present:
-                self.present_all()
-        else:
-            # Legacy: render each display separately
-            for display in self._displays:
-                self.render_display(display, present=present)
+        self.render_all_offscreen()
+        if present:
+            self.present_all()
 
     def render_all_offscreen(self) -> None:
         """

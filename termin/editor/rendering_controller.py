@@ -1256,19 +1256,7 @@ class RenderingController:
         return False
 
     def render_all_displays(self) -> None:
-        """Render all displays (unified render loop)."""
-        if self._manager._use_offscreen_rendering:
-            self._render_displays_offscreen()
-        else:
-            self._render_displays()
-
-    def _render_displays_offscreen(self) -> None:
-        """
-        Render displays using offscreen-first model.
-
-        Phase 1: Render all viewports to their output_fbos (single GL context)
-        Phase 2: Blit output_fbos to displays and swap buffers
-        """
+        """Render all displays using offscreen rendering."""
         if self._get_graphics is None:
             return
 
@@ -1292,65 +1280,13 @@ class RenderingController:
             if backend_window is None:
                 continue
 
-            # Make display context current for blit
             backend_window.make_current()
             backend_window.check_resize()
-
-            # Blit viewport output_fbos to display and swap
             self._manager._present_display(display)
-
             backend_window.clear_render_flag()
 
         if frame_started_here:
             profiler.end_frame()
-
-    def _render_displays(self) -> None:
-        """Internal method to render displays.
-
-        Delegates actual rendering to RenderingManager, handles SDL window management.
-        """
-        if self._get_graphics is None:
-            return
-
-        graphics = self._get_graphics()
-        if graphics is None:
-            return
-
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-
-        # Начинаем frame если ещё не начат (в game mode его начинает _game_tick)
-        frame_started_here = profiler._current_frame is None
-        profiler.begin_frame()
-
-        # Ensure RenderingManager has graphics backend
-        self._manager.set_graphics(graphics)
-
-        for display in self._manager.displays:
-            display_id = id(display)
-
-            # All displays must be in _display_tabs now
-            if display_id not in self._display_tabs:
-                continue
-
-            # Get the backend window for this display
-            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
-            if backend_window is None:
-                continue
-
-            # Make SDL context current
-            backend_window.make_current()
-
-            # Check resize
-            backend_window.check_resize()
-
-            graphics.ensure_ready()
-
-            # Delegate rendering to RenderingManager (present=False, we handle swap)
-            self._manager.render_display(display, present=False)
-
-            backend_window.swap_buffers()
-            backend_window.clear_render_flag()
 
         # Завершаем frame только если мы его начали (не в game mode)
         if frame_started_here:
