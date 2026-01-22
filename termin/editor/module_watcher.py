@@ -191,7 +191,7 @@ class ModuleWatcher:
 
     def trigger_reload(self, module_name: str) -> bool:
         """
-        Manually trigger a module reload.
+        Manually trigger a module reload (or initial load if not yet loaded).
 
         Args:
             module_name: Name of module to reload
@@ -204,18 +204,42 @@ class ModuleWatcher:
         loader = ModuleLoader.instance()
 
         if not loader.is_loaded(module_name):
-            log.error(f"[ModuleWatcher] Module not loaded: {module_name}")
-            if self._on_reload_complete:
-                self._on_reload_complete(module_name, False, "Module not loaded")
-            return False
+            # Module not loaded yet - try initial load
+            module_path = self._module_paths.get(module_name)
+            if not module_path:
+                log.error(f"[ModuleWatcher] Module path not found: {module_name}")
+                if self._on_reload_complete:
+                    self._on_reload_complete(module_name, False, "Module path not found")
+                return False
 
-        success = loader.reload_module(module_name)
+            log.info(f"[ModuleWatcher] Initial load for module: {module_name}")
+            success = loader.load_module(module_path)
+        else:
+            success = loader.reload_module(module_name)
+
+        if success:
+            # Try to upgrade any UnknownComponents that can now be resolved
+            self._try_upgrade_unknown_components()
 
         if self._on_reload_complete:
             message = "" if success else loader.last_error
             self._on_reload_complete(module_name, success, message)
 
         return success
+
+    def _try_upgrade_unknown_components(self) -> None:
+        """Try to upgrade UnknownComponents after module reload."""
+        try:
+            from termin.visualization.core.scene import get_current_scene
+            from termin.entity.unknown_component import upgrade_unknown_components
+
+            scene = get_current_scene()
+            if scene:
+                upgraded = upgrade_unknown_components(scene)
+                if upgraded > 0:
+                    log.info(f"[ModuleWatcher] Upgraded {upgraded} component(s)")
+        except Exception as e:
+            log.error(f"[ModuleWatcher] Failed to upgrade components: {e}")
 
     def _parse_module_file(self, path: str) -> dict | None:
         """Parse a .module JSON file."""

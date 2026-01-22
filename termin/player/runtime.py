@@ -60,6 +60,9 @@ class PlayerRuntime:
         # Register components
         self._register_components()
 
+        # Load C++ modules
+        self._load_modules()
+
         # Scan project assets
         self._scan_project_assets()
 
@@ -141,6 +144,22 @@ class PlayerRuntime:
         rm.register_builtin_meshes()
         rm.register_builtin_frame_passes()
         rm.register_builtin_post_effects()
+
+    def _load_modules(self) -> None:
+        """Load all C++ modules from the project directory."""
+        from termin._native import log
+        from termin.editor.module_scanner import ModuleScanner
+
+        def on_loaded(name: str, success: bool, error: str) -> None:
+            if success:
+                log.info(f"[PlayerRuntime] Loaded module: {name}")
+            else:
+                log.error(f"[PlayerRuntime] Failed to load module {name}: {error}")
+
+        scanner = ModuleScanner(on_module_loaded=on_loaded)
+        loaded, failed = scanner.scan_and_load(str(self.project_path))
+
+        log.info(f"[PlayerRuntime] Modules: {loaded} loaded, {failed} failed")
 
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""

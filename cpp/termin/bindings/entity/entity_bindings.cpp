@@ -142,6 +142,18 @@ public:
     nb::object serialize() const {
         if (!_c) return nb::none();
 
+        // For Python components, check if they have a custom serialize method
+        if (_c->kind == TC_PYTHON_COMPONENT && _c->wrapper) {
+            nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->wrapper));
+            if (nb::hasattr(py_obj, "serialize")) {
+                // Call Python serialize method (e.g., for UnknownComponent)
+                nb::object result = py_obj.attr("serialize")();
+                if (!result.is_none()) {
+                    return result;
+                }
+            }
+        }
+
         nb::dict result;
         result["type"] = type_name();
         result["data"] = serialize_data();
@@ -1053,20 +1065,29 @@ void bind_entity_class(nb::module_& m) {
                     if (!comp_data.contains("type")) continue;
                     std::string type_name = nb::cast<std::string>(comp_data["type"]);
 
+                    nb::object data_field;
+                    if (comp_data.contains("data")) {
+                        data_field = comp_data["data"];
+                    } else {
+                        data_field = nb::dict();
+                    }
+
                     if (!ComponentRegistry::instance().has(type_name)) {
-                        tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
+                        // Create UnknownComponent to preserve data
+                        tc::Log::warn("Unknown component type: %s (creating placeholder)", type_name.c_str());
+                        try {
+                            nb::object unknown_mod = nb::module_::import_("termin.entity.unknown_component");
+                            nb::object unknown_cls = unknown_mod.attr("UnknownComponent");
+                            nb::object unknown_comp = unknown_cls(type_name, data_field);
+                            py_entity.attr("add_component")(unknown_comp);
+                        } catch (const std::exception& e) {
+                            tc::Log::error(e, "Failed to create UnknownComponent for %s", type_name.c_str());
+                        }
                         continue;
                     }
 
                     try {
                         const auto* info = ComponentRegistryPython::get_info(type_name);
-
-                        nb::object data_field;
-                        if (comp_data.contains("data")) {
-                            data_field = comp_data["data"];
-                        } else {
-                            data_field = nb::dict();
-                        }
 
                         if (info && info->kind == TC_CXX_COMPONENT) {
                             // C++ components: create via registry, add, deserialize via TcComponentRef

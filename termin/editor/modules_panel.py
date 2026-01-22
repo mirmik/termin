@@ -193,8 +193,11 @@ class ModulesPanel(QtWidgets.QDockWidget):
 
         self._module_list.clear()
 
-        modules = loader.list_modules()
-        for name in modules:
+        loaded_modules = set(loader.list_modules())
+        watched_modules = set(self._module_watcher.get_watched_modules())
+
+        # Show loaded modules
+        for name in loaded_modules:
             module = loader.get_module(name)
             if module is None:
                 continue
@@ -208,18 +211,36 @@ class ModulesPanel(QtWidgets.QDockWidget):
 
             self._module_list.addTopLevelItem(item)
 
-            # Restore selection
+            if name == selected_name:
+                item.setSelected(True)
+
+        # Show watched but not loaded modules (failed to compile)
+        failed_modules = watched_modules - loaded_modules
+        for name in sorted(failed_modules):
+            item = QtWidgets.QTreeWidgetItem()
+            item.setText(0, name)
+            item.setText(1, "error")
+            item.setForeground(1, QtGui.QBrush(QtGui.QColor("red")))
+            item.setText(2, "")
+            item.setToolTip(0, "Module failed to load - check compiler output")
+
+            self._module_list.addTopLevelItem(item)
+
             if name == selected_name:
                 item.setSelected(True)
 
         # Update status
-        count = len(modules)
-        if count == 0:
-            self._status_label.setText("No modules loaded")
-        elif count == 1:
-            self._status_label.setText("1 module loaded")
+        loaded_count = len(loaded_modules)
+        failed_count = len(failed_modules)
+        if loaded_count == 0 and failed_count == 0:
+            self._status_label.setText("No modules")
         else:
-            self._status_label.setText(f"{count} modules loaded")
+            parts = []
+            if loaded_count > 0:
+                parts.append(f"{loaded_count} loaded")
+            if failed_count > 0:
+                parts.append(f"{failed_count} failed")
+            self._status_label.setText(", ".join(parts))
 
     def _on_auto_reload_toggled(self, checked: bool) -> None:
         """Handle auto-reload checkbox toggle."""
@@ -388,7 +409,21 @@ class ModulesPanel(QtWidgets.QDockWidget):
         super().showEvent(event)
         self._update_timer.start()
         self._module_watcher.enable()
+        self._register_loaded_modules()
         self._update_display()
+
+    def _register_loaded_modules(self) -> None:
+        """Register all loaded modules with the watcher for hot-reload."""
+        try:
+            from termin.entity._entity_native import ModuleLoader
+
+            loader = ModuleLoader.instance()
+            for name in loader.list_modules():
+                module = loader.get_module(name)
+                if module and module.descriptor:
+                    self._module_watcher.watch_module(module.descriptor.path)
+        except Exception as e:
+            log.error(f"[ModulesPanel] Failed to register modules: {e}")
 
     def hideEvent(self, event: QtGui.QHideEvent) -> None:
         """Handle hide event."""
