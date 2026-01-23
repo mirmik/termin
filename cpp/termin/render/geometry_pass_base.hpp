@@ -7,8 +7,6 @@
 #include <optional>
 #include <array>
 
-#include <nanobind/nanobind.h>
-
 #include "termin/render/render_frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/render_context.hpp"
@@ -22,8 +20,6 @@
 #include "tc_log.hpp"
 #include "tc_scene.h"
 #include "tc_inspect.hpp"
-
-namespace nb = nanobind;
 
 namespace termin {
 
@@ -83,9 +79,6 @@ protected:
     // Return FBO format (nullopt = default RGBA8)
     virtual std::optional<std::string> fbo_format() const { return std::nullopt; }
 
-    // Setup extra uniforms before rendering (called once per frame)
-    virtual void setup_extra_uniforms(nb::dict& extra_uniforms) {}
-
     // Setup uniforms for each draw call
     virtual void setup_draw_uniforms(
         const DrawCall& dc,
@@ -93,8 +86,7 @@ protected:
         const Mat44f& model,
         const Mat44f& view,
         const Mat44f& projection,
-        RenderContext& context,
-        nb::dict& extra_uniforms
+        RenderContext& context
     ) {
         shader.set_uniform_mat4("u_model", model.data, false);
         shader.set_uniform_mat4("u_view", view.data, false);
@@ -247,10 +239,6 @@ protected:
         // Get shader
         TcShader& shader = get_shader(graphics);
 
-        // Setup extra uniforms
-        nb::dict extra_uniforms;
-        setup_extra_uniforms(extra_uniforms);
-
         // Collect draw calls
         auto draw_calls = collect_draw_calls(scene, layer_mask);
 
@@ -265,7 +253,6 @@ protected:
         context.graphics = graphics;
         context.phase = phase_name();
         context.current_tc_shader = shader;
-        context.extra_uniforms = extra_uniforms;
 
         const std::string& debug_symbol = get_debug_internal_point();
 
@@ -289,10 +276,9 @@ protected:
             shader_to_use.use();
 
             context.current_tc_shader = shader_to_use;
-            context.extra_uniforms = extra_uniforms;
 
             // Set uniforms via virtual method (allows derived classes to add custom uniforms)
-            setup_draw_uniforms(dc, shader_to_use, model, view, projection, context, extra_uniforms);
+            setup_draw_uniforms(dc, shader_to_use, model, view, projection, context);
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 

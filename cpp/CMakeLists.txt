@@ -220,7 +220,7 @@ add_library(entity_lib SHARED
 )
 target_include_directories(entity_lib PUBLIC ../core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
-target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
+target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS TERMIN_HAS_NANOBIND)
 target_compile_options(entity_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -244,6 +244,7 @@ target_include_directories(render_lib PRIVATE
     $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
     ${Python_INCLUDE_DIRS}
 )
+target_compile_definitions(render_lib PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(render_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -415,6 +416,7 @@ target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
 endif()
+target_compile_definitions(_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
