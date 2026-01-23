@@ -91,6 +91,7 @@ class PipelineRunner:
                     rect=(px, py, pw, ph),
                     scene=scene,
                     camera=viewport.camera,
+                    viewport=viewport,
                     context_key=context_key,
                     lights=lights,
                     canvas=viewport.canvas,

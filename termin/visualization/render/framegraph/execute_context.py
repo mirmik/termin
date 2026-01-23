@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
+    from termin.visualization.core.viewport import Viewport
     from termin.visualization.ui.canvas import Canvas
     from termin.lighting.light import Light
 
@@ -22,7 +23,7 @@ class ExecuteContext:
     - graphics: graphics backend
     - reads_fbos/writes_fbos: FBO maps for input/output
     - rect: pixel rectangle for rendering
-    - scene, camera: what to render
+    - scene, camera, viewport: what to render
     - context_key: for VAO/shader caching
     - lights: pre-computed lights
     - canvas: optional 2D canvas
@@ -34,6 +35,7 @@ class ExecuteContext:
     rect: tuple[int, int, int, int]  # (px, py, pw, ph)
     scene: Optional["Scene"]
     camera: Optional["CameraComponent"]
+    viewport: Optional["Viewport"] = None
     context_key: int = 0
     lights: Optional[list["Light"]] = None
     canvas: Optional["Canvas"] = None

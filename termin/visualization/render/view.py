@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
+    from termin.visualization.core.viewport import Viewport
     from termin.visualization.ui.canvas import Canvas
     from termin.visualization.render.framegraph import RenderPipeline
 
@@ -49,6 +50,7 @@ class RenderView:
         canvas: Опциональная 2D канва для overlay UI.
         pipeline: Конвейер рендеринга.
         layer_mask: Маска слоёв (какие entity рендерить).
+        viewport: Опциональный Viewport (для доступа к internal_entities).
     """
     scene: "Scene"
     camera: "CameraComponent"
@@ -56,6 +58,7 @@ class RenderView:
     canvas: Optional["Canvas"] = None
     pipeline: Optional["RenderPipeline"] = None
     layer_mask: int = 0xFFFFFFFFFFFFFFFF
+    viewport: Optional["Viewport"] = None
 
     def compute_pixel_rect(
         self, 

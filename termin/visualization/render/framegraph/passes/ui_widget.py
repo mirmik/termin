@@ -36,6 +36,9 @@ class UIWidgetPass(RenderFramePass):
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+        "include_internal_entities": InspectField(
+            path="include_internal_entities", label="Include Internal Entities", kind="bool"
+        ),
     }
 
     def __init__(
@@ -43,10 +46,12 @@ class UIWidgetPass(RenderFramePass):
         input_res: str = "color+ui",
         output_res: str = "color+widgets",
         pass_name: str = "UIWidgets",
+        include_internal_entities: bool = False,
     ):
         super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
+        self.include_internal_entities = include_internal_entities
 
     def compute_reads(self) -> Set[str]:
         return {self.input_res}
@@ -65,10 +70,21 @@ class UIWidgetPass(RenderFramePass):
         ctx.graphics.bind_framebuffer(fb_out)
         ctx.graphics.set_viewport(0, 0, pw, ph)
 
-        if ctx.scene is None:
-            return
+        ui_components = []
 
-        ui_components = ctx.scene._tc_scene.get_components_of_type("UIComponent")
+        # Collect UIComponents from scene
+        if ctx.scene is not None:
+            scene_ui = ctx.scene._tc_scene.get_components_of_type("UIComponent")
+            if scene_ui:
+                ui_components.extend(scene_ui)
+
+        # Collect UIComponents from viewport's internal_entities
+        if self.include_internal_entities and ctx.viewport is not None:
+            internal_root = ctx.viewport.internal_entities
+            if internal_root is not None:
+                internal_ui = self._collect_ui_from_hierarchy(internal_root)
+                ui_components.extend(internal_ui)
+
         if not ui_components:
             return
 
@@ -87,3 +103,18 @@ class UIWidgetPass(RenderFramePass):
                     continue
             ui_comp.render(ctx.graphics, pw, ph, ctx.context_key)
             ctx.graphics.check_gl_error(f"UIWidgets: {entity.name if entity else 'ui_component'}")
+
+    def _collect_ui_from_hierarchy(self, entity) -> list:
+        """Recursively collect UIComponents from entity hierarchy."""
+        from termin.visualization.ui.widgets.component import UIComponent
+
+        result = []
+        ui = entity.get_component(UIComponent)
+        if ui is not None:
+            result.append(ui)
+
+        for child_tf in entity.transform.children:
+            if child_tf.entity is not None:
+                result.extend(self._collect_ui_from_hierarchy(child_tf.entity))
+
+        return result
