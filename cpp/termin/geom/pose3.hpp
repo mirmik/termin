@@ -2,6 +2,7 @@
 
 #include "vec3.hpp"
 #include "quat.hpp"
+#include "mat44.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -88,6 +89,13 @@ struct Pose3 {
         m[8] = rot[2]; m[9] = rot[5]; m[10] = rot[8]; m[11] = 0;
         // Column 3
         m[12] = lin.x; m[13] = lin.y; m[14] = lin.z; m[15] = 1;
+    }
+
+    // Get 4x4 transformation matrix as Mat44
+    Mat44 as_mat44() const {
+        Mat44 m;
+        as_matrix(m.data);
+        return m;
     }
 
     // Distance between translations
