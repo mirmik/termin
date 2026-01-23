@@ -164,9 +164,6 @@ void tc_scene_register_component(tc_scene* s, tc_component* c) {
             tc_resource_map_add(s->type_heads, type_name, c);
         }
     }
-
-    // Call on_added callback
-    tc_component_on_added(c, s);
 }
 
 void tc_scene_unregister_component(tc_scene* s, tc_component* c) {

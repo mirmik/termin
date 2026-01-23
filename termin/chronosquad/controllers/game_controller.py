@@ -54,12 +54,12 @@ class GameController(InputComponent):
 
     def _find_chronosphere_controller(self) -> None:
         """Find ChronosphereController in scene."""
-        if self._scene is None:
+        if self.scene is None:
             return
 
         from .chronosphere_controller import ChronosphereController
 
-        for entity in self._scene.entities:
+        for entity in self.scene.entities:
             ctrl = entity.get_component(ChronosphereController)
             if ctrl is not None:
                 self._chronosphere_controller = ctrl
@@ -68,12 +68,12 @@ class GameController(InputComponent):
 
     def _find_camera_controller(self) -> None:
         """Find ChronoCameraController in scene."""
-        if self._scene is None:
+        if self.scene is None:
             return
 
         from .chrono_camera_controller import ChronoCameraController
 
-        for entity in self._scene.entities:
+        for entity in self.scene.entities:
             ctrl = entity.get_component(ChronoCameraController)
             if ctrl is not None:
                 self._camera_controller = ctrl

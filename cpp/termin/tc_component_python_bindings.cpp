@@ -106,18 +106,12 @@ static void py_cb_on_removed_from_entity(void* py_self) {
     PyGILState_Release(gstate);
 }
 
-static void py_cb_on_added(void* py_self, void* scene) {
+static void py_cb_on_added(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
         if (nb::hasattr(self, "on_added")) {
-            // Get Python Scene from tc_scene's py_wrapper
-            tc_scene* tc_s = static_cast<tc_scene*>(scene);
-            void* py_wrapper = tc_s ? tc_scene_get_py_wrapper(tc_s) : nullptr;
-            if (py_wrapper) {
-                nb::handle py_scene((PyObject*)py_wrapper);
-                self.attr("on_added")(py_scene);
-            }
+            self.attr("on_added")();
         }
     } catch (const std::exception& e) {
         tc::Log::error(e, "PythonComponent::on_added");

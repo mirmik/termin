@@ -115,8 +115,8 @@ class AudioSource(PythonComponent):
             self.stop()
         self.clip = clip
 
-    def on_added(self, scene: "Scene") -> None:
-        """Called when component is added to scene."""
+    def on_added(self) -> None:
+        """Called when component is added."""
         if self.play_on_awake and self.clip is not None:
             self.play()
 

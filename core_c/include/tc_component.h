@@ -102,8 +102,8 @@ struct tc_component_vtable {
     void (*on_added_to_entity)(tc_component* self);
     void (*on_removed_from_entity)(tc_component* self);
 
-    // Scene relationship (scene is opaque void*)
-    void (*on_added)(tc_component* self, void* scene);
+    // Lifecycle (called when component is fully attached to entity)
+    void (*on_added)(tc_component* self);
     void (*on_removed)(tc_component* self);
     void (*on_scene_inactive)(tc_component* self);
     void (*on_scene_active)(tc_component* self);
@@ -255,9 +255,9 @@ static inline void tc_component_on_removed_from_entity(tc_component* c) {
     }
 }
 
-static inline void tc_component_on_added(tc_component* c, void* scene) {
+static inline void tc_component_on_added(tc_component* c) {
     if (c && c->vtable && c->vtable->on_added) {
-        c->vtable->on_added(c, scene);
+        c->vtable->on_added(c);
     }
 }
 

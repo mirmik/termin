@@ -89,8 +89,8 @@ public:
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
 
-    // Called when entity is added/removed from scene
-    virtual void on_added(TcSceneRef scene) { (void)scene; }
+    // Called after component is fully attached to entity
+    virtual void on_added() {}
     virtual void on_removed() {}
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
@@ -140,7 +140,7 @@ private:
     static void _cb_on_destroy(tc_component* c);
     static void _cb_on_added_to_entity(tc_component* c);
     static void _cb_on_removed_from_entity(tc_component* c);
-    static void _cb_on_added(tc_component* c, void* scene);
+    static void _cb_on_added(tc_component* c);
     static void _cb_on_removed(tc_component* c);
     static void _cb_on_scene_inactive(tc_component* c);
     static void _cb_on_scene_active(tc_component* c);

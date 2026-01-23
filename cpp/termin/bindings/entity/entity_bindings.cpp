@@ -372,6 +372,15 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_ro("runtime_id", [](const Entity& e) -> uint64_t {
             return e.runtime_id();
         })
+        .def_prop_ro("scene", [](const Entity& e) -> nb::object {
+            tc_entity_pool* pool = e.pool();
+            if (!pool) return nb::none();
+            tc_scene* s = tc_entity_pool_get_scene(pool);
+            if (!s) return nb::none();
+            void* py_wrapper = tc_scene_get_py_wrapper(s);
+            if (!py_wrapper) return nb::none();
+            return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(py_wrapper));
+        })
 
         // Flags
         .def_prop_rw("visible",

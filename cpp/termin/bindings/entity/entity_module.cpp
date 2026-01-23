@@ -88,8 +88,8 @@ public:
     void on_removed_from_entity() override {
         NB_OVERRIDE(on_removed_from_entity);
     }
-    void on_added(TcSceneRef scene) override {
-        NB_OVERRIDE(on_added, scene);
+    void on_added() override {
+        NB_OVERRIDE(on_added);
     }
     void on_removed() override {
         NB_OVERRIDE(on_removed);
@@ -113,7 +113,7 @@ NB_MODULE(_entity_native, m) {
         .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
         .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
         .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
-        .def("on_added", &CxxComponent::on_added, nb::arg("scene"))
+        .def("on_added", &CxxComponent::on_added)
         .def("on_removed", &CxxComponent::on_removed)
         .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
         .def("on_scene_active", &CxxComponent::on_scene_active)

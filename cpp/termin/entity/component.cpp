@@ -112,10 +112,10 @@ void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
     }
 }
 
-void CxxComponent::_cb_on_added(tc_component* c, void* scene) {
+void CxxComponent::_cb_on_added(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
-        self->on_added(TcSceneRef(static_cast<tc_scene*>(scene)));
+        self->on_added();
     }
 }
 

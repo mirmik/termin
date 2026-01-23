@@ -64,7 +64,7 @@ class NavMeshFovShowerComponent(PythonComponent):
     def _find_camera_component(self):
         from termin.visualization.core.camera import CameraComponent
 
-        fov_camera_entity = self._scene.find_entity_by_name("FOVCamera")
+        fov_camera_entity = self.scene.find_entity_by_name("FOVCamera")
         if fov_camera_entity is None:
             return None
 

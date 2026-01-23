@@ -400,8 +400,8 @@ class VoxelDisplayComponent(PythonComponent):
 
     # --- Lifecycle ---
 
-    def on_added(self, scene: "Scene") -> None:
-        """При добавлении в сцену загрузить сетку и построить меш."""
+    def on_added(self) -> None:
+        """При добавлении загрузить сетку и построить меш."""
         # Если есть сохранённое имя сетки, загружаем
         if self._voxel_grid_name and self.voxel_grid.get_grid() is None:
             self.set_voxel_grid_by_name(self._voxel_grid_name)

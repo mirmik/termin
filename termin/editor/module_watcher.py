@@ -189,6 +189,10 @@ class ModuleWatcher:
         """Get list of watched files for a module."""
         return list(self._module_files.get(module_name, []))
 
+    def get_module_path(self, module_name: str) -> str | None:
+        """Get path to .module file for a module."""
+        return self._module_paths.get(module_name)
+
     def trigger_reload(self, module_name: str) -> bool:
         """
         Manually trigger a module reload (or initial load if not yet loaded).

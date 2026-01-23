@@ -67,7 +67,7 @@ class TimelineController(PythonComponent):
 
     def _bind_all_controllers(self) -> None:
         """Find and bind all ObjectControllers in scene."""
-        if self._scene is None or self._timeline is None:
+        if self.scene is None or self._timeline is None:
             log.warning("[TimelineController] Cannot bind: scene or timeline is None")
             return
 
@@ -75,7 +75,7 @@ class TimelineController(PythonComponent):
 
         self._object_controllers.clear()
 
-        for entity in self._scene.entities:
+        for entity in self.scene.entities:
             objctr = entity.get_component(ObjectController)
             if objctr is not None:
                 log.info(f"[TimelineController] Binding ObjectController on '{entity.name}'...")
@@ -93,9 +93,10 @@ class TimelineController(PythonComponent):
     def object_controllers(self) -> List[ObjectController]:
         return self._object_controllers
 
-    def on_added(self, scene) -> None:
-        """Called when added to scene."""
-        super().on_added(scene)
+    def on_added(self) -> None:
+        """Called when added."""
+        print("TimelineController added to scene!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        super().on_added()
         # If already bound to timeline, bind controllers
         if self._timeline is not None:
             self._bind_all_controllers()

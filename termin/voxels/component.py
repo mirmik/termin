@@ -47,8 +47,8 @@ class VoxelGridComponent(PythonComponent):
         """Пометить визуализацию как требующую обновления."""
         self._visualization_dirty = True
 
-    def on_added(self, scene: "Scene") -> None:
-        """Создать визуализатор при добавлении в сцену."""
+    def on_added(self) -> None:
+        """Создать визуализатор при добавлении."""
         from termin.voxels.visualization import VoxelVisualizer
 
         if self._visualizer is None and self.entity is not None:

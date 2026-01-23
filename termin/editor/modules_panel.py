@@ -83,6 +83,13 @@ class ModulesPanel(QtWidgets.QDockWidget):
         self._reload_btn.clicked.connect(self._on_reload_clicked)
         toolbar.addWidget(self._reload_btn)
 
+        # Force Recompile button
+        self._force_recompile_btn = QtWidgets.QPushButton("Force Recompile")
+        self._force_recompile_btn.setToolTip("Delete build cache and recompile from scratch")
+        self._force_recompile_btn.setEnabled(False)
+        self._force_recompile_btn.clicked.connect(self._on_force_recompile_clicked)
+        toolbar.addWidget(self._force_recompile_btn)
+
         layout.addLayout(toolbar)
 
         # Splitter for list and output
@@ -348,6 +355,74 @@ class ModulesPanel(QtWidgets.QDockWidget):
         module_name = selected_items[0].text(0)
         self._reload_module(module_name)
 
+    def _on_force_recompile_clicked(self) -> None:
+        """Handle Force Recompile button click."""
+        import shutil
+
+        selected_items = self._module_list.selectedItems()
+        if not selected_items:
+            return
+
+        module_name = selected_items[0].text(0)
+        self._force_recompile_module(module_name)
+
+    def _force_recompile_module(self, module_name: str) -> None:
+        """Force recompile a module by deleting build cache."""
+        import shutil
+
+        try:
+            from termin.entity._entity_native import ModuleLoader
+
+            loader = ModuleLoader.instance()
+
+            # Get module descriptor path
+            module = loader.get_module(module_name)
+            module_file_path = None
+
+            if module and module.descriptor:
+                module_file_path = module.descriptor.path
+            else:
+                # Try to find from watched modules
+                watched = self._module_watcher.get_watched_modules()
+                if module_name in watched:
+                    module_file_path = self._module_watcher.get_module_path(module_name)
+
+            if not module_file_path:
+                self._append_output(f"Error: Cannot find module file for '{module_name}'")
+                return
+
+            # Get build directory
+            module_dir = os.path.dirname(module_file_path)
+            build_dir = os.path.join(module_dir, "build")
+
+            # Unload module if loaded
+            if loader.is_loaded(module_name):
+                self._append_output(f"Unloading module '{module_name}'...")
+                loader.unload_module(module_name)
+
+            # Delete build directory
+            if os.path.exists(build_dir):
+                self._append_output(f"Deleting build cache: {build_dir}")
+                shutil.rmtree(build_dir, ignore_errors=True)
+
+            # Reload module (will trigger fresh compile)
+            self._append_output(f"Recompiling module '{module_name}' from scratch...")
+            success = loader.load_module(module_file_path)
+
+            if success:
+                self._append_output(f"Module '{module_name}' recompiled successfully")
+                self._append_output(loader.compiler_output)
+            else:
+                self._append_output(f"Error: {loader.last_error}")
+                self._append_output(loader.compiler_output)
+
+            self._update_display()
+            self.module_reloaded.emit(module_name, success)
+
+        except Exception as e:
+            log.error(f"[ModulesPanel] Failed to force recompile module: {e}")
+            self._append_output(f"Error: {e}")
+
     def _reload_module(self, module_name: str) -> None:
         """Reload a module."""
         try:
@@ -373,6 +448,7 @@ class ModulesPanel(QtWidgets.QDockWidget):
         """Handle selection change in module list."""
         has_selection = len(self._module_list.selectedItems()) > 0
         self._reload_btn.setEnabled(has_selection)
+        self._force_recompile_btn.setEnabled(has_selection)
 
     def _on_item_double_clicked(
         self, item: QtWidgets.QTreeWidgetItem, column: int

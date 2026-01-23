@@ -77,7 +77,6 @@ class ColliderComponent(PythonComponent):
             self._source_collider = self._create_collider()
 
         self._attached = None
-        self._scene = None  # Reference to scene for CollisionWorld access
 
     def _extract_collider_params(self, collider: Collider):
         """Extract type and parameters from an existing collider."""
@@ -115,14 +114,14 @@ class ColliderComponent(PythonComponent):
     def _rebuild_attached(self):
         """Rebuild AttachedCollider with current collider and transform."""
         # Remove old attached from collision world
-        if self._attached is not None and self._scene is not None:
-            self._scene.collision_world.remove(self._attached)
+        if self._attached is not None and self.scene is not None:
+            self.scene.collision_world.remove(self._attached)
 
         if self._source_collider is not None and self.entity is not None:
             self._attached = AttachedCollider(self._source_collider, self.entity.transform)
             # Add new attached to collision world
-            if self._scene is not None:
-                self._scene.collision_world.add(self._attached)
+            if self.scene is not None:
+                self.scene.collision_world.add(self._attached)
 
     def _set_collider_type(self, value: str):
         if value != self.collider_type:
@@ -149,16 +148,14 @@ class ColliderComponent(PythonComponent):
         if self.collider_type == "Capsule":
             self._rebuild_collider()
 
-    def on_added(self, scene):
-        super().on_added(scene)
-        self._scene = scene
+    def on_added(self):
+        super().on_added()
         self._rebuild_attached()
 
     def on_removed(self):
         """Remove collider from collision world when component is removed."""
-        if self._attached is not None and self._scene is not None:
-            self._scene.collision_world.remove(self._attached)
-        self._scene = None
+        if self._attached is not None and self.scene is not None:
+            self.scene.collision_world.remove(self._attached)
         super().on_removed()
 
     @property

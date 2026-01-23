@@ -70,7 +70,7 @@ class ChronosphereController(PythonComponent):
         from .timeline_initializer import TimelineInitializer
         from .timeline_controller import TimelineController
 
-        if self._scene is None:
+        if self.scene is None:
             log.warning("[ChronosphereController] No scene available")
             return
 
@@ -92,7 +92,7 @@ class ChronosphereController(PythonComponent):
 
         # Create timeline from scene
         log.info("[ChronosphereController] Creating timeline from scene...")
-        timeline = initializer.create_timeline(self._scene)
+        timeline = initializer.create_timeline(self.scene)
         log.info(f"[ChronosphereController] Created timeline '{timeline.name}' with {len(timeline.objects)} objects")
 
         # Register in chronosphere
@@ -112,7 +112,7 @@ class ChronosphereController(PythonComponent):
 
     def _find_component(self, component_type: type):
         """Find component of given type in scene."""
-        for entity in self._scene.entities:
+        for entity in self.scene.entities:
             comp = entity.get_component(component_type)
             if comp is not None:
                 return comp

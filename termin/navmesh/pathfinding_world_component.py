@@ -149,9 +149,9 @@ class PathfindingWorldComponent(PythonComponent):
         """Количество регионов в графе."""
         return len(self._navmesh_graph.regions)
 
-    def on_added(self, scene: "Scene") -> None:
-        """Called when added to scene. Build graph in editor mode."""
-        super().on_added(scene)
+    def on_added(self) -> None:
+        """Called when added. Build graph in editor mode."""
+        super().on_added()
         # Register as global instance
         PathfindingWorldComponent._instance = self
         # Auto-rebuild in editor mode
@@ -374,9 +374,9 @@ class PathfindingWorldComponent(PythonComponent):
 
     def rebuild(self) -> None:
         """Перестроить граф (вызывать после изменения NavMesh)."""
-        if self._scene is None:
+        if self.scene is None:
             return
-        self._collect_navmeshes(self._scene)
+        self._collect_navmeshes(self.scene)
         self._build_graph()
         self._initialized = True
 

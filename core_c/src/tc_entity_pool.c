@@ -1167,6 +1167,10 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     }
 
     component_array_push(&pool->components[id.index], c);
+
+    // Notify component it was added to entity
+    tc_component_on_added_to_entity(c);
+    tc_component_on_added(c);
 }
 
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {

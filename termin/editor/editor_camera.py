@@ -73,12 +73,11 @@ class EditorCameraManager:
 
     def _ensure_editor_entities_root(self) -> None:
         """Find or create root entity for editor objects (camera, gizmo, etc.)."""
-        for ent in self._scene.entities:
-            if ent.name == "EditorEntities":
-                self.editor_entities = ent
-                return
+        # EditorEntities live in standalone pool, not in scene
+        if self.editor_entities is not None and self.editor_entities.valid():
+            return
 
-        editor_entities = self._scene.create_entity("EditorEntities")
+        editor_entities = Entity(name="EditorEntities")
         editor_entities.serializable = False
         self.editor_entities = editor_entities
 
@@ -93,8 +92,8 @@ class EditorCameraManager:
                         self.camera = camera
                         return
 
-        # Create new camera in scene's pool
-        camera_entity = self._scene.create_entity("camera")
+        # Create camera in standalone pool (not in scene)
+        camera_entity = Entity(name="camera")
         camera_entity.serializable = False
         camera = PerspectiveCameraComponent()
         camera_entity.add_component(camera)
@@ -107,7 +106,7 @@ class EditorCameraManager:
         camera_entity.add_component(hint)
 
         # Create child entity for editor UI with layer=1
-        ui_entity = self._scene.create_entity("editor_ui")
+        ui_entity = Entity(name="editor_ui")
         ui_entity.serializable = False
         ui_entity.layer = 1  # Editor UI layer
         ui_comp = UIComponent()
@@ -267,22 +266,12 @@ class EditorCameraManager:
         self._ensure_editor_camera()
 
     def destroy_editor_entities(self) -> None:
-        """Remove EditorEntities from scene."""
-        from termin._native import log
-
-        if self._scene is None or self._scene._tc_scene is None:
-            log.warn("[EditorCameraManager] destroy_editor_entities: scene or tc_scene is None, cannot remove entities!")
-            return
+        """Destroy EditorEntities (they live in standalone pool, not in scene)."""
         if self.editor_entities is None:
             return
 
-        entities = []
-        self._collect_hierarchy(self.editor_entities, entities)
-
-        # Remove entities from scene (children first, then parent)
-        for ent in reversed(entities):
-            self._scene.remove(ent)
-
+        # Entities are in standalone pool, just drop references
+        # The entities will be cleaned up when no longer referenced
         self.editor_entities = None
         self.camera = None
 

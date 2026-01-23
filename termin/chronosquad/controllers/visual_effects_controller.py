@@ -99,7 +99,7 @@ class VisualEffectsController(PythonComponent):
 
             for effect, view in list(self.views.items()):
                 if not view._visited:
-                    view.destroy(self._scene)
+                    view.destroy(self.scene)
                     del self.views[effect]
 
         except Exception as e:
@@ -111,7 +111,7 @@ class VisualEffectsController(PythonComponent):
         from termin.chronosquad.controllers.effects.blind_effect import BlindEffectView
 
         if isinstance(effect, BlindEffect):
-            view = BlindEffectView(self._scene, effect)
+            view = BlindEffectView(self.scene, effect)
             self.views[effect] = view
             log.info(f"[VisualEffectsController] Initialized BlindEffectView for effect at position {effect._position}")
             return view
