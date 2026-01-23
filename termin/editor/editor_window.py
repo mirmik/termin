@@ -958,6 +958,7 @@ class EditorWindow(QMainWindow):
             get_graphics=self._get_graphics,
             get_window_backend=self._get_window_backend,
             get_sdl_backend=lambda: self._sdl_backend,
+            on_entity_selected=self.show_entity_inspector,
             on_request_update=self._request_viewport_update,
             on_display_input_mode_changed=self._on_display_input_mode_changed,
         )

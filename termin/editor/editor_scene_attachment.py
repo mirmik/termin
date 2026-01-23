@@ -157,6 +157,7 @@ class EditorSceneAttachment:
         )
         self._viewport.name = "(Editor)"
         self._viewport.pipeline = self._pipeline
+        self._viewport.internal_entities = self._camera_manager.editor_entities
         self._camera_manager.camera.add_viewport(self._viewport)
 
         self._attached_scene = scene
