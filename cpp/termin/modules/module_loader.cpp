@@ -20,7 +20,11 @@
 
 #include "module_loader.hpp"
 #include "../entity/component_registry.hpp"
+#ifdef TERMIN_HAS_NANOBIND
 #include "../../../core_c/include/tc_inspect.hpp"
+#else
+#include "../../../core_c/include/tc_inspect_cpp.hpp"
+#endif
 #include <tc_log.hpp>
 
 #include <fstream>

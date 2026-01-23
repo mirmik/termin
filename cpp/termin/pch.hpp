@@ -17,12 +17,14 @@
 #include <algorithm>
 #include <cmath>
 
-// nanobind
+// nanobind (only for Python builds)
+#ifdef TERMIN_HAS_NANOBIND
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/ndarray.h>
+#endif
 
 #endif // __cplusplus

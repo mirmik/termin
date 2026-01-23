@@ -3,7 +3,11 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+
+#ifdef TERMIN_HAS_NANOBIND
 #include <nanobind/nanobind.h>
+namespace nb = nanobind;
+#endif
 
 #include "termin/render/render_frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -17,10 +21,12 @@
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "tc_scene.h"
+#ifdef TERMIN_HAS_NANOBIND
 #include "tc_inspect.hpp"
+#else
+#include "tc_inspect_cpp.hpp"
+#endif
 #include "tc_shader_handle.hpp"
-
-namespace nb = nanobind;
 
 namespace termin {
 

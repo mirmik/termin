@@ -366,6 +366,10 @@ tc_pass* tc_pipeline_get_pass_at(tc_pipeline* p, size_t index) {
     return pass;
 }
 
+size_t tc_pipeline_pass_count(tc_pipeline* p) {
+    return p ? p->pass_count : 0;
+}
+
 void tc_pipeline_add_spec(tc_pipeline* p, const tc_resource_spec* spec) {
     if (!p || !spec) return;
 

@@ -6,9 +6,11 @@
 #include "../../geom/geom.hpp"
 #include "../../colliders/collider.hpp"
 #include <tc_log.hpp>
-#include <nanobind/nanobind.h>
 
+#ifdef TERMIN_HAS_NANOBIND
+#include <nanobind/nanobind.h>
 namespace nb = nanobind;
+#endif
 
 namespace termin {
 
@@ -17,12 +19,15 @@ namespace termin {
 class CXXRotatorComponent : public CxxComponent {
 public:
     float speed = 1.0f;  // radians per second
+#ifdef TERMIN_HAS_NANOBIND
     nb::object collider_component = nb::none();
+#endif
     termin::colliders::Collider* collider = nullptr;
 
     INSPECT_FIELD(CXXRotatorComponent, speed, "Speed", "float", 0.0, 10.0, 0.1)
 
     void start() override {
+#ifdef TERMIN_HAS_NANOBIND
         // Get Python component by type name
         tc_component* tc = entity.get_component_by_type_name("ColliderComponent");
         if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
@@ -34,6 +39,7 @@ public:
             collider = nullptr;
             tc::Log::warn("CXXRotatorComponent: Entity has no ColliderComponent");
         }
+#endif
     }
 
     void update(float dt) override {
@@ -47,7 +53,9 @@ public:
         pose = (pose * screw.to_pose()).normalized();
         entity.transform().relocate(pose);
 
-        collider->angular_velocity = Vec3{0.0, 0.0, speed};
+        if (collider) {
+            collider->angular_velocity = Vec3{0.0, 0.0, speed};
+        }
     }
 };
 

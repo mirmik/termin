@@ -8,7 +8,6 @@
 #include "termin/entity/component.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/material/tc_material_handle.hpp"
-#include "termin/assets/handles.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 #include <memory>

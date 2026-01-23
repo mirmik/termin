@@ -204,7 +204,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation ${CMAKE_C
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
 # are the same instance across all Python extension modules.
-add_library(entity_lib SHARED
+set(ENTITY_LIB_SOURCES
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
     termin/entity/component.cpp
@@ -215,12 +215,23 @@ add_library(entity_lib SHARED
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
-    termin/bindings/inspect/tc_kind_python_instance.cpp
     termin/modules/module_loader.cpp
 )
+# Python-specific sources (require nanobind)
+if(NOT BUILD_CSHARP_BINDINGS)
+    list(APPEND ENTITY_LIB_SOURCES
+        termin/bindings/inspect/tc_kind_python_instance.cpp
+    )
+endif()
+add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
 target_include_directories(entity_lib PUBLIC ../core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
-target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS TERMIN_HAS_NANOBIND)
+if(BUILD_CSHARP_BINDINGS)
+    target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent)
+else()
+    target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
+    target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
+endif()
+target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -232,19 +243,33 @@ set_target_properties(entity_lib PROPERTIES
 )
 
 # Render library (Drawable vtable, shared by components that need rendering)
+# Includes passes with TC_REGISTER_FRAME_PASS for static registration
 add_library(render_lib STATIC
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
     termin/render/cxx_pass.cpp
     termin/render/frame_pass.cpp
+    termin/render/color_pass.cpp
+    termin/render/depth_pass.cpp
+    termin/render/normal_pass.cpp
+    termin/render/shadow_pass.cpp
+    termin/render/id_pass.cpp
+    termin/render/shader_parser.cpp
+    termin/render/shadow_camera.cpp
+    termin/render/glsl_preprocessor.cpp
 )
-target_include_directories(render_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(render_lib PUBLIC entity_lib trent)
-target_include_directories(render_lib PRIVATE
-    $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
-    ${Python_INCLUDE_DIRS}
+target_include_directories(render_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
 )
-target_compile_definitions(render_lib PRIVATE TERMIN_HAS_NANOBIND)
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL)
+if(NOT BUILD_CSHARP_BINDINGS)
+    target_include_directories(render_lib PRIVATE
+        $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
+        ${Python_INCLUDE_DIRS}
+    )
+    target_compile_definitions(render_lib PRIVATE TERMIN_HAS_NANOBIND)
+endif()
 target_compile_options(render_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -583,7 +608,25 @@ if(BUILD_CSHARP_BINDINGS)
         ${CMAKE_CURRENT_SOURCE_DIR}/../core_c/include
         ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     )
-    target_link_libraries(termin PRIVATE OpenGL::GL termin_core)
+    # Link render_lib with whole-archive to include static pass registrations
+    add_dependencies(termin render_lib)
+    if(MSVC)
+        target_link_libraries(termin PRIVATE
+            OpenGL::GL
+            termin_core
+            trent
+            entity_lib
+            -WHOLEARCHIVE:$<TARGET_FILE:render_lib>
+        )
+    else()
+        target_link_libraries(termin PRIVATE
+            OpenGL::GL
+            termin_core
+            trent
+            entity_lib
+            -Wl,--whole-archive render_lib -Wl,--no-whole-archive
+        )
+    endif()
     target_compile_definitions(termin PRIVATE SWIG_CSHARP TC_EXPORTS)
     if(WIN32)
         # Export all symbols on Windows

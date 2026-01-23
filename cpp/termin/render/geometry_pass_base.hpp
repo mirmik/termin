@@ -19,7 +19,11 @@
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
 #include "tc_scene.h"
+#ifdef TERMIN_HAS_NANOBIND
 #include "tc_inspect.hpp"
+#else
+#include "tc_inspect_cpp.hpp"
+#endif
 
 namespace termin {
 

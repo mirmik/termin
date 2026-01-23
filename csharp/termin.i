@@ -6,6 +6,8 @@
 #include "termin/geom/quat.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/camera/camera.hpp"
+#include "tc_pass.h"
+#include "tc_pipeline.h"
 %}
 
 // Use std::string
@@ -146,3 +148,28 @@ struct Camera {
 };
 
 } // namespace termin
+
+// ============================================================================
+// Pass Registry API (C)
+// ============================================================================
+
+// Opaque types
+typedef struct tc_pass tc_pass;
+typedef struct tc_pipeline tc_pipeline;
+
+// Pass registry
+bool tc_pass_registry_has(const char* type_name);
+tc_pass* tc_pass_registry_create(const char* type_name);
+size_t tc_pass_registry_type_count(void);
+const char* tc_pass_registry_type_at(size_t index);
+
+// Pass properties
+void tc_pass_set_name(tc_pass* p, const char* name);
+void tc_pass_set_enabled(tc_pass* p, bool enabled);
+
+// Pipeline
+tc_pipeline* tc_pipeline_create(const char* name);
+void tc_pipeline_destroy(tc_pipeline* pipeline);
+void tc_pipeline_add_pass(tc_pipeline* pipeline, tc_pass* pass);
+size_t tc_pipeline_pass_count(tc_pipeline* pipeline);
+tc_pass* tc_pipeline_pass_at(tc_pipeline* pipeline, size_t index);

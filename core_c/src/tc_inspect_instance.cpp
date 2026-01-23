@@ -3,10 +3,14 @@
 
 #include "../../cpp/trent/trent.h"
 
-// Include Component BEFORE tc_inspect.hpp so it's fully defined
+// Include Component BEFORE tc_inspect so it's fully defined
 #include "../../cpp/termin/entity/component.hpp"
 
+#ifdef TERMIN_HAS_NANOBIND
 #include "../include/tc_inspect.hpp"
+#else
+#include "../include/tc_inspect_cpp.hpp"
+#endif
 #include "../include/tc_pass.h"
 
 namespace tc {
@@ -20,8 +24,9 @@ InspectRegistry& InspectRegistry::instance() {
     return reg;
 }
 
+#ifdef TERMIN_HAS_NANOBIND
 // ============================================================================
-// InspectRegistryPythonExt implementation
+// InspectRegistryPythonExt implementation (Python-only)
 // ============================================================================
 
 void InspectRegistryPythonExt::add_button(InspectRegistry& reg, const std::string& type_name,
@@ -258,6 +263,7 @@ void InspectRegistryPythonExt::deserialize_component_fields_over_python(
     void* target = (reg.get_type_backend(type_name) == TypeBackend::Cpp) ? ptr : obj.ptr();
     deserialize_all_py(reg, target, type_name, data, scene);
 }
+#endif // TERMIN_HAS_NANOBIND
 
 // ============================================================================
 // C++ vtable callbacks for C dispatcher

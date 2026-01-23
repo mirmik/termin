@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -29,8 +30,56 @@ static class NativeLoader
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void OpenGLShutdownDelegate();
 
+    // Pass registry delegates
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private delegate bool PassRegistryHasDelegate([MarshalAs(UnmanagedType.LPStr)] string typeName);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr PassRegistryCreateDelegate([MarshalAs(UnmanagedType.LPStr)] string typeName);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate nuint PassRegistryTypeCountDelegate();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr PassRegistryTypeAtDelegate(nuint index);
+
+    // Pipeline delegates
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr PipelineCreateDelegate([MarshalAs(UnmanagedType.LPStr)] string name);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void PipelineDestroyDelegate(IntPtr pipeline);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void PipelineAddPassDelegate(IntPtr pipeline, IntPtr pass);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate nuint PipelinePassCountDelegate(IntPtr pipeline);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr PipelinePassAtDelegate(IntPtr pipeline, nuint index);
+
+    // Pass property delegates
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void PassSetNameDelegate(IntPtr pass, [MarshalAs(UnmanagedType.LPStr)] string name);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void PassSetEnabledDelegate(IntPtr pass, [MarshalAs(UnmanagedType.U1)] bool enabled);
+
     private static OpenGLInitDelegate? _openglInit;
     private static OpenGLShutdownDelegate? _openglShutdown;
+    private static PassRegistryHasDelegate? _passRegistryHas;
+    private static PassRegistryCreateDelegate? _passRegistryCreate;
+    private static PassRegistryTypeCountDelegate? _passRegistryTypeCount;
+    private static PassRegistryTypeAtDelegate? _passRegistryTypeAt;
+    private static PipelineCreateDelegate? _pipelineCreate;
+    private static PipelineDestroyDelegate? _pipelineDestroy;
+    private static PipelineAddPassDelegate? _pipelineAddPass;
+    private static PipelinePassCountDelegate? _pipelinePassCount;
+    private static PipelinePassAtDelegate? _pipelinePassAt;
+    private static PassSetNameDelegate? _passSetName;
+    private static PassSetEnabledDelegate? _passSetEnabled;
 
     public static void Initialize()
     {
@@ -68,6 +117,53 @@ static class NativeLoader
             _openglShutdown = Marshal.GetDelegateForFunctionPointer<OpenGLShutdownDelegate>(shutdownPtr);
         }
 
+        // Get pass registry function pointers from termin_core.dll (where tc_pass functions are)
+        var hasPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_has");
+        if (hasPtr != IntPtr.Zero)
+            _passRegistryHas = Marshal.GetDelegateForFunctionPointer<PassRegistryHasDelegate>(hasPtr);
+
+        var createPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_create");
+        if (createPtr != IntPtr.Zero)
+            _passRegistryCreate = Marshal.GetDelegateForFunctionPointer<PassRegistryCreateDelegate>(createPtr);
+
+        var countPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_type_count");
+        if (countPtr != IntPtr.Zero)
+            _passRegistryTypeCount = Marshal.GetDelegateForFunctionPointer<PassRegistryTypeCountDelegate>(countPtr);
+
+        var typeAtPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_type_at");
+        if (typeAtPtr != IntPtr.Zero)
+            _passRegistryTypeAt = Marshal.GetDelegateForFunctionPointer<PassRegistryTypeAtDelegate>(typeAtPtr);
+
+        // Pipeline functions
+        var pipelineCreatePtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_create");
+        if (pipelineCreatePtr != IntPtr.Zero)
+            _pipelineCreate = Marshal.GetDelegateForFunctionPointer<PipelineCreateDelegate>(pipelineCreatePtr);
+
+        var pipelineDestroyPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_destroy");
+        if (pipelineDestroyPtr != IntPtr.Zero)
+            _pipelineDestroy = Marshal.GetDelegateForFunctionPointer<PipelineDestroyDelegate>(pipelineDestroyPtr);
+
+        var pipelineAddPassPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_add_pass");
+        if (pipelineAddPassPtr != IntPtr.Zero)
+            _pipelineAddPass = Marshal.GetDelegateForFunctionPointer<PipelineAddPassDelegate>(pipelineAddPassPtr);
+
+        var pipelinePassCountPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_pass_count");
+        if (pipelinePassCountPtr != IntPtr.Zero)
+            _pipelinePassCount = Marshal.GetDelegateForFunctionPointer<PipelinePassCountDelegate>(pipelinePassCountPtr);
+
+        var pipelinePassAtPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_get_pass_at");
+        if (pipelinePassAtPtr != IntPtr.Zero)
+            _pipelinePassAt = Marshal.GetDelegateForFunctionPointer<PipelinePassAtDelegate>(pipelinePassAtPtr);
+
+        // Pass property functions
+        var passSetNamePtr = GetProcAddress(_terminCoreHandle, "tc_pass_set_name");
+        if (passSetNamePtr != IntPtr.Zero)
+            _passSetName = Marshal.GetDelegateForFunctionPointer<PassSetNameDelegate>(passSetNamePtr);
+
+        var passSetEnabledPtr = GetProcAddress(_terminCoreHandle, "tc_pass_set_enabled");
+        if (passSetEnabledPtr != IntPtr.Zero)
+            _passSetEnabled = Marshal.GetDelegateForFunctionPointer<PassSetEnabledDelegate>(passSetEnabledPtr);
+
         // Set DllImportResolver for Termin.Native assembly
         NativeLibrary.SetDllImportResolver(typeof(TerminCore).Assembly, ResolveDll);
     }
@@ -93,6 +189,65 @@ static class NativeLoader
     public static void TerminOpenGLShutdown()
     {
         _openglShutdown?.Invoke();
+    }
+
+    // Pass registry methods
+    public static bool PassRegistryHas(string typeName)
+    {
+        return _passRegistryHas?.Invoke(typeName) ?? false;
+    }
+
+    public static IntPtr PassRegistryCreate(string typeName)
+    {
+        return _passRegistryCreate?.Invoke(typeName) ?? IntPtr.Zero;
+    }
+
+    public static nuint PassRegistryTypeCount()
+    {
+        return _passRegistryTypeCount?.Invoke() ?? 0;
+    }
+
+    public static string? PassRegistryTypeAt(nuint index)
+    {
+        var ptr = _passRegistryTypeAt?.Invoke(index) ?? IntPtr.Zero;
+        return ptr != IntPtr.Zero ? Marshal.PtrToStringAnsi(ptr) : null;
+    }
+
+    // Pipeline methods
+    public static IntPtr PipelineCreate(string name)
+    {
+        return _pipelineCreate?.Invoke(name) ?? IntPtr.Zero;
+    }
+
+    public static void PipelineDestroy(IntPtr pipeline)
+    {
+        _pipelineDestroy?.Invoke(pipeline);
+    }
+
+    public static void PipelineAddPass(IntPtr pipeline, IntPtr pass)
+    {
+        _pipelineAddPass?.Invoke(pipeline, pass);
+    }
+
+    public static nuint PipelinePassCount(IntPtr pipeline)
+    {
+        return _pipelinePassCount?.Invoke(pipeline) ?? 0;
+    }
+
+    public static IntPtr PipelinePassAt(IntPtr pipeline, nuint index)
+    {
+        return _pipelinePassAt?.Invoke(pipeline, index) ?? IntPtr.Zero;
+    }
+
+    // Pass property methods
+    public static void PassSetName(IntPtr pass, string name)
+    {
+        _passSetName?.Invoke(pass, name);
+    }
+
+    public static void PassSetEnabled(IntPtr pass, bool enabled)
+    {
+        _passSetEnabled?.Invoke(pass, enabled);
     }
 }
 
@@ -171,11 +326,61 @@ public partial class MainWindow : Window
 
     private void InitPipeline()
     {
-        // Pipeline rendering requires ColorPass which has many C++ dependencies.
-        // For now, pipeline is disabled. Direct rendering below demonstrates
-        // that OpenGL context and termin mesh/shader APIs work correctly.
-        //
-        // TODO: Add pass registration to termin.dll to enable pipeline rendering.
+        // Test pass registry
+        var typeCount = NativeLoader.PassRegistryTypeCount();
+        var passTypes = new List<string>();
+        for (nuint i = 0; i < typeCount; i++)
+        {
+            var typeName = NativeLoader.PassRegistryTypeAt(i);
+            if (typeName != null)
+                passTypes.Add(typeName);
+        }
+
+        if (typeCount > 0)
+        {
+            Console.WriteLine($"[Pass Registry] {typeCount} types registered:");
+            foreach (var t in passTypes)
+                Console.WriteLine($"  - {t}");
+        }
+        else
+        {
+            Console.WriteLine("[WARNING] Pass registry is empty - passes not registered!");
+        }
+
+        // Create pipeline with passes
+        _pipeline = NativeLoader.PipelineCreate("default");
+        if (_pipeline == IntPtr.Zero)
+        {
+            Console.WriteLine("[WARNING] Failed to create pipeline");
+            return;
+        }
+        Console.WriteLine($"[Pipeline] Created at 0x{_pipeline:X}");
+
+        // Create and add passes
+        if (NativeLoader.PassRegistryHas("DepthPass"))
+        {
+            var depthPass = NativeLoader.PassRegistryCreate("DepthPass");
+            if (depthPass != IntPtr.Zero)
+            {
+                NativeLoader.PassSetName(depthPass, "Depth");
+                NativeLoader.PipelineAddPass(_pipeline, depthPass);
+                Console.WriteLine("[Pipeline] Added DepthPass");
+            }
+        }
+
+        if (NativeLoader.PassRegistryHas("ColorPass"))
+        {
+            var colorPass = NativeLoader.PassRegistryCreate("ColorPass");
+            if (colorPass != IntPtr.Zero)
+            {
+                NativeLoader.PassSetName(colorPass, "Color");
+                NativeLoader.PipelineAddPass(_pipeline, colorPass);
+                Console.WriteLine("[Pipeline] Added ColorPass");
+            }
+        }
+
+        var passCount = NativeLoader.PipelinePassCount(_pipeline);
+        Console.WriteLine($"[Pipeline] Total passes: {passCount}");
     }
 
     private unsafe void CreateCubeMesh()

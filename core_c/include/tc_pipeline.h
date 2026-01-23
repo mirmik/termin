@@ -48,6 +48,9 @@ TC_API tc_pass* tc_pipeline_get_pass(tc_pipeline* p, const char* name);
 // Find pass by index
 TC_API tc_pass* tc_pipeline_get_pass_at(tc_pipeline* p, size_t index);
 
+// Get pass count
+TC_API size_t tc_pipeline_pass_count(tc_pipeline* p);
+
 // ============================================================================
 // Iteration
 // ============================================================================
