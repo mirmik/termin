@@ -1,0 +1,117 @@
+// tc_viewport.h - Viewport (what to render and where)
+#ifndef TC_VIEWPORT_H
+#define TC_VIEWPORT_H
+
+#include "tc_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============================================================================
+// Viewport Structure
+// ============================================================================
+
+struct tc_viewport {
+    char* name;
+    tc_scene* scene;
+    tc_component* camera;           // CameraComponent
+
+    // Normalized rect (0.0 - 1.0)
+    float rect[4];                  // x, y, width, height
+
+    // Pixel rect (updated by display on resize)
+    int pixel_rect[4];              // px, py, pw, ph
+
+    int depth;                      // Render priority (lower = earlier)
+    tc_pipeline* pipeline;
+    uint64_t layer_mask;
+    bool enabled;
+
+    char* input_mode;               // "none", "simple", "editor"
+    bool block_input_in_editor;
+    char* managed_by_scene_pipeline;
+
+    // Internal entities root (for viewport-specific objects)
+    tc_entity* internal_entities;
+
+    // Canvas (Python UI canvas, stored as void*)
+    void* canvas;
+
+    // Python wrapper for callbacks
+    void* py_wrapper;
+};
+
+// ============================================================================
+// Viewport Lifecycle
+// ============================================================================
+
+TC_API tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* camera);
+TC_API void tc_viewport_free(tc_viewport* vp);
+
+// ============================================================================
+// Viewport Properties
+// ============================================================================
+
+TC_API void tc_viewport_set_name(tc_viewport* vp, const char* name);
+TC_API const char* tc_viewport_get_name(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_rect(tc_viewport* vp, float x, float y, float w, float h);
+TC_API void tc_viewport_get_rect(const tc_viewport* vp, float* x, float* y, float* w, float* h);
+
+TC_API void tc_viewport_set_pixel_rect(tc_viewport* vp, int px, int py, int pw, int ph);
+TC_API void tc_viewport_get_pixel_rect(const tc_viewport* vp, int* px, int* py, int* pw, int* ph);
+
+TC_API void tc_viewport_set_depth(tc_viewport* vp, int depth);
+TC_API int tc_viewport_get_depth(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_pipeline(tc_viewport* vp, tc_pipeline* pipeline);
+TC_API tc_pipeline* tc_viewport_get_pipeline(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_layer_mask(tc_viewport* vp, uint64_t mask);
+TC_API uint64_t tc_viewport_get_layer_mask(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_enabled(tc_viewport* vp, bool enabled);
+TC_API bool tc_viewport_get_enabled(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_scene(tc_viewport* vp, tc_scene* scene);
+TC_API tc_scene* tc_viewport_get_scene(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_camera(tc_viewport* vp, tc_component* camera);
+TC_API tc_component* tc_viewport_get_camera(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_input_mode(tc_viewport* vp, const char* mode);
+TC_API const char* tc_viewport_get_input_mode(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_managed_by(tc_viewport* vp, const char* pipeline_name);
+TC_API const char* tc_viewport_get_managed_by(const tc_viewport* vp);
+
+TC_API void tc_viewport_set_block_input_in_editor(tc_viewport* vp, bool block);
+TC_API bool tc_viewport_get_block_input_in_editor(const tc_viewport* vp);
+
+// ============================================================================
+// Pixel Rect Calculation
+// ============================================================================
+
+// Update pixel_rect from normalized rect and display size
+TC_API void tc_viewport_update_pixel_rect(tc_viewport* vp, int display_width, int display_height);
+
+// ============================================================================
+// Canvas (Python object, stored as void*)
+// ============================================================================
+
+TC_API void tc_viewport_set_canvas(tc_viewport* vp, void* canvas);
+TC_API void* tc_viewport_get_canvas(const tc_viewport* vp);
+
+// ============================================================================
+// Python Wrapper
+// ============================================================================
+
+TC_API void tc_viewport_set_py_wrapper(tc_viewport* vp, void* wrapper);
+TC_API void* tc_viewport_get_py_wrapper(const tc_viewport* vp);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TC_VIEWPORT_H

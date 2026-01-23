@@ -1,121 +1,17 @@
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, TYPE_CHECKING
+"""Viewport - what to render and where."""
 
-from termin.visualization.core.identifiable import Identifiable
+from typing import List
 
-if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
-    from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.core.entity import Entity
-    from termin.visualization.ui.canvas import Canvas
-    from termin.visualization.render.framegraph import RenderPipeline
+from termin._native.scene import Viewport
+
+__all__ = ["Viewport", "make_default_pipeline"]
 
 
-@dataclass(eq=False)
-class Viewport(Identifiable):
+def make_default_pipeline():
     """
-    Viewport — "что рендерим и куда" в рамках дисплея.
+    Build default render pipeline.
 
-    Содержит данные:
-    - name: имя viewport для идентификации в пайплайне
-    - scene: сцена с объектами
-    - camera: камера для рендеринга
-    - rect: нормализованный прямоугольник (x, y, w, h) в [0..1]
-    - pixel_rect: прямоугольник в пикселях (обновляется Display при resize)
-    - canvas: опциональная 2D канва для UI
-    - depth: приоритет рендеринга (меньше = раньше, как Camera.depth в Unity)
-    - pipeline: конвейер рендеринга (None = default)
-    - layer_mask: маска слоёв (какие entity рендерить)
-
-    fbos управляются снаружи через ViewportRenderState.
-
-    Для рендеринга используйте RenderEngine с RenderView и ViewportRenderState.
-    """
-    name: str
-    scene: "Scene"
-    camera: "CameraComponent"
-    rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
-    canvas: Optional["Canvas"] = None
-    depth: int = 0  # Render priority: lower values render first
-    pipeline: Optional["RenderPipeline"] = None  # None = don't render
-    input_mode: str = "simple"  # "none", "simple", "editor"
-    block_input_in_editor: bool = False  # Block input when running in editor
-    managed_by_scene_pipeline: Optional[str] = None  # Name of scene pipeline managing this viewport
-    layer_mask: int = 0xFFFFFFFFFFFFFFFF  # All layers enabled by default
-    enabled: bool = True  # Whether this viewport is rendered
-    internal_entities: Optional["Entity"] = None  # Root entity for viewport-specific objects (camera, UI, etc.)
-    pixel_rect: Tuple[int, int, int, int] = (0, 0, 1, 1)  # (px, py, pw, ph) in pixels, updated by Display
-    _init_uuid: str | None = field(default=None, repr=False)
-
-    def __post_init__(self):
-        Identifiable.__init__(self, uuid=self._init_uuid)
-
-    @property
-    def effective_layer_mask(self) -> int:
-        """
-        Get effective layer mask, checking ViewportHintComponent on camera first.
-
-        If camera has ViewportHintComponent attached, use its layer_mask.
-        Otherwise use viewport's own layer_mask.
-        """
-        if self.camera is not None and self.camera.entity is not None:
-            from termin.visualization.core.viewport_hint import ViewportHintComponent
-            hint = self.camera.entity.get_component(ViewportHintComponent)
-            if hint is not None:
-                return hint.layer_mask
-        return self.layer_mask
-
-    def screen_point_to_ray(self, x: float, y: float):
-        """
-        Преобразует экранные координаты в луч в мировом пространстве.
-
-        Параметры:
-            x, y: координаты в пикселях окна.
-
-        Возвращает:
-            Ray3 из камеры через указанную точку, или None если камера недоступна.
-        """
-        if self.camera is None or self.camera.entity is None:
-            return None
-        return self.camera.screen_point_to_ray(x, y, viewport_rect=self.pixel_rect)
-
-    def serialize(self) -> dict:
-        """
-        Сериализует viewport в словарь.
-
-        Возвращает имя сущности камеры для последующего поиска при загрузке.
-        """
-        camera_entity_name = None
-        if self.camera is not None and self.camera.entity is not None:
-            camera_entity_name = self.camera.entity.name
-
-        # Get pipeline name for serialization
-        pipeline_name = None
-        if self.pipeline is not None:
-            pipeline_name = self.pipeline.name
-
-        result = {
-            "uuid": self._uuid,
-            "name": self.name,
-            "camera_entity": camera_entity_name,
-            "rect": list(self.rect),
-            "depth": self.depth,
-            "pipeline": pipeline_name,
-            "input_mode": self.input_mode,
-            "block_input_in_editor": self.block_input_in_editor,
-            "enabled": self.enabled,
-        }
-        # Only serialize layer_mask if not all layers (to keep files clean)
-        if self.layer_mask != 0xFFFFFFFFFFFFFFFF:
-            result["layer_mask"] = hex(self.layer_mask)
-        return result
-
-
-def make_default_pipeline() -> "RenderPipeline":
-    """
-    Собирает дефолтный конвейер рендера.
-
-    Включает: ShadowPass, SkyBoxPass, ColorPass (opaque + transparent), PostFX, UIWidgets, Present.
+    Includes: ShadowPass, SkyBoxPass, ColorPass (opaque + transparent), PostFX, UIWidgets, Present.
     """
     from termin.visualization.render.framegraph import (
         ColorPass,
@@ -127,13 +23,11 @@ def make_default_pipeline() -> "RenderPipeline":
     from termin.visualization.render.framegraph.passes.shadow import ShadowPass
     from termin.visualization.render.postprocess import PostProcessPass
 
-    # Shadow pass — генерирует shadow maps
     shadow_pass = ShadowPass(
         output_res="shadow_maps",
         pass_name="Shadow",
     )
 
-    # Opaque pass — читает shadow maps
     color_pass = ColorPass(
         input_res="skybox",
         output_res="color_opaque",
@@ -142,7 +36,6 @@ def make_default_pipeline() -> "RenderPipeline":
         phase_mark="opaque",
     )
 
-    # Transparent pass — прозрачные объекты с сортировкой
     transparent_pass = ColorPass(
         input_res="color_opaque",
         output_res="color",

@@ -20,6 +20,9 @@ struct tc_pipeline {
     tc_resource_spec* specs;
     size_t spec_count;
     size_t spec_capacity;
+
+    // Python wrapper
+    void* py_wrapper;
 };
 
 // ============================================================================

@@ -68,6 +68,8 @@ typedef struct tc_component_vtable tc_component_vtable;
 typedef struct tc_drawable_vtable tc_drawable_vtable;
 typedef struct tc_input_vtable tc_input_vtable;
 typedef struct tc_scene tc_scene;
+typedef struct tc_viewport tc_viewport;
+typedef struct tc_pipeline tc_pipeline;
 
 // ============================================================================
 // Handle Types
