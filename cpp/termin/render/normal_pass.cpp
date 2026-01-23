@@ -38,4 +38,7 @@ void main()
 }
 )";
 
+// Register NormalPass in tc_pass_registry for C#/standalone C++ usage
+TC_REGISTER_FRAME_PASS(NormalPass);
+
 } // namespace termin

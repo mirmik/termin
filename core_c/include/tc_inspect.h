@@ -160,6 +160,16 @@ TC_API tc_value tc_component_inspect_get(tc_component* c, const char* path);
 TC_API void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene* scene);
 
 // ============================================================================
+// Pass field access (unified API for native and external passes)
+// Works with tc_pass* directly, handles both C++ and Python passes
+// ============================================================================
+
+struct tc_pass;
+
+TC_API tc_value tc_pass_inspect_get(struct tc_pass* p, const char* path);
+TC_API void tc_pass_inspect_set(struct tc_pass* p, const char* path, tc_value value, tc_scene* scene);
+
+// ============================================================================
 // Cleanup
 // ============================================================================
 

@@ -341,4 +341,7 @@ void ShadowPass::execute(
     // Legacy execute - not used, call execute_shadow_pass instead
 }
 
+// Register ShadowPass in tc_pass_registry for C#/standalone C++ usage
+TC_REGISTER_FRAME_PASS(ShadowPass);
+
 } // namespace termin

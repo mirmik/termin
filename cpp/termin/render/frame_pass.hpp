@@ -174,4 +174,21 @@ private:
     }
 };
 
+// ============================================================================
+// Registration macro for FramePass-based classes
+// ============================================================================
+
+#define TC_REGISTER_FRAME_PASS(PassClass)                                    \
+    static tc_pass* _factory_##PassClass() {                                 \
+        auto* pass = new PassClass();                                        \
+        pass->init_native_tc_pass();                                         \
+        return pass->_tc_pass;                                               \
+    }                                                                        \
+    static struct _reg_##PassClass {                                         \
+        _reg_##PassClass() {                                                 \
+            tc_pass_registry_register(                                       \
+                #PassClass, _factory_##PassClass, TC_NATIVE_PASS);           \
+        }                                                                    \
+    } _reg_instance_##PassClass
+
 } // namespace termin

@@ -162,4 +162,7 @@ void IdPass::execute_with_data(
     }
 }
 
+// Register IdPass in tc_pass_registry for C#/standalone C++ usage
+TC_REGISTER_FRAME_PASS(IdPass);
+
 } // namespace termin

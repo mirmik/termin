@@ -337,4 +337,56 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_fbo_pool_clear")]
     public static partial void FboPoolClear(IntPtr pool);
+
+    // ========================================================================
+    // tc_value - Tagged union for field values
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_nil")]
+    public static partial TcValue ValueNil();
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_bool")]
+    public static partial TcValue ValueBool([MarshalAs(UnmanagedType.U1)] bool v);
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_int")]
+    public static partial TcValue ValueInt(long v);
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_float")]
+    public static partial TcValue ValueFloat(float v);
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_double")]
+    public static partial TcValue ValueDouble(double v);
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_string", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcValue ValueString(string s);
+
+    [LibraryImport(DLL, EntryPoint = "tc_value_free")]
+    public static partial void ValueFree(ref TcValue v);
+
+    // ========================================================================
+    // tc_inspect - Field inspection and access
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_inspect_has_type", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool InspectHasType(string typeName);
+
+    [LibraryImport(DLL, EntryPoint = "tc_inspect_field_count", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial nuint InspectFieldCount(string typeName);
+
+    [LibraryImport(DLL, EntryPoint = "tc_inspect_get", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcValue InspectGet(IntPtr obj, string typeName, string path);
+
+    [LibraryImport(DLL, EntryPoint = "tc_inspect_set", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void InspectSet(IntPtr obj, string typeName, string path, TcValue value, IntPtr scene);
+
+    // ========================================================================
+    // Pass field inspection (via tc_pass*)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_inspect_get", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcValue PassInspectGet(IntPtr pass, string path);
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_inspect_set", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void PassInspectSet(IntPtr pass, string path, TcValue value, IntPtr scene);
 }

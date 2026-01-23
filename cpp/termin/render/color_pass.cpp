@@ -523,4 +523,7 @@ void ColorPass::maybe_blit_to_debugger(
     );
 }
 
+// Register ColorPass in tc_pass_registry for C#/standalone C++ usage
+TC_REGISTER_FRAME_PASS(ColorPass);
+
 } // namespace termin

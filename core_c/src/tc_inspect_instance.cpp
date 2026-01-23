@@ -7,6 +7,7 @@
 #include "../../cpp/termin/entity/component.hpp"
 
 #include "../include/tc_inspect.hpp"
+#include "../include/tc_pass.h"
 
 namespace tc {
 
@@ -367,6 +368,30 @@ void tc_component_inspect_set(tc_component* c, const char* path, tc_value value,
     if (!type_name) return;
 
     void* obj = tc::get_inspect_object(c);
+    if (!obj) return;
+
+    tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+}
+
+tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
+    if (!p || !path) return tc_value_nil();
+
+    const char* type_name = tc_pass_type_name(p);
+    if (!type_name) return tc_value_nil();
+
+    void* obj = p->wrapper;
+    if (!obj) return tc_value_nil();
+
+    return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
+}
+
+void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene* scene) {
+    if (!p || !path) return;
+
+    const char* type_name = tc_pass_type_name(p);
+    if (!type_name) return;
+
+    void* obj = p->wrapper;
     if (!obj) return;
 
     tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
