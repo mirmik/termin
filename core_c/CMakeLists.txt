@@ -26,6 +26,7 @@ set(TC_SOURCES
     src/tc_mesh.c
     src/tc_mesh_registry.c
     src/tc_pass.c
+    src/tc_picking.c
     src/tc_pool.c
     src/tc_profiler.c
     src/tc_render.c
@@ -55,6 +56,7 @@ set(TC_HEADERS
     include/tc_mesh.h
     include/tc_mesh_registry.h
     include/tc_pass.h
+    include/tc_picking.h
     include/tc_pipeline.h
     include/tc_pool.h
     include/tc_pose.h

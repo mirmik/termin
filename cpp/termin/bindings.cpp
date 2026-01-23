@@ -1,4 +1,9 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/tuple.h>
+
+extern "C" {
+#include "tc_picking.h"
+}
 
 #include "render_bindings.hpp"
 #include "sdl_bindings.hpp"
@@ -63,4 +68,17 @@ NB_MODULE(_native, m) {
     termin::bind_kind(kind_module);
     termin::bind_tc_component_python(component_module);
     termin::bind_assets(assets_module);
+
+    // Picking utilities (id <-> rgb conversion with cache)
+    m.def("tc_picking_id_to_rgb", [](int id) {
+        int r, g, b;
+        tc_picking_id_to_rgb(id, &r, &g, &b);
+        return std::make_tuple(r, g, b);
+    }, "Convert entity pick ID to RGB (0-255 range), caches for reverse lookup");
+
+    m.def("tc_picking_rgb_to_id", &tc_picking_rgb_to_id,
+        "Convert RGB (0-255) back to entity pick ID, returns 0 if not cached");
+
+    m.def("tc_picking_cache_clear", &tc_picking_cache_clear,
+        "Clear the picking cache");
 }
