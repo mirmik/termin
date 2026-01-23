@@ -23,20 +23,20 @@ class Drawable;
 // For Python component support, include component_registry_python.hpp
 class ENTITY_API ComponentRegistry {
 public:
-    // Factory function for C++ components
-    using NativeFactory = std::function<CxxComponent*()>;
+    // Unified factory function - returns tc_component* regardless of language
+    using TcFactory = std::function<tc_component*()>;
 
     // Singleton access
     static ComponentRegistry& instance();
 
     // C++ component registration
-    void register_native(const std::string& name, NativeFactory factory, const char* parent = nullptr);
+    void register_native(const std::string& name, TcFactory factory, const char* parent = nullptr);
 
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
-    // Creation - returns raw CxxComponent* (for C++ only)
-    CxxComponent* create_component(const std::string& name) const;
+    // Unified creation - returns tc_component* for any component type
+    tc_component* create(const std::string& name) const;
 
     // Queries
     bool has(const std::string& name) const;
@@ -61,8 +61,7 @@ private:
     struct ComponentInfo {
         std::string name;
         tc_component_kind kind;
-        NativeFactory native_factory;
-        void* python_class_ptr = nullptr;  // Opaque pointer to nb::object, managed by ComponentRegistryPython
+        TcFactory factory;  // Unified factory returning tc_component*
     };
 
     ComponentRegistry() = default;
@@ -112,14 +111,14 @@ struct ComponentRegistrar {
             name, has_update ? 1 : 0, has_fixed_update ? 1 : 0);
 
         ComponentRegistry::instance().register_native(name,
-            [name, has_update, has_fixed_update]() -> CxxComponent* {
+            [name, has_update, has_fixed_update]() -> tc_component* {
                 printf("[Factory] Creating %s with has_update=%d\n", name, has_update ? 1 : 0);
                 T* comp = new T();
                 comp->set_type_name(name);
                 comp->set_has_update(has_update);
                 comp->set_has_fixed_update(has_fixed_update);
                 printf("[Factory] After set: comp->has_update()=%d\n", comp->has_update() ? 1 : 0);
-                return comp;
+                return comp->c_component();
             },
             parent);
 

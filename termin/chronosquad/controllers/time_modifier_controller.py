@@ -61,10 +61,7 @@ class TimeModifierController(PythonComponent):
         """Find CameraComponent on this entity."""
         from termin.visualization.core.camera import CameraComponent
 
-        if self._entity is None:
-            return
-
-        self._camera = self._entity.get_component(CameraComponent)
+        self._camera = self.entity.get_component(CameraComponent)
         if self._camera is None:
             log.warning("[TimeModifierController] CameraComponent not found on entity")
 

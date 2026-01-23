@@ -48,12 +48,6 @@ class PythonComponent:
         self._tc = TcComponent(self, type_name)
         self._tc.enabled = enabled
 
-        # Entity reference (set by Entity.add_component)
-        self._entity: Optional[Entity] = None
-
-        # Scene reference (set by on_added)
-        self._scene: Optional[Scene] = None
-
         # Auto-detect if update/fixed_update are overridden
         cls = type(self)
         if cls.update is not PythonComponent.update:
@@ -168,22 +162,18 @@ class PythonComponent:
 
     @property
     def entity(self) -> Optional[Entity]:
-        return self._entity
-
-    @entity.setter
-    def entity(self, value: Optional[Entity]) -> None:
-        self._entity = value
+        """Get owner entity from C-level tc_component."""
+        ent = self._tc.entity
+        if ent is not None and ent.valid:
+            return ent
+        return None
 
     @property
     def scene(self) -> Optional[Scene]:
-        """Get scene this component belongs to.
-
-        First checks cached _scene, then falls back to entity.scene lookup.
-        """
-        if self._scene is not None:
-            return self._scene
-        if self._entity is not None:
-            return self._entity.scene
+        """Get scene this component belongs to."""
+        ent = self.entity
+        if ent is not None:
+            return ent.scene
         return None
 
     # =========================================================================
@@ -276,8 +266,6 @@ class PythonComponent:
     def destroy(self) -> None:
         """Explicitly release all resources. Called by Scene.destroy()."""
         self.on_destroy()
-        self._entity = None
-        self._scene = None
 
     # =========================================================================
     # Serialization

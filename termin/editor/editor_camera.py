@@ -18,6 +18,9 @@ from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCa
 from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 
+# Import to register component in ComponentRegistry
+from termin.editor.editor_camera_ui_controller import EditorCameraUIController  # noqa: F401
+
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
@@ -95,31 +98,37 @@ class EditorCameraManager:
         # Create camera in standalone pool (not in scene)
         camera_entity = Entity(name="camera")
         camera_entity.serializable = False
-        camera = PerspectiveCameraComponent()
-        camera_entity.add_component(camera)
-        camera_entity.add_component(OrbitCameraController())
+        # camera = PerspectiveCameraComponent()
+        # camera_entity.add_component(camera)
+        # camera_entity.add_component(OrbitCameraController())
+        camera_entity.add_component_by_name("PerspectiveCameraComponent")
+        camera_entity.add_component_by_name("OrbitCameraController")
+        camera = camera_entity.get_component(PerspectiveCameraComponent)
 
         # Add ViewportHintComponent for pipeline and layer mask control
-        hint = ViewportHintComponent()
-        hint.pipeline_name = "(Editor)"
+        #hint = ViewportHintComponent()
         # All layers enabled by default (inherited from ViewportHintComponent.__init__)
-        camera_entity.add_component(hint)
-
+        camera_entity.add_component_by_name("ViewportHintComponent")
+        hint = camera_entity.get_component(ViewportHintComponent)
+        hint.pipeline_name = "(Editor)"
+        
         # Create child entity for editor UI with layer=1
         ui_entity = Entity(name="editor_ui")
         ui_entity.serializable = False
         ui_entity.layer = 1  # Editor UI layer
-        ui_comp = UIComponent()
+        #ui_comp = UIComponent()
+        ui_entity.add_component_by_name("UIComponent")
+        ui_comp = ui_entity.get_component(UIComponent)
         ui_comp.active_in_editor = True
         ui_comp.set_ui_layout_by_name("editor_camera_ui")
-        ui_entity.add_component(ui_comp)
 
         # Add EditorCameraUIController if available (loaded from stdlib)
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
-        controller_cls = rm.get_component("EditorCameraUIController")
-        if controller_cls is not None:
-            ui_entity.add_component(controller_cls())
+        #controller_cls = rm.get_component("EditorCameraUIController")
+        #if controller_cls is not None:
+        #    ui_entity.add_component(controller_cls())
+        ui_entity.add_component_by_name("EditorCameraUIController")
 
         # Link UI entity as child of camera
         camera_entity.transform.link(ui_entity.transform)

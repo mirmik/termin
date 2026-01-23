@@ -11,6 +11,7 @@
 #include "render/drawable.hpp"
 #include "render/render_context.hpp"
 #include "tc_component_python_bindings.hpp"
+#include "entity/entity.hpp"
 
 namespace nb = nanobind;
 
@@ -473,6 +474,14 @@ public:
     bool is_input_handler() const {
         return _c && _c->input_vtable != nullptr;
     }
+
+    // Get owner entity (returns invalid Entity if not attached)
+    Entity entity() const {
+        if (_c && _c->owner_pool) {
+            return Entity(_c->owner_pool, _c->owner_entity_id);
+        }
+        return Entity();
+    }
 };
 
 // ============================================================================
@@ -496,6 +505,7 @@ void bind_tc_component_python(nb::module_& m) {
         .def_prop_ro("is_drawable", &TcComponent::is_drawable)
         .def("install_input_vtable", &TcComponent::install_input_vtable)
         .def_prop_ro("is_input_handler", &TcComponent::is_input_handler)
+        .def_prop_ro("entity", &TcComponent::entity)
         ;
 }
 
