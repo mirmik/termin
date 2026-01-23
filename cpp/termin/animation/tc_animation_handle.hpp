@@ -5,12 +5,12 @@
 
 extern "C" {
 #include "termin_core.h"
+#include "tc_inspect.h"
 }
 
 #include <string>
 #include <vector>
 #include <nanobind/nanobind.h>
-#include "../../trent/trent.h"
 #include "../../core_c/include/tc_scene.h"
 
 namespace nb = nanobind;
@@ -193,7 +193,20 @@ public:
         return count;
     }
 
-    // Serialize for scene saving (returns nanobind dict)
+    // Serialize for kind registry (returns tc_value)
+    tc_value serialize_to_value() const {
+        tc_value d = tc_value_dict_new();
+        if (!is_valid()) {
+            tc_value_dict_set(&d, "type", tc_value_string("none"));
+            return d;
+        }
+        tc_value_dict_set(&d, "uuid", tc_value_string(uuid()));
+        tc_value_dict_set(&d, "name", tc_value_string(name()));
+        tc_value_dict_set(&d, "type", tc_value_string("uuid"));
+        return d;
+    }
+
+    // Serialize for scene saving (returns nanobind dict) - for Python bindings
     nb::dict serialize() const {
         nb::dict d;
         if (!is_valid()) {
@@ -206,22 +219,22 @@ public:
         return d;
     }
 
-    // Deserialize from trent data
-    void deserialize_from(const nos::trent& data, tc_scene* = nullptr) {
+    // Deserialize from tc_value data
+    void deserialize_from(const tc_value* data, tc_scene* = nullptr) {
         // Release current handle
         if (tc_animation* a = tc_animation_get(handle)) {
             tc_animation_release(a);
         }
         handle = tc_animation_handle_invalid();
 
-        if (!data.is_dict()) {
+        if (!data || data->type != TC_VALUE_DICT) {
             return;
         }
 
         // Try UUID first
-        if (data.contains("uuid")) {
-            std::string uuid_str = data["uuid"].as_string();
-            tc_animation_handle h = tc_animation_find(uuid_str.c_str());
+        tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(data), "uuid");
+        if (uuid_val && uuid_val->type == TC_VALUE_STRING && uuid_val->data.s) {
+            tc_animation_handle h = tc_animation_find(uuid_val->data.s);
             if (!tc_animation_handle_is_invalid(h)) {
                 handle = h;
                 if (tc_animation* a = tc_animation_get(handle)) {
@@ -232,9 +245,9 @@ public:
         }
 
         // Try name lookup
-        if (data.contains("name")) {
-            std::string name_str = data["name"].as_string();
-            tc_animation_handle h = tc_animation_find_by_name(name_str.c_str());
+        tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(data), "name");
+        if (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s) {
+            tc_animation_handle h = tc_animation_find_by_name(name_val->data.s);
             if (!tc_animation_handle_is_invalid(h)) {
                 handle = h;
                 if (tc_animation* a = tc_animation_get(handle)) {

@@ -324,16 +324,16 @@ class NavMeshBuilderComponent(PythonComponent):
 
     # --- Lifecycle ---
 
-    def on_added(self, scene: "Scene") -> None:
-        """Called when added to scene. Load from cache if available."""
-        super().on_added(scene)
+    def on_added(self) -> None:
+        """Called when added. Load from cache if available."""
+        super().on_added()
         self._try_load_from_cache()
 
     def on_removed(self) -> None:
-        """Called when removed from scene. Unregister from NavMeshRegistry."""
-        if self._scene is not None and self.entity is not None:
+        """Called when removed. Unregister from NavMeshRegistry."""
+        if self.scene is not None and self.entity is not None:
             from termin.navmesh.registry import NavMeshRegistry
-            registry = NavMeshRegistry.for_scene(self._scene)
+            registry = NavMeshRegistry.for_scene(self.scene)
             registry.unregister_all(self.entity.uuid)
         super().on_removed()
 
@@ -344,18 +344,18 @@ class NavMeshBuilderComponent(PythonComponent):
         Returns:
             True if loaded successfully, False otherwise.
         """
-        if self._scene is None or self.entity is None:
+        if self.scene is None or self.entity is None:
             return False
 
         # Scene must have name or uuid for cache
-        if not self._scene.name and not self._scene.uuid:
+        if not self.scene.name and not self.scene.uuid:
             return False
 
         from termin.cache import SceneCache
         from termin.navmesh.persistence import NavMeshPersistence
         from termin.navmesh.registry import NavMeshRegistry
 
-        cache = SceneCache.for_scene(self._scene)
+        cache = SceneCache.for_scene(self.scene)
         cache_key = f"navmesh_{self.agent_type_name}"
 
         data = cache.get(self.entity.uuid, type(self).__name__, cache_key)
@@ -367,7 +367,7 @@ class NavMeshBuilderComponent(PythonComponent):
             self._navmesh = navmesh
 
             # Register in NavMeshRegistry
-            registry = NavMeshRegistry.for_scene(self._scene)
+            registry = NavMeshRegistry.for_scene(self.scene)
             registry.register(self.agent_type_name, navmesh, self.entity)
 
             print(f"NavMeshBuilderComponent: loaded from cache ({navmesh.polygon_count()} polygons)")
@@ -383,18 +383,18 @@ class NavMeshBuilderComponent(PythonComponent):
         Returns:
             True if saved successfully, False otherwise.
         """
-        if self._scene is None or self.entity is None:
+        if self.scene is None or self.entity is None:
             return False
 
         # Scene must have name or uuid for cache
-        if not self._scene.name and not self._scene.uuid:
+        if not self.scene.name and not self.scene.uuid:
             print("NavMeshBuilderComponent: cannot save to cache - scene has no name or uuid")
             return False
 
         from termin.cache import SceneCache
         from termin.navmesh.persistence import NavMeshPersistence
 
-        cache = SceneCache.for_scene(self._scene)
+        cache = SceneCache.for_scene(self.scene)
         cache_key = f"navmesh_{self.agent_type_name}"
 
         try:
@@ -657,14 +657,13 @@ void main() {
 
         result: List[tuple[TcMesh, np.ndarray]] = []
 
-        for comp in entity.components:
-            if isinstance(comp, MeshRenderer):
-                mesh = comp.mesh
-                if mesh is not None and mesh.is_valid:
-                    world_matrix = entity.model_matrix()
-                    local_matrix = root_transform_inv @ world_matrix
-                    result.append((mesh, local_matrix))
-                break
+        comp = entity.get_component(MeshRenderer)
+        if comp is not None:
+            mesh = comp.mesh
+            if mesh is not None and mesh.is_valid:
+                world_matrix = entity.model_matrix()
+                local_matrix = root_transform_inv @ world_matrix
+                result.append((mesh, local_matrix))
 
         if recurse:
             for child in entity.transform.children:
@@ -867,9 +866,9 @@ void main() {
         self._save_to_cache(navmesh)
 
         # Register in NavMeshRegistry
-        if self._scene is not None:
+        if self.scene is not None:
             from termin.navmesh.registry import NavMeshRegistry
-            registry = NavMeshRegistry.for_scene(self._scene)
+            registry = NavMeshRegistry.for_scene(self.scene)
             registry.register(self.agent_type_name, navmesh, self.entity)
             print(f"NavMeshBuilderComponent: registered in NavMeshRegistry for agent type '{self.agent_type_name}'")
 

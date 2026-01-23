@@ -157,7 +157,11 @@ class EditorSceneAttachment:
         )
         self._viewport.name = "(Editor)"
         self._viewport.pipeline = self._pipeline
+        self._viewport.internal_entities = self._camera_manager.editor_entities
         self._camera_manager.camera.add_viewport(self._viewport)
+
+        # Start components in internal_entities hierarchy
+        self._start_internal_entities()
 
         self._attached_scene = scene
 
@@ -242,6 +246,26 @@ class EditorSceneAttachment:
         self._camera_manager.set_camera_data(data)
 
     # --- Internal helpers ---
+
+    def _start_internal_entities(self) -> None:
+        """Call start() on all components in internal_entities hierarchy."""
+        if self._camera_manager is None:
+            return
+        root = self._camera_manager.editor_entities
+        if root is not None:
+            self._start_entity_hierarchy(root)
+
+    def _start_entity_hierarchy(self, entity: "Entity") -> None:
+        """Recursively call start() on all components in entity and children."""
+        from termin.visualization.core.python_component import PythonComponent
+
+        for comp in entity.components:
+            if isinstance(comp, PythonComponent):
+                comp.start()
+
+        for child_tf in entity.transform.children:
+            if child_tf.entity is not None:
+                self._start_entity_hierarchy(child_tf.entity)
 
     def _remove_display_viewports(self) -> None:
         """Remove all viewports from this display."""

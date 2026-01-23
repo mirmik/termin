@@ -41,18 +41,19 @@
           {
             "type": "LightComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
-              "light_type": 0.0,
+              "light_type": 0,
               "color": [
-                1.0,
-                1.0,
-                1.0
+                1,
+                1,
+                1
               ],
-              "intensity": 1.0,
+              "intensity": 1,
               "shadows_enabled": true,
-              "shadows_map_resolution": 4096.0,
-              "cascade_count": 4.0,
-              "max_distance": 100.0,
+              "shadows_map_resolution": 4096,
+              "cascade_count": 4,
+              "max_distance": 100,
               "split_lambda": 0.5,
               "cascade_blend": true
             }
@@ -90,42 +91,48 @@
         ],
         "components": [
           {
-            "type": "VoxelizerComponent",
+            "type": "NavMeshBuilderComponent",
             "data": {
+              "display_name": "navmesh_Human",
               "enabled": true,
-              "grid_name": "Plt",
-              "cell_size": 0.25,
-              "voxelize_mode": 4.0,
-              "voxelize_source": 1.0,
-              "output_path": "Scenes/Plt.voxels",
-              "navmesh_output_path": "Scenes/Plt.navmesh",
-              "normal_angle": 25.0,
-              "contour_simplify": 1.0,
-              "max_edge_length": 6.0,
-              "min_edge_length": 1.0,
+              "navmesh_name": "Plt",
+              "agent_type_name": "Human",
+              "cell_size": 0.15,
+              "voxelize_source": 1,
+              "normal_angle": 25,
+              "contour_simplify": 1,
+              "max_edge_length": 6,
+              "min_edge_length": 1,
               "min_contour_edge_length": 0.5,
-              "max_vertex_valence": 0.0,
+              "max_vertex_valence": 0,
               "use_delaunay_flip": true,
               "use_valence_flip": true,
               "use_angle_flip": true,
               "use_cvt_smoothing": true,
-              "use_edge_collapse": true,
+              "use_edge_collapse": false,
               "use_second_pass": true,
+              "use_watershed": true,
+              "watershed_smoothing": 10,
               "show_region_voxels": false,
-              "show_sparse_boundary": false,
               "show_simplified_contours": false,
-              "show_bridged_contours": true,
-              "show_triangulated": false
+              "show_triangulated": false,
+              "show_distance_field": false,
+              "show_local_maxima": false,
+              "show_peaks": false,
+              "show_watershed_regions": true,
+              "color_seed": 56
             }
           },
           {
             "type": "PathfindingWorldComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
+              "agent_type_name": "Human",
               "skip_astar_if_los": true,
               "use_funnel": true,
               "use_los_optimization": true,
-              "use_edge_centers": false,
+              "use_edge_centers": true,
               "show_graph_edges": false,
               "show_portals": false
             }
@@ -133,7 +140,8 @@
           {
             "type": "NavMeshFovShowerComponent",
             "data": {
-              "enabled": true,
+              "display_name": "",
+              "enabled": false,
               "navmesh": {
                 "uuid": "65a82ebe-b0e2-4590-bc27-310b403475de",
                 "name": "Plt",
@@ -145,6 +153,103 @@
                 "name": "NavMeshFOV",
                 "type": "uuid"
               }
+            }
+          },
+          {
+            "type": "VoxelDisplayComponent",
+            "data": {
+              "display_name": "",
+              "enabled": false,
+              "voxel_grid": {
+                "uuid": "485911ec-312a-488a-9771-dde9b624e074",
+                "name": "Plt",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/termin/examples/project/Scenes/Plt.voxels"
+              },
+              "color_below": [
+                0.2,
+                0.6,
+                1,
+                0.8
+              ],
+              "color_above": [
+                1,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100,
+              "slice_axis": [
+                0,
+                0,
+                1
+              ],
+              "color_surface": [
+                0.2,
+                1,
+                0.3,
+                0.9
+              ]
+            }
+          },
+          {
+            "type": "NavMeshBuilderComponent",
+            "data": {
+              "display_name": "navmesh_Skiby",
+              "enabled": true,
+              "navmesh_name": "",
+              "agent_type_name": "Skiby",
+              "cell_size": 0.25,
+              "voxelize_source": 1,
+              "normal_angle": 25,
+              "contour_simplify": 1,
+              "max_edge_length": 6,
+              "min_edge_length": 1,
+              "min_contour_edge_length": 0.5,
+              "max_vertex_valence": 0,
+              "use_delaunay_flip": true,
+              "use_valence_flip": true,
+              "use_angle_flip": true,
+              "use_cvt_smoothing": true,
+              "use_edge_collapse": false,
+              "use_second_pass": true,
+              "use_watershed": false,
+              "watershed_smoothing": 0,
+              "show_region_voxels": false,
+              "show_simplified_contours": false,
+              "show_triangulated": false,
+              "show_distance_field": false,
+              "show_local_maxima": false,
+              "show_peaks": false,
+              "show_watershed_regions": false,
+              "color_seed": 42
+            }
+          },
+          {
+            "type": "RecastNavMeshBuilderComponent",
+            "data": {
+              "enabled": true,
+              "cell_size": 0.20000000298023224,
+              "cell_height": 0.20000000298023224,
+              "min_region_area": 7,
+              "merge_region_area": 20,
+              "max_edge_length": 12,
+              "max_simplification_error": 1.5,
+              "max_verts_per_poly": 6,
+              "build_detail_mesh": true,
+              "mesh_source": 1,
+              "capture_heightfield": true,
+              "capture_compact": true,
+              "capture_contours": true,
+              "capture_poly_mesh": true,
+              "capture_detail_mesh": true,
+              "show_input_mesh": false,
+              "show_heightfield": false,
+              "show_regions": false,
+              "show_distance_field": false,
+              "show_contours": false,
+              "show_poly_mesh": true,
+              "show_detail_mesh": false
             }
           }
         ],
@@ -181,31 +286,33 @@
               {
                 "type": "MeshRenderer",
                 "data": {
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
                   },
                   "material": {
-                    "uuid": "00000000-0001-0000-0001-000000000003",
-                    "name": "NormalizedPBR",
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
                     "type": "uuid"
                   },
                   "cast_shadow": true,
-                  "_override_material": true
+                  "_override_material": false
                 }
               },
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -224,9 +331,9 @@
             "flags": 0,
             "pose": {
               "position": [
-                -1.8450000286102295,
-                2.0851423740386963,
-                1.4498344659805298
+                -1.9804978370666504,
+                2.569416046142578,
+                1.560789942741394
               ],
               "rotation": [
                 0,
@@ -244,13 +351,14 @@
               {
                 "type": "MeshRenderer",
                 "data": {
+                  "enabled": true,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000001",
                     "name": "Cube"
                   },
                   "material": {
-                    "uuid": "00000000-0001-0000-0001-000000000003",
-                    "name": "NormalizedPBR",
+                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                    "name": "Kairon",
                     "type": "uuid"
                   },
                   "cast_shadow": true,
@@ -260,15 +368,520 @@
               {
                 "type": "ColliderComponent",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
                   "collider_type": "Box",
                   "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1,
+                    1,
+                    1
                   ],
                   "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "32719f8a-d86e-4516-a10a-a28d230f352e",
+            "name": "entity1",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                6.993739128112793,
+                7.336162567138672,
+                0.0010000000474974513
+              ],
+              "rotation": [
+                0,
+                0,
+                0.34744584560394287,
+                0.937700092792511
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "b8ea0316-767e-4d8e-bf54-8bb4822d1fdf",
+            "name": "entity5",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                12.623335838317871,
+                8.684647560119629,
+                1.4675014019012451
+              ],
+              "rotation": [
+                0.0015895068645477295,
+                -0.004573673475533724,
+                0.3282693922519684,
+                0.9445717334747314
+              ]
+            },
+            "scale": [
+              5,
+              0.5,
+              2
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "89b7d8e2-2efa-478f-8cf4-cf7a75809c00",
+            "name": "entity5_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                10.945873260498047,
+                10.806703567504883,
+                1.4576995372772217
+              ],
+              "rotation": [
+                0.0015895068645477295,
+                -0.004573673475533724,
+                0.3282693922519684,
+                0.9445717334747314
+              ]
+            },
+            "scale": [
+              5,
+              0.5,
+              2
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "637d9587-b02b-4406-89d8-16c920bd2e6e",
+            "name": "entity1_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                15.315,
+                12.725,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0.34744304751572597,
+                0.9377010870917155
+              ]
+            },
+            "scale": [
+              10,
+              3,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "e1d31c5a-02ce-4d9b-81d3-80821194aafa",
+            "name": "entity1_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                17.233787536621094,
+                16.13228988647461,
+                0.0010000000474974513
+              ],
+              "rotation": [
+                0,
+                0,
+                0.34744584560394287,
+                0.937700092792511
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "3dad235e-0969-45d8-a8a0-a831e843616a",
+            "name": "entity1_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                3.5194406509399414,
+                11.38097095489502,
+                4.492423057556152
+              ],
+              "rotation": [
+                0.6630547974085494,
+                0.24567933497448968,
+                0.24567933497448968,
+                0.6630547974085494
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
+                  "capsule_radius": 0.25
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "c3c08a97-239a-4287-80ba-4cc2ce94f36e",
+            "name": "entity6",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                14.716891288757324,
+                4.0921454429626465,
+                0.4431307315826416
+              ],
+              "rotation": [
+                0,
+                0,
+                -0.1706918179988861,
+                0.985324501991272
+              ]
+            },
+            "scale": [
+              5,
+              5,
+              0.1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "611229d6-a798-44b4-b8a2-b3033efd9b9f",
+            "name": "entity1_copy_copy",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                23.529708862304688,
+                21.541149139404297,
+                3.1220815181732178
+              ],
+              "rotation": [
+                0.11883252090883573,
+                -0.3207126602037439,
+                0.32648966789389544,
+                0.8811507920430095
+              ]
+            },
+            "scale": [
+              10,
+              10,
+              1
+            ],
+            "components": [
+              {
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube"
+                  },
+                  "material": {
+                    "uuid": "9051196a-a173-4ed6-a36b-be530ba61c6e",
+                    "name": "Ground",
+                    "type": "uuid"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1,
                   "capsule_radius": 0.25
                 }
               }
@@ -309,6 +922,7 @@
           {
             "type": "ChronosphereController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -347,6 +961,7 @@
           {
             "type": "TimelineInitializer",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -385,6 +1000,7 @@
           {
             "type": "TimelineController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -423,6 +1039,7 @@
           {
             "type": "ObjectController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "selectable": true,
               "fov_target": false
@@ -431,23 +1048,26 @@
           {
             "type": "AnimationController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           },
           {
             "type": "HumanModelCollider",
             "data": {
+              "display_name": "",
               "enabled": true,
-              "scale": 1.0,
+              "scale": 1,
               "overlap_radius": 0.023
             }
           },
           {
             "type": "BlinkActionComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
-              "cooldown": 3.0,
-              "max_distance": 15.0,
+              "cooldown": 3,
+              "max_distance": 15,
               "blink_time_lapse": 0.5
             }
           }
@@ -485,108 +1105,292 @@
               {
                 "type": "SkeletonController",
                 "data": {
+                  "enabled": true,
                   "skeleton": {
                     "uuid": "49cf1726-b337-44ec-b171-7ed5cb4c9ced",
                     "name": "Glitch_skeleton"
                   },
                   "bone_entities": [
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {}
+                    {
+                      "uuid": "000000000000001a"
+                    },
+                    {
+                      "uuid": "000000000000001b"
+                    },
+                    {
+                      "uuid": "000000000000001c"
+                    },
+                    {
+                      "uuid": "000000000000001d"
+                    },
+                    {
+                      "uuid": "000000000000001e"
+                    },
+                    {
+                      "uuid": "000000000000001f"
+                    },
+                    {
+                      "uuid": "0000000000000020"
+                    },
+                    {
+                      "uuid": "0000000000000021"
+                    },
+                    {
+                      "uuid": "0000000000000022"
+                    },
+                    {
+                      "uuid": "0000000000000023"
+                    },
+                    {
+                      "uuid": "0000000000000024"
+                    },
+                    {
+                      "uuid": "0000000000000025"
+                    },
+                    {
+                      "uuid": "0000000000000026"
+                    },
+                    {
+                      "uuid": "0000000000000027"
+                    },
+                    {
+                      "uuid": "0000000000000028"
+                    },
+                    {
+                      "uuid": "0000000000000029"
+                    },
+                    {
+                      "uuid": "000000000000002a"
+                    },
+                    {
+                      "uuid": "000000000000002b"
+                    },
+                    {
+                      "uuid": "000000000000002c"
+                    },
+                    {
+                      "uuid": "000000000000002d"
+                    },
+                    {
+                      "uuid": "000000000000002e"
+                    },
+                    {
+                      "uuid": "000000000000002f"
+                    },
+                    {
+                      "uuid": "0000000000000030"
+                    },
+                    {
+                      "uuid": "0000000000000031"
+                    },
+                    {
+                      "uuid": "0000000000000032"
+                    },
+                    {
+                      "uuid": "0000000000000033"
+                    },
+                    {
+                      "uuid": "0000000000000034"
+                    },
+                    {
+                      "uuid": "0000000000000035"
+                    },
+                    {
+                      "uuid": "0000000000000036"
+                    },
+                    {
+                      "uuid": "0000000000000037"
+                    },
+                    {
+                      "uuid": "0000000000000038"
+                    },
+                    {
+                      "uuid": "0000000000000039"
+                    },
+                    {
+                      "uuid": "000000000000003a"
+                    },
+                    {
+                      "uuid": "000000000000003b"
+                    },
+                    {
+                      "uuid": "000000000000003c"
+                    },
+                    {
+                      "uuid": "000000000000003d"
+                    },
+                    {
+                      "uuid": "000000000000003e"
+                    },
+                    {
+                      "uuid": "000000000000003f"
+                    },
+                    {
+                      "uuid": "0000000000000040"
+                    },
+                    {
+                      "uuid": "0000000000000041"
+                    },
+                    {
+                      "uuid": "0000000000000042"
+                    },
+                    {
+                      "uuid": "0000000000000043"
+                    },
+                    {
+                      "uuid": "0000000000000044"
+                    },
+                    {
+                      "uuid": "0000000000000045"
+                    },
+                    {
+                      "uuid": "0000000000000046"
+                    },
+                    {
+                      "uuid": "0000000000000047"
+                    },
+                    {
+                      "uuid": "0000000000000048"
+                    },
+                    {
+                      "uuid": "0000000000000049"
+                    },
+                    {
+                      "uuid": "000000000000004a"
+                    },
+                    {
+                      "uuid": "000000000000004b"
+                    },
+                    {
+                      "uuid": "000000000000004c"
+                    },
+                    {
+                      "uuid": "000000000000004d"
+                    },
+                    {
+                      "uuid": "000000000000004e"
+                    },
+                    {
+                      "uuid": "000000000000004f"
+                    },
+                    {
+                      "uuid": "0000000000000050"
+                    },
+                    {
+                      "uuid": "0000000000000051"
+                    },
+                    {
+                      "uuid": "0000000000000052"
+                    },
+                    {
+                      "uuid": "0000000000000053"
+                    },
+                    {
+                      "uuid": "0000000000000054"
+                    },
+                    {
+                      "uuid": "0000000000000055"
+                    },
+                    {
+                      "uuid": "0000000000000056"
+                    },
+                    {
+                      "uuid": "0000000000000057"
+                    },
+                    {
+                      "uuid": "0000000000000058"
+                    },
+                    {
+                      "uuid": "0000000000000059"
+                    },
+                    {
+                      "uuid": "000000000000005a"
+                    },
+                    {
+                      "uuid": "000000000000005b"
+                    },
+                    {
+                      "uuid": "000000000000005c"
+                    },
+                    {
+                      "uuid": "000000000000005d"
+                    },
+                    {
+                      "uuid": "000000000000005e"
+                    },
+                    {
+                      "uuid": "000000000000005f"
+                    },
+                    {
+                      "uuid": "0000000000000060"
+                    },
+                    {
+                      "uuid": "0000000000000061"
+                    },
+                    {
+                      "uuid": "0000000000000062"
+                    },
+                    {
+                      "uuid": "0000000000000063"
+                    },
+                    {
+                      "uuid": "0000000000000064"
+                    },
+                    {
+                      "uuid": "0000000000000065"
+                    },
+                    {
+                      "uuid": "0000000000000066"
+                    },
+                    {
+                      "uuid": "0000000000000067"
+                    },
+                    {
+                      "uuid": "0000000000000068"
+                    },
+                    {
+                      "uuid": "0000000000000069"
+                    },
+                    {
+                      "uuid": "000000000000006a"
+                    },
+                    {
+                      "uuid": "000000000000006b"
+                    },
+                    {
+                      "uuid": "000000000000006c"
+                    },
+                    {
+                      "uuid": "000000000000006d"
+                    },
+                    {
+                      "uuid": "000000000000006e"
+                    },
+                    {
+                      "uuid": "000000000000006f"
+                    },
+                    {
+                      "uuid": "0000000000000070"
+                    },
+                    {
+                      "uuid": "0000000000000071"
+                    },
+                    {
+                      "uuid": "0000000000000072"
+                    },
+                    {
+                      "uuid": "0000000000000073"
+                    },
+                    {
+                      "uuid": "0000000000000074"
+                    }
                   ]
                 }
               },
               {
                 "type": "AnimationPlayer",
                 "data": {
+                  "enabled": true,
                   "clips": [
                     {
                       "uuid": "anim-0000000000000001",
@@ -742,12 +1546,13 @@
                       {
                         "type": "ColliderComponent",
                         "data": {
+                          "display_name": "",
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
-                            1.0,
-                            1.0,
-                            1.0
+                            1,
+                            1,
+                            1
                           ],
                           "sphere_radius": 0.5,
                           "capsule_height": 0.06,
@@ -878,15 +1683,16 @@
                                       {
                                         "type": "ColliderComponent",
                                         "data": {
+                                          "display_name": "",
                                           "enabled": true,
                                           "collider_type": "Sphere",
                                           "box_size": [
-                                            1.0,
-                                            1.0,
-                                            1.0
+                                            1,
+                                            1,
+                                            1
                                           ],
                                           "sphere_radius": 0.16650000000000004,
-                                          "capsule_height": 1.0,
+                                          "capsule_height": 1,
                                           "capsule_radius": 0.25
                                         }
                                       }
@@ -1053,12 +1859,13 @@
                                       {
                                         "type": "ColliderComponent",
                                         "data": {
+                                          "display_name": "",
                                           "enabled": true,
                                           "collider_type": "Capsule",
                                           "box_size": [
-                                            1.0,
-                                            1.0,
-                                            1.0
+                                            1,
+                                            1,
+                                            1
                                           ],
                                           "sphere_radius": 0.5,
                                           "capsule_height": 0.045,
@@ -1099,12 +1906,13 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.045,
@@ -1145,12 +1953,13 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.045,
@@ -2184,12 +2993,13 @@
                                       {
                                         "type": "ColliderComponent",
                                         "data": {
+                                          "display_name": "",
                                           "enabled": true,
                                           "collider_type": "Capsule",
                                           "box_size": [
-                                            1.0,
-                                            1.0,
-                                            1.0
+                                            1,
+                                            1,
+                                            1
                                           ],
                                           "sphere_radius": 0.5,
                                           "capsule_height": 0.045,
@@ -2230,12 +3040,13 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.045,
@@ -2276,12 +3087,13 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.045,
@@ -3291,12 +4103,13 @@
                       {
                         "type": "ColliderComponent",
                         "data": {
+                          "display_name": "",
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
-                            1.0,
-                            1.0,
-                            1.0
+                            1,
+                            1,
+                            1
                           ],
                           "sphere_radius": 0.5,
                           "capsule_height": 0.07500000000000001,
@@ -3337,12 +4150,13 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.07500000000000001,
@@ -3383,12 +4197,13 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.045,
@@ -3562,12 +4377,13 @@
                       {
                         "type": "ColliderComponent",
                         "data": {
+                          "display_name": "",
                           "enabled": true,
                           "collider_type": "Capsule",
                           "box_size": [
-                            1.0,
-                            1.0,
-                            1.0
+                            1,
+                            1,
+                            1
                           ],
                           "sphere_radius": 0.5,
                           "capsule_height": 0.07500000000000001,
@@ -3608,12 +4424,13 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.07500000000000001,
@@ -3654,12 +4471,13 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.045,
@@ -3835,6 +4653,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "786bb9bf-0e64-4dca-afec-d62b3dc9feae",
                         "name": "gymuniform"
@@ -3883,6 +4702,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "287cc28b-657b-429c-9d00-e69195cb1887",
                         "name": "jammers3"
@@ -3931,6 +4751,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "ed833ccb-7339-4d23-94d2-07d21d3e7b08",
                         "name": "low-poly.002"
@@ -3979,6 +4800,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7",
                         "name": "male_muscle_13290.002"
@@ -4027,6 +4849,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "7b49ace0-9ca3-42f4-a911-fcf77a6cbd3c",
                         "name": "male_muscle_13290"
@@ -4075,6 +4898,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "507bd6b6-819a-4ebb-92bf-a167f42ac354",
                         "name": "MC-SciFi-Armor_Helios"
@@ -4123,6 +4947,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "6432a38a-882f-4c5c-8e47-a800cb44cc3e",
                         "name": "mens_shirt_untuck_elvbhp1f.002"
@@ -4171,17 +4996,18 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "0cb882c2-d41b-4ebe-b500-72dd04b63e90",
                         "name": "mens_shirt_untuck_elvbhp1f"
                       },
                       "material": {
-                        "uuid": "00000000-0001-0000-0001-000000000003",
-                        "name": "NormalizedPBR",
+                        "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0",
+                        "name": "Kairon",
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": true
+                      "_override_material": false
                     }
                   }
                 ],
@@ -4219,6 +5045,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "282bd2fd-dcd6-42ff-a07d-f76aaa11cec9",
                         "name": "mens_tanks_elv1f"
@@ -4267,6 +5094,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "c6513438-2b62-4d41-ab65-d7371067cd14",
                         "name": "mens_trouser_f_elv_chr.002"
@@ -4315,6 +5143,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "b7de39e1-9b44-4358-ac3f-40dffc2ca401",
                         "name": "mind_eyebrows_14.002"
@@ -4363,6 +5192,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "35f6c7a0-80f6-437e-9c89-04c71d55e4cc",
                         "name": "mind_eyelashes_03.002"
@@ -4411,6 +5241,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "82ff9fa0-28ad-41fc-8007-54cda380f60c",
                         "name": "shoes06.002"
@@ -4459,6 +5290,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "f995496f-6565-44b6-9df1-99b10b48ca81",
                         "name": "spiky.002"
@@ -4511,12 +5343,14 @@
           {
             "type": "ClickController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           },
           {
             "type": "GameController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -4555,31 +5389,35 @@
           {
             "type": "ChronoCameraController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           },
           {
             "type": "CameraComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 59.99999999999999,
-              "ortho_size": 5.0,
+              "ortho_size": 5,
               "near": 0.1,
-              "far": 100.0
+              "far": 100
             }
           },
           {
             "type": "ViewportHintComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "pipeline_name": "ChronoSquadPipeline",
-              "layer_mask": "0xffffffffffffffff"
+              "layer_mask": "0xfb"
             }
           },
           {
             "type": "TimeModifierController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -4598,8 +5436,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            1.6990000009536743,
-            0,
+            15.79020881652832,
+            14.411012649536133,
             0.5
           ],
           "rotation": [
@@ -4618,6 +5456,7 @@
           {
             "type": "ObjectController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "selectable": true,
               "fov_target": false
@@ -4626,6 +5465,7 @@
           {
             "type": "AnimationController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -4663,97 +5503,259 @@
               {
                 "type": "SkeletonController",
                 "data": {
+                  "enabled": true,
                   "skeleton": {
                     "uuid": "eb4b4dfb-22c7-43d7-909d-f920f018f2ff",
                     "name": "ArthurDecimated_skeleton"
                   },
                   "bone_entities": [
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {}
+                    {
+                      "uuid": "0000000000000146"
+                    },
+                    {
+                      "uuid": "0000000000000147"
+                    },
+                    {
+                      "uuid": "0000000000000148"
+                    },
+                    {
+                      "uuid": "0000000000000149"
+                    },
+                    {
+                      "uuid": "000000000000014a"
+                    },
+                    {
+                      "uuid": "000000000000014b"
+                    },
+                    {
+                      "uuid": "000000000000014c"
+                    },
+                    {
+                      "uuid": "000000000000014d"
+                    },
+                    {
+                      "uuid": "000000000000014e"
+                    },
+                    {
+                      "uuid": "000000000000014f"
+                    },
+                    {
+                      "uuid": "0000000000000150"
+                    },
+                    {
+                      "uuid": "0000000000000151"
+                    },
+                    {
+                      "uuid": "0000000000000152"
+                    },
+                    {
+                      "uuid": "0000000000000153"
+                    },
+                    {
+                      "uuid": "0000000000000154"
+                    },
+                    {
+                      "uuid": "0000000000000155"
+                    },
+                    {
+                      "uuid": "0000000000000156"
+                    },
+                    {
+                      "uuid": "0000000000000157"
+                    },
+                    {
+                      "uuid": "0000000000000158"
+                    },
+                    {
+                      "uuid": "0000000000000159"
+                    },
+                    {
+                      "uuid": "000000000000015a"
+                    },
+                    {
+                      "uuid": "000000000000015b"
+                    },
+                    {
+                      "uuid": "000000000000015c"
+                    },
+                    {
+                      "uuid": "000000000000015d"
+                    },
+                    {
+                      "uuid": "000000000000015e"
+                    },
+                    {
+                      "uuid": "000000000000015f"
+                    },
+                    {
+                      "uuid": "0000000000000160"
+                    },
+                    {
+                      "uuid": "0000000000000161"
+                    },
+                    {
+                      "uuid": "0000000000000162"
+                    },
+                    {
+                      "uuid": "0000000000000163"
+                    },
+                    {
+                      "uuid": "0000000000000164"
+                    },
+                    {
+                      "uuid": "0000000000000165"
+                    },
+                    {
+                      "uuid": "0000000000000166"
+                    },
+                    {
+                      "uuid": "0000000000000167"
+                    },
+                    {
+                      "uuid": "0000000000000168"
+                    },
+                    {
+                      "uuid": "0000000000000169"
+                    },
+                    {
+                      "uuid": "000000000000016a"
+                    },
+                    {
+                      "uuid": "000000000000016b"
+                    },
+                    {
+                      "uuid": "000000000000016c"
+                    },
+                    {
+                      "uuid": "000000000000016d"
+                    },
+                    {
+                      "uuid": "000000000000016e"
+                    },
+                    {
+                      "uuid": "000000000000016f"
+                    },
+                    {
+                      "uuid": "0000000000000170"
+                    },
+                    {
+                      "uuid": "0000000000000171"
+                    },
+                    {
+                      "uuid": "0000000000000172"
+                    },
+                    {
+                      "uuid": "0000000000000173"
+                    },
+                    {
+                      "uuid": "0000000000000174"
+                    },
+                    {
+                      "uuid": "0000000000000175"
+                    },
+                    {
+                      "uuid": "0000000000000176"
+                    },
+                    {
+                      "uuid": "0000000000000177"
+                    },
+                    {
+                      "uuid": "0000000000000178"
+                    },
+                    {
+                      "uuid": "0000000000000179"
+                    },
+                    {
+                      "uuid": "000000000000017a"
+                    },
+                    {
+                      "uuid": "000000000000017b"
+                    },
+                    {
+                      "uuid": "000000000000017c"
+                    },
+                    {
+                      "uuid": "000000000000017d"
+                    },
+                    {
+                      "uuid": "000000000000017e"
+                    },
+                    {
+                      "uuid": "000000000000017f"
+                    },
+                    {
+                      "uuid": "0000000000000180"
+                    },
+                    {
+                      "uuid": "0000000000000181"
+                    },
+                    {
+                      "uuid": "0000000000000182"
+                    },
+                    {
+                      "uuid": "0000000000000183"
+                    },
+                    {
+                      "uuid": "0000000000000184"
+                    },
+                    {
+                      "uuid": "0000000000000185"
+                    },
+                    {
+                      "uuid": "0000000000000186"
+                    },
+                    {
+                      "uuid": "0000000000000187"
+                    },
+                    {
+                      "uuid": "0000000000000188"
+                    },
+                    {
+                      "uuid": "0000000000000189"
+                    },
+                    {
+                      "uuid": "000000000000018a"
+                    },
+                    {
+                      "uuid": "000000000000018b"
+                    },
+                    {
+                      "uuid": "000000000000018c"
+                    },
+                    {
+                      "uuid": "000000000000018d"
+                    },
+                    {
+                      "uuid": "000000000000018e"
+                    },
+                    {
+                      "uuid": "000000000000018f"
+                    },
+                    {
+                      "uuid": "0000000000000190"
+                    },
+                    {
+                      "uuid": "0000000000000191"
+                    },
+                    {
+                      "uuid": "0000000000000192"
+                    },
+                    {
+                      "uuid": "0000000000000193"
+                    },
+                    {
+                      "uuid": "0000000000000194"
+                    },
+                    {
+                      "uuid": "0000000000000195"
+                    }
                   ]
                 }
               },
               {
                 "type": "AnimationPlayer",
                 "data": {
+                  "enabled": true,
                   "clips": [
                     {
                       "uuid": "anim-0000000000000012",
@@ -5028,8 +6030,9 @@
               {
                 "type": "HumanModelCollider",
                 "data": {
+                  "display_name": "",
                   "enabled": true,
-                  "scale": 1.0,
+                  "scale": 1,
                   "overlap_radius": 0.2
                 }
               }
@@ -5067,6 +6070,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "3321865b-7128-4be9-a189-1bfa1a7d3950",
                         "name": "cargo_pants"
@@ -5115,6 +6119,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "483ca9ae-2652-4279-9fd4-ea972e1550b3",
                         "name": "collier_02"
@@ -5163,6 +6168,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "0ec8c3a4-0671-4465-94d9-4a757e8b30dd",
                         "name": "combatboots"
@@ -5211,6 +6217,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "c23ac6ac-b8b7-4035-ad28-892f2f75ab79",
                         "name": "eyebrow001"
@@ -5259,6 +6266,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "c9ef5c24-5cb5-4ace-8cf0-5add93fcfd96",
                         "name": "eyelashes01"
@@ -5307,6 +6315,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "3118b894-2c4d-4707-9e42-aafb98a80db5",
                         "name": "Glactic_Warrior_02"
@@ -5355,6 +6364,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "d1e48e1e-9830-4421-9a96-446ce79dbbf8",
                         "name": "harvey_vestv1"
@@ -5403,6 +6413,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "a151a0b2-3d17-4e5d-99ec-c68cfec09fad",
                         "name": "jade_mask"
@@ -5451,6 +6462,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "f6eeb63f-65ff-4b9d-aa0e-039b0c7be860",
                         "name": "jammers3"
@@ -5499,6 +6511,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "a3a37dfe-e077-481e-b9bc-2df1aaeb401c",
                         "name": "low-poly"
@@ -5547,6 +6560,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "e81a0a09-a136-4440-975c-42e01ab22aaf",
                         "name": "male_muscle_13290.003"
@@ -5595,6 +6609,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "9425c9e1-a1fc-45f1-a6a3-253d9aa7ddb6",
                         "name": "male_muscle_13290.006"
@@ -5643,6 +6658,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "6aee3579-4c5c-4472-87ea-f25c6251a0a2",
                         "name": "MC-BodySuit-2021"
@@ -5691,6 +6707,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "4e55110b-d990-4e4b-98a0-4542b47d10b7",
                         "name": "mens_cargo_short1j"
@@ -5739,6 +6756,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "be4cd469-1341-43e7-83ac-5ee406bd5899",
                         "name": "mens_tanks_elv1f"
@@ -5749,7 +6767,57 @@
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": true
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_diffuse_mul": 3.1414999961853027,
+                            "u_color": [
+                              0.5503318905830383,
+                              0.018661784008145332,
+                              0.018661784008145332,
+                              1
+                            ]
+                          },
+                          {
+                            "u_color": [
+                              0.5503318905830383,
+                              0.018661784008145332,
+                              0.018661784008145332,
+                              1
+                            ],
+                            "u_metallic": 0,
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0,
+                            "u_diffuse_mul": 3.1414999961853027,
+                            "u_emission_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ],
+                            "u_emission_intensity": 0,
+                            "u_normal_strength": 1
+                          }
+                        ],
+                        "phases_textures": [
+                          {},
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "5fb7972ad02ddfad",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "07151644d3bb92c7",
+                              "name": "__normal_1x1__",
+                              "type": "path",
+                              "path": "__normal_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -5787,6 +6855,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "3db2ea62-9b16-44d0-9b9f-34e49dbc8a63",
                         "name": "mma_gloves"
@@ -5835,6 +6904,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "ba9eeaba-ce2f-4373-b0f8-40f9910c2cc9",
                         "name": "Monks_Hood"
@@ -5883,6 +6953,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "4661d9bc-2fc5-4836-9f85-5082f3672a1b",
                         "name": "sneakers"
@@ -5931,6 +7002,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "fbaaddde-03c3-4415-bb4f-a8730007d06f",
                         "name": "spiky"
@@ -5979,6 +7051,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "cb893db5-a28a-4662-ae83-c278afc05dae",
                         "name": "Vietnam_Military_Jacket"
@@ -6087,12 +7160,13 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.06,
@@ -6223,15 +7297,16 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Sphere",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.21100000000000002,
-                                              "capsule_height": 1.0,
+                                              "capsule_height": 1,
                                               "capsule_radius": 0.25
                                             }
                                           }
@@ -6366,12 +7441,13 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.03,
@@ -6412,12 +7488,13 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.03,
@@ -6458,12 +7535,13 @@
                                                   {
                                                     "type": "ColliderComponent",
                                                     "data": {
+                                                      "display_name": "",
                                                       "enabled": true,
                                                       "collider_type": "Capsule",
                                                       "box_size": [
-                                                        1.0,
-                                                        1.0,
-                                                        1.0
+                                                        1,
+                                                        1,
+                                                        1
                                                       ],
                                                       "sphere_radius": 0.5,
                                                       "capsule_height": 0.03,
@@ -7337,12 +8415,13 @@
                                           {
                                             "type": "ColliderComponent",
                                             "data": {
+                                              "display_name": "",
                                               "enabled": true,
                                               "collider_type": "Capsule",
                                               "box_size": [
-                                                1.0,
-                                                1.0,
-                                                1.0
+                                                1,
+                                                1,
+                                                1
                                               ],
                                               "sphere_radius": 0.5,
                                               "capsule_height": 0.03,
@@ -7383,12 +8462,13 @@
                                               {
                                                 "type": "ColliderComponent",
                                                 "data": {
+                                                  "display_name": "",
                                                   "enabled": true,
                                                   "collider_type": "Capsule",
                                                   "box_size": [
-                                                    1.0,
-                                                    1.0,
-                                                    1.0
+                                                    1,
+                                                    1,
+                                                    1
                                                   ],
                                                   "sphere_radius": 0.5,
                                                   "capsule_height": 0.03,
@@ -7429,12 +8509,13 @@
                                                   {
                                                     "type": "ColliderComponent",
                                                     "data": {
+                                                      "display_name": "",
                                                       "enabled": true,
                                                       "collider_type": "Capsule",
                                                       "box_size": [
-                                                        1.0,
-                                                        1.0,
-                                                        1.0
+                                                        1,
+                                                        1,
+                                                        1
                                                       ],
                                                       "sphere_radius": 0.5,
                                                       "capsule_height": 0.03,
@@ -8284,12 +9365,13 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.05,
@@ -8330,12 +9412,13 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.05,
@@ -8376,12 +9459,13 @@
                                   {
                                     "type": "ColliderComponent",
                                     "data": {
+                                      "display_name": "",
                                       "enabled": true,
                                       "collider_type": "Capsule",
                                       "box_size": [
-                                        1.0,
-                                        1.0,
-                                        1.0
+                                        1,
+                                        1,
+                                        1
                                       ],
                                       "sphere_radius": 0.5,
                                       "capsule_height": 0.03,
@@ -8523,12 +9607,13 @@
                           {
                             "type": "ColliderComponent",
                             "data": {
+                              "display_name": "",
                               "enabled": true,
                               "collider_type": "Capsule",
                               "box_size": [
-                                1.0,
-                                1.0,
-                                1.0
+                                1,
+                                1,
+                                1
                               ],
                               "sphere_radius": 0.5,
                               "capsule_height": 0.05,
@@ -8569,12 +9654,13 @@
                               {
                                 "type": "ColliderComponent",
                                 "data": {
+                                  "display_name": "",
                                   "enabled": true,
                                   "collider_type": "Capsule",
                                   "box_size": [
-                                    1.0,
-                                    1.0,
-                                    1.0
+                                    1,
+                                    1,
+                                    1
                                   ],
                                   "sphere_radius": 0.5,
                                   "capsule_height": 0.05,
@@ -8615,12 +9701,13 @@
                                   {
                                     "type": "ColliderComponent",
                                     "data": {
+                                      "display_name": "",
                                       "enabled": true,
                                       "collider_type": "Capsule",
                                       "box_size": [
-                                        1.0,
-                                        1.0,
-                                        1.0
+                                        1,
+                                        1,
+                                        1
                                       ],
                                       "sphere_radius": 0.5,
                                       "capsule_height": 0.03,
@@ -8801,6 +9888,7 @@
           {
             "type": "ActionServerComponent",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -8839,6 +9927,7 @@
           {
             "type": "VisualEffectsController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -8857,8 +9946,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            3.497128963470459,
-            -2.206026315689087,
+            -2.174358367919922,
+            6.508645057678223,
             0.9935950040817261
           ],
           "rotation": [
@@ -8877,6 +9966,7 @@
           {
             "type": "MeshRenderer",
             "data": {
+              "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
                 "name": "Cube"
@@ -8905,9 +9995,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            -2.61989164352417,
-            -3.390488624572754,
-            1.3829948902130127
+            -2.7872071266174316,
+            -5.888918876647949,
+            1.3827593326568604
           ],
           "rotation": [
             4.701771467807703e-05,
@@ -8925,6 +10015,7 @@
           {
             "type": "MeshRenderer",
             "data": {
+              "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
                 "name": "Cube"
@@ -8935,7 +10026,58 @@
                 "type": "uuid"
               },
               "cast_shadow": true,
-              "_override_material": true
+              "_override_material": true,
+              "_overridden_material_data": {
+                "phases_uniforms": [
+                  {
+                    "u_diffuse_mul": 3.1414999961853027,
+                    "u_emission_intensity": 2,
+                    "u_emission_color": [
+                      0.7583886384963989,
+                      0.12339971214532852,
+                      0.12339971214532852,
+                      1
+                    ]
+                  },
+                  {
+                    "u_color": [
+                      1,
+                      1,
+                      1,
+                      1
+                    ],
+                    "u_metallic": 0,
+                    "u_roughness": 0.5,
+                    "u_subsurface": 0,
+                    "u_diffuse_mul": 3.1414999961853027,
+                    "u_emission_color": [
+                      0.7583886384963989,
+                      0.12339971214532852,
+                      0.12339971214532852,
+                      1
+                    ],
+                    "u_emission_intensity": 2,
+                    "u_normal_strength": 1
+                  }
+                ],
+                "phases_textures": [
+                  {},
+                  {
+                    "u_albedo_texture": {
+                      "uuid": "5fb7972ad02ddfad",
+                      "name": "__white_1x1__",
+                      "type": "path",
+                      "path": "__white_1x1__"
+                    },
+                    "u_normal_texture": {
+                      "uuid": "07151644d3bb92c7",
+                      "name": "__normal_1x1__",
+                      "type": "path",
+                      "path": "__normal_1x1__"
+                    }
+                  }
+                ]
+              }
             }
           }
         ],
@@ -8953,7 +10095,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            2.295976400375366,
+            -6.676997184753418,
             -1.7307894229888916,
             1.1729645729064941
           ],
@@ -8973,6 +10115,7 @@
           {
             "type": "MeshRenderer",
             "data": {
+              "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
                 "name": "Cube"
@@ -9021,6 +10164,7 @@
           {
             "type": "ObjectController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "selectable": false,
               "fov_target": true
@@ -9029,6 +10173,7 @@
           {
             "type": "AnimationController",
             "data": {
+              "display_name": "",
               "enabled": true
             }
           }
@@ -9066,83 +10211,217 @@
               {
                 "type": "SkeletonController",
                 "data": {
+                  "enabled": true,
                   "skeleton": {
                     "uuid": "9a358a86-c955-4b88-aba1-ded136579b83",
                     "name": "CorpGuard_skeleton"
                   },
                   "bone_entities": [
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {}
+                    {
+                      "uuid": "27bb2cff-04ab-4edf-a259-a132382bb1b1"
+                    },
+                    {
+                      "uuid": "e8cbfe7f-a17d-4014-84b0-e87905d289bb"
+                    },
+                    {
+                      "uuid": "1569b79a-7e60-4f81-8e9e-f7bbf7dec7e3"
+                    },
+                    {
+                      "uuid": "f6bae89c-b308-4c83-a86a-ff62c621eca7"
+                    },
+                    {
+                      "uuid": "14226314-9a6c-49b7-bd98-701d6bb2b9c3"
+                    },
+                    {
+                      "uuid": "394737cd-cbbf-46fa-b5ed-fcd81fe52e34"
+                    },
+                    {
+                      "uuid": "6e0eb6d5-2178-446a-b86f-93c05c508e38"
+                    },
+                    {
+                      "uuid": "fb9b7279-b34a-4562-b161-6742dac7584c"
+                    },
+                    {
+                      "uuid": "69543a45-da2b-4980-884a-e80c925f4e2c"
+                    },
+                    {
+                      "uuid": "82dd2107-3150-41a1-a5ee-c90abd6e71d6"
+                    },
+                    {
+                      "uuid": "4f1d77cc-8f2e-4fe3-b351-f86ad4880186"
+                    },
+                    {
+                      "uuid": "1836cde1-0e79-43a1-99ba-a897918381b9"
+                    },
+                    {
+                      "uuid": "6690f4d3-0628-4e79-81ae-4a40eb73b02e"
+                    },
+                    {
+                      "uuid": "03cefd6e-116f-4248-95f0-8f511dad91df"
+                    },
+                    {
+                      "uuid": "f7d639c0-08c2-4f2c-bc86-67f7a0c7630b"
+                    },
+                    {
+                      "uuid": "8bcc3916-04d7-4680-a0b6-03a02b95a72f"
+                    },
+                    {
+                      "uuid": "4916cefd-5da4-49e2-aa04-d5f8b92c2007"
+                    },
+                    {
+                      "uuid": "fa590941-ad5c-4830-8334-8eec81e2ce91"
+                    },
+                    {
+                      "uuid": "a6793cf0-cd75-4485-954d-1eaafe4cf109"
+                    },
+                    {
+                      "uuid": "969cf657-d6a4-4f40-8794-b79de83d0bed"
+                    },
+                    {
+                      "uuid": "54270a03-20dd-49fc-838c-c97439ccddfa"
+                    },
+                    {
+                      "uuid": "a9be87c0-4557-4397-b1fb-061b284e682b"
+                    },
+                    {
+                      "uuid": "9c47c09d-1d86-4e2f-bce7-5fc03057ecc0"
+                    },
+                    {
+                      "uuid": "79e645e5-c31e-4c1f-8c93-04cf09bcec34"
+                    },
+                    {
+                      "uuid": "c601e625-8e15-4e06-8a86-67f5ac932744"
+                    },
+                    {
+                      "uuid": "4f3db62c-17a1-43bf-9f84-381f53309fee"
+                    },
+                    {
+                      "uuid": "1a7f0505-3935-4e69-b492-697a7528956e"
+                    },
+                    {
+                      "uuid": "72eb64fe-0b87-4f5f-b1f6-2b74cd518a42"
+                    },
+                    {
+                      "uuid": "e0e6a4a4-e68c-4840-8133-eeb953bf3f27"
+                    },
+                    {
+                      "uuid": "2c17d7c4-6578-49e7-8b10-633741c8b418"
+                    },
+                    {
+                      "uuid": "5f614c6a-5fc2-4373-ba90-7d190e002b55"
+                    },
+                    {
+                      "uuid": "c3e995e4-ee1e-4840-b5fa-6ace753c2659"
+                    },
+                    {
+                      "uuid": "e01584bf-6b80-47ea-a7d2-9e026d9263e1"
+                    },
+                    {
+                      "uuid": "808a28c8-6e1e-4450-b7dd-c8a33156e6eb"
+                    },
+                    {
+                      "uuid": "ab2dd40b-d16e-4d8e-9020-d9dc3a1eefb4"
+                    },
+                    {
+                      "uuid": "ab2218d6-ad23-4500-99e1-031c3fbefeb8"
+                    },
+                    {
+                      "uuid": "08cfc4b6-5a33-4c45-bca3-b7103b4bd5b5"
+                    },
+                    {
+                      "uuid": "8cd8eb78-72d3-4439-a22d-a5a3661b75a7"
+                    },
+                    {
+                      "uuid": "3f24dd28-ce77-4df8-b483-bf0439c21fcb"
+                    },
+                    {
+                      "uuid": "6ad52b15-86d6-48e1-9cea-369f6d15549f"
+                    },
+                    {
+                      "uuid": "9753a6ca-f5e4-4690-81e7-7a21fb2ad5e0"
+                    },
+                    {
+                      "uuid": "8f415f14-b2d5-49e1-8d3f-3c781d55a28a"
+                    },
+                    {
+                      "uuid": "5984a802-9620-41f3-a9f7-6ecf4b2cfddb"
+                    },
+                    {
+                      "uuid": "414310df-bc78-4022-bd55-41953e83674f"
+                    },
+                    {
+                      "uuid": "cee16939-7bd3-460b-b4dd-2577ef70a1a3"
+                    },
+                    {
+                      "uuid": "c903c5dd-6c66-448b-b653-cc609847acd6"
+                    },
+                    {
+                      "uuid": "3b8f73d8-6aa6-4bbe-acbe-277fb09dc822"
+                    },
+                    {
+                      "uuid": "6faa0676-8c48-4d03-bf62-6640f2477807"
+                    },
+                    {
+                      "uuid": "ebb94e45-2c40-4af6-97c5-fa51565b7b3f"
+                    },
+                    {
+                      "uuid": "7a605c12-e2c5-4474-9faa-959d152ed3ca"
+                    },
+                    {
+                      "uuid": "258580ea-894b-4a9a-bf17-2853a954c1e2"
+                    },
+                    {
+                      "uuid": "344c4d19-3886-40c5-9f52-e4e0caa2c507"
+                    },
+                    {
+                      "uuid": "301b932e-486c-4492-aadf-39ef712da2f3"
+                    },
+                    {
+                      "uuid": "e39763f3-5432-49de-8783-d86fd74b57a6"
+                    },
+                    {
+                      "uuid": "55a40f78-334d-4fc6-a043-b38c7591265b"
+                    },
+                    {
+                      "uuid": "d0682609-fe72-47a7-9f64-fbb304d3908f"
+                    },
+                    {
+                      "uuid": "dc487a32-1096-431e-ab6b-20917e265600"
+                    },
+                    {
+                      "uuid": "43e81dc1-00ee-4308-ae1e-d4141bdf79aa"
+                    },
+                    {
+                      "uuid": "0d2e5ec3-a8ef-4982-9280-0768549439cb"
+                    },
+                    {
+                      "uuid": "833fd084-214d-44e9-bed8-ebfbe21a18e0"
+                    },
+                    {
+                      "uuid": "2f7f4293-c3fe-47da-9caa-f178bf84d7a4"
+                    },
+                    {
+                      "uuid": "da94c7bb-2838-4332-95bb-c9ce23297717"
+                    },
+                    {
+                      "uuid": "8c62af0a-296e-470e-9210-6529879e3974"
+                    },
+                    {
+                      "uuid": "8e0f8bcc-de56-46cb-bcef-f5f6a4b79e38"
+                    },
+                    {
+                      "uuid": "6a002c90-a1e5-4106-bcdb-ebe373896621"
+                    },
+                    {
+                      "uuid": "e8daa321-0b50-489c-bb9b-f7dc2e6a932c"
+                    }
                   ]
                 }
               },
               {
                 "type": "AnimationPlayer",
                 "data": {
+                  "enabled": true,
                   "clips": [
                     {
                       "uuid": "anim-0000000000000047",
@@ -9228,13 +10507,14 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "67036e16-24cd-4bfb-ac54-d44adf5143b4",
                         "name": "corpguard.001"
                       },
                       "material": {
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial",
+                        "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b",
+                        "name": "AdvancedSkin",
                         "type": "uuid"
                       },
                       "cast_shadow": true,
@@ -9276,6 +10556,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "7621e4b3-43d6-4074-8e9e-844ef2d9f020",
                         "name": "eyebrow004.001"
@@ -9324,6 +10605,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "f03b45cb-da6d-4489-944e-58e4bee36f6e",
                         "name": "low-poly.002"
@@ -9372,6 +10654,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "884dc1a9-5cac-430d-bb14-ef5e22764fb1",
                         "name": "m_trousers_02.001"
@@ -9420,6 +10703,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "3cd4ac37-37e5-4fe3-95e8-812377ea1a3a",
                         "name": "shoes03.001"
@@ -9468,17 +10752,68 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "b64efbd6-2d9b-4991-8bd0-42e14b5d3dee",
                         "name": "short02.001"
                       },
                       "material": {
-                        "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4",
-                        "name": "StandartMaterial",
+                        "uuid": "00000000-0001-0000-0001-000000000002",
+                        "name": "CookTorrancePBR",
                         "type": "uuid"
                       },
                       "cast_shadow": true,
-                      "_override_material": false
+                      "_override_material": true,
+                      "_overridden_material_data": {
+                        "phases_uniforms": [
+                          {
+                            "u_color": [
+                              0.2550393044948578,
+                              0.14610514044761658,
+                              0.14610514044761658,
+                              1
+                            ],
+                            "u_diffuse_mul": 3.140000104904175
+                          },
+                          {
+                            "u_color": [
+                              0.2550393044948578,
+                              0.14610514044761658,
+                              0.14610514044761658,
+                              1
+                            ],
+                            "u_metallic": 0,
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0,
+                            "u_diffuse_mul": 3.140000104904175,
+                            "u_emission_color": [
+                              0,
+                              0,
+                              0,
+                              1
+                            ],
+                            "u_emission_intensity": 0,
+                            "u_normal_strength": 1
+                          }
+                        ],
+                        "phases_textures": [
+                          {},
+                          {
+                            "u_albedo_texture": {
+                              "uuid": "5fb7972ad02ddfad",
+                              "name": "__white_1x1__",
+                              "type": "path",
+                              "path": "__white_1x1__"
+                            },
+                            "u_normal_texture": {
+                              "uuid": "07151644d3bb92c7",
+                              "name": "__normal_1x1__",
+                              "type": "path",
+                              "path": "__normal_1x1__"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 ],
@@ -9516,6 +10851,7 @@
                   {
                     "type": "SkinnedMeshRenderer",
                     "data": {
+                      "enabled": true,
                       "mesh": {
                         "uuid": "d692788f-efba-4710-8556-216fc9c00fa3",
                         "name": "uniform_jacket.001"
@@ -11667,12 +13003,62 @@
           {
             "type": "CameraComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
               "fov_deg": 119.99999999999999,
-              "ortho_size": 5.0,
+              "ortho_size": 5,
               "near": 0.1,
-              "far": 100.0
+              "far": 100
+            }
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "ef1edf1c-968b-41a1-9a83-3ddf385f8b8f",
+        "name": "entity7",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            16.159576416015625,
+            8.302141189575195,
+            1.4596285820007324
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube"
+              },
+              "material": {
+                "uuid": "00000000-0001-0000-0001-000000000003",
+                "name": "NormalizedPBR",
+                "type": "uuid"
+              },
+              "cast_shadow": true,
+              "_override_material": false
             }
           }
         ],
@@ -11747,45 +13133,48 @@
   "editor": {
     "camera": {
       "position": [
-        2.9080896377563477,
-        -2.285170555114746,
-        2.8080544471740723
+        21.458467483520508,
+        6.694064140319824,
+        8.496926307678223
       ],
       "rotation": [
-        -0.2807740492643869,
-        -0.16803981735144155,
-        0.4852703091880192,
-        0.810827527939659
+        -0.27526781567885233,
+        -0.22691327784980023,
+        0.5942271198116046,
+        0.7208551338981068
       ],
-      "radius": 5.0,
+      "radius": 24.5,
       "editor_entities": {
         "camera": [
           {
             "type": "PerspectiveCameraComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "projection_type": "perspective",
-              "fov_deg": 80.0,
-              "ortho_size": 5.0,
+              "fov_deg": 80,
+              "ortho_size": 5,
               "near": 0.1,
-              "far": 50.0
+              "far": 50
             }
           },
           {
             "type": "OrbitCameraController",
             "data": {
+              "display_name": "",
               "enabled": true,
-              "radius": 5.0,
-              "min_radius": 1.0,
-              "max_radius": 100.0
+              "radius": 24.5,
+              "min_radius": 1,
+              "max_radius": 100
             }
           },
           {
             "type": "ViewportHintComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "pipeline_name": "(Editor)",
-              "layer_mask": "0xfb"
+              "layer_mask": "0xff"
             }
           }
         ],
@@ -11793,6 +13182,7 @@
           {
             "type": "UIComponent",
             "data": {
+              "display_name": "",
               "enabled": true,
               "ui_layout": null
             }
@@ -11800,6 +13190,7 @@
           {
             "type": "EditorCameraUIController",
             "data": {
+              "display_name": "",
               "enabled": true,
               "colliders_enabled": false,
               "wireframe_enabled": false,
@@ -11809,15 +13200,13 @@
         ]
       }
     },
-    "selected_entity": "0000000000000140",
+    "selected_entity": "0000000000000007",
     "expanded_entities": [
-      "0000000000000007",
-      "000000000000000a",
-      "00000000000000dd",
       "814ba329-db24-48fe-b931-fe68ab904998",
-      "0000000000000131",
       "0000000000000077",
-      "0000000000000130"
+      "0000000000000131",
+      "000000000000000a",
+      "0000000000000007"
     ]
   },
   "resources": {

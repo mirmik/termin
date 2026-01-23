@@ -2,8 +2,8 @@
 
 #include <string>
 #include <nanobind/nanobind.h>
-#include "../../trent/trent.h"
 #include "../../core_c/include/tc_scene.h"
+#include "../../core_c/include/tc_inspect.h"
 
 namespace nb = nanobind;
 
@@ -58,7 +58,29 @@ public:
         return nb::cast<int>(asset.attr("version"));
     }
 
-    // Serialize for scene saving.
+    // Serialize for kind registry (returns tc_value)
+    tc_value serialize_to_value() const {
+        tc_value d = tc_value_dict_new();
+        if (asset.is_none()) {
+            tc_value_dict_set(&d, "type", tc_value_string("none"));
+            return d;
+        }
+        std::string uuid_str = nb::cast<std::string>(asset.attr("uuid"));
+        std::string name_str = nb::cast<std::string>(asset.attr("name"));
+        tc_value_dict_set(&d, "uuid", tc_value_string(uuid_str.c_str()));
+        tc_value_dict_set(&d, "name", tc_value_string(name_str.c_str()));
+        nb::object source_path = asset.attr("source_path");
+        if (!source_path.is_none()) {
+            tc_value_dict_set(&d, "type", tc_value_string("path"));
+            std::string path_str = nb::cast<std::string>(nb::str(source_path.attr("as_posix")()));
+            tc_value_dict_set(&d, "path", tc_value_string(path_str.c_str()));
+        } else {
+            tc_value_dict_set(&d, "type", tc_value_string("named"));
+        }
+        return d;
+    }
+
+    // Serialize for scene saving (returns nanobind dict) - for Python bindings
     nb::dict serialize() const {
         if (asset.is_none()) {
             nb::dict d;
@@ -82,7 +104,7 @@ public:
     static VoxelGridHandle deserialize(const nb::dict& data);
 
     // Deserialize inplace from scene data.
-    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
+    void deserialize_from(const tc_value* data, tc_scene* scene = nullptr);
 };
 
 } // namespace termin

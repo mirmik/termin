@@ -55,9 +55,9 @@ static void py_vtable_on_removed_from_entity(tc_component* c) {
     }
 }
 
-static void py_vtable_on_added(tc_component* c, void* scene) {
+static void py_vtable_on_added(tc_component* c) {
     if (g_py_callbacks.on_added && c->wrapper) {
-        g_py_callbacks.on_added(c->wrapper, scene);
+        g_py_callbacks.on_added(c->wrapper);
     }
 }
 

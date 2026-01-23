@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
+    from termin.visualization.core.entity import Entity
 
 
 class DisplayItem(QStandardItem):
@@ -45,6 +46,15 @@ class ViewportItem(QStandardItem):
         self.setEditable(False)
 
 
+class EntityItem(QStandardItem):
+    """Tree item representing an Entity (from viewport's internal_entities)."""
+
+    def __init__(self, entity: "Entity", name: str):
+        super().__init__(name)
+        self.entity = entity
+        self.setEditable(False)
+
+
 class ViewportListWidget(QWidget):
     """
     Widget displaying Displays and their Viewports in a tree structure.
@@ -60,6 +70,7 @@ class ViewportListWidget(QWidget):
 
     display_selected = pyqtSignal(object)  # Display or None
     viewport_selected = pyqtSignal(object)  # Viewport or None
+    entity_selected = pyqtSignal(object)  # Entity or None (from internal_entities)
     display_add_requested = pyqtSignal()
     viewport_add_requested = pyqtSignal(object)  # Display
     display_remove_requested = pyqtSignal(object)  # Display
@@ -175,11 +186,27 @@ class ViewportListWidget(QWidget):
                         camera_name = f"Camera {i}"
 
                 viewport_item = ViewportItem(viewport, f"{vp_name} ({camera_name})")
+
+                # Add internal_entities hierarchy as children of viewport
+                if viewport.internal_entities is not None:
+                    self._add_entity_hierarchy(viewport_item, viewport.internal_entities)
+
                 display_item.appendRow(viewport_item)
 
             self._model.appendRow(display_item)
 
         self._tree.expandAll()
+
+    def _add_entity_hierarchy(self, parent_item: QStandardItem, entity: "Entity") -> None:
+        """Recursively add entity and its children to the tree."""
+        entity_name = entity.name or f"Entity ({entity.uuid[:8]})"
+        entity_item = EntityItem(entity, entity_name)
+        parent_item.appendRow(entity_item)
+
+        # Add children
+        for child_tf in entity.transform.children:
+            if child_tf.entity is not None:
+                self._add_entity_hierarchy(entity_item, child_tf.entity)
 
     def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
         """Handle selection change in tree."""
@@ -187,22 +214,30 @@ class ViewportListWidget(QWidget):
             self._add_viewport_btn.setEnabled(False)
             self.display_selected.emit(None)
             self.viewport_selected.emit(None)
+            self.entity_selected.emit(None)
             return
 
         item = self._model.itemFromIndex(current)
 
-        if isinstance(item, ViewportItem):
+        if isinstance(item, EntityItem):
+            self._add_viewport_btn.setEnabled(False)
+            self.entity_selected.emit(item.entity)
+            # Don't emit other signals - entity takes priority
+        elif isinstance(item, ViewportItem):
             self._add_viewport_btn.setEnabled(True)
             self.viewport_selected.emit(item.viewport)
+            self.entity_selected.emit(None)
             # Don't emit display_selected here - it would override viewport inspector
         elif isinstance(item, DisplayItem):
             self._add_viewport_btn.setEnabled(True)
             self.display_selected.emit(item.display)
             self.viewport_selected.emit(None)
+            self.entity_selected.emit(None)
         else:
             self._add_viewport_btn.setEnabled(False)
             self.display_selected.emit(None)
             self.viewport_selected.emit(None)
+            self.entity_selected.emit(None)
 
     def _on_add_display_clicked(self) -> None:
         """Handle add display button click."""

@@ -270,7 +270,6 @@ def _apply_texture_defaults(phase, shader_phase, rm):
         tc_tex = tex_handle.get()
         if tc_tex is not None:
             phase.set_texture(name, tc_tex)
-            log.info(f"[MaterialAsset] Set default texture '{name}' -> {tc_tex.uuid}")
         else:
             log.warn(f"[MaterialAsset] Failed to get default texture for '{name}'")
 

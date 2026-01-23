@@ -484,6 +484,7 @@ class RenderEngine:
                 rect=(0, 0, pw, ph),
                 scene=scene,
                 camera=view.camera,
+                viewport=view.viewport,
                 context_key=context_key,
                 lights=lights,
                 canvas=view.canvas,

@@ -1,12 +1,15 @@
-#include "component_registry.hpp"
+#include "component_registry_python.hpp"
 #include "component.hpp"
 #include "../../../core_c/include/tc_component.h"
 #include <stdexcept>
 #include <algorithm>
-#include <iostream>
 #include <tc_log.hpp>
 
 namespace termin {
+
+// ============================================================================
+// ComponentRegistry implementation (C++ only)
+// ============================================================================
 
 ComponentRegistry& ComponentRegistry::instance() {
     static ComponentRegistry inst;
@@ -25,48 +28,18 @@ void ComponentRegistry::register_native(const std::string& name, NativeFactory f
     tc_component_registry_register_with_parent(name.c_str(), nullptr, TC_CXX_COMPONENT, parent);
 }
 
-void ComponentRegistry::register_python(const std::string& name, nb::object cls, const char* parent) {
-    auto it = registry_.find(name);
-    if (it != registry_.end() && it->second.kind == TC_CXX_COMPONENT) {
-        // Don't overwrite native components with Python
-        return;
-    }
-
-    ComponentInfo info;
-    info.name = name;
-    info.kind = TC_PYTHON_COMPONENT;
-    info.python_class = std::move(cls);
-
-    registry_[name] = std::move(info);
-
-    // Register in C registry for type hierarchy
-    tc_component_registry_register_with_parent(name.c_str(), nullptr, TC_PYTHON_COMPONENT, parent);
-}
-
 void ComponentRegistry::unregister(const std::string& name) {
-    registry_.erase(name);
-}
-
-nb::object ComponentRegistry::create(const std::string& name) const {
     auto it = registry_.find(name);
-    if (it == registry_.end()) {
-        throw std::runtime_error("Unknown component type: " + name);
-    }
-
-    const auto& info = it->second;
-
-    if (info.kind == TC_CXX_COMPONENT) {
-        // For native components, we need to call the Python class constructor
-        // because nb::cast(CxxComponent*) doesn't know the derived type.
-        // Get the Python class and call its constructor.
-        nb::object cls = get_class(name);
-        if (cls.is_none()) {
-            throw std::runtime_error("Cannot find Python class for native component: " + name);
+    if (it != registry_.end()) {
+        // Release Python class reference if any
+        if (it->second.python_class_ptr) {
+            nb::object* cls = static_cast<nb::object*>(it->second.python_class_ptr);
+            delete cls;
         }
-        return cls();
-    } else {
-        return info.python_class();
+        registry_.erase(it);
     }
+    // Also unregister from C registry
+    tc_component_registry_unregister(name.c_str());
 }
 
 CxxComponent* ComponentRegistry::create_component(const std::string& name) const {
@@ -81,7 +54,6 @@ CxxComponent* ComponentRegistry::create_component(const std::string& name) const
         return info.native_factory();
     } else {
         // For Python components, this method shouldn't be used
-        // Use create() instead and handle Python objects properly
         return nullptr;
     }
 }
@@ -90,17 +62,127 @@ bool ComponentRegistry::has(const std::string& name) const {
     return registry_.count(name) > 0;
 }
 
-const ComponentRegistry::ComponentInfo* ComponentRegistry::get_info(const std::string& name) const {
+bool ComponentRegistry::is_native(const std::string& name) const {
     auto it = registry_.find(name);
-    if (it == registry_.end()) {
-        return nullptr;
-    }
-    return &it->second;
+    if (it == registry_.end()) return false;
+    return it->second.kind == TC_CXX_COMPONENT;
 }
 
-nb::object ComponentRegistry::get_class(const std::string& name) const {
-    auto it = registry_.find(name);
-    if (it == registry_.end()) {
+std::vector<std::string> ComponentRegistry::list_all() const {
+    std::vector<std::string> result;
+    result.reserve(registry_.size());
+    for (const auto& [name, _] : registry_) {
+        result.push_back(name);
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+std::vector<std::string> ComponentRegistry::list_native() const {
+    std::vector<std::string> result;
+    for (const auto& [name, info] : registry_) {
+        if (info.kind == TC_CXX_COMPONENT) {
+            result.push_back(name);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+void ComponentRegistry::clear() {
+    // Release all Python class references
+    for (auto& [name, info] : registry_) {
+        if (info.python_class_ptr) {
+            nb::object* cls = static_cast<nb::object*>(info.python_class_ptr);
+            delete cls;
+            info.python_class_ptr = nullptr;
+        }
+    }
+    registry_.clear();
+}
+
+void ComponentRegistry::set_drawable(const std::string& name, bool is_drawable) {
+    tc_component_registry_set_drawable(name.c_str(), is_drawable);
+}
+
+void ComponentRegistry::set_input_handler(const std::string& name, bool is_input_handler) {
+    tc_component_registry_set_input_handler(name.c_str(), is_input_handler);
+}
+
+// ============================================================================
+// ComponentRegistryPython implementation (Python support)
+// ============================================================================
+
+void ComponentRegistryPython::register_python(const std::string& name, nb::object cls, const char* parent) {
+    auto& registry = ComponentRegistry::instance();
+    auto it = registry.registry_.find(name);
+    if (it != registry.registry_.end() && it->second.kind == TC_CXX_COMPONENT) {
+        // Don't overwrite native components with Python
+        return;
+    }
+
+    ComponentRegistry::ComponentInfo info;
+    info.name = name;
+    info.kind = TC_PYTHON_COMPONENT;
+    info.python_class_ptr = new nb::object(std::move(cls));
+
+    registry.registry_[name] = std::move(info);
+
+    // Register in C registry for type hierarchy
+    tc_component_registry_register_with_parent(name.c_str(), nullptr, TC_PYTHON_COMPONENT, parent);
+}
+
+nb::object ComponentRegistryPython::create(const std::string& name) {
+    auto& registry = ComponentRegistry::instance();
+    auto it = registry.registry_.find(name);
+    if (it == registry.registry_.end()) {
+        throw std::runtime_error("Unknown component type: " + name);
+    }
+
+    const auto& info = it->second;
+
+    if (info.kind == TC_CXX_COMPONENT) {
+        // For native components, we need to call the Python class constructor
+        nb::object cls = get_class(name);
+        if (cls.is_none()) {
+            throw std::runtime_error("Cannot find Python class for native component: " + name);
+        }
+        return cls();
+    } else {
+        nb::object* cls = static_cast<nb::object*>(info.python_class_ptr);
+        return (*cls)();
+    }
+}
+
+tc_component* ComponentRegistryPython::create_tc_component(const std::string& name) {
+    auto& registry = ComponentRegistry::instance();
+    auto it = registry.registry_.find(name);
+    if (it == registry.registry_.end()) {
+        return nullptr;
+    }
+
+    const auto& info = it->second;
+
+    if (info.kind == TC_CXX_COMPONENT) {
+        // For C++ components, create directly without Python wrapper
+        CxxComponent* comp = info.native_factory();
+        return comp ? comp->c_component() : nullptr;
+    } else {
+        // For Python components, create Python object and extract tc_component*
+        nb::object* cls = static_cast<nb::object*>(info.python_class_ptr);
+        nb::object py_obj = (*cls)();
+        if (nb::hasattr(py_obj, "c_component_ptr")) {
+            uintptr_t ptr = nb::cast<uintptr_t>(py_obj.attr("c_component_ptr")());
+            return reinterpret_cast<tc_component*>(ptr);
+        }
+        return nullptr;
+    }
+}
+
+nb::object ComponentRegistryPython::get_class(const std::string& name) {
+    auto& registry = ComponentRegistry::instance();
+    auto it = registry.registry_.find(name);
+    if (it == registry.registry_.end()) {
         return nb::none();
     }
 
@@ -143,52 +225,30 @@ nb::object ComponentRegistry::get_class(const std::string& name) const {
         }
         return nb::none();
     } else {
-        return info.python_class;
+        nb::object* cls = static_cast<nb::object*>(info.python_class_ptr);
+        return *cls;
     }
 }
 
-std::vector<std::string> ComponentRegistry::list_all() const {
-    std::vector<std::string> result;
-    result.reserve(registry_.size());
-    for (const auto& [name, _] : registry_) {
-        result.push_back(name);
+const ComponentRegistry::ComponentInfo* ComponentRegistryPython::get_info(const std::string& name) {
+    auto& registry = ComponentRegistry::instance();
+    auto it = registry.registry_.find(name);
+    if (it == registry.registry_.end()) {
+        return nullptr;
     }
-    std::sort(result.begin(), result.end());
-    return result;
+    return &it->second;
 }
 
-std::vector<std::string> ComponentRegistry::list_native() const {
+std::vector<std::string> ComponentRegistryPython::list_python() {
+    auto& registry = ComponentRegistry::instance();
     std::vector<std::string> result;
-    for (const auto& [name, info] : registry_) {
-        if (info.kind == TC_CXX_COMPONENT) {
-            result.push_back(name);
-        }
-    }
-    std::sort(result.begin(), result.end());
-    return result;
-}
-
-std::vector<std::string> ComponentRegistry::list_python() const {
-    std::vector<std::string> result;
-    for (const auto& [name, info] : registry_) {
+    for (const auto& [name, info] : registry.registry_) {
         if (info.kind == TC_PYTHON_COMPONENT) {
             result.push_back(name);
         }
     }
     std::sort(result.begin(), result.end());
     return result;
-}
-
-void ComponentRegistry::clear() {
-    registry_.clear();
-}
-
-void ComponentRegistry::set_drawable(const std::string& name, bool is_drawable) {
-    tc_component_registry_set_drawable(name.c_str(), is_drawable);
-}
-
-void ComponentRegistry::set_input_handler(const std::string& name, bool is_input_handler) {
-    tc_component_registry_set_input_handler(name.c_str(), is_input_handler);
 }
 
 } // namespace termin

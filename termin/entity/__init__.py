@@ -14,6 +14,8 @@ from termin.entity._entity_native import (
     ComponentRegistry,
     EntityRegistry,
     CXXRotatorComponent,
+    TcComponentRef,
+    TcSceneRef,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     "ComponentRegistry",
     "EntityRegistry",
     "CXXRotatorComponent",
+    "TcComponentRef",
+    "TcSceneRef",
 ]

@@ -141,6 +141,27 @@ class EditorDisplayInputManager:
         elif event_name == "on_key":
             scene.dispatch_key_editor(event)
 
+    def _dispatch_to_internal_entities(self, viewport: "Viewport", event_name: str, event) -> None:
+        """Диспатчит событие в InputComponent'ы из viewport.internal_entities."""
+        internal_root = viewport.internal_entities
+        if internal_root is None:
+            return
+        self._dispatch_to_entity_hierarchy(internal_root, event_name, event)
+
+    def _dispatch_to_entity_hierarchy(self, entity: "Entity", event_name: str, event) -> None:
+        """Рекурсивно диспатчит событие в InputComponent'ы entity и его детей."""
+        from termin.visualization.core.python_component import InputComponent
+
+        for comp in entity.components:
+            if isinstance(comp, InputComponent) and comp.enabled:
+                handler = getattr(comp, event_name, None)
+                if handler:
+                    handler(event)
+
+        for child_tf in entity.transform.children:
+            if child_tf.entity is not None:
+                self._dispatch_to_entity_hierarchy(child_tf.entity, event_name, event)
+
     def _request_update(self) -> None:
         """Запрашивает перерисовку."""
         if self._on_request_update is not None:
@@ -410,6 +431,7 @@ class EditorDisplayInputManager:
                 viewport=viewport, x=x, y=y,
                 button=button, action=action, mods=mods
             )
+            self._dispatch_to_internal_entities(viewport, "on_mouse_button", event)
             self._dispatch_to_editor_components(viewport, "on_mouse_button", event)
             self._dispatch_to_camera(viewport, "on_mouse_button", event)
 
@@ -460,6 +482,7 @@ class EditorDisplayInputManager:
         # Dispatch to editor components and camera
         if viewport is not None:
             event = MouseMoveEvent(viewport=viewport, x=x, y=y, dx=dx, dy=dy)
+            self._dispatch_to_internal_entities(viewport, "on_mouse_move", event)
             self._dispatch_to_editor_components(viewport, "on_mouse_move", event)
             self._dispatch_to_camera(viewport, "on_mouse_move", event)
 
@@ -483,6 +506,7 @@ class EditorDisplayInputManager:
                 xoffset=xoffset, yoffset=yoffset,
                 mods=actual_mods
             )
+            self._dispatch_to_internal_entities(viewport, "on_scroll", event)
             self._dispatch_to_editor_components(viewport, "on_scroll", event)
             self._dispatch_to_camera(viewport, "on_scroll", event)
 
@@ -506,6 +530,7 @@ class EditorDisplayInputManager:
                 viewport=viewport,
                 key=key, scancode=scancode, action=action, mods=mods
             )
+            self._dispatch_to_internal_entities(viewport, "on_key", event)
             self._dispatch_to_editor_components(viewport, "on_key", event)
             self._dispatch_to_camera(viewport, "on_key", event)
 

@@ -90,6 +90,8 @@ class EditorProjectController:
             # Загружаем настройки навигации для проекта
             from termin.navmesh.settings import NavigationSettingsManager
             NavigationSettingsManager.instance().set_project_path(project_root)
+            # Загружаем C++ модули
+            self._load_project_modules(project_root)
         else:
             self._project_name = None
         self._update_window_title()
@@ -173,8 +175,35 @@ class EditorProjectController:
 
         self._log_message(f"Opened project: {project_file}")
 
+        # Загружаем C++ модули
+        self._load_project_modules(project_root)
+
         # Сбрасываем сцену и пересканируем ресурсы
         self._on_project_reset()
+
+    def _load_project_modules(self, project_root: Path) -> None:
+        """Load all C++ modules from the project directory."""
+        from termin._native import log
+        from termin.editor.module_scanner import ModuleScanner
+
+        log.info(f"[ProjectController] Loading modules from: {project_root}")
+
+        scanner = ModuleScanner(
+            on_module_loaded=self._on_module_loaded,
+        )
+        loaded, failed = scanner.scan_and_load(str(project_root))
+
+        if loaded > 0:
+            self._log_message(f"Loaded {loaded} C++ module(s)")
+        if failed > 0:
+            self._log_message(f"Failed to load {failed} C++ module(s)")
+
+    def _on_module_loaded(self, name: str, success: bool, error: str) -> None:
+        """Callback for module load events."""
+        if success:
+            self._log_message(f"Loaded module: {name}")
+        else:
+            self._log_message(f"Failed to load module {name}: {error}")
 
     def _on_project_file_selected(self, file_path) -> None:
         """Обработчик выбора файла в Project Browser (одинарный клик)."""
@@ -213,10 +242,13 @@ class EditorProjectController:
             # Это файл префаба — открываем в режиме изоляции
             self._on_open_prefab(str(path))
 
-        elif path.suffix in (".material", ".shader", ".py", ".pipeline"):
-            # Материалы, шейдеры, скрипты, пайплайны — открываем во внешнем текстовом редакторе
-            open_in_text_editor(str(path), parent=self._parent, log_message=self._log_message)
+        elif path.suffix in (".png", ".jpg", ".jpeg", ".tga", ".bmp", ".hdr",
+                               ".stl", ".obj", ".glb", ".gltf", ".fbx",
+                               ".wav", ".mp3", ".ogg",
+                               ".dll", ".so", ".pyd", ".exe"):
+            # Бинарные файлы — не открываем в текстовом редакторе
+            self._log_message(f"Cannot open binary file: {path.name}")
 
         else:
-            # Другие файлы — логируем
-            self._log_message(f"Opened: {file_path}")
+            # Все остальные файлы — открываем в текстовом редакторе
+            open_in_text_editor(str(path), parent=self._parent, log_message=self._log_message)

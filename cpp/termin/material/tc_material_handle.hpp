@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "termin_core.h"
+#include "tc_inspect.h"
 }
 
 #include <string>
@@ -12,7 +13,6 @@ extern "C" {
 #include <optional>
 #include <algorithm>
 #include <nanobind/nanobind.h>
-#include "../../trent/trent.h"
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/vec4.hpp"
 #include "termin/geom/mat44.hpp"
@@ -388,7 +388,20 @@ public:
         return m->phases[phase_index].state;
     }
 
-    // Serialize for scene saving (returns nanobind dict)
+    // Serialize for kind registry (returns tc_value)
+    tc_value serialize_to_value() const {
+        tc_value d = tc_value_dict_new();
+        if (!is_valid()) {
+            tc_value_dict_set(&d, "type", tc_value_string("none"));
+            return d;
+        }
+        tc_value_dict_set(&d, "uuid", tc_value_string(uuid()));
+        tc_value_dict_set(&d, "name", tc_value_string(name()));
+        tc_value_dict_set(&d, "type", tc_value_string("uuid"));
+        return d;
+    }
+
+    // Serialize for scene saving (returns nanobind dict) - for Python bindings
     nb::dict serialize() const {
         nb::dict d;
         if (!is_valid()) {
@@ -401,22 +414,22 @@ public:
         return d;
     }
 
-    // Deserialize from trent data
-    void deserialize_from(const nos::trent& data, tc_scene* = nullptr) {
+    // Deserialize from tc_value data
+    void deserialize_from(const tc_value* data, tc_scene* = nullptr) {
         // Release current handle
         if (tc_material* m = tc_material_get(handle)) {
             tc_material_release(m);
         }
         handle = tc_material_handle_invalid();
 
-        if (!data.is_dict()) {
+        if (!data || data->type != TC_VALUE_DICT) {
             return;
         }
 
         // Try UUID first
-        if (data.contains("uuid")) {
-            std::string uuid_str = data["uuid"].as_string();
-            tc_material_handle h = tc_material_find(uuid_str.c_str());
+        tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(data), "uuid");
+        if (uuid_val && uuid_val->type == TC_VALUE_STRING && uuid_val->data.s) {
+            tc_material_handle h = tc_material_find(uuid_val->data.s);
             if (!tc_material_handle_is_invalid(h)) {
                 handle = h;
                 if (tc_material* m = tc_material_get(handle)) {
@@ -427,9 +440,9 @@ public:
         }
 
         // Try name lookup
-        if (data.contains("name")) {
-            std::string name_str = data["name"].as_string();
-            tc_material_handle h = tc_material_find_by_name(name_str.c_str());
+        tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(data), "name");
+        if (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s) {
+            tc_material_handle h = tc_material_find_by_name(name_val->data.s);
             if (!tc_material_handle_is_invalid(h)) {
                 handle = h;
                 if (tc_material* m = tc_material_get(handle)) {
@@ -457,28 +470,26 @@ public:
         return TcMaterial(h);
     }
 
-    // Get or create by UUID
-    static TcMaterial get_or_create(const std::string& uuid) {
-        tc_material_handle h = tc_material_get_or_create(uuid.c_str());
+    // Get or create by UUID (name required if creating)
+    static TcMaterial get_or_create(const std::string& uuid, const std::string& name) {
+        tc_material_handle h = tc_material_get_or_create(uuid.c_str(), name.c_str());
         if (tc_material_handle_is_invalid(h)) {
             return TcMaterial();
         }
         return TcMaterial(h);
     }
 
-    // Create new material
-    static TcMaterial create(const std::string& name = "", const std::string& uuid_hint = "") {
+    // Create new material (name is required)
+    static TcMaterial create(const std::string& name, const std::string& uuid_hint = "") {
+        if (name.empty()) {
+            tc_log_error("[TcMaterial::create] name is required");
+            return TcMaterial();
+        }
         const char* uuid = uuid_hint.empty() ? nullptr : uuid_hint.c_str();
-        tc_material_handle h = tc_material_create(uuid);
+        tc_material_handle h = tc_material_create(uuid, name.c_str());
         if (tc_material_handle_is_invalid(h)) {
             return TcMaterial();
         }
-
-        tc_material* m = tc_material_get(h);
-        if (m && !name.empty()) {
-            m->header.name = tc_intern_string(name.c_str());
-        }
-
         return TcMaterial(h);
     }
 

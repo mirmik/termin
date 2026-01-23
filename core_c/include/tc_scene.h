@@ -49,6 +49,15 @@ TC_API void tc_scene_editor_update(tc_scene* s, double dt);
 // Should be called once per frame, before rendering begins
 TC_API void tc_scene_before_render(tc_scene* s);
 
+// Notify all components that scene started in editor mode
+TC_API void tc_scene_notify_editor_start(tc_scene* s);
+
+// Notify all components that scene is becoming inactive
+TC_API void tc_scene_notify_scene_inactive(tc_scene* s);
+
+// Notify all components that scene is becoming active
+TC_API void tc_scene_notify_scene_active(tc_scene* s);
+
 // ============================================================================
 // Fixed Timestep Configuration
 // ============================================================================

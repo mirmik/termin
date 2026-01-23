@@ -4,8 +4,8 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
-#include "../../trent/trent.h"
 #include "../../core_c/include/tc_scene.h"
+#include "../../core_c/include/tc_inspect.h"
 #include "termin/render/handles.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
@@ -152,7 +152,7 @@ public:
     /**
      * Deserialize inplace from scene data.
      */
-    void deserialize_from(const nos::trent& data, tc_scene* scene = nullptr);
+    void deserialize_from(const tc_value* data, tc_scene* scene = nullptr);
 };
 
 /**

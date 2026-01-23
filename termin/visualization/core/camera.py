@@ -261,8 +261,8 @@ class CameraController(InputComponent):
         super().__init__(enabled)
         self.camera_component: CameraComponent | None = None
 
-    def on_added(self, scene):
-        super().on_added(scene)
+    def on_added(self):
+        super().on_added()
         self.camera_component = self.entity.get_component(CameraComponent)
         if self.camera_component is None:
             raise RuntimeError("CameraController requires a CameraComponent on the same entity.")
@@ -331,10 +331,10 @@ class OrbitCameraController(CameraController):
         self._states: Dict[int, dict] = {}
         self._prevent_moving = prevent_moving
 
-    def on_added(self, scene):
+    def on_added(self):
         if self.entity is None:
             raise RuntimeError("OrbitCameraController must be attached to an entity.")
-        super().on_added(scene)
+        super().on_added()
         self._sync_from_transform()
 
     def prevent_moving(self):

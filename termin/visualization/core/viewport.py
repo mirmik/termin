@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.display import Display
+    from termin.visualization.core.entity import Entity
     from termin.visualization.ui.canvas import Canvas
     from termin.visualization.render.framegraph import RenderPipeline
 
@@ -44,6 +45,7 @@ class Viewport(Identifiable):
     managed_by_scene_pipeline: Optional[str] = None  # Name of scene pipeline managing this viewport
     layer_mask: int = 0xFFFFFFFFFFFFFFFF  # All layers enabled by default
     enabled: bool = True  # Whether this viewport is rendered
+    internal_entities: Optional["Entity"] = None  # Root entity for viewport-specific objects (camera, UI, etc.)
     _init_uuid: str | None = field(default=None, repr=False)
 
     def __post_init__(self):

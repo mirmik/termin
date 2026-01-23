@@ -5,62 +5,46 @@
 #include <functional>
 #include <vector>
 #include <type_traits>
-#include <nanobind/nanobind.h>
 
 #include "component.hpp"
 #include "vtable_utils.hpp"
 #include "input_handler.hpp"
-#include "../../../core_c/include/tc_inspect.hpp"
-#include "../render/drawable.hpp"
+#include "../../../core_c/include/tc_inspect_cpp.hpp"
 
 #include "../export.hpp"
 
-namespace nb = nanobind;
-
 namespace termin {
 
+// Forward declarations for optional checks
+class Drawable;
+
 // Global registry for component types.
-// Manages both C++ native components and Python components.
-// - C++ components register via REGISTER_COMPONENT macro
-// - Python components register via Component.__init_subclass__
+// This header provides C++ component registration without nanobind dependency.
+// For Python component support, include component_registry_python.hpp
 class ENTITY_API ComponentRegistry {
 public:
     // Factory function for C++ components
     using NativeFactory = std::function<CxxComponent*()>;
 
-    struct ComponentInfo {
-        std::string name;
-        tc_component_kind kind;
-        NativeFactory native_factory;  // For C++ components
-        nb::object python_class;       // For Python components
-    };
-
     // Singleton access
     static ComponentRegistry& instance();
 
-    // Registration
+    // C++ component registration
     void register_native(const std::string& name, NativeFactory factory, const char* parent = nullptr);
-    void register_python(const std::string& name, nb::object cls, const char* parent = nullptr);
 
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
-    // Creation - returns nb::object (for Python compatibility)
-    nb::object create(const std::string& name) const;
-
-    // Creation - returns raw CxxComponent* (for Entity::deserialize)
-    // Only works for native C++ components
+    // Creation - returns raw CxxComponent* (for C++ only)
     CxxComponent* create_component(const std::string& name) const;
 
     // Queries
     bool has(const std::string& name) const;
-    const ComponentInfo* get_info(const std::string& name) const;
-    nb::object get_class(const std::string& name) const;
+    bool is_native(const std::string& name) const;
 
     // Listing
     std::vector<std::string> list_all() const;
     std::vector<std::string> list_native() const;
-    std::vector<std::string> list_python() const;
 
     // Clear all (for testing)
     void clear();
@@ -72,6 +56,15 @@ public:
     static void set_input_handler(const std::string& name, bool is_input_handler);
 
 private:
+    friend class ComponentRegistryPython;
+
+    struct ComponentInfo {
+        std::string name;
+        tc_component_kind kind;
+        NativeFactory native_factory;
+        void* python_class_ptr = nullptr;  // Opaque pointer to nb::object, managed by ComponentRegistryPython
+    };
+
     ComponentRegistry() = default;
     ComponentRegistry(const ComponentRegistry&) = delete;
     ComponentRegistry& operator=(const ComponentRegistry&) = delete;
@@ -79,25 +72,53 @@ private:
     std::unordered_map<std::string, ComponentInfo> registry_;
 };
 
-/**
- * Helper for static registration of C++ components.
- * Used by REGISTER_COMPONENT macro.
- *
- * Detects method overrides via vtable inspection (see vtable_utils.hpp).
- * Detects drawable components via std::is_base_of<Drawable, T>.
- */
+// SFINAE helpers for Drawable/InputHandler detection with incomplete types
+// These return false if the base class is incomplete
+namespace detail {
+    template<typename Base, typename Derived, typename = void>
+    struct is_base_of_safe : std::false_type {};
+
+    template<typename Base, typename Derived>
+    struct is_base_of_safe<Base, Derived,
+        std::enable_if_t<sizeof(Base) != 0 && std::is_base_of_v<Base, Derived>>>
+        : std::true_type {};
+}
+
+template<typename T>
+void mark_drawable_if_base(const char* name) {
+    if constexpr (detail::is_base_of_safe<Drawable, T>::value) {
+        ComponentRegistry::set_drawable(name, true);
+    }
+}
+
+template<typename T>
+void mark_input_handler_if_base(const char* name) {
+    if constexpr (detail::is_base_of_safe<InputHandler, T>::value) {
+        ComponentRegistry::set_input_handler(name, true);
+    }
+}
+
+// Helper for static registration of C++ components.
+// Used by REGISTER_COMPONENT macro.
+//
+// Detects method overrides via vtable inspection (see vtable_utils.hpp).
+// Detects drawable components via std::is_base_of<Drawable, T>.
 template<typename T>
 struct ComponentRegistrar {
     ComponentRegistrar(const char* name, const char* parent = nullptr) {
         bool has_update = component_overrides_update<T>();
         bool has_fixed_update = component_overrides_fixed_update<T>();
+        printf("[ComponentRegistrar] %s: has_update=%d, has_fixed_update=%d\n",
+            name, has_update ? 1 : 0, has_fixed_update ? 1 : 0);
 
         ComponentRegistry::instance().register_native(name,
             [name, has_update, has_fixed_update]() -> CxxComponent* {
+                printf("[Factory] Creating %s with has_update=%d\n", name, has_update ? 1 : 0);
                 T* comp = new T();
                 comp->set_type_name(name);
                 comp->set_has_update(has_update);
                 comp->set_has_fixed_update(has_fixed_update);
+                printf("[Factory] After set: comp->has_update()=%d\n", comp->has_update() ? 1 : 0);
                 return comp;
             },
             parent);
@@ -105,30 +126,24 @@ struct ComponentRegistrar {
         // Register type parent for field inheritance
         if (parent) {
             tc::InspectRegistry::instance().set_type_parent(name, parent);
-            // Also register in C API for tc_inspect_serialize inheritance
-            tc_inspect_register_type(name, parent);
         }
 
         // Mark as drawable if component inherits from Drawable
-        if constexpr (std::is_base_of_v<Drawable, T>) {
-            ComponentRegistry::set_drawable(name, true);
-        }
+        // Note: requires Drawable to be complete (include drawable.hpp)
+        // For external modules without drawable.hpp, this check is skipped
+        mark_drawable_if_base<T>(name);
 
         // Mark as input handler if component inherits from InputHandler
-        if constexpr (std::is_base_of_v<InputHandler, T>) {
-            ComponentRegistry::set_input_handler(name, true);
-        }
+        mark_input_handler_if_base<T>(name);
     }
 };
 
-/**
- * Macro for registering C++ components.
- * Place in header file after class definition.
- *
- * Usage:
- *   REGISTER_COMPONENT(MyComponent, Component);
- *   REGISTER_COMPONENT(ChildComponent, ParentComponent);
- */
+// Macro for registering C++ components.
+// Place in header file after class definition.
+//
+// Usage:
+//   REGISTER_COMPONENT(MyComponent, Component);
+//   REGISTER_COMPONENT(ChildComponent, ParentComponent);
 #define REGISTER_COMPONENT(ClassName, Parent) \
     static ::termin::ComponentRegistrar<ClassName> \
         _component_registrar_##ClassName(#ClassName, #Parent)

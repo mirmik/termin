@@ -68,9 +68,14 @@ void tc_material_shutdown(void) {
 // Handle-based API
 // ============================================================================
 
-tc_material_handle tc_material_create(const char* uuid) {
+tc_material_handle tc_material_create(const char* uuid, const char* name) {
     if (!g_initialized) {
         tc_material_init();
+    }
+
+    if (!name || name[0] == '\0') {
+        tc_log_error("tc_material_create: name is required");
+        return tc_material_handle_invalid();
     }
 
     char uuid_buf[TC_UUID_SIZE];
@@ -97,6 +102,7 @@ tc_material_handle tc_material_create(const char* uuid) {
     memset(mat, 0, sizeof(tc_material));
     strncpy(mat->header.uuid, final_uuid, sizeof(mat->header.uuid) - 1);
     mat->header.uuid[sizeof(mat->header.uuid) - 1] = '\0';
+    mat->header.name = tc_intern_string(name);
     mat->header.version = 1;
     mat->header.ref_count = 0;
     mat->header.is_loaded = 1;
@@ -155,7 +161,7 @@ tc_material_handle tc_material_find_by_name(const char* name) {
     return tc_material_handle_invalid();
 }
 
-tc_material_handle tc_material_get_or_create(const char* uuid) {
+tc_material_handle tc_material_get_or_create(const char* uuid, const char* name) {
     if (!uuid || uuid[0] == '\0') {
         tc_log_warn("tc_material_get_or_create: empty uuid");
         return tc_material_handle_invalid();
@@ -166,7 +172,7 @@ tc_material_handle tc_material_get_or_create(const char* uuid) {
         return h;
     }
 
-    return tc_material_create(uuid);
+    return tc_material_create(uuid, name);
 }
 
 tc_material* tc_material_get(tc_material_handle h) {
@@ -465,7 +471,7 @@ void tc_material_set_uniform(
     for (size_t i = 0; i < mat->phase_count; i++) {
         tc_material_phase_set_uniform(&mat->phases[i], name, type, value);
     }
-    mat->header.version++;
+    // Note: uniforms are per-frame values, don't bump version
 }
 
 void tc_material_set_texture(
@@ -594,7 +600,17 @@ tc_material_handle tc_material_copy(tc_material_handle src, const char* new_uuid
         return tc_material_handle_invalid();
     }
 
-    tc_material_handle dst = tc_material_create(new_uuid);
+    if (!src_mat->header.name) {
+        tc_log_error("[tc_material_copy] source material '%s' has no name",
+            src_mat->header.uuid);
+        return tc_material_handle_invalid();
+    }
+
+    // Generate name for copy
+    char name_buf[256];
+    snprintf(name_buf, sizeof(name_buf), "%s_copy", src_mat->header.name);
+
+    tc_material_handle dst = tc_material_create(new_uuid, name_buf);
     tc_material* dst_mat = tc_material_get(dst);
     if (!dst_mat) {
         return tc_material_handle_invalid();
@@ -620,13 +636,6 @@ tc_material_handle tc_material_copy(tc_material_handle src, const char* new_uuid
     // Copy metadata
     strncpy(dst_mat->shader_name, src_mat->shader_name, TC_MATERIAL_NAME_MAX - 1);
     strncpy(dst_mat->active_phase_mark, src_mat->active_phase_mark, TC_PHASE_MARK_MAX - 1);
-
-    // Set name with _copy suffix
-    if (src_mat->header.name) {
-        char name_buf[256];
-        snprintf(name_buf, sizeof(name_buf), "%s_copy", src_mat->header.name);
-        dst_mat->header.name = tc_intern_string(name_buf);
-    }
 
     return dst;
 }

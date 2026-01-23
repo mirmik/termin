@@ -661,14 +661,12 @@ class Scene:
                 component.has_fixed_update = True
 
         # Register with TcScene (adds to type lists automatically)
+        # on_added callback is called by C code in tc_scene_register_component
         if is_python:
             ptr = component.c_component_ptr()
             self._tc_scene.register_component_ptr(ptr)
         else:
             self._tc_scene.register_component(component)
-
-        # Notify component it was added to scene
-        component.on_added(self)
 
     def unregister_component(self, component: Component):
         """Unregister component from tc_scene.
@@ -721,21 +719,15 @@ class Scene:
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""
-        for entity in self.entities:
-            for component in entity.components:
-                component.on_editor_start()
+        self._tc_scene.notify_editor_start()
 
     def notify_scene_inactive(self):
         """Notify all components that scene is becoming inactive."""
-        for entity in self.entities:
-            for component in entity.components:
-                component.on_scene_inactive()
+        self._tc_scene.notify_scene_inactive()
 
     def notify_scene_active(self):
         """Notify all components that scene is becoming active (from INACTIVE)."""
-        for entity in self.entities:
-            for component in entity.components:
-                component.on_scene_active()
+        self._tc_scene.notify_scene_active()
 
     # --- Input dispatch ---
 
@@ -952,9 +944,12 @@ class Scene:
         Breaks cyclic references that prevent Python GC from collecting scene.
         Call this when scene is no longer needed (e.g., exit_game_mode, scene change).
         """
+        from termin._native import log
+
         if self._destroyed:
             return
         self._destroyed = True
+
 
         # Destroy all components in all entities
         for entity in self.entities:

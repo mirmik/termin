@@ -4,15 +4,11 @@
 #include <cstdint>
 #include <cstddef>
 #include <unordered_set>
-#include <nanobind/nanobind.h>
-#include "../../trent/trent.h"
-#include "../inspect/inspect_registry.hpp"
 #include "../../../core_c/include/tc_component.h"
-#include "../../../core_c/include/tc_inspect.hpp"
+#include "../../../core_c/include/tc_inspect_cpp.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
+#include "../tc_scene_ref.hpp"
 #include "entity.hpp"
-
-namespace nb = nanobind;
 
 namespace termin {
 
@@ -93,81 +89,44 @@ public:
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
 
-    // Called when entity is added/removed from scene
-    virtual void on_added(nb::object scene) { (void)scene; }
+    // Called after component is fully attached to entity
+    virtual void on_added() {}
     virtual void on_removed() {}
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
 
     // Serialization - uses C API tc_inspect for INSPECT_FIELD properties.
-    virtual nos::trent serialize_data() const {
-        tc_value v = tc_inspect_serialize(
+    // Returns tc_value that caller must free with tc_value_free()
+    virtual tc_value serialize_data() const {
+        return tc_inspect_serialize(
             const_cast<void*>(static_cast<const void*>(this)),
             type_name()
         );
-        nos::trent result = tc::tc_value_to_trent(&v);
-        tc_value_free(&v);
-        return result;
     }
 
-    virtual void deserialize_data(const nos::trent& data, tc_scene* scene = nullptr) {
-        tc_value v = tc::trent_to_tc_value(data);
-        tc_inspect_deserialize_with_scene(
+    virtual void deserialize_data(const tc_value* data, tc_scene* scene = nullptr) {
+        if (!data) return;
+        tc_inspect_deserialize(
             static_cast<void*>(this),
             type_name(),
-            &v,
+            data,
             scene
         );
-        tc_value_free(&v);
     }
 
-    nos::trent serialize() const {
-        nos::trent result;
-        result["type"] = type_name();
-        result["data"] = serialize_data();
+    // Full serialize (type + data) - returns tc_value dict
+    tc_value serialize() const {
+        tc_value result = tc_value_dict_new();
+        tc_value_dict_set(&result, "type", tc_value_string(type_name()));
+        tc_value data = serialize_data();
+        tc_value_dict_set(&result, "data", data);
+        // Note: dict_set takes ownership, don't free data
         return result;
     }
 
     // Access to underlying C component (for Scene integration)
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
-
-    // Get Python wrapper for this component (cached in _c.wrapper)
-    nb::object to_python() {
-        if (!_c.wrapper) {
-            nb::object py_wrapper = nb::cast(this, nb::rv_policy::reference);
-            _c.wrapper = py_wrapper.inc_ref().ptr();
-        }
-        return nb::borrow<nb::object>(
-            reinterpret_cast<PyObject*>(_c.wrapper)
-        );
-    }
-
-    // Set cached Python wrapper (called from bindings when component is created)
-    void set_wrapper(nb::object self) {
-        if (_c.wrapper) {
-            nb::handle old(reinterpret_cast<PyObject*>(_c.wrapper));
-            old.dec_ref();
-        }
-        _c.wrapper = self.inc_ref().ptr();
-    }
-
-    // Convert any tc_component to Python object
-    static nb::object tc_to_python(tc_component* c) {
-        if (!c) return nb::none();
-
-        if (c->kind == TC_NATIVE_COMPONENT) {
-            CxxComponent* cxx = from_tc(c);
-            if (!cxx) return nb::none();
-            return cxx->to_python();
-        } else {
-            // TC_EXTERNAL_COMPONENT: wrapper holds the Python object
-            if (!c->wrapper) return nb::none();
-            return nb::borrow<nb::object>(
-                reinterpret_cast<PyObject*>(c->wrapper)
-            );
-        }
-    }
 
 protected:
     CxxComponent();
@@ -181,12 +140,17 @@ private:
     static void _cb_on_destroy(tc_component* c);
     static void _cb_on_added_to_entity(tc_component* c);
     static void _cb_on_removed_from_entity(tc_component* c);
-    static void _cb_on_added(tc_component* c, void* scene);
+    static void _cb_on_added(tc_component* c);
     static void _cb_on_removed(tc_component* c);
     static void _cb_on_scene_inactive(tc_component* c);
     static void _cb_on_scene_active(tc_component* c);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
+
+    // Memory management callbacks
+    static void _cb_drop(tc_component* c);
+    static void _cb_retain(tc_component* c);
+    static void _cb_release(tc_component* c);
 };
 
 // Alias for backward compatibility during migration

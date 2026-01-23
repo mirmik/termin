@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
+    from termin.visualization.core.entity import Entity
     from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend, WindowBackend
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.render import RenderEngine, ViewportRenderState
@@ -61,6 +62,7 @@ class RenderingController:
         get_sdl_backend: Optional[Callable[[], "SDLEmbeddedWindowBackend"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
+        on_entity_selected: Optional[Callable[["Entity"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
         make_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None,
         on_display_input_mode_changed: Optional[Callable[["Display", str], None]] = None,
@@ -96,6 +98,7 @@ class RenderingController:
         self._get_sdl_backend = get_sdl_backend
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
+        self._on_entity_selected = on_entity_selected
         self._on_request_update = on_request_update
         self._make_editor_pipeline = make_editor_pipeline
         self._on_display_input_mode_changed_callback = on_display_input_mode_changed
@@ -129,6 +132,7 @@ class RenderingController:
         """Connect ViewportListWidget signals."""
         self._viewport_list.display_selected.connect(self._on_display_selected_from_list)
         self._viewport_list.viewport_selected.connect(self._on_viewport_selected_from_list)
+        self._viewport_list.entity_selected.connect(self._on_entity_selected_from_list)
         self._viewport_list.display_add_requested.connect(self._on_add_display_requested)
         self._viewport_list.viewport_add_requested.connect(self._on_add_viewport_requested)
         self._viewport_list.display_remove_requested.connect(self._on_remove_display_requested)
@@ -823,6 +827,11 @@ class RenderingController:
 
             if self._on_viewport_selected is not None:
                 self._on_viewport_selected(viewport)
+
+    def _on_entity_selected_from_list(self, entity: Optional["Entity"]) -> None:
+        """Handle entity selection from viewport's internal_entities."""
+        if entity is not None and self._on_entity_selected is not None:
+            self._on_entity_selected(entity)
 
     # --- Add/Remove requests ---
 

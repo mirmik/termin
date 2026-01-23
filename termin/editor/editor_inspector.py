@@ -83,21 +83,21 @@ class ComponentsPanel(QWidget):
         if ent is None:
             self._list.blockSignals(False)
             return
-        for comp in ent.components:
-            name = self._get_component_display_name(comp)
+        for ref in ent.tc_components:
+            name = self._get_component_display_name_ref(ref)
             item = QListWidgetItem(name)
             self._list.addItem(item)
         # Clear selection after populating
         self._list.setCurrentRow(-1)
         self._list.blockSignals(False)
 
-    def _get_component_display_name(self, comp: Component) -> str:
-        """Get display name for component: 'display_name (ClassName)' or just 'ClassName'."""
-        class_name = comp.__class__.__name__
-        display_name = getattr(comp, "display_name", "")
+    def _get_component_display_name_ref(self, ref) -> str:
+        """Get display name for component: 'display_name (type_name)' or just 'type_name'."""
+        type_name = ref.type_name
+        display_name = ref.get_field("display_name")
         if display_name:
-            return f"{display_name} ({class_name})"
-        return class_name
+            return f"{display_name} ({type_name})"
+        return type_name
 
     def current_component(self) -> Optional[Component]:
         if self._entity is None:
@@ -106,6 +106,16 @@ class ComponentsPanel(QWidget):
         if row < 0 or row >= len(self._entity.components):
             return None
         return self._entity.components[row]
+
+    def current_component_ref(self):
+        """Get current component as TcComponentRef."""
+        if self._entity is None:
+            return None
+        row = self._list.currentRow()
+        tc_components = self._entity.tc_components
+        if row < 0 or row >= len(tc_components):
+            return None
+        return tc_components[row]
 
     def _get_component_library(self) -> list[str]:
         from termin.entity import ComponentRegistry
@@ -170,12 +180,12 @@ class ComponentsPanel(QWidget):
     def _rename_current_component(self) -> None:
         if self._entity is None:
             return
-        comp = self.current_component()
-        if comp is None:
+        ref = self.current_component_ref()
+        if ref is None or not ref.valid:
             return
 
         # Get current display name
-        current_name = getattr(comp, "display_name", "") or ""
+        current_name = ref.get_field("display_name") or ""
 
         # Show input dialog
         new_name, ok = QInputDialog.getText(
@@ -187,26 +197,28 @@ class ComponentsPanel(QWidget):
 
         if ok:
             # Set new display name (empty string clears custom name)
-            comp.display_name = new_name.strip()
+            ref.set_field("display_name", new_name.strip())
             # Update list item
             row = self._list.currentRow()
             item = self._list.item(row)
             if item is not None:
-                item.setText(self._get_component_display_name(comp))
+                item.setText(self._get_component_display_name_ref(ref))
             self.components_changed.emit()
 
     def _remove_current_component(self) -> None:
         if self._entity is None:
             return
-        comp = self.current_component()
-        if comp is None:
+        ref = self.current_component_ref()
+        if ref is None or not ref.valid:
             return
 
+        type_name = ref.type_name
+
         if self._push_undo_command is not None:
-            cmd = RemoveComponentCommand(self._entity, comp)
+            cmd = RemoveComponentCommand(self._entity, type_name)
             self._push_undo_command(cmd, False)
         else:
-            self._entity.remove_component(comp)
+            self._entity.remove_component_ref(ref)
 
         self.set_entity(self._entity)
         self.components_changed.emit()
@@ -215,23 +227,16 @@ class ComponentsPanel(QWidget):
         if self._entity is None:
             return
 
-        from termin.entity import ComponentRegistry
-
         try:
-            comp = ComponentRegistry.instance().create(name)
+            ref = self._entity.add_component_by_name(name)
         except Exception:
             logger.exception("Failed to create component %s", name)
             return
 
-        # Apply editor defaults (e.g. default mesh/material for MeshRenderer)
-        if hasattr(comp, 'setup_editor_defaults'):
-            comp.setup_editor_defaults()
-
+        # Register undo command (component already added, but undo will remove it)
         if self._push_undo_command is not None:
-            cmd = AddComponentCommand(self._entity, comp)
+            cmd = AddComponentCommand(self._entity, name, ref)
             self._push_undo_command(cmd, False)
-        else:
-            self._entity.add_component(comp)
 
         self.set_entity(self._entity)
 
@@ -306,14 +311,23 @@ class ComponentInspectorPanel(QWidget):
     def _update_material_props_editor(self) -> None:
         """Update material properties editor visibility and content."""
         from termin._native.render import MeshRenderer  # SkinnedMeshRenderer inherits from this
+        from termin.entity import TcComponentRef
 
-        if isinstance(self._component, MeshRenderer) and self._component.override_material:
-            mat = self._component.get_overridden_material()
+        # For TcComponentRef, try to get Python object for MeshRenderer
+        comp = self._component
+        if isinstance(comp, TcComponentRef):
+            if comp.type_name in ('MeshRenderer', 'SkinnedMeshRenderer'):
+                comp = comp.to_python()
+            else:
+                comp = None
+
+        if isinstance(comp, MeshRenderer) and comp.override_material:
+            mat = comp.get_overridden_material()
             # If override enabled but material not created (e.g. after scene load), recreate it
             if mat is None:
-                self._component._override_material = False
-                self._component.set_override_material(True)
-                mat = self._component.get_overridden_material()
+                comp._override_material = False
+                comp.set_override_material(True)
+                mat = comp.get_overridden_material()
             self._material_props_editor.set_material(mat)
             self._material_props_editor.setVisible(True)
         else:
@@ -343,10 +357,17 @@ class ComponentInspectorPanel(QWidget):
         # If override_material changed, call the setter to create/delete the override copy
         if key == "_override_material":
             from termin._native.render import MeshRenderer
-            if isinstance(self._component, MeshRenderer):
+            from termin.entity import TcComponentRef
+            comp = self._component
+            if isinstance(comp, TcComponentRef):
+                if comp.type_name in ('MeshRenderer', 'SkinnedMeshRenderer'):
+                    comp = comp.to_python()
+                else:
+                    comp = None
+            if isinstance(comp, MeshRenderer):
                 # Force setter to run by resetting field first (setter has early-return check)
-                self._component._override_material = not new_value
-                self._component.set_override_material(new_value)
+                comp._override_material = not new_value
+                comp.set_override_material(new_value)
             self._update_material_props_editor()
 
         self.field_changed.emit(self._component, key, new_value)
@@ -439,8 +460,9 @@ class EntityInspector(QWidget):
 
         if ent is not None:
             row = self._components_panel._list.currentRow()
-            if 0 <= row < len(ent.components):
-                self._component_inspector.set_component(ent.components[row])
+            tc_components = ent.tc_components
+            if 0 <= row < len(tc_components):
+                self._component_inspector.set_component(tc_components[row])
             else:
                 self._component_inspector.set_component(None)
         else:
@@ -473,8 +495,12 @@ class EntityInspector(QWidget):
         if self._entity is None or row < 0:
             self._component_inspector.set_component(None)
             return
-        comp = self._entity.components[row]
-        self._component_inspector.set_component(comp)
+        tc_components = self._entity.tc_components
+        if row >= len(tc_components):
+            self._component_inspector.set_component(None)
+            return
+        ref = tc_components[row]
+        self._component_inspector.set_component(ref)
 
     def refresh_transform(self) -> None:
         """Refresh TransformInspector values from the current transform."""

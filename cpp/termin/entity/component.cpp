@@ -1,6 +1,9 @@
 // component.cpp - CxxComponent implementation
 #include "component.hpp"
 #include "tc_log.hpp"
+#include <nanobind/nanobind.h>
+
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -25,8 +28,11 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     // Editor
     CxxComponent::_cb_on_editor_start,
     CxxComponent::_cb_setup_editor_defaults,
-    // Memory management - NULL since CxxComponent is managed by C++/Python
-    nullptr,
+    // Memory management
+    CxxComponent::_cb_drop,
+    // Reference counting - for Python wrapper
+    CxxComponent::_cb_retain,
+    CxxComponent::_cb_release,
     // Serialization - NULL, handled by InspectRegistry
     nullptr,
     nullptr
@@ -106,19 +112,10 @@ void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
     }
 }
 
-void CxxComponent::_cb_on_added(tc_component* c, void* scene) {
-    (void)scene;  // Ignore - might be tc_scene* or PyObject*
+void CxxComponent::_cb_on_added(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
-        // Get Python scene from global current_scene
-        try {
-            nb::module_ scene_mod = nb::module_::import_("termin.visualization.core.scene");
-            nb::object py_scene = scene_mod.attr("get_current_scene")();
-            self->on_added(py_scene);
-        } catch (const nb::python_error& e) {
-            // Module not available or scene not set during initialization - debug level
-            tc::Log::debug(e, "CxxComponent::on_added get_current_scene");
-        }
+        self->on_added();
     }
 }
 
@@ -154,6 +151,28 @@ void CxxComponent::_cb_setup_editor_defaults(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->setup_editor_defaults();
+    }
+}
+
+// Memory management callbacks
+void CxxComponent::_cb_drop(tc_component* c) {
+    auto* self = from_tc(c);
+    if (self) {
+        delete self;
+    }
+}
+
+void CxxComponent::_cb_retain(tc_component* c) {
+    if (c && c->wrapper) {
+        nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
+        py_wrapper.inc_ref();
+    }
+}
+
+void CxxComponent::_cb_release(tc_component* c) {
+    if (c && c->wrapper) {
+        nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
+        py_wrapper.dec_ref();
     }
 }
 

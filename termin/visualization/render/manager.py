@@ -716,6 +716,7 @@ class RenderingManager:
                 canvas=viewport.canvas,
                 pipeline=viewport.pipeline,
                 layer_mask=viewport.effective_layer_mask,
+                viewport=viewport,
             )
             views_and_states.append((view, state))
 
@@ -921,6 +922,7 @@ class RenderingManager:
             canvas=viewport.canvas,
             pipeline=viewport.pipeline,
             layer_mask=viewport.effective_layer_mask,
+            viewport=viewport,
         )
 
         self._render_engine.render_view_to_fbo(

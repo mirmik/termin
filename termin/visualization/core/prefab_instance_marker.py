@@ -196,8 +196,8 @@ class PrefabInstanceMarker(PythonComponent):
 
     # --- Lifecycle ---
 
-    def on_added(self, scene: "Scene") -> None:
-        """Register in PrefabRegistry when added to scene."""
+    def on_added(self) -> None:
+        """Register in PrefabRegistry when added."""
         if self.prefab_uuid and self.entity:
             from termin.visualization.core.prefab_registry import PrefabRegistry
             PrefabRegistry.register(self.prefab_uuid, self.entity)

@@ -24,35 +24,6 @@ namespace nb = nanobind;
 
 namespace tc {
 
-// Combined kind handler - has both C++ and Python vtables
-// This is the unified type used by tc_inspect.hpp
-struct TcKind {
-    std::string name;
-    bool _has_cpp = false;
-    bool _has_python = false;
-
-    // C++ vtable - works with std::any and nos::trent
-    struct CppVtable {
-        std::function<nos::trent(const std::any&)> serialize;
-        std::function<std::any(const nos::trent&, tc_scene*)> deserialize;
-    } cpp;
-
-    // Python vtable - works with nb::object
-    struct PyVtable {
-        nb::object serialize;    // callable(obj) -> dict
-        nb::object deserialize;  // callable(dict) -> obj
-    } python;
-
-    TcKind() = default;
-    explicit TcKind(const std::string& n) : name(n) {}
-
-    bool has_cpp() const { return _has_cpp; }
-    bool has_python() const { return _has_python; }
-};
-
-// Alias for backward compatibility with tc_inspect.hpp
-using KindHandler = TcKind;
-
 // Python kind handler - uses nb::object for Python callables
 struct KindPython {
     std::string name;
@@ -139,57 +110,12 @@ public:
     }
 };
 
-// Unified Kind Registry - combines C++ and Python registries
+// Unified Kind Registry - facade for C++ and Python registries
 // This is what Python code interacts with.
 class TC_KIND_PYTHON_API KindRegistry {
-    // Combined handlers cache
-    mutable std::unordered_map<std::string, TcKind> _combined;
-
-    // Build or update combined handler for a kind
-    TcKind* get_or_build(const std::string& name) {
-        auto it = _combined.find(name);
-        if (it == _combined.end()) {
-            it = _combined.emplace(name, TcKind(name)).first;
-        }
-
-        TcKind& kind = it->second;
-
-        // Sync C++ handler
-        auto* cpp_kind = KindRegistryCpp::instance().get(name);
-        if (cpp_kind) {
-            kind.cpp.serialize = cpp_kind->serialize;
-            kind.cpp.deserialize = cpp_kind->deserialize;
-            kind._has_cpp = true;
-        }
-
-        // Sync Python handler
-        auto* py_kind = KindRegistryPython::instance().get(name);
-        if (py_kind) {
-            kind.python.serialize = py_kind->serialize;
-            kind.python.deserialize = py_kind->deserialize;
-            kind._has_python = true;
-        }
-
-        return &kind;
-    }
-
 public:
     // Singleton - defined in tc_kind_python_instance.cpp (entity_lib)
     static KindRegistry& instance();
-
-    // Get combined handler (returns nullptr if no handler exists)
-    TcKind* get(const std::string& name) {
-        if (!KindRegistryCpp::instance().has(name) &&
-            !KindRegistryPython::instance().has(name)) {
-            return nullptr;
-        }
-        return get_or_build(name);
-    }
-
-    // Get or create combined handler
-    TcKind& get_or_create(const std::string& name) {
-        return *get_or_build(name);
-    }
 
     // Check if kind has C++ handler
     bool has_cpp(const std::string& name) const {
@@ -230,32 +156,28 @@ public:
     // Register C++ handler (delegates to KindRegistryCpp)
     void register_cpp(
         const std::string& name,
-        std::function<nos::trent(const std::any&)> serialize,
-        std::function<std::any(const nos::trent&, tc_scene*)> deserialize
+        std::function<tc_value(const std::any&)> serialize,
+        std::function<std::any(const tc_value*, tc_scene*)> deserialize
     ) {
         KindRegistryCpp::instance().register_kind(name, serialize, deserialize);
-        // Invalidate cache
-        _combined.erase(name);
     }
 
-    // Register Python handler
+    // Register Python handler (delegates to KindRegistryPython)
     void register_python(
         const std::string& name,
         nb::object serialize,
         nb::object deserialize
     ) {
         KindRegistryPython::instance().register_kind(name, serialize, deserialize);
-        // Invalidate cache to rebuild with new Python handler
-        _combined.erase(name);
     }
 
-    // Serialize using C++ handler
-    nos::trent serialize_cpp(const std::string& kind_name, const std::any& value) const {
+    // Serialize using C++ handler (caller owns returned tc_value)
+    tc_value serialize_cpp(const std::string& kind_name, const std::any& value) const {
         return KindRegistryCpp::instance().serialize(kind_name, value);
     }
 
     // Deserialize using C++ handler
-    std::any deserialize_cpp(const std::string& kind_name, const nos::trent& data, tc_scene* scene = nullptr) const {
+    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene* scene = nullptr) const {
         return KindRegistryCpp::instance().deserialize(kind_name, data, scene);
     }
 
@@ -272,12 +194,6 @@ public:
     // Clear Python references
     void clear_python() {
         KindRegistryPython::instance().clear();
-        // Clear combined cache entries that have Python handlers
-        for (auto& [name, kind] : _combined) {
-            kind.python.serialize = nb::object();
-            kind.python.deserialize = nb::object();
-            kind._has_python = false;
-        }
     }
 
     // Access to underlying registries
@@ -301,6 +217,30 @@ inline void bind_kind_registry(nb::module_& m) {
              nb::arg("kind"), nb::arg("obj"))
         .def("deserialize", &KindRegistry::deserialize_python,
              nb::arg("kind"), nb::arg("data"));
+}
+
+// Initialize Python language vtable in C dispatcher
+// Called from inspect_bindings.cpp at module init
+TC_KIND_PYTHON_API void init_python_lang_vtable();
+
+// Callback type for lazy list handler creation
+using EnsureListHandlerFn = bool(*)(const std::string&);
+
+// Global callback pointer - set by inspect_bindings.cpp at module init
+TC_KIND_PYTHON_API extern EnsureListHandlerFn g_ensure_list_handler;
+
+// Ensure list[X] kind has a Python handler (lazy creation)
+// Calls the callback if set, otherwise returns false
+inline bool ensure_list_handler(const std::string& kind) {
+    if (g_ensure_list_handler) {
+        return g_ensure_list_handler(kind);
+    }
+    return false;
+}
+
+// Set the list handler callback (called from inspect_bindings.cpp)
+inline void set_ensure_list_handler(EnsureListHandlerFn fn) {
+    g_ensure_list_handler = fn;
 }
 
 } // namespace tc

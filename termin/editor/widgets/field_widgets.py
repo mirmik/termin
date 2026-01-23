@@ -752,6 +752,7 @@ class FieldWidgetFactory:
             "mesh_handle",
             "tc_mesh",
             "skeleton_handle",
+            "tc_skeleton",
             "voxel_grid_handle",
             "navmesh_handle",
             "texture_handle",

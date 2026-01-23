@@ -274,6 +274,7 @@ class Visualization:
                 camera=viewport.camera,
                 rect=viewport.rect,
                 canvas=viewport.canvas,
+                viewport=viewport,
             )
             state = self.get_viewport_state(viewport)
             views.append((view, state))

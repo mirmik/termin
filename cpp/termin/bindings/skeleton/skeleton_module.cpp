@@ -200,31 +200,29 @@ void bind_tc_skeleton(nb::module_& m) {
 void register_tc_skeleton_kind() {
     // C++ handler for tc_skeleton kind
     tc::KindRegistry::instance().register_cpp("tc_skeleton",
-        // serialize: std::any(TcSkeleton) → trent
-        [](const std::any& value) -> nos::trent {
+        // serialize: std::any(TcSkeleton) → tc_value
+        [](const std::any& value) -> tc_value {
             const termin::TcSkeleton& s = std::any_cast<const termin::TcSkeleton&>(value);
-            nos::trent result;
-            result.init(nos::trent_type::dict);
+            tc_value result = tc_value_dict_new();
             if (s.is_valid()) {
-                result["uuid"] = std::string(s.uuid());
-                result["name"] = std::string(s.name());
+                tc_value_dict_set(&result, "uuid", tc_value_string(s.uuid()));
+                tc_value_dict_set(&result, "name", tc_value_string(s.name()));
             }
             return result;
         },
-        // deserialize: trent, scene → std::any(TcSkeleton)
-        [](const nos::trent& t, tc_scene*) -> std::any {
-            if (!t.is_dict()) return termin::TcSkeleton();
-            auto& dict = t.as_dict();
-            auto it = dict.find("uuid");
-            if (it == dict.end() || !it->second.is_string()) {
+        // deserialize: tc_value, scene → std::any(TcSkeleton)
+        [](const tc_value* v, tc_scene*) -> std::any {
+            if (!v || v->type != TC_VALUE_DICT) return termin::TcSkeleton();
+            tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(v), "uuid");
+            if (!uuid_val || uuid_val->type != TC_VALUE_STRING || !uuid_val->data.s) {
                 return termin::TcSkeleton();
             }
-            std::string uuid = it->second.as_string();
+            std::string uuid = uuid_val->data.s;
             termin::TcSkeleton skel = termin::TcSkeleton::from_uuid(uuid);
             if (!skel.is_valid()) {
-                auto name_it = dict.find("name");
-                std::string name = (name_it != dict.end() && name_it->second.is_string())
-                    ? name_it->second.as_string() : "";
+                tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(v), "name");
+                std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
+                    ? name_val->data.s : "";
                 tc::Log::warn("tc_skeleton deserialize: skeleton not found, uuid=%s name=%s", uuid.c_str(), name.c_str());
             } else {
                 skel.ensure_loaded();

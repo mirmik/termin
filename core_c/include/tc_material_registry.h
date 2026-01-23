@@ -18,9 +18,9 @@ TC_API void tc_material_shutdown(void);
 // Material operations (handle-based API)
 // ============================================================================
 
-// Create a new material with given UUID (or auto-generate if NULL)
+// Create a new material with given UUID (or auto-generate if NULL) and name (required)
 // Returns handle to material, or tc_material_handle_invalid() on failure
-TC_API tc_material_handle tc_material_create(const char* uuid);
+TC_API tc_material_handle tc_material_create(const char* uuid, const char* name);
 
 // Find material by UUID, returns tc_material_handle_invalid() if not found
 TC_API tc_material_handle tc_material_find(const char* uuid);
@@ -28,8 +28,8 @@ TC_API tc_material_handle tc_material_find(const char* uuid);
 // Find material by name, returns tc_material_handle_invalid() if not found
 TC_API tc_material_handle tc_material_find_by_name(const char* name);
 
-// Get existing material or create new one if not found
-TC_API tc_material_handle tc_material_get_or_create(const char* uuid);
+// Get existing material or create new one if not found (name required for creation)
+TC_API tc_material_handle tc_material_get_or_create(const char* uuid, const char* name);
 
 // Get material data by handle (returns NULL if handle is invalid/stale)
 TC_API tc_material* tc_material_get(tc_material_handle h);

@@ -583,16 +583,15 @@ void main() {
         result: List[tuple[TcMesh, np.ndarray]] = []
 
         # Проверяем MeshRenderer на текущем entity
-        for comp in entity.components:
-            if isinstance(comp, MeshRenderer):
-                mesh = comp.mesh
-                if mesh is not None and mesh.is_valid:
-                    # Получаем мировую трансформацию entity с учётом scale
-                    world_matrix = entity.model_matrix()
-                    # Преобразуем в локальную систему координат корневого entity
-                    local_matrix = root_transform_inv @ world_matrix
-                    result.append((mesh, local_matrix))
-                break  # Только один MeshRenderer на entity
+        comp = entity.get_component(MeshRenderer)
+        if comp is not None:
+            mesh = comp.mesh
+            if mesh is not None and mesh.is_valid:
+                # Получаем мировую трансформацию entity с учётом scale
+                world_matrix = entity.model_matrix()
+                # Преобразуем в локальную систему координат корневого entity
+                local_matrix = root_transform_inv @ world_matrix
+                result.append((mesh, local_matrix))
 
         # Рекурсивно обходим детей (если нужно)
         if recurse:

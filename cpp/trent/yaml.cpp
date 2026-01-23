@@ -1,7 +1,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
-#include <yaml/yaml.h>
+#include "yaml.h"
 #include <sstream>
 #include <stdexcept>
 #include <string>

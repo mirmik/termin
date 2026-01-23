@@ -696,8 +696,6 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     if np.allclose(root_scale, [1.0, 1.0, 1.0]):
         return False
 
-    log.debug(f"[normalize_glb_scale] Root scale: {root_scale}")
-
     # Use uniform scale factor (assumes x == y == z)
     scale_factor = float(root_scale[0])
 

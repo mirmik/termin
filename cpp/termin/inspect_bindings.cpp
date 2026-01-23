@@ -2,16 +2,23 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "inspect/inspect_registry.hpp"
+#include "../../core_c/include/tc_inspect.hpp"
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
 #include "render/frame_pass.hpp"
 #include "inspect/tc_kind.hpp"
 #include "inspect_bindings.hpp"
+#include "bindings/tc_value_helpers.hpp"
 
 namespace nb = nanobind;
 
 namespace termin {
+
+// Import tc:: types for bindings
+using tc::TypeBackend;
+using tc::EnumChoice;
+using tc::InspectFieldInfo;
+using tc::InspectRegistry;
 
 // Helper to extract short type name from full qualified name
 // "termin._native.render.MeshRenderer" -> "MeshRenderer"
@@ -64,43 +71,44 @@ void register_builtin_kind_handlers() {
     );
 }
 
-// Generate Python handlers for list[X] kinds
-// Must be called from nanobind module context
-static tc::TcKind* generate_list_handler(const std::string& kind) {
+// Ensure list[X] kind has a Python handler
+// Returns true if handler exists or was created
+static bool ensure_list_handler_impl(const std::string& kind) {
+    auto& py_reg = tc::KindRegistryPython::instance();
+
+    // Already registered?
+    if (py_reg.has(kind)) {
+        return true;
+    }
+
+    // Parse list[element] format
     char container[64], element[64];
     if (!tc_kind_parse(kind.c_str(), container, sizeof(container),
                       element, sizeof(element))) {
-        return nullptr;
+        return false;
     }
 
     if (std::string(container) != "list") {
-        return nullptr;
+        return false;
     }
 
-    auto* elem_handler = tc::KindRegistry::instance().get(element);
-    if (!elem_handler) {
-        return nullptr;
-    }
-
+    // Check element handler exists
     std::string elem_kind = element;
-    auto& list_handler = tc::KindRegistry::instance().get_or_create(kind);
-
-    // Already has Python handlers?
-    if (list_handler.has_python()) {
-        return &list_handler;
+    if (!py_reg.has(elem_kind) && !tc::KindRegistryCpp::instance().has(elem_kind)) {
+        return false;
     }
 
-    // serialize: list -> list of serialized elements
-    list_handler.python.serialize = nb::cpp_function([elem_kind](nb::object obj) -> nb::object {
+    // Create serialize function
+    nb::object serialize_fn = nb::cpp_function([elem_kind](nb::object obj) -> nb::object {
         nb::list result;
         if (obj.is_none()) {
             return result;
         }
-        auto* handler = tc::KindRegistry::instance().get(elem_kind);
+        auto& py_reg = tc::KindRegistryPython::instance();
         for (auto item : obj) {
             nb::object nb_item = nb::borrow<nb::object>(item);
-            if (handler && handler->has_python()) {
-                result.append(handler->python.serialize(nb_item));
+            if (py_reg.has(elem_kind)) {
+                result.append(py_reg.serialize(elem_kind, nb_item));
             } else {
                 result.append(nb_item);
             }
@@ -108,15 +116,15 @@ static tc::TcKind* generate_list_handler(const std::string& kind) {
         return result;
     });
 
-    // deserialize: list -> list of deserialized elements
-    list_handler.python.deserialize = nb::cpp_function([elem_kind](nb::object data) -> nb::object {
+    // Create deserialize function
+    nb::object deserialize_fn = nb::cpp_function([elem_kind](nb::object data) -> nb::object {
         nb::list result;
         if (!nb::isinstance<nb::list>(data)) return result;
-        auto* handler = tc::KindRegistry::instance().get(elem_kind);
+        auto& py_reg = tc::KindRegistryPython::instance();
         for (auto item : data) {
             nb::object nb_item = nb::borrow<nb::object>(item);
-            if (handler && handler->has_python()) {
-                result.append(handler->python.deserialize(nb_item));
+            if (py_reg.has(elem_kind)) {
+                result.append(py_reg.deserialize(elem_kind, nb_item));
             } else {
                 result.append(nb_item);
             }
@@ -125,22 +133,30 @@ static tc::TcKind* generate_list_handler(const std::string& kind) {
     });
 
     // Prevent Python GC from collecting these
-    list_handler.python.serialize.inc_ref();
-    list_handler.python.deserialize.inc_ref();
-    list_handler._has_python = true;
+    serialize_fn.inc_ref();
+    deserialize_fn.inc_ref();
 
-    return &list_handler;
+    // Register in Python registry
+    py_reg.register_kind(kind, serialize_fn, deserialize_fn);
+
+    return true;
 }
 
 void bind_inspect(nb::module_& m) {
     // Register C++ builtin kinds (bool, int, float, string, etc.)
     tc::register_builtin_kinds();
 
+    // Register C++ inspect vtable in C dispatcher
+    tc::init_cpp_inspect_vtable();
+
+    // Register Python language vtable in C kind dispatcher
+    tc::init_python_lang_vtable();
+
     // Register Python-specific kind handlers (enum)
     register_builtin_kind_handlers();
 
-    // Set handler generator callback (runs in nanobind module context)
-    InspectRegistry::instance().set_handler_generator(generate_list_handler);
+    // Set callback for lazy list handler creation
+    tc::set_ensure_list_handler(ensure_list_handler_impl);
 
     // TypeBackend enum
     nb::enum_<TypeBackend>(m, "TypeBackend")
@@ -166,21 +182,22 @@ void bind_inspect(nb::module_& m) {
         .def_ro("is_inspectable", &InspectFieldInfo::is_inspectable)
         .def_ro("choices", &InspectFieldInfo::choices)
         .def_prop_ro("action", [](InspectFieldInfo& self) -> nb::object {
-            // If we have a Python action, return it
-            if (self.action.ptr() != nullptr && !self.action.is_none()) {
-                return self.action;
+            // If we have a Python action (stored as void* -> nb::object*), return it
+            if (self.py_action != nullptr) {
+                nb::object* py_obj = static_cast<nb::object*>(self.py_action);
+                if (py_obj->ptr() != nullptr && !py_obj->is_none()) {
+                    return *py_obj;
+                }
             }
-            // If we have a C++ action callback, lazily create nb::cpp_function
+            // If we have a C++ action callback, wrap it as nb::cpp_function
             if (self.cpp_action) {
                 auto cpp_fn = self.cpp_action;
-                self.action = nb::cpp_function([cpp_fn](nb::object obj) {
-                    // Cast to Component* and call C++ callback
+                return nb::cpp_function([cpp_fn](nb::object obj) {
                     void* ptr = static_cast<void*>(nb::cast<Component*>(obj));
                     if (ptr) {
                         cpp_fn(ptr);
                     }
                 });
-                return self.action;
             }
             return nb::none();
         });
@@ -198,9 +215,10 @@ void bind_inspect(nb::module_& m) {
              "Get all fields including inherited Component fields")
         .def("types", &InspectRegistry::types,
              "Get all registered type names")
-        .def("register_python_fields", &InspectRegistry::register_python_fields,
-             nb::arg("type_name"), nb::arg("fields_dict"),
-             "Register fields from Python inspect_fields dict")
+        .def("register_python_fields", [](InspectRegistry& self, const std::string& type_name, nb::dict fields_dict) {
+            tc::InspectRegistry_register_python_fields(self, type_name, std::move(fields_dict));
+        }, nb::arg("type_name"), nb::arg("fields_dict"),
+           "Register fields from Python inspect_fields dict")
         .def("get_type_backend", &InspectRegistry::get_type_backend,
              nb::arg("type_name"),
              "Get the backend (Cpp/Python/Rust) for a type")
@@ -218,7 +236,7 @@ void bind_inspect(nb::module_& m) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
-            return self.get(ptr, type_name, field_path);
+            return tc::InspectRegistry_get(self, ptr, type_name, field_path);
         }, nb::arg("obj"), nb::arg("field"),
            "Get field value from object")
 
@@ -226,7 +244,7 @@ void bind_inspect(nb::module_& m) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
-            self.set(ptr, type_name, field_path, value);
+            tc::InspectRegistry_set(self, ptr, type_name, field_path, std::move(value));
         }, nb::arg("obj"), nb::arg("field"), nb::arg("value"),
            "Set field value on object")
 
@@ -234,8 +252,10 @@ void bind_inspect(nb::module_& m) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
-            nos::trent t = self.serialize_all(ptr, type_name);
-            return InspectRegistry::trent_to_py(t);
+            tc_value v = self.serialize_all(ptr, type_name);
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return result;
         }, nb::arg("obj"),
            "Serialize all fields of object to dict")
 
@@ -244,13 +264,15 @@ void bind_inspect(nb::module_& m) {
             std::string type_name = get_short_type_name(full_type_name);
             void* ptr = get_raw_pointer(obj);
             nb::dict py_data = nb::cast<nb::dict>(data);
-            self.deserialize_component_fields_over_python(ptr, obj, type_name, py_data);
+            tc::InspectRegistry_deserialize_component_fields_over_python(self, ptr, obj, type_name, py_data);
         }, nb::arg("obj"), nb::arg("data"),
            "Deserialize all fields from dict to object")
 
-        .def("add_button", &InspectRegistry::add_button,
-             nb::arg("type_name"), nb::arg("path"), nb::arg("label"), nb::arg("action"),
-             "Add a button field to a type");
+        .def("add_button", [](InspectRegistry& self, const std::string& type_name,
+                              const std::string& path, const std::string& label, nb::object action) {
+            tc::InspectRegistry_add_button(self, type_name, path, label, std::move(action));
+        }, nb::arg("type_name"), nb::arg("path"), nb::arg("label"), nb::arg("action"),
+           "Add a button field to a type");
 }
 
 } // namespace termin

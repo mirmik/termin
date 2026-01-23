@@ -11,9 +11,11 @@
 #include "termin/assets/handles.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
-#include "termin/inspect/inspect_registry.hpp"
-#include "trent/trent.h"
 #include <memory>
+
+extern "C" {
+#include "tc_value.h"
+}
 
 namespace termin {
 
@@ -37,7 +39,7 @@ public:
     // Material override (creates a copy of tc_material for per-instance customization)
     bool _override_material = false;
     TcMaterial _overridden_material;
-    std::unique_ptr<nos::trent> _pending_override_data;
+    tc_value _pending_override_data = {TC_VALUE_NIL, {}};
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
@@ -46,7 +48,7 @@ public:
     INSPECT_FIELD(MeshRenderer, _override_material, "Override Material", "bool")
 
     MeshRenderer();
-    virtual ~MeshRenderer() = default;
+    virtual ~MeshRenderer();
 
     // --- Mesh ---
 
@@ -148,8 +150,8 @@ public:
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 
     // For SERIALIZABLE_FIELD (must be public for macro access)
-    nos::trent get_override_data() const;
-    void set_override_data(const nos::trent& val);
+    tc_value get_override_data() const;
+    void set_override_data(const tc_value* val);
 
     // Create override material lazily if needed (for deserialization)
     void try_create_override_material();

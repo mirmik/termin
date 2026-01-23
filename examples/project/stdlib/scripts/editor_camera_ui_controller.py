@@ -97,20 +97,19 @@ class EditorCameraUIController(PythonComponent):
         """Ищет CameraComponent на своей entity или родителях."""
         entity = self.entity
         while entity is not None:
-            for comp in entity.components:
-                if isinstance(comp, CameraComponent):
-                    self._camera_component = comp
-                    return
+            comp = entity.get_component(CameraComponent)
+            if comp is not None:
+                self._camera_component = comp
+                return
             entity = entity.parent
 
     def _find_ui_component(self) -> None:
         """Ищет UIComponent на своей Entity."""
         if self.entity is None:
             return
-        for comp in self.entity.components:
-            if isinstance(comp, UIComponent):
-                self._ui_component = comp
-                break
+        comp = self.entity.get_component(UIComponent)
+        if comp is not None:
+            self._ui_component = comp
 
     def _bind_buttons(self) -> None:
         """Привязка обработчиков к кнопкам."""

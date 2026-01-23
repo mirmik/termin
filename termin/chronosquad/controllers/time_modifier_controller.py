@@ -72,10 +72,10 @@ class TimeModifierController(PythonComponent):
         """Find ChronosphereController in scene."""
         from .chronosphere_controller import ChronosphereController
 
-        if self._scene is None:
+        if self.scene is None:
             return
 
-        for entity in self._scene.entities:
+        for entity in self.scene.entities:
             comp = entity.get_component(ChronosphereController)
             if comp is not None:
                 self._chronosphere_controller = comp

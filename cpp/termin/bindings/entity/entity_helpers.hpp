@@ -7,7 +7,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/quat.hpp"
-#include "termin/bindings/trent_helpers.hpp"
+#include "termin/bindings/tc_value_helpers.hpp"
 
 namespace nb = nanobind;
 

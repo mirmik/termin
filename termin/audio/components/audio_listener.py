@@ -35,8 +35,8 @@ class AudioListener(PythonComponent):
         self.volume: float = volume
         self._last_volume: float = volume
 
-    def on_added(self, scene: "Scene") -> None:
-        """Called when component is added to scene."""
+    def on_added(self) -> None:
+        """Called when component is added."""
         self._apply_volume()
 
     def start(self) -> None:

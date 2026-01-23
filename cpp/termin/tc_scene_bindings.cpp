@@ -1,11 +1,15 @@
 // tc_scene_bindings.cpp - Direct bindings for tc_scene C API
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
+#include "tc_scene_ref.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_scene_registry.h"
+#include "../../core_c/include/tc_entity_pool.h"
+#include "../../core_c/include/tc_log.h"
 #include "scene_bindings.hpp"
 
 namespace nb = nanobind;
@@ -30,6 +34,11 @@ public:
             tc_scene_free(_s);
             _s = nullptr;
         }
+    }
+
+    // Get non-owning reference to this scene
+    TcSceneRef scene_ref() const {
+        return TcSceneRef(_s);
     }
 
     // Disable copy
@@ -265,6 +274,7 @@ void bind_tc_scene(nb::module_& m) {
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
         .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
+        .def("scene_ref", &TcScene::scene_ref, "Get non-owning reference to this scene")
 
         // Entity management
         .def("add_entity", &TcScene::add_entity, nb::arg("entity"))
@@ -669,6 +679,17 @@ void bind_tc_scene(nb::module_& m) {
                 throw nb::python_error();
             }
         }, nb::arg("event"), "Dispatch key event to editor input handlers")
+
+        // Notification methods - call lifecycle hooks on all components via C API
+        .def("notify_editor_start", [](TcScene& self) {
+            tc_scene_notify_editor_start(self._s);
+        }, "Notify all components that editor has started")
+        .def("notify_scene_inactive", [](TcScene& self) {
+            tc_scene_notify_scene_inactive(self._s);
+        }, "Notify all components that scene became inactive")
+        .def("notify_scene_active", [](TcScene& self) {
+            tc_scene_notify_scene_active(self._s);
+        }, "Notify all components that scene became active")
         ;
 
     // =========================================================================

@@ -30,7 +30,7 @@ typedef void (*tc_py_before_render_fn)(void* py_self);
 typedef void (*tc_py_on_destroy_fn)(void* py_self);
 typedef void (*tc_py_on_added_to_entity_fn)(void* py_self);
 typedef void (*tc_py_on_removed_from_entity_fn)(void* py_self);
-typedef void (*tc_py_on_added_fn)(void* py_self, void* scene);
+typedef void (*tc_py_on_added_fn)(void* py_self);
 typedef void (*tc_py_on_removed_fn)(void* py_self);
 typedef void (*tc_py_on_scene_inactive_fn)(void* py_self);
 typedef void (*tc_py_on_scene_active_fn)(void* py_self);

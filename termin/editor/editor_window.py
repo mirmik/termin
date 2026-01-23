@@ -46,6 +46,7 @@ from termin.editor.file_processors import (
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
 from termin.editor.profiler import ProfilerPanel
+from termin.editor.modules_panel import ModulesPanel
 
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -125,6 +126,7 @@ class EditorWindow(QMainWindow):
         self._rendering_controller: RenderingController | None = None
         self._viewport_toolbar: QWidget | None = None
         self._profiler_panel: "ProfilerPanel | None" = None
+        self._modules_panel: "ModulesPanel | None" = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -498,12 +500,14 @@ class EditorWindow(QMainWindow):
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_profiler=self._toggle_profiler,
+            on_toggle_modules=self._toggle_modules_panel,
             on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
             on_show_agent_types=self._show_agent_types_dialog,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._mode_controller.is_fullscreen,
             is_profiler_visible=self._is_profiler_visible,
+            is_modules_visible=self._is_modules_panel_visible,
         )
 
     def _update_undo_redo_actions(self) -> None:
@@ -666,6 +670,29 @@ class EditorWindow(QMainWindow):
         """Called when profiler panel visibility changes (e.g., closed via X button)."""
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_profiler_action()
+
+    def _toggle_modules_panel(self, checked: bool) -> None:
+        """Toggle modules panel visibility."""
+        if checked:
+            if self._modules_panel is None:
+                self._modules_panel = ModulesPanel(self)
+                self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._modules_panel)
+                self._modules_panel.visibilityChanged.connect(self._on_modules_panel_visibility_changed)
+            self._modules_panel.show()
+        else:
+            if self._modules_panel is not None:
+                self._modules_panel.hide()
+
+    def _is_modules_panel_visible(self) -> bool:
+        """Returns True if modules panel is visible."""
+        if self._modules_panel is None:
+            return False
+        return self._modules_panel.isVisible()
+
+    def _on_modules_panel_visibility_changed(self, visible: bool) -> None:
+        """Called when modules panel visibility changes."""
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_modules_action()
 
     # ----------- editor camera -----------
 
@@ -931,6 +958,7 @@ class EditorWindow(QMainWindow):
             get_graphics=self._get_graphics,
             get_window_backend=self._get_window_backend,
             get_sdl_backend=lambda: self._sdl_backend,
+            on_entity_selected=self.show_entity_inspector,
             on_request_update=self._request_viewport_update,
             on_display_input_mode_changed=self._on_display_input_mode_changed,
         )

@@ -174,6 +174,18 @@ class PythonComponent:
     def entity(self, value: Optional[Entity]) -> None:
         self._entity = value
 
+    @property
+    def scene(self) -> Optional[Scene]:
+        """Get scene this component belongs to.
+
+        First checks cached _scene, then falls back to entity.scene lookup.
+        """
+        if self._scene is not None:
+            return self._scene
+        if self._entity is not None:
+            return self._entity.scene
+        return None
+
     # =========================================================================
     # Type identification
     # =========================================================================
@@ -242,16 +254,16 @@ class PythonComponent:
         pass
 
     # =========================================================================
-    # Scene relationship
+    # Lifecycle
     # =========================================================================
 
-    def on_added(self, scene: Scene) -> None:
-        """Called when entity is added to scene."""
-        self._scene = scene
+    def on_added(self) -> None:
+        """Called after component is fully attached to entity."""
+        pass
 
     def on_removed(self) -> None:
-        """Called when entity is removed from scene."""
-        self._scene = None
+        """Called when component is removed."""
+        pass
 
     def on_scene_inactive(self) -> None:
         """Called when scene mode changes to INACTIVE."""

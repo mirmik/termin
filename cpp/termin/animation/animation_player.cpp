@@ -151,6 +151,11 @@ void AnimationPlayer::update_bones_at_time(double t) {
         return;
     }
 
+    // Lazy skeleton acquisition (in case start() was called before SkeletonController existed)
+    if (!_target_skeleton) {
+        _acquire_skeleton();
+    }
+
     if (!_target_skeleton) {
         tc::Log::warn("[AnimationPlayer::update_bones_at_time] no target skeleton");
         return;

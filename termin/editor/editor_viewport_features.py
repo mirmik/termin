@@ -553,6 +553,7 @@ class EditorViewportFeatures:
             UIWidgetPass(
                 input_res="color_tonemapped",
                 output_res="color+widgets",
+                include_internal_entities=True,
             ),
             PresentToScreenPass(
                 input_res="color+widgets",

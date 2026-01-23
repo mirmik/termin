@@ -7,20 +7,59 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/ndarray.h>
 #include <functional>
+#include <cstring>
 
 #include "tc_log.hpp"
 #include "termin/entity/component.hpp"
-#include "termin/entity/component_registry.hpp"
+#include "termin/entity/component_registry_python.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
 #include "../../../../core_c/include/tc_scene.h"
 #include "../../../../core_c/include/tc_inspect.hpp"
+#include "../tc_value_helpers.hpp"
+#include "../../tc_scene_ref.hpp"
 
 namespace nb = nanobind;
 
 namespace termin {
+
+// Python-specific helper functions for CxxComponent
+// (moved from component.hpp to avoid nanobind dependency in public headers)
+
+inline nb::object component_to_python(CxxComponent* cxx) {
+    if (!cxx) return nb::none();
+    tc_component* c = cxx->c_component();
+    if (!c->wrapper) {
+        nb::object py_wrapper = nb::cast(cxx, nb::rv_policy::reference);
+        c->wrapper = py_wrapper.inc_ref().ptr();
+    }
+    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
+}
+
+inline void component_set_wrapper(CxxComponent* cxx, nb::object self) {
+    tc_component* c = cxx->c_component();
+    if (c->wrapper) {
+        nb::handle old(reinterpret_cast<PyObject*>(c->wrapper));
+        old.dec_ref();
+    }
+    c->wrapper = self.inc_ref().ptr();
+}
+
+inline nb::object tc_component_to_python(tc_component* c) {
+    if (!c) return nb::none();
+
+    if (c->kind == TC_NATIVE_COMPONENT) {
+        CxxComponent* cxx = CxxComponent::from_tc(c);
+        if (!cxx) return nb::none();
+        return component_to_python(cxx);
+    } else {
+        // TC_EXTERNAL_COMPONENT: wrapper holds the Python object
+        if (!c->wrapper) return nb::none();
+        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
+    }
+}
 
 // Iterator for traversing ancestor entities
 class EntityAncestorIterator {
@@ -37,6 +76,150 @@ public:
         _current = _current.parent();
         return nb::cast(result);
     }
+};
+
+// Non-owning reference to a tc_component - allows working with components
+// without requiring Python bindings for their specific type
+class TcComponentRef {
+public:
+    tc_component* _c = nullptr;
+
+    TcComponentRef() = default;
+    explicit TcComponentRef(tc_component* c) : _c(c) {}
+
+    bool valid() const { return _c != nullptr; }
+
+    const char* type_name() const {
+        return _c ? tc_component_type_name(_c) : "";
+    }
+
+    bool enabled() const { return _c ? _c->enabled : false; }
+    void set_enabled(bool v) { if (_c) _c->enabled = v; }
+
+    bool active_in_editor() const { return _c ? _c->active_in_editor : false; }
+    void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
+
+    bool is_drawable() const { return tc_component_is_drawable(_c); }
+    bool is_input_handler() const { return tc_component_is_input_handler(_c); }
+
+    tc_component_kind kind() const {
+        return _c ? _c->kind : TC_NATIVE_COMPONENT;
+    }
+
+    // Try to get typed Python object (may return None if no bindings available)
+    nb::object to_python() const {
+        if (!_c) return nb::none();
+        return tc_component_to_python(_c);
+    }
+
+    // Get owner entity
+    Entity entity() const {
+        if (!_c || !_c->owner_pool) return Entity();
+        return Entity(_c->owner_pool, _c->owner_entity_id);
+    }
+
+    // Serialize component data using tc_inspect
+    nb::object serialize_data() const {
+        if (!_c) return nb::none();
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            // For C++ components, get CxxComponent pointer
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            // For external (Python) components, wrapper holds the object
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return nb::none();
+
+        tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
+        nb::object result = tc_value_to_py(&v);
+        tc_value_free(&v);
+        return result;
+    }
+
+    // Full serialize (type + data) - returns dict with "type" and "data"
+    nb::object serialize() const {
+        if (!_c) return nb::none();
+
+        // For Python components, check if they have a custom serialize method
+        if (_c->kind == TC_PYTHON_COMPONENT && _c->wrapper) {
+            nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->wrapper));
+            if (nb::hasattr(py_obj, "serialize")) {
+                // Call Python serialize method (e.g., for UnknownComponent)
+                nb::object result = py_obj.attr("serialize")();
+                if (!result.is_none()) {
+                    return result;
+                }
+            }
+        }
+
+        nb::dict result;
+        result["type"] = type_name();
+        result["data"] = serialize_data();
+        return result;
+    }
+
+    // Deserialize data into component with explicit scene context
+    void deserialize_data(nb::object data, TcSceneRef scene_ref = TcSceneRef()) {
+        if (!_c || data.is_none()) return;
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return;
+
+        tc_value v = py_to_tc_value(data);
+        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene_ref.ptr());
+        tc_value_free(&v);
+    }
+
+    // Get field value by name
+    nb::object get_field(const std::string& field_name) const {
+        if (!_c) return nb::none();
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return nb::none();
+
+        try {
+            return tc::InspectRegistry_get(tc::InspectRegistry::instance(),
+                obj_ptr, tc_component_type_name(_c), field_name);
+        } catch (...) {
+            return nb::none();
+        }
+    }
+
+    // Set field value by name
+    void set_field(const std::string& field_name, nb::object value, TcSceneRef scene_ref = TcSceneRef()) {
+        if (!_c || value.is_none()) return;
+
+        void* obj_ptr = nullptr;
+        if (_c->kind == TC_NATIVE_COMPONENT) {
+            obj_ptr = CxxComponent::from_tc(_c);
+        } else {
+            obj_ptr = _c->wrapper;
+        }
+        if (!obj_ptr) return;
+
+        try {
+            tc::InspectRegistry_set(tc::InspectRegistry::instance(),
+                obj_ptr, tc_component_type_name(_c), field_name, value, scene_ref.ptr());
+        } catch (...) {
+            // Field not found or setter failed
+        }
+    }
+
+    // Comparison
+    bool operator==(const TcComponentRef& other) const { return _c == other._c; }
+    bool operator!=(const TcComponentRef& other) const { return _c != other._c; }
 };
 
 // Helper: register component with Python Scene if entity is in a scene's pool
@@ -61,6 +244,48 @@ void bind_entity_class(nb::module_& m) {
     nb::class_<EntityAncestorIterator>(m, "_EntityAncestorIterator")
         .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })
         .def("__next__", &EntityAncestorIterator::next);
+
+    // Non-owning scene reference - for passing scene context
+    nb::class_<TcSceneRef>(m, "TcSceneRef")
+        .def(nb::init<>())
+        .def("__bool__", &TcSceneRef::valid)
+        .def("__repr__", [](const TcSceneRef& self) {
+            if (!self.valid()) return std::string("<TcSceneRef: invalid>");
+            return std::string("<TcSceneRef: valid>");
+        });
+
+    // Non-owning component reference - works with any component regardless of language bindings
+    nb::class_<TcComponentRef>(m, "TcComponentRef")
+        .def(nb::init<>())
+        .def("__bool__", &TcComponentRef::valid)
+        .def("__eq__", &TcComponentRef::operator==)
+        .def("__ne__", &TcComponentRef::operator!=)
+        .def("__repr__", [](const TcComponentRef& self) {
+            if (!self.valid()) return std::string("<TcComponentRef: invalid>");
+            return std::string("<TcComponentRef: ") + self.type_name() + ">";
+        })
+        .def_prop_ro("type_name", &TcComponentRef::type_name)
+        .def_prop_rw("enabled", &TcComponentRef::enabled, &TcComponentRef::set_enabled)
+        .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
+        .def_prop_ro("is_drawable", &TcComponentRef::is_drawable)
+        .def_prop_ro("is_input_handler", &TcComponentRef::is_input_handler)
+        .def_prop_ro("kind", &TcComponentRef::kind)
+        .def_prop_ro("entity", &TcComponentRef::entity)
+        .def("to_python", &TcComponentRef::to_python,
+            "Try to get typed Python component object. Returns None if no bindings available.")
+        .def("serialize", &TcComponentRef::serialize,
+            "Serialize component to dict with 'type' and 'data' keys.")
+        .def("serialize_data", &TcComponentRef::serialize_data,
+            "Serialize component data (fields only) to dict.")
+        .def("deserialize_data", &TcComponentRef::deserialize_data,
+            nb::arg("data"), nb::arg("scene") = TcSceneRef(),
+            "Deserialize data dict into component fields. Pass scene for handle resolution.")
+        .def("get_field", &TcComponentRef::get_field,
+            nb::arg("field_name"),
+            "Get field value by name. Returns None if field not found.")
+        .def("set_field", &TcComponentRef::set_field,
+            nb::arg("field_name"), nb::arg("value"), nb::arg("scene") = TcSceneRef(),
+            "Set field value by name.");
 
     nb::class_<Entity>(m, "Entity")
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
@@ -146,6 +371,15 @@ void bind_entity_class(nb::module_& m) {
             })
         .def_prop_ro("runtime_id", [](const Entity& e) -> uint64_t {
             return e.runtime_id();
+        })
+        .def_prop_ro("scene", [](const Entity& e) -> nb::object {
+            tc_entity_pool* pool = e.pool();
+            if (!pool) return nb::none();
+            tc_scene* s = tc_entity_pool_get_scene(pool);
+            if (!s) return nb::none();
+            void* py_wrapper = tc_scene_get_py_wrapper(s);
+            if (!py_wrapper) return nb::none();
+            return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(py_wrapper));
         })
 
         // Flags
@@ -239,7 +473,7 @@ void bind_entity_class(nb::module_& m) {
         .def("add_component", [](Entity& e, nb::object component) -> nb::object {
             if (nb::isinstance<Component>(component)) {
                 Component* c = nb::cast<Component*>(component);
-                c->set_wrapper(component);
+                component_set_wrapper(c, component);
                 e.add_component(c);
                 register_component_with_scene(e, component);
                 return component;
@@ -260,6 +494,28 @@ void bind_entity_class(nb::module_& m) {
 
             throw std::runtime_error("add_component requires Component or PythonComponent");
         }, nb::arg("component"))
+
+        // Create component by type name and add to entity, returns TcComponentRef
+        .def("add_component_by_name", [](Entity& e, const std::string& type_name) -> TcComponentRef {
+            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+            if (!tc) {
+                throw std::runtime_error("Failed to create component: " + type_name);
+            }
+            e.add_component_ptr(tc);
+
+            // Register with scene if entity is in one
+            tc_entity_pool* pool = e.pool();
+            if (pool) {
+                tc_scene* scene = tc_entity_pool_get_scene(pool);
+                if (scene) {
+                    tc_scene_register_component(scene, tc);
+                }
+            }
+
+            return TcComponentRef(tc);
+        }, nb::arg("type_name"),
+           "Create component by type name and add to entity. Returns TcComponentRef.")
+
         .def("remove_component", [](Entity& e, nb::object component) {
             if (nb::isinstance<Component>(component)) {
                 e.remove_component(nb::cast<Component*>(component));
@@ -274,15 +530,45 @@ void bind_entity_class(nb::module_& m) {
 
             throw std::runtime_error("remove_component requires Component or PythonComponent");
         }, nb::arg("component"))
+
+        // TcComponentRef-based methods (work without Python wrappers)
+        .def("remove_component_ref", [](Entity& e, TcComponentRef ref) {
+            if (!ref.valid()) return;
+            e.remove_component_ptr(ref._c);
+        }, nb::arg("ref"), "Remove component by TcComponentRef.")
+
+        .def("has_component_ref", [](Entity& e, TcComponentRef ref) -> bool {
+            if (!ref.valid()) return false;
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                if (e.component_at(i) == ref._c) return true;
+            }
+            return false;
+        }, nb::arg("ref"), "Check if entity has this component.")
         .def("get_component_by_type", [](Entity& e, const std::string& type_name) -> nb::object {
             tc_component* tc = e.get_component_by_type_name(type_name);
             if (!tc) {
                 return nb::none();
             }
-            return CxxComponent::tc_to_python(tc);
+            return tc_component_to_python(tc);
         }, nb::arg("type_name"))
-        .def("get_python_component", &Entity::get_python_component,
-             nb::arg("type_name"))
+        .def("has_component_type", [](Entity& e, const std::string& type_name) -> bool {
+            return e.get_component_by_type_name(type_name) != nullptr;
+        }, nb::arg("type_name"))
+        .def("get_python_component", [](Entity& e, const std::string& type_name) -> nb::object {
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
+                    const char* comp_type = tc->type_name ? tc->type_name :
+                                            (tc->vtable ? tc->vtable->type_name : nullptr);
+                    if (comp_type && type_name == comp_type) {
+                        return nb::borrow((PyObject*)tc->wrapper);
+                    }
+                }
+            }
+            return nb::none();
+        }, nb::arg("type_name"))
         .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {
             if (!e.valid()) {
                 return nb::none();
@@ -292,7 +578,7 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
 
                 if (nb::isinstance(py_comp, type_class)) {
                     return py_comp;
@@ -306,7 +592,7 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
 
                 if (nb::isinstance(py_comp, type_class)) {
                     return py_comp;
@@ -321,13 +607,53 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = tc_component_to_python(tc);
                 if (!py_comp.is_none()) {
                     result.append(py_comp);
                 }
             }
             return result;
         })
+
+        // tc_components - returns all components as TcComponentRef (works with any language)
+        .def_prop_ro("tc_components", [](Entity& e) {
+            nb::list result;
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (tc) {
+                    result.append(TcComponentRef(tc));
+                }
+            }
+            return result;
+        })
+
+        // get_tc_component - get component ref by type name
+        .def("get_tc_component", [](Entity& e, const std::string& type_name) -> TcComponentRef {
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+                if (tc_component_type_name(tc) == type_name ||
+                    strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) {
+                    return TcComponentRef(tc);
+                }
+            }
+            return TcComponentRef();
+        }, nb::arg("type_name"))
+
+        // has_tc_component - check if entity has component with given type name
+        .def("has_tc_component", [](Entity& e, const std::string& type_name) -> bool {
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+                if (strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) {
+                    return true;
+                }
+            }
+            return false;
+        }, nb::arg("type_name"))
 
         // Hierarchy
         .def("set_parent", [](Entity& e, nb::object parent_obj) {
@@ -354,10 +680,12 @@ void bind_entity_class(nb::module_& m) {
 
         // Lifecycle
         .def("update", &Entity::update, nb::arg("dt"))
-        .def("on_added_to_scene", &Entity::on_added_to_scene, nb::arg("scene"))
+        .def("on_added_to_scene", [](Entity& e, TcSceneRef scene_ref) {
+            e.on_added_to_scene(scene_ref.ptr());
+        }, nb::arg("scene"))
         .def("on_removed_from_scene", &Entity::on_removed_from_scene)
-        .def("on_added", [](Entity& e, nb::object scene) {
-            e.on_added_to_scene(scene);
+        .def("on_added", [](Entity& e, TcSceneRef scene_ref) {
+            e.on_added_to_scene(scene_ref.ptr());
         }, nb::arg("scene"))
         .def("on_removed", [](Entity& e) {
             e.on_removed_from_scene();
@@ -371,11 +699,12 @@ void bind_entity_class(nb::module_& m) {
             [](const Entity& e) { return e.serializable(); },
             [](Entity& e, bool v) { e.set_serializable(v); })
         .def("serialize", [](Entity& e) -> nb::object {
-            nos::trent data = e.serialize_base();
-            if (data.is_nil()) {
+            tc_value data = e.serialize_base();
+            if (data.type == TC_VALUE_NIL) {
                 return nb::none();
             }
-            nb::dict result = nb::cast<nb::dict>(trent_to_py(data));
+            nb::dict result = nb::cast<nb::dict>(tc_value_to_py(&data));
+            tc_value_free(&data);
 
             nb::list comp_list;
             size_t count = e.component_count();
@@ -383,13 +712,11 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                nb::object py_comp = CxxComponent::tc_to_python(tc);
-
-                if (nb::hasattr(py_comp, "serialize")) {
-                    nb::object comp_data = py_comp.attr("serialize")();
-                    if (!comp_data.is_none()) {
-                        comp_list.append(comp_data);
-                    }
+                // Use TcComponentRef for unified serialization (works for all component types)
+                TcComponentRef ref(tc);
+                nb::object comp_data = ref.serialize();
+                if (!comp_data.is_none()) {
+                    comp_list.append(comp_data);
                 }
             }
             result["components"] = comp_list;
@@ -533,8 +860,6 @@ void bind_entity_class(nb::module_& m) {
                     }
                     nb::list components = nb::cast<nb::list>(comp_list_obj);
 
-                    auto& registry = ComponentRegistry::instance();
-
                     for (size_t i = 0; i < nb::len(components); ++i) {
                         nb::object comp_data_item = components[i];
                         if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
@@ -544,13 +869,13 @@ void bind_entity_class(nb::module_& m) {
 
                         std::string type_name = nb::cast<std::string>(comp_data["type"]);
 
-                        if (!registry.has(type_name)) {
+                        if (!ComponentRegistry::instance().has(type_name)) {
                             tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
                             continue;
                         }
 
                         try {
-                            nb::object comp = registry.create(type_name);
+                            nb::object comp = ComponentRegistryPython::create(type_name);
                             if (comp.is_none()) continue;
 
                             nb::object data_field;
@@ -560,14 +885,14 @@ void bind_entity_class(nb::module_& m) {
                                 data_field = nb::dict();
                             }
 
-                            const auto* info = registry.get_info(type_name);
+                            const auto* info = ComponentRegistryPython::get_info(type_name);
                             if (info && info->kind == TC_CXX_COMPONENT) {
                                 if (nb::isinstance<nb::dict>(data_field)) {
                                     nb::dict data_dict = nb::cast<nb::dict>(data_field);
                                     void* raw_ptr = nb::inst_ptr<void>(comp);
                                     // Use C API for deserialization
                                     tc_value tc_data = tc::nb_to_tc_value(data_dict);
-                                    tc_inspect_deserialize_with_scene(raw_ptr, type_name.c_str(), &tc_data, c_scene);
+                                    tc_inspect_deserialize(raw_ptr, type_name.c_str(), &tc_data, c_scene);
                                     tc_value_free(&tc_data);
                                 }
                             } else {
@@ -720,7 +1045,9 @@ void bind_entity_class(nb::module_& m) {
                 if (py_entity.is_none() || data.is_none()) return;
 
                 Entity ent = nb::cast<Entity>(py_entity);
-                if (!ent.valid()) return;
+                if (!ent.valid()) {
+                    return;
+                }
 
                 nb::dict dict_data = nb::cast<nb::dict>(data);
                 if (!dict_data.contains("components")) return;
@@ -729,17 +1056,15 @@ void bind_entity_class(nb::module_& m) {
                 if (!nb::isinstance<nb::list>(comp_list_obj)) return;
                 nb::list components = nb::cast<nb::list>(comp_list_obj);
 
-                // Get scene pointer for entity reference resolution
-                tc_scene* c_scene = nullptr;
+                // Get scene ref for entity reference resolution
+                TcSceneRef scene_ref;
                 if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
                     nb::object tc_scene_obj = scene.attr("_tc_scene");
                     if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
                         uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                        c_scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                        scene_ref = TcSceneRef(reinterpret_cast<tc_scene*>(scene_ptr));
                     }
                 }
-
-                auto& registry = ComponentRegistry::instance();
 
                 for (size_t i = 0; i < nb::len(components); ++i) {
                     nb::object comp_data_item = components[i];
@@ -749,39 +1074,62 @@ void bind_entity_class(nb::module_& m) {
                     if (!comp_data.contains("type")) continue;
                     std::string type_name = nb::cast<std::string>(comp_data["type"]);
 
-                    if (!registry.has(type_name)) {
-                        tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
+                    nb::object data_field;
+                    if (comp_data.contains("data")) {
+                        data_field = comp_data["data"];
+                    } else {
+                        data_field = nb::dict();
+                    }
+
+                    if (!ComponentRegistry::instance().has(type_name)) {
+                        // Create UnknownComponent to preserve data
+                        tc::Log::warn("Unknown component type: %s (creating placeholder)", type_name.c_str());
+                        try {
+                            nb::object unknown_mod = nb::module_::import_("termin.entity.unknown_component");
+                            nb::object unknown_cls = unknown_mod.attr("UnknownComponent");
+                            nb::object unknown_comp = unknown_cls(type_name, data_field);
+                            py_entity.attr("add_component")(unknown_comp);
+                        } catch (const std::exception& e) {
+                            tc::Log::error(e, "Failed to create UnknownComponent for %s", type_name.c_str());
+                        }
                         continue;
                     }
 
                     try {
-                        nb::object comp = registry.create(type_name);
-                        if (comp.is_none()) continue;
+                        const auto* info = ComponentRegistryPython::get_info(type_name);
 
-                        nb::object data_field;
-                        if (comp_data.contains("data")) {
-                            data_field = comp_data["data"];
-                        } else {
-                            data_field = nb::dict();
-                        }
-
-                        const auto* info = registry.get_info(type_name);
                         if (info && info->kind == TC_CXX_COMPONENT) {
-                            if (nb::isinstance<nb::dict>(data_field)) {
-                                nb::dict data_dict = nb::cast<nb::dict>(data_field);
-                                void* raw_ptr = nb::inst_ptr<void>(comp);
-                                // Use C API for deserialization
-                                tc_value tc_data = tc::nb_to_tc_value(data_dict);
-                                tc_inspect_deserialize_with_scene(raw_ptr, type_name.c_str(), &tc_data, c_scene);
-                                tc_value_free(&tc_data);
+                            // C++ components: create via registry, add, deserialize via TcComponentRef
+                            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+                            if (!tc) {
+                                tc::Log::warn("Failed to create C++ component: %s", type_name.c_str());
+                                continue;
                             }
+
+                            ent.add_component_ptr(tc);
+
+                            // Register with scene
+                            tc_entity_pool* pool = ent.pool();
+                            if (pool) {
+                                tc_scene* c_scene = tc_entity_pool_get_scene(pool);
+                                if (c_scene) {
+                                    tc_scene_register_component(c_scene, tc);
+                                }
+                            }
+
+                            TcComponentRef ref(tc);
+                            ref.deserialize_data(data_field, scene_ref);
                         } else {
+                            // Python components: create Python object, deserialize, add via Python
+                            nb::object comp = ComponentRegistryPython::create(type_name);
+                            if (comp.is_none()) continue;
+
                             if (nb::hasattr(comp, "deserialize_data")) {
                                 comp.attr("deserialize_data")(data_field, context);
                             }
-                        }
 
-                        py_entity.attr("add_component")(comp);
+                            py_entity.attr("add_component")(comp);
+                        }
 
                         if (!ent.validate_components()) {
                             tc::Log::error("Component validation failed after adding %s", type_name.c_str());

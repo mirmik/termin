@@ -298,18 +298,32 @@ tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool) {
 void tc_entity_pool_destroy(tc_entity_pool* pool) {
     if (!pool) return;
 
+    size_t total_components = 0;
+    size_t released_components = 0;
+    (void)total_components;
+    (void)released_components;
+
     // Free strings, release Python refs, and free dynamic arrays
     for (size_t i = 0; i < pool->capacity; i++) {
         free(pool->names[i]);
         free(pool->uuids[i]);
         entity_id_array_free(&pool->children[i]);
 
-        // Release references for all components with wrapper
+        // Destroy all components
         ComponentArray* comps = &pool->components[i];
         for (size_t j = 0; j < comps->count; j++) {
             tc_component* c = comps->items[j];
-            if (c && c->wrapper) {
+            if (!c) continue;
+            total_components++;
+
+            if (c->wrapper) {
+                // Has Python wrapper - release via reference counting
                 tc_component_release(c);
+                released_components++;
+            } else if (c->vtable && c->vtable->drop) {
+                // No wrapper but has drop - destroy directly
+                c->vtable->drop(c);
+                released_components++;
             }
         }
         component_array_free(&pool->components[i]);
@@ -547,10 +561,12 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
         // Notify component it's being removed from entity
         tc_component_on_removed_from_entity(c);
 
-        // Remove from array and release wrapper reference
+        // Remove from array and destroy component
         component_array_remove(comps, c);
         if (c->wrapper) {
             tc_component_release(c);
+        } else if (c->vtable && c->vtable->drop) {
+            c->vtable->drop(c);
         }
     }
     // Free components array itself
@@ -1151,6 +1167,10 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     }
 
     component_array_push(&pool->components[id.index], c);
+
+    // Notify component it was added to entity
+    tc_component_on_added_to_entity(c);
+    tc_component_on_added(c);
 }
 
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
@@ -1175,11 +1195,11 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
     // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
 
-    // Release wrapper reference (matches retain in add_component/set_wrapper)
-    // For external components: retain was done in add_component
-    // For native components: retain was done via set_wrapper in bindings
+    // Destroy component
     if (c->wrapper) {
         tc_component_release(c);
+    } else if (c->vtable && c->vtable->drop) {
+        c->vtable->drop(c);
     }
 }
 
