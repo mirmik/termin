@@ -1,5 +1,10 @@
 #pragma once
 
+// CameraComponent C++ implementation is DISABLED
+// Using Python implementation in termin/visualization/core/camera.py instead
+// To re-enable: uncomment the code below and re-enable bind_camera_component in entity_module.cpp
+
+/*
 #include "../entity/component.hpp"
 #include "../entity/component_registry.hpp"
 #include "../entity/entity.hpp"
@@ -181,3 +186,4 @@ private:
 REGISTER_COMPONENT(CameraComponent, CxxComponent);
 
 } // namespace termin
+*/
