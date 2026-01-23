@@ -314,8 +314,8 @@ class UIComponent(InputComponent):
 
         # Get viewport dimensions from event
         vp = event.viewport
-        if vp is not None and vp.display is not None:
-            px, py, pw, ph = vp.display.viewport_rect_to_pixels(vp)
+        if vp is not None:
+            px, py, pw, ph = vp.pixel_rect
             self._viewport_w = pw
             self._viewport_h = ph
 
@@ -332,8 +332,8 @@ class UIComponent(InputComponent):
 
         # Get viewport dimensions from event
         vp = event.viewport
-        if vp is not None and vp.display is not None:
-            px, py, pw, ph = vp.display.viewport_rect_to_pixels(vp)
+        if vp is not None:
+            px, py, pw, ph = vp.pixel_rect
             self._viewport_w = pw
             self._viewport_h = ph
 

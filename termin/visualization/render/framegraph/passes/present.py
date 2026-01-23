@@ -238,7 +238,6 @@ class ResolvePass(RenderFramePass):
             return
 
         src_size = fb_in.get_size()
-        log.info(f"[ResolvePass] Blitting from '{self.input_res}' ({src_size[0]}x{src_size[1]}) to '{self.output_res}' ({pw}x{ph})")
         ctx.graphics.blit_framebuffer(
             fb_in,
             fb_out,

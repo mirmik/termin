@@ -363,10 +363,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
     def swap_buffers(self) -> None:
         if self._window is not None:
-            # Check current context before swap
-            current_ctx = video.SDL_GL_GetCurrentContext()
-            if current_ctx != self._gl_context:
-                print(f"WARNING: Wrong context before swap! Expected {self._gl_context}, got {current_ctx}")
             video.SDL_GL_SwapWindow(self._window)
 
     def framebuffer_size(self) -> Tuple[int, int]:

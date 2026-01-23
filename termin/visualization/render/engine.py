@@ -72,8 +72,6 @@ def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
 
     if tc_pipeline.pass_count != len(frame_passes):
         py_names = [p.pass_name for p in frame_passes]
-        log.error(f"[engine] Pass count mismatch: C={tc_pipeline.pass_count}, Python={len(frame_passes)}")
-        log.error(f"[engine] Python passes: {py_names}")
         for p in frame_passes:
             has_tc = p._tc_pass is not None
             log.error(f"[engine]   '{p.pass_name}' ({type(p).__name__}): _tc_pass={'set' if has_tc else 'None'}")
@@ -105,8 +103,6 @@ def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
         # Get alias_groups from C frame graph
         c_alias_groups = tc_frame_graph_get_alias_groups(fg)
         alias_groups = {k: set(v) for k, v in c_alias_groups.items()}
-        log.info(f"[engine] C frame graph schedule: {[p.pass_name for p in schedule]}")
-        log.info(f"[engine] C alias_groups: {alias_groups}")
         return schedule, alias_groups
     finally:
         tc_frame_graph_destroy(fg)
@@ -405,8 +401,6 @@ class RenderEngine:
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
         from termin._native import log
 
-        log.info(f"[engine] render_view_to_fbo called, size={size}")
-
         pipeline = view.pipeline
         if pipeline is None:
             log.warn("[engine] render_view_to_fbo: pipeline is None")
@@ -422,6 +416,9 @@ class RenderEngine:
             log.warn("[engine] render_view_to_fbo: scene is None or destroyed")
             return
 
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         pw, ph = size
 
         # Обновляем aspect ratio камеры
@@ -432,13 +429,9 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Debug: log what each pass reports
-        log.info(f"[engine] render_view_to_fbo: passes reads/writes:")
-        for p in frame_passes:
-            log.info(f"[engine]   {p.pass_name}: reads={p.reads}, writes={p.writes}, tc_pass={getattr(p, '_tc_pass', None) is not None}")
-
         # Строим framegraph schedule (using tc_frame_graph if available)
-        schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
+        with profiler.section("Build Schedule"):
+            schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
 
         # Собираем ResourceSpecs
         resource_specs_map = {}
@@ -450,38 +443,26 @@ class RenderEngine:
                 resource_specs_map[spec.resource] = spec
 
         # Allocate resources based on alias_groups
-        resources = _allocate_pipeline_resources(
-            self, state, alias_groups, resource_specs_map, target_fbo, size
-        )
+        with profiler.section("Allocate Resources"):
+            resources = _allocate_pipeline_resources(
+                self, state, alias_groups, resource_specs_map, target_fbo, size
+            )
 
         # Clear resources according to specs
-        _clear_resources_by_spec(self.graphics, resources, resource_specs_map, size)
+        with profiler.section("Clear Resources"):
+            _clear_resources_by_spec(self.graphics, resources, resource_specs_map, size)
 
         # Выполняем пассы
         scene = view.scene
-        lights = scene.build_lights()
+        with profiler.section("Build Lights"):
+            lights = scene.build_lights()
 
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-
-        log.info(f"[engine] render_view_to_fbo: executing {len(schedule)} passes: {[p.pass_name for p in schedule]}")
-        _first_pass = True
         for render_pass in schedule:
             self.graphics.reset_state()
             self._clear_gl_errors()
 
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
-
-            if _first_pass:
-                log.info(f"[engine] render_view_to_fbo: first pass '{render_pass.pass_name}' reads={list(pass_reads.keys())}, writes={list(pass_writes.keys())}")
-                missing_reads = [k for k, v in pass_reads.items() if v is None]
-                missing_writes = [k for k, v in pass_writes.items() if v is None]
-                if missing_reads:
-                    log.warn(f"[engine] render_view_to_fbo: '{render_pass.pass_name}' missing reads: {missing_reads}")
-                if missing_writes:
-                    log.warn(f"[engine] render_view_to_fbo: '{render_pass.pass_name}' missing writes: {missing_writes}")
-                _first_pass = False
 
             ctx = ExecuteContext(
                 graphics=self.graphics,
@@ -531,6 +512,8 @@ class RenderEngine:
         """
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
         from termin._native import log
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
 
         frame_passes = pipeline.passes
         if not frame_passes:
@@ -562,7 +545,8 @@ class RenderEngine:
                 render_pass.required_resources()
 
         # Строим framegraph schedule (using tc_frame_graph if available)
-        schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
+        with profiler.section("Build Schedule"):
+            schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
 
         # Собираем ResourceSpecs
         resource_specs_map = {}
@@ -579,18 +563,18 @@ class RenderEngine:
         target_fbo = default_ctx.output_fbo
 
         # Allocate resources based on alias_groups
-        resources = _allocate_pipeline_resources(
-            self, shared_state, alias_groups, resource_specs_map, target_fbo, default_size
-        )
+        with profiler.section("Allocate Resources"):
+            resources = _allocate_pipeline_resources(
+                self, shared_state, alias_groups, resource_specs_map, target_fbo, default_size
+            )
 
         # Clear resources according to specs
-        _clear_resources_by_spec(self.graphics, resources, resource_specs_map, default_size)
+        with profiler.section("Clear Resources"):
+            _clear_resources_by_spec(self.graphics, resources, resource_specs_map, default_size)
 
         # Выполняем пассы
-        lights = scene.build_lights()
-
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
+        with profiler.section("Build Lights"):
+            lights = scene.build_lights()
 
         for render_pass in schedule:
             self.graphics.reset_state()

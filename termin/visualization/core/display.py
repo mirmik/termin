@@ -59,6 +59,13 @@ class Display(Identifiable):
         self._viewports: List["Viewport"] = []
         self._editor_only = editor_only
 
+        # Subscribe to surface resize
+        surface.set_on_resize(self._on_surface_resize)
+
+    def _on_surface_resize(self, width: int, height: int) -> None:
+        """Handle surface resize - update all viewport pixel_rects."""
+        self.update_all_pixel_rects()
+
     @property
     def name(self) -> str:
         """Имя дисплея."""
@@ -95,16 +102,14 @@ class Display(Identifiable):
         """
         Добавляет viewport в дисплей.
 
-        Устанавливает обратную ссылку viewport.display = self.
-
         Параметры:
             viewport: Viewport для добавления.
 
         Возвращает:
             Добавленный viewport.
         """
-        viewport.display = self
         self._viewports.append(viewport)
+        self._update_viewport_pixel_rect(viewport)
         return viewport
 
     def remove_viewport(self, viewport: "Viewport") -> None:
@@ -116,10 +121,24 @@ class Display(Identifiable):
         """
         if viewport in self._viewports:
             self._viewports.remove(viewport)
-            viewport.display = None
             # Remove viewport from camera's list
             if viewport.camera is not None:
                 viewport.camera.remove_viewport(viewport)
+
+    def _update_viewport_pixel_rect(self, viewport: "Viewport") -> None:
+        """Пересчитывает pixel_rect для одного viewport."""
+        width, height = self.get_size()
+        vx, vy, vw, vh = viewport.rect
+        px = int(vx * width)
+        py = int(vy * height)
+        pw = max(1, int(vw * width))
+        ph = max(1, int(vh * height))
+        viewport.pixel_rect = (px, py, pw, ph)
+
+    def update_all_pixel_rects(self) -> None:
+        """Пересчитывает pixel_rect для всех viewports. Вызывать при resize surface."""
+        for viewport in self._viewports:
+            self._update_viewport_pixel_rect(viewport)
 
     def create_viewport(
         self,
@@ -153,13 +172,13 @@ class Display(Identifiable):
             name=name,
             scene=scene,
             camera=camera,
-            display=self,
             rect=rect,
             canvas=canvas,
             pipeline=pipeline,
         )
         camera.add_viewport(viewport)
         self._viewports.append(viewport)
+        self._update_viewport_pixel_rect(viewport)
         return viewport
 
     def viewport_at(self, x: float, y: float) -> Optional["Viewport"]:

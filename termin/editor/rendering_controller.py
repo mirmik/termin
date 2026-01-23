@@ -277,18 +277,19 @@ class RenderingController:
         display_viewports: dict[int, list[tuple["Viewport", ViewportConfig]]] = {}
 
         for viewport in viewports:
-            if viewport.display is None:
+            display = self._manager.get_display_for_viewport(viewport)
+            if display is None:
                 continue
-            display_id = id(viewport.display)
+            display_id = id(display)
 
             # Find matching ViewportConfig
-            config = self._find_viewport_config(scene, viewport)
+            config = self._find_viewport_config(scene, viewport, display)
             if config is None:
                 continue
 
             if display_id not in display_viewports:
                 display_viewports[display_id] = []
-            display_viewports[display_id].append((viewport, config))
+            display_viewports[display_id].append((viewport, config, display))
 
         # Set up input for each display
         for display_id, vp_configs in display_viewports.items():
@@ -296,10 +297,7 @@ class RenderingController:
                 continue
 
             # Use first viewport's input mode for the display
-            viewport, config = vp_configs[0]
-            display = viewport.display
-            if display is None:
-                continue
+            viewport, config, display = vp_configs[0]
 
             # Skip editor display - it has its own input handling
             if display_id == self._editor_display_id:
@@ -313,14 +311,16 @@ class RenderingController:
 
         return viewports
 
-    def _find_viewport_config(self, scene: "Scene", viewport: "Viewport"):
+    def _find_viewport_config(self, scene: "Scene", viewport: "Viewport", display: "Display" = None):
         """Find ViewportConfig that matches a viewport."""
         from termin.visualization.core.viewport_config import ViewportConfig
 
-        if viewport.display is None or viewport.camera is None:
+        if display is None:
+            display = self._manager.get_display_for_viewport(viewport)
+        if display is None or viewport.camera is None:
             return None
 
-        display_name = viewport.display.name
+        display_name = display.name
         camera_uuid = ""
         if viewport.camera.entity is not None:
             camera_uuid = viewport.camera.entity.uuid
@@ -813,7 +813,7 @@ class RenderingController:
 
         if viewport is not None:
             # Update selected display from viewport's parent
-            self._selected_display = viewport.display
+            self._selected_display = self._manager.get_display_for_viewport(viewport)
 
             scene = self._get_scene() if self._get_scene is not None else None
             # Build display_names dict for inspector
@@ -823,6 +823,7 @@ class RenderingController:
                 displays=self._manager.displays,
                 display_names=display_names,
                 scene=scene,
+                current_display=self._selected_display,
             )
 
             if self._on_viewport_selected is not None:
@@ -944,8 +945,9 @@ class RenderingController:
 
     def _on_remove_viewport_requested(self, viewport: "Viewport") -> None:
         """Handle request to remove viewport."""
-        if viewport.display is not None:
-            viewport.display.remove_viewport(viewport)
+        display = self._manager.get_display_for_viewport(viewport)
+        if display is not None:
+            display.remove_viewport(viewport)
 
         if self._selected_viewport is viewport:
             self._selected_viewport = None
@@ -1046,7 +1048,7 @@ class RenderingController:
         if self._selected_viewport is None:
             return
 
-        old_display = self._selected_viewport.display
+        old_display = self._manager.get_display_for_viewport(self._selected_viewport)
         if old_display is not None and old_display is not new_display:
             old_display.remove_viewport(self._selected_viewport)
 

@@ -236,6 +236,7 @@ class InspectorController:
         displays: Optional[List["Display"]] = None,
         display_names: Optional[dict[int, str]] = None,
         scene: "Scene | None" = None,
+        current_display: "Display | None" = None,
     ) -> None:
         """
         Show ViewportInspector and set target viewport.
@@ -245,13 +246,14 @@ class InspectorController:
             displays: Available displays for selection.
             display_names: Optional display names mapping.
             scene: Scene to find cameras from.
+            current_display: Display that contains this viewport.
         """
         self._stack.setCurrentIndex(self.VIEWPORT_INSPECTOR_INDEX)
         if displays is not None:
             self._viewport_inspector.set_displays(displays, display_names)
         if scene is not None:
             self._viewport_inspector.set_scene(scene)
-        self._viewport_inspector.set_viewport(viewport)
+        self._viewport_inspector.set_viewport(viewport, current_display)
 
     def show_pipeline_inspector_for_file(self, file_path: str) -> None:
         """Show PipelineInspector and load pipeline from file."""

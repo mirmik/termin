@@ -58,8 +58,16 @@ class RenderSurface(ABC):
     def present(self) -> None:
         """
         Представляет результат рендеринга (swap buffers для окна).
-        
+
         Для offscreen — no-op.
+        """
+        pass
+
+    def set_on_resize(self, callback: Callable[[int, int], None] | None) -> None:
+        """
+        Set callback for resize events.
+
+        For offscreen surfaces this is a no-op (size doesn't change dynamically).
         """
         pass
 
@@ -201,6 +209,12 @@ class WindowRenderSurface(RenderSurface):
         """Обработчик изменения размера framebuffer."""
         if self._on_resize is not None:
             self._on_resize(width, height)
+
+    def set_on_resize(self, callback: Callable[[int, int], None] | None) -> None:
+        """Set resize callback."""
+        self._on_resize = callback
+        if callback is not None:
+            self._backend_window.set_framebuffer_size_callback(self._handle_resize)
 
     def get_framebuffer(self) -> "FramebufferHandle":
         return self._backend_window.get_window_framebuffer()

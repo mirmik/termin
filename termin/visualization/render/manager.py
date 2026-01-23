@@ -78,10 +78,6 @@ class RenderingManager:
         # viewport_id -> ViewportRenderState
         self._viewport_states: Dict[int, "ViewportRenderState"] = {}
 
-        # Legacy: display-based viewport states (for backwards compatibility)
-        # Will be removed after migration
-        self._legacy_viewport_states: Dict[int, Dict[int, "ViewportRenderState"]] = {}
-
         # Graphics backend (set via initialize() or set_graphics())
         self._graphics: Optional["GraphicsBackend"] = None
 
@@ -202,6 +198,13 @@ class RenderingManager:
         """List of managed displays (copy)."""
         return list(self._displays)
 
+    def get_display_for_viewport(self, viewport: "Viewport") -> Optional["Display"]:
+        """Find display that contains this viewport."""
+        for display in self._displays:
+            if viewport in display.viewports:
+                return display
+        return None
+
     def add_display(self, display: "Display", name: Optional[str] = None) -> None:
         """
         Add display to management.
@@ -217,10 +220,6 @@ class RenderingManager:
 
         if name is not None:
             display.name = name
-
-        # Legacy: Initialize viewport states for this display
-        display_id = id(display)
-        self._legacy_viewport_states[display_id] = {}
 
     def remove_display(self, display: "Display") -> None:
         """Remove display from management."""
@@ -342,7 +341,6 @@ class RenderingManager:
             scene=scene,
             camera=camera,
             rect=region,
-            display=display,
             pipeline=pipeline,
         )
 
@@ -604,69 +602,22 @@ class RenderingManager:
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get render state for a viewport."""
-        viewport_id = id(viewport)
-
-        # New flat structure
-        state = self._viewport_states.get(viewport_id)
-        if state is not None:
-            return state
-
-        # Legacy fallback
-        display = viewport.display
-        if display is None:
-            return None
-
-        display_id = id(display)
-        states = self._legacy_viewport_states.get(display_id)
-        if states is None:
-            return None
-
-        return states.get(viewport_id)
+        return self._viewport_states.get(id(viewport))
 
     def remove_viewport_state(self, viewport: "Viewport") -> None:
         """Remove render state for a viewport (call after clearing FBOs)."""
-        viewport_id = id(viewport)
-
-        # Remove from new structure
-        state = self._viewport_states.pop(viewport_id, None)
+        state = self._viewport_states.pop(id(viewport), None)
         if state is not None:
             state.clear_all()
-
-        # Legacy cleanup
-        display = viewport.display
-        if display is not None:
-            display_id = id(display)
-            states = self._legacy_viewport_states.get(display_id)
-            if states is not None and viewport_id in states:
-                del states[viewport_id]
 
     def get_or_create_viewport_state(self, viewport: "Viewport") -> "ViewportRenderState":
         """Get or create render state for a viewport."""
         from termin.visualization.render.state import ViewportRenderState
 
         viewport_id = id(viewport)
-
-        # New flat structure (preferred)
-        if self._use_offscreen_rendering:
-            if viewport_id not in self._viewport_states:
-                self._viewport_states[viewport_id] = ViewportRenderState()
-            return self._viewport_states[viewport_id]
-
-        # Legacy: display-based structure
-        display = viewport.display
-        if display is None:
-            raise ValueError("Viewport has no display")
-
-        display_id = id(display)
-        if display_id not in self._legacy_viewport_states:
-            self._legacy_viewport_states[display_id] = {}
-
-        states = self._legacy_viewport_states[display_id]
-
-        if viewport_id not in states:
-            states[viewport_id] = ViewportRenderState()
-
-        return states[viewport_id]
+        if viewport_id not in self._viewport_states:
+            self._viewport_states[viewport_id] = ViewportRenderState()
+        return self._viewport_states[viewport_id]
 
     # --- Rendering ---
 
@@ -758,8 +709,6 @@ class RenderingManager:
         are rendered in a single pass. Scene pipelines can span multiple displays.
         """
         from termin._native import log
-        print("[RenderingManager] render_all_offscreen called")
-
 
         if self._offscreen_context is None:
             log.warn("[render_all_offscreen] OffscreenContext not initialized, call initialize() first")
@@ -823,8 +772,6 @@ class RenderingManager:
         from termin._native import log
         from termin.visualization.render.engine import ViewportContext
 
-        print(f"[RenderingManager] _render_scene_pipeline_offscreen: scene={scene.name}, pipeline={pipeline_name}")
-
         if scene.is_destroyed:
             return
 
@@ -845,18 +792,11 @@ class RenderingManager:
             if viewport.camera is None:
                 continue
 
-            display = viewport.display
-            if display is None or display.surface is None:
-                continue
-
             if first_viewport is None:
                 first_viewport = viewport
 
-            # Compute output size
-            width, height = display.surface.get_size()
-            vx, vy, vw, vh = viewport.rect
-            pw = max(1, int(vw * width))
-            ph = max(1, int(vh * height))
+            # Get output size from pixel_rect (updated by Display on resize)
+            px, py, pw, ph = viewport.pixel_rect
 
             # Ensure output FBO exists
             state = self.get_or_create_viewport_state(viewport)
@@ -894,21 +834,12 @@ class RenderingManager:
         """Render a single unmanaged viewport to its output_fbo."""
         from termin.visualization.render.view import RenderView
 
-        display = viewport.display
-        if display is None or display.surface is None:
-            return
-
         scene = viewport.scene
         if scene is None or scene.is_destroyed:
             return
 
-        print(f"[RenderingManager] _render_viewport_offscreen: viewport={viewport.name}, scene={scene.name}")
-
-        # Compute output size
-        width, height = display.surface.get_size()
-        vx, vy, vw, vh = viewport.rect
-        pw = max(1, int(vw * width))
-        ph = max(1, int(vh * height))
+        # Get output size from pixel_rect (updated by Display on resize)
+        px, py, pw, ph = viewport.pixel_rect
 
         # Ensure output FBO
         state = self.get_or_create_viewport_state(viewport)
@@ -943,16 +874,24 @@ class RenderingManager:
         3. Blit viewports in depth order
         4. swap_buffers()
         """
-        for display in self._displays:
-            self._present_display(display)
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
+        with profiler.section("Present All"):
+            for display in self._displays:
+                self._present_display(display)
 
     def _present_display(self, display: "Display") -> None:
         """Blit viewport output_fbos to a single display."""
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         surface = display.surface
         if surface is None:
             return
 
-        surface.make_current()
+        with profiler.section("Make Current"):
+            surface.make_current()
 
         width, height = surface.get_size()
         if width <= 0 or height <= 0:
@@ -968,30 +907,32 @@ class RenderingManager:
         # Blit viewports in depth order
         sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 
-        for viewport in sorted_viewports:
-            if not viewport.enabled:
-                continue
+        with profiler.section("Blit Viewports"):
+            for viewport in sorted_viewports:
+                if not viewport.enabled:
+                    continue
 
-            state = self.get_viewport_state(viewport)
-            if state is None or state.output_fbo is None:
-                continue
+                state = self.get_viewport_state(viewport)
+                if state is None or state.output_fbo is None:
+                    continue
 
-            # Compute destination rect on display
-            vx, vy, vw, vh = viewport.rect
-            dx = int(vx * width)
-            dy = int(vy * height)
-            dw = max(1, int(vw * width))
-            dh = max(1, int(vh * height))
+                # Compute destination rect on display
+                vx, vy, vw, vh = viewport.rect
+                dx = int(vx * width)
+                dy = int(vy * height)
+                dw = max(1, int(vw * width))
+                dh = max(1, int(vh * height))
 
-            # Blit output_fbo -> display_fbo
-            self._graphics.blit_framebuffer(
-                state.output_fbo,
-                display_fbo,
-                (0, 0, dw, dh),  # src rect (full output_fbo)
-                (dx, dy, dx + dw, dy + dh),  # dst rect on display
-            )
+                # Blit output_fbo -> display_fbo
+                self._graphics.blit_framebuffer(
+                    state.output_fbo,
+                    display_fbo,
+                    (0, 0, dw, dh),  # src rect (full output_fbo)
+                    (dx, dy, dx + dw, dy + dh),  # dst rect on display
+                )
 
-        surface.present()
+        with profiler.section("Swap Buffers"):
+            surface.present()
 
     def _collect_all_viewports(self) -> Dict[str, "Viewport"]:
         """Collect all viewports from all displays by name."""

@@ -60,12 +60,17 @@ def _translate_qt_mods(qt_mods: int) -> int:
 
 
 class _QtGLWidget(QOpenGLWidget):
-    def __init__(self, owner: "QtGLWindowHandle", parent=None):
+    def __init__(self, owner: "QtGLWindowHandle", parent=None, vsync: bool = True):
         super().__init__(parent)
         self._owner = owner
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
         self.setMouseTracking(True)
+
+        # Configure swap interval (vsync)
+        fmt = QtGui.QSurfaceFormat()
+        fmt.setSwapInterval(1 if vsync else 0)
+        self.setFormat(fmt)
 
     # --- События мыши / клавиатуры --------------------------------------
 
@@ -125,10 +130,11 @@ class QtGLWindowHandle(BackendWindow):
         share=None,
         parent=None,
         graphics: Optional[OpenGLGraphicsBackend] = None,
+        vsync: bool = False,
     ):
         self.app = _qt_app()
 
-        self._widget = _QtGLWidget(self, parent=parent)
+        self._widget = _QtGLWidget(self, parent=parent, vsync=vsync)
         self._widget.setMinimumSize(50, 50)
         self._widget.resize(width, height)
         self._widget.show()
@@ -239,9 +245,11 @@ class QtWindowBackend(WindowBackend):
         self,
         app: Optional[QtWidgets.QApplication] = None,
         graphics: Optional[OpenGLGraphicsBackend] = None,
+        vsync: bool = False,
     ):
         self.app = app or _qt_app()
         self._graphics = graphics
+        self._vsync = vsync
 
     def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
         """Set graphics backend for new windows."""
@@ -254,12 +262,14 @@ class QtWindowBackend(WindowBackend):
         title: str,
         share: Optional[BackendWindow] = None,
         parent: Optional[QtWidgets.QWidget] = None,
+        vsync: Optional[bool] = None,
     ) -> QtGLWindowHandle:
         return QtGLWindowHandle(
             width, height, title,
             share=share,
             parent=parent,
             graphics=self._graphics,
+            vsync=vsync if vsync is not None else self._vsync,
         )
 
     def poll_events(self):

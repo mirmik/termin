@@ -60,6 +60,7 @@ class ViewportInspector(QWidget):
         super().__init__(parent)
 
         self._viewport: Optional["Viewport"] = None
+        self._current_display: Optional["Display"] = None
         self._displays: List["Display"] = []
         self._display_names: dict[int, str] = {}
         self._cameras: List[Tuple["CameraComponent", str]] = []  # (camera, name)
@@ -212,14 +213,16 @@ class ViewportInspector(QWidget):
         self._scene = scene
         self._update_camera_list()
 
-    def set_viewport(self, viewport: Optional["Viewport"]) -> None:
+    def set_viewport(self, viewport: Optional["Viewport"], current_display: Optional["Display"] = None) -> None:
         """
         Set the viewport to inspect.
 
         Args:
             viewport: Viewport to inspect, or None to clear.
+            current_display: Display that contains this viewport.
         """
         self._viewport = viewport
+        self._current_display = current_display
 
         if viewport is None:
             self._clear()
@@ -232,8 +235,8 @@ class ViewportInspector(QWidget):
 
             # Update display selection
             self._update_display_combo()
-            if viewport.display is not None and viewport.display in self._displays:
-                idx = self._displays.index(viewport.display)
+            if current_display is not None and current_display in self._displays:
+                idx = self._displays.index(current_display)
                 self._display_combo.setCurrentIndex(idx)
             else:
                 self._display_combo.setCurrentIndex(-1)
@@ -358,10 +361,6 @@ class ViewportInspector(QWidget):
         """Update display dropdown with current displays."""
         self._updating = True
         try:
-            current_display = None
-            if self._viewport is not None:
-                current_display = self._viewport.display
-
             self._display_combo.clear()
             for i, display in enumerate(self._displays):
                 if id(display) in self._display_names:
@@ -371,8 +370,8 @@ class ViewportInspector(QWidget):
                 self._display_combo.addItem(name)
 
             # Restore selection
-            if current_display is not None and current_display in self._displays:
-                idx = self._displays.index(current_display)
+            if self._current_display is not None and self._current_display in self._displays:
+                idx = self._displays.index(self._current_display)
                 self._display_combo.setCurrentIndex(idx)
         finally:
             self._updating = False

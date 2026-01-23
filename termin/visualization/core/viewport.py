@@ -6,7 +6,6 @@ from termin.visualization.core.identifiable import Identifiable
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.core.display import Display
     from termin.visualization.core.entity import Entity
     from termin.visualization.ui.canvas import Canvas
     from termin.visualization.render.framegraph import RenderPipeline
@@ -21,8 +20,8 @@ class Viewport(Identifiable):
     - name: имя viewport для идентификации в пайплайне
     - scene: сцена с объектами
     - camera: камера для рендеринга
-    - display: родительский дисплей
     - rect: нормализованный прямоугольник (x, y, w, h) в [0..1]
+    - pixel_rect: прямоугольник в пикселях (обновляется Display при resize)
     - canvas: опциональная 2D канва для UI
     - depth: приоритет рендеринга (меньше = раньше, как Camera.depth в Unity)
     - pipeline: конвейер рендеринга (None = default)
@@ -36,7 +35,6 @@ class Viewport(Identifiable):
     scene: "Scene"
     camera: "CameraComponent"
     rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
-    display: Optional["Display"] = None
     canvas: Optional["Canvas"] = None
     depth: int = 0  # Render priority: lower values render first
     pipeline: Optional["RenderPipeline"] = None  # None = don't render
@@ -46,6 +44,7 @@ class Viewport(Identifiable):
     layer_mask: int = 0xFFFFFFFFFFFFFFFF  # All layers enabled by default
     enabled: bool = True  # Whether this viewport is rendered
     internal_entities: Optional["Entity"] = None  # Root entity for viewport-specific objects (camera, UI, etc.)
+    pixel_rect: Tuple[int, int, int, int] = (0, 0, 1, 1)  # (px, py, pw, ph) in pixels, updated by Display
     _init_uuid: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
@@ -76,29 +75,9 @@ class Viewport(Identifiable):
         Возвращает:
             Ray3 из камеры через указанную точку, или None если камера недоступна.
         """
-        if self.display is None:
-            return None
         if self.camera is None or self.camera.entity is None:
             return None
-        rect = self.display.viewport_rect_to_pixels(self)
-        return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
-
-    def compute_pixel_rect(self, width: int, height: int) -> Tuple[int, int, int, int]:
-        """
-        Вычисляет прямоугольник viewport'а в пикселях.
-
-        Параметры:
-            width, height: размер родительской поверхности.
-
-        Возвращает:
-            (px, py, pw, ph) — позиция и размер в пикселях.
-        """
-        vx, vy, vw, vh = self.rect
-        px = int(vx * width)
-        py = int(vy * height)
-        pw = max(1, int(vw * width))
-        ph = max(1, int(vh * height))
-        return (px, py, pw, ph)
+        return self.camera.screen_point_to_ray(x, y, viewport_rect=self.pixel_rect)
 
     def serialize(self) -> dict:
         """
