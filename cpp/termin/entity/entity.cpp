@@ -68,7 +68,7 @@ void Entity::add_component(Component* component) {
 
     component->entity = *this;
     tc_entity_pool_add_component(_pool, _id, component->c_component());
-    component->on_added_to_entity();
+    // on_added_to_entity is called inside tc_entity_pool_add_component
 }
 
 void Entity::add_component_ptr(tc_component* c) {
@@ -83,14 +83,14 @@ void Entity::add_component_ptr(tc_component* c) {
     }
 
     tc_entity_pool_add_component(_pool, _id, c);
-    tc_component_on_added_to_entity(c);
+    // on_added_to_entity is called inside tc_entity_pool_add_component
 }
 
 void Entity::remove_component(Component* component) {
     if (!component || !valid()) return;
 
     tc_entity_pool_remove_component(_pool, _id, component->c_component());
-    component->on_removed_from_entity();
+    // on_removed_from_entity is called inside tc_entity_pool_remove_component
     component->entity = Entity();  // Invalid entity
 }
 
@@ -98,7 +98,7 @@ void Entity::remove_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
 
     tc_entity_pool_remove_component(_pool, _id, c);
-    tc_component_on_removed_from_entity(c);
+    // on_removed_from_entity is called inside tc_entity_pool_remove_component
 }
 
 CxxComponent* Entity::get_component_by_type(const std::string& type_name) {

@@ -452,19 +452,23 @@ void bind_entity_class(nb::module_& m) {
                 throw std::runtime_error("Failed to create component: " + type_name);
             }
             e.add_component_ptr(tc);
-
-            // Register with scene if entity is in one
-            tc_entity_pool* pool = e.pool();
-            if (pool) {
-                tc_scene* scene = tc_entity_pool_get_scene(pool);
-                if (scene) {
-                    tc_scene_register_component(scene, tc);
-                }
-            }
-
             return TcComponentRef(tc);
         }, nb::arg("type_name"),
            "Create component by type name and add to entity. Returns TcComponentRef.")
+
+        // Add existing PythonComponent (uses its tc_component instead of factory)
+        .def("add_component", [](Entity& e, nb::object comp) -> TcComponentRef {
+            // Get tc_component* from PythonComponent._tc.c_ptr_int()
+            nb::object tc_wrapper = comp.attr("_tc");
+            uintptr_t ptr = nb::cast<uintptr_t>(tc_wrapper.attr("c_ptr_int")());
+            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+            if (!tc) {
+                throw std::runtime_error("Component has no tc_component");
+            }
+            e.add_component_ptr(tc);
+            return TcComponentRef(tc);
+        }, nb::arg("component"),
+           "Add existing PythonComponent to entity. Returns TcComponentRef.")
 
         // TcComponentRef-based methods (work without Python wrappers)
         .def("remove_component_ref", [](Entity& e, TcComponentRef ref) {
@@ -820,9 +824,6 @@ void bind_entity_class(nb::module_& m) {
                                 tc_component* tc = ComponentRegistryPython::create_tc_component("UnknownComponent");
                                 if (tc) {
                                     ent.add_component_ptr(tc);
-                                    if (c_scene) {
-                                        tc_scene_register_component(c_scene, tc);
-                                    }
                                     TcComponentRef ref(tc);
                                     ref.set_field("stored_type", nb::str(type_name.c_str()), scene_ref);
                                     ref.set_field("stored_data", data_field, scene_ref);
@@ -842,9 +843,6 @@ void bind_entity_class(nb::module_& m) {
                             }
 
                             ent.add_component_ptr(tc);
-                            if (c_scene) {
-                                tc_scene_register_component(c_scene, tc);
-                            }
 
                             // Deserialize via TcComponentRef (works for all component types)
                             TcComponentRef ref(tc);

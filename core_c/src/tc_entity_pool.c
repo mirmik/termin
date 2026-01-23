@@ -1168,6 +1168,12 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
 
     component_array_push(&pool->components[id.index], c);
 
+    // Register with scene if pool belongs to one
+    tc_scene* scene = tc_entity_pool_get_scene(pool);
+    if (scene) {
+        tc_scene_register_component(scene, c);
+    }
+
     // Notify component it was added to entity
     tc_component_on_added_to_entity(c);
     tc_component_on_added(c);
