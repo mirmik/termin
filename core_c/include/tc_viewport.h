@@ -13,6 +13,9 @@ extern "C" {
 // ============================================================================
 
 struct tc_viewport {
+    // Reference counting
+    uint32_t ref_count;
+
     char* name;
     tc_scene* scene;
     tc_component* camera;           // CameraComponent
@@ -48,6 +51,19 @@ struct tc_viewport {
 
 TC_API tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* camera);
 TC_API void tc_viewport_free(tc_viewport* vp);
+
+// ============================================================================
+// Reference Counting
+// ============================================================================
+
+// Increment reference count
+TC_API void tc_viewport_add_ref(tc_viewport* vp);
+
+// Decrement reference count. Returns true if viewport was destroyed (ref_count reached 0)
+TC_API bool tc_viewport_release(tc_viewport* vp);
+
+// Get current reference count
+TC_API uint32_t tc_viewport_get_ref_count(const tc_viewport* vp);
 
 // ============================================================================
 // Viewport Properties

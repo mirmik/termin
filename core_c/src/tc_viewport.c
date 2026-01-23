@@ -1,5 +1,6 @@
 // tc_viewport.c - Viewport implementation
 #include "tc_viewport.h"
+#include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,6 +29,7 @@ tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* ca
     tc_viewport* vp = (tc_viewport*)calloc(1, sizeof(tc_viewport));
     if (!vp) return NULL;
 
+    vp->ref_count = 1;  // Start with ref_count = 1
     vp->name = tc_strdup(name);
     vp->scene = scene;
     vp->camera = camera;
@@ -67,6 +69,39 @@ void tc_viewport_free(tc_viewport* vp) {
     free(vp->input_mode);
     free(vp->managed_by_scene_pipeline);
     free(vp);
+}
+
+// ============================================================================
+// Reference Counting
+// ============================================================================
+
+void tc_viewport_add_ref(tc_viewport* vp) {
+    if (vp) {
+        vp->ref_count++;
+    }
+}
+
+bool tc_viewport_release(tc_viewport* vp) {
+    if (!vp) {
+        return false;
+    }
+    if (vp->ref_count == 0) {
+        tc_log(TC_LOG_WARN, "[tc_viewport_release] name=%s refcount already zero!",
+               vp->name ? vp->name : "(null)");
+        return false;
+    }
+
+    vp->ref_count--;
+
+    if (vp->ref_count == 0) {
+        tc_viewport_free(vp);
+        return true;
+    }
+    return false;
+}
+
+uint32_t tc_viewport_get_ref_count(const tc_viewport* vp) {
+    return vp ? vp->ref_count : 0;
 }
 
 // ============================================================================

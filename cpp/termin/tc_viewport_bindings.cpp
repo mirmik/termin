@@ -1,9 +1,9 @@
-// tc_viewport_bindings.cpp - Direct bindings for tc_viewport C API
+// tc_viewport_bindings.cpp - Python bindings for TcViewport (RAII wrapper)
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 
-#include "../../core_c/include/tc_viewport.h"
+#include "viewport/tc_viewport_handle.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_component.h"
 #include "../../core_c/include/tc_pipeline.h"
@@ -13,9 +13,12 @@ namespace nb = nanobind;
 namespace termin {
 
 void bind_tc_viewport(nb::module_& m) {
-    nb::class_<tc_viewport>(m, "Viewport")
-        // Constructor
-        .def("__init__", [](tc_viewport* self,
+    nb::class_<TcViewport>(m, "Viewport")
+        // Default constructor
+        .def(nb::init<>())
+
+        // Constructor with parameters
+        .def("__init__", [](TcViewport* self,
                            const std::string& name,
                            nb::object scene,
                            nb::object camera,
@@ -45,7 +48,7 @@ void bind_tc_viewport(nb::module_& m) {
                 tc_c = reinterpret_cast<tc_component*>(ptr);
             }
 
-            // Create viewport
+            // Create viewport (ref_count starts at 1)
             tc_viewport* vp = tc_viewport_new(name.c_str(), tc_s, tc_c);
 
             // Set rect
@@ -66,6 +69,7 @@ void bind_tc_viewport(nb::module_& m) {
 
             // Canvas (Python object stored directly)
             if (!canvas.is_none()) {
+                Py_INCREF(canvas.ptr());
                 tc_viewport_set_canvas(vp, canvas.ptr());
             }
 
@@ -73,21 +77,20 @@ void bind_tc_viewport(nb::module_& m) {
             if (!pipeline.is_none()) {
                 nb::object tc_pl = pipeline.attr("_tc_pipeline");
                 tc_pipeline* tc_p = nb::cast<tc_pipeline*>(tc_pl);
+                Py_INCREF(pipeline.ptr());
                 tc_p->py_wrapper = pipeline.ptr();
                 vp->pipeline = tc_p;
             }
 
-            // Internal entities - store Python Entity directly in internal_entities field
-            // (we reuse the tc_entity* slot to store PyObject*)
+            // Internal entities - store Python Entity directly
             if (!internal_entities.is_none()) {
+                Py_INCREF(internal_entities.ptr());
                 vp->internal_entities = reinterpret_cast<tc_entity*>(internal_entities.ptr());
             }
 
-            // Copy into placement
-            memcpy(self, vp, sizeof(tc_viewport));
-            // Don't free vp - we copied the data, self owns it now
-            // But we need to handle the allocated strings - they're now owned by self
-            free(vp);  // Free the struct itself, not the contents
+            // Construct TcViewport in-place (don't add_ref since tc_viewport_new already set ref_count=1)
+            new (self) TcViewport();
+            self->ptr_ = vp;
         },
         nb::arg("name"),
         nb::arg("scene"),
@@ -104,20 +107,26 @@ void bind_tc_viewport(nb::module_& m) {
         nb::arg("internal_entities") = nb::none(),
         nb::arg("pixel_rect") = std::make_tuple(0, 0, 1, 1))
 
+        // Check validity
+        .def("is_valid", &TcViewport::is_valid)
+
+        // Reference count (for debugging)
+        .def_prop_ro("ref_count", &TcViewport::ref_count)
+
         // Name
         .def_prop_rw("name",
-            [](tc_viewport& self) {
-                const char* n = tc_viewport_get_name(&self);
+            [](TcViewport& self) {
+                const char* n = self.name();
                 return n ? std::string(n) : "";
             },
-            [](tc_viewport& self, const std::string& n) {
-                tc_viewport_set_name(&self, n.c_str());
+            [](TcViewport& self, const std::string& n) {
+                if (self.ptr_) tc_viewport_set_name(self.ptr_, n.c_str());
             })
 
         // Scene - returns Python wrapper via tc_scene's py_wrapper
         .def_prop_rw("scene",
-            [](tc_viewport& self) -> nb::object {
-                tc_scene* s = tc_viewport_get_scene(&self);
+            [](TcViewport& self) -> nb::object {
+                tc_scene* s = self.scene();
                 if (s) {
                     void* wrapper = tc_scene_get_py_wrapper(s);
                     if (wrapper) {
@@ -126,161 +135,189 @@ void bind_tc_viewport(nb::module_& m) {
                 }
                 return nb::none();
             },
-            [](tc_viewport& self, nb::object scene_obj) {
+            [](TcViewport& self, nb::object scene_obj) {
+                if (!self.ptr_) return;
                 if (scene_obj.is_none()) {
-                    tc_viewport_set_scene(&self, nullptr);
+                    tc_viewport_set_scene(self.ptr_, nullptr);
                 } else {
                     nb::object tc_scene_obj = scene_obj.attr("_tc_scene");
                     uintptr_t ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    tc_viewport_set_scene(&self, reinterpret_cast<tc_scene*>(ptr));
+                    tc_viewport_set_scene(self.ptr_, reinterpret_cast<tc_scene*>(ptr));
                 }
             })
 
         // Camera - returns Python wrapper via tc_component's wrapper
         .def_prop_rw("camera",
-            [](tc_viewport& self) -> nb::object {
-                tc_component* c = tc_viewport_get_camera(&self);
+            [](TcViewport& self) -> nb::object {
+                tc_component* c = self.camera();
                 if (c && c->wrapper) {
                     return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
                 }
                 return nb::none();
             },
-            [](tc_viewport& self, nb::object camera_obj) {
+            [](TcViewport& self, nb::object camera_obj) {
+                if (!self.ptr_) return;
                 if (camera_obj.is_none()) {
-                    tc_viewport_set_camera(&self, nullptr);
+                    tc_viewport_set_camera(self.ptr_, nullptr);
                 } else {
                     uintptr_t ptr = nb::cast<uintptr_t>(camera_obj.attr("c_component_ptr")());
-                    tc_viewport_set_camera(&self, reinterpret_cast<tc_component*>(ptr));
+                    tc_viewport_set_camera(self.ptr_, reinterpret_cast<tc_component*>(ptr));
                 }
             })
 
         // Rect (normalized 0-1)
         .def_prop_rw("rect",
-            [](tc_viewport& self) {
+            [](TcViewport& self) {
                 float x, y, w, h;
-                tc_viewport_get_rect(&self, &x, &y, &w, &h);
+                self.get_rect(x, y, w, h);
                 return std::make_tuple(x, y, w, h);
             },
-            [](tc_viewport& self, std::tuple<float, float, float, float> r) {
-                tc_viewport_set_rect(&self, std::get<0>(r), std::get<1>(r),
-                                    std::get<2>(r), std::get<3>(r));
+            [](TcViewport& self, std::tuple<float, float, float, float> r) {
+                self.set_rect(std::get<0>(r), std::get<1>(r),
+                             std::get<2>(r), std::get<3>(r));
             })
 
         // Pixel rect
         .def_prop_rw("pixel_rect",
-            [](tc_viewport& self) {
+            [](TcViewport& self) {
                 int px, py, pw, ph;
-                tc_viewport_get_pixel_rect(&self, &px, &py, &pw, &ph);
+                self.get_pixel_rect(px, py, pw, ph);
                 return std::make_tuple(px, py, pw, ph);
             },
-            [](tc_viewport& self, std::tuple<int, int, int, int> r) {
-                tc_viewport_set_pixel_rect(&self, std::get<0>(r), std::get<1>(r),
-                                          std::get<2>(r), std::get<3>(r));
+            [](TcViewport& self, std::tuple<int, int, int, int> r) {
+                self.set_pixel_rect(std::get<0>(r), std::get<1>(r),
+                                   std::get<2>(r), std::get<3>(r));
             })
 
-        .def("update_pixel_rect", [](tc_viewport& self, int w, int h) {
-            tc_viewport_update_pixel_rect(&self, w, h);
-        }, nb::arg("display_width"), nb::arg("display_height"))
+        .def("update_pixel_rect", &TcViewport::update_pixel_rect,
+             nb::arg("display_width"), nb::arg("display_height"))
 
         // Canvas
         .def_prop_rw("canvas",
-            [](tc_viewport& self) -> nb::object {
-                void* ptr = tc_viewport_get_canvas(&self);
+            [](TcViewport& self) -> nb::object {
+                if (!self.ptr_) return nb::none();
+                void* ptr = tc_viewport_get_canvas(self.ptr_);
                 if (ptr) {
                     return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(ptr));
                 }
                 return nb::none();
             },
-            [](tc_viewport& self, nb::object canvas) {
-                tc_viewport_set_canvas(&self, canvas.is_none() ? nullptr : canvas.ptr());
+            [](TcViewport& self, nb::object canvas) {
+                if (!self.ptr_) return;
+                // Release old canvas
+                void* old = tc_viewport_get_canvas(self.ptr_);
+                if (old) {
+                    Py_DECREF(reinterpret_cast<PyObject*>(old));
+                }
+                // Set new canvas
+                if (!canvas.is_none()) {
+                    Py_INCREF(canvas.ptr());
+                    tc_viewport_set_canvas(self.ptr_, canvas.ptr());
+                } else {
+                    tc_viewport_set_canvas(self.ptr_, nullptr);
+                }
             })
 
         // Depth
         .def_prop_rw("depth",
-            [](tc_viewport& self) { return tc_viewport_get_depth(&self); },
-            [](tc_viewport& self, int d) { tc_viewport_set_depth(&self, d); })
+            [](TcViewport& self) { return self.depth(); },
+            [](TcViewport& self, int d) { self.set_depth(d); })
 
         // Pipeline
         .def_prop_rw("pipeline",
-            [](tc_viewport& self) -> nb::object {
-                tc_pipeline* p = self.pipeline;
+            [](TcViewport& self) -> nb::object {
+                tc_pipeline* p = self.pipeline();
                 if (p && p->py_wrapper) {
                     return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->py_wrapper));
                 }
                 return nb::none();
             },
-            [](tc_viewport& self, nb::object pipeline_obj) {
+            [](TcViewport& self, nb::object pipeline_obj) {
+                if (!self.ptr_) return;
                 if (pipeline_obj.is_none()) {
-                    self.pipeline = nullptr;
+                    self.ptr_->pipeline = nullptr;
                 } else {
                     nb::object tc_pl = pipeline_obj.attr("_tc_pipeline");
                     tc_pipeline* tc_p = nb::cast<tc_pipeline*>(tc_pl);
+                    Py_INCREF(pipeline_obj.ptr());
                     tc_p->py_wrapper = pipeline_obj.ptr();
-                    self.pipeline = tc_p;
+                    self.ptr_->pipeline = tc_p;
                 }
             })
 
         // Layer mask
         .def_prop_rw("layer_mask",
-            [](tc_viewport& self) { return tc_viewport_get_layer_mask(&self); },
-            [](tc_viewport& self, uint64_t m) { tc_viewport_set_layer_mask(&self, m); })
+            [](TcViewport& self) { return self.layer_mask(); },
+            [](TcViewport& self, uint64_t m) { self.set_layer_mask(m); })
 
         // Enabled
         .def_prop_rw("enabled",
-            [](tc_viewport& self) { return tc_viewport_get_enabled(&self); },
-            [](tc_viewport& self, bool e) { tc_viewport_set_enabled(&self, e); })
+            [](TcViewport& self) { return self.enabled(); },
+            [](TcViewport& self, bool e) { self.set_enabled(e); })
 
         // Input mode
         .def_prop_rw("input_mode",
-            [](tc_viewport& self) {
-                const char* m = tc_viewport_get_input_mode(&self);
-                return m ? std::string(m) : "";
+            [](TcViewport& self) {
+                if (!self.ptr_) return std::string("");
+                const char* m = tc_viewport_get_input_mode(self.ptr_);
+                return m ? std::string(m) : std::string("");
             },
-            [](tc_viewport& self, const std::string& m) {
-                tc_viewport_set_input_mode(&self, m.c_str());
+            [](TcViewport& self, const std::string& m) {
+                if (self.ptr_) tc_viewport_set_input_mode(self.ptr_, m.c_str());
             })
 
         // Block input in editor
         .def_prop_rw("block_input_in_editor",
-            [](tc_viewport& self) { return tc_viewport_get_block_input_in_editor(&self); },
-            [](tc_viewport& self, bool b) { tc_viewport_set_block_input_in_editor(&self, b); })
+            [](TcViewport& self) {
+                return self.ptr_ ? tc_viewport_get_block_input_in_editor(self.ptr_) : false;
+            },
+            [](TcViewport& self, bool b) {
+                if (self.ptr_) tc_viewport_set_block_input_in_editor(self.ptr_, b);
+            })
 
         // Managed by scene pipeline
         .def_prop_rw("managed_by_scene_pipeline",
-            [](tc_viewport& self) -> nb::object {
-                const char* m = tc_viewport_get_managed_by(&self);
+            [](TcViewport& self) -> nb::object {
+                if (!self.ptr_) return nb::none();
+                const char* m = tc_viewport_get_managed_by(self.ptr_);
                 if (m && m[0]) {
                     return nb::cast(std::string(m));
                 }
                 return nb::none();
             },
-            [](tc_viewport& self, nb::object v) {
+            [](TcViewport& self, nb::object v) {
+                if (!self.ptr_) return;
                 if (v.is_none()) {
-                    tc_viewport_set_managed_by(&self, "");
+                    tc_viewport_set_managed_by(self.ptr_, "");
                 } else {
-                    tc_viewport_set_managed_by(&self, nb::cast<std::string>(v).c_str());
+                    tc_viewport_set_managed_by(self.ptr_, nb::cast<std::string>(v).c_str());
                 }
             })
 
         // Internal entities (Python Entity object stored in tc_entity* slot)
         .def_prop_rw("internal_entities",
-            [](tc_viewport& self) -> nb::object {
-                if (self.internal_entities) {
-                    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(self.internal_entities));
-                }
-                return nb::none();
+            [](TcViewport& self) -> nb::object {
+                if (!self.ptr_ || !self.ptr_->internal_entities) return nb::none();
+                return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(self.ptr_->internal_entities));
             },
-            [](tc_viewport& self, nb::object entity_obj) {
+            [](TcViewport& self, nb::object entity_obj) {
+                if (!self.ptr_) return;
+                // Release old
+                if (self.ptr_->internal_entities) {
+                    Py_DECREF(reinterpret_cast<PyObject*>(self.ptr_->internal_entities));
+                }
+                // Set new
                 if (entity_obj.is_none()) {
-                    self.internal_entities = nullptr;
+                    self.ptr_->internal_entities = nullptr;
                 } else {
-                    self.internal_entities = reinterpret_cast<tc_entity*>(entity_obj.ptr());
+                    Py_INCREF(entity_obj.ptr());
+                    self.ptr_->internal_entities = reinterpret_cast<tc_entity*>(entity_obj.ptr());
                 }
             })
 
         // Effective layer mask (checks ViewportHintComponent on camera)
-        .def_prop_ro("effective_layer_mask", [](tc_viewport& self) -> uint64_t {
-            tc_component* cam = tc_viewport_get_camera(&self);
+        .def_prop_ro("effective_layer_mask", [](TcViewport& self) -> uint64_t {
+            tc_component* cam = self.camera();
             if (cam && cam->wrapper) {
                 try {
                     nb::object camera_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(cam->wrapper));
@@ -297,12 +334,12 @@ void bind_tc_viewport(nb::module_& m) {
                     // Fall through to default
                 }
             }
-            return tc_viewport_get_layer_mask(&self);
+            return self.layer_mask();
         })
 
         // Screen point to ray
-        .def("screen_point_to_ray", [](tc_viewport& self, float x, float y) -> nb::object {
-            tc_component* cam = tc_viewport_get_camera(&self);
+        .def("screen_point_to_ray", [](TcViewport& self, float x, float y) -> nb::object {
+            tc_component* cam = self.camera();
             if (!cam || !cam->wrapper) {
                 return nb::none();
             }
@@ -313,7 +350,7 @@ void bind_tc_viewport(nb::module_& m) {
                     return nb::none();
                 }
                 int px, py, pw, ph;
-                tc_viewport_get_pixel_rect(&self, &px, &py, &pw, &ph);
+                self.get_pixel_rect(px, py, pw, ph);
                 auto rect = std::make_tuple(px, py, pw, ph);
                 return camera_obj.attr("screen_point_to_ray")(x, y, nb::arg("viewport_rect") = rect);
             } catch (...) {
@@ -322,14 +359,13 @@ void bind_tc_viewport(nb::module_& m) {
         }, nb::arg("x"), nb::arg("y"))
 
         // Serialize
-        .def("serialize", [](tc_viewport& self) {
+        .def("serialize", [](TcViewport& self) {
             nb::dict result;
 
-            const char* n = tc_viewport_get_name(&self);
-            result["name"] = n ? std::string(n) : "";
+            result["name"] = self.name();
 
             // Camera entity name
-            tc_component* cam = tc_viewport_get_camera(&self);
+            tc_component* cam = self.camera();
             if (cam && cam->wrapper) {
                 try {
                     nb::object camera_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(cam->wrapper));
@@ -341,12 +377,12 @@ void bind_tc_viewport(nb::module_& m) {
             }
 
             float rx, ry, rw, rh;
-            tc_viewport_get_rect(&self, &rx, &ry, &rw, &rh);
+            self.get_rect(rx, ry, rw, rh);
             result["rect"] = nb::make_tuple(rx, ry, rw, rh);
-            result["depth"] = tc_viewport_get_depth(&self);
+            result["depth"] = self.depth();
 
             // Pipeline name
-            tc_pipeline* pl = self.pipeline;
+            tc_pipeline* pl = self.pipeline();
             if (pl && pl->py_wrapper) {
                 try {
                     nb::object pl_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(pl->py_wrapper));
@@ -354,12 +390,14 @@ void bind_tc_viewport(nb::module_& m) {
                 } catch (...) {}
             }
 
-            const char* im = tc_viewport_get_input_mode(&self);
-            result["input_mode"] = im ? std::string(im) : "";
-            result["block_input_in_editor"] = tc_viewport_get_block_input_in_editor(&self);
-            result["enabled"] = tc_viewport_get_enabled(&self);
+            if (self.ptr_) {
+                const char* im = tc_viewport_get_input_mode(self.ptr_);
+                result["input_mode"] = im ? std::string(im) : "";
+                result["block_input_in_editor"] = tc_viewport_get_block_input_in_editor(self.ptr_);
+            }
+            result["enabled"] = self.enabled();
 
-            uint64_t mask = tc_viewport_get_layer_mask(&self);
+            uint64_t mask = self.layer_mask();
             if (mask != 0xFFFFFFFFFFFFFFFFULL) {
                 char buf[32];
                 snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)mask);
@@ -367,6 +405,11 @@ void bind_tc_viewport(nb::module_& m) {
             }
 
             return result;
+        })
+
+        // Raw pointer access (for C interop)
+        .def("_tc_viewport_ptr", [](TcViewport& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(self.ptr_);
         })
         ;
 }
