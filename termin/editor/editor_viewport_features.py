@@ -609,6 +609,6 @@ class EditorViewportFeatures:
 
         return RenderPipeline(
             name="editor",
-            passes=passes,
+            _init_passes=passes,
             pipeline_specs=pipeline_specs,
         )

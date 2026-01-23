@@ -71,6 +71,12 @@ def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
     tc_pipeline = pipeline._tc_pipeline
 
     if tc_pipeline.pass_count != len(frame_passes):
+        py_names = [p.pass_name for p in frame_passes]
+        log.error(f"[engine] Pass count mismatch: C={tc_pipeline.pass_count}, Python={len(frame_passes)}")
+        log.error(f"[engine] Python passes: {py_names}")
+        for p in frame_passes:
+            has_tc = p._tc_pass is not None
+            log.error(f"[engine]   '{p.pass_name}' ({type(p).__name__}): _tc_pass={'set' if has_tc else 'None'}")
         raise RuntimeError(
             f"tc_pipeline.pass_count={tc_pipeline.pass_count} != len(frame_passes)={len(frame_passes)}"
         )

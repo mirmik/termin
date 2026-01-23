@@ -170,7 +170,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
             ),
         ]
 
-        return RenderPipeline(name="preview", passes=passes)
+        return RenderPipeline(name="preview", _init_passes=passes)
 
     def _init_render_engine(self) -> None:
         """Initialize render engine and viewport state."""

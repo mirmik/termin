@@ -2,14 +2,12 @@
 
 #include <unordered_map>
 #include <vector>
-#include <nanobind/nanobind.h>
+#include <functional>
 
 #include "termin/render/frame_pass.hpp"
 
 #include "termin/render/handles.hpp"
 #include "termin/render/resource_spec.hpp"
-
-namespace nb = nanobind;
 
 namespace termin {
 
@@ -35,6 +33,40 @@ struct Rect4i {
 using FBOMap = std::unordered_map<std::string, FramebufferHandle*>;
 
 /**
+ * Callbacks for frame debugger integration.
+ * Language-agnostic interface - Python/C# bindings wrap this.
+ */
+struct FrameDebuggerCallbacks {
+    void* user_data = nullptr;
+
+    // Called to blit framebuffer content to debugger window
+    void (*blit_from_pass)(
+        void* user_data,
+        FramebufferHandle* fb,
+        GraphicsBackend* graphics,
+        int width,
+        int height
+    ) = nullptr;
+
+    // Called to capture depth buffer (optional)
+    void (*capture_depth)(
+        void* user_data,
+        FramebufferHandle* fb,
+        int width,
+        int height,
+        float* out_data
+    ) = nullptr;
+
+    // Called on error (optional)
+    void (*on_error)(
+        void* user_data,
+        const char* message
+    ) = nullptr;
+
+    bool is_set() const { return blit_from_pass != nullptr; }
+};
+
+/**
  * Base class for render passes that draw to framebuffers.
  *
  * Subclasses implement execute() to perform actual rendering.
@@ -42,26 +74,23 @@ using FBOMap = std::unordered_map<std::string, FramebufferHandle*>;
  */
 class RenderFramePass : public FramePass {
 public:
-    nb::object debugger_window;
-    nb::object depth_capture_callback;
-    nb::object depth_error_callback;
+    // C++ callback-based debugger interface
+    FrameDebuggerCallbacks debugger_callbacks;
 
     using FramePass::FramePass;
 
     virtual ~RenderFramePass() = default;
 
-    void set_debugger_window(
-        nb::object window,
-        nb::object callback = nb::none(),
-        nb::object error_callback = nb::none()
-    ) {
-        debugger_window = window;
-        depth_capture_callback = callback;
-        depth_error_callback = error_callback;
+    void set_debugger_callbacks(const FrameDebuggerCallbacks& callbacks) {
+        debugger_callbacks = callbacks;
     }
 
-    nb::object get_debugger_window() const {
-        return debugger_window;
+    void clear_debugger_callbacks() {
+        debugger_callbacks = {};
+    }
+
+    bool has_debugger() const {
+        return debugger_callbacks.is_set();
     }
 
     /**

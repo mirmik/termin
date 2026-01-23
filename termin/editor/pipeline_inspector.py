@@ -814,9 +814,9 @@ class PipelineInspector(QWidget):
             # Insert after current selection or at end
             row = self._pass_list.currentRow()
             if row < 0:
-                self._pipeline.passes.append(new_pass)
+                self._pipeline.add_pass(new_pass)
             else:
-                self._pipeline.passes.insert(row + 1, new_pass)
+                self._pipeline.insert_pass(row + 1, new_pass)
 
             self._rebuild_ui()
             self.pipeline_changed.emit(self._pipeline)
@@ -850,7 +850,7 @@ class PipelineInspector(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        del self._pipeline.passes[row]
+        self._pipeline.remove_pass(pass_obj)
         self._rebuild_ui()
         self.pipeline_changed.emit(self._pipeline)
 
@@ -863,9 +863,8 @@ class PipelineInspector(QWidget):
         if row <= 0 or row >= len(self._pipeline.passes):
             return
 
-        # Swap passes
-        passes = self._pipeline.passes
-        passes[row], passes[row - 1] = passes[row - 1], passes[row]
+        # Move pass up
+        self._pipeline.move_pass(row, row - 1)
 
         self._rebuild_ui()
         self._pass_list.setCurrentRow(row - 1)
@@ -880,9 +879,8 @@ class PipelineInspector(QWidget):
         if row < 0 or row >= len(self._pipeline.passes) - 1:
             return
 
-        # Swap passes
-        passes = self._pipeline.passes
-        passes[row], passes[row + 1] = passes[row + 1], passes[row]
+        # Move pass down
+        self._pipeline.move_pass(row, row + 1)
 
         self._rebuild_ui()
         self._pass_list.setCurrentRow(row + 1)

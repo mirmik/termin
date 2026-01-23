@@ -90,7 +90,7 @@ class TestPasses(unittest.TestCase):
             )
 
             pipeline = RenderPipeline(
-                passes=[color_pass, present_pass],
+                _init_passes=[color_pass, present_pass],
                 pipeline_specs=[
                     ResourceSpec(
                         resource="empty",
@@ -378,7 +378,7 @@ void main() {
             )
 
             pipeline_opaque = RenderPipeline(
-                passes=[color_pass_opaque, present_pass],
+                _init_passes=[color_pass_opaque, present_pass],
                 pipeline_specs=[
                     ResourceSpec(
                         resource="empty",
@@ -421,7 +421,7 @@ void main() {
             )
 
             pipeline_transparent = RenderPipeline(
-                passes=[color_pass_transparent, present_pass],
+                _init_passes=[color_pass_transparent, present_pass],
                 pipeline_specs=[
                     ResourceSpec(
                         resource="empty",
@@ -570,7 +570,7 @@ void main() {
                 )
 
                 pipeline = RenderPipeline(
-                    passes=[color_pass, present_pass],
+                    _init_passes=[color_pass, present_pass],
                     pipeline_specs=[
                         ResourceSpec(
                             resource="empty",
@@ -776,7 +776,7 @@ class TestPipelineSerialization(unittest.TestCase):
 
         # Создаём сложный пайплайн
         pipeline = RenderPipeline(
-            passes=[
+            _init_passes=[
                 ShadowPass(
                     output_res="shadows",
                 ),
@@ -853,7 +853,7 @@ class TestPipelineSerialization(unittest.TestCase):
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
 
         pipeline = RenderPipeline(
-            passes=[
+            _init_passes=[
                 SkyBoxPass(input_res="empty", output_res="skybox"),
                 ColorPass(input_res="skybox", output_res="color", phase_mark="main"),
                 PresentToScreenPass(input_res="color"),

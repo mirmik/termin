@@ -18,13 +18,6 @@ from termin._native.render import ShadowPass as _ShadowPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.system_shaders import get_system_shader
 
-# Import tc_pass functions for external pass creation
-try:
-    from termin._native.render import tc_pass_new_external, tc_pass_set_name
-    _HAS_TC_PASS = True
-except ImportError:
-    _HAS_TC_PASS = False
-
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.lighting import Light
@@ -65,11 +58,8 @@ class ShadowPass(_ShadowPassNative):
             caster_offset=caster_offset,
         )
 
-        # Replace C++ native tc_pass with external tc_pass that calls Python methods
-        if _HAS_TC_PASS:
-            self._tc_pass = tc_pass_new_external(self, self.__class__.__name__)
-            if self._tc_pass is not None:
-                tc_pass_set_name(self._tc_pass, pass_name)
+        # Create external tc_pass that calls Python methods
+        self._setup_external_tc_pass(self)
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":

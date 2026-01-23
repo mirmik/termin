@@ -572,9 +572,16 @@ if(BUILD_CSHARP_BINDINGS)
     # This creates termin.dll that C# P/Invoke calls
     add_library(termin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/../csharp/termin_wrap.cxx
+        termin/render/opengl/tc_opengl.cpp
+        termin/render/glad/src/glad.c
     )
-    target_include_directories(termin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_definitions(termin PRIVATE SWIG_CSHARP)
+    target_include_directories(termin PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../core_c/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
+    )
+    target_link_libraries(termin PRIVATE OpenGL::GL termin_core)
+    target_compile_definitions(termin PRIVATE SWIG_CSHARP TC_EXPORTS)
     if(WIN32)
         # Export all symbols on Windows
         set_target_properties(termin PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)

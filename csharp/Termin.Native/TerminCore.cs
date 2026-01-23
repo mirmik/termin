@@ -142,4 +142,199 @@ public static partial class TerminCore
         IntPtr graphics,
         long contextKey
     );
+
+    // ========================================================================
+    // Mesh Registry
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_init")]
+    public static partial void MeshInit();
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_shutdown")]
+    public static partial void MeshShutdown();
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_create", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcMeshHandle MeshCreate(string? uuid);
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_get")]
+    public static partial IntPtr MeshGet(TcMeshHandle handle);
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_set_data", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool MeshSetData(
+        IntPtr mesh,
+        IntPtr vertices,
+        nuint vertexCount,
+        ref TcVertexLayout layout,
+        IntPtr indices,
+        nuint indexCount,
+        string? name
+    );
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_upload_gpu")]
+    public static partial uint MeshUploadGpu(IntPtr mesh);
+
+    [LibraryImport(DLL, EntryPoint = "tc_mesh_draw_gpu")]
+    public static partial void MeshDrawGpu(IntPtr mesh);
+
+    // ========================================================================
+    // Vertex Layout
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_vertex_layout_init")]
+    public static partial void VertexLayoutInit(ref TcVertexLayout layout);
+
+    [LibraryImport(DLL, EntryPoint = "tc_vertex_layout_add", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool VertexLayoutAdd(
+        ref TcVertexLayout layout,
+        string name,
+        byte size,
+        TcAttribType type,
+        byte location
+    );
+
+    [LibraryImport(DLL, EntryPoint = "tc_vertex_layout_pos")]
+    public static partial TcVertexLayout VertexLayoutPos();
+
+    [LibraryImport(DLL, EntryPoint = "tc_vertex_layout_pos_normal")]
+    public static partial TcVertexLayout VertexLayoutPosNormal();
+
+    [LibraryImport(DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv")]
+    public static partial TcVertexLayout VertexLayoutPosNormalUv();
+
+    [LibraryImport(DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv_color")]
+    public static partial TcVertexLayout VertexLayoutPosNormalUvColor();
+
+    // ========================================================================
+    // Shader Registry
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_init")]
+    public static partial void ShaderInit();
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_shutdown")]
+    public static partial void ShaderShutdown();
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_from_sources", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcShaderHandle ShaderFromSources(
+        string vertexSource,
+        string fragmentSource,
+        string? geometrySource,
+        string? name,
+        string? sourcePath
+    );
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_get")]
+    public static partial IntPtr ShaderGet(TcShaderHandle handle);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_compile_gpu")]
+    public static partial uint ShaderCompileGpu(IntPtr shader);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_use_gpu")]
+    public static partial void ShaderUseGpu(IntPtr shader);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_set_int")]
+    public static partial void ShaderSetInt(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, int value);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_set_float")]
+    public static partial void ShaderSetFloat(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float value);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_set_vec3")]
+    public static partial void ShaderSetVec3(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float x, float y, float z);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_set_vec4")]
+    public static partial void ShaderSetVec4(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float x, float y, float z, float w);
+
+    [LibraryImport(DLL, EntryPoint = "tc_shader_set_mat4")]
+    public static partial void ShaderSetMat4(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float[] data, [MarshalAs(UnmanagedType.U1)] bool transpose);
+
+    // ========================================================================
+    // Material Registry
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_init")]
+    public static partial void MaterialInit();
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_shutdown")]
+    public static partial void MaterialShutdown();
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_create", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcMaterialHandle MaterialCreate(string? uuid, string name);
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_get")]
+    public static partial IntPtr MaterialGet(TcMaterialHandle handle);
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_add_phase", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr MaterialAddPhase(IntPtr material, TcShaderHandle shader, string phaseMark, int priority);
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_set_color")]
+    public static partial void MaterialSetColor(IntPtr material, float r, float g, float b, float a);
+
+    [LibraryImport(DLL, EntryPoint = "tc_material_phase_apply_gpu")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool MaterialPhaseApplyGpu(IntPtr phase);
+
+    // ========================================================================
+    // Component Registry
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_registry_create", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr ComponentRegistryCreate(string typeName);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_registry_has", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ComponentRegistryHas(string typeName);
+
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_add_component")]
+    public static partial void EntityPoolAddComponent(IntPtr pool, TcEntityId id, IntPtr component);
+
+    // ========================================================================
+    // Pass Registry
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_registry_has", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool PassRegistryHas(string typeName);
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_registry_create", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr PassRegistryCreate(string typeName);
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_registry_type_count")]
+    public static partial nuint PassRegistryTypeCount();
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_registry_type_at")]
+    public static partial IntPtr PassRegistryTypeAt(nuint index);
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_set_name", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void PassSetName(IntPtr pass, string name);
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_set_enabled")]
+    public static partial void PassSetEnabled(IntPtr pass, [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_drop")]
+    public static partial void PassDrop(IntPtr pass);
+
+    // ========================================================================
+    // FBO Pool Extended
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_fbo_pool_ensure", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr FboPoolEnsure(
+        IntPtr pool,
+        string key,
+        int width,
+        int height,
+        int samples,
+        string? format
+    );
+
+    [LibraryImport(DLL, EntryPoint = "tc_fbo_pool_get", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr FboPoolGet(IntPtr pool, string key);
+
+    [LibraryImport(DLL, EntryPoint = "tc_fbo_pool_set", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void FboPoolSet(IntPtr pool, string key, IntPtr fbo);
+
+    [LibraryImport(DLL, EntryPoint = "tc_fbo_pool_clear")]
+    public static partial void FboPoolClear(IntPtr pool);
 }

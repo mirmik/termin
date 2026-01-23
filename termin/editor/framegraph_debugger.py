@@ -1391,7 +1391,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         )
 
         # Добавляем в конец пайплайна (после всех пассов)
-        pipeline.passes.append(self._frame_debugger_pass)
+        pipeline.add_pass(self._frame_debugger_pass)
         log.info(f"[FrameDebugger] Attached FrameDebuggerPass, pipeline has {len(pipeline.passes)} passes")
 
         if self._on_request_update is not None:
@@ -1406,7 +1406,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         pipeline = self._get_current_pipeline()
         if pipeline is not None and self._frame_debugger_pass in pipeline.passes:
-            pipeline.passes.remove(self._frame_debugger_pass)
+            pipeline.remove_pass(self._frame_debugger_pass)
             log.info(f"[FrameDebugger] Detached FrameDebuggerPass, pipeline has {len(pipeline.passes)} passes")
         else:
             log.warn(f"[FrameDebugger] _detach: pass not in pipeline (pipeline={pipeline is not None})")

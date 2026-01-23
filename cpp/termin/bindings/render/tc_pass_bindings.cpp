@@ -320,6 +320,12 @@ void bind_tc_pass(nb::module_& m) {
         })
         .def("is_inplace", [](tc_pass* p) {
             return tc_pass_is_inplace(p);
+        })
+        .def_prop_ro("wrapper", [](tc_pass* p) -> nb::object {
+            if (p->wrapper) {
+                return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->wrapper));
+            }
+            return nb::none();
         });
 
     // tc_pipeline - struct is fully defined in header
@@ -342,6 +348,14 @@ void bind_tc_pass(nb::module_& m) {
 
     m.def("tc_pipeline_add_pass", [](tc_pipeline* p, tc_pass* pass) {
         tc_pipeline_add_pass(p, pass);
+    });
+
+    m.def("tc_pipeline_remove_pass", [](tc_pipeline* p, tc_pass* pass) {
+        tc_pipeline_remove_pass(p, pass);
+    });
+
+    m.def("tc_pipeline_insert_pass_before", [](tc_pipeline* p, tc_pass* pass, tc_pass* before) {
+        tc_pipeline_insert_pass_before(p, pass, before);
     });
 
     m.def("tc_pipeline_get_pass", [](tc_pipeline* p, const std::string& name) {

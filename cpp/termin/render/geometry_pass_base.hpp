@@ -167,21 +167,17 @@ protected:
         int width,
         int height
     ) {
-        if (debugger_window.is_none()) {
+        if (!debugger_callbacks.is_set()) {
             return;
         }
 
-        try {
-            debugger_window.attr("blit_from_pass")(
-                nb::cast(fb, nb::rv_policy::reference),
-                nb::cast(graphics, nb::rv_policy::reference),
-                width,
-                height,
-                depth_capture_callback
-            );
-        } catch (const nb::python_error& e) {
-            tc::Log::error(e, "GeometryPassBase::blit_to_debugger_window");
-        }
+        debugger_callbacks.blit_from_pass(
+            debugger_callbacks.user_data,
+            fb,
+            graphics,
+            width,
+            height
+        );
     }
 
     std::vector<DrawCall> collect_draw_calls(

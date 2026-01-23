@@ -9,13 +9,6 @@ from termin._native.render import ColorPass as _ColorPassNative
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.editor.inspect_field import InspectField
 
-# Import tc_pass functions for external pass creation
-try:
-    from termin._native.render import tc_pass_new_external, tc_pass_set_name
-    _HAS_TC_PASS = True
-except ImportError:
-    _HAS_TC_PASS = False
-
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
@@ -113,11 +106,8 @@ class ColorPass(_ColorPassNative):
         self._cached_camera_name: str | None = None
         self._cached_camera_component = None
 
-        # Replace C++ native tc_pass with external tc_pass that calls Python methods
-        if _HAS_TC_PASS:
-            self._tc_pass = tc_pass_new_external(self, self.__class__.__name__)
-            if self._tc_pass is not None:
-                tc_pass_set_name(self._tc_pass, pass_name)
+        # Create external tc_pass that calls Python methods
+        self._setup_external_tc_pass(self)
 
 
     @classmethod

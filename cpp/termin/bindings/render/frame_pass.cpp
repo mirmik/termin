@@ -20,9 +20,111 @@ extern "C" {
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
 #include "tc_scene.h"
+#include "tc_log.hpp"
 #include <cstdint>
+#include <unordered_map>
 
 namespace termin {
+
+// ============================================================================
+// Helper to create external tc_pass for C++ passes used from Python
+// This ensures Python methods (compute_reads, compute_writes) are called
+// ============================================================================
+
+static void setup_external_tc_pass(FramePass* pass, nb::object py_self) {
+    // Increment refcount since C code will hold a reference to the Python object
+    Py_INCREF(py_self.ptr());
+
+    // Create external tc_pass that will call Python methods
+    tc_pass* ext_pass = tc_pass_new_external(py_self.ptr(), nb::type_name(py_self.type()).c_str());
+    if (ext_pass) {
+        tc_pass_set_name(ext_pass, pass->pass_name.c_str());
+        pass->_tc_pass = ext_pass;
+    } else {
+        // Failed to create, decrement refcount
+        Py_DECREF(py_self.ptr());
+    }
+}
+
+// ============================================================================
+// Python debugger callbacks holder
+// Stores Python objects and provides C-style callbacks for FrameDebuggerCallbacks
+// ============================================================================
+
+struct PyDebuggerHolder {
+    nb::object window;
+    nb::object depth_callback;
+    nb::object error_callback;
+
+    static void blit_from_pass_cb(void* user_data, FramebufferHandle* fb,
+                                   GraphicsBackend* graphics, int width, int height) {
+        auto* holder = static_cast<PyDebuggerHolder*>(user_data);
+        if (!holder || holder->window.is_none()) return;
+
+        nb::gil_scoped_acquire gil;
+        try {
+            holder->window.attr("blit_from_pass")(
+                nb::cast(fb, nb::rv_policy::reference),
+                nb::cast(graphics, nb::rv_policy::reference),
+                width, height,
+                holder->depth_callback
+            );
+        } catch (const std::exception& e) {
+            tc::Log::error("PyDebuggerHolder::blit_from_pass: %s", e.what());
+        }
+    }
+
+    static void on_error_cb(void* user_data, const char* message) {
+        auto* holder = static_cast<PyDebuggerHolder*>(user_data);
+        if (!holder || holder->error_callback.is_none()) return;
+
+        nb::gil_scoped_acquire gil;
+        try {
+            holder->error_callback(message);
+        } catch (const std::exception& e) {
+            tc::Log::error("PyDebuggerHolder::on_error: %s", e.what());
+        }
+    }
+};
+
+// Global map to hold Python debugger callbacks (prevents GC)
+static std::unordered_map<RenderFramePass*, std::unique_ptr<PyDebuggerHolder>> g_debugger_holders;
+
+// Helper to set up Python debugger callbacks on a pass
+static void setup_py_debugger(RenderFramePass* pass, nb::object window,
+                               nb::object depth_callback, nb::object error_callback) {
+    if (window.is_none()) {
+        // Clear callbacks
+        g_debugger_holders.erase(pass);
+        pass->clear_debugger_callbacks();
+        return;
+    }
+
+    // Create or update holder
+    auto& holder = g_debugger_holders[pass];
+    if (!holder) {
+        holder = std::make_unique<PyDebuggerHolder>();
+    }
+    holder->window = window;
+    holder->depth_callback = depth_callback;
+    holder->error_callback = error_callback;
+
+    // Set C callbacks
+    FrameDebuggerCallbacks callbacks;
+    callbacks.user_data = holder.get();
+    callbacks.blit_from_pass = PyDebuggerHolder::blit_from_pass_cb;
+    callbacks.on_error = error_callback.is_none() ? nullptr : PyDebuggerHolder::on_error_cb;
+    pass->set_debugger_callbacks(callbacks);
+}
+
+// Helper to get Python debugger window from pass
+static nb::object get_py_debugger_window(RenderFramePass* pass) {
+    auto it = g_debugger_holders.find(pass);
+    if (it != g_debugger_holders.end() && it->second) {
+        return it->second->window;
+    }
+    return nb::none();
+}
 
 void bind_frame_pass(nb::module_& m) {
     // FramePass base class
@@ -55,11 +157,14 @@ void bind_frame_pass(nb::module_& m) {
                 return p.tc_pass_handle();
             },
             [](FramePass& p, tc_pass* new_pass) {
-                // Note: This leaks the old native tc_pass, but allows Python
-                // subclasses to replace it with an external tc_pass
                 p._tc_pass = new_pass;
             },
             nb::rv_policy::reference)
+        // Setup external tc_pass for Python usage (calls Python methods)
+        .def("_setup_external_tc_pass", [](FramePass& self, nb::object py_self) {
+            setup_external_tc_pass(&self, py_self);
+        }, nb::arg("py_self"),
+           "Create external tc_pass that calls Python methods. Call after super().__init__().")
         .def("__repr__", [](const FramePass& p) {
             return "<FramePass '" + p.pass_name + "'>";
         });
@@ -250,8 +355,61 @@ void bind_frame_pass(nb::module_& m) {
             return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
         });
 
+    // RenderFramePass - base class for FBO-based render passes
+    nb::class_<RenderFramePass, FramePass>(m, "RenderFramePass")
+        .def("set_debugger_window", [](RenderFramePass& self, nb::object window,
+                                        nb::object depth_callback, nb::object error_callback) {
+            setup_py_debugger(&self, window, depth_callback, error_callback);
+        },
+             nb::arg("window").none(),
+             nb::arg("depth_callback").none() = nb::none(),
+             nb::arg("depth_error_callback").none() = nb::none())
+        .def("get_debugger_window", [](RenderFramePass& self) {
+            return get_py_debugger_window(&self);
+        })
+        .def_prop_rw("debugger_window",
+            [](RenderFramePass& self) { return get_py_debugger_window(&self); },
+            [](RenderFramePass& self, nb::object val) {
+                setup_py_debugger(&self, val, nb::none(), nb::none());
+            })
+        .def_prop_rw("depth_capture_callback",
+            [](RenderFramePass& self) {
+                auto it = g_debugger_holders.find(&self);
+                if (it != g_debugger_holders.end() && it->second) {
+                    return it->second->depth_callback;
+                }
+                return nb::object(nb::none());
+            },
+            [](RenderFramePass& self, nb::object val) {
+                auto it = g_debugger_holders.find(&self);
+                if (it != g_debugger_holders.end() && it->second) {
+                    it->second->depth_callback = val;
+                }
+            })
+        .def_prop_rw("_debugger_window",
+            [](RenderFramePass& self) { return get_py_debugger_window(&self); },
+            [](RenderFramePass& self, nb::object val) {
+                setup_py_debugger(&self, val, nb::none(), nb::none());
+            })
+        .def_prop_rw("_depth_capture_callback",
+            [](RenderFramePass& self) {
+                auto it = g_debugger_holders.find(&self);
+                if (it != g_debugger_holders.end() && it->second) {
+                    return it->second->depth_callback;
+                }
+                return nb::object(nb::none());
+            },
+            [](RenderFramePass& self, nb::object val) {
+                auto it = g_debugger_holders.find(&self);
+                if (it != g_debugger_holders.end() && it->second) {
+                    it->second->depth_callback = val;
+                }
+            })
+        .def("get_resource_specs", &RenderFramePass::get_resource_specs)
+        .def("destroy", &RenderFramePass::destroy);
+
     // ColorPass - main color rendering pass
-    nb::class_<ColorPass, FramePass>(m, "ColorPass")
+    nb::class_<ColorPass, RenderFramePass>(m, "ColorPass")
         .def("__init__", [](ColorPass* self, const std::string& input_res, const std::string& output_res,
                             const std::string& shadow_res, const std::string& phase_mark,
                             const std::string& pass_name, const std::string& sort_mode, bool clear_depth) {
@@ -273,19 +431,6 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("wireframe", &ColorPass::wireframe)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
-        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
-             nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none(),
-             nb::arg("depth_error_callback").none() = nb::none())
-        .def("get_debugger_window", &RenderFramePass::get_debugger_window)
-        .def_rw("debugger_window", &RenderFramePass::debugger_window)
-        .def_rw("depth_capture_callback", &RenderFramePass::depth_capture_callback)
-        .def_prop_rw("_debugger_window",
-            [](const ColorPass& self) { return self.debugger_window; },
-            [](ColorPass& self, nb::object val) { self.debugger_window = val; })
-        .def_prop_rw("_depth_capture_callback",
-            [](const ColorPass& self) { return self.depth_capture_callback; },
-            [](ColorPass& self, nb::object val) { self.depth_capture_callback = val; })
         .def("execute_with_data", [](
             ColorPass& self,
             GraphicsBackend* graphics,
@@ -449,7 +594,7 @@ void bind_frame_pass(nb::module_& m) {
         });
 
     // DepthPass - linear depth rendering pass
-    nb::class_<DepthPass, FramePass>(m, "DepthPass")
+    nb::class_<DepthPass, RenderFramePass>(m, "DepthPass")
         .def("__init__", [](DepthPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) DepthPass(input_res, output_res, pass_name);
@@ -459,17 +604,7 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("pass_name") = "Depth")
         .def_rw("input_res", &DepthPass::input_res)
         .def_rw("output_res", &DepthPass::output_res)
-        .def("get_resource_specs", &DepthPass::get_resource_specs)
         .def("get_internal_symbols", &DepthPass::get_internal_symbols)
-        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
-             nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none(),
-             nb::arg("depth_error_callback").none() = nb::none())
-        .def("get_debugger_window", &RenderFramePass::get_debugger_window)
-        .def_rw("debugger_window", &RenderFramePass::debugger_window)
-        .def_prop_rw("_debugger_window",
-            [](const DepthPass& self) { return self.debugger_window; },
-            [](DepthPass& self, nb::object val) { self.debugger_window = val; })
         .def("execute_with_data", [](
             DepthPass& self,
             GraphicsBackend* graphics,
@@ -574,7 +709,7 @@ void bind_frame_pass(nb::module_& m) {
         });
 
     // NormalPass - world-space normal rendering pass
-    nb::class_<NormalPass, FramePass>(m, "NormalPass")
+    nb::class_<NormalPass, RenderFramePass>(m, "NormalPass")
         .def("__init__", [](NormalPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) NormalPass(input_res, output_res, pass_name);
@@ -682,7 +817,7 @@ void bind_frame_pass(nb::module_& m) {
         });
 
     // IdPass - entity ID rendering pass for picking
-    nb::class_<IdPass, FramePass>(m, "IdPass")
+    nb::class_<IdPass, RenderFramePass>(m, "IdPass")
         .def("__init__", [](IdPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) IdPass(input_res, output_res, pass_name);
@@ -692,17 +827,7 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("pass_name") = "IdPass")
         .def_rw("input_res", &IdPass::input_res)
         .def_rw("output_res", &IdPass::output_res)
-        .def("get_resource_specs", &IdPass::get_resource_specs)
         .def("get_internal_symbols", &IdPass::get_internal_symbols)
-        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
-             nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none(),
-             nb::arg("depth_error_callback").none() = nb::none())
-        .def("get_debugger_window", &RenderFramePass::get_debugger_window)
-        .def_rw("debugger_window", &RenderFramePass::debugger_window)
-        .def_prop_rw("_debugger_window",
-            [](const IdPass& self) { return self.debugger_window; },
-            [](IdPass& self, nb::object val) { self.debugger_window = val; })
         .def("execute_with_data", [](
             IdPass& self,
             GraphicsBackend* graphics,
@@ -824,7 +949,7 @@ void bind_frame_pass(nb::module_& m) {
         .def_ro("cascade_split_far", &ShadowMapResult::cascade_split_far);
 
     // ShadowPass - shadow map rendering pass
-    nb::class_<ShadowPass, FramePass>(m, "ShadowPass")
+    nb::class_<ShadowPass, RenderFramePass>(m, "ShadowPass")
         .def("__init__", [](ShadowPass* self, const std::string& output_res,
                             const std::string& pass_name, float caster_offset) {
             new (self) ShadowPass(output_res, pass_name, caster_offset);
@@ -837,12 +962,7 @@ void bind_frame_pass(nb::module_& m) {
         .def_prop_rw("shadow_shader",
             [](ShadowPass& self) -> TcShader* { return self.shadow_shader; },
             [](ShadowPass& self, TcShader* s) { self.shadow_shader = s; })
-        .def("get_resource_specs", &ShadowPass::get_resource_specs)
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
-        .def("set_debugger_window", &RenderFramePass::set_debugger_window,
-             nb::arg("window").none(),
-             nb::arg("depth_callback").none() = nb::none(),
-             nb::arg("depth_error_callback").none() = nb::none())
         .def("execute_shadow_pass", [](
             ShadowPass& self,
             GraphicsBackend* graphics,

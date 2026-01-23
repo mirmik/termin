@@ -1381,7 +1381,7 @@ class MyComponent(PythonComponent):
 
         pipeline = RenderPipeline(
             name=name,
-            passes=[
+            _init_passes=[
                 SkyBoxPass(
                     input_res="empty",
                     output_res="skybox",

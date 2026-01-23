@@ -5,7 +5,6 @@
 #include <set>
 #include <algorithm>
 #include <unordered_map>
-#include <nanobind/nanobind.h>
 
 #include "termin/render/render_frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -23,8 +22,6 @@
 #include "termin/entity/component.hpp"
 #include "tc_inspect.hpp"
 #include "tc_scene.h"
-
-namespace nb = nanobind;
 
 namespace termin {
 

@@ -6,6 +6,24 @@
 #include <string.h>
 
 // ============================================================================
+// Pass Property Setters
+// ============================================================================
+
+void tc_pass_set_name(tc_pass* p, const char* name) {
+    if (!p) return;
+    if (p->pass_name) free(p->pass_name);
+    p->pass_name = name ? strdup(name) : NULL;
+}
+
+void tc_pass_set_enabled(tc_pass* p, bool enabled) {
+    if (p) p->enabled = enabled;
+}
+
+void tc_pass_set_passthrough(tc_pass* p, bool passthrough) {
+    if (p) p->passthrough = passthrough;
+}
+
+// ============================================================================
 // Pass Registry
 // ============================================================================
 
@@ -159,6 +177,25 @@ static void external_release(tc_pass* p) {
     }
 }
 
+static void external_drop(tc_pass* p) {
+    if (!p) return;
+
+    // Decrement Python refcount
+    if (g_external_callbacks.decref && p->wrapper) {
+        g_external_callbacks.decref(p->wrapper);
+        p->wrapper = NULL;
+    }
+
+    // Free pass_name
+    if (p->pass_name) {
+        free(p->pass_name);
+        p->pass_name = NULL;
+    }
+
+    // Free the tc_pass struct itself
+    free(p);
+}
+
 static const tc_pass_vtable g_external_vtable = {
     .type_name = "ExternalPass",
     .execute = external_execute,
@@ -168,7 +205,7 @@ static const tc_pass_vtable g_external_vtable = {
     .get_resource_specs = external_get_resource_specs,
     .get_internal_symbols = external_get_internal_symbols,
     .destroy = external_destroy,
-    .drop = NULL,  // External code manages memory
+    .drop = external_drop,
     .retain = external_retain,
     .release = external_release,
     .serialize = NULL,

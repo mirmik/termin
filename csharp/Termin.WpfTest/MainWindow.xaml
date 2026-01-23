@@ -1,0 +1,13 @@
+<Window x:Class="Termin.WpfTest.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:glWpf="clr-namespace:OpenTK.Wpf;assembly=GLWpfControl"
+        xmlns:local="clr-namespace:Termin.WpfTest"
+        mc:Ignorable="d"
+        Title="Termin WPF Test" Height="600" Width="800">
+    <Grid>
+        <glWpf:GLWpfControl x:Name="GlControl" Render="GlControl_Render" />
+    </Grid>
+</Window>

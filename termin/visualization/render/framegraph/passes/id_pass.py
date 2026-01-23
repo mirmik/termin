@@ -8,13 +8,6 @@ import numpy as np
 from termin._native.render import IdPass as _IdPassNative
 from termin.editor.inspect_field import InspectField
 
-# Import tc_pass functions for external pass creation
-try:
-    from termin._native.render import tc_pass_new_external, tc_pass_set_name
-    _HAS_TC_PASS = True
-except ImportError:
-    _HAS_TC_PASS = False
-
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
@@ -69,11 +62,8 @@ class IdPass(_IdPassNative):
         )
         self.camera_name = camera_name
 
-        # Replace C++ native tc_pass with external tc_pass that calls Python methods
-        if _HAS_TC_PASS:
-            self._tc_pass = tc_pass_new_external(self, self.__class__.__name__)
-            if self._tc_pass is not None:
-                tc_pass_set_name(self._tc_pass, pass_name)
+        # Create external tc_pass that calls Python methods
+        self._setup_external_tc_pass(self)
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "IdPass":
