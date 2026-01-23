@@ -99,10 +99,16 @@ static class NativeLoader
 public partial class MainWindow : Window
 {
     private float _angle;
-    private Camera? _camera;
     private bool _initialized;
 
-    // Termin handles
+    // Pipeline rendering (disabled for now - requires pass registration)
+    private IntPtr _pipeline;
+    private IntPtr _fboPool;
+    private IntPtr _graphics;
+    private Camera? _camera;
+    private Scene? _scene;
+
+    // Direct mesh rendering (fallback)
     private TcMeshHandle _meshHandle;
     private TcShaderHandle _shaderHandle;
     private IntPtr _meshPtr;
@@ -140,22 +146,41 @@ public partial class MainWindow : Window
         TerminCore.ShaderInit();
         TerminCore.MaterialInit();
 
-        // Create mesh
-        CreateCubeMesh();
-
-        // Create shader
-        CreateShader();
-
         GL.Enable(EnableCap.DepthTest);
 
-        // Create camera using Termin.Native
+        // Get graphics backend
+        _graphics = TerminOpenGL.GetGraphics();
+
+        // Create camera using Termin.Native SWIG wrapper
         _camera = Camera.perspective_deg(60.0, 800.0 / 600.0);
+
+        // Create scene
+        _scene = new Scene();
+
+        // Create entity (without MeshRenderer for now - just testing pipeline)
+        var cubeId = _scene.Entities.CreateEntity("Cube");
+        _scene.Entities.SetPosition(cubeId, new System.Numerics.Vector3(0, 0, 0));
+
+        // Create pipeline
+        InitPipeline();
+
+        // Create mesh and shader for direct rendering
+        CreateCubeMesh();
+        CreateShader();
+    }
+
+    private void InitPipeline()
+    {
+        // Pipeline rendering requires ColorPass which has many C++ dependencies.
+        // For now, pipeline is disabled. Direct rendering below demonstrates
+        // that OpenGL context and termin mesh/shader APIs work correctly.
+        //
+        // TODO: Add pass registration to termin.dll to enable pipeline rendering.
     }
 
     private unsafe void CreateCubeMesh()
     {
         // Cube vertices: position (3) + normal (3) + uv (2) = 8 floats per vertex
-        // Using pos_normal_uv layout
         float[] vertices = {
             // Front face (Z+)
             -0.5f, -0.5f,  0.5f,   0, 0, 1,   0, 0,
@@ -198,46 +223,28 @@ public partial class MainWindow : Window
             20, 21, 22, 22, 23, 20  // left
         };
 
-        // Create mesh
         _meshHandle = TerminCore.MeshCreate(null);
         _meshPtr = TerminCore.MeshGet(_meshHandle);
 
-        if (_meshPtr == IntPtr.Zero)
-        {
-            MessageBox.Show("Failed to create mesh", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
-        }
+        if (_meshPtr == IntPtr.Zero) return;
 
-        // Get predefined layout (position + normal + uv)
         TcVertexLayout layout = TerminCore.VertexLayoutPosNormalUv();
 
-        // Set mesh data
         fixed (float* vertPtr = vertices)
         fixed (uint* idxPtr = indices)
         {
-            bool success = TerminCore.MeshSetData(
+            TerminCore.MeshSetData(
                 _meshPtr,
                 (IntPtr)vertPtr,
-                (nuint)24,  // 24 vertices
+                (nuint)24,
                 ref layout,
                 (IntPtr)idxPtr,
                 (nuint)indices.Length,
                 "cube"
             );
-
-            if (!success)
-            {
-                MessageBox.Show("Failed to set mesh data", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
         }
 
-        // Upload to GPU
-        uint vao = TerminCore.MeshUploadGpu(_meshPtr);
-        if (vao == 0)
-        {
-            MessageBox.Show("Failed to upload mesh to GPU", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        TerminCore.MeshUploadGpu(_meshPtr);
     }
 
     private void CreateShader()
@@ -270,7 +277,6 @@ out vec4 FragColor;
 uniform vec4 u_color;
 
 void main() {
-    // Simple directional light
     vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
     float diff = max(dot(normalize(v_normal), lightDir), 0.0);
     float ambient = 0.3;
@@ -288,18 +294,9 @@ void main() {
         );
 
         _shaderPtr = TerminCore.ShaderGet(_shaderHandle);
-
-        if (_shaderPtr == IntPtr.Zero)
+        if (_shaderPtr != IntPtr.Zero)
         {
-            MessageBox.Show("Failed to create shader", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
-        }
-
-        // Compile shader
-        uint program = TerminCore.ShaderCompileGpu(_shaderPtr);
-        if (program == 0)
-        {
-            MessageBox.Show("Failed to compile shader", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            TerminCore.ShaderCompileGpu(_shaderPtr);
         }
     }
 
@@ -307,18 +304,23 @@ void main() {
     {
         InitGL();
 
+        int width = (int)GlControl.ActualWidth;
+        int height = (int)GlControl.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+
+        // Update camera aspect ratio
+        double aspect = width / (double)height;
+        if (_camera != null)
+        {
+            _camera.aspect = aspect;
+        }
+
+        // Direct rendering - demonstrates mesh/shader integration
         GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
         if (_shaderPtr == IntPtr.Zero || _meshPtr == IntPtr.Zero)
             return;
-
-        // Update camera aspect ratio
-        double aspect = GlControl.ActualWidth / GlControl.ActualHeight;
-        if (_camera != null)
-        {
-            _camera.aspect = aspect;
-        }
 
         // Model matrix (rotating cube)
         _angle += (float)delta.TotalSeconds * 45.0f;
@@ -331,16 +333,15 @@ void main() {
         var up = new Vector3(0, 0, 1);
         var view = Matrix4.LookAt(eye, target, up);
 
-        // Projection matrix using termin Camera parameters
+        // Projection matrix
         float fov = _camera != null ? (float)_camera.fov_y : MathHelper.DegreesToRadians(60.0f);
         float near = _camera != null ? (float)_camera.near : 0.1f;
         float far = _camera != null ? (float)_camera.far : 100.0f;
         var projection = Matrix4.CreatePerspectiveFieldOfView(fov, (float)aspect, near, far);
 
-        // Use termin shader
+        // Use shader and draw
         TerminCore.ShaderUseGpu(_shaderPtr);
 
-        // Set uniforms
         float[] modelData = MatrixToArray(model);
         float[] viewData = MatrixToArray(view);
         float[] projData = MatrixToArray(projection);
@@ -350,7 +351,6 @@ void main() {
         TerminCore.ShaderSetMat4(_shaderPtr, "u_projection", projData, false);
         TerminCore.ShaderSetVec4(_shaderPtr, "u_color", 0.8f, 0.3f, 0.2f, 1.0f);
 
-        // Draw mesh using termin
         TerminCore.MeshDrawGpu(_meshPtr);
     }
 
@@ -367,6 +367,26 @@ void main() {
 
     protected override void OnClosed(EventArgs e)
     {
+        // Cleanup pipeline
+        if (_fboPool != IntPtr.Zero)
+        {
+            TerminCore.FboPoolDestroy(_fboPool);
+            _fboPool = IntPtr.Zero;
+        }
+        if (_pipeline != IntPtr.Zero)
+        {
+            TerminCore.PipelineDestroy(_pipeline);
+            _pipeline = IntPtr.Zero;
+        }
+
+        // Cleanup scene
+        _scene?.Dispose();
+        _scene = null;
+
+        // Cleanup camera
+        _camera?.Dispose();
+        _camera = null;
+
         // Cleanup termin resources
         TerminCore.MaterialShutdown();
         TerminCore.ShaderShutdown();

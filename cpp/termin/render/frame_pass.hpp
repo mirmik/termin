@@ -155,6 +155,7 @@ private:
     static const tc_pass_vtable _cpp_vtable;
 
     // Static callbacks for vtable
+    static void _cb_execute(tc_pass* p, tc_execute_context* ctx);
     static size_t _cb_get_reads(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_writes(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_inplace_aliases(tc_pass* p, const char** out, size_t max);
