@@ -1,9 +1,11 @@
 // component.cpp - CxxComponent implementation
 #include "component.hpp"
 #include "tc_log.hpp"
-#include <nanobind/nanobind.h>
 
+#ifdef TERMIN_HAS_NANOBIND
+#include <nanobind/nanobind.h>
 namespace nb = nanobind;
+#endif
 
 namespace termin {
 
@@ -53,12 +55,14 @@ CxxComponent::CxxComponent() {
 }
 
 CxxComponent::~CxxComponent() {
+#ifdef TERMIN_HAS_NANOBIND
     // Release Python wrapper reference if we have one
     if (_c.wrapper) {
         nb::handle py_wrapper(reinterpret_cast<PyObject*>(_c.wrapper));
         py_wrapper.dec_ref();
         _c.wrapper = nullptr;
     }
+#endif
 }
 
 // Static callbacks that dispatch to C++ virtual methods
@@ -163,17 +167,25 @@ void CxxComponent::_cb_drop(tc_component* c) {
 }
 
 void CxxComponent::_cb_retain(tc_component* c) {
+#ifdef TERMIN_HAS_NANOBIND
     if (c && c->wrapper) {
         nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
         py_wrapper.inc_ref();
     }
+#else
+    (void)c;
+#endif
 }
 
 void CxxComponent::_cb_release(tc_component* c) {
+#ifdef TERMIN_HAS_NANOBIND
     if (c && c->wrapper) {
         nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
         py_wrapper.dec_ref();
     }
+#else
+    (void)c;
+#endif
 }
 
 } // namespace termin

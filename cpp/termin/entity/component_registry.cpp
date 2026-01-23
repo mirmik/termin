@@ -1,9 +1,13 @@
-#include "component_registry_python.hpp"
+#include "component_registry.hpp"
 #include "component.hpp"
 #include "../../../core_c/include/tc_component.h"
 #include <stdexcept>
 #include <algorithm>
 #include <tc_log.hpp>
+
+#ifdef TERMIN_HAS_NANOBIND
+#include "component_registry_python.hpp"
+#endif
 
 namespace termin {
 
@@ -31,11 +35,13 @@ void ComponentRegistry::register_native(const std::string& name, NativeFactory f
 void ComponentRegistry::unregister(const std::string& name) {
     auto it = registry_.find(name);
     if (it != registry_.end()) {
+#ifdef TERMIN_HAS_NANOBIND
         // Release Python class reference if any
         if (it->second.python_class_ptr) {
             nb::object* cls = static_cast<nb::object*>(it->second.python_class_ptr);
             delete cls;
         }
+#endif
         registry_.erase(it);
     }
     // Also unregister from C registry
@@ -90,6 +96,7 @@ std::vector<std::string> ComponentRegistry::list_native() const {
 }
 
 void ComponentRegistry::clear() {
+#ifdef TERMIN_HAS_NANOBIND
     // Release all Python class references
     for (auto& [name, info] : registry_) {
         if (info.python_class_ptr) {
@@ -98,6 +105,7 @@ void ComponentRegistry::clear() {
             info.python_class_ptr = nullptr;
         }
     }
+#endif
     registry_.clear();
 }
 
@@ -109,6 +117,7 @@ void ComponentRegistry::set_input_handler(const std::string& name, bool is_input
     tc_component_registry_set_input_handler(name.c_str(), is_input_handler);
 }
 
+#ifdef TERMIN_HAS_NANOBIND
 // ============================================================================
 // ComponentRegistryPython implementation (Python support)
 // ============================================================================
@@ -250,5 +259,6 @@ std::vector<std::string> ComponentRegistryPython::list_python() {
     std::sort(result.begin(), result.end());
     return result;
 }
+#endif // TERMIN_HAS_NANOBIND
 
 } // namespace termin

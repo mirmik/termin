@@ -297,6 +297,7 @@ nanobind_add_module(_entity_native
     termin/bindings/entity/entity_bindings.cpp
 )
 target_link_libraries(_entity_native PRIVATE entity_lib trent)
+target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
