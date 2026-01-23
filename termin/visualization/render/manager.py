@@ -664,7 +664,7 @@ class RenderingManager:
                 scene=viewport.scene,
                 camera=viewport.camera,
                 rect=viewport.rect,
-                canvas=viewport.canvas,
+                canvas=None,
                 pipeline=viewport.pipeline,
                 layer_mask=viewport.effective_layer_mask,
                 viewport=viewport,
@@ -806,7 +806,7 @@ class RenderingManager:
                 name=viewport_name,
                 camera=viewport.camera,
                 rect=(0, 0, pw, ph),  # Full FBO, offset at blit time
-                canvas=viewport.canvas,
+                canvas=None,
                 layer_mask=viewport.effective_layer_mask,
                 output_fbo=output_fbo,
             )
@@ -850,7 +850,7 @@ class RenderingManager:
             scene=viewport.scene,
             camera=viewport.camera,
             rect=(0.0, 0.0, 1.0, 1.0),  # Full output FBO
-            canvas=viewport.canvas,
+            canvas=None,
             pipeline=viewport.pipeline,
             layer_mask=viewport.effective_layer_mask,
             viewport=viewport,

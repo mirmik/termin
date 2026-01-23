@@ -273,7 +273,7 @@ class Visualization:
                 scene=viewport.scene,
                 camera=viewport.camera,
                 rect=viewport.rect,
-                canvas=viewport.canvas,
+                canvas=None,
                 viewport=viewport,
             )
             state = self.get_viewport_state(viewport)

@@ -316,10 +316,22 @@ set_target_properties(skeleton_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
 
+# Viewport native module (TcViewport) - nanobind
+# Must be before _entity_native since CameraComponent uses TcViewport
+nanobind_add_module(_viewport_native
+    termin/bindings/viewport/viewport_module.cpp
+)
+target_link_libraries(_viewport_native PRIVATE entity_lib)
+target_compile_definitions(_viewport_native PRIVATE TERMIN_HAS_NANOBIND)
+target_compile_options(_viewport_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # Entity native module (Component, Entity, registries) - nanobind
 nanobind_add_module(_entity_native
     termin/bindings/entity/entity_module.cpp
     termin/bindings/entity/entity_bindings.cpp
+    termin/bindings/camera/camera_bindings.cpp
 )
 target_link_libraries(_entity_native PRIVATE entity_lib trent)
 target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
@@ -409,7 +421,7 @@ nanobind_add_module(_native
     termin/bindings/render/solid_primitive.cpp
     termin/sdl_bindings.cpp
     termin/tc_scene_bindings.cpp
-    termin/tc_viewport_bindings.cpp
+    # tc_viewport_bindings.cpp moved to _viewport_native module
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/profiler_bindings.cpp
@@ -561,6 +573,10 @@ set_target_properties(_skeleton_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
 )
+set_target_properties(_viewport_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
 set_target_properties(_entity_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -590,6 +606,7 @@ install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
 install(TARGETS _texture_native DESTINATION ${CMAKE_INSTALL_PREFIX}/texture)
 install(TARGETS _graphics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/graphics)
+install(TARGETS _viewport_native DESTINATION ${CMAKE_INSTALL_PREFIX}/viewport)
 install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})
 

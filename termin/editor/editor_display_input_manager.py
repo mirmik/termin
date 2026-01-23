@@ -356,16 +356,6 @@ class EditorDisplayInputManager:
         x, y = self._backend_window.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
 
-        # UI click handling
-        if viewport and viewport.canvas:
-            rect = self._viewport_rect_to_pixels(viewport)
-            if action == Action.PRESS:
-                if viewport.canvas.mouse_down(x, y, rect):
-                    return
-            elif action == Action.RELEASE:
-                if viewport.canvas.mouse_up(x, y, rect):
-                    return
-
         # Track active viewport
         if action == Action.PRESS:
             self._active_viewport = viewport
@@ -473,11 +463,6 @@ class EditorDisplayInputManager:
 
         self._last_cursor = (x, y)
         viewport = self._active_viewport or self._viewport_under_cursor(x, y)
-
-        # Canvas hover
-        if viewport and viewport.canvas:
-            rect = self._viewport_rect_to_pixels(viewport)
-            viewport.canvas.mouse_move(x, y, rect)
 
         # Dispatch to editor components and camera
         if viewport is not None:

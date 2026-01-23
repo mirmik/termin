@@ -55,9 +55,8 @@ tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* ca
     vp->block_input_in_editor = false;
     vp->managed_by_scene_pipeline = NULL;
 
-    vp->internal_entities = NULL;
-    vp->canvas = NULL;
-    vp->py_wrapper = NULL;
+    vp->internal_entities_pool = NULL;
+    vp->internal_entities_id = TC_ENTITY_ID_INVALID;
 
     return vp;
 }
@@ -243,25 +242,24 @@ void tc_viewport_update_pixel_rect(tc_viewport* vp, int display_width, int displ
 }
 
 // ============================================================================
-// Canvas
+// Internal Entities
 // ============================================================================
 
-void tc_viewport_set_canvas(tc_viewport* vp, void* canvas) {
-    if (vp) vp->canvas = canvas;
+void tc_viewport_set_internal_entities(tc_viewport* vp, tc_entity_pool* pool, tc_entity_id id) {
+    if (!vp) return;
+    vp->internal_entities_pool = pool;
+    vp->internal_entities_id = id;
 }
 
-void* tc_viewport_get_canvas(const tc_viewport* vp) {
-    return vp ? vp->canvas : NULL;
+tc_entity_pool* tc_viewport_get_internal_entities_pool(const tc_viewport* vp) {
+    return vp ? vp->internal_entities_pool : NULL;
 }
 
-// ============================================================================
-// Python Wrapper
-// ============================================================================
-
-void tc_viewport_set_py_wrapper(tc_viewport* vp, void* wrapper) {
-    if (vp) vp->py_wrapper = wrapper;
+tc_entity_id tc_viewport_get_internal_entities_id(const tc_viewport* vp) {
+    return vp ? vp->internal_entities_id : TC_ENTITY_ID_INVALID;
 }
 
-void* tc_viewport_get_py_wrapper(const tc_viewport* vp) {
-    return vp ? vp->py_wrapper : NULL;
+bool tc_viewport_has_internal_entities(const tc_viewport* vp) {
+    if (!vp || !vp->internal_entities_pool) return false;
+    return tc_entity_pool_alive(vp->internal_entities_pool, vp->internal_entities_id);
 }

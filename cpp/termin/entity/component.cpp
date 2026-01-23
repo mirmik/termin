@@ -57,7 +57,8 @@ CxxComponent::CxxComponent() {
 CxxComponent::~CxxComponent() {
 #ifdef TERMIN_HAS_NANOBIND
     // Release Python wrapper reference if we have one
-    if (_c.wrapper) {
+    if (_c.wrapper && Py_IsInitialized()) {
+        nb::gil_scoped_acquire gil;
         nb::handle py_wrapper(reinterpret_cast<PyObject*>(_c.wrapper));
         py_wrapper.dec_ref();
         _c.wrapper = nullptr;
@@ -168,7 +169,8 @@ void CxxComponent::_cb_drop(tc_component* c) {
 
 void CxxComponent::_cb_retain(tc_component* c) {
 #ifdef TERMIN_HAS_NANOBIND
-    if (c && c->wrapper) {
+    if (c && c->wrapper && Py_IsInitialized()) {
+        nb::gil_scoped_acquire gil;
         nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
         py_wrapper.inc_ref();
     }
@@ -179,7 +181,8 @@ void CxxComponent::_cb_retain(tc_component* c) {
 
 void CxxComponent::_cb_release(tc_component* c) {
 #ifdef TERMIN_HAS_NANOBIND
-    if (c && c->wrapper) {
+    if (c && c->wrapper && Py_IsInitialized()) {
+        nb::gil_scoped_acquire gil;
         nb::handle py_wrapper(reinterpret_cast<PyObject*>(c->wrapper));
         py_wrapper.dec_ref();
     }

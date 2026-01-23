@@ -122,6 +122,43 @@ static inline tc_vec3 tc_gpose_transform_vector(tc_general_pose3 p, tc_vec3 vec)
 // Matrix conversion
 // ============================================================================
 
+// Fill 4x4 column-major matrix from Pose3 (no scale)
+static inline void tc_pose3_to_matrix(tc_pose3 p, double* out) {
+    double xx = p.rotation.x * p.rotation.x;
+    double yy = p.rotation.y * p.rotation.y;
+    double zz = p.rotation.z * p.rotation.z;
+    double xy = p.rotation.x * p.rotation.y;
+    double xz = p.rotation.x * p.rotation.z;
+    double yz = p.rotation.y * p.rotation.z;
+    double wx = p.rotation.w * p.rotation.x;
+    double wy = p.rotation.w * p.rotation.y;
+    double wz = p.rotation.w * p.rotation.z;
+
+    // Column 0
+    out[0] = 1.0 - 2.0 * (yy + zz);
+    out[1] = 2.0 * (xy + wz);
+    out[2] = 2.0 * (xz - wy);
+    out[3] = 0.0;
+
+    // Column 1
+    out[4] = 2.0 * (xy - wz);
+    out[5] = 1.0 - 2.0 * (xx + zz);
+    out[6] = 2.0 * (yz + wx);
+    out[7] = 0.0;
+
+    // Column 2
+    out[8]  = 2.0 * (xz + wy);
+    out[9]  = 2.0 * (yz - wx);
+    out[10] = 1.0 - 2.0 * (xx + yy);
+    out[11] = 0.0;
+
+    // Column 3 (translation)
+    out[12] = p.position.x;
+    out[13] = p.position.y;
+    out[14] = p.position.z;
+    out[15] = 1.0;
+}
+
 // Fill 4x4 column-major matrix from GeneralPose3
 static inline void tc_gpose_to_mat44(tc_general_pose3 p, tc_mat44* out) {
     double xx = p.rotation.x * p.rotation.x;

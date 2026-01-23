@@ -8,7 +8,6 @@ extern "C" {
 #include "render_bindings.hpp"
 #include "sdl_bindings.hpp"
 #include "scene_bindings.hpp"
-#include "tc_viewport_bindings.hpp"
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -37,6 +36,10 @@ NB_MODULE(_native, m) {
     nb::module_ graphics_native = nb::module_::import_("termin.graphics._graphics_native");
     m.attr("graphics") = graphics_native;
 
+    // Import _viewport_native for TcViewport type (used by CameraComponent)
+    nb::module_ viewport_native = nb::module_::import_("termin.viewport._viewport_native");
+    m.attr("viewport") = viewport_native;
+
     // Import _entity_native and re-export as submodule
     // Types like Component, Entity, EntityHandle are defined there
     // Must be imported before render (MeshRenderer inherits Component)
@@ -62,7 +65,7 @@ NB_MODULE(_native, m) {
     termin::bind_render(render_module);
     termin::bind_sdl(platform_module);
     termin::bind_tc_scene(scene_module);
-    termin::bind_tc_viewport(scene_module);
+    // TcViewport is now in separate _viewport_native module
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);

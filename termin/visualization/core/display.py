@@ -145,7 +145,6 @@ class Display(Identifiable):
         scene: "Scene",
         camera: "CameraComponent",
         rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
-        canvas: Optional["Canvas"] = None,
         pipeline: Optional["RenderPipeline"] = None,
         name: str = "main",
     ) -> "Viewport":
@@ -156,7 +155,6 @@ class Display(Identifiable):
             scene: Сцена для рендеринга.
             camera: Камера для рендеринга.
             rect: Нормализованный прямоугольник (x, y, w, h) в [0..1].
-            canvas: Опциональная 2D канва для UI.
             pipeline: Конвейер рендеринга (None = default pipeline).
             name: Имя viewport для идентификации в пайплайне.
 
@@ -173,7 +171,6 @@ class Display(Identifiable):
             scene=scene,
             camera=camera,
             rect=rect,
-            canvas=canvas,
             pipeline=pipeline,
         )
         camera.add_viewport(viewport)

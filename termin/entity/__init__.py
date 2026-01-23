@@ -8,6 +8,13 @@ Component and InputComponent are available via termin.visualization.core.compone
 # Setup DLL paths before importing native extensions
 from termin import _dll_setup  # noqa: F401
 
+# Import _geom_native first to register Mat44 type before _entity_native uses it
+from termin.geombase import _geom_native  # noqa: F401
+
+# Import _viewport_native to register TcViewport type before _entity_native uses it
+from termin.viewport import _viewport_native  # noqa: F401
+from termin.viewport import Viewport
+
 from termin.entity._entity_native import (
     Entity,
     Component,
@@ -18,6 +25,9 @@ from termin.entity._entity_native import (
     TcSceneRef,
 )
 
+# CameraComponent moved to termin.visualization.core.camera (Python implementation)
+# Import it from there directly to avoid circular imports
+
 __all__ = [
     "Component",
     "Entity",
@@ -26,4 +36,5 @@ __all__ = [
     "CXXRotatorComponent",
     "TcComponentRef",
     "TcSceneRef",
+    "Viewport",
 ]

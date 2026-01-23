@@ -42,7 +42,7 @@ def _setup_dll_paths():
 _setup_dll_paths()
 
 
-def _preload_native_modules():
+def _preload_native_modules_DISABLED():
     """
     Preload native modules that register kind handlers.
 
@@ -90,4 +90,4 @@ def _preload_native_modules():
             pass  # Failed to preload, will be loaded later
 
 
-_preload_native_modules()
+# _preload_native_modules()  # Disabled for debugging

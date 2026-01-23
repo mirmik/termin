@@ -2,7 +2,7 @@
 
 from typing import List
 
-from termin._native.scene import Viewport
+from termin.viewport import Viewport
 
 __all__ = ["Viewport", "make_default_pipeline"]
 

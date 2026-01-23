@@ -20,7 +20,7 @@ class CXXRotatorComponent : public CxxComponent {
 public:
     float speed = 1.0f;  // radians per second
 #ifdef TERMIN_HAS_NANOBIND
-    nb::object collider_component = nb::none();
+    nb::object collider_component;  // Default-constructed, no Python interaction
 #endif
     termin::colliders::Collider* collider = nullptr;
 

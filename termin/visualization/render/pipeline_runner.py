@@ -94,7 +94,7 @@ class PipelineRunner:
                     viewport=viewport,
                     context_key=context_key,
                     lights=lights,
-                    canvas=viewport.canvas,
+                    canvas=None,
                     layer_mask=viewport.effective_layer_mask,
                 )
                 render_pass.execute(ctx)

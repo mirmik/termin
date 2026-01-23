@@ -3,6 +3,7 @@
 #define TC_VIEWPORT_H
 
 #include "tc_types.h"
+#include "tc_entity_pool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,13 +37,8 @@ struct tc_viewport {
     char* managed_by_scene_pipeline;
 
     // Internal entities root (for viewport-specific objects)
-    tc_entity* internal_entities;
-
-    // Canvas (Python UI canvas, stored as void*)
-    void* canvas;
-
-    // Python wrapper for callbacks
-    void* py_wrapper;
+    tc_entity_pool* internal_entities_pool;
+    tc_entity_id internal_entities_id;
 };
 
 // ============================================================================
@@ -113,18 +109,13 @@ TC_API bool tc_viewport_get_block_input_in_editor(const tc_viewport* vp);
 TC_API void tc_viewport_update_pixel_rect(tc_viewport* vp, int display_width, int display_height);
 
 // ============================================================================
-// Canvas (Python object, stored as void*)
+// Internal Entities
 // ============================================================================
 
-TC_API void tc_viewport_set_canvas(tc_viewport* vp, void* canvas);
-TC_API void* tc_viewport_get_canvas(const tc_viewport* vp);
-
-// ============================================================================
-// Python Wrapper
-// ============================================================================
-
-TC_API void tc_viewport_set_py_wrapper(tc_viewport* vp, void* wrapper);
-TC_API void* tc_viewport_get_py_wrapper(const tc_viewport* vp);
+TC_API void tc_viewport_set_internal_entities(tc_viewport* vp, tc_entity_pool* pool, tc_entity_id id);
+TC_API tc_entity_pool* tc_viewport_get_internal_entities_pool(const tc_viewport* vp);
+TC_API tc_entity_id tc_viewport_get_internal_entities_id(const tc_viewport* vp);
+TC_API bool tc_viewport_has_internal_entities(const tc_viewport* vp);
 
 #ifdef __cplusplus
 }

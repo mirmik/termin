@@ -13,8 +13,7 @@ Projection matrices are adapted accordingly.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport
@@ -28,6 +27,14 @@ from termin.editor.inspect_field import InspectField, inspect
 from termin.visualization.core.python_component import PythonComponent, InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent, ScrollEvent
 from termin.visualization.platform.backends.base import Action, MouseButton
+
+__all__ = [
+    "CameraComponent",
+    "PerspectiveCameraComponent",
+    "OrthographicCameraComponent",
+    "CameraController",
+    "OrbitCameraController",
+]
 
 
 class CameraComponent(PythonComponent):
@@ -180,11 +187,6 @@ class CameraComponent(PythonComponent):
         """Clear stale viewport references when scene becomes inactive."""
         self._viewports.clear()
 
-    # def on_added(self, scene):
-    #     if self.entity is None:
-    #         raise RuntimeError("CameraComponent must be attached to an entity.")
-    #     super().on_added(scene)
-
     def get_view_matrix(self) -> Mat44:
         """Get view matrix in column-major format (Mat44)."""
         if self.entity is None:
@@ -277,7 +279,7 @@ class CameraController(InputComponent):
         return
 
     def center_on(self, position: np.ndarray) -> None:
-        """Центрирует камеру на заданной позиции."""
+        """Center camera on position."""
         return
 
 
@@ -499,6 +501,6 @@ class OrbitCameraController(CameraController):
         self.zoom(-event.yoffset * self._zoom_speed)
 
     def center_on(self, position: np.ndarray) -> None:
-        """Центрирует камеру на заданной позиции."""
+        """Center camera on position."""
         self._target = np.array(position, dtype=np.float32)
         self._update_pose()

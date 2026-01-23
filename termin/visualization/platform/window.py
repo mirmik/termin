@@ -148,7 +148,6 @@ class Window:
         scene: "Scene",
         camera: "CameraComponent",
         rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
-        canvas: Optional["Canvas"] = None,
     ) -> Viewport:
         """
         Создаёт и добавляет viewport.
@@ -157,7 +156,6 @@ class Window:
             scene: Сцена для рендеринга.
             camera: Камера для рендеринга.
             rect: Нормализованный прямоугольник (x, y, w, h).
-            canvas: Опциональная 2D канва.
 
         Возвращает:
             Созданный Viewport.
@@ -169,7 +167,6 @@ class Window:
             scene=scene,
             camera=camera,
             rect=rect,
-            canvas=canvas,
         )
 
     def update(self, dt: float) -> None:
