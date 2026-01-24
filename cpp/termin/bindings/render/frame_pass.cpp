@@ -2,6 +2,8 @@
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/make_iterator.h>
 
 extern "C" {
 #include "tc_pass.h"
@@ -144,6 +146,88 @@ void bind_frame_pass(nb::module_& m) {
                    ", " + std::to_string(r.width) + ", " + std::to_string(r.height) + ")";
         });
 
+    // FrameGraphResource - base class for framegraph resources
+    nb::class_<FrameGraphResource>(m, "FrameGraphResource")
+        .def("resource_type", &FrameGraphResource::resource_type);
+
+    // ShadowMapArrayEntry - single shadow map entry
+    nb::class_<ShadowMapArrayEntry>(m, "ShadowMapArrayEntry")
+        .def(nb::init<>())
+        .def_rw("fbo", &ShadowMapArrayEntry::fbo)
+        .def_rw("light_space_matrix", &ShadowMapArrayEntry::light_space_matrix)
+        .def_rw("light_index", &ShadowMapArrayEntry::light_index)
+        .def_rw("cascade_index", &ShadowMapArrayEntry::cascade_index)
+        .def_rw("cascade_split_near", &ShadowMapArrayEntry::cascade_split_near)
+        .def_rw("cascade_split_far", &ShadowMapArrayEntry::cascade_split_far)
+        .def("texture", &ShadowMapArrayEntry::texture, nb::rv_policy::reference);
+
+    // ShadowMapArrayResource - shadow map array for framegraph
+    nb::class_<ShadowMapArrayResource, FrameGraphResource>(m, "ShadowMapArrayResource")
+        .def(nb::init<>())
+        .def(nb::init<int>(), nb::arg("resolution"))
+        .def("resource_type", &ShadowMapArrayResource::resource_type)
+        .def("size", &ShadowMapArrayResource::size)
+        .def("empty", &ShadowMapArrayResource::empty)
+        .def("clear", &ShadowMapArrayResource::clear)
+        .def_rw("resolution", &ShadowMapArrayResource::resolution)
+        .def_rw("entries", &ShadowMapArrayResource::entries)
+        .def("__len__", &ShadowMapArrayResource::__len__)
+        .def("__getitem__", [](ShadowMapArrayResource& self, size_t index) -> ShadowMapArrayEntry& {
+            if (index >= self.size()) {
+                throw nb::index_error("ShadowMapArrayResource index out of range");
+            }
+            return self[index];
+        }, nb::rv_policy::reference)
+        .def("__iter__", [](ShadowMapArrayResource& self) {
+            return nb::make_iterator(nb::type<ShadowMapArrayResource>(), "iterator",
+                                     self.begin(), self.end());
+        }, nb::keep_alive<0, 1>())
+        .def("get_by_light_index", &ShadowMapArrayResource::get_by_light_index, nb::rv_policy::reference)
+        .def("add_entry", [](ShadowMapArrayResource& self,
+                             FramebufferHandle* fbo,
+                             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> light_space_matrix,
+                             int light_index,
+                             int cascade_index,
+                             float cascade_split_near,
+                             float cascade_split_far) {
+            Mat44f mat;
+            auto view = light_space_matrix.view();
+            // numpy is row-major: data[row * 4 + col]
+            // Mat44f is column-major: data[col * 4 + row]
+            // mat(col, row) accesses data[col * 4 + row]
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    mat(col, row) = view(row, col);
+                }
+            }
+            self.add_entry(fbo, mat, light_index, cascade_index, cascade_split_near, cascade_split_far);
+        }, nb::arg("fbo"), nb::arg("light_space_matrix"), nb::arg("light_index"),
+           nb::arg("cascade_index") = 0, nb::arg("cascade_split_near") = 0.0f,
+           nb::arg("cascade_split_far") = 0.0f);
+
+    // Helper to convert Python dict to ResourceMap
+    auto dict_to_resource_map = [](nb::dict py_dict) -> ResourceMap {
+        ResourceMap result;
+        for (auto item : py_dict) {
+            std::string key = nb::cast<std::string>(nb::str(item.first));
+            nb::object val = nb::borrow<nb::object>(item.second);
+            if (!val.is_none()) {
+                // Try FramebufferHandle first
+                try {
+                    result[key] = nb::cast<FramebufferHandle*>(val);
+                    continue;
+                } catch (const nb::cast_error&) {}
+                // Try ShadowMapArrayResource
+                try {
+                    result[key] = nb::cast<ShadowMapArrayResource*>(val);
+                    continue;
+                } catch (const nb::cast_error&) {}
+                // Unknown resource type - skip
+            }
+        }
+        return result;
+    };
+
     // ExecuteContext - context passed to render passes
     nb::class_<ExecuteContext>(m, "ExecuteContext")
         .def(nb::init<>())
@@ -151,8 +235,36 @@ void bind_frame_pass(nb::module_& m) {
             [](const ExecuteContext& ctx) { return ctx.graphics; },
             [](ExecuteContext& ctx, GraphicsBackend* g) { ctx.graphics = g; },
             nb::rv_policy::reference)
-        .def_rw("reads_fbos", &ExecuteContext::reads_fbos)
-        .def_rw("writes_fbos", &ExecuteContext::writes_fbos)
+        .def_prop_rw("reads_fbos",
+            [](const ExecuteContext& ctx) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, val] : ctx.reads_fbos) {
+                    if (auto* fbo = dynamic_cast<FramebufferHandle*>(val)) {
+                        result[nb::str(key.c_str())] = nb::cast(fbo, nb::rv_policy::reference);
+                    } else if (auto* shadow = dynamic_cast<ShadowMapArrayResource*>(val)) {
+                        result[nb::str(key.c_str())] = nb::cast(shadow, nb::rv_policy::reference);
+                    }
+                }
+                return result;
+            },
+            [dict_to_resource_map](ExecuteContext& ctx, nb::dict py_dict) {
+                ctx.reads_fbos = dict_to_resource_map(py_dict);
+            })
+        .def_prop_rw("writes_fbos",
+            [](const ExecuteContext& ctx) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, val] : ctx.writes_fbos) {
+                    if (auto* fbo = dynamic_cast<FramebufferHandle*>(val)) {
+                        result[nb::str(key.c_str())] = nb::cast(fbo, nb::rv_policy::reference);
+                    } else if (auto* shadow = dynamic_cast<ShadowMapArrayResource*>(val)) {
+                        result[nb::str(key.c_str())] = nb::cast(shadow, nb::rv_policy::reference);
+                    }
+                }
+                return result;
+            },
+            [dict_to_resource_map](ExecuteContext& ctx, nb::dict py_dict) {
+                ctx.writes_fbos = dict_to_resource_map(py_dict);
+            })
         .def_rw("rect", &ExecuteContext::rect)
         .def_prop_rw("scene",
             [](const ExecuteContext& ctx) -> uintptr_t {
@@ -563,11 +675,14 @@ void bind_frame_pass(nb::module_& m) {
             Vec3 ambient_color{ambient_color_py(0), ambient_color_py(1), ambient_color_py(2)};
 
             // Convert shadow maps
-            std::vector<ShadowMapEntry> shadow_maps;
+            std::vector<ShadowMapArrayEntry> shadow_maps;
             if (!shadow_array_py.is_none()) {
                 size_t count = nb::len(shadow_array_py);
                 for (size_t i = 0; i < count; ++i) {
                     nb::object entry = shadow_array_py[nb::int_(i)];
+
+                    // Get fbo
+                    FramebufferHandle* fbo = nb::cast<FramebufferHandle*>(entry.attr("fbo"));
 
                     // Get light_space_matrix as numpy array
                     nb::ndarray<nb::numpy, double, nb::shape<4, 4>> matrix_py = nb::cast<nb::ndarray<nb::numpy, double, nb::shape<4, 4>>>(entry.attr("light_space_matrix"));
@@ -582,7 +697,7 @@ void bind_frame_pass(nb::module_& m) {
                     int cascade_index = nb::cast<int>(entry.attr("cascade_index"));
                     float cascade_split_near = nb::cast<float>(entry.attr("cascade_split_near"));
                     float cascade_split_far = nb::cast<float>(entry.attr("cascade_split_far"));
-                    shadow_maps.emplace_back(matrix, light_index, cascade_index, cascade_split_near, cascade_split_far);
+                    shadow_maps.emplace_back(fbo, matrix, light_index, cascade_index, cascade_split_near, cascade_split_far);
                 }
             }
 
@@ -629,6 +744,9 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("extra_texture_uniforms", &ColorPass::extra_texture_uniforms)
         .def("clear_extra_textures", &ColorPass::clear_extra_textures)
         .def("set_extra_texture_uniform", &ColorPass::set_extra_texture_uniform)
+        .def("execute", [](ColorPass& self, ExecuteContext& ctx) {
+            self.execute(ctx);
+        }, nb::arg("ctx"))
         .def("destroy", &ColorPass::destroy)
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.pass_name + "' phase='" + p.phase_mark + "'>";

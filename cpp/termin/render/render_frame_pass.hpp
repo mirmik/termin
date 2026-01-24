@@ -28,9 +28,13 @@ struct Rect4i {
 };
 
 /**
- * FBO map type: resource name -> framebuffer handle.
+ * Resource map type: resource name -> framegraph resource.
+ * Can contain FramebufferHandle, ShadowMapArrayResource, etc.
  */
-using FBOMap = std::unordered_map<std::string, FramebufferHandle*>;
+using ResourceMap = std::unordered_map<std::string, FrameGraphResource*>;
+
+// Legacy alias for backwards compatibility
+using FBOMap = ResourceMap;
 
 /**
  * Callbacks for frame debugger integration.

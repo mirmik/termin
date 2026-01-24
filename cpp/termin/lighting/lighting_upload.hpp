@@ -53,12 +53,12 @@ namespace detail {
 }
 
 // TcShader version (no allocations)
-inline void upload_shadow_maps_to_shader(TcShader& shader, const std::vector<ShadowMapEntry>& shadow_maps) {
+inline void upload_shadow_maps_to_shader(TcShader& shader, const std::vector<ShadowMapArrayEntry>& shadow_maps) {
     int count = static_cast<int>(std::min(shadow_maps.size(), static_cast<size_t>(MAX_SHADOW_MAPS)));
     shader.set_uniform_int("u_shadow_map_count", count);
 
     for (int i = 0; i < count; ++i) {
-        const ShadowMapEntry& entry = shadow_maps[i];
+        const ShadowMapArrayEntry& entry = shadow_maps[i];
 
         shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
         shader.set_uniform_mat4(detail::light_space_matrix_names[i], entry.light_space_matrix.data, false);

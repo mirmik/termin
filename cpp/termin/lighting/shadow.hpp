@@ -3,37 +3,104 @@
 #include <vector>
 #include "termin/geom/mat44.hpp"
 #include "termin/lighting/shadow_settings.hpp"
+#include "termin/render/frame_graph_resource.hpp"
 
 namespace termin {
 
+class FramebufferHandle;
+
+// Forward declaration
+class GPUTextureHandle;
+
 /**
  * Shadow map entry for one light source (or cascade).
- *
- * Contains the light-space matrix for transforming world coordinates
- * to the light's clip space, and the index of the light in the lights array.
- * For CSM, each cascade has a separate entry with its own matrix and split distances.
+ * Mirrors Python ShadowMapArrayEntry dataclass.
  */
-struct ShadowMapEntry {
+struct ShadowMapArrayEntry {
+    FramebufferHandle* fbo = nullptr;
     Mat44f light_space_matrix;
     int light_index = 0;
+    int cascade_index = 0;
+    float cascade_split_near = 0.0f;
+    float cascade_split_far = 0.0f;
 
-    // Cascade parameters
-    int cascade_index = 0;           // Cascade index (0-3)
-    float cascade_split_near = 0.0f; // Near split distance (view-space Z)
-    float cascade_split_far = 0.0f;  // Far split distance (view-space Z)
+    ShadowMapArrayEntry() = default;
 
-    ShadowMapEntry() = default;
+    ShadowMapArrayEntry(
+        FramebufferHandle* fbo_,
+        const Mat44f& matrix,
+        int light_idx,
+        int cascade_idx = 0,
+        float split_near = 0.0f,
+        float split_far = 0.0f
+    ) : fbo(fbo_), light_space_matrix(matrix), light_index(light_idx),
+        cascade_index(cascade_idx), cascade_split_near(split_near),
+        cascade_split_far(split_far) {}
 
-    ShadowMapEntry(const Mat44f& matrix, int idx)
-        : light_space_matrix(matrix), light_index(idx) {}
-
-    ShadowMapEntry(const Mat44f& matrix, int light_idx, int cascade_idx,
-                   float split_near, float split_far)
-        : light_space_matrix(matrix), light_index(light_idx),
-          cascade_index(cascade_idx), cascade_split_near(split_near),
-          cascade_split_far(split_far) {}
+    GPUTextureHandle* texture() const;
 };
 
+
 // ShadowSettings is defined in shadow_settings.hpp
+
+// Shadow map array resource for framegraph.
+// Contains shadow maps for all lights with shadows.
+// ShadowPass writes this resource, ColorPass reads it.
+class ShadowMapArrayResource : public FrameGraphResource {
+public:
+    std::vector<ShadowMapArrayEntry> entries;
+    int resolution = 1024;
+
+    ShadowMapArrayResource() = default;
+    explicit ShadowMapArrayResource(int res) : resolution(res) {}
+
+    const char* resource_type() const override { return "shadow_map_array"; }
+
+    size_t size() const { return entries.size(); }
+    bool empty() const { return entries.empty(); }
+
+    void clear() {
+        entries.clear();
+    }
+
+    void add_entry(
+        FramebufferHandle* fbo,
+        const Mat44f& light_space_matrix,
+        int light_index,
+        int cascade_index = 0,
+        float cascade_split_near = 0.0f,
+        float cascade_split_far = 0.0f
+    ) {
+        entries.push_back(ShadowMapArrayEntry(
+            fbo, light_space_matrix, light_index, cascade_index,
+            cascade_split_near, cascade_split_far
+        ));
+    }
+
+    const ShadowMapArrayEntry& operator[](size_t index) const {
+        return entries[index];
+    }
+
+    ShadowMapArrayEntry& operator[](size_t index) {
+        return entries[index];
+    }
+
+    ShadowMapArrayEntry* get_by_light_index(int light_index) {
+        for (auto& entry : entries) {
+            if (entry.light_index == light_index) {
+                return &entry;
+            }
+        }
+        return nullptr;
+    }
+
+    // For iteration from Python
+    size_t __len__() const { return size(); }
+
+    auto begin() { return entries.begin(); }
+    auto end() { return entries.end(); }
+    auto begin() const { return entries.begin(); }
+    auto end() const { return entries.end(); }
+};
 
 } // namespace termin

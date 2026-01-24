@@ -266,9 +266,10 @@ class ColorPass(_ColorPassNative):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         """Execute color pass using C++ implementation."""
+        from termin._native.render import ExecuteContext as CppExecuteContext, Rect4i
+
         scene = ctx.scene
         camera = ctx.camera
-        rect = ctx.rect
 
         # If camera_name is set, use it (overrides passed camera)
         if self.camera_name:
@@ -278,14 +279,6 @@ class ColorPass(_ColorPassNative):
 
         if camera is None:
             return  # No camera available
-
-        # Get output FBO and use its size for rendering
-        output_fbo = ctx.writes_fbos.get(self.output_res)
-        if output_fbo is not None:
-            fbo_size = output_fbo.get_size()
-            rect = (0, 0, fbo_size.width, fbo_size.height)
-            # Update camera aspect ratio to match FBO
-            camera.set_aspect(fbo_size.width / max(1, fbo_size.height))
 
         if ctx.lights is not None:
             scene.lights = ctx.lights
@@ -298,49 +291,31 @@ class ColorPass(_ColorPassNative):
             if not isinstance(shadow_array, ShadowMapArrayResource):
                 shadow_array = None
 
-        # Bind shadow maps to texture units
+        # Bind shadow maps to texture units (still in Python for now)
         self._bind_shadow_maps(ctx.graphics, shadow_array)
 
         # Bind extra textures (if any)
         if self._extra_textures:
             self._bind_extra_textures(ctx.reads_fbos)
 
-        # Get camera matrices
-        view = camera.get_view_matrix()
-        projection = camera.get_projection_matrix()
+        # Build C++ ExecuteContext
+        # Include both FramebufferHandle and ShadowMapArrayResource
+        from termin.graphics import FramebufferHandle
+        from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+        reads_fbos = {k: v for k, v in ctx.reads_fbos.items()
+                      if isinstance(v, (FramebufferHandle, ShadowMapArrayResource))}
+        writes_fbos = {k: v for k, v in ctx.writes_fbos.items()
+                       if isinstance(v, (FramebufferHandle, ShadowMapArrayResource))}
 
-        # Get camera position
-        if camera.entity is not None:
-            cam_pos = camera.entity.transform.global_pose().lin
-        else:
-            cam_pos = np.array([0.0, 0.0, 0.0])
+        cpp_ctx = CppExecuteContext()
+        cpp_ctx.graphics = ctx.graphics
+        cpp_ctx.reads_fbos = reads_fbos
+        cpp_ctx.writes_fbos = writes_fbos
+        cpp_ctx.rect = Rect4i(ctx.rect[0], ctx.rect[1], ctx.rect[2], ctx.rect[3])
+        cpp_ctx.scene = scene._tc_scene.scene_ptr()
+        cpp_ctx.camera = camera
+        cpp_ctx.lights = list(scene.lights) if scene.lights else []
+        cpp_ctx.layer_mask = ctx.layer_mask
 
-        # Convert camera position to numpy array
-        cam_pos_arr = np.array([cam_pos.x, cam_pos.y, cam_pos.z], dtype=np.float64)
-
-        # Get ambient (may be Vec3 or numpy array)
-        ac = scene.ambient_color
-        if hasattr(ac, 'x'):
-            ambient_color = np.array([ac.x, ac.y, ac.z], dtype=np.float64)
-        else:
-            ambient_color = np.asarray(ac, dtype=np.float64)
-        ambient_intensity = float(scene.ambient_intensity)
-
-        # Call C++ execute_with_data
-        # Debugger window and depth callback are already set on C++ object
-        self.execute_with_data(
-            graphics=ctx.graphics,
-            reads_fbos=ctx.reads_fbos,
-            writes_fbos=ctx.writes_fbos,
-            rect=rect,
-            scene=scene,
-            view=view.to_numpy_f32(),
-            projection=projection.to_numpy_f32(),
-            camera_position=cam_pos_arr,
-            lights=list(scene.lights) if scene.lights else [],
-            ambient_color=ambient_color,
-            ambient_intensity=ambient_intensity,
-            shadow_array=shadow_array,
-            shadow_settings=scene.shadow_settings,
-            layer_mask=ctx.layer_mask,
-        )
+        # Call C++ execute
+        _ColorPassNative.execute(self, cpp_ctx)

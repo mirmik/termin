@@ -6,6 +6,7 @@
 #include <string>
 
 #include "termin/render/types.hpp"
+#include "termin/render/frame_graph_resource.hpp"
 
 namespace termin {
 
@@ -61,9 +62,11 @@ public:
 /**
  * Abstract framebuffer handle.
  */
-class FramebufferHandle {
+class FramebufferHandle : public FrameGraphResource {
 public:
     virtual ~FramebufferHandle() = default;
+
+    const char* resource_type() const override { return "fbo"; }
 
     virtual void resize(int width, int height) = 0;
     virtual void release() = 0;

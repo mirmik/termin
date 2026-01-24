@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "termin/render/render_frame_pass.hpp"
+#include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
@@ -17,6 +18,7 @@
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/lighting/lighting_ubo.hpp"
 #include "termin/camera/camera.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
@@ -114,10 +116,18 @@ public:
         const std::vector<Light>& lights,
         const Vec3& ambient_color,
         float ambient_intensity,
-        const std::vector<ShadowMapEntry>& shadow_maps,
+        const std::vector<ShadowMapArrayEntry>& shadow_maps,
         const ShadowSettings& shadow_settings,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
+
+    /**
+     * Execute using ExecuteContext.
+     *
+     * Extracts camera matrices and scene data from context,
+     * then calls execute_with_data().
+     */
+    void execute(ExecuteContext& ctx);
 
     // Legacy execute (required by base class) - does nothing
     void execute(

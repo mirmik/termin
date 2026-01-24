@@ -55,7 +55,10 @@ void IdPass::execute_with_data(
     if (it == writes_fbos.end() || it->second == nullptr) {
         return;
     }
-    FramebufferHandle* fb = it->second;
+    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
+    if (!fb) {
+        return;
+    }
 
     // Bind and clear
     bind_and_clear(graphics, fb, rect);

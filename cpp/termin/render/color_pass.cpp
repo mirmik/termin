@@ -9,6 +9,7 @@ extern "C" {
 #include "tc_component.h"
 #include "tc_material.h"
 #include "tc_gpu.h"
+#include "tc_scene_lighting.h"
 }
 
 #include <cmath>
@@ -244,7 +245,7 @@ void ColorPass::execute_with_data(
     const std::vector<Light>& lights,
     const Vec3& ambient_color,
     float ambient_intensity,
-    const std::vector<ShadowMapEntry>& shadow_maps,
+    const std::vector<ShadowMapArrayEntry>& shadow_maps,
     const ShadowSettings& shadow_settings,
     uint64_t layer_mask
 ) {
@@ -253,7 +254,10 @@ void ColorPass::execute_with_data(
     if (it == writes_fbos.end() || it->second == nullptr) {
         return;
     }
-    FramebufferHandle* fb = it->second;
+    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
+    if (!fb) {
+        return;
+    }
 
     // Bind framebuffer and set viewport
     graphics->bind_framebuffer(fb);
@@ -486,6 +490,84 @@ void ColorPass::execute_with_data(
 
     // Reset render state
     graphics->apply_render_state(RenderState());
+}
+
+void ColorPass::execute(ExecuteContext& ctx) {
+    if (!ctx.camera) {
+        return;
+    }
+
+    // Get output FBO and update rect to match its size
+    Rect4i rect = ctx.rect;
+    auto it = ctx.writes_fbos.find(output_res);
+    if (it != ctx.writes_fbos.end() && it->second != nullptr) {
+        FramebufferHandle* output_fbo = dynamic_cast<FramebufferHandle*>(it->second);
+        if (output_fbo) {
+            int w = output_fbo->get_width();
+            int h = output_fbo->get_height();
+            rect = Rect4i{0, 0, w, h};
+            // Update camera aspect ratio
+            ctx.camera->set_aspect(static_cast<double>(w) / std::max(1, h));
+        }
+    }
+
+    // Get camera matrices
+    Mat44 view64 = ctx.camera->get_view_matrix();
+    Mat44 proj64 = ctx.camera->get_projection_matrix();
+    Mat44f view = view64.to_float();
+    Mat44f projection = proj64.to_float();
+
+    // Get camera position
+    Vec3 camera_position = ctx.camera->get_position();
+
+    // Get scene lighting properties
+    Vec3 ambient_color{1.0, 1.0, 1.0};
+    float ambient_intensity = 0.1f;
+    ShadowSettings shadow_settings;
+
+    if (ctx.scene) {
+        tc_scene_lighting* lighting = tc_scene_get_lighting(ctx.scene);
+        if (lighting) {
+            ambient_color = Vec3{
+                lighting->ambient_color[0],
+                lighting->ambient_color[1],
+                lighting->ambient_color[2]
+            };
+            ambient_intensity = lighting->ambient_intensity;
+            shadow_settings.method = lighting->shadow_method;
+            shadow_settings.softness = lighting->shadow_softness;
+            shadow_settings.bias = lighting->shadow_bias;
+        }
+    }
+
+    // Get shadow maps from reads_fbos
+    std::vector<ShadowMapArrayEntry> shadow_maps;
+    if (!shadow_res.empty()) {
+        auto shadow_it = ctx.reads_fbos.find(shadow_res);
+        if (shadow_it != ctx.reads_fbos.end() && shadow_it->second != nullptr) {
+            ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(shadow_it->second);
+            if (shadow_array) {
+                shadow_maps = shadow_array->entries;
+            }
+        }
+    }
+
+    execute_with_data(
+        ctx.graphics,
+        ctx.reads_fbos,
+        ctx.writes_fbos,
+        rect,
+        ctx.scene,
+        view,
+        projection,
+        camera_position,
+        ctx.lights,
+        ambient_color,
+        ambient_intensity,
+        shadow_maps,
+        shadow_settings,
+        ctx.layer_mask
+    );
 }
 
 void ColorPass::execute(
