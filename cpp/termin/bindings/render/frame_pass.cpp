@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include <nanobind/stl/set.h>
+#include <nanobind/stl/vector.h>
 #include <nanobind/stl/unordered_map.h>
 
 extern "C" {
@@ -9,6 +10,7 @@ extern "C" {
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/render/execute_context.hpp"
 #include "termin/render/render.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
@@ -16,6 +18,7 @@ extern "C" {
 #include "termin/render/id_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
@@ -127,6 +130,51 @@ static nb::object get_py_debugger_window(RenderFramePass* pass) {
 }
 
 void bind_frame_pass(nb::module_& m) {
+    // Rect4i - viewport rectangle
+    nb::class_<Rect4i>(m, "Rect4i")
+        .def(nb::init<>())
+        .def(nb::init<int, int, int, int>(),
+             nb::arg("x"), nb::arg("y"), nb::arg("width"), nb::arg("height"))
+        .def_rw("x", &Rect4i::x)
+        .def_rw("y", &Rect4i::y)
+        .def_rw("width", &Rect4i::width)
+        .def_rw("height", &Rect4i::height)
+        .def("__repr__", [](const Rect4i& r) {
+            return "Rect4i(" + std::to_string(r.x) + ", " + std::to_string(r.y) +
+                   ", " + std::to_string(r.width) + ", " + std::to_string(r.height) + ")";
+        });
+
+    // ExecuteContext - context passed to render passes
+    nb::class_<ExecuteContext>(m, "ExecuteContext")
+        .def(nb::init<>())
+        .def_prop_rw("graphics",
+            [](const ExecuteContext& ctx) { return ctx.graphics; },
+            [](ExecuteContext& ctx, GraphicsBackend* g) { ctx.graphics = g; },
+            nb::rv_policy::reference)
+        .def_rw("reads_fbos", &ExecuteContext::reads_fbos)
+        .def_rw("writes_fbos", &ExecuteContext::writes_fbos)
+        .def_rw("rect", &ExecuteContext::rect)
+        .def_prop_rw("scene",
+            [](const ExecuteContext& ctx) -> uintptr_t {
+                return reinterpret_cast<uintptr_t>(ctx.scene);
+            },
+            [](ExecuteContext& ctx, uintptr_t ptr) {
+                ctx.scene = reinterpret_cast<tc_scene*>(ptr);
+            })
+        .def_prop_rw("camera",
+            [](const ExecuteContext& ctx) { return ctx.camera; },
+            [](ExecuteContext& ctx, CameraComponent* c) { ctx.camera = c; },
+            nb::rv_policy::reference)
+        .def_prop_rw("viewport",
+            [](const ExecuteContext& ctx) -> uintptr_t {
+                return reinterpret_cast<uintptr_t>(ctx.viewport);
+            },
+            [](ExecuteContext& ctx, uintptr_t ptr) {
+                ctx.viewport = reinterpret_cast<tc_viewport*>(ptr);
+            })
+        .def_rw("lights", &ExecuteContext::lights)
+        .def_rw("layer_mask", &ExecuteContext::layer_mask);
+
     // FramePass base class
     nb::class_<FramePass>(m, "FramePass")
         .def(nb::init<>())
