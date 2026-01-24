@@ -116,7 +116,6 @@ class PostEffectPass(RenderFramePass):
             input_tex=input_tex,
             output_fbo=output_fbo,
             size=(w, h),
-            context_key=ctx.context_key,
             reads_fbos=ctx.reads_fbos,
             scene=ctx.scene,
             camera=ctx.camera,
@@ -132,7 +131,6 @@ class PostEffectPass(RenderFramePass):
         input_tex: "GPUTextureHandle",
         output_fbo: "FramebufferHandle | None",
         size: tuple[int, int],
-        context_key: int,
         reads_fbos: dict[str, "FramebufferHandle | None"],
         scene,
         camera,
@@ -147,7 +145,6 @@ class PostEffectPass(RenderFramePass):
             input_tex: Input color texture.
             output_fbo: Output FBO (already bound).
             size: (width, height) of the output.
-            context_key: Context key for shader caching.
             reads_fbos: All available read FBOs (for extra textures).
             scene: Scene object.
             camera: Camera object.
@@ -157,10 +154,9 @@ class PostEffectPass(RenderFramePass):
     def draw_fullscreen_quad(
         self,
         graphics: "GraphicsBackend",
-        context_key: int,
     ) -> None:
         """Draw a fullscreen quad using the graphics backend."""
-        graphics.draw_ui_textured_quad(context_key)
+        graphics.draw_ui_textured_quad()
 
     def get_texture_from_fbo(
         self,

@@ -14,7 +14,7 @@ class UIElement:
 
     material: Material | None = None
 
-    def draw(self, canvas, graphics, context_key: int, viewport_rect: Tuple[int, int, int, int]):
+    def draw(self, canvas, graphics, viewport_rect: Tuple[int, int, int, int]):
         raise NotImplementedError
 
     def _require_material(self) -> Material:
@@ -66,14 +66,14 @@ class UIRectangle(UIElement):
         w, h = self.size
         return x <= nx <= x + w and y <= ny <= y + h
 
-    def draw(self, canvas, graphics, context_key: int, viewport_rect: Tuple[int, int, int, int]):
+    def draw(self, canvas, graphics, viewport_rect: Tuple[int, int, int, int]):
         material = self._require_material()
         material.apply(IDENTITY, IDENTITY, IDENTITY)
         vertices = self._to_clip_vertices()
         shader = material.shader
         shader.set_uniform_vec4("u_color", np.array(self.color, dtype=np.float32))
         shader.set_uniform_int("u_use_texture", 0)
-        canvas.draw_vertices(graphics, context_key, vertices)
+        canvas.draw_vertices(graphics,vertices)
 
 
 @dataclass
@@ -84,14 +84,14 @@ class UIText(UIElement):
     scale: float = 1.0
     material: Material | None = None
 
-    def draw(self, canvas, graphics, context_key, viewport):
+    def draw(self, canvas, graphics,viewport):
         material = self._require_material()
         material.apply(IDENTITY, IDENTITY, IDENTITY)
 
         shader = material.shader
         shader.set_uniform_vec4("u_color", np.array(self.color, dtype=np.float32))
         shader.set_uniform_int("u_use_texture", 1)
-        texture_handle = canvas.font.ensure_texture(graphics, context_key=context_key)
+        texture_handle = canvas.font.ensure_texture(graphics)
         texture_handle.bind(0)
         shader.set_uniform_int("u_texture", 0)
 
@@ -123,7 +123,7 @@ class UIText(UIElement):
                 [vx1, vy1, u1, v1],
             ], dtype=np.float32)
 
-            canvas.draw_textured_quad(graphics, context_key, vertices)
+            canvas.draw_textured_quad(graphics,vertices)
 
             cx += (w * self.scale) / pw
 
@@ -171,9 +171,9 @@ class UIButton(UIElement):
     def contains(self, nx, ny):
         return self.bg.contains(nx, ny)
 
-    def draw(self, canvas, graphics, context_key, viewport_rect):
-        self.bg.draw(canvas, graphics, context_key, viewport_rect)
-        self.label.draw(canvas, graphics, context_key, viewport_rect)
+    def draw(self, canvas, graphics,viewport_rect):
+        self.bg.draw(canvas, graphics,viewport_rect)
+        self.label.draw(canvas, graphics,viewport_rect)
 
 @dataclass
 class UISlider(UIElement):
@@ -201,9 +201,9 @@ class UISlider(UIElement):
         hx = x + self.value * w
         return hx, y
 
-    def draw(self, canvas, graphics, context_key, viewport_rect):
+    def draw(self, canvas, graphics,viewport_rect):
         track = self._track_vertices()
-        track.draw(canvas, graphics, context_key, viewport_rect)
+        track.draw(canvas, graphics,viewport_rect)
 
         hx, hy = self._handle_position()
         handle = UIRectangle(
@@ -212,7 +212,7 @@ class UISlider(UIElement):
             color=(0.8, 0.8, 0.9, 1),
             material=self.handle_material
         )
-        handle.draw(canvas, graphics, context_key, viewport_rect)
+        handle.draw(canvas, graphics,viewport_rect)
 
     def contains(self, nx, ny):
         x, y = self.position

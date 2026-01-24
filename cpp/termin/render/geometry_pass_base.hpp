@@ -226,7 +226,6 @@ protected:
         tc_scene* scene,
         const Mat44f& view,
         const Mat44f& projection,
-        int64_t context_key,
         uint64_t layer_mask
     ) {
         // Find output FBO
@@ -253,7 +252,6 @@ protected:
         RenderContext context;
         context.view = view;
         context.projection = projection;
-        context.context_key = context_key;
         context.graphics = graphics;
         context.phase = phase_name();
         context.current_tc_shader = shader;

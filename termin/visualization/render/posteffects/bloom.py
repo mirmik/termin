@@ -314,7 +314,7 @@ class BloomEffect(PostEffect):
             fbo = self._mip_fbos.pop()
             fbo.delete()
 
-    def draw(self, gfx, context_key, color_tex, extra_textures, size, target_fbo=None):
+    def draw(self, gfx,color_tex, extra_textures, size, target_fbo=None):
         """Execute bloom effect with progressive downsample/upsample."""
         w, h = size
         format_str = "rgba16f"
@@ -339,7 +339,7 @@ class BloomEffect(PostEffect):
         bright.set_uniform_float("u_threshold", self.threshold)
         bright.set_uniform_float("u_soft_threshold", self.soft_threshold)
 
-        gfx.draw_ui_textured_quad(context_key)
+        gfx.draw_ui_textured_quad()
 
         # === 2. Progressive Downsample ===
         down = _get_downsample_shader()
@@ -362,7 +362,7 @@ class BloomEffect(PostEffect):
             down.set_uniform_int("u_texture", 0)
             down.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
 
-            gfx.draw_ui_textured_quad(context_key)
+            gfx.draw_ui_textured_quad()
 
         # === 3. Progressive Upsample (accumulate bloom) ===
         up = _get_upsample_shader()
@@ -389,7 +389,7 @@ class BloomEffect(PostEffect):
             up.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
             up.set_uniform_float("u_blend_factor", 1.0)
 
-            gfx.draw_ui_textured_quad(context_key)
+            gfx.draw_ui_textured_quad()
 
         # === 4. Composite Pass ===
         if target_fbo is not None:
@@ -407,7 +407,7 @@ class BloomEffect(PostEffect):
         comp.set_uniform_int("u_bloom", 1)
         comp.set_uniform_float("u_intensity", self.intensity)
 
-        gfx.draw_ui_textured_quad(context_key)
+        gfx.draw_ui_textured_quad()
 
     def clear_callbacks(self) -> None:
         """Clean up resources."""

@@ -85,7 +85,7 @@ class UnifiedGizmoPass(RenderFramePass):
 
         # Render all gizmos
         if manager is not None and renderer is not None:
-            manager.render(renderer, ctx.graphics, view, proj, ctx.context_key)
+            manager.render(renderer, ctx.graphics, view, proj)
 
         # Flush debug primitives added by components via ImmediateRenderer.instance()
         if renderer is not None:

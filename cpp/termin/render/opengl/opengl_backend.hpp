@@ -440,10 +440,9 @@ public:
     OpenGLGraphicsBackend() : initialized_(false) {}
 
     ~OpenGLGraphicsBackend() override {
-        // Clean up UI buffers
-        for (auto& [key, bufs] : ui_buffers_) {
-            glDeleteVertexArrays(1, &bufs.first);
-            glDeleteBuffers(1, &bufs.second);
+        if (ui_vao_ != 0) {
+            glDeleteVertexArrays(1, &ui_vao_);
+            glDeleteBuffers(1, &ui_vbo_);
         }
     }
 
@@ -832,11 +831,11 @@ public:
 
     // --- UI drawing ---
 
-    void draw_ui_vertices(int64_t context_key, const float* vertices, int vertex_count) override {
-        auto& [vao, vbo] = get_ui_buffers(context_key);
+    void draw_ui_vertices(const float* vertices, int vertex_count) override {
+        ensure_ui_buffers();
 
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBindVertexArray(ui_vao_);
+        glBindBuffer(GL_ARRAY_BUFFER, ui_vbo_);
         glBufferData(GL_ARRAY_BUFFER, vertex_count * 2 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
 
         glEnableVertexAttribArray(0);
@@ -847,18 +846,18 @@ public:
         glBindVertexArray(0);
     }
 
-    void draw_ui_textured_quad(int64_t context_key) override {
+    void draw_ui_textured_quad() override {
         static const float fs_verts[] = {
             -1, -1, 0, 0,
              1, -1, 1, 0,
             -1,  1, 0, 1,
              1,  1, 1, 1
         };
-        draw_ui_textured_quad_impl(context_key, fs_verts, 4);
+        draw_ui_textured_quad_impl(fs_verts, 4);
     }
 
-    void draw_ui_textured_quad(int64_t context_key, const float* vertices, int vertex_count) {
-        draw_ui_textured_quad_impl(context_key, vertices, vertex_count);
+    void draw_ui_textured_quad(const float* vertices, int vertex_count) {
+        draw_ui_textured_quad_impl(vertices, vertex_count);
     }
 
     // --- Immediate mode rendering ---
@@ -1000,18 +999,11 @@ public:
     }
 
 private:
-    void draw_ui_textured_quad_impl(int64_t context_key, const float* vertices, int vertex_count) {
-        auto& [vao, vbo] = get_ui_buffers(context_key);
+    void draw_ui_textured_quad_impl(const float* vertices, int vertex_count) {
+        ensure_ui_buffers();
 
-        glBindVertexArray(vao);
-
-        GLenum err_after_bind = glGetError();
-        if (err_after_bind != GL_NO_ERROR) {
-            tc::Log::error("draw_ui_textured_quad: GL error after glBindVertexArray(vao=%u, context_key=%lld): 0x%x",
-                           vao, (long long)context_key, err_after_bind);
-        }
-
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBindVertexArray(ui_vao_);
+        glBindBuffer(GL_ARRAY_BUFFER, ui_vbo_);
         glBufferData(GL_ARRAY_BUFFER, vertex_count * 4 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
 
         constexpr GLsizei stride = 4 * sizeof(float);
@@ -1021,34 +1013,19 @@ private:
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(2 * sizeof(float)));
 
         glDrawArrays(GL_TRIANGLE_STRIP, 0, vertex_count);
-
-        GLenum err_after_draw = glGetError();
-        if (err_after_draw != GL_NO_ERROR) {
-            tc::Log::error("draw_ui_textured_quad: GL error after glDrawArrays(context_key=%lld, vao=%u): 0x%x",
-                           (long long)context_key, vao, err_after_draw);
-        }
-
         glBindVertexArray(0);
     }
 
-    std::pair<GLuint, GLuint>& get_ui_buffers(int64_t context_key) {
-        auto it = ui_buffers_.find(context_key);
-        if (it != ui_buffers_.end()) {
-            // Check if VAO is still valid (may be invalid after context change)
-            if (glIsVertexArray(it->second.first)) {
-                return it->second;
+    void ensure_ui_buffers() {
+        if (ui_vao_ != 0) {
+            if (glIsVertexArray(ui_vao_)) {
+                return;
             }
-            // VAO invalid - remove stale entry
-            tc::Log::warn("get_ui_buffers: VAO %u invalid for context_key=%lld, recreating",
-                          it->second.first, (long long)context_key);
-            ui_buffers_.erase(it);
+            tc::Log::warn("ensure_ui_buffers: VAO %u invalid, recreating", ui_vao_);
         }
 
-        GLuint vao, vbo;
-        glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
-        ui_buffers_[context_key] = {vao, vbo};
-        return ui_buffers_[context_key];
+        glGenVertexArrays(1, &ui_vao_);
+        glGenBuffers(1, &ui_vbo_);
     }
 
     void draw_immediate_impl(const float* vertices, int vertex_count, GLenum mode) {
@@ -1092,7 +1069,10 @@ private:
     }
 
     bool initialized_;
-    std::unordered_map<int64_t, std::pair<GLuint, GLuint>> ui_buffers_;
+
+    // UI drawing resources
+    GLuint ui_vao_ = 0;
+    GLuint ui_vbo_ = 0;
 
     // Immediate mode rendering resources
     GLuint immediate_vao_ = 0;

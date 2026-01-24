@@ -49,7 +49,6 @@ class UIRenderer:
         self._graphics = graphics
         self._font = font
         self._shader: TcShader | None = None
-        self._context_key: int | None = None
 
         # Viewport size in pixels
         self._viewport_w: int = 0
@@ -69,16 +68,10 @@ class UIRenderer:
         if self._shader is None:
             self._shader = TcShader.from_sources(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIRenderer")
 
-    def begin(self, viewport_w: int, viewport_h: int, context_key: int | None = None):
+    def begin(self, viewport_w: int, viewport_h: int):
         """Begin UI rendering pass."""
-        from termin._native import log
-
         self._viewport_w = viewport_w
         self._viewport_h = viewport_h
-        self._context_key = context_key
-
-        if context_key is None:
-            log.warn("[UIRenderer] context_key is None, using 0")
 
         self._ensure_shader()
 
@@ -128,7 +121,6 @@ class UIRenderer:
         ], dtype=np.float32)
 
         # Bind shader and set uniforms
-        key = self._context_key if self._context_key is not None else 0
         self._shader.ensure_ready()
         self._shader.use()
         self._graphics.check_gl_error("UIRenderer: after shader.use")
@@ -137,8 +129,7 @@ class UIRenderer:
         self._graphics.check_gl_error("UIRenderer: after set uniforms")
 
         # Draw
-        key = self._context_key if self._context_key is not None else 0
-        self._graphics.draw_ui_vertices(key, vertices)
+        self._graphics.draw_ui_vertices(vertices)
         self._graphics.check_gl_error("UIRenderer: after draw_rect")
 
     def draw_text(self, x: float, y: float, text: str,
@@ -149,15 +140,13 @@ class UIRenderer:
         if not font or not text:
             return
 
-        key = self._context_key if self._context_key is not None else 0
         self._shader.ensure_ready()
         self._shader.use()
         self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
         self._shader.set_uniform_int("u_use_texture", 1)
 
         # Bind font texture
-        key = self._context_key if self._context_key is not None else 0
-        texture_handle = font.ensure_texture(self._graphics, context_key=key)
+        texture_handle = font.ensure_texture(self._graphics)
         texture_handle.bind(0)
         self._shader.set_uniform_int("u_texture", 0)
         self._graphics.check_gl_error("UIRenderer: after text setup")
@@ -197,7 +186,7 @@ class UIRenderer:
                 [right, bottom, u1, v1],
             ], dtype=np.float32)
 
-            self._graphics.draw_ui_textured_quad(key, vertices)
+            self._graphics.draw_ui_textured_quad(vertices)
 
             cursor_x += char_w
 

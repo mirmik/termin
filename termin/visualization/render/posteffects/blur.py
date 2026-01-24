@@ -77,7 +77,7 @@ class GaussianBlurPass(PostEffect):
     def __init__(self, direction=(1.0, 0.0)):
         self.direction = np.array(direction, dtype=np.float32)
 
-    def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
+    def draw(self, gfx, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
         texel_size = (1.0 / max(1, w), 1.0 / max(1, h))
 
@@ -94,4 +94,4 @@ class GaussianBlurPass(PostEffect):
         gfx.set_cull_face(False)
         gfx.set_blend(False)
 
-        gfx.draw_ui_textured_quad(key)
+        gfx.draw_ui_textured_quad()

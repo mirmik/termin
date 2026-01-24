@@ -107,7 +107,6 @@ public:
      * @param lights Light sources
      * @param camera_view Camera view matrix (for frustum fitting)
      * @param camera_projection Camera projection matrix
-     * @param context_key VAO/shader cache key
      * @return Vector of shadow map results
      */
     std::vector<ShadowMapResult> execute_shadow_pass(
@@ -115,8 +114,7 @@ public:
         tc_scene* scene,
         const std::vector<Light>& lights,
         const Mat44f& camera_view,
-        const Mat44f& camera_projection,
-        int64_t context_key
+        const Mat44f& camera_projection
     );
 
     // Legacy execute (required by base class) - not used
@@ -127,7 +125,6 @@ public:
         const Rect4i& rect,
         void* scene,
         void* camera,
-        int64_t context_key,
         const std::vector<Light*>* lights = nullptr
     ) override;
 

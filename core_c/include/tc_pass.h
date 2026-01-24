@@ -41,7 +41,6 @@ struct tc_execute_context {
     int rect_height;
     void* scene;                 // tc_scene*
     void* camera;                // Camera*
-    int64_t context_key;         // For VAO/shader caching
     void* lights;                // Light array
     size_t light_count;
     uint64_t layer_mask;

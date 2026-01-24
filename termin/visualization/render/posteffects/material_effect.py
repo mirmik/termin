@@ -153,7 +153,6 @@ class MaterialPostEffect(PostEffect):
     def draw(
         self,
         gfx: "GraphicsBackend",
-        context_key: int,
         color_tex: "GPUTextureHandle",
         extra_textures: dict[str, "GPUTextureHandle"],
         size: tuple[int, int],
@@ -165,19 +164,19 @@ class MaterialPostEffect(PostEffect):
         material = self._get_material()
         if material is None:
             # Fallback: just pass through color
-            self._draw_passthrough(gfx, context_key, color_tex)
+            self._draw_passthrough(gfx, color_tex)
             return
 
         # Get first phase (post effects typically have one phase)
         if not material.phases:
-            self._draw_passthrough(gfx, context_key, color_tex)
+            self._draw_passthrough(gfx, color_tex)
             return
 
         phase = material.phases[0]
         shader = phase.shader
 
         if not shader.is_valid:
-            self._draw_passthrough(gfx, context_key, color_tex)
+            self._draw_passthrough(gfx, color_tex)
             return
 
         shader.ensure_ready()
@@ -232,7 +231,7 @@ class MaterialPostEffect(PostEffect):
         gfx.check_gl_error(f"MaterialPostEffect({self.name}): after before_draw callback")
 
         # Draw fullscreen quad
-        gfx.draw_ui_textured_quad(context_key)
+        gfx.draw_ui_textured_quad()
         gfx.check_gl_error(f"MaterialPostEffect({self.name}): after draw_quad")
 
     def _set_uniform(self, shader, name: str, value) -> None:
@@ -264,7 +263,6 @@ class MaterialPostEffect(PostEffect):
     def _draw_passthrough(
         self,
         gfx: "GraphicsBackend",
-        context_key: int,
         color_tex: "GPUTextureHandle",
     ) -> None:
         """Fallback: pass through color unchanged."""
@@ -275,4 +273,4 @@ class MaterialPostEffect(PostEffect):
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         color_tex.bind(0)
-        gfx.draw_ui_textured_quad(context_key)
+        gfx.draw_ui_textured_quad()

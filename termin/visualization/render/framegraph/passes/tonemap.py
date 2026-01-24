@@ -142,7 +142,6 @@ class TonemapPass(PostEffectPass):
         input_tex: "GPUTextureHandle",
         output_fbo: "FramebufferHandle | None",
         size: tuple[int, int],
-        context_key: int,
         reads_fbos: dict[str, "FramebufferHandle | None"],
         scene,
         camera,
@@ -159,7 +158,7 @@ class TonemapPass(PostEffectPass):
         shader.set_uniform_int("u_method", self.method)
 
         # Draw fullscreen quad
-        self.draw_fullscreen_quad(graphics, context_key)
+        self.draw_fullscreen_quad(graphics)
 
     def destroy(self) -> None:
         """Clean up shader."""

@@ -342,7 +342,6 @@ class BloomPass(PostEffectPass):
         input_tex: "GPUTextureHandle",
         output_fbo: "FramebufferHandle | None",
         size: tuple[int, int],
-        context_key: int,
         reads_fbos: dict[str, "FramebufferHandle | None"],
         scene,
         camera,
@@ -367,7 +366,7 @@ class BloomPass(PostEffectPass):
         bright.set_uniform_float("u_threshold", self.threshold)
         bright.set_uniform_float("u_soft_threshold", self.soft_threshold)
 
-        self.draw_fullscreen_quad(graphics, context_key)
+        self.draw_fullscreen_quad(graphics)
 
         # === 2. Progressive Downsample ===
         down = _get_downsample_shader()
@@ -390,7 +389,7 @@ class BloomPass(PostEffectPass):
             down.set_uniform_int("u_texture", 0)
             down.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
 
-            self.draw_fullscreen_quad(graphics, context_key)
+            self.draw_fullscreen_quad(graphics)
 
         # === 3. Progressive Upsample (accumulate bloom) ===
         up = _get_upsample_shader()
@@ -417,7 +416,7 @@ class BloomPass(PostEffectPass):
             up.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
             up.set_uniform_float("u_blend_factor", 1.0)
 
-            self.draw_fullscreen_quad(graphics, context_key)
+            self.draw_fullscreen_quad(graphics)
 
         # === 4. Composite Pass (to output FBO) ===
         graphics.bind_framebuffer(output_fbo)
@@ -434,7 +433,7 @@ class BloomPass(PostEffectPass):
         comp.set_uniform_int("u_bloom", 1)
         comp.set_uniform_float("u_intensity", self.intensity)
 
-        self.draw_fullscreen_quad(graphics, context_key)
+        self.draw_fullscreen_quad(graphics)
 
     def destroy(self) -> None:
         """Clean up internal FBOs."""

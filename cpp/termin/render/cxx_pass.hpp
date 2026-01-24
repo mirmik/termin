@@ -33,7 +33,6 @@ struct ExecuteContext {
     int rect_height = 0;
     void* scene = nullptr;       // tc_scene*
     void* camera = nullptr;      // Camera*
-    int64_t context_key = 0;
     void* lights = nullptr;      // std::vector<Light>*
     size_t light_count = 0;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;

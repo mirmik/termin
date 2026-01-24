@@ -213,7 +213,7 @@ class Mesh2Drawable:
         name: Optional[str] = None,
     ):
         self._mesh: Mesh2 = mesh
-        self._context_resources: Dict[int, GPUMeshHandle] = {}
+        self._handle: GPUMeshHandle | None = None
         self._source_id: Optional[str] = source_id
         self.name: Optional[str] = name or source_id
 
@@ -240,38 +240,19 @@ class Mesh2Drawable:
         self._mesh = value
 
     def upload(self, context: RenderContext):
-        ctx = context.context_key
-        if ctx in self._context_resources:
+        if self._handle is not None:
             return
-        handle = context.graphics.create_mesh(self._mesh)
-        self._context_resources[ctx] = handle
+        self._handle = context.graphics.create_mesh(self._mesh)
 
     def draw(self, context: RenderContext):
-        ctx = context.context_key
-        if ctx not in self._context_resources:
+        if self._handle is None:
             self.upload(context)
-        handle = self._context_resources[ctx]
-        handle.draw()
+        self._handle.draw()
 
     def delete(self):
-        from termin.visualization.platform.backends import (
-            get_context_make_current,
-            get_current_context_key,
-        )
-
-        original_ctx = get_current_context_key()
-
-        for ctx_key, handle in self._context_resources.items():
-            make_current = get_context_make_current(ctx_key)
-            if make_current is not None:
-                make_current()
-            handle.delete()
-        self._context_resources.clear()
-
-        if original_ctx is not None:
-            restore = get_context_make_current(original_ctx)
-            if restore is not None:
-                restore()
+        if self._handle is not None:
+            self._handle.delete()
+            self._handle = None
 
     def serialize(self) -> dict:
         if self._source_id is not None:

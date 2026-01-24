@@ -113,7 +113,7 @@ class UI:
 
             self._root.layout(x, y, w, h, viewport_w, viewport_h)
 
-    def render(self, viewport_w: int, viewport_h: int, context_key: int | None = None):
+    def render(self, viewport_w: int, viewport_h: int):
         """Render the UI."""
         if not self._root:
             return
@@ -122,7 +122,7 @@ class UI:
         if viewport_w != self._viewport_w or viewport_h != self._viewport_h:
             self.layout(viewport_w, viewport_h)
 
-        self._renderer.begin(viewport_w, viewport_h, context_key)
+        self._renderer.begin(viewport_w, viewport_h)
         self._root.render(self._renderer)
         self._renderer.end()
 

@@ -63,7 +63,7 @@ class FontTextureAtlas:
         self.font = ImageFont.truetype(path, size)
         self.size = size
         self.glyphs = {}
-        self._handles: dict[int | None, GPUTextureHandle] = {}
+        self._handle: GPUTextureHandle | None = None
         self._atlas_data = None
         self.tex_w = 0
         self.tex_h = 0
@@ -72,22 +72,19 @@ class FontTextureAtlas:
     @property
     def texture(self) -> GPUTextureHandle | None:
         """Backend texture handle (uploaded lazily once a context exists)."""
-        return self._handles.get(None)
+        return self._handle
 
-    def ensure_texture(self, graphics: GraphicsBackend, context_key: int | None = None) -> GPUTextureHandle:
+    def ensure_texture(self, graphics: GraphicsBackend) -> GPUTextureHandle:
         """Uploads atlas into the current graphics backend if not done yet."""
-        handle = self._handles.get(context_key)
-        if handle is not None:
-            # Check if texture is still valid (may be invalid after context change)
+        if self._handle is not None:
+            # Check if texture is still valid
             import OpenGL.GL as gl
-            if not gl.glIsTexture(handle.get_id()):
-                log.warn(f"ensure_texture: texture {handle.get_id()} invalid for context_key={context_key}, recreating")
-                del self._handles[context_key]
-                handle = None
-        if handle is None:
-            handle = self._upload_texture(graphics)
-            self._handles[context_key] = handle
-        return handle
+            if not gl.glIsTexture(self._handle.get_id()):
+                log.warn(f"ensure_texture: texture {self._handle.get_id()} invalid, recreating")
+                self._handle = None
+        if self._handle is None:
+            self._handle = self._upload_texture(graphics)
+        return self._handle
 
     def _build_atlas(self):
         chars = [chr(i) for i in range(32, 127)]

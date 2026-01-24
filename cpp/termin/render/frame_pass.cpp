@@ -49,7 +49,6 @@ void FramePass::_cb_execute(tc_pass* p, tc_execute_context* ctx) {
         rect,
         ctx->scene,
         ctx->camera,
-        ctx->context_key,
         nullptr  // lights - TODO: convert from ctx->lights
     );
 }

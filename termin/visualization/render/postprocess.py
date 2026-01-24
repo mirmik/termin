@@ -153,7 +153,6 @@ class PostEffect:
     def draw(
         self,
         gfx: "GraphicsBackend",
-        context_key: int,
         color_tex: "GPUTextureHandle",
         extra_textures: dict[str, "GPUTextureHandle"],
         size: tuple[int, int],
@@ -343,8 +342,6 @@ class PostProcessPass(RenderFramePass):
             return
 
         px, py, pw, ph = ctx.rect
-        key = ctx.context_key
-
         size = (pw, ph)
 
         fb_in = ctx.reads_fbos.get(self.input_res)
@@ -383,7 +380,7 @@ class PostProcessPass(RenderFramePass):
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
-            blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out_final, size, key)
+            blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out_final, size)
             return
 
         current_tex = color_tex
@@ -408,7 +405,7 @@ class PostProcessPass(RenderFramePass):
                 ctx.graphics.bind_framebuffer(fb_target)
                 ctx.graphics.set_viewport(0, 0, pw, ph)
 
-                effect.draw(ctx.graphics, key, current_tex, extra_textures, size, fb_target)
+                effect.draw(ctx.graphics, current_tex, extra_textures, size, fb_target)
                 ctx.graphics.check_gl_error(f"PostFX: {effect.name if hasattr(effect, 'name') else effect.__class__.__name__}")
 
                 # Debugger: блит после применения эффекта если выбран его символ
@@ -430,7 +427,6 @@ class PostProcessPass(RenderFramePass):
         src_fb: "FramebufferHandle",
         dst_fb: "FramebufferHandle",
         size: tuple[int, int],
-        context_key: int,
     ) -> None:
         """
         Копирует промежуточный результат постобработки в debug FBO.
@@ -438,6 +434,6 @@ class PostProcessPass(RenderFramePass):
         Используется для внутренних точек — после копирования возвращаемся
         к исходному FBO, чтобы продолжить цепочку без побочных эффектов.
         """
-        blit_fbo_to_fbo(gfx, src_fb, dst_fb, size, context_key)
+        blit_fbo_to_fbo(gfx, src_fb, dst_fb, size)
         gfx.bind_framebuffer(src_fb)
         gfx.set_viewport(0, 0, size[0], size[1])

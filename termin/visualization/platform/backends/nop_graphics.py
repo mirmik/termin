@@ -165,17 +165,10 @@ class NOPGraphicsBackend(GraphicsBackend):
     ) -> GPUTextureHandle:
         return NOPGPUTextureHandle()
 
-    def draw_ui_vertices(self, context_key: int, vertices):
-        # Ничего не рисуем
+    def draw_ui_vertices(self, vertices):
         pass
 
-    def draw_ui_textured_quad(self, context_key: int, vertices=None):
-        """
-        Обрати внимание: здесь параметр vertices сделан опциональным.
-        Это чтобы пережить оба варианта вызова:
-        - draw_ui_textured_quad(context_key)
-        - draw_ui_textured_quad(context_key, vertices)
-        """
+    def draw_ui_textured_quad(self):
         pass
 
     def set_polygon_mode(self, mode: str):

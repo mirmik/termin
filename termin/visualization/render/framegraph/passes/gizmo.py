@@ -85,7 +85,6 @@ class GizmoPass(RenderFramePass):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         px, py, pw, ph = ctx.rect
-        key = ctx.context_key
 
         fb = ctx.writes_fbos.get(self.output_res)
         ctx.graphics.bind_framebuffer(fb)
@@ -115,7 +114,6 @@ class GizmoPass(RenderFramePass):
             projection=proj,
             camera=ctx.camera,
             scene=ctx.scene,
-            context_key=key,
             graphics=ctx.graphics,
             phase="gizmo_mask",
         )

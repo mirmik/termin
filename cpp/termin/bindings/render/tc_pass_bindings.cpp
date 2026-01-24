@@ -30,7 +30,6 @@ static void py_pass_execute(void* wrapper, tc_execute_context* ctx) {
         py_ctx["rect_y"] = ctx->rect_y;
         py_ctx["rect_width"] = ctx->rect_width;
         py_ctx["rect_height"] = ctx->rect_height;
-        py_ctx["context_key"] = ctx->context_key;
         py_ctx["layer_mask"] = ctx->layer_mask;
 
         // Call Python execute method
@@ -466,7 +465,6 @@ void bind_tc_pass(nb::module_& m) {
         if (ctx_dict.contains("rect_y")) ctx.rect_y = nb::cast<int>(ctx_dict["rect_y"]);
         if (ctx_dict.contains("rect_width")) ctx.rect_width = nb::cast<int>(ctx_dict["rect_width"]);
         if (ctx_dict.contains("rect_height")) ctx.rect_height = nb::cast<int>(ctx_dict["rect_height"]);
-        if (ctx_dict.contains("context_key")) ctx.context_key = nb::cast<int64_t>(ctx_dict["context_key"]);
         if (ctx_dict.contains("layer_mask")) ctx.layer_mask = nb::cast<uint64_t>(ctx_dict["layer_mask"]);
 
         tc_pass_execute(p, &ctx);

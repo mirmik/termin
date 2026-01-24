@@ -44,7 +44,7 @@ class GrayscaleEffect(PostEffect):
             self._shader = TcShader.from_sources(GRAY_VERT, GRAY_FRAG, "", "GrayscaleEffect")
         return self._shader
 
-    def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
+    def draw(self, gfx, color_tex, extra_textures, size, target_fbo=None):
         shader = self._get_shader()
         shader.ensure_ready()
         shader.use()
@@ -52,4 +52,4 @@ class GrayscaleEffect(PostEffect):
         color_tex.bind(0)
         shader.set_uniform_int("u_texture", 0)
 
-        gfx.draw_ui_textured_quad(key)
+        gfx.draw_ui_textured_quad()

@@ -27,9 +27,6 @@ struct RenderContext {
     Mat44f view;
     Mat44f projection;
 
-    // Context key for VAO/shader caching
-    int64_t context_key = 0;
-
     // Graphics backend pointer
     GraphicsBackend* graphics = nullptr;
 

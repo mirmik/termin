@@ -133,7 +133,6 @@ class SkyBoxPass(RenderFramePass):
             projection=projection,
             camera=ctx.camera,
             scene=ctx.scene,
-            context_key=ctx.context_key,
             graphics=ctx.graphics,
             phase="skybox",
         )

@@ -213,17 +213,17 @@ class TestPasses(unittest.TestCase):
 
             rect = (0, 0, width, height)
 
-            depth_pass.execute(
+            from termin.visualization.render.framegraph.execute_context import ExecuteContext
+            ctx = ExecuteContext(
                 graphics=graphics,
                 reads_fbos=reads_fbos,
                 writes_fbos=writes_fbos,
                 rect=rect,
                 scene=scene,
                 camera=camera,
-                context_key=surface.context_key(),
                 lights=None,
-                canvas=None,
             )
+            depth_pass.execute(ctx)
 
             # --- Проверяем результат ---
 

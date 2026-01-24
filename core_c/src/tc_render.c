@@ -373,8 +373,7 @@ void tc_render_pipeline(
     int height,
     tc_scene* scene,
     void* camera,
-    void* graphics,
-    int64_t context_key
+    void* graphics
 ) {
     if (!pipeline || !pool) return;
 
@@ -448,7 +447,6 @@ void tc_render_pipeline(
     base_ctx.rect_height = height;
     base_ctx.scene = scene;
     base_ctx.camera = camera;
-    base_ctx.context_key = context_key;
     base_ctx.layer_mask = 0xFFFFFFFFFFFFFFFF;
 
     for (size_t i = 0; i < schedule_count; i++) {

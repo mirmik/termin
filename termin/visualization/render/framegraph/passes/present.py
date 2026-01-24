@@ -56,7 +56,6 @@ def blit_fbo_to_fbo(
     src_fb,
     dst_fb,
     size: tuple[int, int],
-    context_key: int,
 ):
     from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 
@@ -90,7 +89,7 @@ def blit_fbo_to_fbo(
 
     tex.bind(0)
 
-    gfx.draw_ui_textured_quad(context_key)
+    gfx.draw_ui_textured_quad()
 
     gfx.set_depth_test(True)
     gfx.set_depth_mask(True)
@@ -142,7 +141,6 @@ class BlitPass(RenderFramePass):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         px, py, pw, ph = ctx.rect
-        key = ctx.context_key
 
         if self._get_source_res is None:
             return
@@ -159,7 +157,7 @@ class BlitPass(RenderFramePass):
         if fb_out is None:
             return
 
-        blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out, (pw, ph), key)
+        blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out, (pw, ph))
 
 
 FSQ_VERT = """

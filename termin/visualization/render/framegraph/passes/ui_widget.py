@@ -101,7 +101,7 @@ class UIWidgetPass(RenderFramePass):
                 entity_layer = entity.layer
                 if not (ctx.layer_mask & (1 << entity_layer)):
                     continue
-            ui_comp.render(ctx.graphics, pw, ph, ctx.context_key)
+            ui_comp.render(ctx.graphics, pw, ph)
             ctx.graphics.check_gl_error(f"UIWidgets: {entity.name if entity else 'ui_component'}")
 
     def _collect_ui_from_hierarchy(self, entity) -> list:

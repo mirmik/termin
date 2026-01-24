@@ -157,8 +157,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     tc_scene* scene,
     const std::vector<Light>& lights,
     const Mat44f& camera_view,
-    const Mat44f& camera_projection,
-    int64_t context_key
+    const Mat44f& camera_projection
 ) {
     std::vector<ShadowMapResult> results;
 
@@ -222,7 +221,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
     // Create render context
     RenderContext context;
-    context.context_key = context_key;
     context.graphics = graphics;
     context.phase = "shadow";
 
@@ -335,7 +333,6 @@ void ShadowPass::execute(
     const Rect4i& rect,
     void* scene,
     void* camera,
-    int64_t context_key,
     const std::vector<Light*>* lights
 ) {
     // Legacy execute - not used, call execute_shadow_pass instead

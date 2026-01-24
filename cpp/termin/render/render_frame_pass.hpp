@@ -102,7 +102,6 @@ public:
      * @param rect Viewport rectangle (x, y, width, height)
      * @param scene Current scene (opaque pointer for now)
      * @param camera Active camera (opaque pointer for now)
-     * @param context_key Key for VAO/shader caching
      * @param lights Pre-computed light list (optional)
      */
     virtual void execute(
@@ -112,7 +111,6 @@ public:
         const Rect4i& rect,
         void* scene,
         void* camera,
-        int64_t context_key,
         const std::vector<Light*>* lights = nullptr
     ) = 0;
 

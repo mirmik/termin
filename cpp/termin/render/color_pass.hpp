@@ -97,7 +97,6 @@ public:
      * @param view View matrix
      * @param projection Projection matrix
      * @param camera_position Camera world position (for distance sorting)
-     * @param context_key VAO/shader cache key
      * @param lights Light sources
      * @param ambient_color Ambient light color
      * @param ambient_intensity Ambient light intensity
@@ -112,7 +111,6 @@ public:
         const Mat44f& view,
         const Mat44f& projection,
         const Vec3& camera_position,
-        int64_t context_key,
         const std::vector<Light>& lights,
         const Vec3& ambient_color,
         float ambient_intensity,
@@ -129,7 +127,6 @@ public:
         const Rect4i& rect,
         void* scene,
         void* camera,
-        int64_t context_key,
         const std::vector<Light*>* lights = nullptr
     ) override;
 

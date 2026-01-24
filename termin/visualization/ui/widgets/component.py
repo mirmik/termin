@@ -229,8 +229,7 @@ class UIComponent(InputComponent):
             return []
         return self._ui.find_all(name)
 
-    def render(self, graphics: GraphicsBackend, viewport_w: int, viewport_h: int,
-               context_key: int | None = None):
+    def render(self, graphics: GraphicsBackend, viewport_w: int, viewport_h: int):
         """
         Render the UI.
 
@@ -240,7 +239,6 @@ class UIComponent(InputComponent):
             graphics: Graphics backend.
             viewport_w: Viewport width in pixels.
             viewport_h: Viewport height in pixels.
-            context_key: Context key for GPU resource management.
         """
         if self._graphics is None:
             self._graphics = graphics
@@ -250,7 +248,7 @@ class UIComponent(InputComponent):
         if self._ui.root is None:
             return
 
-        self._ui.render(viewport_w, viewport_h, context_key)
+        self._ui.render(viewport_w, viewport_h)
 
     def _ensure_layout(self):
         """Ensure layout is up to date for input handling."""

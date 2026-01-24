@@ -10,7 +10,6 @@ class FrameExecutionContext:
     window: "Window"
     viewport: "Viewport"
     rect: Tuple[int, int, int, int]  # (px, py, pw, ph)
-    context_key: int
 
     # карта ресурс -> FBO (или None, если это swapchain/экран)
     fbos: Dict[str, "FramebufferHandle" | None]
@@ -22,7 +21,6 @@ class FrameContext:
     viewport: "Viewport"
     rect: Tuple[int, int, int, int]
     size: Tuple[int, int]
-    context_key: int
     graphics: "GraphicsBackend"
     fbos: Dict[str, Any] = field(default_factory=dict)
     # Предвычисленные источники света для текущего кадра/вьюпорта.

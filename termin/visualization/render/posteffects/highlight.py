@@ -107,7 +107,7 @@ class HighlightEffect(PostEffect):
             self._shader = TcShader.from_sources(HIGHLIGHT_VERT, HIGHLIGHT_FRAG, "", "HighlightEffect")
         return self._shader
 
-    def draw(self, gfx, key, color_tex, extra_textures, size, target_fbo=None):
+    def draw(self, gfx, color_tex, extra_textures, size, target_fbo=None):
         w, h = size
         tex_id = extra_textures.get("id")
 
@@ -137,7 +137,7 @@ class HighlightEffect(PostEffect):
         oc = self._color
         shader.set_uniform_vec3("u_outline_color", float(oc[0]), float(oc[1]), float(oc[2]))
 
-        gfx.draw_ui_textured_quad(key)
+        gfx.draw_ui_textured_quad()
 
     def clear_callbacks(self) -> None:
         """Clear callback to allow garbage collection."""

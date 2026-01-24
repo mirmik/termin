@@ -337,7 +337,6 @@ class ColorPass(_ColorPassNative):
             view=view.to_numpy_f32(),
             projection=projection.to_numpy_f32(),
             camera_position=cam_pos_arr,
-            context_key=ctx.context_key,
             lights=list(scene.lights) if scene.lights else [],
             ambient_color=ambient_color,
             ambient_intensity=ambient_intensity,

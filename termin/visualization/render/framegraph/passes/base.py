@@ -20,9 +20,7 @@ class RenderFramePass(FramePass):
                 - reads_fbos/writes_fbos: FBO maps
                 - rect: pixel rectangle (px, py, pw, ph)
                 - scene, camera: what to render
-                - context_key: for VAO/shader caching
                 - lights: pre-computed lights
-                - canvas: optional 2D canvas
                 - layer_mask: which entity layers to render
         """
         raise NotImplementedError

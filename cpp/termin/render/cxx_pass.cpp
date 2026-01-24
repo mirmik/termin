@@ -22,7 +22,6 @@ ExecuteContext ExecuteContext::from_c(tc_execute_context* ctx) {
     result.rect_height = ctx->rect_height;
     result.scene = ctx->scene;
     result.camera = ctx->camera;
-    result.context_key = ctx->context_key;
     result.lights = ctx->lights;
     result.light_count = ctx->light_count;
     result.layer_mask = ctx->layer_mask;
@@ -41,7 +40,6 @@ tc_execute_context ExecuteContext::to_c() const {
     ctx.rect_height = rect_height;
     ctx.scene = scene;
     ctx.camera = camera;
-    ctx.context_key = context_key;
     ctx.lights = lights;
     ctx.light_count = light_count;
     ctx.layer_mask = layer_mask;

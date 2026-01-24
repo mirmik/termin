@@ -83,8 +83,7 @@ TC_API void tc_render_pipeline(
     int height,
     tc_scene* scene,
     void* camera,
-    void* graphics,
-    int64_t context_key
+    void* graphics
 );
 
 // ============================================================================

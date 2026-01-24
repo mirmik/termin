@@ -1,7 +1,7 @@
 """OpenGL context management.
 
 The main OpenGLGraphicsBackend is now in C++ (_native module).
-This file contains context management for multi-context GPU resource cleanup.
+This file contains context management for GPU resource cleanup.
 
 Framebuffer handles are now created via:
 - OpenGLGraphicsBackend.create_framebuffer(width, height) - for offscreen rendering
@@ -11,36 +11,20 @@ Framebuffer handles are now created via:
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from typing import Callable
 
 # --- Context Management ---
-# Used for switching contexts when deleting GPU resources in multi-context scenarios
+# Single context - used for making context current before GPU operations
 
-_context_registry: Dict[int, Callable[[], None]] = {}
-_current_context_key: int | None = None
-
-
-def register_context(context_key: int, make_current: Callable[[], None]) -> None:
-    """Register a context for resource cleanup."""
-    global _current_context_key
-    _context_registry[context_key] = make_current
-    _current_context_key = context_key
+_make_current_fn: Callable[[], None] | None = None
 
 
-def get_context_make_current(context_key: int) -> Callable[[], None] | None:
-    """Get make_current function for a context."""
-    original = _context_registry.get(context_key)
-    if original is None:
-        return None
-
-    def wrapped():
-        global _current_context_key
-        original()
-        _current_context_key = context_key
-
-    return wrapped
+def register_context(make_current: Callable[[], None]) -> None:
+    """Register the context's make_current function."""
+    global _make_current_fn
+    _make_current_fn = make_current
 
 
-def get_current_context_key() -> int | None:
-    """Get currently active context key."""
-    return _current_context_key
+def get_make_current() -> Callable[[], None] | None:
+    """Get the make_current function."""
+    return _make_current_fn

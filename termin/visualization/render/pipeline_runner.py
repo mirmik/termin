@@ -19,7 +19,6 @@ class PipelineRunner:
         viewports: Iterable[Viewport],
         framebuffer_size: Tuple[int, int],
         display_fbo,
-        context_key: int,
     ) -> None:
         width, height = framebuffer_size
 
@@ -92,9 +91,7 @@ class PipelineRunner:
                     scene=scene,
                     camera=viewport.camera,
                     viewport=viewport,
-                    context_key=context_key,
                     lights=lights,
-                    canvas=None,
                     layer_mask=viewport.effective_layer_mask,
                 )
                 render_pass.execute(ctx)

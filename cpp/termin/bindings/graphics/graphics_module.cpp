@@ -440,14 +440,14 @@ void bind_graphics_backend(nb::module_& m) {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }, nb::arg("src"), nb::arg("dst"), nb::arg("src_rect"), nb::arg("dst_rect"),
            nb::arg("blit_color") = true, nb::arg("blit_depth") = false)
-        .def("draw_ui_vertices", [](OpenGLGraphicsBackend& self, int64_t context_key, nb::ndarray<float, nb::c_contig, nb::device::cpu> vertices) {
+        .def("draw_ui_vertices", [](OpenGLGraphicsBackend& self, nb::ndarray<float, nb::c_contig, nb::device::cpu> vertices) {
             int count = static_cast<int>(vertices.size() / 2);
-            self.draw_ui_vertices(context_key, const_cast<float*>(vertices.data()), count);
+            self.draw_ui_vertices(const_cast<float*>(vertices.data()), count);
         })
-        .def("draw_ui_textured_quad", static_cast<void (OpenGLGraphicsBackend::*)(int64_t)>(&OpenGLGraphicsBackend::draw_ui_textured_quad))
-        .def("draw_ui_textured_quad", [](OpenGLGraphicsBackend& self, int64_t context_key, nb::ndarray<float, nb::c_contig, nb::device::cpu> vertices) {
+        .def("draw_ui_textured_quad", static_cast<void (OpenGLGraphicsBackend::*)()>(&OpenGLGraphicsBackend::draw_ui_textured_quad))
+        .def("draw_ui_textured_quad", [](OpenGLGraphicsBackend& self, nb::ndarray<float, nb::c_contig, nb::device::cpu> vertices) {
             int count = static_cast<int>(vertices.size() / 4);
-            self.draw_ui_textured_quad(context_key, const_cast<float*>(vertices.data()), count);
+            self.draw_ui_textured_quad(const_cast<float*>(vertices.data()), count);
         })
         .def("create_mesh", [](OpenGLGraphicsBackend& self, nb::object mesh, DrawMode mode) -> std::unique_ptr<GPUMeshHandle> {
             nb::ndarray<float, nb::c_contig, nb::device::cpu> buffer = nb::cast<nb::ndarray<float, nb::c_contig, nb::device::cpu>>(mesh.attr("interleaved_buffer")());

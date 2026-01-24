@@ -241,7 +241,6 @@ void ColorPass::execute_with_data(
     const Mat44f& view,
     const Mat44f& projection,
     const Vec3& camera_position,
-    int64_t context_key,
     const std::vector<Light>& lights,
     const Vec3& ambient_color,
     float ambient_intensity,
@@ -271,7 +270,6 @@ void ColorPass::execute_with_data(
     RenderContext context;
     context.view = view;
     context.projection = projection;
-    context.context_key = context_key;
     context.graphics = graphics;
     context.phase = phase_mark;
 
@@ -497,7 +495,6 @@ void ColorPass::execute(
     const Rect4i& rect,
     void* scene,
     void* camera,
-    int64_t context_key,
     const std::vector<Light*>* lights
 ) {
     // Legacy execute - not used, call execute_with_data instead

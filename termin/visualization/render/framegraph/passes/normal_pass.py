@@ -172,6 +172,5 @@ class NormalPass(_NormalPassNative):
             scene=scene,
             view=view.to_numpy_f32(),
             projection=projection.to_numpy_f32(),
-            context_key=ctx.context_key,
             layer_mask=ctx.layer_mask,
         )

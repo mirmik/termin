@@ -146,7 +146,6 @@ class ShadowPass(_ShadowPassNative):
             lights=list(ctx.lights),
             camera_view=camera_view,
             camera_projection=camera_projection,
-            context_key=ctx.context_key,
         )
 
         # Convert C++ results to ShadowMapArrayResource

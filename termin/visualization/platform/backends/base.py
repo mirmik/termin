@@ -257,11 +257,11 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
-    def draw_ui_vertices(self, context_key: int, vertices):
+    def draw_ui_vertices(self, vertices):
         ...
 
     @abstractmethod
-    def draw_ui_textured_quad(self, context_key: int):
+    def draw_ui_textured_quad(self):
         ...
 
     @abstractmethod

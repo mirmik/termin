@@ -92,7 +92,7 @@ class FogEffect(PostEffect):
             self._shader = TcShader.from_sources(FOG_VERT, FOG_FRAG, "", "FogEffect")
         return self._shader
 
-    def draw(self, gfx, context_key, color_tex, extra_textures, size, target_fbo=None):
+    def draw(self, gfx,color_tex, extra_textures, size, target_fbo=None):
         depth_tex = extra_textures.get("depth")
 
         shader = self._get_shader()
@@ -111,4 +111,4 @@ class FogEffect(PostEffect):
         shader.set_uniform_float("u_fog_start", self._fog_start if depth_tex else 1.0)
         shader.set_uniform_float("u_fog_end", self._fog_end if depth_tex else 1.0)
 
-        gfx.draw_ui_textured_quad(context_key)
+        gfx.draw_ui_textured_quad()

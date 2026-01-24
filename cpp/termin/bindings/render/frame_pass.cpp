@@ -201,9 +201,6 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](RenderContext* self, nb::kwargs kwargs) {
             new (self) RenderContext();
 
-            if (kwargs.contains("context_key")) {
-                self->context_key = nb::cast<int64_t>(kwargs["context_key"]);
-            }
             if (kwargs.contains("phase")) {
                 self->phase = nb::cast<std::string>(kwargs["phase"]);
             }
@@ -269,7 +266,6 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
         })
-        .def_rw("context_key", &RenderContext::context_key)
         .def_rw("phase", &RenderContext::phase)
         .def_rw("scene", &RenderContext::scene)
         .def_rw("shadow_data", &RenderContext::shadow_data)
@@ -441,7 +437,6 @@ void bind_frame_pass(nb::module_& m) {
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
             nb::ndarray<nb::numpy, double, nb::shape<3>> camera_position_py,
-            int64_t context_key,
             nb::list lights_py,
             nb::ndarray<nb::numpy, double, nb::shape<3>> ambient_color_py,
             float ambient_intensity,
@@ -561,7 +556,6 @@ void bind_frame_pass(nb::module_& m) {
                 view,
                 projection,
                 camera_position,
-                context_key,
                 lights,
                 ambient_color,
                 ambient_intensity,
@@ -578,7 +572,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("camera_position"),
-        nb::arg("context_key"),
         nb::arg("lights"),
         nb::arg("ambient_color"),
         nb::arg("ambient_intensity"),
@@ -614,7 +607,6 @@ void bind_frame_pass(nb::module_& m) {
             nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
-            int64_t context_key,
             float near_plane,
             float far_plane,
             uint64_t layer_mask
@@ -686,7 +678,6 @@ void bind_frame_pass(nb::module_& m) {
                 scene,
                 view,
                 projection,
-                context_key,
                 near_plane,
                 far_plane,
                 layer_mask
@@ -699,7 +690,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
-        nb::arg("context_key"),
         nb::arg("near_plane"),
         nb::arg("far_plane"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
@@ -730,7 +720,6 @@ void bind_frame_pass(nb::module_& m) {
             nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
-            int64_t context_key,
             uint64_t layer_mask
         ) {
             // Convert FBO maps
@@ -798,7 +787,6 @@ void bind_frame_pass(nb::module_& m) {
                 scene,
                 view,
                 projection,
-                context_key,
                 layer_mask
             );
         },
@@ -809,7 +797,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
-        nb::arg("context_key"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &NormalPass::destroy)
         .def("__repr__", [](const NormalPass& p) {
@@ -837,7 +824,6 @@ void bind_frame_pass(nb::module_& m) {
             nb::object scene_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
-            int64_t context_key,
             uint64_t layer_mask
         ) {
             // Convert FBO maps
@@ -907,7 +893,6 @@ void bind_frame_pass(nb::module_& m) {
                 scene,
                 view,
                 projection,
-                context_key,
                 layer_mask
             );
         },
@@ -918,7 +903,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("scene"),
         nb::arg("view"),
         nb::arg("projection"),
-        nb::arg("context_key"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &IdPass::destroy)
         .def("__repr__", [](const IdPass& p) {
@@ -969,8 +953,7 @@ void bind_frame_pass(nb::module_& m) {
             nb::object scene_py,
             nb::list lights_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_view_py,
-            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_projection_py,
-            int64_t context_key
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_projection_py
         ) {
             // Get tc_scene* from Python Scene object
             tc_scene* scene = nullptr;
@@ -1006,7 +989,7 @@ void bind_frame_pass(nb::module_& m) {
 
             // Call C++ execute
             std::vector<ShadowMapResult> results = self.execute_shadow_pass(
-                graphics, scene, lights, camera_view, camera_projection, context_key
+                graphics, scene, lights, camera_view, camera_projection
             );
 
             // Convert results to Python list
@@ -1020,8 +1003,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("scene"),
         nb::arg("lights"),
         nb::arg("camera_view"),
-        nb::arg("camera_projection"),
-        nb::arg("context_key"))
+        nb::arg("camera_projection"))
         .def("destroy", &ShadowPass::destroy)
         .def("__repr__", [](const ShadowPass& p) {
             return "<ShadowPass '" + p.pass_name + "'>";

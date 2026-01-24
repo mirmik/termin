@@ -286,14 +286,14 @@ void bind_graphics_backend(nb::module_& m) {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }, nb::arg("src"), nb::arg("dst"), nb::arg("src_rect"), nb::arg("dst_rect"),
            nb::arg("blit_color") = true, nb::arg("blit_depth") = false)
-        .def("draw_ui_vertices", [](OpenGLGraphicsBackend& self, int64_t context_key, nb::ndarray<nb::numpy, float> vertices) {
+        .def("draw_ui_vertices", [](OpenGLGraphicsBackend& self, nb::ndarray<nb::numpy, float> vertices) {
             int count = static_cast<int>(vertices.size() / 2);
-            self.draw_ui_vertices(context_key, vertices.data(), count);
+            self.draw_ui_vertices(vertices.data(), count);
         })
-        .def("draw_ui_textured_quad", static_cast<void (OpenGLGraphicsBackend::*)(int64_t)>(&OpenGLGraphicsBackend::draw_ui_textured_quad))
-        .def("draw_ui_textured_quad", [](OpenGLGraphicsBackend& self, int64_t context_key, nb::ndarray<nb::numpy, float> vertices) {
+        .def("draw_ui_textured_quad", static_cast<void (OpenGLGraphicsBackend::*)()>(&OpenGLGraphicsBackend::draw_ui_textured_quad))
+        .def("draw_ui_textured_quad", [](OpenGLGraphicsBackend& self, nb::ndarray<nb::numpy, float> vertices) {
             int count = static_cast<int>(vertices.size() / 4);  // 4 floats per vertex (x, y, u, v)
-            self.draw_ui_textured_quad(context_key, vertices.data(), count);
+            self.draw_ui_textured_quad(vertices.data(), count);
         })
         // Generic create_mesh for all Python mesh objects (Mesh3, SkinnedMesh3, Mesh2, etc.)
         // Uses interleaved_buffer() and get_vertex_layout() to support any vertex format

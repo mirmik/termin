@@ -187,7 +187,6 @@ class DepthPass(_DepthPassNative):
             scene=scene,
             view=view.to_numpy_f32(),
             projection=projection.to_numpy_f32(),
-            context_key=ctx.context_key,
             near_plane=near_plane,
             far_plane=far_plane,
             layer_mask=ctx.layer_mask,

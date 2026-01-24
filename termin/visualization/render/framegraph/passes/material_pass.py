@@ -369,7 +369,6 @@ class MaterialPass(PostEffectPass):
             input_tex=None,
             output_fbo=output_fbo,
             size=(w, h),
-            context_key=ctx.context_key,
             reads_fbos=ctx.reads_fbos,
             scene=ctx.scene,
             camera=ctx.camera,
@@ -385,7 +384,6 @@ class MaterialPass(PostEffectPass):
         input_tex: "GPUTextureHandle",
         output_fbo: "FramebufferHandle | None",
         size: tuple[int, int],
-        context_key: int,
         reads_fbos: dict[str, "FramebufferHandle | None"],
         scene,
         camera,
@@ -395,14 +393,14 @@ class MaterialPass(PostEffectPass):
 
         if material is None or not material.phases:
             # Passthrough - just copy input to output
-            self._draw_passthrough(graphics, context_key, input_tex)
+            self._draw_passthrough(graphics, input_tex)
             return
 
         phase = material.phases[0]
         shader = phase.shader
 
         if not shader.is_valid:
-            self._draw_passthrough(graphics, context_key, input_tex)
+            self._draw_passthrough(graphics, input_tex)
             return
 
         shader.ensure_ready()
@@ -459,7 +457,7 @@ class MaterialPass(PostEffectPass):
             if tex_name in bound_uniforms:
                 continue
             if tex_handle is not None:
-                # TcTexture uses bind_gpu(unit) instead of bind(graphics, unit, context_key)
+                # TcTexture uses bind_gpu(unit) instead of bind(graphics, unit)
                 tex_handle.upload_gpu()
                 tex_handle.bind_gpu(texture_unit)
                 shader.set_uniform_int(tex_name, texture_unit)
@@ -474,7 +472,7 @@ class MaterialPass(PostEffectPass):
             self._before_draw(shader)
 
         # Draw
-        self.draw_fullscreen_quad(graphics, context_key)
+        self.draw_fullscreen_quad(graphics)
 
     def _set_uniform(self, shader, name: str, value) -> None:
         """Set uniform based on value type."""
@@ -504,7 +502,6 @@ class MaterialPass(PostEffectPass):
     def _draw_passthrough(
         self,
         graphics: "GraphicsBackend",
-        context_key: int,
         input_tex: "GPUTextureHandle | None",
     ) -> None:
         """Fallback: pass through input unchanged."""
@@ -518,7 +515,7 @@ class MaterialPass(PostEffectPass):
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         input_tex.bind(0)
-        self.draw_fullscreen_quad(graphics, context_key)
+        self.draw_fullscreen_quad(graphics)
 
     def destroy(self) -> None:
         """Clean up resources and callbacks."""

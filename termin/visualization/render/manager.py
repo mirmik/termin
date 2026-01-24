@@ -108,7 +108,6 @@ class RenderingManager:
         Creates OffscreenContext which provides:
         - Dedicated GL context for all rendering
         - GraphicsBackend instance
-        - Single context_key for all resources
 
         Call this before creating displays. Displays should share context
         with offscreen_context.gl_context.
@@ -664,7 +663,6 @@ class RenderingManager:
                 scene=viewport.scene,
                 camera=viewport.camera,
                 rect=viewport.rect,
-                canvas=None,
                 pipeline=viewport.pipeline,
                 layer_mask=viewport.effective_layer_mask,
                 viewport=viewport,
@@ -720,7 +718,6 @@ class RenderingManager:
 
         # Activate offscreen context
         self._offscreen_context.make_current()
-        context_key = self._offscreen_context.context_key
 
         # Ensure graphics is ready (load GL functions)
         self._graphics.ensure_ready()
@@ -745,7 +742,6 @@ class RenderingManager:
                     pipeline_name=pipeline_name,
                     pipeline=pipeline,
                     all_viewports=all_viewports_by_name,
-                    context_key=context_key,
                 )
 
         # 2. Render unmanaged viewports
@@ -758,7 +754,7 @@ class RenderingManager:
                 if viewport.pipeline is None or viewport.scene is None:
                     continue
 
-                self._render_viewport_offscreen(viewport, context_key)
+                self._render_viewport_offscreen(viewport)
 
     def _render_scene_pipeline_offscreen(
         self,
@@ -766,7 +762,6 @@ class RenderingManager:
         pipeline_name: str,
         pipeline: "RenderPipeline",
         all_viewports: Dict[str, "Viewport"],
-        context_key: int,
     ) -> None:
         """Render a scene pipeline to viewport output_fbos."""
         from termin._native import log
@@ -821,14 +816,12 @@ class RenderingManager:
             scene=scene,
             viewport_contexts=viewport_contexts,
             shared_state=state,
-            context_key=context_key,
             default_viewport=target_names[0] if target_names else "",
         )
 
     def _render_viewport_offscreen(
         self,
         viewport: "Viewport",
-        context_key: int,
     ) -> None:
         """Render a single unmanaged viewport to its output_fbo."""
         from termin.visualization.render.view import RenderView
@@ -849,7 +842,6 @@ class RenderingManager:
             scene=viewport.scene,
             camera=viewport.camera,
             rect=(0.0, 0.0, 1.0, 1.0),  # Full output FBO
-            canvas=None,
             pipeline=viewport.pipeline,
             layer_mask=viewport.effective_layer_mask,
             viewport=viewport,
@@ -860,7 +852,6 @@ class RenderingManager:
             state=state,
             target_fbo=output_fbo,
             size=(pw, ph),
-            context_key=context_key,
         )
 
     def present_all(self) -> None:

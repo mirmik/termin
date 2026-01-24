@@ -29,14 +29,13 @@ public:
         tc_scene* scene,
         const Mat44f& view,
         const Mat44f& projection,
-        int64_t context_key,
         float near_plane,
         float far_plane,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     ) {
         _near_plane = near_plane;
         _far_plane = far_plane;
-        execute_geometry_pass(graphics, writes_fbos, rect, scene, view, projection, context_key, layer_mask);
+        execute_geometry_pass(graphics, writes_fbos, rect, scene, view, projection, layer_mask);
     }
 
     void execute(
@@ -46,7 +45,6 @@ public:
         const Rect4i& rect,
         void* scene,
         void* camera,
-        int64_t context_key,
         const std::vector<Light*>* lights = nullptr
     ) override {
         // Legacy - not used

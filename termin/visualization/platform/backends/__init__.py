@@ -26,8 +26,7 @@ from termin.graphics import OpenGLGraphicsBackend
 # Context management functions (still in Python)
 from termin.visualization.platform.backends.opengl import (
     register_context,
-    get_context_make_current,
-    get_current_context_key,
+    get_make_current,
 )
 
 # SDL backend using C++ implementation
@@ -95,6 +94,5 @@ __all__ = [
     "OpenGLGraphicsBackend",
     # Context management
     "register_context",
-    "get_context_make_current",
-    "get_current_context_key",
+    "get_make_current",
 ]

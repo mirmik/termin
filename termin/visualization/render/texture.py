@@ -82,7 +82,7 @@ class Texture:
             texture_data.delete_gpu()
         self._preview_pixmap = None
 
-    def bind(self, graphics: "GraphicsBackend", unit: int = 0, context_key: int | None = None) -> None:
+    def bind(self, graphics: "GraphicsBackend", unit: int = 0) -> None:
         """Bind texture to specified unit."""
         texture_data = self._handle.get()
         if texture_data is None:

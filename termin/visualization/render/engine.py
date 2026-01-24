@@ -283,11 +283,10 @@ class RenderEngine:
 
             width, height = surface.get_size()
             display_fbo = surface.get_framebuffer()
-            context_key = surface.context_key()
 
             # Регистрируем контекст для корректного удаления GPU ресурсов
             from termin.visualization.platform.backends import register_context
-            register_context(context_key, surface.make_current)
+            register_context(surface.make_current)
 
             for view, state in views:
                 try:
@@ -296,7 +295,6 @@ class RenderEngine:
                         state=state,
                         target_fbo=display_fbo,
                         size=(width, height),
-                        context_key=context_key,
                     )
                 except Exception as e:
                     import traceback
@@ -382,7 +380,6 @@ class RenderEngine:
         state: "ViewportRenderState",
         target_fbo: "FramebufferHandle",
         size: Tuple[int, int],
-        context_key: int,
     ) -> None:
         """
         Рендерит view в указанный FBO (offscreen).
@@ -394,7 +391,6 @@ class RenderEngine:
             state: ViewportRenderState (fbos).
             target_fbo: Целевой FBO для рендера.
             size: Размер FBO (width, height).
-            context_key: Ключ контекста для кэширования.
         """
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
         from termin._native import log
@@ -489,7 +485,6 @@ class RenderEngine:
         scene: "Scene",
         viewport_contexts: Dict[str, ViewportContext],
         shared_state: "ViewportRenderState",
-        context_key: int,
         default_viewport: str = "",
     ) -> None:
         """
@@ -503,7 +498,6 @@ class RenderEngine:
             scene: Сцена.
             viewport_contexts: Словарь viewport_name -> ViewportContext (с output_fbo).
             shared_state: ViewportRenderState с общими ресурсами.
-            context_key: Ключ контекста.
             default_viewport: Viewport по умолчанию для пассов без viewport_name.
         """
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass

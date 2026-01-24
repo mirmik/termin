@@ -25,7 +25,7 @@ class Canvas:
     def clear(self):
         self.elements.clear()
 
-    def render(self, graphics: GraphicsBackend, context_key: int, viewport_rect: Tuple[int, int, int, int]):
+    def render(self, graphics: GraphicsBackend, viewport_rect: Tuple[int, int, int, int]):
         if not self.elements:
             return
         graphics.set_cull_face(False)
@@ -33,16 +33,16 @@ class Canvas:
         graphics.set_blend(True)
         graphics.set_blend_func("src_alpha", "one_minus_src_alpha")
         for element in self.elements:
-            element.draw(self, graphics, context_key, viewport_rect)
+            element.draw(self, graphics,viewport_rect)
         graphics.set_cull_face(True)
         graphics.set_blend(False)
         graphics.set_depth_test(True)
 
-    def draw_vertices(self, graphics: GraphicsBackend, context_key: int, vertices):
-        graphics.draw_ui_vertices(context_key, vertices)
+    def draw_vertices(self, graphics: GraphicsBackend, vertices):
+        graphics.draw_ui_vertices(vertices)
 
-    def draw_textured_quad(self, graphics: GraphicsBackend, context_key: int, vertices: np.ndarray):
-        graphics.draw_ui_textured_quad(context_key, vertices)
+    def draw_textured_quad(self, graphics: GraphicsBackend, vertices: np.ndarray):
+        graphics.draw_ui_textured_quad(vertices)
 
     def hit_test(self, x: float, y: float, viewport_rect_pixels: Tuple[int, int, int, int]) -> "UIElement | None":
         px, py, pw, ph = viewport_rect_pixels
