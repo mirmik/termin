@@ -112,12 +112,15 @@ struct ComponentRegistrar {
 
         ComponentRegistry::instance().register_native(name,
             [name, has_update, has_fixed_update]() -> tc_component* {
-                printf("[Factory] Creating %s with has_update=%d\n", name, has_update ? 1 : 0);
+                printf("[Factory] Creating %s sizeof(tc_component)=%zu sizeof(T)=%zu offsetof(_c)=%zu\n",
+                    name, sizeof(tc_component), sizeof(T), offsetof(T, _c));
                 T* comp = new T();
+                printf("[Factory] comp=%p comp->c_component()=%p diff=%td\n",
+                    (void*)comp, (void*)comp->c_component(),
+                    (char*)comp->c_component() - (char*)comp);
                 comp->set_type_name(name);
                 comp->set_has_update(has_update);
                 comp->set_has_fixed_update(has_fixed_update);
-                printf("[Factory] After set: comp->has_update()=%d\n", comp->has_update() ? 1 : 0);
                 return comp->c_component();
             },
             parent);

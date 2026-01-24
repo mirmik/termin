@@ -26,6 +26,7 @@
 #include "../../../core_c/include/tc_inspect_cpp.hpp"
 #endif
 #include <tc_log.hpp>
+#include <tc_version.h>
 
 #include <fstream>
 #include <sstream>
@@ -104,6 +105,79 @@ bool ModuleLoader::parse_module_file(const std::string& path, ModuleDescriptor& 
         }
     }
 
+    // Parse built_version (0 if missing = not built yet)
+    if (tr.contains("built_version") && tr["built_version"].is_numer()) {
+        out.built_version = (int)tr["built_version"].as_integer();
+    } else {
+        out.built_version = 0;
+    }
+
+    return true;
+}
+
+bool ModuleLoader::write_module_version(const std::string& path, int version) {
+    // Read existing content
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        tc::Log::error("Cannot open module file for version update: %s", path.c_str());
+        return false;
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+    file.close();
+
+    nos::trent tr;
+    try {
+        tr = nos::yaml::parse(content);
+    } catch (const std::exception& e) {
+        tc::Log::error("Failed to parse module file for version update: %s", e.what());
+        return false;
+    }
+
+    // Update version
+    tr["built_version"] = version;
+
+    // Write back as JSON
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        tc::Log::error("Cannot write module file: %s", path.c_str());
+        return false;
+    }
+
+    // Manual JSON serialization (simple enough for .module format)
+    out << "{\n";
+    out << "    \"name\": \"" << tr["name"].as_string() << "\",\n";
+    out << "    \"sources\": [";
+    bool first = true;
+    for (const auto& src : tr["sources"].as_list()) {
+        if (!first) out << ", ";
+        out << "\"" << src.as_string() << "\"";
+        first = false;
+    }
+    out << "],\n";
+    out << "    \"include_dirs\": [";
+    first = true;
+    for (const auto& dir : tr["include_dirs"].as_list()) {
+        if (!first) out << ", ";
+        out << "\"" << dir.as_string() << "\"";
+        first = false;
+    }
+    out << "],\n";
+    out << "    \"components\": [";
+    first = true;
+    for (const auto& comp : tr["components"].as_list()) {
+        if (!first) out << ", ";
+        out << "\"" << comp.as_string() << "\"";
+        first = false;
+    }
+    out << "],\n";
+    out << "    \"built_version\": " << version << "\n";
+    out << "}\n";
+    out.close();
+
+    tc::Log::info("Module '%s' built_version updated to %d", path.c_str(), version);
     return true;
 }
 
@@ -361,6 +435,10 @@ std::string ModuleLoader::compile_module(const std::string& name) {
         return "";
     }
 
+    // Update built_version in .module file
+    write_module_version(desc.path, TC_VERSION);
+    it->second.descriptor.built_version = TC_VERSION;
+
     emit_event(name, "compiled");
     return dll_path.string();
 }
@@ -406,6 +484,13 @@ bool ModuleLoader::load_module(const std::string& module_path) {
 #endif
 
     bool needs_compile = !fs::exists(dll_path);
+
+    // Check if module was built with different engine version
+    if (!needs_compile && desc.built_version != TC_VERSION) {
+        tc::Log::info("Module '%s' built_version=%d, engine TC_VERSION=%d, recompiling...",
+                      desc.name.c_str(), desc.built_version, TC_VERSION);
+        needs_compile = true;
+    }
 
     // Check if sources are newer than DLL
     if (!needs_compile && fs::exists(dll_path)) {

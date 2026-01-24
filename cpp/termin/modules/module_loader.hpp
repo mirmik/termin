@@ -35,6 +35,7 @@ struct ModuleDescriptor {
     std::vector<std::string> sources;          // Glob patterns for sources
     std::vector<std::string> include_dirs;     // Additional include directories
     std::vector<std::string> components;       // Component type names
+    int built_version = 0;                     // Engine version module was built for
 };
 
 // Information about a loaded module
@@ -107,6 +108,9 @@ private:
 
     // Parse .module file
     bool parse_module_file(const std::string& path, ModuleDescriptor& out);
+
+    // Write built_version to .module file
+    bool write_module_version(const std::string& path, int version);
 
     // DLL operations
     ModuleHandle load_dll(const std::string& path);

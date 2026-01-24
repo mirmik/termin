@@ -12,13 +12,8 @@
 #endif
 
 // ============================================================================
-// Version
+// Version (defined in termin_core.h)
 // ============================================================================
-
-#define TC_VERSION_MAJOR 0
-#define TC_VERSION_MINOR 1
-#define TC_VERSION_PATCH 0
-#define TC_VERSION_STRING "0.1.0"
 
 const char* tc_version(void) {
     return TC_VERSION_STRING;
@@ -34,6 +29,10 @@ int tc_version_minor(void) {
 
 int tc_version_patch(void) {
     return TC_VERSION_PATCH;
+}
+
+int tc_version_int(void) {
+    return TC_VERSION;
 }
 
 // ============================================================================

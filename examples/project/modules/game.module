@@ -2,5 +2,6 @@
     "name": "game_components",
     "sources": ["components/spin_component.cpp"],
     "include_dirs": ["."],
-    "components": ["SpinComponent"]
+    "components": ["SpinComponent"],
+    "built_version": 1
 }

@@ -142,6 +142,9 @@
             "data": {
               "display_name": "",
               "enabled": false,
+              "navmesh": {
+                "type": "none"
+              },
               "material": {
                 "uuid": "b62e01e0-b3f6-4443-a367-b0edf8bffa60",
                 "name": "NavMeshFOV",
@@ -5391,13 +5394,9 @@
           {
             "type": "CameraComponent",
             "data": {
-              "display_name": "",
-              "enabled": true,
-              "projection_type": "perspective",
-              "fov_deg": 59.99999999999999,
-              "ortho_size": 5,
-              "near": 0.1,
-              "far": 100
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0
             }
           },
           {
@@ -13012,13 +13011,9 @@
           {
             "type": "CameraComponent",
             "data": {
-              "display_name": "",
-              "enabled": true,
-              "projection_type": "perspective",
-              "fov_deg": 119.99999999999999,
-              "ortho_size": 5,
-              "near": 0.1,
-              "far": 100
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0
             }
           }
         ],
@@ -13142,29 +13137,25 @@
   "editor": {
     "camera": {
       "position": [
-        4.597894668579102,
-        -4.17092227935791,
-        3.4172885417938232
+        11.745615005493164,
+        -1.6987581253051758,
+        6.876863956451416
       ],
       "rotation": [
-        -0.37470392901618954,
-        -0.17393177979921232,
-        0.38343044172950225,
-        0.8260301434638009
+        -0.29064107332912836,
+        -0.15388653169020727,
+        0.44190186348973126,
+        0.8346073597223751
       ],
-      "radius": 8.5,
+      "radius": 14.5,
       "editor_entities": {
         "camera": [
           {
-            "type": "PerspectiveCameraComponent",
+            "type": "CameraComponent",
             "data": {
-              "display_name": "",
-              "enabled": true,
-              "projection_type": "perspective",
-              "fov_deg": 80.0,
-              "ortho_size": 5,
-              "near": 0.1,
-              "far": 50
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0
             }
           },
           {
@@ -13172,7 +13163,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "radius": 8.5,
+              "radius": 14.5,
               "min_radius": 1,
               "max_radius": 100
             }
@@ -13210,8 +13201,8 @@
     },
     "expanded_entities": [
       "0000000000000131",
-      "0000000000000077",
       "000000000000000a",
+      "0000000000000077",
       "814ba329-db24-48fe-b931-fe68ab904998",
       "0000000000000007"
     ]

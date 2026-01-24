@@ -20,6 +20,7 @@
 #ifndef TERMIN_CORE_H
 #define TERMIN_CORE_H
 
+#include "tc_version.h"
 #include "tc_types.h"
 #include "tc_vec3.h"
 #include "tc_quat.h"
@@ -79,6 +80,7 @@ TC_API const char* tc_version(void);
 TC_API int tc_version_major(void);
 TC_API int tc_version_minor(void);
 TC_API int tc_version_patch(void);
+TC_API int tc_version_int(void);  // TC_VERSION as runtime value
 
 #ifdef __cplusplus
 }
