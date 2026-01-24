@@ -21,12 +21,19 @@ if TYPE_CHECKING:
 import numpy as np
 
 from termin._native import log
-from termin.geombase import Pose3, Mat44
+from termin.geombase import Pose3
 
-from termin.editor.inspect_field import InspectField, inspect
-from termin.visualization.core.python_component import PythonComponent, InputComponent
+from termin.editor.inspect_field import inspect
+from termin.visualization.core.python_component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent, ScrollEvent
 from termin.visualization.platform.backends.base import Action, MouseButton
+
+# Re-export from C++
+from termin.entity._entity_native import (
+    CameraComponent,
+    PerspectiveCameraComponent,
+    OrthographicCameraComponent,
+)
 
 __all__ = [
     "CameraComponent",
@@ -35,225 +42,6 @@ __all__ = [
     "CameraController",
     "OrbitCameraController",
 ]
-
-
-class CameraComponent(PythonComponent):
-    """
-    Unified camera component supporting both perspective and orthographic projection.
-
-    Attributes:
-        projection_type: "perspective" or "orthographic"
-        fov_y: Vertical field of view in radians (perspective mode)
-        aspect: Aspect ratio width/height
-        ortho_size: Half-height of the orthographic view (orthographic mode)
-        near, far: Clipping planes
-    """
-
-    # Projection type: "perspective" or "orthographic"
-    projection_type: str = "perspective"
-
-    # Perspective parameters
-    fov_y: float = math.radians(60.0)
-    aspect: float = 1.0
-
-    # Orthographic parameters (ortho_size = half-height)
-    ortho_size: float = 5.0
-
-    inspect_fields = {
-        "projection_type": InspectField(
-            path="projection_type",
-            label="Projection",
-            kind="enum",
-            choices=[("perspective", "Perspective"), ("orthographic", "Orthographic")],
-        ),
-        "fov_deg": InspectField(
-            label="FOV (deg)",
-            kind="float",
-            min=5.0,
-            max=170.0,
-            step=1.0,
-            getter=lambda obj: math.degrees(obj.fov_y),
-            setter=lambda obj, value: setattr(obj, "fov_y", math.radians(float(value))),
-        ),
-        "ortho_size": InspectField(
-            path="ortho_size",
-            label="Ortho Size",
-            kind="float",
-            min=0.1,
-            max=1000.0,
-            step=0.5,
-        ),
-        "near": InspectField(
-            path="near",
-            label="Near clip",
-            kind="float",
-            min=0.001,
-            max=10000.0,
-            step=0.01,
-        ),
-        "far": InspectField(
-            path="far",
-            label="Far clip",
-            kind="float",
-            min=0.01,
-            max=100000.0,
-            step=1.0,
-        ),
-    }
-
-    def screen_point_to_ray(self, x: float, y: float, viewport_rect):
-        from termin.geombase import Ray3, Vec3
-
-        px, py, pw, ph = viewport_rect
-
-        # Use actual aspect from viewport_rect (camera.aspect may be outdated)
-        viewport_aspect = pw / float(max(1, ph))
-        old_aspect = self.aspect
-        if old_aspect is not None:
-            self.aspect = viewport_aspect
-
-        nx = ((x - px) / pw) * 2.0 - 1.0
-        ny = ((y - py) / ph) * -2.0 + 1.0
-
-        # Mat44 multiplication: P @ V
-        PV = self.get_projection_matrix() @ self.get_view_matrix()
-
-        # Restore old aspect
-        if old_aspect is not None:
-            self.aspect = old_aspect
-
-        inv_PV = PV.inverse()
-
-        # Transform near and far clip points
-        p_near = inv_PV.transform_point(Vec3(nx, ny, -1.0))
-        p_far = inv_PV.transform_point(Vec3(nx, ny, 1.0))
-
-        direction = (p_far - p_near).normalized()
-
-        return Ray3(p_near, direction)
-
-    def __init__(
-        self,
-        near: float = 0.1,
-        far: float = 100.0,
-        fov_y_degrees: float = 60.0,
-        aspect: float = 1.0,
-        ortho_size: float = 5.0,
-        projection_type: str = "perspective",
-    ):
-        super().__init__(enabled=True)
-        self.near = near
-        self.far = far
-        self.fov_y = math.radians(fov_y_degrees)
-        self.aspect = aspect
-        self.ortho_size = ortho_size
-        self.projection_type = projection_type
-        self._viewports: List["Viewport"] = []
-
-    @property
-    def viewport(self) -> Optional["Viewport"]:
-        """First viewport (for backward compatibility)."""
-        return self._viewports[0] if self._viewports else None
-
-    @viewport.setter
-    def viewport(self, value: Optional["Viewport"]) -> None:
-        """Set single viewport (for backward compatibility)."""
-        if value is None:
-            self._viewports.clear()
-        elif value not in self._viewports:
-            self._viewports.clear()
-            self._viewports.append(value)
-
-    @property
-    def viewports(self) -> List["Viewport"]:
-        """List of viewports this camera renders to."""
-        return self._viewports
-
-    def add_viewport(self, viewport: "Viewport") -> None:
-        """Add viewport to camera's viewport list."""
-        if viewport not in self._viewports:
-            self._viewports.append(viewport)
-
-    def remove_viewport(self, viewport: "Viewport") -> None:
-        """Remove viewport from camera's viewport list."""
-        if viewport in self._viewports:
-            self._viewports.remove(viewport)
-
-    def has_viewport(self, viewport: "Viewport") -> bool:
-        """Check if camera is bound to viewport."""
-        return viewport in self._viewports
-
-    def on_scene_inactive(self) -> None:
-        """Clear stale viewport references when scene becomes inactive."""
-        self._viewports.clear()
-
-    def get_view_matrix(self) -> Mat44:
-        """Get view matrix in column-major format (Mat44)."""
-        if self.entity is None:
-            raise RuntimeError("CameraComponent has no entity.")
-        return self.entity.transform.global_pose().inverse().as_mat44()
-
-    def get_projection_matrix(self) -> Mat44:
-        """
-        Projection matrix for Y-forward convention (Mat44, column-major).
-
-        Camera looks along +Y axis:
-        - View X → Screen X (right)
-        - View Z → Screen Y (up)
-        - View Y → Depth (forward)
-        """
-        if self.projection_type == "orthographic":
-            top = self.ortho_size
-            bottom = -self.ortho_size
-            right = self.ortho_size * self.aspect
-            left = -right
-            return Mat44.orthographic(left, right, bottom, top, self.near, self.far)
-        else:
-            return Mat44.perspective(self.fov_y, max(1e-6, self.aspect), self.near, self.far)
-
-    def projection_matrix(self) -> Mat44:
-        return self.get_projection_matrix()
-
-    def view_matrix(self) -> Mat44:
-        return self.get_view_matrix()
-
-    def set_aspect(self, aspect: float):
-        """Set aspect ratio (width/height)."""
-        self.aspect = aspect
-
-
-class PerspectiveCameraComponent(CameraComponent):
-    """
-    Perspective camera - convenience subclass with perspective defaults.
-
-    Deprecated: Use CameraComponent directly with projection_type="perspective".
-    """
-
-    def __init__(self, fov_y_degrees: float = 60.0, aspect: float = 1.0, near: float = 0.1, far: float = 100.0):
-        super().__init__(
-            near=near,
-            far=far,
-            fov_y_degrees=fov_y_degrees,
-            aspect=aspect,
-            projection_type="perspective",
-        )
-
-
-class OrthographicCameraComponent(CameraComponent):
-    """
-    Orthographic camera - convenience subclass with orthographic defaults.
-
-    Deprecated: Use CameraComponent directly with projection_type="orthographic".
-    """
-
-    def __init__(self, ortho_size: float = 5.0, aspect: float = 1.0, near: float = 0.1, far: float = 100.0):
-        super().__init__(
-            near=near,
-            far=far,
-            aspect=aspect,
-            ortho_size=ortho_size,
-            projection_type="orthographic",
-        )
 
 
 class CameraController(InputComponent):
@@ -479,7 +267,6 @@ class OrbitCameraController(CameraController):
         if self._prevent_moving:
             return
         if self.camera_component is None:
-            log.error(f"[OrbitCameraController.on_mouse_move] camera_component is None! self={self}, entity={self.entity}, _started={self._started}")
             return
         if not self.camera_component.has_viewport(event.viewport):
             return

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../export.hpp"
 #include "../entity/component.hpp"
 #include "../entity/entity.hpp"
 #include "../geom/mat44.hpp"
@@ -18,9 +19,9 @@
 
 namespace termin {
 
-// CameraComponent2 - component that provides view/projection matrices.
+// CameraComponent - component that provides view/projection matrices.
 // Uses entity transform for view matrix computation.
-class CameraComponent2 : public CxxComponent {
+class ENTITY_API CameraComponent : public CxxComponent {
 public:
     // Projection type
     CameraProjection projection_type = CameraProjection::Perspective;
@@ -41,11 +42,11 @@ private:
 
 public:
     // INSPECT_FIELD registrations
-    INSPECT_FIELD(CameraComponent2, near_clip, "Near Clip", "double", 0.001, 10000.0, 0.01)
-    INSPECT_FIELD(CameraComponent2, far_clip, "Far Clip", "double", 0.01, 100000.0, 1.0)
-    INSPECT_FIELD(CameraComponent2, ortho_size, "Ortho Size", "double", 0.1, 1000.0, 0.5)
+    INSPECT_FIELD(CameraComponent, near_clip, "Near Clip", "double", 0.001, 10000.0, 0.01)
+    INSPECT_FIELD(CameraComponent, far_clip, "Far Clip", "double", 0.01, 100000.0, 1.0)
+    INSPECT_FIELD(CameraComponent, ortho_size, "Ortho Size", "double", 0.1, 1000.0, 0.5)
 
-    CameraComponent2();
+    CameraComponent();
 
     // Projection type accessors
     std::string get_projection_type_str() const;

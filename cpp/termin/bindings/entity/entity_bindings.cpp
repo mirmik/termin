@@ -13,6 +13,7 @@
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry_python.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
@@ -30,12 +31,17 @@ namespace termin {
 
 inline nb::object component_to_python(CxxComponent* cxx) {
     if (!cxx) return nb::none();
-    tc_component* c = cxx->c_component();
-    if (!c->wrapper) {
-        nb::object py_wrapper = nb::cast(cxx, nb::rv_policy::reference);
-        c->wrapper = py_wrapper.inc_ref().ptr();
+
+    const char* type_name = cxx->type_name();
+
+    // Dispatch to specific derived type for proper Python binding
+    // Don't cache - create new wrapper each time to avoid dangling pointer issues
+    if (type_name && strcmp(type_name, "CameraComponent") == 0) {
+        return nb::cast(static_cast<CameraComponent*>(cxx), nb::rv_policy::reference);
+    } else {
+        // Fallback to base CxxComponent
+        return nb::cast(cxx, nb::rv_policy::reference);
     }
-    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
 }
 
 inline nb::object tc_component_to_python(tc_component* c) {

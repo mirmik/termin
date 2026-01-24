@@ -23,10 +23,10 @@ from termin.entity._entity_native import (
     CXXRotatorComponent,
     TcComponentRef,
     TcSceneRef,
+    CameraComponent,
+    PerspectiveCameraComponent,
+    OrthographicCameraComponent,
 )
-
-# CameraComponent moved to termin.visualization.core.camera (Python implementation)
-# Import it from there directly to avoid circular imports
 
 __all__ = [
     "Component",
@@ -37,4 +37,7 @@ __all__ = [
     "TcComponentRef",
     "TcSceneRef",
     "Viewport",
+    "CameraComponent",
+    "PerspectiveCameraComponent",
+    "OrthographicCameraComponent",
 ]

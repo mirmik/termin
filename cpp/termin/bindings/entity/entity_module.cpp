@@ -20,7 +20,7 @@
 #include "tc_log.hpp"
 #include "entity_helpers.hpp"
 #include "entity_bindings.hpp"
-// #include "../camera/camera_bindings.hpp"  // disabled - using Python CameraComponent
+#include "../camera/camera_bindings.hpp"
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -205,8 +205,8 @@ NB_MODULE(_entity_native, m) {
     // --- Entity (in separate file for faster compilation) ---
     bind_entity_class(m);
 
-    // --- CameraComponent (disabled - using Python version) ---
-    // bind_camera_component(m);
+    // --- CameraComponent ---
+    bind_camera_component(m);
 
     // --- EntityRegistry ---
     nb::class_<EntityRegistry>(m, "EntityRegistry")

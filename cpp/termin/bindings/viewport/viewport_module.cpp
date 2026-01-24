@@ -7,6 +7,8 @@
 
 #include "termin/viewport/tc_viewport_handle.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/entity/component.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "termin_core.h"
 #include "tc_pipeline.h"
 
@@ -140,13 +142,26 @@ void bind_tc_viewport_class(nb::module_& m) {
                 }
             })
 
-        // Camera - returns Python wrapper via tc_component's wrapper
+        // Camera - returns Python wrapper for CameraComponent
         .def_prop_rw("camera",
             [](TcViewport& self) -> nb::object {
                 tc_component* c = self.camera();
-                if (c && c->wrapper) {
+                if (!c) return nb::none();
+
+                // For external (Python) components, use wrapper
+                if (c->kind == TC_PYTHON_COMPONENT && c->wrapper) {
                     return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
                 }
+
+                // For native (C++) components, create Python wrapper
+                if (c->kind == TC_NATIVE_COMPONENT) {
+                    CxxComponent* cxx = CxxComponent::from_tc(c);
+                    if (cxx) {
+                        // Cast to CameraComponent (the only camera type we have)
+                        return nb::cast(static_cast<CameraComponent*>(cxx), nb::rv_policy::reference);
+                    }
+                }
+
                 return nb::none();
             },
             [](TcViewport& self, nb::object camera_obj) {
@@ -377,6 +392,12 @@ void bind_tc_viewport_class(nb::module_& m) {
         .def("_tc_viewport_ptr", [](TcViewport& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self.ptr_);
         })
+
+        // Create from raw pointer (for cross-module interop)
+        .def_static("_from_ptr", [](uintptr_t ptr) {
+            tc_viewport* vp = reinterpret_cast<tc_viewport*>(ptr);
+            return TcViewport(vp);  // Adds ref
+        }, nb::arg("ptr"))
         ;
 }
 

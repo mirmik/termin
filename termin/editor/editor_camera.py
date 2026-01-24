@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
+from termin.visualization.core.camera import CameraComponent, OrbitCameraController
 from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 
@@ -101,9 +101,9 @@ class EditorCameraManager:
         # camera = PerspectiveCameraComponent()
         # camera_entity.add_component(camera)
         # camera_entity.add_component(OrbitCameraController())
-        camera_entity.add_component_by_name("PerspectiveCameraComponent")
+        camera_entity.add_component_by_name("CameraComponent")
         camera_entity.add_component_by_name("OrbitCameraController")
-        camera = camera_entity.get_component(PerspectiveCameraComponent)
+        camera = camera_entity.get_component(CameraComponent)
 
         # Add ViewportHintComponent for pipeline and layer mask control
         #hint = ViewportHintComponent()
