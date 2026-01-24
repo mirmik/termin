@@ -446,6 +446,19 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("component"),
            "Add existing PythonComponent to entity. Returns TcComponentRef.")
 
+        // Remove existing PythonComponent (uses its tc_component)
+        .def("remove_component", [](Entity& e, nb::object comp) {
+            // Get tc_component* from PythonComponent._tc.c_ptr_int()
+            nb::object tc_wrapper = comp.attr("_tc");
+            uintptr_t ptr = nb::cast<uintptr_t>(tc_wrapper.attr("c_ptr_int")());
+            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+            if (!tc) {
+                throw std::runtime_error("Component has no tc_component");
+            }
+            e.remove_component_ptr(tc);
+        }, nb::arg("component"),
+           "Remove existing PythonComponent from entity.")
+
         // TcComponentRef-based methods (work without Python wrappers)
         .def("remove_component_ref", [](Entity& e, TcComponentRef ref) {
             if (!ref.valid()) return;

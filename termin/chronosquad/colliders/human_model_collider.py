@@ -49,14 +49,14 @@ class HumanModelCollider(PythonComponent):
             path=None,
             label="Add Colliders",
             kind="button",
-            action=lambda self: self.add_colliders(),
+            action=lambda ref: ref.to_python().add_colliders(),
             is_serializable=False,
         ),
         "remove_colliders_btn": InspectField(
             path=None,
             label="Remove All Colliders",
             kind="button",
-            action=lambda self: self.remove_all_colliders(),
+            action=lambda ref: ref.to_python().remove_all_colliders(),
             is_serializable=False,
         ),
     }
@@ -72,7 +72,7 @@ class HumanModelCollider(PythonComponent):
         if self.entity is None:
             return None
 
-        from termin._native.render import SkeletonController
+        from termin.skeleton import SkeletonController
 
         # Check this entity
         comp = self.entity.get_component(SkeletonController)
