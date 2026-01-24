@@ -298,11 +298,6 @@ tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool) {
 void tc_entity_pool_destroy(tc_entity_pool* pool) {
     if (!pool) return;
 
-    size_t total_components = 0;
-    size_t released_components = 0;
-    (void)total_components;
-    (void)released_components;
-
     // Free strings, release Python refs, and free dynamic arrays
     for (size_t i = 0; i < pool->capacity; i++) {
         free(pool->names[i]);
@@ -314,16 +309,7 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
         for (size_t j = 0; j < comps->count; j++) {
             tc_component* c = comps->items[j];
             if (!c) continue;
-            total_components++;
-
-            const char* type_name = tc_component_type_name(c);
-            tc_log(TC_LOG_DEBUG, "[pool_destroy] releasing component type=%s kind=%d native_lang=%d body=%p",
-                type_name ? type_name : "NULL", c->kind, c->native_language, c->body);
-
-            // Release component - unified for all types
             tc_component_release(c);
-            tc_log(TC_LOG_DEBUG, "[pool_destroy] released %s", type_name ? type_name : "NULL");
-            released_components++;
         }
         component_array_free(&pool->components[i]);
     }
@@ -541,7 +527,6 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
 
     // Remove all components properly
     ComponentArray* comps = &pool->components[idx];
-    tc_log(TC_LOG_DEBUG, "[pool_free] entity idx=%u has %zu components", idx, comps->count);
     while (comps->count > 0) {
         tc_component* c = comps->items[0];
         if (!c) {
@@ -549,10 +534,6 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
             component_array_remove(comps, c);
             continue;
         }
-
-        const char* type_name = tc_component_type_name(c);
-        tc_log(TC_LOG_DEBUG, "[pool_free] removing component type=%s kind=%d native_lang=%d body=%p",
-            type_name ? type_name : "NULL", c->kind, c->native_language, c->body);
 
         // Notify component it's being removed from scene
         tc_component_on_removed(c);
@@ -567,9 +548,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
 
         // Remove from array and release component
         component_array_remove(comps, c);
-        tc_log(TC_LOG_DEBUG, "[pool_free] releasing %s", type_name ? type_name : "NULL");
         tc_component_release(c);
-        tc_log(TC_LOG_DEBUG, "[pool_free] released %s", type_name ? type_name : "NULL");
     }
     // Free components array itself
     free(comps->items);
@@ -1159,17 +1138,12 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
 
-    const char* type_name = tc_component_type_name(c);
-    tc_log(TC_LOG_DEBUG, "[add_component] type=%s kind=%d native_lang=%d factory_retained=%d body=%p",
-        type_name ? type_name : "NULL", c->kind, c->native_language, c->factory_retained, c->body);
-
     // Set owner entity reference
     c->owner_entity_id = id;
     c->owner_pool = pool;
 
     // Retain component unless factory already did it
     if (!c->factory_retained) {
-        tc_log(TC_LOG_DEBUG, "[add_component] retaining %s", type_name ? type_name : "NULL");
         tc_component_retain(c);
     }
     // Clear flag - next add will need retain again
@@ -1186,15 +1160,10 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     // Notify component it was added to entity
     tc_component_on_added_to_entity(c);
     tc_component_on_added(c);
-    tc_log(TC_LOG_DEBUG, "[add_component] done %s", type_name ? type_name : "NULL");
 }
 
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) return;
-
-    const char* type_name = tc_component_type_name(c);
-    tc_log(TC_LOG_DEBUG, "[remove_component] type=%s kind=%d native_lang=%d body=%p",
-        type_name ? type_name : "NULL", c->kind, c->native_language, c->body);
 
     // Notify component it's being removed from scene
     tc_component_on_removed(c);
@@ -1215,11 +1184,9 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
     // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
 
-    tc_log(TC_LOG_DEBUG, "[remove_component] releasing %s", type_name ? type_name : "NULL");
     // Release component - may delete if ref_count reaches 0
     // Works for both Python (Py_DECREF) and C++ (--ref_count, delete if 0)
     tc_component_release(c);
-    tc_log(TC_LOG_DEBUG, "[remove_component] done %s", type_name ? type_name : "NULL");
 }
 
 size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id) {

@@ -69,10 +69,7 @@ CxxComponent::~CxxComponent() {
 
 void CxxComponent::release() {
     int prev = _ref_count.fetch_sub(1);
-    tc::Log::debug("[CxxComponent::release] type=%s prev_ref=%d", type_name(), prev);
     if (prev <= 1) {
-        // ref_count reached 0 - delete self
-        tc::Log::debug("[CxxComponent::release] deleting %s", type_name());
         delete this;
     }
 }

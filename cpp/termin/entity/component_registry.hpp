@@ -107,17 +107,10 @@ struct ComponentRegistrar {
     ComponentRegistrar(const char* name, const char* parent = nullptr) {
         bool has_update = component_overrides_update<T>();
         bool has_fixed_update = component_overrides_fixed_update<T>();
-        printf("[ComponentRegistrar] %s: has_update=%d, has_fixed_update=%d\n",
-            name, has_update ? 1 : 0, has_fixed_update ? 1 : 0);
 
         ComponentRegistry::instance().register_native(name,
             [name, has_update, has_fixed_update]() -> tc_component* {
-                printf("[Factory] Creating %s sizeof(tc_component)=%zu sizeof(T)=%zu offsetof(_c)=%zu\n",
-                    name, sizeof(tc_component), sizeof(T), offsetof(T, _c));
                 T* comp = new T();
-                printf("[Factory] comp=%p comp->c_component()=%p diff=%td\n",
-                    (void*)comp, (void*)comp->c_component(),
-                    (char*)comp->c_component() - (char*)comp);
                 comp->set_type_name(name);
                 comp->set_has_update(has_update);
                 comp->set_has_fixed_update(has_fixed_update);

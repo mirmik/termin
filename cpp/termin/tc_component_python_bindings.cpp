@@ -340,14 +340,7 @@ static void py_cb_incref(void* py_obj) {
 static void py_cb_decref(void* py_obj) {
     if (py_obj) {
         PyGILState_STATE gstate = PyGILState_Ensure();
-        PyObject* obj = (PyObject*)py_obj;
-        Py_ssize_t refcnt = Py_REFCNT(obj);
-        PyObject* type = PyObject_Type(obj);
-        const char* type_name = type ? ((PyTypeObject*)type)->tp_name : "unknown";
-        tc::Log::debug("[py_cb_decref] type=%s refcnt_before=%zd obj=%p", type_name, refcnt, py_obj);
-        Py_XDECREF(type);
-        Py_DECREF(obj);
-        tc::Log::debug("[py_cb_decref] done");
+        Py_DECREF((PyObject*)py_obj);
         PyGILState_Release(gstate);
     }
 }
