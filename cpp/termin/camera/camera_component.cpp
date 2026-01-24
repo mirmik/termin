@@ -47,14 +47,18 @@ Mat44 CameraComponent::get_view_matrix() const {
 }
 
 Mat44 CameraComponent::get_projection_matrix() const {
+    return compute_projection_matrix(aspect);
+}
+
+Mat44 CameraComponent::compute_projection_matrix(double aspect_override) const {
     if (projection_type == CameraProjection::Orthographic) {
         double top = ortho_size;
         double bottom = -ortho_size;
-        double right = ortho_size * aspect;
+        double right = ortho_size * aspect_override;
         double left = -right;
         return Mat44::orthographic(left, right, bottom, top, near_clip, far_clip);
     } else {
-        return Mat44::perspective(fov_y, std::max(1e-6, aspect), near_clip, far_clip);
+        return Mat44::perspective(fov_y, std::max(1e-6, aspect_override), near_clip, far_clip);
     }
 }
 
@@ -112,10 +116,9 @@ std::pair<Vec3, Vec3> CameraComponent::screen_point_to_ray(double x, double y, i
     double nx = ((x - vp_x) / vp_w) * 2.0 - 1.0;
     double ny = ((y - vp_y) / vp_h) * -2.0 + 1.0;
 
-    // Compute inverse PV matrix with viewport aspect
-    CameraComponent temp = *this;
-    temp.aspect = vp_aspect;
-    Mat44 pv = temp.get_projection_matrix() * get_view_matrix();
+    // Compute projection matrix with viewport aspect (without copying self)
+    Mat44 proj_matrix = compute_projection_matrix(vp_aspect);
+    Mat44 pv = proj_matrix * get_view_matrix();
     Mat44 inv_pv = pv.inverse();
 
     // Transform near and far points

@@ -3,8 +3,11 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <cstring>
 
 #include "termin/entity/entity.hpp"
+#include "termin/entity/component.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/quat.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
@@ -12,6 +15,47 @@
 namespace nb = nanobind;
 
 namespace termin {
+
+// ============================================================================
+// Component Python conversion
+// ============================================================================
+
+// Convert CxxComponent to Python object (creates binding wrapper)
+inline nb::object component_to_python(CxxComponent* cxx) {
+    if (!cxx) return nb::none();
+
+    const char* type_name = cxx->type_name();
+
+    // Dispatch to specific derived type for proper Python binding
+    if (type_name && strcmp(type_name, "CameraComponent") == 0) {
+        return nb::cast(static_cast<CameraComponent*>(cxx), nb::rv_policy::reference);
+    } else {
+        // Fallback to base CxxComponent
+        return nb::cast(cxx, nb::rv_policy::reference);
+    }
+}
+
+// Convert tc_component to Python object
+// For Python-native components: returns body directly
+// For C++-native components: creates Python binding wrapper
+inline nb::object tc_component_to_python(tc_component* c) {
+    if (!c) return nb::none();
+
+    // Check if component is native Python - return body directly
+    if (c->native_language == TC_BINDING_PYTHON) {
+        if (!c->body) return nb::none();
+        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->body));
+    }
+
+    // Component is native C++ - create Python binding wrapper
+    if (c->kind == TC_NATIVE_COMPONENT) {
+        CxxComponent* cxx = CxxComponent::from_tc(c);
+        if (!cxx) return nb::none();
+        return component_to_python(cxx);
+    }
+
+    return nb::none();
+}
 
 // ============================================================================
 // Pool helpers

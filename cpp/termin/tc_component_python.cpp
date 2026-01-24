@@ -14,86 +14,86 @@ static tc_python_input_callbacks g_py_input_callbacks = {0};
 // ============================================================================
 
 static void py_vtable_start(tc_component* c) {
-    if (g_py_callbacks.start && c->wrapper) {
-        g_py_callbacks.start(c->wrapper);
+    if (g_py_callbacks.start && c->body) {
+        g_py_callbacks.start(c->body);
     }
 }
 
 static void py_vtable_update(tc_component* c, float dt) {
-    if (g_py_callbacks.update && c->wrapper) {
-        g_py_callbacks.update(c->wrapper, dt);
+    if (g_py_callbacks.update && c->body) {
+        g_py_callbacks.update(c->body, dt);
     }
 }
 
 static void py_vtable_fixed_update(tc_component* c, float dt) {
-    if (g_py_callbacks.fixed_update && c->wrapper) {
-        g_py_callbacks.fixed_update(c->wrapper, dt);
+    if (g_py_callbacks.fixed_update && c->body) {
+        g_py_callbacks.fixed_update(c->body, dt);
     }
 }
 
 static void py_vtable_before_render(tc_component* c) {
-    if (g_py_callbacks.before_render && c->wrapper) {
-        g_py_callbacks.before_render(c->wrapper);
+    if (g_py_callbacks.before_render && c->body) {
+        g_py_callbacks.before_render(c->body);
     }
 }
 
 static void py_vtable_on_destroy(tc_component* c) {
-    if (g_py_callbacks.on_destroy && c->wrapper) {
-        g_py_callbacks.on_destroy(c->wrapper);
+    if (g_py_callbacks.on_destroy && c->body) {
+        g_py_callbacks.on_destroy(c->body);
     }
 }
 
 static void py_vtable_on_added_to_entity(tc_component* c) {
-    if (g_py_callbacks.on_added_to_entity && c->wrapper) {
-        g_py_callbacks.on_added_to_entity(c->wrapper);
+    if (g_py_callbacks.on_added_to_entity && c->body) {
+        g_py_callbacks.on_added_to_entity(c->body);
     }
 }
 
 static void py_vtable_on_removed_from_entity(tc_component* c) {
-    if (g_py_callbacks.on_removed_from_entity && c->wrapper) {
-        g_py_callbacks.on_removed_from_entity(c->wrapper);
+    if (g_py_callbacks.on_removed_from_entity && c->body) {
+        g_py_callbacks.on_removed_from_entity(c->body);
     }
 }
 
 static void py_vtable_on_added(tc_component* c) {
-    if (g_py_callbacks.on_added && c->wrapper) {
-        g_py_callbacks.on_added(c->wrapper);
+    if (g_py_callbacks.on_added && c->body) {
+        g_py_callbacks.on_added(c->body);
     }
 }
 
 static void py_vtable_on_removed(tc_component* c) {
-    if (g_py_callbacks.on_removed && c->wrapper) {
-        g_py_callbacks.on_removed(c->wrapper);
+    if (g_py_callbacks.on_removed && c->body) {
+        g_py_callbacks.on_removed(c->body);
     }
 }
 
 static void py_vtable_on_scene_inactive(tc_component* c) {
-    if (g_py_callbacks.on_scene_inactive && c->wrapper) {
-        g_py_callbacks.on_scene_inactive(c->wrapper);
+    if (g_py_callbacks.on_scene_inactive && c->body) {
+        g_py_callbacks.on_scene_inactive(c->body);
     }
 }
 
 static void py_vtable_on_scene_active(tc_component* c) {
-    if (g_py_callbacks.on_scene_active && c->wrapper) {
-        g_py_callbacks.on_scene_active(c->wrapper);
+    if (g_py_callbacks.on_scene_active && c->body) {
+        g_py_callbacks.on_scene_active(c->body);
     }
 }
 
 static void py_vtable_on_editor_start(tc_component* c) {
-    if (g_py_callbacks.on_editor_start && c->wrapper) {
-        g_py_callbacks.on_editor_start(c->wrapper);
+    if (g_py_callbacks.on_editor_start && c->body) {
+        g_py_callbacks.on_editor_start(c->body);
     }
 }
 
 static void py_vtable_retain(tc_component* c) {
-    if (g_py_callbacks.incref && c->wrapper) {
-        g_py_callbacks.incref(c->wrapper);
+    if (g_py_callbacks.incref && c->body) {
+        g_py_callbacks.incref(c->body);
     }
 }
 
 static void py_vtable_release(tc_component* c) {
-    if (g_py_callbacks.decref && c->wrapper) {
-        g_py_callbacks.decref(c->wrapper);
+    if (g_py_callbacks.decref && c->body) {
+        g_py_callbacks.decref(c->body);
     }
 }
 
@@ -140,9 +140,9 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
     // Initialize with Python vtable
     tc_component_init(c, &g_python_vtable);
 
-    // Store Python object pointer
-    c->wrapper = py_self;
-    c->externally_managed = true;
+    // Store Python object pointer as body (this is a Python-native component)
+    c->body = py_self;
+    c->native_language = TC_BINDING_PYTHON;
 
     // Set instance type name (owned copy)
     c->type_name = type_name ? strdup(type_name) : NULL;
@@ -168,21 +168,21 @@ void tc_component_free_python(tc_component* c) {
 // ============================================================================
 
 static bool py_drawable_has_phase(tc_component* c, const char* phase_mark) {
-    if (g_py_drawable_callbacks.has_phase && c->wrapper) {
-        return g_py_drawable_callbacks.has_phase(c->wrapper, phase_mark);
+    if (g_py_drawable_callbacks.has_phase && c->body) {
+        return g_py_drawable_callbacks.has_phase(c->body, phase_mark);
     }
     return false;
 }
 
 static void py_drawable_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
-    if (g_py_drawable_callbacks.draw_geometry && c->wrapper) {
-        g_py_drawable_callbacks.draw_geometry(c->wrapper, render_context, geometry_id);
+    if (g_py_drawable_callbacks.draw_geometry && c->body) {
+        g_py_drawable_callbacks.draw_geometry(c->body, render_context, geometry_id);
     }
 }
 
 static void* py_drawable_get_geometry_draws(tc_component* c, const char* phase_mark) {
-    if (g_py_drawable_callbacks.get_geometry_draws && c->wrapper) {
-        return g_py_drawable_callbacks.get_geometry_draws(c->wrapper, phase_mark);
+    if (g_py_drawable_callbacks.get_geometry_draws && c->body) {
+        return g_py_drawable_callbacks.get_geometry_draws(c->body, phase_mark);
     }
     return NULL;
 }
@@ -211,26 +211,26 @@ void tc_component_install_python_drawable_vtable(tc_component* c) {
 // ============================================================================
 
 static void py_input_on_mouse_button(tc_component* c, void* event) {
-    if (g_py_input_callbacks.on_mouse_button && c->wrapper) {
-        g_py_input_callbacks.on_mouse_button(c->wrapper, event);
+    if (g_py_input_callbacks.on_mouse_button && c->body) {
+        g_py_input_callbacks.on_mouse_button(c->body, event);
     }
 }
 
 static void py_input_on_mouse_move(tc_component* c, void* event) {
-    if (g_py_input_callbacks.on_mouse_move && c->wrapper) {
-        g_py_input_callbacks.on_mouse_move(c->wrapper, event);
+    if (g_py_input_callbacks.on_mouse_move && c->body) {
+        g_py_input_callbacks.on_mouse_move(c->body, event);
     }
 }
 
 static void py_input_on_scroll(tc_component* c, void* event) {
-    if (g_py_input_callbacks.on_scroll && c->wrapper) {
-        g_py_input_callbacks.on_scroll(c->wrapper, event);
+    if (g_py_input_callbacks.on_scroll && c->body) {
+        g_py_input_callbacks.on_scroll(c->body, event);
     }
 }
 
 static void py_input_on_key(tc_component* c, void* event) {
-    if (g_py_input_callbacks.on_key && c->wrapper) {
-        g_py_input_callbacks.on_key(c->wrapper, event);
+    if (g_py_input_callbacks.on_key && c->body) {
+        g_py_input_callbacks.on_key(c->body, event);
     }
 }
 

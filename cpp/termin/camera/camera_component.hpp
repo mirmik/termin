@@ -62,6 +62,7 @@ public:
     // Matrix getters
     Mat44 get_view_matrix() const;
     Mat44 get_projection_matrix() const;
+    Mat44 compute_projection_matrix(double aspect_override) const;
 
     // Camera world position
     Vec3 get_position() const;

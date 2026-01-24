@@ -26,37 +26,7 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Python-specific helper functions for CxxComponent
-// (moved from component.hpp to avoid nanobind dependency in public headers)
-
-inline nb::object component_to_python(CxxComponent* cxx) {
-    if (!cxx) return nb::none();
-
-    const char* type_name = cxx->type_name();
-
-    // Dispatch to specific derived type for proper Python binding
-    // Don't cache - create new wrapper each time to avoid dangling pointer issues
-    if (type_name && strcmp(type_name, "CameraComponent") == 0) {
-        return nb::cast(static_cast<CameraComponent*>(cxx), nb::rv_policy::reference);
-    } else {
-        // Fallback to base CxxComponent
-        return nb::cast(cxx, nb::rv_policy::reference);
-    }
-}
-
-inline nb::object tc_component_to_python(tc_component* c) {
-    if (!c) return nb::none();
-
-    if (c->kind == TC_NATIVE_COMPONENT) {
-        CxxComponent* cxx = CxxComponent::from_tc(c);
-        if (!cxx) return nb::none();
-        return component_to_python(cxx);
-    } else {
-        // TC_EXTERNAL_COMPONENT: wrapper holds the Python object
-        if (!c->wrapper) return nb::none();
-        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
-    }
-}
+// component_to_python and tc_component_to_python are defined in entity_helpers.hpp
 
 // Iterator for traversing ancestor entities
 class EntityAncestorIterator {
@@ -124,8 +94,8 @@ public:
             // For C++ components, get CxxComponent pointer
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
-            // For external (Python) components, wrapper holds the object
-            obj_ptr = _c->wrapper;
+            // For external (Python) components, body holds the object
+            obj_ptr = _c->body;
         }
         if (!obj_ptr) return nb::none();
 
@@ -140,8 +110,8 @@ public:
         if (!_c) return nb::none();
 
         // For Python components, check if they have a custom serialize method
-        if (_c->kind == TC_PYTHON_COMPONENT && _c->wrapper) {
-            nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->wrapper));
+        if (_c->native_language == TC_BINDING_PYTHON && _c->body) {
+            nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->body));
             if (nb::hasattr(py_obj, "serialize")) {
                 // Call Python serialize method (e.g., for UnknownComponent)
                 nb::object result = py_obj.attr("serialize")();
@@ -165,7 +135,7 @@ public:
         if (_c->kind == TC_NATIVE_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
-            obj_ptr = _c->wrapper;
+            obj_ptr = _c->body;
         }
         if (!obj_ptr) return;
 
@@ -182,7 +152,7 @@ public:
         if (_c->kind == TC_NATIVE_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
-            obj_ptr = _c->wrapper;
+            obj_ptr = _c->body;
         }
         if (!obj_ptr) return nb::none();
 
@@ -202,7 +172,7 @@ public:
         if (_c->kind == TC_NATIVE_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
-            obj_ptr = _c->wrapper;
+            obj_ptr = _c->body;
         }
         if (!obj_ptr) return;
 
@@ -504,11 +474,11 @@ void bind_entity_class(nb::module_& m) {
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
-                if (tc && tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
+                if (tc && tc->native_language == TC_BINDING_PYTHON && tc->body) {
                     const char* comp_type = tc->type_name ? tc->type_name :
                                             (tc->vtable ? tc->vtable->type_name : nullptr);
                     if (comp_type && type_name == comp_type) {
-                        return nb::borrow((PyObject*)tc->wrapper);
+                        return nb::borrow((PyObject*)tc->body);
                     }
                 }
             }

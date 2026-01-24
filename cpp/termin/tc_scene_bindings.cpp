@@ -5,6 +5,7 @@
 
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
+#include "bindings/entity/entity_helpers.hpp"
 #include "tc_scene_ref.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_scene_registry.h"
@@ -172,11 +173,11 @@ private:
                 if (cxx) {
                     cxx->entity = ent;
                 }
-            } else if (tc->kind == TC_EXTERNAL_COMPONENT && tc->wrapper) {
+            } else if (tc->native_language == TC_BINDING_PYTHON && tc->body) {
                 // Python component - update via Python attribute
                 // All Python components have 'entity' field declared in base class
                 nb::gil_scoped_acquire gil;
-                nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->wrapper);
+                nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->body);
                 py_comp.attr("entity") = nb::cast(ent);
             }
         }
@@ -351,9 +352,10 @@ void bind_tc_scene(nb::module_& m) {
             nb::list result;
             tc_component* c = tc_scene_first_component_of_type(self._s, type_name.c_str());
             while (c != NULL) {
-                // Return the Python wrapper if available
-                if (c->wrapper) {
-                    result.append(nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper)));
+                // Return Python object via tc_component_to_python
+                nb::object py_comp = tc_component_to_python(c);
+                if (!py_comp.is_none()) {
+                    result.append(py_comp);
                 }
                 c = c->type_next;
             }
@@ -397,9 +399,8 @@ void bind_tc_scene(nb::module_& m) {
                     if (data->had_exception) return false;
 
                     try {
-                        if (c->wrapper) {
-                            nb::object py_comp = nb::borrow<nb::object>(
-                                reinterpret_cast<PyObject*>(c->wrapper));
+                        nb::object py_comp = tc_component_to_python(c);
+                        if (!py_comp.is_none()) {
                             nb::object result = data->py_callback(py_comp);
                             // If callback returns False, stop iteration
                             if (nb::isinstance<nb::bool_>(result) && !nb::cast<bool>(result)) {

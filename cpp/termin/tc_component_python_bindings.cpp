@@ -340,7 +340,14 @@ static void py_cb_incref(void* py_obj) {
 static void py_cb_decref(void* py_obj) {
     if (py_obj) {
         PyGILState_STATE gstate = PyGILState_Ensure();
-        Py_DECREF((PyObject*)py_obj);
+        PyObject* obj = (PyObject*)py_obj;
+        Py_ssize_t refcnt = Py_REFCNT(obj);
+        PyObject* type = PyObject_Type(obj);
+        const char* type_name = type ? ((PyTypeObject*)type)->tp_name : "unknown";
+        tc::Log::debug("[py_cb_decref] type=%s refcnt_before=%zd obj=%p", type_name, refcnt, py_obj);
+        Py_XDECREF(type);
+        Py_DECREF(obj);
+        tc::Log::debug("[py_cb_decref] done");
         PyGILState_Release(gstate);
     }
 }
@@ -400,20 +407,20 @@ public:
     tc_component* _c = nullptr;
 
     // Create a new TcComponent wrapping a Python object
+    // The TcComponent owns the tc_component, which lives as long as PythonComponent.
+    // NO retain here - Entity will do retain when component is added.
     TcComponent(nb::object py_self, const std::string& type_name) {
         ensure_callbacks_initialized();
 
         // Create C component with Python vtable (owns type_name copy)
+        // body points to py_self, native_language = TC_BINDING_PYTHON
         _c = tc_component_new_python(py_self.ptr(), type_name.c_str());
-
-        // Increment Python refcount via vtable (keeps Python object alive)
-        tc_component_retain(_c);
     }
 
     ~TcComponent() {
         if (_c) {
-            // Decrement Python refcount via vtable
-            tc_component_release(_c);
+            // Just free the tc_component struct, don't touch Python refcount
+            // Entity already released if it was added
             tc_component_free_python(_c);
             _c = nullptr;
         }

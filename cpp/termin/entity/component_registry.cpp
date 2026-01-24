@@ -123,9 +123,13 @@ void ComponentRegistryPython::register_python(const std::string& name, nb::objec
         nb::object py_obj = (*cls_ptr)();
         if (nb::hasattr(py_obj, "c_component_ptr")) {
             uintptr_t ptr = nb::cast<uintptr_t>(py_obj.attr("c_component_ptr")());
-            // TcComponent constructor already called retain to keep Python object alive.
-            // Entity pool will call release when component is removed.
-            return reinterpret_cast<tc_component*>(ptr);
+            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+            // Keep Python object alive - this INCREF will be balanced by release on remove.
+            // Without this, py_obj goes out of scope and Python object is destroyed.
+            Py_INCREF(py_obj.ptr());
+            // Tell entity that retain was already done by factory
+            tc->factory_retained = true;
+            return tc;
         }
         return nullptr;
     };

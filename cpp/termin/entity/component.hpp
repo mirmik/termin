@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <cstddef>
+#include <atomic>
 #include <unordered_set>
 #include "../../../core_c/include/tc_component.h"
 #include "../../../core_c/include/tc_inspect_cpp.hpp"
@@ -16,6 +17,8 @@ namespace termin {
 // C++ components use REGISTER_COMPONENT macro for auto-registration.
 //
 // tc_component is embedded as first member, allowing container_of to work.
+// Lifetime is managed via reference counting (_ref_count).
+// Components start with ref_count=0 and are retained when added to entity.
 class ENTITY_API CxxComponent {
 public:
     // --- Fields (public) ---
@@ -29,6 +32,11 @@ public:
 private:
     // --- Fields (private) ---
 
+    // Reference count for lifetime management
+    // Starts at 0, incremented by entity on add, decremented on remove
+    // When reaches 0 after being >0, component deletes itself
+    std::atomic<int> _ref_count{0};
+
     // Static vtable for C++ components - dispatches to virtual methods
     static const tc_component_vtable _cxx_vtable;
 
@@ -38,12 +46,18 @@ public:
     virtual ~CxxComponent();
 
     // Get CxxComponent* from tc_component* (uses offsetof since _c is first member)
+    // Returns nullptr if c is not a CxxComponent (e.g., Python component)
     static CxxComponent* from_tc(tc_component* c) {
-        if (!c) return nullptr;
+        if (!c || c->kind != TC_CXX_COMPONENT) return nullptr;
         return reinterpret_cast<CxxComponent*>(
             reinterpret_cast<char*>(c) - offsetof(CxxComponent, _c)
         );
     }
+
+    // Reference counting for lifetime management
+    void retain() { ++_ref_count; }
+    void release();  // Defined in .cpp - may delete this
+    int ref_count() const { return _ref_count.load(); }
 
     // Type identification (for serialization)
     const char* type_name() const { return _c.type_name; }

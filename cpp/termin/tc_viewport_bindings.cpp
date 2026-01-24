@@ -4,6 +4,7 @@
 #include <nanobind/stl/tuple.h>
 
 #include "viewport/tc_viewport_handle.hpp"
+#include "bindings/entity/entity_helpers.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_component.h"
 #include "../../core_c/include/tc_pipeline.h"
@@ -146,14 +147,11 @@ void bind_tc_viewport(nb::module_& m) {
                 }
             })
 
-        // Camera - returns Python wrapper via tc_component's wrapper
+        // Camera - returns Python wrapper via tc_component_to_python
         .def_prop_rw("camera",
             [](TcViewport& self) -> nb::object {
                 tc_component* c = self.camera();
-                if (c && c->wrapper) {
-                    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->wrapper));
-                }
-                return nb::none();
+                return tc_component_to_python(c);
             },
             [](TcViewport& self, nb::object camera_obj) {
                 if (!self.ptr_) return;
@@ -318,9 +316,9 @@ void bind_tc_viewport(nb::module_& m) {
         // Effective layer mask (checks ViewportHintComponent on camera)
         .def_prop_ro("effective_layer_mask", [](TcViewport& self) -> uint64_t {
             tc_component* cam = self.camera();
-            if (cam && cam->wrapper) {
+            nb::object camera_obj = tc_component_to_python(cam);
+            if (!camera_obj.is_none()) {
                 try {
-                    nb::object camera_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(cam->wrapper));
                     nb::object entity = camera_obj.attr("entity");
                     if (!entity.is_none()) {
                         nb::module_ hint_module = nb::module_::import_("termin.visualization.core.viewport_hint");
@@ -340,11 +338,11 @@ void bind_tc_viewport(nb::module_& m) {
         // Screen point to ray
         .def("screen_point_to_ray", [](TcViewport& self, float x, float y) -> nb::object {
             tc_component* cam = self.camera();
-            if (!cam || !cam->wrapper) {
+            nb::object camera_obj = tc_component_to_python(cam);
+            if (camera_obj.is_none()) {
                 return nb::none();
             }
             try {
-                nb::object camera_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(cam->wrapper));
                 nb::object entity = camera_obj.attr("entity");
                 if (entity.is_none()) {
                     return nb::none();
@@ -366,9 +364,9 @@ void bind_tc_viewport(nb::module_& m) {
 
             // Camera entity name
             tc_component* cam = self.camera();
-            if (cam && cam->wrapper) {
+            nb::object camera_obj = tc_component_to_python(cam);
+            if (!camera_obj.is_none()) {
                 try {
-                    nb::object camera_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(cam->wrapper));
                     nb::object entity = camera_obj.attr("entity");
                     if (!entity.is_none()) {
                         result["camera_entity"] = entity.attr("name");

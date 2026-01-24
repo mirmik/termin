@@ -35,6 +35,18 @@ typedef enum tc_component_kind {
 #define TC_PYTHON_COMPONENT TC_EXTERNAL_COMPONENT
 
 // ============================================================================
+// Binding Types - for language-specific wrappers
+// ============================================================================
+
+typedef enum tc_binding_type {
+    TC_BINDING_NONE = 0,        // No binding / native C
+    TC_BINDING_PYTHON = 1,
+    TC_BINDING_CSHARP = 2,
+    TC_BINDING_RUST = 3,
+    TC_BINDING_MAX = 8          // Reserve space for future languages
+} tc_binding_type;
+
+// ============================================================================
 // Drawable VTable - for components that can render geometry
 // ============================================================================
 
@@ -156,14 +168,20 @@ struct tc_component {
     // Component kind (native or external)
     tc_component_kind kind;
 
-    // If true, this tc_component was allocated externally (e.g. from Python)
-    // and memory is managed by the external system
-    bool externally_managed;
+    // Native language - where the component "body" lives
+    // TC_BINDING_NONE for C/C++ components (body is the CxxComponent itself)
+    // TC_BINDING_PYTHON for Python components (body points to PyObject)
+    tc_binding_type native_language;
 
-    // External wrapper object (e.g. PyObject* for Python)
-    // - For externally_managed components: holds the owning reference
-    // - For native components accessed externally: cached wrapper (may be NULL)
-    void* wrapper;
+    // Body pointer - points to the actual component implementation
+    // For TC_BINDING_PYTHON: PyObject* of the PythonComponent
+    // For TC_BINDING_NONE (C++): NULL (body is the CxxComponent containing this tc_component)
+    void* body;
+
+    // Language bindings - wrappers for accessing this component from other languages
+    // bindings[TC_BINDING_PYTHON] = PyObject* wrapper for accessing CxxComponent from Python
+    // Each binding holds a reference (via retain) to keep the component alive
+    void* bindings[TC_BINDING_MAX];
 
     // Flags
     bool enabled;
@@ -172,6 +190,10 @@ struct tc_component {
     bool has_update;
     bool has_fixed_update;
     bool has_before_render;
+
+    // If true, factory already did retain - entity should NOT retain again on add_component.
+    // Factory sets this to true after doing its own retain.
+    bool factory_retained;
 
     // Intrusive list for scene's type-based component lists
     // Linked when registered with scene, unlinked on unregister
@@ -196,14 +218,18 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->owner_pool = NULL;
     c->type_name = NULL;
     c->kind = TC_NATIVE_COMPONENT;
-    c->externally_managed = false;
-    c->wrapper = NULL;
+    c->native_language = TC_BINDING_NONE;
+    c->body = NULL;
+    for (int i = 0; i < TC_BINDING_MAX; i++) {
+        c->bindings[i] = NULL;
+    }
     c->enabled = true;
     c->active_in_editor = false;
     c->_started = false;
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
     c->has_before_render = (vtable && vtable->before_render != NULL);
+    c->factory_retained = false;
     c->type_prev = NULL;
     c->type_next = NULL;
 }
@@ -440,6 +466,30 @@ TC_API size_t tc_component_registry_get_input_handler_types(
     const char** out_names,
     size_t max_count
 );
+
+// ============================================================================
+// Binding management helpers
+// ============================================================================
+
+static inline void* tc_component_get_binding(tc_component* c, tc_binding_type lang) {
+    if (!c || lang <= TC_BINDING_NONE || lang >= TC_BINDING_MAX) return NULL;
+    return c->bindings[lang];
+}
+
+static inline void tc_component_set_binding(tc_component* c, tc_binding_type lang, void* binding) {
+    if (!c || lang <= TC_BINDING_NONE || lang >= TC_BINDING_MAX) return;
+    c->bindings[lang] = binding;
+}
+
+static inline void tc_component_clear_binding(tc_component* c, tc_binding_type lang) {
+    if (!c || lang <= TC_BINDING_NONE || lang >= TC_BINDING_MAX) return;
+    c->bindings[lang] = NULL;
+}
+
+static inline bool tc_component_is_native(tc_component* c, tc_binding_type lang) {
+    if (!c) return false;
+    return c->native_language == lang;
+}
 
 #ifdef __cplusplus
 }

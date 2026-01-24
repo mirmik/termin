@@ -347,7 +347,8 @@ static void* get_inspect_object(tc_component* c) {
     if (c->kind == TC_NATIVE_COMPONENT) {
         return termin::CxxComponent::from_tc(c);
     } else {
-        return c->wrapper;
+        // For external components, body holds the Python object
+        return c->body;
     }
 }
 
