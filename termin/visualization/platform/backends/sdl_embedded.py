@@ -487,7 +487,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 shader.use()
                 shader.set_uniform_int("u_tex", 0)
                 tex.bind(0)
-                graphics.draw_ui_textured_quad(0)
+                graphics.draw_ui_textured_quad()
 
             graphics.set_depth_test(True)
             graphics.set_depth_mask(True)
@@ -621,7 +621,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         shader.use()
         shader.set_uniform_int("u_tex", 0)
         tex.bind(0)
-        graphics.draw_ui_textured_quad(0)
+        graphics.draw_ui_textured_quad()
 
         graphics.set_depth_test(True)
         graphics.set_depth_mask(True)

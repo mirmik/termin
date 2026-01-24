@@ -94,7 +94,7 @@ class RenderFramePass(FramePass):
             shader.use()
             shader.set_uniform_int("u_tex", 0)
             tex.bind(0)
-            graphics.draw_ui_textured_quad(0)
+            graphics.draw_ui_textured_quad()
 
             self._debugger_window.swap_buffers()
 

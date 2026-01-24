@@ -336,7 +336,7 @@ class FrameDebuggerPass(RenderFramePass):
             shader.set_uniform_int("u_channel", self._channel_mode)
             shader.set_uniform_int("u_highlight_hdr", 1 if self._highlight_hdr else 0)
             tex.bind(0)
-            ctx.graphics.draw_ui_textured_quad(0)
+            ctx.graphics.draw_ui_textured_quad()
 
             ctx.graphics.set_depth_test(True)
             ctx.graphics.set_depth_mask(True)
