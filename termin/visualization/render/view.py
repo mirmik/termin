@@ -5,7 +5,6 @@ RenderView содержит:
 - scene: сцена с объектами
 - camera: камера (CameraComponent)
 - rect: нормализованный прямоугольник [0..1] внутри целевой поверхности
-- canvas: опциональная 2D канва для UI
 - pipeline: конвейер рендеринга
 
 RenderView НЕ содержит:
@@ -26,14 +25,13 @@ RenderView НЕ содержит:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Tuple
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.viewport import Viewport
-    from termin.visualization.ui.canvas import Canvas
     from termin.visualization.render.framegraph import RenderPipeline
 
 
@@ -47,7 +45,6 @@ class RenderView:
         camera: Камера, определяющая точку зрения.
         rect: Нормализованный прямоугольник (x, y, w, h) в [0..1].
               (0,0) — левый нижний угол, (1,1) — правый верхний.
-        canvas: Опциональная 2D канва для overlay UI.
         pipeline: Конвейер рендеринга.
         layer_mask: Маска слоёв (какие entity рендерить).
         viewport: Опциональный Viewport (для доступа к internal_entities).
@@ -55,7 +52,6 @@ class RenderView:
     scene: "Scene"
     camera: "CameraComponent"
     rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
-    canvas: Optional["Canvas"] = None
     pipeline: Optional["RenderPipeline"] = None
     layer_mask: int = 0xFFFFFFFFFFFFFFFF
     viewport: Optional["Viewport"] = None

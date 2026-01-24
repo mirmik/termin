@@ -1,11 +1,27 @@
 // tc_scene.c - Scene implementation using entity pool
 #include "../include/tc_scene.h"
+#include "../include/tc_scene_lighting.h"
 #include "../include/tc_scene_registry.h"
 #include "../include/tc_resource_map.h"
 #include "../include/tc_profiler.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+// ============================================================================
+// Scene Lighting Defaults
+// ============================================================================
+
+void tc_scene_lighting_init(tc_scene_lighting* lighting) {
+    if (!lighting) return;
+    lighting->ambient_color[0] = 1.0f;
+    lighting->ambient_color[1] = 1.0f;
+    lighting->ambient_color[2] = 1.0f;
+    lighting->ambient_intensity = 0.1f;
+    lighting->shadow_method = TC_SHADOW_METHOD_PCF;
+    lighting->shadow_softness = 1.0f;
+    lighting->shadow_bias = 0.005f;
+}
 
 // ============================================================================
 // Dynamic array for components
@@ -80,6 +96,9 @@ struct tc_scene {
 
     // Component type lists: type_name -> tc_component* (head of intrusive list)
     tc_resource_map* type_heads;
+
+    // Lighting properties (ambient, shadows)
+    tc_scene_lighting lighting;
 };
 
 // ============================================================================
@@ -99,6 +118,7 @@ tc_scene* tc_scene_new(void) {
     s->fixed_timestep = 1.0 / 60.0;
     s->accumulated_time = 0.0;
     s->type_heads = tc_resource_map_new(NULL);  // No destructor - components are not owned
+    tc_scene_lighting_init(&s->lighting);
 
     // Register in global scene registry
     tc_scene_registry_add(s, NULL);
@@ -421,6 +441,36 @@ void* tc_scene_get_py_wrapper(tc_scene* s) {
 }
 
 // ============================================================================
+// Entity Queries
+// ============================================================================
+
+typedef struct {
+    const char* target_name;
+    tc_entity_id found_id;
+} FindByNameData;
+
+static bool find_by_name_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    FindByNameData* data = (FindByNameData*)user_data;
+    const char* name = tc_entity_pool_name(pool, id);
+    if (name && strcmp(name, data->target_name) == 0) {
+        data->found_id = id;
+        return false;  // Stop iteration
+    }
+    return true;  // Continue
+}
+
+tc_entity_id tc_scene_find_entity_by_name(tc_scene* s, const char* name) {
+    if (!s || !name) return TC_ENTITY_ID_INVALID;
+
+    FindByNameData data;
+    data.target_name = name;
+    data.found_id = TC_ENTITY_ID_INVALID;
+
+    tc_entity_pool_foreach(s->pool, find_by_name_callback, &data);
+    return data.found_id;
+}
+
+// ============================================================================
 // Component Type Lists
 // ============================================================================
 
@@ -616,4 +666,27 @@ tc_scene_component_type* tc_scene_get_all_component_types(tc_scene* s, size_t* o
 
     *out_count = collector.count;
     return collector.types;
+}
+
+// ============================================================================
+// Scene Lighting API
+// ============================================================================
+
+tc_scene_lighting* tc_scene_get_lighting(tc_scene* s) {
+    return s ? &s->lighting : NULL;
+}
+
+void tc_scene_set_ambient(tc_scene* s, float r, float g, float b, float intensity) {
+    if (!s) return;
+    s->lighting.ambient_color[0] = r;
+    s->lighting.ambient_color[1] = g;
+    s->lighting.ambient_color[2] = b;
+    s->lighting.ambient_intensity = intensity;
+}
+
+void tc_scene_set_shadow_settings(tc_scene* s, int method, float softness, float bias) {
+    if (!s) return;
+    s->lighting.shadow_method = method;
+    s->lighting.shadow_softness = softness;
+    s->lighting.shadow_bias = bias;
 }

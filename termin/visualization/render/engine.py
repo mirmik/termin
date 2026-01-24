@@ -219,7 +219,6 @@ if TYPE_CHECKING:
     from termin.visualization.render.state import ViewportRenderState
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.ui.canvas import Canvas
     from termin.visualization.render.framegraph import RenderPipeline
 
 
@@ -233,7 +232,6 @@ class ViewportContext:
     name: str
     camera: "CameraComponent"
     rect: Tuple[int, int, int, int]  # (px, py, pw, ph) in pixels
-    canvas: Optional["Canvas"] = None
     layer_mask: int = 0xFFFFFFFFFFFFFFFF
     output_fbo: Optional["FramebufferHandle"] = None  # Target FBO for offscreen rendering
 
@@ -472,9 +470,7 @@ class RenderEngine:
                 scene=scene,
                 camera=view.camera,
                 viewport=view.viewport,
-                context_key=context_key,
                 lights=lights,
-                canvas=view.canvas,
                 layer_mask=view.layer_mask,
             )
 
@@ -602,9 +598,7 @@ class RenderEngine:
                 rect=(px, py, pw, ph),
                 scene=scene,
                 camera=ctx.camera,
-                context_key=context_key,
                 lights=lights,
-                canvas=ctx.canvas,
                 layer_mask=ctx.layer_mask,
             )
 

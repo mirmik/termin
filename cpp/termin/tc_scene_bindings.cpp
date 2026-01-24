@@ -8,6 +8,7 @@
 #include "bindings/entity/entity_helpers.hpp"
 #include "tc_scene_ref.hpp"
 #include "../../core_c/include/tc_scene.h"
+#include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_registry.h"
 #include "../../core_c/include/tc_entity_pool.h"
 #include "../../core_c/include/tc_log.h"
@@ -218,6 +219,16 @@ public:
         return Entity(pool, id);
     }
 
+    // Find entity by name in scene's pool
+    Entity find_entity_by_name(const std::string& name) const {
+        if (name.empty()) return Entity();
+
+        tc_entity_id id = tc_scene_find_entity_by_name(_s, name.c_str());
+        if (!tc_entity_id_valid(id)) return Entity();
+
+        return Entity(entity_pool(), id);
+    }
+
     // Scene name (from registry)
     std::string name() const {
         const char* n = tc_scene_registry_get_name(_s);
@@ -226,6 +237,11 @@ public:
 
     void set_name(const std::string& n) {
         tc_scene_registry_set_name(_s, n.c_str());
+    }
+
+    // Lighting properties
+    tc_scene_lighting* lighting() {
+        return tc_scene_get_lighting(_s);
     }
 
     // Get all entities in scene's pool
@@ -340,12 +356,23 @@ void bind_tc_scene(nb::module_& m) {
             return nb::none();
         }, nb::arg("pick_id"), "Find entity by pick_id. Returns None if not found.")
 
+        .def("find_entity_by_name", [](TcScene& self, const std::string& name) -> nb::object {
+            Entity e = self.find_entity_by_name(name);
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("name"), "Find entity by name. Returns None if not found.")
+
         // Scene name
         .def_prop_rw("name", &TcScene::name, &TcScene::set_name)
 
         // Python wrapper for callbacks
         .def("set_py_wrapper", &TcScene::set_py_wrapper, nb::arg("wrapper"),
              "Set Python Scene wrapper for component auto-registration")
+
+        // Lighting (returns pointer to internal tc_scene_lighting)
+        .def("lighting_ptr", [](TcScene& self) {
+            return reinterpret_cast<uintptr_t>(self.lighting());
+        }, "Get pointer to tc_scene_lighting")
 
         // Component type queries
         .def("get_components_of_type", [](TcScene& self, const std::string& type_name) {

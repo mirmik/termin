@@ -806,7 +806,6 @@ class RenderingManager:
                 name=viewport_name,
                 camera=viewport.camera,
                 rect=(0, 0, pw, ph),  # Full FBO, offset at blit time
-                canvas=None,
                 layer_mask=viewport.effective_layer_mask,
                 output_fbo=output_fbo,
             )

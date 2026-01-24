@@ -65,6 +65,7 @@ NB_MODULE(_native, m) {
     termin::bind_render(render_module);
     termin::bind_sdl(platform_module);
     termin::bind_tc_scene(scene_module);
+    termin::bind_tc_scene_lighting(scene_module);
     // TcViewport is now in separate _viewport_native module
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);

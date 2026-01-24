@@ -422,6 +422,7 @@ nanobind_add_module(_native
     termin/bindings/render/solid_primitive.cpp
     termin/sdl_bindings.cpp
     termin/tc_scene_bindings.cpp
+    termin/tc_scene_lighting_bindings.cpp
     # tc_viewport_bindings.cpp moved to _viewport_native module
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp

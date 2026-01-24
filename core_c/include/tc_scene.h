@@ -5,6 +5,7 @@
 #include "tc_types.h"
 #include "tc_entity_pool.h"
 #include "tc_component.h"
+#include "tc_scene_lighting.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,6 +85,18 @@ TC_API size_t tc_scene_fixed_update_list_count(const tc_scene* s);
 // Set/get Python Scene wrapper for callbacks from C to Python
 TC_API void tc_scene_set_py_wrapper(tc_scene* s, void* py_wrapper);
 TC_API void* tc_scene_get_py_wrapper(tc_scene* s);
+
+// ============================================================================
+// Component Type Lists (intrusive linked lists by type_name)
+// ============================================================================
+
+// ============================================================================
+// Entity Queries
+// ============================================================================
+
+// Find entity by name in scene's pool
+// Returns invalid entity id if not found
+TC_API tc_entity_id tc_scene_find_entity_by_name(tc_scene* s, const char* name);
 
 // ============================================================================
 // Component Type Lists (intrusive linked lists by type_name)
