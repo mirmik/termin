@@ -67,7 +67,6 @@ class Scene:
 
         # Background color with alpha
         self._background_color = np.array(background_color, dtype=np.float32)
-        self._collision_world = CollisionWorld()
 
         # Skybox manager
         self._skybox = SkyboxManager()
@@ -272,7 +271,7 @@ class Scene:
     @property
     def collision_world(self) -> CollisionWorld:
         """Get the collision world for physics and raycasting."""
-        return self._collision_world
+        return self._tc_scene.collision_world()
 
     @property
     def colliders(self) -> List[Component]:

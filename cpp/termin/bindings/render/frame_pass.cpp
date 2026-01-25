@@ -1079,6 +1079,8 @@ void bind_frame_pass(nb::module_& m) {
             Py_INCREF(obj);
             return wrapper;
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &DepthPass::compute_reads)
+        .def_prop_ro("writes", &DepthPass::compute_writes)
         .def("destroy", &DepthPass::destroy)
         .def("__repr__", [](const DepthPass& p) {
             return "<DepthPass '" + p.get_pass_name() + "'>";
@@ -1262,6 +1264,8 @@ void bind_frame_pass(nb::module_& m) {
             Py_INCREF(obj);
             return wrapper;
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &NormalPass::compute_reads)
+        .def_prop_ro("writes", &NormalPass::compute_writes)
         .def("destroy", &NormalPass::destroy)
         .def("__repr__", [](const NormalPass& p) {
             return "<NormalPass '" + p.get_pass_name() + "'>";
@@ -1446,6 +1450,8 @@ void bind_frame_pass(nb::module_& m) {
             Py_INCREF(obj);
             return wrapper;
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &IdPass::compute_reads)
+        .def_prop_ro("writes", &IdPass::compute_writes)
         .def("destroy", &IdPass::destroy)
         .def("__repr__", [](const IdPass& p) {
             return "<IdPass '" + p.get_pass_name() + "'>";
@@ -1615,6 +1621,8 @@ void bind_frame_pass(nb::module_& m) {
             Py_INCREF(obj);
             return wrapper;
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &ShadowPass::compute_reads)
+        .def_prop_ro("writes", &ShadowPass::compute_writes)
         .def("destroy", &ShadowPass::destroy)
         .def("__repr__", [](const ShadowPass& p) {
             return "<ShadowPass '" + p.get_pass_name() + "'>";

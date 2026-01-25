@@ -177,6 +177,16 @@ TC_API tc_scene_component_type* tc_scene_get_all_component_types(
     size_t* out_count
 );
 
+// ============================================================================
+// Collision World
+// ============================================================================
+
+// Get the collision world (C++ CollisionWorld*)
+TC_API void* tc_scene_get_collision_world(tc_scene* s);
+
+// Set the collision world (called from C++ TcScene)
+TC_API void tc_scene_set_collision_world(tc_scene* s, void* cw);
+
 #ifdef __cplusplus
 }
 #endif

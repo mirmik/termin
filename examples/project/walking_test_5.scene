@@ -142,6 +142,9 @@
             "data": {
               "display_name": "",
               "enabled": false,
+              "navmesh": {
+                "type": "none"
+              },
               "material": {
                 "uuid": "b62e01e0-b3f6-4443-a367-b0edf8bffa60",
                 "name": "NavMeshFOV",
@@ -13337,7 +13340,7 @@
     "scene_pipelines": [
       {
         "type": "uuid",
-        "uuid": "40446995-249d-41cf-b4f1-84f21895063c"
+        "uuid": "336eb45d-ac02-4733-8fc1-4d7c1dd11b19"
       }
     ],
     "light_direction": [
@@ -13355,11 +13358,11 @@
       1.0,
       1.0
     ],
-    "ambient_intensity": 0.1,
+    "ambient_intensity": 0.10000000149011612,
     "shadow_settings": {
       "method": 1,
       "softness": 1.0,
-      "bias": 0.001
+      "bias": 0.0010000000474974513
     },
     "skybox_type": "gradient",
     "skybox_color": [
@@ -13446,10 +13449,10 @@
     "expanded_entities": [
       "0000000000000007",
       "814ba329-db24-48fe-b931-fe68ab904998",
+      "0000000000000077",
       "0000000000000131",
       "000000000000000a",
-      "0000000000000130",
-      "0000000000000077"
+      "0000000000000130"
     ]
   },
   "resources": {

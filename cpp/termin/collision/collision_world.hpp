@@ -495,6 +495,8 @@ public:
 
     const BVH& bvh() const { return bvh_; }
 
+    const std::vector<Collider*>& colliders() const { return colliders_; }
+
 private:
     BVH bvh_;
     std::vector<Collider*> colliders_;

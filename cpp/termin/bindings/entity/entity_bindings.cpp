@@ -25,6 +25,7 @@
 #include "../../viewport/tc_viewport_ref.hpp"
 #include "../../mesh/tc_mesh_handle.hpp"
 #include "../../material/tc_material_handle.hpp"
+#include "../../collision/collision_world.hpp"
 
 namespace nb = nanobind;
 
@@ -258,7 +259,23 @@ void bind_entity_class(nb::module_& m) {
                 c = c->type_next;
             }
             return result;
-        }, nb::arg("type_name"), "Get all components of given type");
+        }, nb::arg("type_name"), "Get all components of given type")
+        .def_prop_ro("collision_world", [](TcSceneRef& self) -> collision::CollisionWorld* {
+            if (!self.valid()) return nullptr;
+            void* cw = tc_scene_get_collision_world(self.ptr());
+            return static_cast<collision::CollisionWorld*>(cw);
+        }, nb::rv_policy::reference, "Get collision world for this scene")
+        .def_prop_ro("colliders", [](TcSceneRef& self) {
+            nb::list result;
+            if (!self.valid()) return result;
+            void* cw = tc_scene_get_collision_world(self.ptr());
+            if (!cw) return result;
+            auto* world = static_cast<collision::CollisionWorld*>(cw);
+            for (auto* collider : world->colliders()) {
+                result.append(nb::cast(collider, nb::rv_policy::reference));
+            }
+            return result;
+        }, "Get all colliders in collision world");
 
     // Non-owning viewport reference - for passing viewport context
     nb::class_<TcViewportRef>(m, "TcViewportRef")

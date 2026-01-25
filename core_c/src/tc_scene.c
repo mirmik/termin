@@ -105,6 +105,9 @@ struct tc_scene {
 
     // Skybox properties
     tc_scene_skybox skybox;
+
+    // Collision world (C++ CollisionWorld*)
+    void* collision_world;
 };
 
 // ============================================================================
@@ -126,6 +129,7 @@ tc_scene* tc_scene_new(void) {
     s->type_heads = tc_resource_map_new(NULL);  // No destructor - components are not owned
     tc_scene_lighting_init(&s->lighting);
     tc_scene_skybox_init(&s->skybox);
+    s->collision_world = NULL;  // Created by C++ code via tc_scene_set_collision_world
 
     // Register in global scene registry
     tc_scene_registry_add(s, NULL);
@@ -142,6 +146,8 @@ void tc_scene_free(tc_scene* s) {
     // Release skybox resources
     tc_scene_skybox_free(&s->skybox);
 
+    // Note: collision_world is owned by C++ TcScene, not destroyed here
+
     list_free(&s->pending_start);
     list_free(&s->update_list);
     list_free(&s->fixed_update_list);
@@ -154,6 +160,14 @@ void tc_scene_free(tc_scene* s) {
 
 tc_entity_pool* tc_scene_entity_pool(tc_scene* s) {
     return s ? s->pool : NULL;
+}
+
+void* tc_scene_get_collision_world(tc_scene* s) {
+    return s ? s->collision_world : NULL;
+}
+
+void tc_scene_set_collision_world(tc_scene* s, void* cw) {
+    if (s) s->collision_world = cw;
 }
 
 // ============================================================================

@@ -10,7 +10,9 @@
 #include "tc_scene_ref.hpp"
 #include "mesh/tc_mesh_handle.hpp"
 #include "material/tc_material_handle.hpp"
+#include "collision/collision_world.hpp"
 #include "../../core_c/include/tc_scene.h"
+#include <memory>
 #include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_skybox.h"
 #include "../../core_c/include/tc_scene_registry.h"
@@ -26,9 +28,12 @@ namespace termin {
 class TcScene {
 public:
     tc_scene* _s = nullptr;
+    std::unique_ptr<collision::CollisionWorld> _collision_world;
 
     TcScene() {
         _s = tc_scene_new();
+        _collision_world = std::make_unique<collision::CollisionWorld>();
+        tc_scene_set_collision_world(_s, _collision_world.get());
     }
 
     ~TcScene() {
@@ -37,6 +42,9 @@ public:
 
     void destroy() {
         if (_s) {
+            // Clear pointer in tc_scene before destroying
+            tc_scene_set_collision_world(_s, nullptr);
+            _collision_world.reset();
             tc_scene_free(_s);
             _s = nullptr;
         }
@@ -52,14 +60,16 @@ public:
     TcScene& operator=(const TcScene&) = delete;
 
     // Move
-    TcScene(TcScene&& other) noexcept : _s(other._s) {
+    TcScene(TcScene&& other) noexcept
+        : _s(other._s), _collision_world(std::move(other._collision_world)) {
         other._s = nullptr;
     }
 
     TcScene& operator=(TcScene&& other) noexcept {
         if (this != &other) {
-            if (_s) tc_scene_free(_s);
+            destroy();
             _s = other._s;
+            _collision_world = std::move(other._collision_world);
             other._s = nullptr;
         }
         return *this;
@@ -288,6 +298,11 @@ public:
         update_component_entity_refs(new_entity);
 
         return new_entity;
+    }
+
+    // Collision world access
+    collision::CollisionWorld* collision_world() const {
+        return _collision_world.get();
     }
 };
 
@@ -774,6 +789,11 @@ void bind_tc_scene(nb::module_& m) {
         .def("notify_scene_active", [](TcScene& self) {
             tc_scene_notify_scene_active(self._s);
         }, "Notify all components that scene became active")
+
+        // Collision world
+        .def("collision_world", &TcScene::collision_world,
+             nb::rv_policy::reference,
+             "Get collision world for this scene")
         ;
 
     // =========================================================================

@@ -174,121 +174,7 @@
       "type": "DepthPass",
       "x": 171.27002620784629,
       "y": 846.5291991920476,
-      "name": "FOVDepth",
-      "params": {
-        "camera_name": "FOVCamera"
-      }
-    },
-    {
-      "type": "MaterialPass",
-      "x": 474.1801583776338,
-      "y": -347.2430434556969,
-      "node_type": "effect",
-      "name": "TimeSpection",
-      "params": {
-        "material_name": "TimeSpection"
-      },
-      "width": 197.74881111226273,
-      "height": 113.04404771248602,
-      "dynamic_inputs": [
-        [
-          "input_tex",
-          "fbo"
-        ],
-        [
-          "depth_texture",
-          "fbo"
-        ],
-        [
-          "normal_texture",
-          "fbo"
-        ]
-      ]
-    },
-    {
-      "type": "FBO",
-      "x": 239.36768318015066,
-      "y": -593.233112870454,
-      "node_type": "resource",
-      "params": {
-        "format": "rgba16f",
-        "samples": "1",
-        "size_mode": "viewport",
-        "scale": "1.0",
-        "width": 1024,
-        "height": 1024,
-        "has_color": true,
-        "has_depth": false,
-        "clear_color": false,
-        "clear_color_r": 0.0,
-        "clear_color_g": 0.0,
-        "clear_color_b": 0.0,
-        "clear_color_a": 1.0,
-        "clear_depth": false,
-        "clear_depth_value": 1.0
-      }
-    },
-    {
-      "type": "FBO",
-      "x": -667.3519720149004,
-      "y": 146.40390040332315,
-      "node_type": "resource",
-      "params": {
-        "format": "rgba16f",
-        "samples": "1",
-        "size_mode": "viewport",
-        "scale": "1.0",
-        "width": 1024,
-        "height": 1024,
-        "has_color": true,
-        "has_depth": true,
-        "clear_color": false,
-        "clear_color_r": 0.0,
-        "clear_color_g": 0.0,
-        "clear_color_b": 0.0,
-        "clear_color_a": 1.0,
-        "clear_depth": false,
-        "clear_depth_value": 1.0
-      }
-    },
-    {
-      "type": "DepthPass",
-      "x": -434.3265127705372,
-      "y": 84.65729066539589,
-      "params": {
-        "camera_name": ""
-      }
-    },
-    {
-      "type": "FBO",
-      "x": -665.1229685402247,
-      "y": 448.61031250004214,
-      "node_type": "resource",
-      "params": {
-        "format": "rgba16f",
-        "samples": "1",
-        "size_mode": "viewport",
-        "scale": "1.0",
-        "width": 1024,
-        "height": 1024,
-        "has_color": true,
-        "has_depth": true,
-        "clear_color": false,
-        "clear_color_r": 0.0,
-        "clear_color_g": 0.0,
-        "clear_color_b": 0.0,
-        "clear_color_a": 1.0,
-        "clear_depth": false,
-        "clear_depth_value": 1.0
-      }
-    },
-    {
-      "type": "NormalPass",
-      "x": -427.02817870514497,
-      "y": 538.9003594185936,
-      "params": {
-        "camera_name": ""
-      }
+      "name": "FOVDepth"
     },
     {
       "type": "TonemapPass",
@@ -372,70 +258,32 @@
       "to_node": 11,
       "to_socket": "input_res"
     },
+    null,
+    null,
+    {
+      "from_node": 5,
+      "from_socket": "output_res",
+      "to_node": 12,
+      "to_socket": "input_res"
+    },
+    {
+      "from_node": 12,
+      "from_socket": "output_res",
+      "to_node": 3,
+      "to_socket": "input_res"
+    },
     {
       "from_node": 13,
       "from_socket": "fbo",
       "to_node": 12,
       "to_socket": "output_res_target"
     },
-    {
-      "from_node": 14,
-      "from_socket": "fbo",
-      "to_node": 15,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 16,
-      "from_socket": "fbo",
-      "to_node": 17,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 5,
-      "from_socket": "output_res",
-      "to_node": 18,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 18,
-      "from_socket": "output_res",
-      "to_node": 3,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 19,
-      "from_socket": "fbo",
-      "to_node": 18,
-      "to_socket": "output_res_target"
-    },
-    {
-      "from_node": 15,
-      "from_socket": "output_res",
-      "to_node": 12,
-      "to_socket": "depth_texture"
-    },
-    {
-      "from_node": 17,
-      "from_socket": "output_res",
-      "to_node": 12,
-      "to_socket": "normal_texture"
-    },
+    null,
+    null,
     {
       "from_node": 4,
       "from_socket": "output_res",
       "to_node": 8,
-      "to_socket": "input_res"
-    },
-    {
-      "from_node": 8,
-      "from_socket": "output_res",
-      "to_node": 12,
-      "to_socket": "input_tex"
-    },
-    {
-      "from_node": 12,
-      "from_socket": "output_res",
-      "to_node": 5,
       "to_socket": "input_res"
     },
     {
@@ -449,6 +297,12 @@
       "from_socket": "output_res",
       "to_node": 4,
       "to_socket": "u_fov"
+    },
+    {
+      "from_node": 8,
+      "from_socket": "output_res",
+      "to_node": 5,
+      "to_socket": "input_res"
     }
   ],
   "viewport_frames": [
