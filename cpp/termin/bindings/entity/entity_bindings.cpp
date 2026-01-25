@@ -266,16 +266,19 @@ void bind_entity_class(nb::module_& m) {
             return static_cast<collision::CollisionWorld*>(cw);
         }, nb::rv_policy::reference, "Get collision world for this scene")
         .def_prop_ro("colliders", [](TcSceneRef& self) {
+            // Return ColliderComponent instances (not raw Collider*)
             nb::list result;
             if (!self.valid()) return result;
-            void* cw = tc_scene_get_collision_world(self.ptr());
-            if (!cw) return result;
-            auto* world = static_cast<collision::CollisionWorld*>(cw);
-            for (auto* collider : world->colliders()) {
-                result.append(nb::cast(collider, nb::rv_policy::reference));
+            tc_component* c = tc_scene_first_component_of_type(self.ptr(), "ColliderComponent");
+            while (c != NULL) {
+                nb::object py_comp = tc_component_to_python(c);
+                if (!py_comp.is_none()) {
+                    result.append(py_comp);
+                }
+                c = c->type_next;
             }
             return result;
-        }, "Get all colliders in collision world");
+        }, "Get all ColliderComponent instances");
 
     // Non-owning viewport reference - for passing viewport context
     nb::class_<TcViewportRef>(m, "TcViewportRef")
