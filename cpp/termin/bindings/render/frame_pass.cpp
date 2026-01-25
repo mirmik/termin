@@ -1572,10 +1572,62 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("lights"),
         nb::arg("camera_view"),
         nb::arg("camera_projection"))
+        .def("execute", [](ShadowPass& self, ExecuteContext& ctx) {
+            self.execute(ctx);
+        }, nb::arg("ctx"))
+        .def("serialize", [](ShadowPass& self) {
+            nb::dict result;
+            result["type"] = "ShadowPass";
+            result["pass_name"] = nb::str(self.get_pass_name().c_str());
+            result["enabled"] = self.get_enabled();
+            nb::dict data;
+            data["output_res"] = nb::str(self.output_res.c_str());
+            data["caster_offset"] = self.caster_offset;
+            result["data"] = data;
+            std::string vp_name = self.get_viewport_name();
+            if (!vp_name.empty()) {
+                result["viewport_name"] = nb::str(vp_name.c_str());
+            }
+            return result;
+        })
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = "Shadow";
+            std::string output_res = "shadow_maps";
+            float caster_offset = 50.0f;
+            if (data.contains("pass_name")) {
+                pass_name = nb::cast<std::string>(data["pass_name"]);
+            }
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("caster_offset")) {
+                    caster_offset = nb::cast<float>(d["caster_offset"]);
+                }
+            }
+            auto* p = new ShadowPass(output_res, pass_name, caster_offset);
+            tc_pass* tc = p->tc_pass_ptr();
+            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
+            tc->externally_managed = true;
+            Py_INCREF(obj);
+            return wrapper;
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("destroy", &ShadowPass::destroy)
         .def("__repr__", [](const ShadowPass& p) {
             return "<ShadowPass '" + p.get_pass_name() + "'>";
         });
+
+    // Node graph attributes for ShadowPass
+    {
+        m.attr("ShadowPass").attr("category") = "Render";
+        m.attr("ShadowPass").attr("node_inputs") = nb::make_tuple();
+        m.attr("ShadowPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "shadow")
+        );
+    }
 }
 
 } // namespace termin

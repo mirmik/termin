@@ -10,7 +10,9 @@ namespace nb = nanobind;
 #endif
 
 #include "termin/render/render_frame_pass.hpp"
+#include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
+#include "termin/lighting/shadow.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/graphics_backend.hpp"
@@ -90,6 +92,15 @@ public:
 
     virtual ~ShadowPass() = default;
 
+    // Dynamic resource computation
+    std::set<std::string> compute_reads() const override {
+        return {};
+    }
+
+    std::set<std::string> compute_writes() const override {
+        return {output_res};
+    }
+
     // Non-copyable (contains unique_ptr in fbo_pool_)
     ShadowPass(const ShadowPass&) = delete;
     ShadowPass& operator=(const ShadowPass&) = delete;
@@ -98,6 +109,12 @@ public:
 
     // Clean up FBO pool
     void destroy() override;
+
+    /**
+     * Execute shadow pass using ExecuteContext.
+     * Main entry point from Python.
+     */
+    void execute(ExecuteContext& ctx);
 
     /**
      * Execute shadow pass, rendering shadow maps for all lights.

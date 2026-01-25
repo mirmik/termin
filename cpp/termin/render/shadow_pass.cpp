@@ -1,6 +1,11 @@
 #include "shadow_pass.hpp"
 #include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
+#include "termin/camera/camera_component.hpp"
+
+extern "C" {
+#include "tc_shader_registry.h"
+}
 
 #include <cmath>
 #include <algorithm>
@@ -326,6 +331,75 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 }
 
 
+void ShadowPass::execute(ExecuteContext& ctx) {
+    // Get shadow array from writes_fbos
+    auto it = ctx.writes_fbos.find(output_res);
+    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+        return;
+    }
+
+    // Dynamic cast to ShadowMapArrayResource
+    ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(it->second);
+    if (!shadow_array) {
+        tc::Log::error("ShadowPass: writes_fbos[%s] is not a ShadowMapArrayResource", output_res.c_str());
+        return;
+    }
+
+    // Clear previous frame's entries
+    shadow_array->clear();
+
+    if (ctx.lights.empty()) {
+        return;
+    }
+
+    // Get shadow shader from registry if not set
+    if (!shadow_shader) {
+        tc_shader_handle h = tc_shader_find_by_name("shadow");
+        if (tc_shader_is_valid(h)) {
+            static TcShader cached_shader;
+            cached_shader = TcShader(h);
+            shadow_shader = &cached_shader;
+        }
+    }
+
+    if (!shadow_shader) {
+        tc::Log::error("ShadowPass: shadow shader not found");
+        return;
+    }
+
+    if (!ctx.camera) {
+        tc::Log::error("ShadowPass: camera is null");
+        return;
+    }
+
+    // Get camera matrices
+    Mat44 view_d = ctx.camera->get_view_matrix();
+    Mat44 proj_d = ctx.camera->get_projection_matrix();
+    Mat44f camera_view = view_d.to_float();
+    Mat44f camera_projection = proj_d.to_float();
+
+    // Execute shadow pass
+    std::vector<ShadowMapResult> results = execute_shadow_pass(
+        ctx.graphics,
+        ctx.scene.ptr(),
+        ctx.lights,
+        camera_view,
+        camera_projection
+    );
+
+    // Add results to shadow array
+    for (const auto& result : results) {
+        shadow_array->add_entry(
+            result.fbo,
+            result.light_space_matrix,
+            result.light_index,
+            result.cascade_index,
+            result.cascade_split_near,
+            result.cascade_split_far
+        );
+    }
+}
+
 void ShadowPass::execute(
     GraphicsBackend* graphics,
     const FBOMap& reads_fbos,
@@ -335,7 +409,7 @@ void ShadowPass::execute(
     void* camera,
     const std::vector<Light*>* lights
 ) {
-    // Legacy execute - not used, call execute_shadow_pass instead
+    // Legacy execute - not used, call execute_shadow_pass or execute(ExecuteContext&)
 }
 
 // Register ShadowPass in tc_pass_registry for C#/standalone C++ usage
