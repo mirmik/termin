@@ -4,8 +4,8 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, TYPE_CHECKIN
 from collections import deque
 
 from termin._native.render import (
-    TcPassWrapper,
     TcPass,
+    TcPassRef,
 )
 
 if TYPE_CHECKING:
@@ -67,14 +67,14 @@ class FramePass:
         # Callback для сообщения об ошибке чтения depth: (str) -> None
         self._depth_error_callback: "Callable[[str], None] | None" = None
 
-        # C handle for tc_pass system (TcPassWrapper owns tc_pass, frees it in destructor)
-        self._tc_pass_wrapper: "TcPassWrapper" = TcPassWrapper(self, self.__class__.__name__)
-        self._tc_pass_wrapper.pass_name = pass_name
+        # C handle for tc_pass system (TcPass owns tc_pass, frees it in destructor)
+        self._tc_pass_handle: "TcPass" = TcPass(self, self.__class__.__name__)
+        self._tc_pass_handle.pass_name = pass_name
 
     @property
-    def _tc_pass(self) -> "TcPass":
-        """Return raw tc_pass pointer for C interop (backwards compatibility)."""
-        return self._tc_pass_wrapper.c_ptr()
+    def _tc_pass(self) -> "TcPassRef":
+        """Return TcPassRef for C interop."""
+        return self._tc_pass_handle.ref()
 
     # ---- reads/writes как вычисляемые свойства --------------------------------
 

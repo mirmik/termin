@@ -388,8 +388,8 @@ def create_pass_instance(
     new_pass_name = node.name if node.name else node.title
     instance.pass_name = new_pass_name
     # Also sync tc_pass name for Python passes
-    if hasattr(instance, "_tc_pass_wrapper"):
-        instance._tc_pass_wrapper.pass_name = new_pass_name
+    if hasattr(instance, "_tc_pass_handle"):
+        instance._tc_pass_handle.pass_name = new_pass_name
 
     # Known resource params for standard passes
     known_resource_params = {"input_res", "output_res", "shadow_res"}

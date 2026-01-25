@@ -206,6 +206,7 @@ static const tc_pass_vtable g_external_vtable = {
     .get_internal_symbols = external_get_internal_symbols,
     .destroy = external_destroy,
     .drop = external_drop,
+    .retain = external_retain,
     .release = external_release,
     .serialize = NULL,
     .deserialize = NULL,

@@ -11,6 +11,7 @@ extern "C" {
 }
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render/tc_pass.hpp"
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/execute_context.hpp"
@@ -196,7 +197,11 @@ void bind_frame_pass(nb::module_& m) {
             self.add_entry(fbo, mat, light_index, cascade_index, cascade_split_near, cascade_split_far);
         }, nb::arg("fbo"), nb::arg("light_space_matrix"), nb::arg("light_index"),
            nb::arg("cascade_index") = 0, nb::arg("cascade_split_near") = 0.0f,
-           nb::arg("cascade_split_far") = 0.0f);
+           nb::arg("cascade_split_far") = 0.0f)
+        .def("delete", [](ShadowMapArrayResource& self) {
+            // Clear entries - FBOs are managed by ShadowPass
+            self.clear();
+        }, "Delete resource (clears entries)");
 
     // Helper to convert Python dict to ResourceMap
     auto dict_to_resource_map = [](nb::dict py_dict) -> ResourceMap {
@@ -352,6 +357,9 @@ void bind_frame_pass(nb::module_& m) {
         .def_prop_rw("enabled",
             [](FramePass& p) { return p.get_enabled(); },
             [](FramePass& p, bool v) { p.set_enabled(v); })
+        .def_prop_rw("passthrough",
+            [](FramePass& p) { return p._c.passthrough; },
+            [](FramePass& p, bool v) { p._c.passthrough = v; })
         .def_prop_rw("viewport_name",
             [](FramePass& p) { return p.get_viewport_name(); },
             [](FramePass& p, const std::string& n) { p.set_viewport_name(n); })
@@ -363,13 +371,11 @@ void bind_frame_pass(nb::module_& m) {
         .def("clear_debug_internal_point", &FramePass::clear_debug_internal_point)
         .def("get_debug_internal_point", &FramePass::get_debug_internal_point)
         .def("required_resources", &FramePass::required_resources)
-        // Expose tc_pass pointer to Python for frame graph integration
-        // Read-only since tc_pass is now embedded as _c
+        // Expose TcPassRef for frame graph integration
         .def_prop_ro("_tc_pass",
-            [](FramePass& p) -> tc_pass* {
-                return p.tc_pass_ptr();
-            },
-            nb::rv_policy::reference)
+            [](FramePass& p) {
+                return TcPassRef(p.tc_pass_ptr());
+            })
         .def("_set_py_wrapper", [](FramePass& p, nb::object py_self) {
             tc_pass* tc = p.tc_pass_ptr();
             if (tc) {
@@ -381,7 +387,21 @@ void bind_frame_pass(nb::module_& m) {
         }, nb::arg("py_self"))
         .def("__repr__", [](const FramePass& p) {
             return "<FramePass '" + p.get_pass_name() + "'>";
-        });
+        })
+        .def("deserialize_data", [](FramePass& self, nb::object data) {
+            if (data.is_none()) return;
+            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
+            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
+            registry.attr("deserialize_all")(nb::cast(&self), data);
+        })
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = "unnamed";
+            if (data.contains("pass_name")) {
+                pass_name = nb::cast<std::string>(data["pass_name"]);
+            }
+            return new FramePass(pass_name);
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none(),
+           nb::rv_policy::take_ownership);
 
     // FrameGraph errors
     nb::exception<FrameGraphError>(m, "FrameGraphError");
@@ -889,7 +909,14 @@ void bind_frame_pass(nb::module_& m) {
         .def("destroy", &ColorPass::destroy)
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.get_pass_name() + "' phase='" + p.phase_mark + "'>";
-        });
+        })
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "unnamed";
+            auto* p = new ColorPass();
+            p->set_pass_name(pass_name);
+            return p;
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none(),
+           nb::rv_policy::take_ownership);
 
     // Node graph attributes for ColorPass
     color_pass.attr("category") = "Render";

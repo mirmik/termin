@@ -265,13 +265,7 @@ class SceneManager:
         # Support both new format "scene" and old "scenes"
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         if scene_data:
-            # Disable GC during scene loading to avoid GC crash
-            import gc
-            gc.disable()
-            try:
-                scene.load_from_data(scene_data, context=None, update_settings=True)
-            finally:
-                gc.enable()
+            scene.load_from_data(scene_data, context=None, update_settings=True)
 
         self._scenes[name] = scene
         self._modes[name] = SceneMode.INACTIVE
