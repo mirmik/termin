@@ -158,14 +158,14 @@ struct tc_component {
     // Component kind (native or external)
     tc_component_kind kind;
 
-    // Native language - where the component "body" lives
-    // TC_BINDING_NONE for C/C++ components (body is the CxxComponent itself)
-    // TC_BINDING_PYTHON for Python components (body points to PyObject)
-    tc_binding_type native_language;
+    // Native language - which language the component type is defined in
+    // TC_LANGUAGE_CXX for C++ components
+    // TC_LANGUAGE_PYTHON for Python components
+    tc_language native_language;
 
     // Body pointer - points to the actual component implementation
-    // For TC_BINDING_PYTHON: PyObject* of the PythonComponent
-    // For TC_BINDING_NONE (C++): NULL (body is the CxxComponent containing this tc_component)
+    // For TC_LANGUAGE_PYTHON: PyObject* of the PythonComponent
+    // For TC_LANGUAGE_CXX: NULL (body is the CxxComponent containing this tc_component)
     void* body;
 
     // Language bindings - wrappers for accessing this component from other languages
@@ -215,7 +215,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
 #endif
     c->owner_pool = NULL;
     c->kind = TC_NATIVE_COMPONENT;
-    c->native_language = TC_BINDING_NONE;
+    c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
     for (int i = 0; i < TC_BINDING_MAX; i++) {
         c->bindings[i] = NULL;
@@ -503,7 +503,7 @@ static inline void tc_component_clear_binding(tc_component* c, tc_binding_type l
     c->bindings[lang] = NULL;
 }
 
-static inline bool tc_component_is_native(tc_component* c, tc_binding_type lang) {
+static inline bool tc_component_is_language(tc_component* c, tc_language lang) {
     if (!c) return false;
     return c->native_language == lang;
 }

@@ -141,7 +141,7 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
 
     // Store Python object pointer as body (this is a Python-native component)
     c->body = py_self;
-    c->native_language = TC_BINDING_PYTHON;
+    c->native_language = TC_LANGUAGE_PYTHON;
 
     // Python components
     c->kind = TC_EXTERNAL_COMPONENT;

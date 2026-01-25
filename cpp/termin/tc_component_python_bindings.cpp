@@ -406,7 +406,7 @@ public:
         ensure_callbacks_initialized();
 
         // Create C component with Python vtable (owns type_name copy)
-        // body points to py_self, native_language = TC_BINDING_PYTHON
+        // body points to py_self, native_language = TC_LANGUAGE_PYTHON
         _c = tc_component_new_python(py_self.ptr(), type_name.c_str());
     }
 

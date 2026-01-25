@@ -188,7 +188,7 @@ private:
                 if (cxx) {
                     cxx->entity = ent;
                 }
-            } else if (tc->native_language == TC_BINDING_PYTHON && tc->body) {
+            } else if (tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
                 // Python component - update via Python attribute
                 // All Python components have 'entity' field declared in base class
                 nb::gil_scoped_acquire gil;

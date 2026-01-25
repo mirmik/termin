@@ -119,8 +119,9 @@ struct tc_pass {
     // Debug
     char* debug_internal_symbol;
 
-    // External language support
+    // Language support
     tc_pass_kind kind;
+    tc_language native_language; // Which language the pass type is defined in
     bool externally_managed;
     void* body;                  // External object (PyObject*, etc.) for TC_EXTERNAL_PASS
 
@@ -153,6 +154,7 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->viewport_name = NULL;
     p->debug_internal_symbol = NULL;
     p->kind = TC_NATIVE_PASS;
+    p->native_language = TC_LANGUAGE_CXX;
     p->externally_managed = false;
     p->body = NULL;
     for (int i = 0; i < TC_BINDING_MAX; i++) {

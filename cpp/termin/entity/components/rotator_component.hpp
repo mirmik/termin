@@ -30,7 +30,7 @@ public:
 #ifdef TERMIN_HAS_NANOBIND
         // Get Python component by type name
         tc_component* tc = entity.get_component_by_type_name("ColliderComponent");
-        if (tc && tc->native_language == TC_BINDING_PYTHON && tc->body) {
+        if (tc && tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
             collider_component = nb::borrow((PyObject*)tc->body);
             nb::object collider_obj = collider_component.attr("attached_collider");
             collider = nb::cast<termin::colliders::Collider*>(collider_obj);

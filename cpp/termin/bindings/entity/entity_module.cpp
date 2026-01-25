@@ -305,7 +305,7 @@ NB_MODULE(_entity_native, m) {
 
             nb::dict info;
             info["name"] = type_name;
-            info["kind"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "native" : "python";
+            info["language"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "C++" : "Python";
 
             const char* parent = tc_component_registry_get_parent(type_name);
             info["parent"] = parent ? nb::str(parent) : nb::none();

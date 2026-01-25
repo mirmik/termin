@@ -150,7 +150,7 @@ void bind_tc_viewport_class(nb::module_& m) {
                 if (!c) return nb::none();
 
                 // For Python-native components, return body directly
-                if (c->native_language == TC_BINDING_PYTHON && c->body) {
+                if (c->native_language == TC_LANGUAGE_PYTHON && c->body) {
                     return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->body));
                 }
 

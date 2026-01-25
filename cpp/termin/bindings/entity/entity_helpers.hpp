@@ -42,7 +42,7 @@ inline nb::object tc_component_to_python(tc_component* c) {
     if (!c) return nb::none();
 
     // Check if component is native Python - return body directly
-    if (c->native_language == TC_BINDING_PYTHON) {
+    if (c->native_language == TC_LANGUAGE_PYTHON) {
         if (!c->body) return nb::none();
         return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->body));
     }

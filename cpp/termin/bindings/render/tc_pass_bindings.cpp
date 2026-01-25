@@ -799,7 +799,7 @@ void bind_tc_pass(nb::module_& m) {
             if (type_name) {
                 nb::dict info;
                 info["type_name"] = nb::str(type_name);
-                info["kind"] = tc_pass_registry_get_kind(type_name) == TC_NATIVE_PASS ? "native" : "external";
+                info["language"] = tc_pass_registry_get_kind(type_name) == TC_NATIVE_PASS ? "C++" : "Python";
                 result.append(info);
             }
         }

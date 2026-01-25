@@ -3,7 +3,22 @@
 #ifndef TC_BINDING_H
 #define TC_BINDING_H
 
-// Binding types for language-specific wrappers
+// ============================================================================
+// Language enum - which language a type is defined in
+// ============================================================================
+
+typedef enum tc_language {
+    TC_LANGUAGE_C = 0,
+    TC_LANGUAGE_CXX = 1,
+    TC_LANGUAGE_PYTHON = 2,
+    TC_LANGUAGE_RUST = 3,
+    TC_LANGUAGE_CSHARP = 4
+} tc_language;
+
+// ============================================================================
+// Binding types - for language-specific wrappers (accessing objects from other languages)
+// ============================================================================
+
 #define TC_BINDING_NONE 0
 #define TC_BINDING_PYTHON 1
 #define TC_BINDING_CSHARP 2

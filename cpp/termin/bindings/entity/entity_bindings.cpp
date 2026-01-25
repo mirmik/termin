@@ -115,7 +115,7 @@ public:
         if (!_c) return nb::none();
 
         // For Python components, check if they have a custom serialize method
-        if (_c->native_language == TC_BINDING_PYTHON && _c->body) {
+        if (_c->native_language == TC_LANGUAGE_PYTHON && _c->body) {
             nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->body));
             if (nb::hasattr(py_obj, "serialize")) {
                 // Call Python serialize method (e.g., for UnknownComponent)
@@ -583,7 +583,7 @@ void bind_entity_class(nb::module_& m) {
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
-                if (tc && tc->native_language == TC_BINDING_PYTHON && tc->body) {
+                if (tc && tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
                     const char* comp_type = tc_component_type_name(tc);
                     if (comp_type && type_name == comp_type) {
                         return nb::borrow((PyObject*)tc->body);

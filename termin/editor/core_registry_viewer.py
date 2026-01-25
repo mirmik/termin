@@ -122,7 +122,7 @@ class CoreRegistryViewer(QDialog):
 
         # Components tab
         self._components_tree = QTreeWidget()
-        self._components_tree.setHeaderLabels(["Name", "Kind", "Drawable", "Parent", "Descendants"])
+        self._components_tree.setHeaderLabels(["Name", "Language", "Drawable", "Parent", "Descendants"])
         self._components_tree.setAlternatingRowColors(True)
         self._components_tree.itemClicked.connect(self._on_component_clicked)
         self._tab_widget.addTab(self._components_tree, "Components")
@@ -134,9 +134,9 @@ class CoreRegistryViewer(QDialog):
         self._pipelines_tree.itemClicked.connect(self._on_pipeline_clicked)
         self._tab_widget.addTab(self._pipelines_tree, "Pipelines")
 
-        # Passes tab
+        # Passes tab (shows registered pass types, like Components)
         self._passes_tree = QTreeWidget()
-        self._passes_tree.setHeaderLabels(["Pass Name", "Type", "Pipeline", "Kind", "Enabled"])
+        self._passes_tree.setHeaderLabels(["Type Name", "Language"])
         self._passes_tree.setAlternatingRowColors(True)
         self._passes_tree.itemClicked.connect(self._on_pass_clicked)
         self._tab_widget.addTab(self._passes_tree, "Passes")
@@ -546,13 +546,13 @@ class CoreRegistryViewer(QDialog):
         infos = component_registry_get_all_info()
         for info in sorted(infos, key=lambda x: x["name"]):
             name = info["name"]
-            kind = info["kind"]
+            language = info["language"]
             is_drawable = "Yes" if info.get("is_drawable", False) else "-"
             parent = info["parent"] or "-"
             desc_count = len(info["descendants"])
             descendants = str(desc_count) if desc_count > 0 else "-"
 
-            item = QTreeWidgetItem([name, kind, is_drawable, parent, descendants])
+            item = QTreeWidgetItem([name, language, is_drawable, parent, descendants])
             item.setData(0, Qt.ItemDataRole.UserRole, ("component", info))
             self._components_tree.addTopLevelItem(item)
 
@@ -571,11 +571,12 @@ class CoreRegistryViewer(QDialog):
     def _show_component_details(self, info: dict) -> None:
         """Display component type details in the details panel."""
         is_drawable = info.get("is_drawable", False)
+        language = info["language"]
         lines = [
             "=== COMPONENT TYPE ===",
             "",
             f"Name:           {info['name']}",
-            f"Kind:           {info['kind']}",
+            f"Language:       {language}",
             f"Drawable:       {'Yes' if is_drawable else 'No'}",
             f"Parent:         {info['parent'] or '(none)'}",
             "",
@@ -665,47 +666,37 @@ class CoreRegistryViewer(QDialog):
     # =========================================================================
 
     def _refresh_passes(self) -> None:
-        """Refresh pass list from all pipelines."""
+        """Refresh pass types from registry."""
         self._passes_tree.clear()
 
-        infos = tc_pass_registry_get_all_instance_info()
-        for info in infos:
-            pass_name = info["pass_name"] or "(unnamed)"
-            type_name = info["type_name"] or "(unknown)"
-            pipeline_name = info["pipeline_name"] or "(none)"
-            kind = info["kind"]
-            enabled = "Yes" if info["enabled"] else "No"
+        infos = tc_pass_registry_get_all_types()
+        for info in sorted(infos, key=lambda x: x["type_name"]):
+            type_name = info["type_name"]
+            language = info["language"]
 
-            item = QTreeWidgetItem([pass_name, type_name, pipeline_name, kind, enabled])
-            item.setData(0, Qt.ItemDataRole.UserRole, ("pass", info))
+            item = QTreeWidgetItem([type_name, language])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("pass_type", info))
             self._passes_tree.addTopLevelItem(item)
 
-        for i in range(5):
+        for i in range(2):
             self._passes_tree.resizeColumnToContents(i)
 
     def _on_pass_clicked(self, item: QTreeWidgetItem, column: int) -> None:
-        """Show pass details in details panel."""
+        """Show pass type details in details panel."""
         data = item.data(0, Qt.ItemDataRole.UserRole)
-        if data is None or data[0] != "pass":
+        if data is None or data[0] != "pass_type":
             return
 
         info = data[1]
         self._show_pass_details(info)
 
     def _show_pass_details(self, info: dict) -> None:
-        """Display pass details in the details panel."""
+        """Display pass type details in the details panel."""
         lines = [
-            "=== RENDER PASS ===",
+            "=== PASS TYPE ===",
             "",
-            f"Pass name:      {info['pass_name'] or '(unnamed)'}",
-            f"Type name:      {info['type_name'] or '(unknown)'}",
-            f"Pipeline:       {info['pipeline_name'] or '(none)'}",
-            "",
-            "--- State ---",
-            f"Kind:           {info['kind']}",
-            f"Enabled:        {'Yes' if info['enabled'] else 'No'}",
-            f"Passthrough:    {'Yes' if info['passthrough'] else 'No'}",
-            f"Inplace:        {'Yes' if info['is_inplace'] else 'No'}",
+            f"Type name:      {info['type_name']}",
+            f"Language:       {info['language']}",
         ]
         self._details_text.setText("\n".join(lines))
 
@@ -835,7 +826,7 @@ class CoreRegistryViewer(QDialog):
         material_count_val = tc_material_count()
         scene_count_val = tc_scene_registry_count()
         pipeline_count_val = tc_pipeline_registry_count()
-        pass_count_val = len(tc_pass_registry_get_all_instance_info())
+        pass_count_val = len(tc_pass_registry_get_all_types())
 
         mesh_infos = tc_mesh_get_all_info()
         mesh_memory = sum(info["memory_bytes"] for info in mesh_infos)
