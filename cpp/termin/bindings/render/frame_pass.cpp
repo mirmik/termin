@@ -373,9 +373,10 @@ void bind_frame_pass(nb::module_& m) {
         .def("_set_py_wrapper", [](FramePass& p, nb::object py_self) {
             tc_pass* tc = p.tc_pass_ptr();
             if (tc) {
-                tc->body = py_self.ptr();
+                PyObject* obj = py_self.ptr();
+                tc->body = obj;
                 tc->externally_managed = true;
-                Py_INCREF(py_self.ptr());
+                Py_INCREF(obj);
             }
         }, nb::arg("py_self"))
         .def("__repr__", [](const FramePass& p) {
@@ -635,9 +636,10 @@ void bind_frame_pass(nb::module_& m) {
             // Python-created pass: store wrapper in body and mark as externally managed
             tc_pass* tc = self->tc_pass_ptr();
             nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            tc->body = wrapper.ptr();
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
             tc->externally_managed = true;
-            Py_INCREF(wrapper.ptr());
+            Py_INCREF(obj);
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "color",
@@ -919,9 +921,10 @@ void bind_frame_pass(nb::module_& m) {
             // Python-created pass: store wrapper in body and mark as externally managed
             tc_pass* tc = self->tc_pass_ptr();
             nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            tc->body = wrapper.ptr();
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
             tc->externally_managed = true;
-            Py_INCREF(wrapper.ptr());
+            Py_INCREF(obj);
         },
              nb::arg("input_res") = "empty_depth",
              nb::arg("output_res") = "depth",
@@ -1024,10 +1027,81 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("near_plane"),
         nb::arg("far_plane"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
+        .def_rw("camera_name", &DepthPass::camera_name)
+        .def("execute", [](DepthPass& self, ExecuteContext& ctx) {
+            self.execute(ctx);
+        }, nb::arg("ctx"))
+        .def("serialize", [](DepthPass& self) {
+            nb::dict result;
+            result["type"] = "DepthPass";
+            result["pass_name"] = nb::str(self.get_pass_name().c_str());
+            result["enabled"] = self.get_enabled();
+            nb::dict data;
+            data["input_res"] = nb::str(self.input_res.c_str());
+            data["output_res"] = nb::str(self.output_res.c_str());
+            if (!self.camera_name.empty()) {
+                data["camera_name"] = nb::str(self.camera_name.c_str());
+            }
+            result["data"] = data;
+            std::string vp_name = self.get_viewport_name();
+            if (!vp_name.empty()) {
+                result["viewport_name"] = nb::str(vp_name.c_str());
+            }
+            return result;
+        })
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = "Depth";
+            std::string camera_name = "";
+            std::string input_res = "empty_depth";
+            std::string output_res = "depth";
+            if (data.contains("pass_name")) {
+                pass_name = nb::cast<std::string>(data["pass_name"]);
+            }
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("camera_name")) {
+                    camera_name = nb::cast<std::string>(d["camera_name"]);
+                }
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+            }
+            auto* p = new DepthPass(input_res, output_res, pass_name);
+            p->camera_name = camera_name;
+            tc_pass* tc = p->tc_pass_ptr();
+            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
+            tc->externally_managed = true;
+            Py_INCREF(obj);
+            return wrapper;
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("destroy", &DepthPass::destroy)
         .def("__repr__", [](const DepthPass& p) {
             return "<DepthPass '" + p.get_pass_name() + "'>";
         });
+
+    // Node graph attributes for DepthPass
+    {
+        nb::dict visibility;
+        nb::dict camera_cond;
+        camera_cond["_outside_viewport"] = true;
+        visibility["camera_name"] = camera_cond;
+        m.attr("DepthPass").attr("node_param_visibility") = visibility;
+        m.attr("DepthPass").attr("category") = "Render";
+        m.attr("DepthPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("DepthPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("DepthPass").attr("node_inplace_pairs") = nb::make_tuple(
+            nb::make_tuple("input_res", "output_res")
+        );
+    }
 
     // NormalPass - world-space normal rendering pass
     nb::class_<NormalPass, RenderFramePass>(m, "NormalPass")
@@ -1037,9 +1111,10 @@ void bind_frame_pass(nb::module_& m) {
             // Python-created pass: store wrapper in body and mark as externally managed
             tc_pass* tc = self->tc_pass_ptr();
             nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            tc->body = wrapper.ptr();
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
             tc->externally_managed = true;
-            Py_INCREF(wrapper.ptr());
+            Py_INCREF(obj);
         },
              nb::arg("input_res") = "empty_normal",
              nb::arg("output_res") = "normal",
@@ -1135,10 +1210,81 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
+        .def_rw("camera_name", &NormalPass::camera_name)
+        .def("execute", [](NormalPass& self, ExecuteContext& ctx) {
+            self.execute(ctx);
+        }, nb::arg("ctx"))
+        .def("serialize", [](NormalPass& self) {
+            nb::dict result;
+            result["type"] = "NormalPass";
+            result["pass_name"] = nb::str(self.get_pass_name().c_str());
+            result["enabled"] = self.get_enabled();
+            nb::dict data;
+            data["input_res"] = nb::str(self.input_res.c_str());
+            data["output_res"] = nb::str(self.output_res.c_str());
+            if (!self.camera_name.empty()) {
+                data["camera_name"] = nb::str(self.camera_name.c_str());
+            }
+            result["data"] = data;
+            std::string vp_name = self.get_viewport_name();
+            if (!vp_name.empty()) {
+                result["viewport_name"] = nb::str(vp_name.c_str());
+            }
+            return result;
+        })
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = "Normal";
+            std::string camera_name = "";
+            std::string input_res = "empty_normal";
+            std::string output_res = "normal";
+            if (data.contains("pass_name")) {
+                pass_name = nb::cast<std::string>(data["pass_name"]);
+            }
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("camera_name")) {
+                    camera_name = nb::cast<std::string>(d["camera_name"]);
+                }
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+            }
+            auto* p = new NormalPass(input_res, output_res, pass_name);
+            p->camera_name = camera_name;
+            tc_pass* tc = p->tc_pass_ptr();
+            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
+            tc->externally_managed = true;
+            Py_INCREF(obj);
+            return wrapper;
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("destroy", &NormalPass::destroy)
         .def("__repr__", [](const NormalPass& p) {
             return "<NormalPass '" + p.get_pass_name() + "'>";
         });
+
+    // Node graph attributes for NormalPass
+    {
+        nb::dict visibility;
+        nb::dict camera_cond;
+        camera_cond["_outside_viewport"] = true;
+        visibility["camera_name"] = camera_cond;
+        m.attr("NormalPass").attr("node_param_visibility") = visibility;
+        m.attr("NormalPass").attr("category") = "Render";
+        m.attr("NormalPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("NormalPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("NormalPass").attr("node_inplace_pairs") = nb::make_tuple(
+            nb::make_tuple("input_res", "output_res")
+        );
+    }
 
     // IdPass - entity ID rendering pass for picking
     nb::class_<IdPass, RenderFramePass>(m, "IdPass")
@@ -1148,9 +1294,10 @@ void bind_frame_pass(nb::module_& m) {
             // Python-created pass: store wrapper in body and mark as externally managed
             tc_pass* tc = self->tc_pass_ptr();
             nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            tc->body = wrapper.ptr();
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
             tc->externally_managed = true;
-            Py_INCREF(wrapper.ptr());
+            Py_INCREF(obj);
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "id",
@@ -1247,10 +1394,81 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("view"),
         nb::arg("projection"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
+        .def_rw("camera_name", &IdPass::camera_name)
+        .def("execute", [](IdPass& self, ExecuteContext& ctx) {
+            self.execute(ctx);
+        }, nb::arg("ctx"))
+        .def("serialize", [](IdPass& self) {
+            nb::dict result;
+            result["type"] = "IdPass";
+            result["pass_name"] = nb::str(self.get_pass_name().c_str());
+            result["enabled"] = self.get_enabled();
+            nb::dict data;
+            data["input_res"] = nb::str(self.input_res.c_str());
+            data["output_res"] = nb::str(self.output_res.c_str());
+            if (!self.camera_name.empty()) {
+                data["camera_name"] = nb::str(self.camera_name.c_str());
+            }
+            result["data"] = data;
+            std::string vp_name = self.get_viewport_name();
+            if (!vp_name.empty()) {
+                result["viewport_name"] = nb::str(vp_name.c_str());
+            }
+            return result;
+        })
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = "IdPass";
+            std::string camera_name = "";
+            std::string input_res = "empty";
+            std::string output_res = "id";
+            if (data.contains("pass_name")) {
+                pass_name = nb::cast<std::string>(data["pass_name"]);
+            }
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("camera_name")) {
+                    camera_name = nb::cast<std::string>(d["camera_name"]);
+                }
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+            }
+            auto* p = new IdPass(input_res, output_res, pass_name);
+            p->camera_name = camera_name;
+            tc_pass* tc = p->tc_pass_ptr();
+            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
+            tc->externally_managed = true;
+            Py_INCREF(obj);
+            return wrapper;
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("destroy", &IdPass::destroy)
         .def("__repr__", [](const IdPass& p) {
             return "<IdPass '" + p.get_pass_name() + "'>";
         });
+
+    // Node graph attributes for IdPass
+    {
+        nb::dict visibility;
+        nb::dict camera_cond;
+        camera_cond["_outside_viewport"] = true;
+        visibility["camera_name"] = camera_cond;
+        m.attr("IdPass").attr("node_param_visibility") = visibility;
+        m.attr("IdPass").attr("category") = "ID/Picking";
+        m.attr("IdPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("IdPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("IdPass").attr("node_inplace_pairs") = nb::make_tuple(
+            nb::make_tuple("input_res", "output_res")
+        );
+    }
 
     // ShadowMapResult - result of shadow map rendering
     nb::class_<ShadowMapResult>(m, "ShadowMapResult")
@@ -1283,9 +1501,10 @@ void bind_frame_pass(nb::module_& m) {
             // Python-created pass: store wrapper in body and mark as externally managed
             tc_pass* tc = self->tc_pass_ptr();
             nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            tc->body = wrapper.ptr();
+            PyObject* obj = wrapper.ptr();
+            tc->body = obj;
             tc->externally_managed = true;
-            Py_INCREF(wrapper.ptr());
+            Py_INCREF(obj);
         },
              nb::arg("output_res") = "shadow_maps",
              nb::arg("pass_name") = "Shadow",

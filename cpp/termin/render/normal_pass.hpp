@@ -1,6 +1,7 @@
 #pragma once
 
 #include "termin/render/geometry_pass_base.hpp"
+#include "termin/render/execute_context.hpp"
 
 namespace termin {
 
@@ -32,6 +33,48 @@ public:
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     ) {
         execute_geometry_pass(graphics, writes_fbos, rect, scene, view, projection, layer_mask);
+    }
+
+    // Execute using ExecuteContext - main entry point from Python
+    void execute(ExecuteContext& ctx) {
+        tc_scene* scene = ctx.scene.ptr();
+        CameraComponent* camera = ctx.camera;
+        Rect4i rect = ctx.rect;
+
+        // If camera_name is set, use it (overrides passed camera)
+        if (!camera_name.empty()) {
+            camera = find_camera_by_name(scene, camera_name);
+            if (!camera) return;
+        }
+
+        if (!camera) return;
+
+        // Get output FBO and use its size
+        auto it = ctx.writes_fbos.find(output_res);
+        if (it != ctx.writes_fbos.end() && it->second != nullptr) {
+            FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
+            if (fb) {
+                auto fbo_size = fb->get_size();
+                rect = Rect4i(0, 0, fbo_size.width, fbo_size.height);
+                camera->set_aspect(static_cast<double>(fbo_size.width) / std::max(1, fbo_size.height));
+            }
+        }
+
+        Mat44 view_d = camera->get_view_matrix();
+        Mat44 proj_d = camera->get_projection_matrix();
+        Mat44f view = view_d.to_float();
+        Mat44f projection = proj_d.to_float();
+
+        execute_with_data(
+            ctx.graphics,
+            ctx.reads_fbos,
+            ctx.writes_fbos,
+            rect,
+            scene,
+            view,
+            projection,
+            ctx.layer_mask
+        );
     }
 
     void execute(

@@ -96,6 +96,11 @@ def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
                 schedule.append(py_pass)
 
         if len(schedule) != len(frame_passes):
+            log.error(f"[engine] pass_map keys: {list(pass_map.keys())}")
+            tc_names = [tc_pass.pass_name for tc_pass in tc_schedule]
+            log.error(f"[engine] tc_schedule names: {tc_names}")
+            missing = set(pass_map.keys()) - set(tc_names)
+            log.error(f"[engine] missing from tc_schedule: {missing}")
             raise RuntimeError(
                 f"tc_frame_graph schedule mismatch: got {len(schedule)}, expected {len(frame_passes)}"
             )

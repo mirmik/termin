@@ -58,7 +58,9 @@ class RenderPipeline:
         for p in self._init_passes:
             self.add_pass(p)
 
-        # Clear init list - it's no longer needed
+        # Keep references to passes to prevent GC
+        # (tc_pipeline should hold refs via Py_INCREF, but keep as backup)
+        self._passes_refs = list(self._init_passes)
         self._init_passes = []
 
         log.info(f"[RenderPipeline] created '{self.name}' with {self._tc_pipeline.pass_count} passes")

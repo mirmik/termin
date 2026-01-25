@@ -119,8 +119,8 @@ class TonemapPass(PostEffectPass):
 
     def __init__(
         self,
-        input_res: str,
-        output_res: str,
+        input_res: str = "color_pp",
+        output_res: str = "color_ldr",
         pass_name: str = "Tonemap",
         exposure: float = 1.0,
         method: int = 0,  # ACES

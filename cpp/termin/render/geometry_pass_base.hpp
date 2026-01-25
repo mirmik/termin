@@ -16,6 +16,7 @@
 #include "termin/render/drawable.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
 #include "tc_scene.h"
@@ -32,9 +33,11 @@ public:
     // Pass configuration
     std::string input_res;
     std::string output_res;
+    std::string camera_name;  // Optional camera entity name for standalone use
 
     INSPECT_FIELD(GeometryPassBase, input_res, "Input Resource", "string")
     INSPECT_FIELD(GeometryPassBase, output_res, "Output Resource", "string")
+    INSPECT_FIELD(GeometryPassBase, camera_name, "Camera Name", "string")
 
     struct DrawCall {
         Entity entity;
@@ -49,11 +52,53 @@ public:
         return entity_names;
     }
 
+    // Dynamic resource computation based on current input_res/output_res values
+    std::set<std::string> compute_reads() const override {
+        return {input_res};
+    }
+
+    std::set<std::string> compute_writes() const override {
+        return {output_res};
+    }
+
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+        return {{input_res, output_res}};
+    }
+
     void destroy() override {
         _shader = TcShader();
     }
 
+    // Find camera by entity name in scene
+    // Returns nullptr if not found
+    CameraComponent* find_camera_by_name(tc_scene* scene, const std::string& name) {
+        if (name.empty() || !scene) return nullptr;
+
+        // Check cache
+        if (_cached_camera_name == name && _cached_camera != nullptr) {
+            return _cached_camera;
+        }
+
+        // Find entity by name
+        tc_entity_id eid = tc_scene_find_entity_by_name(scene, name.c_str());
+        if (!tc_entity_id_valid(eid)) {
+            _cached_camera_name = name;
+            _cached_camera = nullptr;
+            return nullptr;
+        }
+
+        // Get CameraComponent from entity
+        Entity ent(tc_scene_entity_pool(scene), eid);
+        _cached_camera = ent.get_component<CameraComponent>();
+        _cached_camera_name = name;
+        return _cached_camera;
+    }
+
 protected:
+    // Cached camera lookup
+    std::string _cached_camera_name;
+    CameraComponent* _cached_camera = nullptr;
+
     // Cached shader
     TcShader _shader;
 

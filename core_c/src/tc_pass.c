@@ -166,16 +166,12 @@ static void external_destroy(tc_pass* p) {
 }
 
 static void external_retain(tc_pass* p) {
-    tc_log(TC_LOG_DEBUG, "[external_retain] p=%p body=%p has_incref=%d",
-           (void*)p, p->body, g_external_callbacks.incref != NULL);
     if (g_external_callbacks.incref && p->body) {
         g_external_callbacks.incref(p->body);
     }
 }
 
 static void external_release(tc_pass* p) {
-    tc_log(TC_LOG_DEBUG, "[external_release] p=%p body=%p has_decref=%d",
-           (void*)p, p->body, g_external_callbacks.decref != NULL);
     if (g_external_callbacks.decref && p->body) {
         g_external_callbacks.decref(p->body);
     }
@@ -210,7 +206,6 @@ static const tc_pass_vtable g_external_vtable = {
     .get_internal_symbols = external_get_internal_symbols,
     .destroy = external_destroy,
     .drop = external_drop,
-    .retain = external_retain,
     .release = external_release,
     .serialize = NULL,
     .deserialize = NULL,
@@ -231,9 +226,6 @@ tc_pass* tc_pass_new_external(void* body, const char* type_name) {
     p->externally_managed = true;
     p->kind = TC_EXTERNAL_PASS;
     p->pass_name = type_name ? strdup(type_name) : NULL;
-
-    tc_log(TC_LOG_DEBUG, "[tc_pass_new_external] created p=%p kind=%d name=%s body=%p",
-           (void*)p, (int)p->kind, p->pass_name ? p->pass_name : "(null)", body);
 
     return p;
 }
@@ -305,15 +297,9 @@ void tc_pipeline_destroy(tc_pipeline* p) {
 void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     if (!p || !pass) return;
 
-    tc_log(TC_LOG_DEBUG, "[tc_pipeline_add_pass] pipeline=%s pass=%p kind=%d name=%s body=%p",
-           p->name, (void*)pass, (int)pass->kind,
-           pass->pass_name ? pass->pass_name : "(null)",
-           pass->body);
-
     // Retain pass to prevent deletion while in pipeline
     tc_pass_retain(pass);
 
-    tc_log(TC_LOG_DEBUG, "[tc_pipeline_add_pass] after retain, pass=%p", (void*)pass);
 
     pass->prev = p->last_pass;
     pass->next = NULL;
@@ -326,7 +312,6 @@ void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     p->last_pass = pass;
     p->pass_count++;
 
-    tc_log(TC_LOG_DEBUG, "[tc_pipeline_add_pass] done, count=%zu", p->pass_count);
 }
 
 void tc_pipeline_insert_pass_before(tc_pipeline* p, tc_pass* pass, tc_pass* before) {

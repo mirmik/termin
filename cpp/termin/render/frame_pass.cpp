@@ -19,9 +19,11 @@ size_t FramePass::_cb_get_reads(tc_pass* p, const char** out, size_t max) {
     FramePass* self = from_tc(p);
     if (!self || !out) return 0;
 
+    // Use virtual compute_reads() for dynamic resource computation
+    auto computed_reads = self->compute_reads();
     self->_cached_reads.clear();
-    self->_cached_reads.reserve(self->reads.size());
-    for (const auto& r : self->reads) {
+    self->_cached_reads.reserve(computed_reads.size());
+    for (const auto& r : computed_reads) {
         self->_cached_reads.push_back(r);
     }
 
@@ -36,9 +38,11 @@ size_t FramePass::_cb_get_writes(tc_pass* p, const char** out, size_t max) {
     FramePass* self = from_tc(p);
     if (!self || !out) return 0;
 
+    // Use virtual compute_writes() for dynamic resource computation
+    auto computed_writes = self->compute_writes();
     self->_cached_writes.clear();
-    self->_cached_writes.reserve(self->writes.size());
-    for (const auto& w : self->writes) {
+    self->_cached_writes.reserve(computed_writes.size());
+    for (const auto& w : computed_writes) {
         self->_cached_writes.push_back(w);
     }
 

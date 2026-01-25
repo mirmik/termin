@@ -25,6 +25,13 @@ inline nb::object tc_pass_to_python(tc_pass* p) {
         return nb::none();
     }
 
+    // Check kind is valid
+    if (p->kind != TC_NATIVE_PASS && p->kind != TC_EXTERNAL_PASS) {
+        tc_log(TC_LOG_ERROR, "[tc_pass_to_python] Invalid kind=%d for p=%p",
+               (int)p->kind, (void*)p);
+        return nb::none();
+    }
+
     // External pass (Python) - return body directly
     if (p->kind == TC_EXTERNAL_PASS && p->body) {
         return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
@@ -285,12 +292,14 @@ static void py_pass_destroy(void* wrapper) {
 
 static void py_pass_incref(void* wrapper) {
     nb::gil_scoped_acquire gil;
-    Py_INCREF(static_cast<PyObject*>(wrapper));
+    PyObject* obj = static_cast<PyObject*>(wrapper);
+    Py_INCREF(obj);
 }
 
 static void py_pass_decref(void* wrapper) {
     nb::gil_scoped_acquire gil;
-    Py_DECREF(static_cast<PyObject*>(wrapper));
+    PyObject* obj = static_cast<PyObject*>(wrapper);
+    Py_DECREF(obj);
 }
 
 static tc_external_pass_callbacks g_py_pass_callbacks = {

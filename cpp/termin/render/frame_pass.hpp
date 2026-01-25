@@ -157,6 +157,16 @@ public:
 
     virtual void execute(tc_execute_context* ctx) {}
 
+    // Dynamic resource computation - override in subclasses
+    // Default implementation returns static reads/writes members
+    virtual std::set<std::string> compute_reads() const {
+        return reads;
+    }
+
+    virtual std::set<std::string> compute_writes() const {
+        return writes;
+    }
+
     virtual std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const {
         return {};
     }
