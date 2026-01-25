@@ -354,16 +354,37 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
     // Get shadow shader from registry if not set
     if (!shadow_shader) {
-        tc_shader_handle h = tc_shader_find_by_name("shadow");
+        tc_shader_handle h = tc_shader_find_by_name("system:shadow");
+        if (!tc_shader_is_valid(h)) {
+            // Create shadow shader if it doesn't exist
+            static const char* shadow_vert = R"(
+#version 330 core
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+)";
+            static const char* shadow_frag = R"(
+#version 330 core
+void main() {
+    // Depth-only pass
+}
+)";
+            h = tc_shader_from_sources(shadow_vert, shadow_frag, nullptr, "system:shadow", nullptr);
+        }
         if (tc_shader_is_valid(h)) {
             static TcShader cached_shader;
             cached_shader = TcShader(h);
+            cached_shader.ensure_ready();
             shadow_shader = &cached_shader;
         }
     }
 
     if (!shadow_shader) {
-        tc::Log::error("ShadowPass: shadow shader not found");
+        tc::Log::error("ShadowPass: failed to create shadow shader");
         return;
     }
 

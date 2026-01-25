@@ -1,10 +1,12 @@
 """
 System shaders registry.
 
-Simple shaders used by render passes (shadow, pick, etc.)
+Simple shaders used by render passes (pick, etc.)
 that don't need material phases.
 
 These are compiled lazily on first use and cached.
+
+Note: Shadow shader is now in C++ (shadow_pass.cpp).
 """
 
 from __future__ import annotations
@@ -17,30 +19,6 @@ from termin._native.render import TcShader
 # ============================================================
 # Shader Sources
 # ============================================================
-
-SHADOW_VERT = """
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main()
-{
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-"""
-
-SHADOW_FRAG = """
-#version 330 core
-
-void main()
-{
-    // Depth-only pass
-}
-"""
 
 PICK_VERT = """
 #version 330 core
@@ -86,7 +64,6 @@ class SystemShaderRegistry:
     def __init__(self):
         # Shader definitions: name -> (vert_source, frag_source)
         self._definitions: Dict[str, tuple[str, str]] = {
-            "shadow": (SHADOW_VERT, SHADOW_FRAG),
             "pick": (PICK_VERT, PICK_FRAG),
         }
 
@@ -105,7 +82,7 @@ class SystemShaderRegistry:
         Get a system shader by name, compiling if necessary.
 
         Args:
-            name: Shader name ("shadow", "pick", etc.)
+            name: Shader name ("pick", etc.)
 
         Returns:
             TcShader ready for use
@@ -141,7 +118,7 @@ def get_system_shader(name: str) -> TcShader:
     Convenience function to get a system shader.
 
     Args:
-        name: Shader name ("shadow", "pick", etc.)
+        name: Shader name ("pick", etc.)
 
     Returns:
         TcShader ready for use
