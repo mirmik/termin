@@ -73,18 +73,12 @@ class RenderPipeline:
         if self._tc_pipeline is None:
             return []
 
-        from termin._native import log
-
         result = []
         count = self._tc_pipeline.pass_count
-        log.debug(f"[RenderPipeline.passes] pipeline={self.name} count={count}")
         for i in range(count):
             tc_pass = tc_pipeline_get_pass_at(self._tc_pipeline, i)
-            log.debug(f"[RenderPipeline.passes] i={i} tc_pass={tc_pass}")
             if tc_pass is not None:
-                log.debug(f"[RenderPipeline.passes] getting body...")
                 body = tc_pass.body
-                log.debug(f"[RenderPipeline.passes] body={body}")
                 if body is not None:
                     result.append(body)
         return result

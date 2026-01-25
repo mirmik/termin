@@ -372,14 +372,11 @@ void ColorPass::execute_with_data(
     bool detailed = tc_profiler_detailed_rendering();
 
     // Collect draw calls into cached vector
-    tc::Log::debug("[ColorPass] before collect_draw_calls");
     if (detailed) tc_profiler_begin_section("Collect");
     collect_draw_calls(scene, phase_mark, layer_mask);
     if (detailed) tc_profiler_end_section();
-    tc::Log::debug("[ColorPass] after collect_draw_calls, count=%zu", cached_draw_calls_.size());
 
     // Compute sort keys and sort (single pass with combined priority+distance key)
-    tc::Log::debug("[ColorPass] before sort");
     if (detailed) tc_profiler_begin_section("Sort");
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
         compute_sort_keys(camera_position);
@@ -392,7 +389,6 @@ void ColorPass::execute_with_data(
             });
     }
     if (detailed) tc_profiler_end_section();
-    tc::Log::debug("[ColorPass] after sort");
 
     // Clear entity names cache but keep capacity
     entity_names.clear();
@@ -416,29 +412,22 @@ void ColorPass::execute_with_data(
     // Setup lighting UBO if any shader needs it (or if manually enabled)
     bool ubo_active = use_ubo || any_shader_needs_ubo;
 
-    tc::Log::debug("[ColorPass] before UBO, ubo_active=%d", ubo_active ? 1 : 0);
     if (detailed) tc_profiler_begin_section("UBO");
     if (ubo_active) {
-        tc::Log::debug("[ColorPass] UBO create");
         lighting_ubo_.create(graphics);
         graphics->check_gl_error("ColorPass: after UBO create");
-        tc::Log::debug("[ColorPass] UBO update_from_lights");
         lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
                                           camera_position, shadow_settings);
-        tc::Log::debug("[ColorPass] UBO upload");
         lighting_ubo_.upload();
         graphics->check_gl_error("ColorPass: after UBO upload");
     }
     if (detailed) tc_profiler_end_section();
-    tc::Log::debug("[ColorPass] after UBO");
 
     // Bind shadow textures to texture units (once per frame)
-    tc::Log::debug("[ColorPass] before bind_shadow_textures");
     if (detailed) tc_profiler_begin_section("ShadowBind");
     bind_shadow_textures(shadow_maps);
     graphics->check_gl_error("ColorPass: after bind_shadow_textures");
     if (detailed) tc_profiler_end_section();
-    tc::Log::debug("[ColorPass] after bind_shadow_textures");
 
     // Render each draw call
     if (detailed) {
@@ -451,11 +440,9 @@ void ColorPass::execute_with_data(
     // Track last shader to avoid redundant shadow map uploads
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
 
-    tc::Log::debug("[ColorPass] before draw loop, count=%zu", cached_draw_calls_.size());
     size_t draw_idx = 0;
     for (const auto& dc : cached_draw_calls_)
     {
-        tc::Log::debug("[ColorPass] draw %zu entity=%p phase=%p", draw_idx, &dc.entity, dc.phase);
         ++draw_idx;
         if (detailed) {
             tc_profiler_begin_section("Prep.ModelMatrix");

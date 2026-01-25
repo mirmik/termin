@@ -471,9 +471,7 @@ class RenderEngine:
             )
 
             with profiler.section(render_pass.pass_name):
-                print(f"[DEBUG] Executing pass: {render_pass.pass_name}", flush=True)
                 render_pass.execute(ctx)
-                print(f"[DEBUG] Done pass: {render_pass.pass_name}", flush=True)
 
             self._check_gl_errors(render_pass.pass_name)
 
