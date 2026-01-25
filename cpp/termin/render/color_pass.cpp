@@ -1,4 +1,5 @@
 #include "color_pass.hpp"
+#include "cxx_pass.hpp"
 #include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
 #include "termin/lighting/lighting_upload.hpp"

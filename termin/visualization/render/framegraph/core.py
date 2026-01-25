@@ -6,6 +6,8 @@ from collections import deque
 from termin._native.render import (
     TcPass,
     TcPassRef,
+    tc_pass_registry_register_python,
+    tc_pass_registry_has,
 )
 
 if TYPE_CHECKING:
@@ -97,12 +99,17 @@ class FramePass:
         return set()
 
     def __init_subclass__(cls, **kwargs):
-        """Register subclass in InspectRegistry for inspector support."""
+        """Register subclass in InspectRegistry and pass type registry."""
         super().__init_subclass__(**kwargs)
 
         # Don't register base classes
         if cls.__name__ in ("FramePass", "RenderFramePass"):
             return
+
+        # Register pass type in C registry with class for factory
+        print(f"[FramePass.__init_subclass__] Registering pass type: {cls.__name__}")
+        if not tc_pass_registry_has(cls.__name__):
+            tc_pass_registry_register_python(cls.__name__, cls)
 
         try:
             from termin._native.inspect import InspectRegistry

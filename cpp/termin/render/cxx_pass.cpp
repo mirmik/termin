@@ -1,70 +1,10 @@
 // cxx_pass.cpp - CxxPass implementation
 #include "cxx_pass.hpp"
+#include "termin/camera/camera_component.hpp"
 #include <cstring>
 #include <algorithm>
 
 namespace termin {
-
-// ============================================================================
-// ExecuteContext
-// ============================================================================
-
-ExecuteContext ExecuteContext::from_c(tc_execute_context* ctx) {
-    ExecuteContext result;
-    if (!ctx) return result;
-
-    result.graphics = static_cast<GraphicsBackend*>(ctx->graphics);
-    result.reads_fbos = static_cast<std::unordered_map<std::string, FramebufferHandle*>*>(ctx->reads_fbos);
-    result.writes_fbos = static_cast<std::unordered_map<std::string, FramebufferHandle*>*>(ctx->writes_fbos);
-    result.rect_x = ctx->rect_x;
-    result.rect_y = ctx->rect_y;
-    result.rect_width = ctx->rect_width;
-    result.rect_height = ctx->rect_height;
-    result.scene = ctx->scene;
-    result.camera = ctx->camera;
-    result.lights = ctx->lights;
-    result.light_count = ctx->light_count;
-    result.layer_mask = ctx->layer_mask;
-
-    return result;
-}
-
-tc_execute_context ExecuteContext::to_c() const {
-    tc_execute_context ctx = {};
-    ctx.graphics = graphics;
-    ctx.reads_fbos = reads_fbos;
-    ctx.writes_fbos = writes_fbos;
-    ctx.rect_x = rect_x;
-    ctx.rect_y = rect_y;
-    ctx.rect_width = rect_width;
-    ctx.rect_height = rect_height;
-    ctx.scene = scene;
-    ctx.camera = camera;
-    ctx.lights = lights;
-    ctx.light_count = light_count;
-    ctx.layer_mask = layer_mask;
-    return ctx;
-}
-
-// ============================================================================
-// ResourceSpec
-// ============================================================================
-
-tc_resource_spec ResourceSpec::to_c() const {
-    tc_resource_spec spec = {};
-    spec.resource = resource.c_str();
-    spec.fixed_width = fixed_width;
-    spec.fixed_height = fixed_height;
-    spec.clear_color[0] = clear_color[0];
-    spec.clear_color[1] = clear_color[1];
-    spec.clear_color[2] = clear_color[2];
-    spec.clear_color[3] = clear_color[3];
-    spec.clear_depth = clear_depth;
-    spec.has_clear_color = has_clear_color;
-    spec.has_clear_depth = has_clear_depth;
-    spec.format = format.empty() ? nullptr : format.c_str();
-    return spec;
-}
 
 // ============================================================================
 // CxxPass Static Vtable
@@ -148,7 +88,30 @@ void CxxPass::clear_debug_internal_symbol() {
 void CxxPass::_cb_execute(tc_pass* p, tc_execute_context* ctx) {
     CxxPass* self = from_tc(p);
     if (self && ctx) {
-        ExecuteContext cxx_ctx = ExecuteContext::from_c(ctx);
+        // Convert C context to C++ context
+        ExecuteContext cxx_ctx;
+        cxx_ctx.graphics = static_cast<GraphicsBackend*>(ctx->graphics);
+        cxx_ctx.rect.x = ctx->rect_x;
+        cxx_ctx.rect.y = ctx->rect_y;
+        cxx_ctx.rect.width = ctx->rect_width;
+        cxx_ctx.rect.height = ctx->rect_height;
+        cxx_ctx.layer_mask = ctx->layer_mask;
+        if (ctx->scene) {
+            cxx_ctx.scene = TcSceneRef(static_cast<tc_scene*>(ctx->scene));
+        }
+        cxx_ctx.camera = static_cast<CameraComponent*>(ctx->camera);
+        // reads_fbos/writes_fbos: C passes void* pointers to maps
+        if (ctx->reads_fbos) {
+            cxx_ctx.reads_fbos = *static_cast<FBOMap*>(ctx->reads_fbos);
+        }
+        if (ctx->writes_fbos) {
+            cxx_ctx.writes_fbos = *static_cast<FBOMap*>(ctx->writes_fbos);
+        }
+        // lights: C passes void* to vector
+        if (ctx->lights && ctx->light_count > 0) {
+            auto* lights_vec = static_cast<std::vector<Light>*>(ctx->lights);
+            cxx_ctx.lights = *lights_vec;
+        }
         self->execute(cxx_ctx);
     }
 }
@@ -222,7 +185,28 @@ size_t CxxPass::_cb_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t
 
     size_t count = std::min(self->_cached_specs.size(), max);
     for (size_t i = 0; i < count; i++) {
-        out[i] = self->_cached_specs[i].to_c();
+        const auto& spec = self->_cached_specs[i];
+        tc_resource_spec& c = out[i];
+        memset(&c, 0, sizeof(c));
+        c.resource = spec.resource.c_str();
+        strncpy(c.resource_type, spec.resource_type.c_str(), sizeof(c.resource_type) - 1);
+        if (spec.size) {
+            c.fixed_width = spec.size->first;
+            c.fixed_height = spec.size->second;
+        }
+        c.samples = spec.samples;
+        if (spec.clear_color) {
+            c.has_clear_color = true;
+            c.clear_color[0] = static_cast<float>((*spec.clear_color)[0]);
+            c.clear_color[1] = static_cast<float>((*spec.clear_color)[1]);
+            c.clear_color[2] = static_cast<float>((*spec.clear_color)[2]);
+            c.clear_color[3] = static_cast<float>((*spec.clear_color)[3]);
+        }
+        if (spec.clear_depth) {
+            c.has_clear_depth = true;
+            c.clear_depth = *spec.clear_depth;
+        }
+        c.format = spec.format ? spec.format->c_str() : nullptr;
     }
     return count;
 }

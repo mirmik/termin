@@ -4,6 +4,8 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/set.h>
 #include <cstring>
+#include <unordered_map>
+#include <memory>
 
 extern "C" {
 #include "tc_pass.h"
@@ -12,12 +14,63 @@ extern "C" {
 #include "tc_frame_graph.h"
 #include "tc_render.h"
 #include "tc_log.h"
+#include "termin_core.h"
 }
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"
 
 namespace termin {
+
+// ============================================================================
+// Python Pass Registry - stores Python classes for factory creation
+// ============================================================================
+
+static std::unordered_map<std::string, std::shared_ptr<nb::object>>& python_pass_classes() {
+    static std::unordered_map<std::string, std::shared_ptr<nb::object>> classes;
+    return classes;
+}
+
+// Python pass factory trampoline
+// userdata is the interned type_name string
+static tc_pass* python_pass_factory(void* userdata) {
+    const char* type_name = static_cast<const char*>(userdata);
+
+    auto& py_classes = python_pass_classes();
+    auto it = py_classes.find(type_name);
+    if (it == py_classes.end()) {
+        tc_log(TC_LOG_ERROR, "python_pass_factory: class not found for type %s", type_name);
+        return nullptr;
+    }
+
+    try {
+        // Call Python class constructor: cls()
+        nb::object py_obj = (*(it->second))();
+
+        // Get tc_pass* from the Python object via _tc_pass_handle
+        if (nb::hasattr(py_obj, "_tc_pass_handle")) {
+            nb::object handle = py_obj.attr("_tc_pass_handle");
+            // TcPass has ptr() method that returns tc_pass*
+            if (nb::hasattr(handle, "ptr")) {
+                // Get the raw pointer
+                tc_pass* p = nb::cast<tc_pass*>(handle.attr("ptr")());
+                if (p) {
+                    // Keep Python object alive
+                    Py_INCREF(py_obj.ptr());
+                    return p;
+                }
+            }
+        }
+        tc_log(TC_LOG_ERROR, "python_pass_factory: %s has no valid _tc_pass_handle", type_name);
+    } catch (const nb::python_error& e) {
+        tc_log(TC_LOG_ERROR, "python_pass_factory: failed to create %s: %s", type_name, e.what());
+        PyErr_Clear();
+    }
+
+    return nullptr;
+}
+
+// ============================================================================
 
 // Convert tc_pass to Python object
 // For Python-native passes: returns body directly
@@ -697,6 +750,7 @@ void bind_tc_pass(nb::module_& m) {
         if (infos) {
             for (size_t i = 0; i < count; i++) {
                 nb::dict info;
+                info["ptr"] = reinterpret_cast<uintptr_t>(infos[i].ptr);
                 info["name"] = infos[i].name ? nb::str(infos[i].name) : nb::none();
                 info["pass_count"] = infos[i].pass_count;
                 result.append(info);
@@ -717,6 +771,7 @@ void bind_tc_pass(nb::module_& m) {
                 nb::dict info;
                 info["pass_name"] = infos[i].pass_name ? nb::str(infos[i].pass_name) : nb::none();
                 info["type_name"] = infos[i].type_name ? nb::str(infos[i].type_name) : nb::none();
+                info["pipeline_ptr"] = reinterpret_cast<uintptr_t>(infos[i].pipeline_ptr);
                 info["pipeline_name"] = infos[i].pipeline_name ? nb::str(infos[i].pipeline_name) : nb::none();
                 info["enabled"] = infos[i].enabled;
                 info["passthrough"] = infos[i].passthrough;
@@ -750,6 +805,29 @@ void bind_tc_pass(nb::module_& m) {
         }
 
         return result;
+    });
+
+    // Register Python pass type with factory
+    m.def("tc_pass_registry_register_python", [](const std::string& type_name, nb::object cls) {
+        // Store Python class
+        auto cls_ptr = std::make_shared<nb::object>(std::move(cls));
+        python_pass_classes()[type_name] = cls_ptr;
+
+        // Get interned type name to use as userdata (stable pointer)
+        const char* interned_name = tc_intern_string(type_name.c_str());
+
+        // Register with factory trampoline
+        tc_pass_registry_register(
+            type_name.c_str(),
+            python_pass_factory,
+            const_cast<char*>(interned_name),
+            TC_EXTERNAL_PASS
+        );
+    });
+
+    // Check if pass type is registered
+    m.def("tc_pass_registry_has", [](const std::string& type_name) {
+        return tc_pass_registry_has(type_name.c_str());
     });
 }
 

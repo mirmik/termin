@@ -49,7 +49,7 @@ void tc_pass_registry_register(
     void* factory_userdata,
     tc_pass_kind kind
 ) {
-    if (!type_name || !factory) return;
+    if (!type_name) return;
 
     ensure_pass_registry_initialized();
 
@@ -272,20 +272,28 @@ tc_pass* tc_pass_new_external(void* body, const char* type_name) {
     p->kind = TC_EXTERNAL_PASS;
 
     // Link to type registry for type name and instance tracking
-    if (type_name) {
-        ensure_pass_registry_initialized();
-        tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
-        if (entry) {
-            p->type_entry = entry;
-            p->type_version = entry->version;
-            tc_type_entry_link_instance(
-                entry,
-                p,
-                PASS_REGISTRY_PREV_OFFSET,
-                PASS_REGISTRY_NEXT_OFFSET
-            );
-        }
+    if (!type_name) {
+        tc_log(TC_LOG_ERROR, "[tc_pass_new_external] type_name is NULL!");
+        free(p);
+        return NULL;
     }
+
+    ensure_pass_registry_initialized();
+    tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
+    if (!entry) {
+        tc_log(TC_LOG_ERROR, "[tc_pass_new_external] type '%s' not registered! Call tc_pass_registry_register() first.", type_name);
+        free(p);
+        return NULL;
+    }
+
+    p->type_entry = entry;
+    p->type_version = entry->version;
+    tc_type_entry_link_instance(
+        entry,
+        p,
+        PASS_REGISTRY_PREV_OFFSET,
+        PASS_REGISTRY_NEXT_OFFSET
+    );
 
     return p;
 }
@@ -636,6 +644,7 @@ tc_pass_info* tc_pass_registry_get_all_instance_info(size_t* count) {
             infos[idx].ptr = pass;
             infos[idx].pass_name = pass->pass_name;
             infos[idx].type_name = tc_pass_type_name(pass);
+            infos[idx].pipeline_ptr = pipeline;
             infos[idx].pipeline_name = pipeline->name;
             infos[idx].enabled = pass->enabled;
             infos[idx].passthrough = pass->passthrough;

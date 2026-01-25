@@ -2,6 +2,7 @@
 #include "../include/tc_component.h"
 #include "../include/tc_type_registry.h"
 #include "../include/termin_core.h"
+#include "../include/tc_log.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
@@ -71,26 +72,48 @@ bool tc_component_registry_has(const char* type_name) {
 }
 
 tc_component* tc_component_registry_create(const char* type_name) {
-    if (!g_component_registry) return NULL;
+    if (!type_name) {
+        tc_log(TC_LOG_ERROR, "[tc_component_registry_create] type_name is NULL!");
+        return NULL;
+    }
+    if (!g_component_registry) {
+        tc_log(TC_LOG_ERROR, "[tc_component_registry_create] registry not initialized!");
+        return NULL;
+    }
 
     tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
-    if (!entry || !entry->registered || !entry->factory) return NULL;
+    if (!entry) {
+        tc_log(TC_LOG_ERROR, "[tc_component_registry_create] type '%s' not registered!", type_name);
+        return NULL;
+    }
+    if (!entry->registered) {
+        tc_log(TC_LOG_ERROR, "[tc_component_registry_create] type '%s' was unregistered!", type_name);
+        return NULL;
+    }
+    if (!entry->factory) {
+        tc_log(TC_LOG_ERROR, "[tc_component_registry_create] type '%s' has no factory!", type_name);
+        return NULL;
+    }
 
     // Create via type entry's factory
     tc_component* c = (tc_component*)tc_type_entry_create(entry);
-    if (c) {
-        c->kind = (tc_component_kind)entry->kind;
-
-        // Link to type registry for instance tracking
-        c->type_entry = entry;
-        c->type_version = entry->version;
-        tc_type_entry_link_instance(
-            entry,
-            c,
-            COMPONENT_REGISTRY_PREV_OFFSET,
-            COMPONENT_REGISTRY_NEXT_OFFSET
-        );
+    if (!c) {
+        tc_log(TC_LOG_ERROR, "[tc_component_registry_create] factory for '%s' returned NULL!", type_name);
+        return NULL;
     }
+
+    c->kind = (tc_component_kind)entry->kind;
+
+    // Link to type registry for instance tracking
+    c->type_entry = entry;
+    c->type_version = entry->version;
+    tc_type_entry_link_instance(
+        entry,
+        c,
+        COMPONENT_REGISTRY_PREV_OFFSET,
+        COMPONENT_REGISTRY_NEXT_OFFSET
+    );
+
     return c;
 }
 

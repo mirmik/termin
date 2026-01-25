@@ -52,6 +52,7 @@ typedef struct tc_pass_info {
     tc_pass* ptr;
     const char* pass_name;
     const char* type_name;
+    tc_pipeline* pipeline_ptr;
     const char* pipeline_name;
     bool enabled;
     bool passthrough;

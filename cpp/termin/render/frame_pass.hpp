@@ -94,6 +94,29 @@ public:
         );
     }
 
+    // Link to type registry (call after construction if not created via factory)
+    void link_to_type_registry(const char* type_name) {
+        if (!type_name) return;
+
+        // Ensure type is registered
+        if (!tc_pass_registry_has(type_name)) {
+            tc_pass_registry_register(type_name, nullptr, nullptr, TC_NATIVE_PASS);
+        }
+
+        tc_type_entry* entry = tc_pass_registry_get_entry(type_name);
+        if (entry) {
+            _c.type_entry = entry;
+            _c.type_version = entry->version;
+        }
+    }
+
+    // Setup external wrapper (for Python/other bindings)
+    // Caller is responsible for preventing wrapper from being GC'd
+    void set_external_body(void* body) {
+        _c.body = body;
+        _c.externally_managed = true;
+    }
+
     // ========================================================================
     // Accessors for fields stored in _c (no duplication)
     // ========================================================================
@@ -216,7 +239,13 @@ private:
     static tc_pass* _factory_##PassClass(void* /*userdata*/) {               \
         auto* pass = new PassClass();                                        \
         pass->retain();                                                      \
-        return pass->tc_pass_ptr();                                          \
+        tc_pass* c = pass->tc_pass_ptr();                                    \
+        tc_type_entry* entry = tc_pass_registry_get_entry(#PassClass);       \
+        if (entry) {                                                         \
+            c->type_entry = entry;                                           \
+            c->type_version = entry->version;                                \
+        }                                                                    \
+        return c;                                                            \
     }                                                                        \
     static struct _reg_##PassClass {                                         \
         _reg_##PassClass() {                                                 \

@@ -600,11 +600,25 @@ class CoreRegistryViewer(QDialog):
         self._pipelines_tree.clear()
 
         infos = tc_pipeline_registry_get_all_info()
-        for info in sorted(infos, key=lambda x: x["name"] or ""):
+        # Group by name to detect duplicates
+        name_counts: dict[str, int] = {}
+        for info in infos:
             name = info["name"] or "(unnamed)"
+            name_counts[name] = name_counts.get(name, 0) + 1
+
+        name_indices: dict[str, int] = {}
+        for info in infos:
+            name = info["name"] or "(unnamed)"
+            # If multiple pipelines with same name, add index
+            if name_counts[name] > 1:
+                idx = name_indices.get(name, 0)
+                name_indices[name] = idx + 1
+                display_name = f"{name} #{idx + 1}"
+            else:
+                display_name = name
             pass_count = str(info["pass_count"])
 
-            item = QTreeWidgetItem([name, pass_count])
+            item = QTreeWidgetItem([display_name, pass_count])
             item.setData(0, Qt.ItemDataRole.UserRole, ("pipeline", info))
             self._pipelines_tree.addTopLevelItem(item)
 
@@ -622,16 +636,18 @@ class CoreRegistryViewer(QDialog):
 
     def _show_pipeline_details(self, info: dict) -> None:
         """Display pipeline details in the details panel."""
+        pipeline_ptr = info.get("ptr", 0)
         lines = [
             "=== PIPELINE ===",
             "",
             f"Name:           {info['name'] or '(unnamed)'}",
+            f"Ptr:            0x{pipeline_ptr:x}",
             f"Pass count:     {info['pass_count']}",
         ]
 
-        # Get passes for this pipeline
+        # Get passes for this pipeline (filter by ptr, not name)
         all_passes = tc_pass_registry_get_all_instance_info()
-        pipeline_passes = [p for p in all_passes if p["pipeline_name"] == info["name"]]
+        pipeline_passes = [p for p in all_passes if p.get("pipeline_ptr") == pipeline_ptr]
 
         if pipeline_passes:
             lines.extend([

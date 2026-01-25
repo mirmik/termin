@@ -9,75 +9,14 @@
 #include <cstddef>
 #include <unordered_map>
 
+#include "termin/render/execute_context.hpp"
+#include "termin/render/resource_spec.hpp"
+
 extern "C" {
 #include "tc_pass.h"
 }
 
 namespace termin {
-
-// Forward declarations
-class GraphicsBackend;
-class FramebufferHandle;
-
-// ============================================================================
-// ExecuteContext - C++ wrapper for tc_execute_context
-// ============================================================================
-
-struct ExecuteContext {
-    GraphicsBackend* graphics = nullptr;
-    std::unordered_map<std::string, FramebufferHandle*>* reads_fbos = nullptr;
-    std::unordered_map<std::string, FramebufferHandle*>* writes_fbos = nullptr;
-    int rect_x = 0;
-    int rect_y = 0;
-    int rect_width = 0;
-    int rect_height = 0;
-    void* scene = nullptr;       // tc_scene*
-    void* camera = nullptr;      // Camera*
-    void* lights = nullptr;      // std::vector<Light>*
-    size_t light_count = 0;
-    uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-
-    // Convenience accessors
-    int width() const { return rect_width; }
-    int height() const { return rect_height; }
-
-    // Convert from C struct
-    static ExecuteContext from_c(tc_execute_context* ctx);
-
-    // Convert to C struct
-    tc_execute_context to_c() const;
-};
-
-// ============================================================================
-// ResourceSpec - C++ wrapper for tc_resource_spec
-// ============================================================================
-
-struct ResourceSpec {
-    std::string resource;
-    int fixed_width = 0;         // 0 = viewport size
-    int fixed_height = 0;
-    float clear_color[4] = {0, 0, 0, 1};
-    float clear_depth = 1.0f;
-    bool has_clear_color = false;
-    bool has_clear_depth = false;
-    std::string format;
-
-    ResourceSpec() = default;
-
-    ResourceSpec(const std::string& res)
-        : resource(res) {}
-
-    ResourceSpec(const std::string& res, float r, float g, float b, float a)
-        : resource(res), has_clear_color(true) {
-        clear_color[0] = r;
-        clear_color[1] = g;
-        clear_color[2] = b;
-        clear_color[3] = a;
-    }
-
-    // Convert to C struct
-    tc_resource_spec to_c() const;
-};
 
 // ============================================================================
 // InplaceAlias - pair of read/write names for inplace operations
@@ -118,6 +57,22 @@ public:
     // Access to underlying C pass
     tc_pass* c_pass() { return &_c; }
     const tc_pass* c_pass() const { return &_c; }
+
+    // Link to type registry (call after construction if not created via factory)
+    void link_to_type_registry(const char* type_name) {
+        if (!type_name) return;
+
+        // Ensure type is registered
+        if (!tc_pass_registry_has(type_name)) {
+            tc_pass_registry_register(type_name, nullptr, nullptr, TC_NATIVE_PASS);
+        }
+
+        tc_type_entry* entry = tc_pass_registry_get_entry(type_name);
+        if (entry) {
+            _c.type_entry = entry;
+            _c.type_version = entry->version;
+        }
+    }
 
     // ========== Accessors ==========
 
@@ -188,19 +143,56 @@ private:
 };
 
 // ============================================================================
-// Registration Helper Macro
+// Pass Registration (same pattern as ComponentRegistrar)
 // ============================================================================
 
-#define TC_REGISTER_PASS(PassClass)                                         \
-    static tc_pass* _factory_##PassClass(void* /*userdata*/) {              \
-        auto* p = new PassClass();                                          \
-        return p->c_pass();                                                 \
-    }                                                                       \
-    static struct _reg_##PassClass {                                        \
-        _reg_##PassClass() {                                                \
-            tc_pass_registry_register(                                      \
-                #PassClass, _factory_##PassClass, nullptr, TC_NATIVE_PASS); \
-        }                                                                   \
-    } _reg_instance_##PassClass
+// Factory data stored in static variables per template instantiation
+template<typename T>
+struct CxxPassFactoryData {
+    static const char* type_name;
+
+    static tc_pass* create(void* /*userdata*/) {
+        T* pass = new T();
+        tc_pass* c = pass->c_pass();
+
+        // Link to type registry
+        tc_type_entry* entry = tc_pass_registry_get_entry(type_name);
+        if (entry) {
+            c->type_entry = entry;
+            c->type_version = entry->version;
+        }
+
+        return c;
+    }
+};
+
+template<typename T> const char* CxxPassFactoryData<T>::type_name = nullptr;
+
+// Helper for static registration of C++ passes
+template<typename T>
+struct PassRegistrar {
+    PassRegistrar(const char* name) {
+        // Store type name for factory
+        CxxPassFactoryData<T>::type_name = name;
+
+        // Register in C registry with static factory function
+        tc_pass_registry_register(
+            name,
+            &CxxPassFactoryData<T>::create,
+            nullptr,
+            TC_NATIVE_PASS
+        );
+    }
+};
+
+// Macro for registering C++ passes
+// Place after class definition
+//
+// Usage:
+//   REGISTER_PASS(ColorPass);
+//   REGISTER_PASS(ShadowPass);
+#define REGISTER_PASS(ClassName) \
+    static ::termin::PassRegistrar<ClassName> \
+        _pass_registrar_##ClassName(#ClassName)
 
 } // namespace termin

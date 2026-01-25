@@ -36,10 +36,27 @@ extern "C" {
 namespace termin {
 
 // ============================================================================
-// Helper to create external tc_pass for C++ passes used from Python
-// This ensures Python methods (compute_reads, compute_writes) are called
+// Helper to initialize C++ pass created from Python bindings
+// Combines: link_to_type_registry + set_external_body + Py_INCREF
 // ============================================================================
 
+template<typename T>
+void init_pass_from_python(T* self, const char* type_name) {
+    self->link_to_type_registry(type_name);
+    nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+    self->set_external_body(wrapper.ptr());
+    Py_INCREF(wrapper.ptr());
+}
+
+// Variant for _deserialize_instance: takes ownership and returns wrapper
+template<typename T>
+nb::object init_pass_from_deserialize(T* pass, const char* type_name) {
+    pass->link_to_type_registry(type_name);
+    nb::object wrapper = nb::cast(pass, nb::rv_policy::take_ownership);
+    pass->set_external_body(wrapper.ptr());
+    Py_INCREF(wrapper.ptr());
+    return wrapper;
+}
 
 // ============================================================================
 // Python debugger callbacks holder
@@ -377,13 +394,8 @@ void bind_frame_pass(nb::module_& m) {
                 return TcPassRef(p.tc_pass_ptr());
             })
         .def("_set_py_wrapper", [](FramePass& p, nb::object py_self) {
-            tc_pass* tc = p.tc_pass_ptr();
-            if (tc) {
-                PyObject* obj = py_self.ptr();
-                tc->body = obj;
-                tc->externally_managed = true;
-                Py_INCREF(obj);
-            }
+            p.set_external_body(py_self.ptr());
+            Py_INCREF(py_self.ptr());
         }, nb::arg("py_self"))
         .def("__repr__", [](const FramePass& p) {
             return "<FramePass '" + p.get_pass_name() + "'>";
@@ -676,13 +688,7 @@ void bind_frame_pass(nb::module_& m) {
                 shadow_res = "";  // None means no shadows
             }
             new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_mode, clear_depth, camera_name);
-            // Python-created pass: store wrapper in body and mark as externally managed
-            tc_pass* tc = self->tc_pass_ptr();
-            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
+            init_pass_from_python(self, "ColorPass");
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "color",
@@ -968,13 +974,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](DepthPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) DepthPass(input_res, output_res, pass_name);
-            // Python-created pass: store wrapper in body and mark as externally managed
-            tc_pass* tc = self->tc_pass_ptr();
-            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
+            init_pass_from_python(self, "DepthPass");
         },
              nb::arg("input_res") = "empty_depth",
              nb::arg("output_res") = "depth",
@@ -1121,13 +1121,7 @@ void bind_frame_pass(nb::module_& m) {
             }
             auto* p = new DepthPass(input_res, output_res, pass_name);
             p->camera_name = camera_name;
-            tc_pass* tc = p->tc_pass_ptr();
-            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
-            return wrapper;
+            return init_pass_from_deserialize(p, "DepthPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &DepthPass::compute_reads)
         .def_prop_ro("writes", &DepthPass::compute_writes)
@@ -1160,13 +1154,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](NormalPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) NormalPass(input_res, output_res, pass_name);
-            // Python-created pass: store wrapper in body and mark as externally managed
-            tc_pass* tc = self->tc_pass_ptr();
-            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
+            init_pass_from_python(self, "NormalPass");
         },
              nb::arg("input_res") = "empty_normal",
              nb::arg("output_res") = "normal",
@@ -1306,13 +1294,7 @@ void bind_frame_pass(nb::module_& m) {
             }
             auto* p = new NormalPass(input_res, output_res, pass_name);
             p->camera_name = camera_name;
-            tc_pass* tc = p->tc_pass_ptr();
-            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
-            return wrapper;
+            return init_pass_from_deserialize(p, "NormalPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &NormalPass::compute_reads)
         .def_prop_ro("writes", &NormalPass::compute_writes)
@@ -1345,13 +1327,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](IdPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) IdPass(input_res, output_res, pass_name);
-            // Python-created pass: store wrapper in body and mark as externally managed
-            tc_pass* tc = self->tc_pass_ptr();
-            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
+            init_pass_from_python(self, "IdPass");
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "id",
@@ -1492,13 +1468,7 @@ void bind_frame_pass(nb::module_& m) {
             }
             auto* p = new IdPass(input_res, output_res, pass_name);
             p->camera_name = camera_name;
-            tc_pass* tc = p->tc_pass_ptr();
-            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
-            return wrapper;
+            return init_pass_from_deserialize(p, "IdPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &IdPass::compute_reads)
         .def_prop_ro("writes", &IdPass::compute_writes)
@@ -1554,13 +1524,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](ShadowPass* self, const std::string& output_res,
                             const std::string& pass_name, float caster_offset) {
             new (self) ShadowPass(output_res, pass_name, caster_offset);
-            // Python-created pass: store wrapper in body and mark as externally managed
-            tc_pass* tc = self->tc_pass_ptr();
-            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
+            init_pass_from_python(self, "ShadowPass");
         },
              nb::arg("output_res") = "shadow_maps",
              nb::arg("pass_name") = "Shadow",
@@ -1663,13 +1627,7 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
             auto* p = new ShadowPass(output_res, pass_name, caster_offset);
-            tc_pass* tc = p->tc_pass_ptr();
-            nb::object wrapper = nb::cast(p, nb::rv_policy::take_ownership);
-            PyObject* obj = wrapper.ptr();
-            tc->body = obj;
-            tc->externally_managed = true;
-            Py_INCREF(obj);
-            return wrapper;
+            return init_pass_from_deserialize(p, "ShadowPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &ShadowPass::compute_reads)
         .def_prop_ro("writes", &ShadowPass::compute_writes)
