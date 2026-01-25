@@ -3,6 +3,7 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/make_iterator.h>
 
 extern "C" {
@@ -24,6 +25,7 @@ extern "C" {
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
+#include "termin/tc_scene_ref.hpp"
 #include "tc_scene.h"
 #include "tc_log.hpp"
 #include <cstdint>
@@ -36,20 +38,6 @@ namespace termin {
 // This ensures Python methods (compute_reads, compute_writes) are called
 // ============================================================================
 
-static void setup_external_tc_pass(FramePass* pass, nb::object py_self) {
-    // Increment refcount since C code will hold a reference to the Python object
-    Py_INCREF(py_self.ptr());
-
-    // Create external tc_pass that will call Python methods
-    tc_pass* ext_pass = tc_pass_new_external(py_self.ptr(), nb::type_name(py_self.type()).c_str());
-    if (ext_pass) {
-        tc_pass_set_name(ext_pass, pass->pass_name.c_str());
-        pass->_tc_pass = ext_pass;
-    } else {
-        // Failed to create, decrement refcount
-        Py_DECREF(py_self.ptr());
-    }
-}
 
 // ============================================================================
 // Python debugger callbacks holder
@@ -144,7 +132,11 @@ void bind_frame_pass(nb::module_& m) {
         .def("__repr__", [](const Rect4i& r) {
             return "Rect4i(" + std::to_string(r.x) + ", " + std::to_string(r.y) +
                    ", " + std::to_string(r.width) + ", " + std::to_string(r.height) + ")";
-        });
+        })
+        .def("__iter__", [](const Rect4i& r) {
+            return nb::make_tuple(r.x, r.y, r.width, r.height).attr("__iter__")();
+        })
+        .def("__len__", [](const Rect4i&) { return 4; });
 
     // FrameGraphResource - base class for framegraph resources
     nb::class_<FrameGraphResource>(m, "FrameGraphResource")
@@ -231,6 +223,66 @@ void bind_frame_pass(nb::module_& m) {
     // ExecuteContext - context passed to render passes
     nb::class_<ExecuteContext>(m, "ExecuteContext")
         .def(nb::init<>())
+        .def("__init__", [dict_to_resource_map](ExecuteContext* self, nb::kwargs kwargs) {
+            new (self) ExecuteContext();
+            if (kwargs.contains("graphics")) {
+                nb::object g = nb::borrow<nb::object>(kwargs["graphics"]);
+                if (!g.is_none()) {
+                    self->graphics = nb::cast<GraphicsBackend*>(g);
+                }
+            }
+            if (kwargs.contains("reads_fbos")) {
+                nb::dict d = nb::cast<nb::dict>(kwargs["reads_fbos"]);
+                self->reads_fbos = dict_to_resource_map(d);
+            }
+            if (kwargs.contains("writes_fbos")) {
+                nb::dict d = nb::cast<nb::dict>(kwargs["writes_fbos"]);
+                self->writes_fbos = dict_to_resource_map(d);
+            }
+            if (kwargs.contains("rect")) {
+                nb::tuple t = nb::cast<nb::tuple>(kwargs["rect"]);
+                self->rect.x = nb::cast<int>(t[0]);
+                self->rect.y = nb::cast<int>(t[1]);
+                self->rect.width = nb::cast<int>(t[2]);
+                self->rect.height = nb::cast<int>(t[3]);
+            }
+            if (kwargs.contains("scene")) {
+                nb::object s = nb::borrow<nb::object>(kwargs["scene"]);
+                if (!s.is_none()) {
+                    // Accept TcSceneRef directly or extract from Python Scene
+                    if (nb::isinstance<TcSceneRef>(s)) {
+                        self->scene = nb::cast<TcSceneRef>(s);
+                    } else if (nb::hasattr(s, "_tc_scene")) {
+                        nb::object tc_scene_obj = s.attr("_tc_scene");
+                        if (nb::hasattr(tc_scene_obj, "scene_ref")) {
+                            self->scene = nb::cast<TcSceneRef>(tc_scene_obj.attr("scene_ref")());
+                        }
+                    }
+                }
+            }
+            if (kwargs.contains("camera")) {
+                nb::object c = nb::borrow<nb::object>(kwargs["camera"]);
+                if (!c.is_none()) {
+                    self->camera = nb::cast<CameraComponent*>(c);
+                }
+            }
+            if (kwargs.contains("viewport")) {
+                nb::object v = nb::borrow<nb::object>(kwargs["viewport"]);
+                if (!v.is_none() && nb::hasattr(v, "_tc_viewport")) {
+                    uintptr_t ptr = nb::cast<uintptr_t>(v.attr("_tc_viewport"));
+                    self->viewport = reinterpret_cast<tc_viewport*>(ptr);
+                }
+            }
+            if (kwargs.contains("lights")) {
+                nb::object l = nb::borrow<nb::object>(kwargs["lights"]);
+                if (!l.is_none()) {
+                    self->lights = nb::cast<std::vector<Light>>(l);
+                }
+            }
+            if (kwargs.contains("layer_mask")) {
+                self->layer_mask = nb::cast<uint64_t>(kwargs["layer_mask"]);
+            }
+        })
         .def_prop_rw("graphics",
             [](const ExecuteContext& ctx) { return ctx.graphics; },
             [](ExecuteContext& ctx, GraphicsBackend* g) { ctx.graphics = g; },
@@ -266,13 +318,7 @@ void bind_frame_pass(nb::module_& m) {
                 ctx.writes_fbos = dict_to_resource_map(py_dict);
             })
         .def_rw("rect", &ExecuteContext::rect)
-        .def_prop_rw("scene",
-            [](const ExecuteContext& ctx) -> uintptr_t {
-                return reinterpret_cast<uintptr_t>(ctx.scene);
-            },
-            [](ExecuteContext& ctx, uintptr_t ptr) {
-                ctx.scene = reinterpret_cast<tc_scene*>(ptr);
-            })
+        .def_rw("scene", &ExecuteContext::scene)
         .def_prop_rw("camera",
             [](const ExecuteContext& ctx) { return ctx.camera; },
             [](ExecuteContext& ctx, CameraComponent* c) { ctx.camera = c; },
@@ -297,11 +343,17 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("pass_name"),
              nb::arg("reads") = std::set<std::string>{},
              nb::arg("writes") = std::set<std::string>{})
-        .def_rw("pass_name", &FramePass::pass_name)
+        .def_prop_rw("pass_name",
+            [](FramePass& p) { return p.get_pass_name(); },
+            [](FramePass& p, const std::string& n) { p.set_pass_name(n); })
         .def_rw("reads", &FramePass::reads)
         .def_rw("writes", &FramePass::writes)
-        .def_rw("enabled", &FramePass::enabled)
-        .def_rw("viewport_name", &FramePass::viewport_name)
+        .def_prop_rw("enabled",
+            [](FramePass& p) { return p.get_enabled(); },
+            [](FramePass& p, bool v) { p.set_enabled(v); })
+        .def_prop_rw("viewport_name",
+            [](FramePass& p) { return p.get_viewport_name(); },
+            [](FramePass& p, const std::string& n) { p.set_viewport_name(n); })
         .def("get_inplace_aliases", &FramePass::get_inplace_aliases)
         .def("is_inplace", &FramePass::is_inplace)
         .def_prop_ro("inplace", &FramePass::is_inplace)
@@ -310,23 +362,23 @@ void bind_frame_pass(nb::module_& m) {
         .def("clear_debug_internal_point", &FramePass::clear_debug_internal_point)
         .def("get_debug_internal_point", &FramePass::get_debug_internal_point)
         .def("required_resources", &FramePass::required_resources)
-        // Expose tc_pass handle to Python for frame graph integration
-        // Writable to allow Python subclasses to replace with external tc_pass
-        .def_prop_rw("_tc_pass",
+        // Expose tc_pass pointer to Python for frame graph integration
+        // Read-only since tc_pass is now embedded as _c
+        .def_prop_ro("_tc_pass",
             [](FramePass& p) -> tc_pass* {
-                return p.tc_pass_handle();
-            },
-            [](FramePass& p, tc_pass* new_pass) {
-                p._tc_pass = new_pass;
+                return p.tc_pass_ptr();
             },
             nb::rv_policy::reference)
-        // Setup external tc_pass for Python usage (calls Python methods)
-        .def("_setup_external_tc_pass", [](FramePass& self, nb::object py_self) {
-            setup_external_tc_pass(&self, py_self);
-        }, nb::arg("py_self"),
-           "Create external tc_pass that calls Python methods. Call after super().__init__().")
+        .def("_set_py_wrapper", [](FramePass& p, nb::object py_self) {
+            tc_pass* tc = p.tc_pass_ptr();
+            if (tc) {
+                tc->body = py_self.ptr();
+                tc->externally_managed = true;
+                Py_INCREF(py_self.ptr());
+            }
+        }, nb::arg("py_self"))
         .def("__repr__", [](const FramePass& p) {
-            return "<FramePass '" + p.pass_name + "'>";
+            return "<FramePass '" + p.get_pass_name() + "'>";
         });
 
     // FrameGraph errors
@@ -565,19 +617,35 @@ void bind_frame_pass(nb::module_& m) {
         .def("destroy", &RenderFramePass::destroy);
 
     // ColorPass - main color rendering pass
-    nb::class_<ColorPass, RenderFramePass>(m, "ColorPass")
-        .def("__init__", [](ColorPass* self, const std::string& input_res, const std::string& output_res,
-                            const std::string& shadow_res, const std::string& phase_mark,
-                            const std::string& pass_name, const std::string& sort_mode, bool clear_depth) {
-            new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_mode, clear_depth);
+    auto color_pass = nb::class_<ColorPass, RenderFramePass>(m, "ColorPass")
+        .def("__init__", [](ColorPass* self,
+                            std::string input_res, std::string output_res,
+                            nb::object shadow_res_obj, std::string phase_mark,
+                            std::string pass_name, std::string sort_mode, bool clear_depth,
+                            std::string camera_name) {
+            // Convert None to empty string for shadow_res
+            std::string shadow_res = "shadow_maps";
+            if (!shadow_res_obj.is_none()) {
+                shadow_res = nb::cast<std::string>(shadow_res_obj);
+            } else {
+                shadow_res = "";  // None means no shadows
+            }
+            new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_mode, clear_depth, camera_name);
+            // Python-created pass: store wrapper in body and mark as externally managed
+            tc_pass* tc = self->tc_pass_ptr();
+            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+            tc->body = wrapper.ptr();
+            tc->externally_managed = true;
+            Py_INCREF(wrapper.ptr());
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "color",
-             nb::arg("shadow_res") = "shadow_maps",
+             nb::arg("shadow_res").none() = nb::none(),
              nb::arg("phase_mark") = "opaque",
              nb::arg("pass_name") = "Color",
              nb::arg("sort_mode") = "none",
-             nb::arg("clear_depth") = false)
+             nb::arg("clear_depth") = false,
+             nb::arg("camera_name") = "")
         .def_rw("input_res", &ColorPass::input_res)
         .def_rw("output_res", &ColorPass::output_res)
         .def_rw("shadow_res", &ColorPass::shadow_res)
@@ -585,8 +653,76 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("sort_mode", &ColorPass::sort_mode)
         .def_rw("clear_depth", &ColorPass::clear_depth)
         .def_rw("wireframe", &ColorPass::wireframe)
+        .def_rw("camera_name", &ColorPass::camera_name)
+        .def_rw("extra_textures", &ColorPass::extra_textures)
+        .def("add_extra_texture", &ColorPass::add_extra_texture,
+             nb::arg("uniform_name"), nb::arg("resource_name"))
+        .def("compute_reads", &ColorPass::compute_reads)
+        .def("compute_writes", &ColorPass::compute_writes)
+        .def("get_inplace_aliases", &ColorPass::get_inplace_aliases)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
+        // reads/writes properties (aliases for compute_reads/compute_writes)
+        .def_prop_ro("reads", &ColorPass::compute_reads)
+        .def_prop_ro("writes", &ColorPass::compute_writes)
+        // Serialization methods
+        .def("serialize_data", [](ColorPass& self) {
+            // Import InspectRegistry from Python bindings
+            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
+            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
+            nb::dict result = nb::cast<nb::dict>(registry.attr("serialize_all")(nb::cast(&self)));
+            // Add extra_textures (not in INSPECT_FIELD)
+            if (!self.extra_textures.empty()) {
+                nb::dict extra;
+                for (const auto& [k, v] : self.extra_textures) {
+                    extra[nb::str(k.c_str())] = nb::str(v.c_str());
+                }
+                result["extra_textures"] = extra;
+            }
+            return result;
+        })
+        .def("deserialize_data", [](ColorPass& self, nb::object data) {
+            if (data.is_none()) return;
+            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
+            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
+            registry.attr("deserialize_all")(nb::cast(&self), data);
+            // Restore extra_textures
+            if (nb::isinstance<nb::dict>(data)) {
+                nb::dict d = nb::cast<nb::dict>(data);
+                if (d.contains("extra_textures")) {
+                    self.extra_textures.clear();
+                    nb::dict extra = nb::cast<nb::dict>(d["extra_textures"]);
+                    for (auto item : extra) {
+                        std::string k = nb::cast<std::string>(nb::str(item.first));
+                        std::string v = nb::cast<std::string>(nb::str(item.second));
+                        self.extra_textures[k] = v;
+                    }
+                }
+            }
+        })
+        .def("serialize", [](ColorPass& self) {
+            nb::dict result;
+            result["type"] = "ColorPass";
+            result["pass_name"] = nb::str(self.get_pass_name().c_str());
+            result["enabled"] = self.get_enabled();
+            // Get serialize_data result
+            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
+            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
+            nb::dict data = nb::cast<nb::dict>(registry.attr("serialize_all")(nb::cast(&self)));
+            if (!self.extra_textures.empty()) {
+                nb::dict extra;
+                for (const auto& [k, v] : self.extra_textures) {
+                    extra[nb::str(k.c_str())] = nb::str(v.c_str());
+                }
+                data["extra_textures"] = extra;
+            }
+            result["data"] = data;
+            std::string vp_name = self.get_viewport_name();
+            if (!vp_name.empty()) {
+                result["viewport_name"] = nb::str(vp_name.c_str());
+            }
+            return result;
+        })
         .def("execute_with_data", [](
             ColorPass& self,
             GraphicsBackend* graphics,
@@ -749,14 +885,42 @@ void bind_frame_pass(nb::module_& m) {
         }, nb::arg("ctx"))
         .def("destroy", &ColorPass::destroy)
         .def("__repr__", [](const ColorPass& p) {
-            return "<ColorPass '" + p.pass_name + "' phase='" + p.phase_mark + "'>";
+            return "<ColorPass '" + p.get_pass_name() + "' phase='" + p.phase_mark + "'>";
         });
+
+    // Node graph attributes for ColorPass
+    color_pass.attr("category") = "Render";
+    color_pass.attr("has_dynamic_inputs") = true;
+    color_pass.attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"),
+        nb::make_tuple("shadow_res", "shadow")
+    );
+    color_pass.attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    color_pass.attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("input_res", "output_res")
+    );
+    // Node parameter visibility conditions
+    {
+        nb::dict visibility;
+        nb::dict camera_cond;
+        camera_cond["_outside_viewport"] = true;
+        visibility["camera_name"] = camera_cond;
+        color_pass.attr("node_param_visibility") = visibility;
+    }
 
     // DepthPass - linear depth rendering pass
     nb::class_<DepthPass, RenderFramePass>(m, "DepthPass")
         .def("__init__", [](DepthPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) DepthPass(input_res, output_res, pass_name);
+            // Python-created pass: store wrapper in body and mark as externally managed
+            tc_pass* tc = self->tc_pass_ptr();
+            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+            tc->body = wrapper.ptr();
+            tc->externally_managed = true;
+            Py_INCREF(wrapper.ptr());
         },
              nb::arg("input_res") = "empty_depth",
              nb::arg("output_res") = "depth",
@@ -861,7 +1025,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &DepthPass::destroy)
         .def("__repr__", [](const DepthPass& p) {
-            return "<DepthPass '" + p.pass_name + "'>";
+            return "<DepthPass '" + p.get_pass_name() + "'>";
         });
 
     // NormalPass - world-space normal rendering pass
@@ -869,6 +1033,12 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](NormalPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) NormalPass(input_res, output_res, pass_name);
+            // Python-created pass: store wrapper in body and mark as externally managed
+            tc_pass* tc = self->tc_pass_ptr();
+            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+            tc->body = wrapper.ptr();
+            tc->externally_managed = true;
+            Py_INCREF(wrapper.ptr());
         },
              nb::arg("input_res") = "empty_normal",
              nb::arg("output_res") = "normal",
@@ -966,7 +1136,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &NormalPass::destroy)
         .def("__repr__", [](const NormalPass& p) {
-            return "<NormalPass '" + p.pass_name + "'>";
+            return "<NormalPass '" + p.get_pass_name() + "'>";
         });
 
     // IdPass - entity ID rendering pass for picking
@@ -974,6 +1144,12 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](IdPass* self, const std::string& input_res,
                             const std::string& output_res, const std::string& pass_name) {
             new (self) IdPass(input_res, output_res, pass_name);
+            // Python-created pass: store wrapper in body and mark as externally managed
+            tc_pass* tc = self->tc_pass_ptr();
+            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+            tc->body = wrapper.ptr();
+            tc->externally_managed = true;
+            Py_INCREF(wrapper.ptr());
         },
              nb::arg("input_res") = "empty",
              nb::arg("output_res") = "id",
@@ -1072,7 +1248,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("destroy", &IdPass::destroy)
         .def("__repr__", [](const IdPass& p) {
-            return "<IdPass '" + p.pass_name + "'>";
+            return "<IdPass '" + p.get_pass_name() + "'>";
         });
 
     // ShadowMapResult - result of shadow map rendering
@@ -1103,6 +1279,12 @@ void bind_frame_pass(nb::module_& m) {
         .def("__init__", [](ShadowPass* self, const std::string& output_res,
                             const std::string& pass_name, float caster_offset) {
             new (self) ShadowPass(output_res, pass_name, caster_offset);
+            // Python-created pass: store wrapper in body and mark as externally managed
+            tc_pass* tc = self->tc_pass_ptr();
+            nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+            tc->body = wrapper.ptr();
+            tc->externally_managed = true;
+            Py_INCREF(wrapper.ptr());
         },
              nb::arg("output_res") = "shadow_maps",
              nb::arg("pass_name") = "Shadow",
@@ -1172,7 +1354,7 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("camera_projection"))
         .def("destroy", &ShadowPass::destroy)
         .def("__repr__", [](const ShadowPass& p) {
-            return "<ShadowPass '" + p.pass_name + "'>";
+            return "<ShadowPass '" + p.get_pass_name() + "'>";
         });
 }
 

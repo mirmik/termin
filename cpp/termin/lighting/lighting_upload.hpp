@@ -4,6 +4,7 @@
 #include <string>
 
 #include "termin/lighting/shadow.hpp"
+#include "termin/lighting/dummy_shadow_texture.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 
 namespace termin {
@@ -88,6 +89,32 @@ inline void init_shadow_map_samplers(TcShader& shader) {
     shader.set_uniform_int("u_shadow_map_count", 0);
     for (int i = 0; i < MAX_SHADOW_MAPS; ++i) {
         shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
+    }
+}
+
+/**
+ * Bind shadow map textures to their texture units.
+ * Call this ONCE per frame, before rendering any draw calls.
+ *
+ * Binds actual shadow textures from entries, and fills remaining slots
+ * with dummy shadow texture (required by AMD drivers).
+ */
+inline void bind_shadow_textures(const std::vector<ShadowMapArrayEntry>& shadow_maps) {
+    int bound_count = 0;
+
+    // Bind actual shadow textures
+    for (size_t i = 0; i < shadow_maps.size() && i < static_cast<size_t>(MAX_SHADOW_MAPS); ++i) {
+        GPUTextureHandle* tex = shadow_maps[i].texture();
+        if (tex) {
+            tex->bind(SHADOW_MAP_TEXTURE_UNIT_START + static_cast<int>(i));
+            ++bound_count;
+        }
+    }
+
+    // Bind dummy texture to remaining slots (AMD compatibility)
+    DummyShadowTexture& dummy = get_dummy_shadow_texture();
+    for (int i = bound_count; i < MAX_SHADOW_MAPS; ++i) {
+        dummy.bind(SHADOW_MAP_TEXTURE_UNIT_START + i);
     }
 }
 

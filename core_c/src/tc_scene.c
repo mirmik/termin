@@ -1,9 +1,12 @@
 // tc_scene.c - Scene implementation using entity pool
 #include "../include/tc_scene.h"
 #include "../include/tc_scene_lighting.h"
+#include "../include/tc_scene_skybox.h"
 #include "../include/tc_scene_registry.h"
 #include "../include/tc_resource_map.h"
 #include "../include/tc_profiler.h"
+#include "../include/tc_mesh.h"
+#include "../include/tc_material.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -99,6 +102,9 @@ struct tc_scene {
 
     // Lighting properties (ambient, shadows)
     tc_scene_lighting lighting;
+
+    // Skybox properties
+    tc_scene_skybox skybox;
 };
 
 // ============================================================================
@@ -119,6 +125,7 @@ tc_scene* tc_scene_new(void) {
     s->accumulated_time = 0.0;
     s->type_heads = tc_resource_map_new(NULL);  // No destructor - components are not owned
     tc_scene_lighting_init(&s->lighting);
+    tc_scene_skybox_init(&s->skybox);
 
     // Register in global scene registry
     tc_scene_registry_add(s, NULL);
@@ -131,6 +138,9 @@ void tc_scene_free(tc_scene* s) {
 
     // Unregister from global scene registry
     tc_scene_registry_remove(s);
+
+    // Release skybox resources
+    tc_scene_skybox_free(&s->skybox);
 
     list_free(&s->pending_start);
     list_free(&s->update_list);
@@ -438,6 +448,94 @@ void tc_scene_set_py_wrapper(tc_scene* s, void* py_wrapper) {
 
 void* tc_scene_get_py_wrapper(tc_scene* s) {
     return s ? s->py_wrapper : NULL;
+}
+
+// ============================================================================
+// Skybox
+// ============================================================================
+
+tc_scene_skybox* tc_scene_get_skybox(tc_scene* s) {
+    return s ? &s->skybox : NULL;
+}
+
+void tc_scene_set_skybox_type(tc_scene* s, int type) {
+    if (s) s->skybox.type = type;
+}
+
+int tc_scene_get_skybox_type(tc_scene* s) {
+    return s ? s->skybox.type : TC_SKYBOX_GRADIENT;
+}
+
+void tc_scene_set_skybox_color(tc_scene* s, float r, float g, float b) {
+    if (!s) return;
+    s->skybox.color[0] = r;
+    s->skybox.color[1] = g;
+    s->skybox.color[2] = b;
+}
+
+void tc_scene_get_skybox_color(tc_scene* s, float* r, float* g, float* b) {
+    if (!s) return;
+    if (r) *r = s->skybox.color[0];
+    if (g) *g = s->skybox.color[1];
+    if (b) *b = s->skybox.color[2];
+}
+
+void tc_scene_set_skybox_top_color(tc_scene* s, float r, float g, float b) {
+    if (!s) return;
+    s->skybox.top_color[0] = r;
+    s->skybox.top_color[1] = g;
+    s->skybox.top_color[2] = b;
+}
+
+void tc_scene_get_skybox_top_color(tc_scene* s, float* r, float* g, float* b) {
+    if (!s) return;
+    if (r) *r = s->skybox.top_color[0];
+    if (g) *g = s->skybox.top_color[1];
+    if (b) *b = s->skybox.top_color[2];
+}
+
+void tc_scene_set_skybox_bottom_color(tc_scene* s, float r, float g, float b) {
+    if (!s) return;
+    s->skybox.bottom_color[0] = r;
+    s->skybox.bottom_color[1] = g;
+    s->skybox.bottom_color[2] = b;
+}
+
+void tc_scene_get_skybox_bottom_color(tc_scene* s, float* r, float* g, float* b) {
+    if (!s) return;
+    if (r) *r = s->skybox.bottom_color[0];
+    if (g) *g = s->skybox.bottom_color[1];
+    if (b) *b = s->skybox.bottom_color[2];
+}
+
+void tc_scene_set_skybox_mesh(tc_scene* s, tc_mesh* mesh) {
+    if (!s) return;
+    if (s->skybox.mesh) {
+        tc_mesh_release(s->skybox.mesh);
+    }
+    s->skybox.mesh = mesh;
+    if (mesh) {
+        tc_mesh_add_ref(mesh);
+    }
+}
+
+tc_mesh* tc_scene_get_skybox_mesh(tc_scene* s) {
+    return s ? s->skybox.mesh : NULL;
+}
+
+void tc_scene_set_skybox_material(tc_scene* s, tc_material* material) {
+    if (!s) return;
+    if (s->skybox.material) {
+        tc_material_release(s->skybox.material);
+    }
+    s->skybox.material = material;
+    if (material) {
+        tc_material_add_ref(material);
+    }
+}
+
+tc_material* tc_scene_get_skybox_material(tc_scene* s) {
+    return s ? s->skybox.material : NULL;
 }
 
 // ============================================================================

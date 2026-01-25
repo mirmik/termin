@@ -362,6 +362,9 @@ def create_pass_instance(
     """
     Create a FramePass instance from a graph node.
 
+    Creates pass via default constructor, then sets properties as attributes.
+    Works uniformly for Python and C++ (nanobind) pass classes.
+
     Args:
         node: Graph node with pass_class in data
         resource_params: Dict of resource name parameters (input_res, output_res, etc.)
@@ -378,56 +381,39 @@ def create_pass_instance(
     if pass_cls is None:
         raise CompileError(f"Unknown pass class: {class_name}")
 
-    # Build constructor kwargs
-    kwargs = {}
+    # Create instance via default constructor
+    instance = pass_cls()
 
-    # Pass name
-    kwargs["pass_name"] = node.name if node.name else node.title
+    # Set pass_name
+    instance.pass_name = node.name if node.name else node.title
 
-    # Resource parameters (filter out viewport_name if present)
+    # Known resource params for standard passes
+    known_resource_params = {"input_res", "output_res", "shadow_res"}
+
+    # Set resource parameters
     for key, value in resource_params.items():
-        if key != "viewport_name":
-            kwargs[key] = value
+        if key == "viewport_name":
+            continue
+        if key in known_resource_params:
+            try:
+                setattr(instance, key, value)
+            except AttributeError:
+                pass
+        else:
+            # Dynamic input - add as extra texture if supported
+            if hasattr(instance, "add_extra_texture"):
+                instance.add_extra_texture(key, value)
 
-    # UI parameters from node
+    # Set UI parameters from node
     for param in node._params:
         value = node._param_values.get(param.name)
         if value is not None and param.name not in resource_params:
-            kwargs[param.name] = value
+            try:
+                setattr(instance, param.name, value)
+            except AttributeError:
+                pass  # Ignore unknown attributes
 
-    # Check if class accepts **kwargs (VAR_KEYWORD)
-    # If so, don't pass viewport_name to constructor (it would end up in **kwargs)
-    import inspect
-    sig = inspect.signature(pass_cls.__init__)
-    valid_params = set(sig.parameters.keys())
-    has_var_keyword = any(
-        p.kind == inspect.Parameter.VAR_KEYWORD
-        for p in sig.parameters.values()
-    )
-
-    # Only add viewport_name to kwargs if it's explicitly in signature
-    # Otherwise set it as attribute after creation
-    if viewport_name and "viewport_name" in valid_params:
-        kwargs["viewport_name"] = viewport_name
-
-    # Try to create instance, handling optional parameters
-    try:
-        instance = pass_cls(**kwargs)
-    except TypeError as e:
-        # Some parameters might not be accepted - try with just basics
-        basic_kwargs = {"pass_name": kwargs.get("pass_name", node.title)}
-
-        for key, value in kwargs.items():
-            # Include param if it's in signature OR class accepts **kwargs
-            if key in valid_params or has_var_keyword:
-                basic_kwargs[key] = value
-
-        try:
-            instance = pass_cls(**basic_kwargs)
-        except TypeError:
-            raise CompileError(f"Failed to create {class_name}: {e}")
-
-    # Set viewport_name as attribute (works for all passes via FramePass base class)
+    # Set viewport_name
     if viewport_name:
         instance.viewport_name = viewport_name
 

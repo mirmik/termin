@@ -2,13 +2,17 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/tuple.h>
 
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
 #include "bindings/entity/entity_helpers.hpp"
 #include "tc_scene_ref.hpp"
+#include "mesh/tc_mesh_handle.hpp"
+#include "material/tc_material_handle.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include "../../core_c/include/tc_scene_lighting.h"
+#include "../../core_c/include/tc_scene_skybox.h"
 #include "../../core_c/include/tc_scene_registry.h"
 #include "../../core_c/include/tc_entity_pool.h"
 #include "../../core_c/include/tc_log.h"
@@ -368,6 +372,58 @@ void bind_tc_scene(nb::module_& m) {
         // Python wrapper for callbacks
         .def("set_py_wrapper", &TcScene::set_py_wrapper, nb::arg("wrapper"),
              "Set Python Scene wrapper for component auto-registration")
+
+        // Skybox type
+        .def("get_skybox_type", [](TcScene& self) -> int {
+            return tc_scene_get_skybox_type(self._s);
+        })
+        .def("set_skybox_type", [](TcScene& self, int type) {
+            tc_scene_set_skybox_type(self._s, type);
+        })
+
+        // Skybox colors (as tuples)
+        .def("get_skybox_color", [](TcScene& self) -> std::tuple<float, float, float> {
+            float r, g, b;
+            tc_scene_get_skybox_color(self._s, &r, &g, &b);
+            return {r, g, b};
+        })
+        .def("set_skybox_color", [](TcScene& self, float r, float g, float b) {
+            tc_scene_set_skybox_color(self._s, r, g, b);
+        })
+        .def("get_skybox_top_color", [](TcScene& self) -> std::tuple<float, float, float> {
+            float r, g, b;
+            tc_scene_get_skybox_top_color(self._s, &r, &g, &b);
+            return {r, g, b};
+        })
+        .def("set_skybox_top_color", [](TcScene& self, float r, float g, float b) {
+            tc_scene_set_skybox_top_color(self._s, r, g, b);
+        })
+        .def("get_skybox_bottom_color", [](TcScene& self) -> std::tuple<float, float, float> {
+            float r, g, b;
+            tc_scene_get_skybox_bottom_color(self._s, &r, &g, &b);
+            return {r, g, b};
+        })
+        .def("set_skybox_bottom_color", [](TcScene& self, float r, float g, float b) {
+            tc_scene_set_skybox_bottom_color(self._s, r, g, b);
+        })
+
+        // Skybox mesh and material (ownership in tc_scene via refcount)
+        .def("get_skybox_mesh", [](TcScene& self) -> TcMesh {
+            tc_mesh* raw = tc_scene_get_skybox_mesh(self._s);
+            if (!raw) return TcMesh();
+            return TcMesh(raw);
+        })
+        .def("set_skybox_mesh", [](TcScene& self, const TcMesh& mesh) {
+            tc_scene_set_skybox_mesh(self._s, mesh.get());
+        })
+        .def("get_skybox_material", [](TcScene& self) -> TcMaterial {
+            tc_material* raw = tc_scene_get_skybox_material(self._s);
+            if (!raw) return TcMaterial();
+            return TcMaterial(raw);
+        })
+        .def("set_skybox_material", [](TcScene& self, const TcMaterial& material) {
+            tc_scene_set_skybox_material(self._s, material.get());
+        })
 
         // Lighting (returns pointer to internal tc_scene_lighting)
         .def("lighting_ptr", [](TcScene& self) {

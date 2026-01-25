@@ -1,80 +1,24 @@
-// frame_pass.cpp - FramePass tc_pass vtable implementation
+// frame_pass.cpp - FramePass implementation with embedded tc_pass
 #include "frame_pass.hpp"
-#include "render_frame_pass.hpp"
 #include <algorithm>
+#include <cstdlib>
 
 namespace termin {
 
-// Static callback for execute - dispatches to RenderFramePass::execute()
+// ============================================================================
+// Static vtable callbacks - use from_tc() to recover C++ object
+// ============================================================================
+
 void FramePass::_cb_execute(tc_pass* p, tc_execute_context* ctx) {
-    if (!p || !p->wrapper || !ctx) return;
-
-    FramePass* base = static_cast<FramePass*>(p->wrapper);
-
-    // Try to cast to RenderFramePass
-    RenderFramePass* self = dynamic_cast<RenderFramePass*>(base);
-    if (!self) return;
-
-    // Build FBOMaps from ctx arrays
-    // Arrays are in same order as _cb_get_reads/_cb_get_writes
-    FBOMap reads_map;
-    FBOMap writes_map;
-
-    void** read_fbos = static_cast<void**>(ctx->reads_fbos);
-    void** write_fbos = static_cast<void**>(ctx->writes_fbos);
-
-    size_t i = 0;
-    for (const auto& name : self->reads) {
-        if (read_fbos && read_fbos[i]) {
-            reads_map[name] = static_cast<FramebufferHandle*>(read_fbos[i]);
-        }
-        i++;
-    }
-
-    i = 0;
-    for (const auto& name : self->writes) {
-        if (write_fbos && write_fbos[i]) {
-            writes_map[name] = static_cast<FramebufferHandle*>(write_fbos[i]);
-        }
-        i++;
-    }
-
-    Rect4i rect{ctx->rect_x, ctx->rect_y, ctx->rect_width, ctx->rect_height};
-
-    // Call RenderFramePass::execute()
-    self->execute(
-        static_cast<GraphicsBackend*>(ctx->graphics),
-        reads_map,
-        writes_map,
-        rect,
-        ctx->scene,
-        ctx->camera,
-        nullptr  // lights - TODO: convert from ctx->lights
-    );
+    FramePass* self = from_tc(p);
+    if (!self || !ctx) return;
+    self->execute(ctx);
 }
 
-// Static vtable for C++ FramePass objects
-const tc_pass_vtable FramePass::_cpp_vtable = {
-    .type_name = "CppFramePass",
-    .execute = FramePass::_cb_execute,
-    .get_reads = FramePass::_cb_get_reads,
-    .get_writes = FramePass::_cb_get_writes,
-    .get_inplace_aliases = FramePass::_cb_get_inplace_aliases,
-    .get_resource_specs = nullptr,  // Handled separately
-    .get_internal_symbols = FramePass::_cb_get_internal_symbols,
-    .destroy = FramePass::_cb_destroy,
-    .drop = nullptr,
-    .retain = nullptr,
-    .release = nullptr,
-    .serialize = nullptr,
-    .deserialize = nullptr,
-};
-
 size_t FramePass::_cb_get_reads(tc_pass* p, const char** out, size_t max) {
-    if (!p || !p->wrapper || !out) return 0;
-    FramePass* self = static_cast<FramePass*>(p->wrapper);
+    FramePass* self = from_tc(p);
+    if (!self || !out) return 0;
 
-    // Cache strings to avoid dangling pointers
     self->_cached_reads.clear();
     self->_cached_reads.reserve(self->reads.size());
     for (const auto& r : self->reads) {
@@ -89,8 +33,8 @@ size_t FramePass::_cb_get_reads(tc_pass* p, const char** out, size_t max) {
 }
 
 size_t FramePass::_cb_get_writes(tc_pass* p, const char** out, size_t max) {
-    if (!p || !p->wrapper || !out) return 0;
-    FramePass* self = static_cast<FramePass*>(p->wrapper);
+    FramePass* self = from_tc(p);
+    if (!self || !out) return 0;
 
     self->_cached_writes.clear();
     self->_cached_writes.reserve(self->writes.size());
@@ -106,8 +50,8 @@ size_t FramePass::_cb_get_writes(tc_pass* p, const char** out, size_t max) {
 }
 
 size_t FramePass::_cb_get_inplace_aliases(tc_pass* p, const char** out, size_t max) {
-    if (!p || !p->wrapper || !out) return 0;
-    FramePass* self = static_cast<FramePass*>(p->wrapper);
+    FramePass* self = from_tc(p);
+    if (!self || !out) return 0;
 
     auto aliases = self->get_inplace_aliases();
     self->_cached_aliases.clear();
@@ -126,9 +70,18 @@ size_t FramePass::_cb_get_inplace_aliases(tc_pass* p, const char** out, size_t m
     return pair_count;
 }
 
+size_t FramePass::_cb_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t max) {
+    // Resource specs are handled by RenderFramePass, not base FramePass
+    // This callback returns 0 by default
+    (void)p;
+    (void)out;
+    (void)max;
+    return 0;
+}
+
 size_t FramePass::_cb_get_internal_symbols(tc_pass* p, const char** out, size_t max) {
-    if (!p || !p->wrapper || !out) return 0;
-    FramePass* self = static_cast<FramePass*>(p->wrapper);
+    FramePass* self = from_tc(p);
+    if (!self || !out) return 0;
 
     self->_cached_symbols = self->get_internal_symbols();
 
@@ -140,10 +93,107 @@ size_t FramePass::_cb_get_internal_symbols(tc_pass* p, const char** out, size_t 
 }
 
 void FramePass::_cb_destroy(tc_pass* p) {
-    // Don't delete the C++ object - it's managed by Python/nanobind
-    // Just clear the wrapper to prevent double-free
-    if (p) {
-        p->wrapper = nullptr;
+    FramePass* self = from_tc(p);
+    if (self) {
+        self->destroy();
+    }
+}
+
+void FramePass::_cb_drop(tc_pass* p) {
+    FramePass* self = from_tc(p);
+    if (self && !p->externally_managed) {
+        delete self;
+    }
+}
+
+void FramePass::_cb_retain(tc_pass* p) {
+    if (!p) return;
+    if (p->externally_managed && p->body) {
+        tc_pass_body_incref(p->body);
+    } else {
+        FramePass* self = from_tc(p);
+        if (self) {
+            self->retain();
+        }
+    }
+}
+
+void FramePass::_cb_release(tc_pass* p) {
+    if (!p) return;
+    if (p->externally_managed && p->body) {
+        tc_pass_body_decref(p->body);
+    } else {
+        FramePass* self = from_tc(p);
+        if (self) {
+            self->release();
+        }
+    }
+}
+
+// ============================================================================
+// Static vtable definition
+// ============================================================================
+
+const tc_pass_vtable FramePass::_cpp_vtable = {
+    .type_name = "CppFramePass",
+    .execute = FramePass::_cb_execute,
+    .get_reads = FramePass::_cb_get_reads,
+    .get_writes = FramePass::_cb_get_writes,
+    .get_inplace_aliases = FramePass::_cb_get_inplace_aliases,
+    .get_resource_specs = FramePass::_cb_get_resource_specs,
+    .get_internal_symbols = FramePass::_cb_get_internal_symbols,
+    .destroy = FramePass::_cb_destroy,
+    .drop = FramePass::_cb_drop,
+    .retain = FramePass::_cb_retain,
+    .release = FramePass::_cb_release,
+    .serialize = nullptr,
+    .deserialize = nullptr,
+};
+
+// ============================================================================
+// Constructors / Destructor
+// ============================================================================
+
+FramePass::FramePass() {
+    _init_tc_pass();
+}
+
+FramePass::FramePass(
+    const std::string& name,
+    std::set<std::string> reads_set,
+    std::set<std::string> writes_set
+) : reads(std::move(reads_set)),
+    writes(std::move(writes_set))
+{
+    _init_tc_pass();
+    set_pass_name(name);
+}
+
+FramePass::~FramePass() {
+    _cleanup_tc_pass();
+}
+
+// ============================================================================
+// tc_pass management
+// ============================================================================
+
+void FramePass::_init_tc_pass() {
+    tc_pass_init(&_c, &_cpp_vtable);
+    _c.kind = TC_NATIVE_PASS;
+}
+
+void FramePass::_cleanup_tc_pass() {
+    if (_c.pass_name) {
+        free(_c.pass_name);
+        _c.pass_name = nullptr;
+    }
+    if (_c.viewport_name) {
+        free(_c.viewport_name);
+        _c.viewport_name = nullptr;
+    }
+    if (_c.debug_internal_symbol) {
+        free(_c.debug_internal_symbol);
+        _c.debug_internal_symbol = nullptr;
     }
 }
 

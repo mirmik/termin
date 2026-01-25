@@ -386,7 +386,7 @@ tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
     const char* type_name = tc_pass_type_name(p);
     if (!type_name) return tc_value_nil();
 
-    void* obj = p->wrapper;
+    void* obj = p->body;
     if (!obj) return tc_value_nil();
 
     return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
@@ -398,7 +398,7 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene*
     const char* type_name = tc_pass_type_name(p);
     if (!type_name) return;
 
-    void* obj = p->wrapper;
+    void* obj = p->body;
     if (!obj) return;
 
     tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);

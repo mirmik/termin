@@ -5,6 +5,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/ndarray.h>
 #include <functional>
 #include <cstring>
@@ -21,6 +22,8 @@
 #include "../../../../core_c/include/tc_inspect.hpp"
 #include "../tc_value_helpers.hpp"
 #include "../../tc_scene_ref.hpp"
+#include "../../mesh/tc_mesh_handle.hpp"
+#include "../../material/tc_material_handle.hpp"
 
 namespace nb = nanobind;
 
@@ -202,6 +205,45 @@ void bind_entity_class(nb::module_& m) {
         .def("__repr__", [](const TcSceneRef& self) {
             if (!self.valid()) return std::string("<TcSceneRef: invalid>");
             return std::string("<TcSceneRef: valid>");
+        })
+        .def("skybox_mesh", [](TcSceneRef& self) -> TcMesh {
+            if (!self.valid()) return TcMesh();
+            tc_mesh* mesh = tc_scene_get_skybox_mesh(self.ptr());
+            if (!mesh) return TcMesh();
+            return TcMesh(mesh);
+        })
+        .def("skybox_material", [](TcSceneRef& self) -> TcMaterial {
+            if (!self.valid()) return TcMaterial();
+            tc_material* material = tc_scene_get_skybox_material(self.ptr());
+            if (!material) return TcMaterial();
+            return TcMaterial(material);
+        })
+        .def_prop_ro("skybox_type", [](TcSceneRef& self) -> std::string {
+            if (!self.valid()) return "gradient";
+            int type = tc_scene_get_skybox_type(self.ptr());
+            switch (type) {
+                case TC_SKYBOX_NONE: return "none";
+                case TC_SKYBOX_SOLID: return "solid";
+                default: return "gradient";
+            }
+        })
+        .def_prop_ro("skybox_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
+            if (!self.valid()) return {0.5f, 0.7f, 0.9f};
+            float r, g, b;
+            tc_scene_get_skybox_color(self.ptr(), &r, &g, &b);
+            return {r, g, b};
+        })
+        .def_prop_ro("skybox_top_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
+            if (!self.valid()) return {0.4f, 0.6f, 0.9f};
+            float r, g, b;
+            tc_scene_get_skybox_top_color(self.ptr(), &r, &g, &b);
+            return {r, g, b};
+        })
+        .def_prop_ro("skybox_bottom_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
+            if (!self.valid()) return {0.6f, 0.5f, 0.4f};
+            float r, g, b;
+            tc_scene_get_skybox_bottom_color(self.ptr(), &r, &g, &b);
+            return {r, g, b};
         });
 
     // Non-owning component reference - works with any component regardless of language bindings

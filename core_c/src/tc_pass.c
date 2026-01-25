@@ -119,61 +119,65 @@ static tc_external_pass_callbacks g_external_callbacks = {0};
 
 // External pass vtable callbacks
 static void external_execute(tc_pass* p, tc_execute_context* ctx) {
-    if (g_external_callbacks.execute && p->wrapper) {
-        g_external_callbacks.execute(p->wrapper, ctx);
+    if (g_external_callbacks.execute && p->body) {
+        g_external_callbacks.execute(p->body, ctx);
     }
 }
 
 static size_t external_get_reads(tc_pass* p, const char** out, size_t max) {
-    if (g_external_callbacks.get_reads && p->wrapper) {
-        return g_external_callbacks.get_reads(p->wrapper, out, max);
+    if (g_external_callbacks.get_reads && p->body) {
+        return g_external_callbacks.get_reads(p->body, out, max);
     }
     return 0;
 }
 
 static size_t external_get_writes(tc_pass* p, const char** out, size_t max) {
-    if (g_external_callbacks.get_writes && p->wrapper) {
-        return g_external_callbacks.get_writes(p->wrapper, out, max);
+    if (g_external_callbacks.get_writes && p->body) {
+        return g_external_callbacks.get_writes(p->body, out, max);
     }
     return 0;
 }
 
 static size_t external_get_inplace_aliases(tc_pass* p, const char** out, size_t max) {
-    if (g_external_callbacks.get_inplace_aliases && p->wrapper) {
-        return g_external_callbacks.get_inplace_aliases(p->wrapper, out, max);
+    if (g_external_callbacks.get_inplace_aliases && p->body) {
+        return g_external_callbacks.get_inplace_aliases(p->body, out, max);
     }
     return 0;
 }
 
 static size_t external_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t max) {
-    if (g_external_callbacks.get_resource_specs && p->wrapper) {
-        return g_external_callbacks.get_resource_specs(p->wrapper, out, max);
+    if (g_external_callbacks.get_resource_specs && p->body) {
+        return g_external_callbacks.get_resource_specs(p->body, out, max);
     }
     return 0;
 }
 
 static size_t external_get_internal_symbols(tc_pass* p, const char** out, size_t max) {
-    if (g_external_callbacks.get_internal_symbols && p->wrapper) {
-        return g_external_callbacks.get_internal_symbols(p->wrapper, out, max);
+    if (g_external_callbacks.get_internal_symbols && p->body) {
+        return g_external_callbacks.get_internal_symbols(p->body, out, max);
     }
     return 0;
 }
 
 static void external_destroy(tc_pass* p) {
-    if (g_external_callbacks.destroy && p->wrapper) {
-        g_external_callbacks.destroy(p->wrapper);
+    if (g_external_callbacks.destroy && p->body) {
+        g_external_callbacks.destroy(p->body);
     }
 }
 
 static void external_retain(tc_pass* p) {
-    if (g_external_callbacks.incref && p->wrapper) {
-        g_external_callbacks.incref(p->wrapper);
+    tc_log(TC_LOG_DEBUG, "[external_retain] p=%p body=%p has_incref=%d",
+           (void*)p, p->body, g_external_callbacks.incref != NULL);
+    if (g_external_callbacks.incref && p->body) {
+        g_external_callbacks.incref(p->body);
     }
 }
 
 static void external_release(tc_pass* p) {
-    if (g_external_callbacks.decref && p->wrapper) {
-        g_external_callbacks.decref(p->wrapper);
+    tc_log(TC_LOG_DEBUG, "[external_release] p=%p body=%p has_decref=%d",
+           (void*)p, p->body, g_external_callbacks.decref != NULL);
+    if (g_external_callbacks.decref && p->body) {
+        g_external_callbacks.decref(p->body);
     }
 }
 
@@ -181,9 +185,9 @@ static void external_drop(tc_pass* p) {
     if (!p) return;
 
     // Decrement Python refcount
-    if (g_external_callbacks.decref && p->wrapper) {
-        g_external_callbacks.decref(p->wrapper);
-        p->wrapper = NULL;
+    if (g_external_callbacks.decref && p->body) {
+        g_external_callbacks.decref(p->body);
+        p->body = NULL;
     }
 
     // Free pass_name
@@ -218,15 +222,18 @@ void tc_pass_set_external_callbacks(const tc_external_pass_callbacks* callbacks)
     }
 }
 
-tc_pass* tc_pass_new_external(void* wrapper, const char* type_name) {
+tc_pass* tc_pass_new_external(void* body, const char* type_name) {
     tc_pass* p = (tc_pass*)calloc(1, sizeof(tc_pass));
     if (!p) return NULL;
 
     tc_pass_init(p, &g_external_vtable);
-    p->wrapper = wrapper;
+    p->body = body;
     p->externally_managed = true;
     p->kind = TC_EXTERNAL_PASS;
     p->pass_name = type_name ? strdup(type_name) : NULL;
+
+    tc_log(TC_LOG_DEBUG, "[tc_pass_new_external] created p=%p kind=%d name=%s body=%p",
+           (void*)p, (int)p->kind, p->pass_name ? p->pass_name : "(null)", body);
 
     return p;
 }
@@ -237,6 +244,18 @@ void tc_pass_free_external(tc_pass* p) {
         if (p->viewport_name) free(p->viewport_name);
         if (p->debug_internal_symbol) free(p->debug_internal_symbol);
         free(p);
+    }
+}
+
+void tc_pass_body_incref(void* body) {
+    if (g_external_callbacks.incref && body) {
+        g_external_callbacks.incref(body);
+    }
+}
+
+void tc_pass_body_decref(void* body) {
+    if (g_external_callbacks.decref && body) {
+        g_external_callbacks.decref(body);
     }
 }
 
@@ -262,12 +281,12 @@ tc_pipeline* tc_pipeline_create(const char* name) {
 void tc_pipeline_destroy(tc_pipeline* p) {
     if (!p) return;
 
-    // Destroy all passes
+    // Release all passes (may drop if ref_count reaches 0)
     tc_pass* pass = p->first_pass;
     while (pass) {
         tc_pass* next = pass->next;
         tc_pass_destroy(pass);
-        tc_pass_drop(pass);
+        tc_pass_release(pass);
         pass = next;
     }
 
@@ -286,6 +305,16 @@ void tc_pipeline_destroy(tc_pipeline* p) {
 void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     if (!p || !pass) return;
 
+    tc_log(TC_LOG_DEBUG, "[tc_pipeline_add_pass] pipeline=%s pass=%p kind=%d name=%s body=%p",
+           p->name, (void*)pass, (int)pass->kind,
+           pass->pass_name ? pass->pass_name : "(null)",
+           pass->body);
+
+    // Retain pass to prevent deletion while in pipeline
+    tc_pass_retain(pass);
+
+    tc_log(TC_LOG_DEBUG, "[tc_pipeline_add_pass] after retain, pass=%p", (void*)pass);
+
     pass->prev = p->last_pass;
     pass->next = NULL;
 
@@ -296,10 +325,15 @@ void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     }
     p->last_pass = pass;
     p->pass_count++;
+
+    tc_log(TC_LOG_DEBUG, "[tc_pipeline_add_pass] done, count=%zu", p->pass_count);
 }
 
 void tc_pipeline_insert_pass_before(tc_pipeline* p, tc_pass* pass, tc_pass* before) {
     if (!p || !pass) return;
+
+    // Retain pass to prevent deletion while in pipeline
+    tc_pass_retain(pass);
 
     if (!before || before == p->first_pass) {
         // Insert at beginning
@@ -341,6 +375,9 @@ void tc_pipeline_remove_pass(tc_pipeline* p, tc_pass* pass) {
     pass->prev = NULL;
     pass->next = NULL;
     p->pass_count--;
+
+    // Release pass - may drop if ref_count reaches 0
+    tc_pass_release(pass);
 }
 
 tc_pass* tc_pipeline_get_pass(tc_pipeline* p, const char* name) {

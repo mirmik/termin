@@ -117,7 +117,7 @@ protected:
                 vertex_shader_source(),
                 fragment_shader_source(),
                 "",
-                pass_name
+                get_pass_name()
             );
             _shader.ensure_ready();
         }

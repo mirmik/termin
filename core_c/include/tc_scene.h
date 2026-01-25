@@ -6,6 +6,7 @@
 #include "tc_entity_pool.h"
 #include "tc_component.h"
 #include "tc_scene_lighting.h"
+#include "tc_scene_skybox.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,10 +86,6 @@ TC_API size_t tc_scene_fixed_update_list_count(const tc_scene* s);
 // Set/get Python Scene wrapper for callbacks from C to Python
 TC_API void tc_scene_set_py_wrapper(tc_scene* s, void* py_wrapper);
 TC_API void* tc_scene_get_py_wrapper(tc_scene* s);
-
-// ============================================================================
-// Component Type Lists (intrusive linked lists by type_name)
-// ============================================================================
 
 // ============================================================================
 // Entity Queries

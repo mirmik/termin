@@ -1,37 +1,5 @@
 """ExecuteContext - context passed to render passes during execution."""
 
-from __future__ import annotations
+from termin._native.render import ExecuteContext
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
-    from termin.visualization.core.scene import Scene
-    from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.core.viewport import Viewport
-    from termin.lighting.light import Light
-
-
-@dataclass
-class ExecuteContext:
-    """
-    Context passed to RenderFramePass.execute().
-
-    Contains all data needed by passes to render:
-    - graphics: graphics backend
-    - reads_fbos/writes_fbos: FBO maps for input/output
-    - rect: pixel rectangle for rendering
-    - scene, camera, viewport: what to render
-    - lights: pre-computed lights
-    - layer_mask: which entity layers to render
-    """
-    graphics: "GraphicsBackend"
-    reads_fbos: dict[str, "FramebufferHandle | None"]
-    writes_fbos: dict[str, "FramebufferHandle | None"]
-    rect: tuple[int, int, int, int]  # (px, py, pw, ph)
-    scene: Optional["Scene"]
-    camera: Optional["CameraComponent"]
-    viewport: Optional["Viewport"] = None
-    lights: Optional[list["Light"]] = None
-    layer_mask: int = 0xFFFFFFFFFFFFFFFF
+__all__ = ["ExecuteContext"]

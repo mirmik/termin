@@ -57,9 +57,8 @@ class ShadowPass(_ShadowPassNative):
             pass_name=pass_name,
             caster_offset=caster_offset,
         )
-
-        # Create external tc_pass that calls Python methods
-        self._setup_external_tc_pass(self)
+        # Store Python wrapper in bindings for prevent GC
+        self._set_py_wrapper(self)
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":

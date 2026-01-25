@@ -38,13 +38,8 @@ typedef enum tc_component_kind {
 // Binding Types - for language-specific wrappers
 // ============================================================================
 
-typedef enum tc_binding_type {
-    TC_BINDING_NONE = 0,        // No binding / native C
-    TC_BINDING_PYTHON = 1,
-    TC_BINDING_CSHARP = 2,
-    TC_BINDING_RUST = 3,
-    TC_BINDING_MAX = 8          // Reserve space for future languages
-} tc_binding_type;
+#include "tc_binding.h"
+typedef int tc_binding_type;
 
 // ============================================================================
 // Drawable VTable - for components that can render geometry

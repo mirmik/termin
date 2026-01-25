@@ -16,8 +16,8 @@ from termin.colliders.raycast_hit import RaycastHit
 from termin.collision._collision_native import CollisionWorld
 from termin.core import Event
 
-from .skybox import SkyboxManager
 from .lighting import LightingManager
+from .skybox import SkyboxManager
 from termin.visualization.core.viewport_config import ViewportConfig
 
 
@@ -121,51 +121,83 @@ class Scene:
     def background_color(self, value):
         self._background_color = np.asarray(value, dtype=np.float32)
 
-    # --- Skybox delegation (backward compatibility) ---
+    # --- Skybox (stored in tc_scene) ---
+
+    # Skybox type constants (match tc_skybox_type enum)
+    _SKYBOX_TYPE_NONE = 0
+    _SKYBOX_TYPE_GRADIENT = 1
+    _SKYBOX_TYPE_SOLID = 2
+
+    _SKYBOX_TYPE_TO_STR = {
+        _SKYBOX_TYPE_NONE: "none",
+        _SKYBOX_TYPE_GRADIENT: "gradient",
+        _SKYBOX_TYPE_SOLID: "solid",
+    }
+    _SKYBOX_STR_TO_TYPE = {v: k for k, v in _SKYBOX_TYPE_TO_STR.items()}
 
     @property
     def skybox_type(self) -> str:
-        return self._skybox.skybox_type
+        type_int = self._tc_scene.get_skybox_type()
+        return self._SKYBOX_TYPE_TO_STR.get(type_int, "gradient")
 
     @skybox_type.setter
     def skybox_type(self, value: str):
-        self._skybox.skybox_type = value
+        type_int = self._SKYBOX_STR_TO_TYPE.get(value, self._SKYBOX_TYPE_GRADIENT)
+        self._tc_scene.set_skybox_type(type_int)
 
     @property
     def skybox_color(self) -> np.ndarray:
-        return self._skybox.skybox_color
+        r, g, b = self._tc_scene.get_skybox_color()
+        return np.array([r, g, b], dtype=np.float32)
 
     @skybox_color.setter
     def skybox_color(self, value):
-        self._skybox.skybox_color = np.asarray(value, dtype=np.float32)
+        v = np.asarray(value, dtype=np.float32)
+        self._tc_scene.set_skybox_color(float(v[0]), float(v[1]), float(v[2]))
 
     @property
     def skybox_top_color(self) -> np.ndarray:
-        return self._skybox.skybox_top_color
+        r, g, b = self._tc_scene.get_skybox_top_color()
+        return np.array([r, g, b], dtype=np.float32)
 
     @skybox_top_color.setter
     def skybox_top_color(self, value):
-        self._skybox.skybox_top_color = np.asarray(value, dtype=np.float32)
+        v = np.asarray(value, dtype=np.float32)
+        self._tc_scene.set_skybox_top_color(float(v[0]), float(v[1]), float(v[2]))
 
     @property
     def skybox_bottom_color(self) -> np.ndarray:
-        return self._skybox.skybox_bottom_color
+        r, g, b = self._tc_scene.get_skybox_bottom_color()
+        return np.array([r, g, b], dtype=np.float32)
 
     @skybox_bottom_color.setter
     def skybox_bottom_color(self, value):
-        self._skybox.skybox_bottom_color = np.asarray(value, dtype=np.float32)
+        v = np.asarray(value, dtype=np.float32)
+        self._tc_scene.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
 
     def skybox_mesh(self):
-        """Get skybox cube mesh (TcMesh)."""
-        return self._skybox.mesh
+        """Get skybox cube mesh (TcMesh). Creates lazily if needed."""
+        mesh = self._tc_scene.get_skybox_mesh()
+        if not mesh.is_valid:
+            mesh = self._skybox._ensure_skybox_mesh()
+            self._tc_scene.set_skybox_mesh(mesh)
+        return mesh
 
     def skybox_material(self) -> "Material | None":
-        """Get skybox material based on current skybox_type."""
-        return self._skybox.material
+        """Get skybox material based on current skybox_type. Creates lazily if needed."""
+        if self.skybox_type == "none":
+            return None
+        # SkyboxManager creates material based on skybox_type stored in tc_scene
+        # We need to sync type to SkyboxManager for material creation
+        self._skybox.skybox_type = self.skybox_type
+        material = self._skybox.material
+        if material is not None:
+            self._tc_scene.set_skybox_material(material._tc_material)
+        return material
 
     def set_skybox_type(self, skybox_type: str) -> None:
-        """Set skybox type and reset material if type changed."""
-        self._skybox.set_type(skybox_type)
+        """Set skybox type."""
+        self.skybox_type = skybox_type
 
     # --- Lighting delegation (backward compatibility) ---
 
@@ -843,7 +875,11 @@ class Scene:
             "scene_pipelines": [h.serialize() for h in self._scene_pipelines],
         }
         result.update(self._lighting.serialize())
-        result.update(self._skybox.serialize())
+        # Skybox settings
+        result["skybox_type"] = self.skybox_type
+        result["skybox_color"] = list(self.skybox_color)
+        result["skybox_top_color"] = list(self.skybox_top_color)
+        result["skybox_bottom_color"] = list(self.skybox_bottom_color)
         return result
 
     @classmethod
@@ -875,7 +911,20 @@ class Scene:
                 dtype=np.float32
             )
             self._lighting.load_from_data(data)
-            self._skybox.load_from_data(data)
+            # Skybox settings
+            self.skybox_type = data.get("skybox_type", "gradient")
+            self.skybox_color = np.asarray(
+                data.get("skybox_color", [0.5, 0.7, 0.9]),
+                dtype=np.float32
+            )
+            self.skybox_top_color = np.asarray(
+                data.get("skybox_top_color", [0.4, 0.6, 0.9]),
+                dtype=np.float32
+            )
+            self.skybox_bottom_color = np.asarray(
+                data.get("skybox_bottom_color", [0.6, 0.5, 0.4]),
+                dtype=np.float32
+            )
             # Load layer and flag names
             self.layer_names = {int(k): v for k, v in data.get("layer_names", {}).items()}
             self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
@@ -958,10 +1007,6 @@ class Scene:
                     component.destroy()
 
         # Destroy managers
-        if self._skybox is not None:
-            self._skybox.destroy()
-            self._skybox = None
-
         if self._lighting is not None:
             self._lighting.destroy()
             self._lighting = None

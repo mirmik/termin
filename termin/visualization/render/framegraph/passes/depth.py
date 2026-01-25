@@ -63,9 +63,6 @@ class DepthPass(_DepthPassNative):
         )
         self.camera_name = camera_name
 
-        # Create external tc_pass that calls Python methods
-        self._setup_external_tc_pass(self)
-
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "DepthPass":
         return cls(

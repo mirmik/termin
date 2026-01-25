@@ -51,7 +51,7 @@ public:
      */
     explicit FrameGraph(const std::vector<FramePass*>& passes) {
         for (auto* p : passes) {
-            if (p && p->enabled) {
+            if (p && p->get_enabled()) {
                 passes_.push_back(p);
             }
         }
@@ -123,7 +123,7 @@ public:
             for (size_t i = 0; i < n; ++i) {
                 if (in_degree[i] > 0) {
                     if (!problematic.empty()) problematic += ", ";
-                    problematic += passes_[i]->pass_name;
+                    problematic += passes_[i]->get_pass_name();
                 }
             }
             throw FrameGraphCycleError(
@@ -195,12 +195,12 @@ private:
             for (const auto& [src, dst] : aliases) {
                 if (p->reads.find(src) == p->reads.end()) {
                     throw FrameGraphError(
-                        "Inplace alias source '" + src + "' not in reads of pass '" + p->pass_name + "'"
+                        "Inplace alias source '" + src + "' not in reads of pass '" + p->get_pass_name() + "'"
                     );
                 }
                 if (p->writes.find(dst) == p->writes.end()) {
                     throw FrameGraphError(
-                        "Inplace alias target '" + dst + "' not in writes of pass '" + p->pass_name + "'"
+                        "Inplace alias target '" + dst + "' not in writes of pass '" + p->get_pass_name() + "'"
                     );
                 }
                 if (modified_inputs.count(src)) {
@@ -217,7 +217,7 @@ private:
                     size_t other_idx = writer_for[res];
                     throw FrameGraphMultiWriterError(
                         "Resource '" + res + "' is written by multiple passes: '" +
-                        passes_[other_idx]->pass_name + "' and '" + p->pass_name + "'"
+                        passes_[other_idx]->get_pass_name() + "' and '" + p->get_pass_name() + "'"
                     );
                 }
                 writer_for[res] = idx;

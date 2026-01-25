@@ -1,0 +1,62 @@
+UserWarning: Using SDL2 binaries from pysdl2-dll 2.32.0
+[INFO] [RenderPipeline] created 'Default' with 7 passes
+===RESULT===
+pass_name: TestPass
+reads: {'input'}
+writes: {'output'}
+_tc_pass: <termin._native.render.TcPass object at 0x000002C66782AF30>
+_tc_pass.pass_name: TestPass
+SUCCESS
+[INFO] [tc_mesh_destroy] DESTROYING mesh uuid=00000000-0000-0000-0003-000000000001 name=Cube refcount=0
+[INFO] [tc_mesh_destroy] DESTROYING mesh uuid=00000000-0000-0000-0003-000000000002 name=Sphere refcount=0
+[INFO] [tc_mesh_destroy] DESTROYING mesh uuid=00000000-0000-0000-0003-000000000003 name=Plane refcount=0
+[INFO] [tc_mesh_destroy] DESTROYING mesh uuid=00000000-0000-0000-0003-000000000004 name=Cylinder refcount=0
+[InspectFieldRegistrar] Registering field: CXXRotatorComponent.speed (kind=float)
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9E3136100 result=1
+[InspectFieldRegistrar] Registering field: CameraComponent.near_clip (kind=double)
+[InspectFieldRegistrar] Registering field: CameraComponent.far_clip (kind=double)
+[InspectFieldRegistrar] Registering field: CameraComponent.ortho_size (kind=double)
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9E3129760 result=0
+[InspectFieldRegistrar] Registering field: ColorPass.input_res (kind=string)
+[InspectFieldRegistrar] Registering field: ColorPass.output_res (kind=string)
+[InspectFieldRegistrar] Registering field: ColorPass.shadow_res (kind=string)
+[InspectFieldRegistrar] Registering field: ColorPass.phase_mark (kind=string)
+[InspectFieldRegistrar] Registering field: ColorPass.clear_depth (kind=bool)
+[InspectFieldRegistrar] Registering field: ColorPass.camera_name (kind=string)
+[InspectFieldRegistrar] Registering field: GeometryPassBase.input_res (kind=string)
+[InspectFieldRegistrar] Registering field: GeometryPassBase.output_res (kind=string)
+[InspectFieldRegistrar] Registering field: ShadowPass.output_res (kind=string)
+[InspectFieldRegistrar] Registering field: ShadowPass.caster_offset (kind=float)
+[InspectFieldRegistrar] Registering field: MeshRenderer.mesh (kind=tc_mesh)
+[InspectFieldRegistrar] Registering field: MeshRenderer.material (kind=tc_material)
+[InspectFieldRegistrar] Registering field: MeshRenderer.cast_shadow (kind=bool)
+[InspectFieldRegistrar] Registering field: MeshRenderer._override_material (kind=bool)
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[InspectFieldRegistrar] Registering field: SkeletonController.skeleton (kind=tc_skeleton)
+[InspectFieldRegistrar] Registering field: SkeletonController.bone_entities (kind=list[entity])
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9CB71FC62 result=1
+[InspectFieldRegistrar] Registering field: CXXRotatorComponent.speed (kind=float)
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9E12FFA0C result=1
+[InspectFieldRegistrar] Registering field: SkeletonController.skeleton (kind=tc_skeleton)
+[InspectFieldRegistrar] Registering field: SkeletonController.bone_entities (kind=list[entity])
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9E310139F result=1
+[component_overrides_update] update_slot=2
+[component_overrides_update] base[2]=00007FF9E3129760 derived[2]=00007FF9E310139F result=1

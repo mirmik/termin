@@ -32,6 +32,7 @@ set(TC_SOURCES
     src/tc_render.c
     src/tc_resource_map.c
     src/tc_scene.c
+    src/tc_scene_skybox.c
     src/tc_scene_registry.c
     src/tc_shader_registry.c
     src/tc_skeleton_registry.c

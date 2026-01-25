@@ -83,19 +83,110 @@ ColorPass::ColorPass(
     const std::string& phase_mark,
     const std::string& pass_name,
     const std::string& sort_mode,
-    bool clear_depth
+    bool clear_depth,
+    const std::string& camera_name
 ) : RenderFramePass(pass_name, {input_res}, {output_res}),
     input_res(input_res),
     output_res(output_res),
     shadow_res(shadow_res),
     phase_mark(phase_mark),
     sort_mode(sort_mode),
+    camera_name(camera_name),
     clear_depth(clear_depth)
 {
     // Add shadow_res to reads if not empty
     if (!shadow_res.empty()) {
         reads.insert(shadow_res);
     }
+}
+
+std::set<std::string> ColorPass::compute_reads() const {
+    std::set<std::string> result;
+    result.insert(input_res);
+    if (!shadow_res.empty()) {
+        result.insert(shadow_res);
+    }
+    // Add extra texture resources
+    for (const auto& [uniform_name, resource_name] : extra_textures) {
+        result.insert(resource_name);
+    }
+    return result;
+}
+
+std::set<std::string> ColorPass::compute_writes() const {
+    return {output_res};
+}
+
+std::vector<std::pair<std::string, std::string>> ColorPass::get_inplace_aliases() const {
+    return {{input_res, output_res}};
+}
+
+void ColorPass::add_extra_texture(const std::string& uniform_name, const std::string& resource_name) {
+    if (resource_name.empty() || resource_name.find("empty_") == 0) {
+        return;
+    }
+    // Ensure u_ prefix for uniform name
+    std::string name = uniform_name;
+    if (name.find("u_") != 0) {
+        name = "u_" + name;
+    }
+    extra_textures[name] = resource_name;
+}
+
+void ColorPass::bind_extra_textures(const FBOMap& reads_fbos) {
+    // Clear previous frame's uniforms
+    extra_texture_uniforms.clear();
+
+    int i = 0;
+    for (const auto& [uniform_name, resource_name] : extra_textures) {
+        auto it = reads_fbos.find(resource_name);
+        if (it == reads_fbos.end() || it->second == nullptr) {
+            tc::Log::warn("[ColorPass:%s] FBO not found for resource: %s",
+                         get_pass_name().c_str(), resource_name.c_str());
+            continue;
+        }
+
+        // Get FBO and its color texture
+        FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(it->second);
+        if (!fbo) {
+            tc::Log::warn("[ColorPass:%s] Resource %s is not a FramebufferHandle",
+                         get_pass_name().c_str(), resource_name.c_str());
+            continue;
+        }
+
+        GPUTextureHandle* tex = fbo->color_texture();
+        if (!tex) {
+            tc::Log::warn("[ColorPass:%s] No color_texture on FBO %s",
+                         get_pass_name().c_str(), resource_name.c_str());
+            continue;
+        }
+
+        // Bind to texture unit
+        int unit = EXTRA_TEXTURE_UNIT_START + i;
+        tex->bind(unit);
+
+        // Register uniform->unit mapping for shader
+        extra_texture_uniforms[uniform_name] = unit;
+        ++i;
+    }
+}
+
+CameraComponent* ColorPass::find_camera_by_name(tc_scene* scene, const std::string& name) {
+    if (name.empty() || !scene) {
+        return nullptr;
+    }
+
+    // Check cache
+    if (cached_camera_name_ == name && cached_camera_ != nullptr) {
+        return cached_camera_;
+    }
+
+    // Search in scene entities
+    // TODO: This requires iterating scene entities and finding CameraComponent
+    // For now, return nullptr - camera lookup by name needs scene iteration support
+    cached_camera_name_ = name;
+    cached_camera_ = nullptr;
+    return nullptr;
 }
 
 std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
@@ -332,6 +423,12 @@ void ColorPass::execute_with_data(
     }
     if (detailed) tc_profiler_end_section();
 
+    // Bind shadow textures to texture units (once per frame)
+    if (detailed) tc_profiler_begin_section("ShadowBind");
+    bind_shadow_textures(shadow_maps);
+    graphics->check_gl_error("ColorPass: after bind_shadow_textures");
+    if (detailed) tc_profiler_end_section();
+
     // Render each draw call
     if (detailed) {
         tc_profiler_begin_section("DrawCalls");
@@ -493,8 +590,26 @@ void ColorPass::execute_with_data(
 }
 
 void ColorPass::execute(ExecuteContext& ctx) {
-    if (!ctx.camera) {
+    // Use camera from context, or find by name if camera_name is set
+    CameraComponent* camera = ctx.camera;
+    tc_scene* scene = ctx.scene.ptr();
+    if (!camera_name.empty()) {
+        CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
+        if (named_camera) {
+            camera = named_camera;
+        } else {
+            // Camera not found, skip pass
+            return;
+        }
+    }
+
+    if (!camera) {
         return;
+    }
+
+    // Bind extra textures (if any)
+    if (!extra_textures.empty()) {
+        bind_extra_textures(ctx.reads_fbos);
     }
 
     // Get output FBO and update rect to match its size
@@ -507,26 +622,26 @@ void ColorPass::execute(ExecuteContext& ctx) {
             int h = output_fbo->get_height();
             rect = Rect4i{0, 0, w, h};
             // Update camera aspect ratio
-            ctx.camera->set_aspect(static_cast<double>(w) / std::max(1, h));
+            camera->set_aspect(static_cast<double>(w) / std::max(1, h));
         }
     }
 
     // Get camera matrices
-    Mat44 view64 = ctx.camera->get_view_matrix();
-    Mat44 proj64 = ctx.camera->get_projection_matrix();
+    Mat44 view64 = camera->get_view_matrix();
+    Mat44 proj64 = camera->get_projection_matrix();
     Mat44f view = view64.to_float();
     Mat44f projection = proj64.to_float();
 
     // Get camera position
-    Vec3 camera_position = ctx.camera->get_position();
+    Vec3 camera_position = camera->get_position();
 
     // Get scene lighting properties
     Vec3 ambient_color{1.0, 1.0, 1.0};
     float ambient_intensity = 0.1f;
     ShadowSettings shadow_settings;
 
-    if (ctx.scene) {
-        tc_scene_lighting* lighting = tc_scene_get_lighting(ctx.scene);
+    if (scene) {
+        tc_scene_lighting* lighting = tc_scene_get_lighting(scene);
         if (lighting) {
             ambient_color = Vec3{
                 lighting->ambient_color[0],
@@ -557,7 +672,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
         ctx.reads_fbos,
         ctx.writes_fbos,
         rect,
-        ctx.scene,
+        scene,
         view,
         projection,
         camera_position,

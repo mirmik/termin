@@ -7,9 +7,9 @@
 
 #include "termin/render/render_frame_pass.hpp"
 #include "termin/lighting/light.hpp"
+#include "termin/tc_scene_ref.hpp"
 
 extern "C" {
-#include "tc_scene.h"
 #include "tc_viewport.h"
 }
 
@@ -34,7 +34,7 @@ struct ExecuteContext {
     FBOMap reads_fbos;
     FBOMap writes_fbos;
     Rect4i rect;
-    tc_scene* scene = nullptr;
+    TcSceneRef scene;
     CameraComponent* camera = nullptr;
     tc_viewport* viewport = nullptr;
     std::vector<Light> lights;

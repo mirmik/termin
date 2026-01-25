@@ -38,6 +38,14 @@ public:
         }
     }
 
+    // Construct from raw pointer (finds handle for it)
+    explicit TcMaterial(tc_material* m) {
+        if (m) {
+            handle = tc_material_find(m->header.uuid);
+            tc_material_add_ref(m);
+        }
+    }
+
     TcMaterial(const TcMaterial& other) : handle(other.handle) {
         if (tc_material* m = tc_material_get(handle)) {
             tc_material_add_ref(m);

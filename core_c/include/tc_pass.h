@@ -4,6 +4,7 @@
 #define TC_PASS_H
 
 #include "tc_types.h"
+#include "tc_binding.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -123,7 +124,11 @@ struct tc_pass {
     // External language support
     tc_pass_kind kind;
     bool externally_managed;
-    void* wrapper;               // External object (PyObject*, etc.)
+    void* body;                  // External object (PyObject*, etc.) for TC_EXTERNAL_PASS
+
+    // Language bindings - wrappers for accessing this pass from other languages
+    // bindings[TC_BINDING_PYTHON] = PyObject* wrapper for accessing native pass from Python
+    void* bindings[TC_BINDING_MAX];
 
     // Linked list for pipeline iteration
     tc_pass* next;
@@ -143,9 +148,31 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->debug_internal_symbol = NULL;
     p->kind = TC_NATIVE_PASS;
     p->externally_managed = false;
-    p->wrapper = NULL;
+    p->body = NULL;
+    for (int i = 0; i < TC_BINDING_MAX; i++) {
+        p->bindings[i] = NULL;
+    }
     p->next = NULL;
     p->prev = NULL;
+}
+
+// ============================================================================
+// Binding Helpers
+// ============================================================================
+
+static inline void* tc_pass_get_binding(tc_pass* p, int lang) {
+    if (!p || lang <= 0 || lang >= TC_BINDING_MAX) return NULL;
+    return p->bindings[lang];
+}
+
+static inline void tc_pass_set_binding(tc_pass* p, int lang, void* binding) {
+    if (!p || lang <= 0 || lang >= TC_BINDING_MAX) return;
+    p->bindings[lang] = binding;
+}
+
+static inline void tc_pass_clear_binding(tc_pass* p, int lang) {
+    if (!p || lang <= 0 || lang >= TC_BINDING_MAX) return;
+    p->bindings[lang] = NULL;
 }
 
 // ============================================================================
@@ -261,20 +288,24 @@ TC_API tc_pass_kind tc_pass_registry_get_kind(const char* type_name);
 // ============================================================================
 
 typedef struct {
-    void (*execute)(void* wrapper, tc_execute_context* ctx);
-    size_t (*get_reads)(void* wrapper, const char** out, size_t max);
-    size_t (*get_writes)(void* wrapper, const char** out, size_t max);
-    size_t (*get_inplace_aliases)(void* wrapper, const char** out, size_t max);
-    size_t (*get_resource_specs)(void* wrapper, tc_resource_spec* out, size_t max);
-    size_t (*get_internal_symbols)(void* wrapper, const char** out, size_t max);
-    void (*destroy)(void* wrapper);
-    void (*incref)(void* wrapper);
-    void (*decref)(void* wrapper);
+    void (*execute)(void* body, tc_execute_context* ctx);
+    size_t (*get_reads)(void* body, const char** out, size_t max);
+    size_t (*get_writes)(void* body, const char** out, size_t max);
+    size_t (*get_inplace_aliases)(void* body, const char** out, size_t max);
+    size_t (*get_resource_specs)(void* body, tc_resource_spec* out, size_t max);
+    size_t (*get_internal_symbols)(void* body, const char** out, size_t max);
+    void (*destroy)(void* body);
+    void (*incref)(void* body);
+    void (*decref)(void* body);
 } tc_external_pass_callbacks;
 
 TC_API void tc_pass_set_external_callbacks(const tc_external_pass_callbacks* callbacks);
-TC_API tc_pass* tc_pass_new_external(void* wrapper, const char* type_name);
+TC_API tc_pass* tc_pass_new_external(void* body, const char* type_name);
 TC_API void tc_pass_free_external(tc_pass* p);
+
+// Call external incref/decref on body (for externally_managed native passes)
+TC_API void tc_pass_body_incref(void* body);
+TC_API void tc_pass_body_decref(void* body);
 
 #ifdef __cplusplus
 }

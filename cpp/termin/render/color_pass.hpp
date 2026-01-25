@@ -37,6 +37,9 @@ namespace termin {
  * Collects all Drawable components from entities, filters by phase_mark,
  * sorts by priority, and renders with materials and lighting.
  */
+// Starting texture unit for extra textures (after shadow maps 8-23)
+constexpr int EXTRA_TEXTURE_UNIT_START = 24;
+
 class ColorPass : public RenderFramePass {
 public:
     // Pass configuration
@@ -45,9 +48,14 @@ public:
     std::string shadow_res = "shadow_maps";  // Shadow map resource name (empty = no shadows)
     std::string phase_mark = "opaque";
     std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
+    std::string camera_name;  // Override camera by entity name (empty = use context camera)
     bool clear_depth = false;
     bool wireframe = false;  // Render as wireframe (override polygon mode)
     bool use_ubo = false;    // Use UBO for lighting (faster, requires LIGHTING_USE_UBO in shaders)
+
+    // Extra texture resources: uniform_name -> resource_name
+    // These are bound before rendering and passed to shaders
+    std::unordered_map<std::string, std::string> extra_textures;
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
@@ -55,8 +63,7 @@ public:
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
 
-    // Extra texture uniforms: uniform_name -> texture_unit
-    // Set from Python before execute_with_data
+    // Extra texture uniforms: uniform_name -> texture_unit (computed during execute)
     std::unordered_map<std::string, int> extra_texture_uniforms;
 
     // INSPECT_FIELD registrations
@@ -67,6 +74,7 @@ public:
     INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",
         {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
     INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
+    INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
 
     ColorPass(
         const std::string& input_res = "empty",
@@ -75,7 +83,8 @@ public:
         const std::string& phase_mark = "opaque",
         const std::string& pass_name = "Color",
         const std::string& sort_mode = "none",
-        bool clear_depth = false
+        bool clear_depth = false,
+        const std::string& camera_name = ""
     );
 
     virtual ~ColorPass() = default;
@@ -143,6 +152,28 @@ public:
     std::vector<ResourceSpec> get_resource_specs() const override;
 
     /**
+     * Compute read resources dynamically.
+     */
+    std::set<std::string> compute_reads() const;
+
+    /**
+     * Compute write resources dynamically.
+     */
+    std::set<std::string> compute_writes() const;
+
+    /**
+     * Get inplace aliases (input->output pairs that share the same FBO).
+     */
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const;
+
+    /**
+     * Add extra texture resource.
+     * @param uniform_name Shader uniform name (will add u_ prefix if missing)
+     * @param resource_name Framegraph resource name
+     */
+    void add_extra_texture(const std::string& uniform_name, const std::string& resource_name);
+
+    /**
      * Get internal symbols for debugging.
      */
     std::vector<std::string> get_internal_symbols() const override {
@@ -150,6 +181,20 @@ public:
     }
 
 private:
+    /**
+     * Bind extra textures to texture units before rendering.
+     */
+    void bind_extra_textures(const FBOMap& reads_fbos);
+
+    /**
+     * Find camera component by entity name in scene.
+     * Returns nullptr if not found.
+     */
+    CameraComponent* find_camera_by_name(tc_scene* scene, const std::string& name);
+
+    // Cached camera lookup
+    std::string cached_camera_name_;
+    CameraComponent* cached_camera_ = nullptr;
     // Last GPU time in ms (from detailed profiling mode)
     double last_gpu_time_ms_ = 0.0;
 

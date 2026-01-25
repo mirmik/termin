@@ -2,11 +2,6 @@
 #include "component.hpp"
 #include "tc_log.hpp"
 
-#ifdef TERMIN_HAS_NANOBIND
-#include <nanobind/nanobind.h>
-namespace nb = nanobind;
-#endif
-
 namespace termin {
 
 // Static vtable for C++ components - dispatches to virtual methods
@@ -55,16 +50,6 @@ CxxComponent::CxxComponent() {
 }
 
 CxxComponent::~CxxComponent() {
-#ifdef TERMIN_HAS_NANOBIND
-    // Release Python binding if we have one
-    void* py_binding = tc_component_get_binding(&_c, TC_BINDING_PYTHON);
-    if (py_binding && Py_IsInitialized()) {
-        nb::gil_scoped_acquire gil;
-        nb::handle py_wrapper(reinterpret_cast<PyObject*>(py_binding));
-        py_wrapper.dec_ref();
-        tc_component_clear_binding(&_c, TC_BINDING_PYTHON);
-    }
-#endif
 }
 
 void CxxComponent::release() {

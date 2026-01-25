@@ -13,7 +13,42 @@ extern "C" {
 #include "tc_log.h"
 }
 
+#include "termin/render/frame_pass.hpp"
+
 namespace termin {
+
+// Convert tc_pass to Python object
+// For Python-native passes: returns body directly
+// For C++-native passes: creates Python binding wrapper via nanobind
+inline nb::object tc_pass_to_python(tc_pass* p) {
+    if (!p) {
+        tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] p is NULL");
+        return nb::none();
+    }
+
+    tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] p=%p kind=%d name=%s",
+           (void*)p, (int)p->kind, p->pass_name ? p->pass_name : "(null)");
+
+    // External pass (Python) - return body directly
+    if (p->kind == TC_EXTERNAL_PASS && p->body) {
+        tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] external pass, body=%p", p->body);
+        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
+    }
+
+    // Native pass (C++) - use FramePass::from_tc and let nanobind create wrapper
+    if (p->kind == TC_NATIVE_PASS) {
+        tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] native pass, calling from_tc");
+        FramePass* fp = FramePass::from_tc(p);
+        tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] from_tc returned %p", (void*)fp);
+        if (fp) {
+            tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] casting to Python");
+            return nb::cast(fp, nb::rv_policy::reference);
+        }
+    }
+
+    tc_log(TC_LOG_DEBUG, "[tc_pass_to_python] returning none");
+    return nb::none();
+}
 
 // ============================================================================
 // External pass callbacks - dispatch to Python methods
@@ -289,6 +324,66 @@ static void ensure_py_callbacks_registered() {
 }
 
 // ============================================================================
+// TcPass wrapper for Python passes (similar to TcComponent pattern)
+// ============================================================================
+
+class TcPass {
+public:
+    tc_pass* _c = nullptr;
+
+    // Create a new TcPass wrapping a Python object
+    // The TcPass owns the tc_pass, which lives as long as Python FramePass.
+    // NO Py_INCREF here - Pipeline will do retain when pass is added.
+    TcPass(nb::object py_self, const std::string& type_name) {
+        ensure_py_callbacks_registered();
+
+        // Create C pass with Python vtable
+        // body points to py_self, NO Py_INCREF (pipeline will do retain)
+        _c = tc_pass_new_external(py_self.ptr(), type_name.c_str());
+    }
+
+    ~TcPass() {
+        if (_c) {
+            // Just free the tc_pass struct, don't touch Python refcount
+            // Pipeline already released if it was added
+            tc_pass_free_external(_c);
+            _c = nullptr;
+        }
+    }
+
+    // Disable copy
+    TcPass(const TcPass&) = delete;
+    TcPass& operator=(const TcPass&) = delete;
+
+    // Properties
+    std::string pass_name() const {
+        return _c && _c->pass_name ? _c->pass_name : "";
+    }
+
+    void set_pass_name(const std::string& name) {
+        if (_c) {
+            tc_pass_set_name(_c, name.c_str());
+        }
+    }
+
+    bool enabled() const { return _c ? _c->enabled : true; }
+    void set_enabled(bool v) { if (_c) _c->enabled = v; }
+
+    bool passthrough() const { return _c ? _c->passthrough : false; }
+    void set_passthrough(bool v) { if (_c) _c->passthrough = v; }
+
+    std::string type_name() const {
+        return _c ? tc_pass_type_name(_c) : "Pass";
+    }
+
+    bool is_inplace() const {
+        return _c ? tc_pass_is_inplace(_c) : false;
+    }
+
+    tc_pass* c_ptr() { return _c; }
+};
+
+// ============================================================================
 // Bindings
 // ============================================================================
 
@@ -320,12 +415,7 @@ void bind_tc_pass(nb::module_& m) {
         .def("is_inplace", [](tc_pass* p) {
             return tc_pass_is_inplace(p);
         })
-        .def_prop_ro("wrapper", [](tc_pass* p) -> nb::object {
-            if (p->wrapper) {
-                return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->wrapper));
-            }
-            return nb::none();
-        });
+        .def_prop_ro("body", &tc_pass_to_python);
 
     // tc_pipeline - struct is fully defined in header
     nb::class_<tc_pipeline>(m, "TcPipeline")
@@ -345,16 +435,37 @@ void bind_tc_pass(nb::module_& m) {
         tc_pipeline_destroy(p);
     });
 
+    // Pipeline functions accept tc_pass* (get via TcPassWrapper.c_ptr() or TcPass)
     m.def("tc_pipeline_add_pass", [](tc_pipeline* p, tc_pass* pass) {
+        // tc_pipeline_add_pass internally calls tc_pass_retain
         tc_pipeline_add_pass(p, pass);
+    });
+
+    // Overload for TcPassWrapper
+    m.def("tc_pipeline_add_pass", [](tc_pipeline* p, TcPass* wrapper) {
+        if (wrapper && wrapper->c_ptr()) {
+            tc_pipeline_add_pass(p, wrapper->c_ptr());
+        }
     });
 
     m.def("tc_pipeline_remove_pass", [](tc_pipeline* p, tc_pass* pass) {
         tc_pipeline_remove_pass(p, pass);
     });
 
+    m.def("tc_pipeline_remove_pass", [](tc_pipeline* p, TcPass* wrapper) {
+        if (wrapper && wrapper->c_ptr()) {
+            tc_pipeline_remove_pass(p, wrapper->c_ptr());
+        }
+    });
+
     m.def("tc_pipeline_insert_pass_before", [](tc_pipeline* p, tc_pass* pass, tc_pass* before) {
         tc_pipeline_insert_pass_before(p, pass, before);
+    });
+
+    m.def("tc_pipeline_insert_pass_before", [](tc_pipeline* p, TcPass* wrapper, tc_pass* before) {
+        if (wrapper && wrapper->c_ptr()) {
+            tc_pipeline_insert_pass_before(p, wrapper->c_ptr(), before);
+        }
     });
 
     m.def("tc_pipeline_get_pass", [](tc_pipeline* p, const std::string& name) {
@@ -439,22 +550,28 @@ void bind_tc_pass(nb::module_& m) {
         return result;
     });
 
-    // External pass creation
+    // TcPass wrapper class for Python passes
+    nb::class_<TcPass>(m, "TcPassWrapper")
+        .def(nb::init<nb::object, const std::string&>(),
+             nb::arg("py_self"), nb::arg("type_name"))
+        .def_prop_rw("pass_name", &TcPass::pass_name, &TcPass::set_pass_name)
+        .def_prop_rw("enabled", &TcPass::enabled, &TcPass::set_enabled)
+        .def_prop_rw("passthrough", &TcPass::passthrough, &TcPass::set_passthrough)
+        .def_prop_ro("type_name", &TcPass::type_name)
+        .def("is_inplace", &TcPass::is_inplace)
+        .def("c_ptr", &TcPass::c_ptr, nb::rv_policy::reference)
+        ;
+
+    // Legacy external pass creation (for compatibility, prefer TcPassWrapper)
     m.def("tc_pass_new_external", [](nb::object py_pass, const std::string& type_name) {
         ensure_py_callbacks_registered();
-
-        // Increment refcount since C code will hold a reference
-        Py_INCREF(py_pass.ptr());
-
+        // NO Py_INCREF here - Pipeline will do retain when pass is added
         tc_pass* p = tc_pass_new_external(py_pass.ptr(), type_name.c_str());
         return p;
-    }, nb::arg("wrapper"), nb::arg("type_name"), nb::rv_policy::reference);
+    }, nb::arg("body"), nb::arg("type_name"), nb::rv_policy::reference);
 
     m.def("tc_pass_free_external", [](tc_pass* p) {
-        if (p && p->wrapper) {
-            nb::gil_scoped_acquire gil;
-            Py_DECREF(static_cast<PyObject*>(p->wrapper));
-        }
+        // Just free the struct, don't touch Python refcount
         tc_pass_free_external(p);
     });
 
