@@ -26,6 +26,7 @@ typedef enum tc_texture_format {
     TC_TEXTURE_R8    = 3,   // 1 channel, 8 bits
     TC_TEXTURE_RGBA16F = 4, // 4 channels, 16-bit float
     TC_TEXTURE_RGB16F = 5,  // 3 channels, 16-bit float
+    TC_TEXTURE_DEPTH24 = 6, // depth texture, 24 bits (for shadow maps)
 } tc_texture_format;
 
 // ============================================================================
@@ -44,7 +45,7 @@ typedef struct tc_texture {
     uint8_t transpose;          // transform flag
     uint8_t mipmap;             // generate mipmaps on upload
     uint8_t clamp;              // use clamp wrapping (vs repeat)
-    uint8_t _pad[1];
+    uint8_t compare_mode;       // enable depth comparison for sampler2DShadow
     const char* source_path;    // optional source file path (interned string)
 
     // GPU state (managed by tc_gpu)

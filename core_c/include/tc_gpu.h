@@ -28,8 +28,20 @@ typedef struct tc_gpu_ops {
         bool clamp
     );
 
+    // Upload depth texture to GPU (for shadow maps), returns GPU texture ID (0 on failure)
+    // If compare_mode is true, enables GL_TEXTURE_COMPARE_MODE for sampler2DShadow
+    uint32_t (*depth_texture_upload)(
+        const float* data,
+        int width,
+        int height,
+        bool compare_mode
+    );
+
     // Bind texture to unit
     void (*texture_bind)(uint32_t gpu_id, int unit);
+
+    // Bind depth texture to unit (uses GL_TEXTURE_2D, same as regular texture)
+    void (*depth_texture_bind)(uint32_t gpu_id, int unit);
 
     // Delete GPU texture
     void (*texture_delete)(uint32_t gpu_id);

@@ -1,6 +1,8 @@
 #include "tc_texture_handle.hpp"
 #include "tc_log.hpp"
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 
 namespace termin {
 
@@ -81,6 +83,52 @@ TcTexture TcTexture::white_1x1() {
         "",
         WHITE_UUID
     );
+}
+
+TcTexture TcTexture::dummy_shadow_1x1() {
+    static const char* SHADOW_UUID = "__dummy_shadow_1x1__";
+
+    // Check if already exists
+    tc_texture_handle h = tc_texture_find(SHADOW_UUID);
+    if (!tc_texture_handle_is_invalid(h)) {
+        return TcTexture(h);
+    }
+
+    // Create new texture
+    h = tc_texture_create(SHADOW_UUID);
+    tc_texture* tex = tc_texture_get(h);
+    if (!tex) {
+        tc::Log::error("TcTexture::dummy_shadow_1x1: failed to create texture");
+        return TcTexture();
+    }
+
+    // 1x1 depth texture with value 1.0 (max depth = fully lit, no shadow)
+    float depth_value = 1.0f;
+
+    // Allocate and copy data
+    tex->data = malloc(sizeof(float));
+    if (!tex->data) {
+        tc::Log::error("TcTexture::dummy_shadow_1x1: failed to allocate data");
+        tc_texture_destroy(h);
+        return TcTexture();
+    }
+    std::memcpy(tex->data, &depth_value, sizeof(float));
+
+    tex->width = 1;
+    tex->height = 1;
+    tex->channels = 1;
+    tex->format = TC_TEXTURE_DEPTH24;
+    tex->compare_mode = 1;  // Enable depth comparison for sampler2DShadow
+    tex->clamp = 1;
+    tex->mipmap = 0;
+    tex->header.version = 1;
+
+    if (tex->header.name) {
+        free((void*)tex->header.name);
+    }
+    tex->header.name = strdup("__dummy_shadow_1x1__");
+
+    return TcTexture(h);
 }
 
 std::tuple<std::vector<uint8_t>, uint32_t, uint32_t> TcTexture::get_upload_data() const {

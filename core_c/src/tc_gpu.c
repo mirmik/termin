@@ -47,7 +47,7 @@ bool tc_texture_upload_gpu(tc_texture* tex) {
         return false;
     }
 
-    if (!g_gpu_ops || !g_gpu_ops->texture_upload) {
+    if (!g_gpu_ops) {
         tc_log(TC_LOG_ERROR, "tc_texture_upload_gpu: GPU ops not set");
         return false;
     }
@@ -58,15 +58,34 @@ bool tc_texture_upload_gpu(tc_texture* tex) {
         tex->gpu_id = 0;
     }
 
-    // Upload new texture
-    uint32_t gpu_id = g_gpu_ops->texture_upload(
-        (const uint8_t*)tex->data,
-        (int)tex->width,
-        (int)tex->height,
-        (int)tex->channels,
-        tex->mipmap != 0,
-        tex->clamp != 0
-    );
+    uint32_t gpu_id = 0;
+
+    // Check if this is a depth texture
+    if (tex->format == TC_TEXTURE_DEPTH24) {
+        if (!g_gpu_ops->depth_texture_upload) {
+            tc_log(TC_LOG_ERROR, "tc_texture_upload_gpu: depth_texture_upload not set");
+            return false;
+        }
+        gpu_id = g_gpu_ops->depth_texture_upload(
+            (const float*)tex->data,
+            (int)tex->width,
+            (int)tex->height,
+            tex->compare_mode != 0
+        );
+    } else {
+        if (!g_gpu_ops->texture_upload) {
+            tc_log(TC_LOG_ERROR, "tc_texture_upload_gpu: texture_upload not set");
+            return false;
+        }
+        gpu_id = g_gpu_ops->texture_upload(
+            (const uint8_t*)tex->data,
+            (int)tex->width,
+            (int)tex->height,
+            (int)tex->channels,
+            tex->mipmap != 0,
+            tex->clamp != 0
+        );
+    }
 
     if (gpu_id == 0) {
         tc_log(TC_LOG_ERROR, "tc_texture_upload_gpu: upload failed for '%s'",
@@ -84,7 +103,7 @@ bool tc_texture_bind_gpu(tc_texture* tex, int unit) {
         return false;
     }
 
-    if (!g_gpu_ops || !g_gpu_ops->texture_bind) {
+    if (!g_gpu_ops) {
         tc_log(TC_LOG_ERROR, "tc_texture_bind_gpu: GPU ops not set");
         return false;
     }
@@ -96,8 +115,20 @@ bool tc_texture_bind_gpu(tc_texture* tex, int unit) {
         }
     }
 
-    // Bind
-    g_gpu_ops->texture_bind(tex->gpu_id, unit);
+    // Bind using appropriate function for texture type
+    if (tex->format == TC_TEXTURE_DEPTH24) {
+        if (!g_gpu_ops->depth_texture_bind) {
+            tc_log(TC_LOG_ERROR, "tc_texture_bind_gpu: depth_texture_bind not set");
+            return false;
+        }
+        g_gpu_ops->depth_texture_bind(tex->gpu_id, unit);
+    } else {
+        if (!g_gpu_ops->texture_bind) {
+            tc_log(TC_LOG_ERROR, "tc_texture_bind_gpu: texture_bind not set");
+            return false;
+        }
+        g_gpu_ops->texture_bind(tex->gpu_id, unit);
+    }
     return true;
 }
 

@@ -198,6 +198,10 @@ public:
     // Create 1x1 white texture
     static TcTexture white_1x1();
 
+    // Create 1x1 depth texture for sampler2DShadow placeholders (AMD compatibility)
+    // Returns 1.0 (fully lit) when sampled
+    static TcTexture dummy_shadow_1x1();
+
     // Get by UUID from registry
     static TcTexture from_uuid(const std::string& uuid) {
         tc_texture_handle h = tc_texture_find(uuid.c_str());

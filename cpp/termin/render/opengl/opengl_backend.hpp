@@ -166,6 +166,43 @@ inline void texture_delete(uint32_t gpu_id) {
     glDeleteTextures(1, &gpu_id);
 }
 
+inline uint32_t depth_texture_upload(
+    const float* data,
+    int width,
+    int height,
+    bool compare_mode
+) {
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
+        width, height, 0,
+        GL_DEPTH_COMPONENT, GL_FLOAT,
+        data
+    );
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    if (compare_mode) {
+        // Enable hardware depth comparison for sampler2DShadow
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return texture;
+}
+
+inline void depth_texture_bind(uint32_t gpu_id, int unit) {
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glBindTexture(GL_TEXTURE_2D, gpu_id);
+}
+
 inline uint32_t shader_compile(
     const char* vertex_source,
     const char* fragment_source,
@@ -404,7 +441,9 @@ inline void register_gpu_ops() {
     static tc_gpu_ops ops = {
         // Texture operations
         texture_upload,
+        depth_texture_upload,
         texture_bind,
+        depth_texture_bind,
         texture_delete,
         // Shader operations
         nullptr,  // shader_preprocess - set from Python via tc_gpu_set_shader_preprocess

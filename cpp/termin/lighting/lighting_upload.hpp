@@ -4,8 +4,9 @@
 #include <string>
 
 #include "termin/lighting/shadow.hpp"
-#include "termin/lighting/dummy_shadow_texture.hpp"
+#include "termin/texture/tc_texture_handle.hpp"
 #include "termin/render/tc_shader_handle.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -100,22 +101,28 @@ inline void init_shadow_map_samplers(TcShader& shader) {
  * with dummy shadow texture (required by AMD drivers).
  */
 inline void bind_shadow_textures(const std::vector<ShadowMapArrayEntry>& shadow_maps) {
+    tc::Log::debug("[bind_shadow_textures] start, count=%zu", shadow_maps.size());
     int bound_count = 0;
 
     // Bind actual shadow textures
     for (size_t i = 0; i < shadow_maps.size() && i < static_cast<size_t>(MAX_SHADOW_MAPS); ++i) {
+        tc::Log::debug("[bind_shadow_textures] entry %zu", i);
         GPUTextureHandle* tex = shadow_maps[i].texture();
         if (tex) {
+            tc::Log::debug("[bind_shadow_textures] binding tex %zu", i);
             tex->bind(SHADOW_MAP_TEXTURE_UNIT_START + static_cast<int>(i));
             ++bound_count;
         }
     }
 
+    tc::Log::debug("[bind_shadow_textures] bound %d, getting dummy", bound_count);
     // Bind dummy texture to remaining slots (AMD compatibility)
-    DummyShadowTexture& dummy = get_dummy_shadow_texture();
+    TcTexture dummy = TcTexture::dummy_shadow_1x1();
+    tc::Log::debug("[bind_shadow_textures] binding dummy to %d slots", MAX_SHADOW_MAPS - bound_count);
     for (int i = bound_count; i < MAX_SHADOW_MAPS; ++i) {
-        dummy.bind(SHADOW_MAP_TEXTURE_UNIT_START + i);
+        dummy.bind_gpu(SHADOW_MAP_TEXTURE_UNIT_START + i);
     }
+    tc::Log::debug("[bind_shadow_textures] done");
 }
 
 } // namespace termin

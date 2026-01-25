@@ -26,6 +26,7 @@ extern "C" {
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
 #include "termin/tc_scene_ref.hpp"
+#include "termin/viewport/tc_viewport_ref.hpp"
 #include "tc_scene.h"
 #include "tc_log.hpp"
 #include <cstdint>
@@ -324,11 +325,11 @@ void bind_frame_pass(nb::module_& m) {
             [](ExecuteContext& ctx, CameraComponent* c) { ctx.camera = c; },
             nb::rv_policy::reference)
         .def_prop_rw("viewport",
-            [](const ExecuteContext& ctx) -> uintptr_t {
-                return reinterpret_cast<uintptr_t>(ctx.viewport);
+            [](const ExecuteContext& ctx) -> TcViewportRef {
+                return TcViewportRef(ctx.viewport);
             },
-            [](ExecuteContext& ctx, uintptr_t ptr) {
-                ctx.viewport = reinterpret_cast<tc_viewport*>(ptr);
+            [](ExecuteContext& ctx, TcViewportRef& vp) {
+                ctx.viewport = vp.ptr();
             })
         .def_rw("lights", &ExecuteContext::lights)
         .def_rw("layer_mask", &ExecuteContext::layer_mask);

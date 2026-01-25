@@ -520,7 +520,9 @@ void tc_scene_set_skybox_mesh(tc_scene* s, tc_mesh* mesh) {
 }
 
 tc_mesh* tc_scene_get_skybox_mesh(tc_scene* s) {
-    return s ? s->skybox.mesh : NULL;
+    if (!s) return NULL;
+    // Lazy creation of skybox mesh
+    return tc_scene_skybox_ensure_mesh(&s->skybox);
 }
 
 void tc_scene_set_skybox_material(tc_scene* s, tc_material* material) {

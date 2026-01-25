@@ -171,6 +171,11 @@ public:
         result.ptr_ = vp;
         return result;
     }
+
+    // Wrap existing pointer (adds ref)
+    static TcViewport from_ptr(tc_viewport* vp) {
+        return TcViewport(vp);
+    }
 };
 
 } // namespace termin

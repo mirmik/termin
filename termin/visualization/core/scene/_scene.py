@@ -192,12 +192,21 @@ class Scene:
         self._skybox.skybox_type = self.skybox_type
         material = self._skybox.material
         if material is not None:
-            self._tc_scene.set_skybox_material(material._tc_material)
+            # Material is now alias for TcMaterial, pass directly
+            self._tc_scene.set_skybox_material(material)
         return material
 
     def set_skybox_type(self, skybox_type: str) -> None:
         """Set skybox type."""
         self.skybox_type = skybox_type
+
+    def _ensure_skybox_resources(self) -> None:
+        """Ensure skybox mesh and material are created and set in tc_scene."""
+        if self.skybox_type == "none":
+            return
+        # This triggers lazy creation and sets resources in tc_scene
+        self.skybox_mesh()
+        self.skybox_material()
 
     # --- Lighting delegation (backward compatibility) ---
 
@@ -254,6 +263,8 @@ class Scene:
 
     def build_lights(self) -> List[Light]:
         """Build world-space light parameters from all light components."""
+        # Ensure skybox resources are ready before render
+        self._ensure_skybox_resources()
         return self._lighting.build_lights()
 
     # --- Collision World ---

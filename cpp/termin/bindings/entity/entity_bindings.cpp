@@ -22,6 +22,7 @@
 #include "../../../../core_c/include/tc_inspect.hpp"
 #include "../tc_value_helpers.hpp"
 #include "../../tc_scene_ref.hpp"
+#include "../../viewport/tc_viewport_ref.hpp"
 #include "../../mesh/tc_mesh_handle.hpp"
 #include "../../material/tc_material_handle.hpp"
 
@@ -244,6 +245,39 @@ void bind_entity_class(nb::module_& m) {
             float r, g, b;
             tc_scene_get_skybox_bottom_color(self.ptr(), &r, &g, &b);
             return {r, g, b};
+        })
+        .def("get_components_of_type", [](TcSceneRef& self, const std::string& type_name) {
+            nb::list result;
+            if (!self.valid()) return result;
+            tc_component* c = tc_scene_first_component_of_type(self.ptr(), type_name.c_str());
+            while (c != NULL) {
+                nb::object py_comp = tc_component_to_python(c);
+                if (!py_comp.is_none()) {
+                    result.append(py_comp);
+                }
+                c = c->type_next;
+            }
+            return result;
+        }, nb::arg("type_name"), "Get all components of given type");
+
+    // Non-owning viewport reference - for passing viewport context
+    nb::class_<TcViewportRef>(m, "TcViewportRef")
+        .def(nb::init<>())
+        .def("__bool__", &TcViewportRef::is_valid)
+        .def("is_valid", &TcViewportRef::is_valid)
+        .def("__repr__", [](const TcViewportRef& self) {
+            if (!self.is_valid()) return std::string("<TcViewportRef: invalid>");
+            return std::string("<TcViewportRef: '") + self.name() + "'>";
+        })
+        .def_prop_ro("name", &TcViewportRef::name)
+        .def_prop_ro("enabled", &TcViewportRef::enabled)
+        .def_prop_ro("depth", &TcViewportRef::depth)
+        .def_prop_ro("layer_mask", &TcViewportRef::layer_mask)
+        .def_prop_ro("internal_entities", [](TcViewportRef& self) -> nb::object {
+            if (!self.is_valid() || !self.has_internal_entities()) return nb::none();
+            tc_entity_pool* pool = self.internal_entities_pool();
+            tc_entity_id id = self.internal_entities_id();
+            return nb::cast(Entity(pool, id));
         });
 
     // Non-owning component reference - works with any component regardless of language bindings

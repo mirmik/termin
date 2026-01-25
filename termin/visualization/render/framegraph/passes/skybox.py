@@ -87,7 +87,10 @@ class SkyBoxPass(RenderFramePass):
         mesh = ctx.scene.skybox_mesh()
         material = ctx.scene.skybox_material()
 
-        if mesh is None or material is None:
+        # Check validity - TcMesh/TcMaterial from TcSceneRef may be invalid
+        if mesh is None or not mesh.is_valid:
+            return
+        if material is None or not material.is_valid:
             return
 
         _, _, width, height = ctx.rect

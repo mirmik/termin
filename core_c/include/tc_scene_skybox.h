@@ -34,6 +34,9 @@ TC_API void tc_scene_skybox_init(tc_scene_skybox* skybox);
 // Free resources (release mesh/material refs)
 TC_API void tc_scene_skybox_free(tc_scene_skybox* skybox);
 
+// Ensure skybox mesh exists (creates lazily if needed)
+TC_API struct tc_mesh* tc_scene_skybox_ensure_mesh(tc_scene_skybox* skybox);
+
 // ============================================================================
 // Scene Skybox API
 // ============================================================================
