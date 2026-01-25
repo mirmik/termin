@@ -388,11 +388,34 @@ void bind_frame_pass(nb::module_& m) {
         .def("__repr__", [](const FramePass& p) {
             return "<FramePass '" + p.get_pass_name() + "'>";
         })
+        .def("serialize_data", [](FramePass& self) {
+            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
+            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
+            return registry.attr("serialize_all")(nb::cast(&self));
+        })
         .def("deserialize_data", [](FramePass& self, nb::object data) {
             if (data.is_none()) return;
             nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
             nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
             registry.attr("deserialize_all")(nb::cast(&self), data);
+        })
+        .def("serialize", [](FramePass& self) {
+            nb::dict result;
+            // Get actual type name from vtable
+            tc_pass* tc = self.tc_pass_ptr();
+            const char* type_name = tc && tc->vtable ? tc->vtable->type_name : "FramePass";
+            result["type"] = nb::str(type_name);
+            result["pass_name"] = nb::str(self.get_pass_name().c_str());
+            result["enabled"] = self.get_enabled();
+            // Serialize data via InspectRegistry
+            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
+            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
+            result["data"] = registry.attr("serialize_all")(nb::cast(&self));
+            std::string vp_name = self.get_viewport_name();
+            if (!vp_name.empty()) {
+                result["viewport_name"] = nb::str(vp_name.c_str());
+            }
+            return result;
         })
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             std::string pass_name = "unnamed";

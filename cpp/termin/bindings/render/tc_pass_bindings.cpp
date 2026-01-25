@@ -20,7 +20,8 @@ namespace termin {
 
 // Convert tc_pass to Python object
 // For Python-native passes: returns body directly
-// For C++-native passes: creates Python binding wrapper via nanobind
+// For C++-native passes with externally_managed: returns body (Python wrapper)
+// For C++-native passes without wrapper: creates nanobind wrapper
 inline nb::object tc_pass_to_python(tc_pass* p) {
     if (!p) {
         return nb::none();
@@ -33,12 +34,12 @@ inline nb::object tc_pass_to_python(tc_pass* p) {
         return nb::none();
     }
 
-    // External pass (Python) - return body directly
-    if (p->kind == TC_EXTERNAL_PASS && p->body) {
+    // External pass (Python) or native pass with Python wrapper - return body directly
+    if (p->body && p->externally_managed) {
         return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
     }
 
-    // Native pass (C++) - use FramePass::from_tc and let nanobind create wrapper
+    // Native pass (C++) without wrapper - use FramePass::from_tc and let nanobind create wrapper
     if (p->kind == TC_NATIVE_PASS) {
         FramePass* fp = FramePass::from_tc(p);
         if (fp) {
