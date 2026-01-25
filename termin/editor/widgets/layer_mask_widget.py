@@ -142,7 +142,10 @@ class LayerMaskFieldWidget(FieldWidget):
         if value is None:
             value = 0xFFFFFFFFFFFFFFFF
 
-        self._value = int(value)
+        if isinstance(value, str):
+            self._value = int(value, 0)  # Auto-detect base from prefix (0x, 0b, etc.)
+        else:
+            self._value = int(value)
 
         # Update checkboxes without emitting signals
         for layer_idx, cb in self._checkboxes.items():

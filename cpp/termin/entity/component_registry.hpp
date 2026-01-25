@@ -1,8 +1,6 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
-#include <functional>
 #include <vector>
 #include <type_traits>
 
@@ -19,24 +17,18 @@ namespace termin {
 class Drawable;
 
 // Global registry for component types.
-// This header provides C++ component registration without nanobind dependency.
+// This is a thin wrapper around the C registry (tc_component_registry).
 // For Python component support, include component_registry_python.hpp
 class ENTITY_API ComponentRegistry {
 public:
-    // Unified factory function - returns tc_component* regardless of language
-    using TcFactory = std::function<tc_component*()>;
-
     // Singleton access
     static ComponentRegistry& instance();
 
-    // C++ component registration
-    void register_native(const std::string& name, TcFactory factory, const char* parent = nullptr);
+    // C++ component registration - registers directly in C registry
+    void register_native(const std::string& name, tc_component_factory factory, void* userdata, const char* parent = nullptr);
 
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
-
-    // Unified creation - returns tc_component* for any component type
-    tc_component* create(const std::string& name) const;
 
     // Queries
     bool has(const std::string& name) const;
@@ -56,23 +48,12 @@ public:
     static void set_input_handler(const std::string& name, bool is_input_handler);
 
 private:
-    friend class ComponentRegistryPython;
-
-    struct ComponentInfo {
-        std::string name;
-        tc_component_kind kind;
-        TcFactory factory;  // Unified factory returning tc_component*
-    };
-
     ComponentRegistry() = default;
     ComponentRegistry(const ComponentRegistry&) = delete;
     ComponentRegistry& operator=(const ComponentRegistry&) = delete;
-
-    std::unordered_map<std::string, ComponentInfo> registry_;
 };
 
 // SFINAE helpers for Drawable/InputHandler detection with incomplete types
-// These return false if the base class is incomplete
 namespace detail {
     template<typename Base, typename Derived, typename = void>
     struct is_base_of_safe : std::false_type {};
@@ -97,26 +78,44 @@ void mark_input_handler_if_base(const char* name) {
     }
 }
 
+// Factory data stored in static variables per template instantiation
+template<typename T>
+struct CxxComponentFactoryData {
+    static bool has_update;
+    static bool has_fixed_update;
+    static bool initialized;
+
+    static tc_component* create(void* /*userdata*/) {
+        T* comp = new T();
+        comp->set_has_update(has_update);
+        comp->set_has_fixed_update(has_fixed_update);
+        return comp->c_component();
+    }
+};
+
+template<typename T> bool CxxComponentFactoryData<T>::has_update = false;
+template<typename T> bool CxxComponentFactoryData<T>::has_fixed_update = false;
+template<typename T> bool CxxComponentFactoryData<T>::initialized = false;
+
 // Helper for static registration of C++ components.
 // Used by REGISTER_COMPONENT macro.
-//
-// Detects method overrides via vtable inspection (see vtable_utils.hpp).
-// Detects drawable components via std::is_base_of<Drawable, T>.
 template<typename T>
 struct ComponentRegistrar {
     ComponentRegistrar(const char* name, const char* parent = nullptr) {
-        bool has_update = component_overrides_update<T>();
-        bool has_fixed_update = component_overrides_fixed_update<T>();
+        // Initialize factory data once
+        if (!CxxComponentFactoryData<T>::initialized) {
+            CxxComponentFactoryData<T>::has_update = component_overrides_update<T>();
+            CxxComponentFactoryData<T>::has_fixed_update = component_overrides_fixed_update<T>();
+            CxxComponentFactoryData<T>::initialized = true;
+        }
 
-        ComponentRegistry::instance().register_native(name,
-            [name, has_update, has_fixed_update]() -> tc_component* {
-                T* comp = new T();
-                comp->set_type_name(name);
-                comp->set_has_update(has_update);
-                comp->set_has_fixed_update(has_fixed_update);
-                return comp->c_component();
-            },
-            parent);
+        // Register in C registry with static factory function
+        ComponentRegistry::instance().register_native(
+            name,
+            &CxxComponentFactoryData<T>::create,
+            nullptr,  // no userdata needed
+            parent
+        );
 
         // Register type parent for field inheritance
         if (parent) {
@@ -124,8 +123,6 @@ struct ComponentRegistrar {
         }
 
         // Mark as drawable if component inherits from Drawable
-        // Note: requires Drawable to be complete (include drawable.hpp)
-        // For external modules without drawable.hpp, this check is skipped
         mark_drawable_if_base<T>(name);
 
         // Mark as input handler if component inherits from InputHandler

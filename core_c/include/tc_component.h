@@ -4,6 +4,7 @@
 
 #include "tc_types.h"
 #include "tc_shader.h"
+#include "tc_type_registry.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -95,9 +96,6 @@ struct tc_input_vtable {
 // ============================================================================
 
 struct tc_component_vtable {
-    // Type identification
-    const char* type_name;
-
     // Lifecycle methods (all optional - can be NULL)
     void (*start)(tc_component* self);
     void (*update)(tc_component* self, float dt);
@@ -157,9 +155,6 @@ struct tc_component {
     tc_entity_id owner_entity_id;
     tc_entity_pool* owner_pool;
 
-    // Instance-specific type name (takes precedence over vtable->type_name)
-    const char* type_name;
-
     // Component kind (native or external)
     tc_component_kind kind;
 
@@ -194,6 +189,14 @@ struct tc_component {
     // Linked when registered with scene, unlinked on unregister
     tc_component* type_prev;
     tc_component* type_next;
+
+    // Type registry link (for global instance tracking and hot reload)
+    tc_type_entry* type_entry;
+    uint32_t type_version;
+
+    // Intrusive list for global type registry instance tracking
+    tc_component* registry_prev;
+    tc_component* registry_next;
 };
 
 // ============================================================================
@@ -211,7 +214,6 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->owner_entity_id = (tc_entity_id){0xFFFFFFFF, 0};  // invalid
 #endif
     c->owner_pool = NULL;
-    c->type_name = NULL;
     c->kind = TC_NATIVE_COMPONENT;
     c->native_language = TC_BINDING_NONE;
     c->body = NULL;
@@ -227,6 +229,10 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->factory_retained = false;
     c->type_prev = NULL;
     c->type_next = NULL;
+    c->type_entry = NULL;
+    c->type_version = 0;
+    c->registry_prev = NULL;
+    c->registry_next = NULL;
 }
 
 // ============================================================================
@@ -319,10 +325,8 @@ static inline void tc_component_release(tc_component* c) {
 }
 
 static inline const char* tc_component_type_name(const tc_component* c) {
-    if (c) {
-        // Instance-specific type_name takes precedence (for C++ wrapper)
-        if (c->type_name) return c->type_name;
-        if (c->vtable && c->vtable->type_name) return c->vtable->type_name;
+    if (c && c->type_entry && c->type_entry->type_name) {
+        return c->type_entry->type_name;
     }
     return "Component";
 }
@@ -398,17 +402,20 @@ static inline void tc_component_on_key(tc_component* c, void* event) {
 // Component Registry
 // ============================================================================
 
-typedef tc_component* (*tc_component_factory)(void);
+// Component factory: takes userdata, returns tc_component*
+typedef tc_component* (*tc_component_factory)(void* userdata);
 
 TC_API void tc_component_registry_register(
     const char* type_name,
     tc_component_factory factory,
+    void* factory_userdata,
     tc_component_kind kind
 );
 
 TC_API void tc_component_registry_register_with_parent(
     const char* type_name,
     tc_component_factory factory,
+    void* factory_userdata,
     tc_component_kind kind,
     const char* parent_type_name
 );
@@ -461,6 +468,21 @@ TC_API size_t tc_component_registry_get_input_handler_types(
     const char** out_names,
     size_t max_count
 );
+
+// Get type entry for a component type
+TC_API tc_type_entry* tc_component_registry_get_entry(const char* type_name);
+
+// Get instance count for a type
+TC_API size_t tc_component_registry_instance_count(const char* type_name);
+
+// Check if component's type version is current (for hot reload detection)
+static inline bool tc_component_type_is_current(const tc_component* c) {
+    if (!c || !c->type_entry) return true;
+    return tc_type_version_is_current(c->type_entry, c->type_version);
+}
+
+// Unlink component from type registry (called when component is destroyed)
+TC_API void tc_component_unlink_from_registry(tc_component* c);
 
 // ============================================================================
 // Binding management helpers

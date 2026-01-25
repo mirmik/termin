@@ -95,7 +95,11 @@ namespace nb = nanobind;
     nb::class_<ClassName, termin::CxxComponent>(module, #ClassName) \
         .def("__init__", [](ClassName* self) { \
             new (self) ClassName(); \
-            self->set_type_name(#ClassName); \
+            tc_type_entry* entry = tc_component_registry_get_entry(#ClassName); \
+            if (entry) { \
+                self->c_component()->type_entry = entry; \
+                self->c_component()->type_version = entry->version; \
+            } \
             self->set_has_update(termin::component_overrides_update<ClassName>()); \
             self->set_has_fixed_update(termin::component_overrides_fixed_update<ClassName>()); \
         })

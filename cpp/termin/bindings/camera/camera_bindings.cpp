@@ -130,7 +130,12 @@ void bind_camera_component(nb::module_& m) {
     // Factory function for PerspectiveCameraComponent
     m.def("PerspectiveCameraComponent", [](double fov_y_degrees, double aspect, double near, double far) {
         auto* cam = new CameraComponent();
-        cam->set_type_name("PerspectiveCameraComponent");
+        // Link to CameraComponent type entry
+        tc_type_entry* entry = tc_component_registry_get_entry("CameraComponent");
+        if (entry) {
+            cam->c_component()->type_entry = entry;
+            cam->c_component()->type_version = entry->version;
+        }
         cam->set_fov_degrees(fov_y_degrees);
         cam->aspect = aspect;
         cam->near_clip = near;
@@ -147,7 +152,12 @@ void bind_camera_component(nb::module_& m) {
     // Factory function for OrthographicCameraComponent
     m.def("OrthographicCameraComponent", [](double ortho_size, double aspect, double near, double far) {
         auto* cam = new CameraComponent();
-        cam->set_type_name("OrthographicCameraComponent");
+        // Link to CameraComponent type entry
+        tc_type_entry* entry = tc_component_registry_get_entry("CameraComponent");
+        if (entry) {
+            cam->c_component()->type_entry = entry;
+            cam->c_component()->type_version = entry->version;
+        }
         cam->ortho_size = ortho_size;
         cam->aspect = aspect;
         cam->near_clip = near;

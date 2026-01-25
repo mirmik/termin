@@ -30,7 +30,7 @@ static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> s_ski
 SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer()
 {
-    set_type_name("SkinnedMeshRenderer");
+    // type_entry is set by registry when component is created via factory
 }
 
 void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {

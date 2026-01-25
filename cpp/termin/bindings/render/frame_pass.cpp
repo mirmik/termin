@@ -401,9 +401,9 @@ void bind_frame_pass(nb::module_& m) {
         })
         .def("serialize", [](FramePass& self) {
             nb::dict result;
-            // Get actual type name from vtable
+            // Get actual type name from type_entry
             tc_pass* tc = self.tc_pass_ptr();
-            const char* type_name = tc && tc->vtable ? tc->vtable->type_name : "FramePass";
+            const char* type_name = tc_pass_type_name(tc);
             result["type"] = nb::str(type_name);
             result["pass_name"] = nb::str(self.get_pass_name().c_str());
             result["enabled"] = self.get_enabled();

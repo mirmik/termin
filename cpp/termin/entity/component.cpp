@@ -6,8 +6,6 @@ namespace termin {
 
 // Static vtable for C++ components - dispatches to virtual methods
 const tc_component_vtable CxxComponent::_cxx_vtable = {
-    // type_name - set per-instance via _c.type_name, not here
-    "CxxComponent",
     // Lifecycle
     CxxComponent::_cb_start,
     CxxComponent::_cb_update,
@@ -39,7 +37,7 @@ CxxComponent::CxxComponent() {
     // Initialize the C component structure
     tc_component_init(&_c, &_cxx_vtable);
     _c.kind = TC_CXX_COMPONENT;
-    set_type_name("CxxComponent");
+    // Note: type_entry is set by the registry when component is created via factory
     // Set default flags
     _c.enabled = true;
     _c.active_in_editor = false;

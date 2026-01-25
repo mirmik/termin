@@ -23,7 +23,7 @@ protected:
 };
 
 RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent() {
-    set_type_name("RecastNavMeshBuilderComponent");
+    // type_entry is set by registry when component is created via factory
     install_drawable_vtable(&_c);
 }
 

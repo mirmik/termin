@@ -102,7 +102,6 @@ static void py_vtable_release(tc_component* c) {
 // ============================================================================
 
 static const tc_component_vtable g_python_vtable = {
-    .type_name = "PythonComponent",  // Instance type_name will override this
     .start = py_vtable_start,
     .update = py_vtable_update,
     .fixed_update = py_vtable_fixed_update,
@@ -144,21 +143,29 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
     c->body = py_self;
     c->native_language = TC_BINDING_PYTHON;
 
-    // Set instance type name (owned copy)
-    c->type_name = type_name ? strdup(type_name) : NULL;
-
     // Python components
     c->kind = TC_EXTERNAL_COMPONENT;
+
+    // Link to type registry for type name and instance tracking
+    if (type_name) {
+        tc_type_entry* entry = tc_component_registry_get_entry(type_name);
+        if (entry) {
+            c->type_entry = entry;
+            c->type_version = entry->version;
+            // Note: linking to instance list is done via tc_type_entry_link_instance
+            // but we need the offsets which are defined in tc_component.c
+            // For external components, we skip instance linking for now
+            // since they're tracked differently via Python GC
+        }
+    }
 
     return c;
 }
 
 void tc_component_free_python(tc_component* c) {
     if (c) {
-        // Free owned type_name
-        if (c->type_name) {
-            free((void*)c->type_name);
-        }
+        // Unlink from type registry if linked
+        tc_component_unlink_from_registry(c);
         free(c);
     }
 }

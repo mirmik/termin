@@ -71,7 +71,6 @@ tc_resource_spec ResourceSpec::to_c() const {
 // ============================================================================
 
 const tc_pass_vtable CxxPass::_cxx_vtable = {
-    .type_name = "CxxPass",
     .execute = CxxPass::_cb_execute,
     .get_reads = CxxPass::_cb_get_reads,
     .get_writes = CxxPass::_cb_get_writes,

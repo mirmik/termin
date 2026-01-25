@@ -5,6 +5,7 @@
 
 #include "tc_types.h"
 #include "tc_binding.h"
+#include "tc_type_registry.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -69,9 +70,6 @@ struct tc_resource_spec {
 // ============================================================================
 
 struct tc_pass_vtable {
-    // Type identification
-    const char* type_name;
-
     // Core execution
     void (*execute)(tc_pass* self, tc_execute_context* ctx);
 
@@ -133,6 +131,14 @@ struct tc_pass {
     // Linked list for pipeline iteration
     tc_pass* next;
     tc_pass* prev;
+
+    // Type registry link (for global instance tracking and hot reload)
+    tc_type_entry* type_entry;
+    uint32_t type_version;
+
+    // Intrusive list for global type registry instance tracking
+    tc_pass* registry_prev;
+    tc_pass* registry_next;
 };
 
 // ============================================================================
@@ -154,6 +160,10 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     }
     p->next = NULL;
     p->prev = NULL;
+    p->type_entry = NULL;
+    p->type_version = 0;
+    p->registry_prev = NULL;
+    p->registry_next = NULL;
 }
 
 // ============================================================================
@@ -186,8 +196,8 @@ static inline void tc_pass_execute(tc_pass* p, tc_execute_context* ctx) {
 }
 
 static inline const char* tc_pass_type_name(const tc_pass* p) {
-    if (p) {
-        if (p->vtable && p->vtable->type_name) return p->vtable->type_name;
+    if (p && p->type_entry && p->type_entry->type_name) {
+        return p->type_entry->type_name;
     }
     return "Pass";
 }
@@ -268,11 +278,13 @@ TC_API void tc_pass_set_passthrough(tc_pass* p, bool passthrough);
 // Pass Registry
 // ============================================================================
 
-typedef tc_pass* (*tc_pass_factory)(void);
+// Pass factory: takes userdata, returns tc_pass*
+typedef tc_pass* (*tc_pass_factory)(void* userdata);
 
 TC_API void tc_pass_registry_register(
     const char* type_name,
     tc_pass_factory factory,
+    void* factory_userdata,
     tc_pass_kind kind
 );
 
@@ -282,6 +294,21 @@ TC_API tc_pass* tc_pass_registry_create(const char* type_name);
 TC_API size_t tc_pass_registry_type_count(void);
 TC_API const char* tc_pass_registry_type_at(size_t index);
 TC_API tc_pass_kind tc_pass_registry_get_kind(const char* type_name);
+
+// Get type entry for a pass type
+TC_API tc_type_entry* tc_pass_registry_get_entry(const char* type_name);
+
+// Get instance count for a type
+TC_API size_t tc_pass_registry_instance_count(const char* type_name);
+
+// Unlink pass from type registry (called when pass is destroyed)
+TC_API void tc_pass_unlink_from_registry(tc_pass* p);
+
+// Check if pass's type version is current (for hot reload detection)
+static inline bool tc_pass_type_is_current(const tc_pass* p) {
+    if (!p || !p->type_entry) return true;
+    return tc_type_version_is_current(p->type_entry, p->type_version);
+}
 
 // ============================================================================
 // External Pass Support (for Python/Rust/C#)

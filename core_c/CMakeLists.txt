@@ -37,6 +37,7 @@ set(TC_SOURCES
     src/tc_shader_registry.c
     src/tc_skeleton_registry.c
     src/tc_texture_registry.c
+    src/tc_type_registry.c
     src/tc_viewport.c
 )
 
@@ -76,6 +77,7 @@ set(TC_HEADERS
     include/tc_skeleton_registry.h
     include/tc_texture.h
     include/tc_texture_registry.h
+    include/tc_type_registry.h
     include/tc_types.h
     include/tc_vec3.h
     include/tc_viewport.h

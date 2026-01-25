@@ -8,11 +8,11 @@
 
 #define TC_VERSION_MAJOR 0
 #define TC_VERSION_MINOR 1
-#define TC_VERSION_PATCH 1
-#define TC_VERSION_STRING "0.1.1"
+#define TC_VERSION_PATCH 4
+#define TC_VERSION_STRING "0.1.4"
 
 // Single integer version for compatibility checks
 // INCREMENT THIS when any ABI-breaking change is made!
-#define TC_VERSION 1
+#define TC_VERSION 4
 
 #endif // TC_VERSION_H

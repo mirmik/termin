@@ -8,6 +8,7 @@
 extern "C" {
 #include "tc_pass.h"
 #include "tc_pipeline.h"
+#include "tc_pipeline_registry.h"
 #include "tc_frame_graph.h"
 #include "tc_render.h"
 #include "tc_log.h"
@@ -345,9 +346,9 @@ void bind_tc_pass(nb::module_& m) {
         .def(nb::init<>())
         .def("valid", &TcPassRef::valid)
         .def_prop_rw("pass_name", &TcPassRef::pass_name, &TcPassRef::set_pass_name)
+        .def_prop_ro("type_name", &TcPassRef::type_name)
         .def_prop_rw("enabled", &TcPassRef::enabled, &TcPassRef::set_enabled)
         .def_prop_rw("passthrough", &TcPassRef::passthrough, &TcPassRef::set_passthrough)
-        .def_prop_ro("type_name", &TcPassRef::type_name)
         .def("is_inplace", &TcPassRef::is_inplace)
         .def_prop_ro("body", [](TcPassRef& self) {
             return tc_pass_to_python(self.ptr());
@@ -362,9 +363,9 @@ void bind_tc_pass(nb::module_& m) {
         }, nb::arg("py_self"), nb::arg("type_name"))
         .def("ref", &TcPass::ref)
         .def_prop_rw("pass_name", &TcPass::pass_name, &TcPass::set_pass_name)
+        .def_prop_ro("type_name", &TcPass::type_name)
         .def_prop_rw("enabled", &TcPass::enabled, &TcPass::set_enabled)
         .def_prop_rw("passthrough", &TcPass::passthrough, &TcPass::set_passthrough)
-        .def_prop_ro("type_name", &TcPass::type_name)
         .def("is_inplace", &TcPass::is_inplace);
 
     // tc_pipeline - struct is fully defined in header
@@ -675,6 +676,77 @@ void bind_tc_pass(nb::module_& m) {
             }
 
             result[nb::str(specs[i].resource)] = spec_dict;
+        }
+
+        return result;
+    });
+
+    // ========================================================================
+    // Pipeline Registry bindings
+    // ========================================================================
+
+    m.def("tc_pipeline_registry_count", []() {
+        return tc_pipeline_registry_count();
+    });
+
+    m.def("tc_pipeline_registry_get_all_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_pipeline_info* infos = tc_pipeline_registry_get_all_info(&count);
+
+        if (infos) {
+            for (size_t i = 0; i < count; i++) {
+                nb::dict info;
+                info["name"] = infos[i].name ? nb::str(infos[i].name) : nb::none();
+                info["pass_count"] = infos[i].pass_count;
+                result.append(info);
+            }
+            free(infos);
+        }
+
+        return result;
+    });
+
+    m.def("tc_pass_registry_get_all_instance_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_pass_info* infos = tc_pass_registry_get_all_instance_info(&count);
+
+        if (infos) {
+            for (size_t i = 0; i < count; i++) {
+                nb::dict info;
+                info["pass_name"] = infos[i].pass_name ? nb::str(infos[i].pass_name) : nb::none();
+                info["type_name"] = infos[i].type_name ? nb::str(infos[i].type_name) : nb::none();
+                info["pipeline_name"] = infos[i].pipeline_name ? nb::str(infos[i].pipeline_name) : nb::none();
+                info["enabled"] = infos[i].enabled;
+                info["passthrough"] = infos[i].passthrough;
+                info["is_inplace"] = infos[i].is_inplace;
+                info["kind"] = infos[i].kind == TC_NATIVE_PASS ? "native" : "external";
+                result.append(info);
+            }
+            free(infos);
+        }
+
+        return result;
+    });
+
+    // Pass type registry (registered pass types, not instances)
+    m.def("tc_pass_registry_type_count", []() {
+        return tc_pass_registry_type_count();
+    });
+
+    m.def("tc_pass_registry_get_all_types", []() {
+        nb::list result;
+        size_t count = tc_pass_registry_type_count();
+
+        for (size_t i = 0; i < count; i++) {
+            const char* type_name = tc_pass_registry_type_at(i);
+            if (type_name) {
+                nb::dict info;
+                info["type_name"] = nb::str(type_name);
+                info["kind"] = tc_pass_registry_get_kind(type_name) == TC_NATIVE_PASS ? "native" : "external";
+                result.append(info);
+            }
         }
 
         return result;

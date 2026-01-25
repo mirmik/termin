@@ -121,9 +121,8 @@ tc_component* Entity::get_component_by_type_name(const std::string& type_name) {
         tc_component* tc = component_at(i);
         if (!tc) continue;
 
-        // Get type name from tc_component
-        const char* comp_type = tc->type_name ? tc->type_name :
-                                (tc->vtable ? tc->vtable->type_name : nullptr);
+        // Get type name from tc_component via type_entry
+        const char* comp_type = tc_component_type_name(tc);
         if (comp_type && type_name == comp_type) {
             return tc;
         }

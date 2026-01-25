@@ -213,7 +213,7 @@ private:
 // ============================================================================
 
 #define TC_REGISTER_FRAME_PASS(PassClass)                                    \
-    static tc_pass* _factory_##PassClass() {                                 \
+    static tc_pass* _factory_##PassClass(void* /*userdata*/) {               \
         auto* pass = new PassClass();                                        \
         pass->retain();                                                      \
         return pass->tc_pass_ptr();                                          \
@@ -221,7 +221,7 @@ private:
     static struct _reg_##PassClass {                                         \
         _reg_##PassClass() {                                                 \
             tc_pass_registry_register(                                       \
-                #PassClass, _factory_##PassClass, TC_NATIVE_PASS);           \
+                #PassClass, _factory_##PassClass, nullptr, TC_NATIVE_PASS);  \
         }                                                                    \
     } _reg_instance_##PassClass
 

@@ -192,14 +192,14 @@ private:
 // ============================================================================
 
 #define TC_REGISTER_PASS(PassClass)                                         \
-    static tc_pass* _factory_##PassClass() {                                \
+    static tc_pass* _factory_##PassClass(void* /*userdata*/) {              \
         auto* p = new PassClass();                                          \
         return p->c_pass();                                                 \
     }                                                                       \
     static struct _reg_##PassClass {                                        \
         _reg_##PassClass() {                                                \
             tc_pass_registry_register(                                      \
-                #PassClass, _factory_##PassClass, TC_NATIVE_PASS);          \
+                #PassClass, _factory_##PassClass, nullptr, TC_NATIVE_PASS); \
         }                                                                   \
     } _reg_instance_##PassClass
 

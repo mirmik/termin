@@ -139,7 +139,6 @@ void FramePass::_cb_release(tc_pass* p) {
 // ============================================================================
 
 const tc_pass_vtable FramePass::_cpp_vtable = {
-    .type_name = "CppFramePass",
     .execute = FramePass::_cb_execute,
     .get_reads = FramePass::_cb_get_reads,
     .get_writes = FramePass::_cb_get_writes,

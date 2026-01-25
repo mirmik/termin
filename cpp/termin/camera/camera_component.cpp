@@ -7,7 +7,7 @@
 namespace termin {
 
 CameraComponent::CameraComponent() {
-    set_type_name("CameraComponent");
+    // type_entry is set by registry when component is created via factory
 }
 
 std::string CameraComponent::get_projection_type_str() const {

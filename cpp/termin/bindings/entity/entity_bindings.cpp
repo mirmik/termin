@@ -584,8 +584,7 @@ void bind_entity_class(nb::module_& m) {
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
                 if (tc && tc->native_language == TC_BINDING_PYTHON && tc->body) {
-                    const char* comp_type = tc->type_name ? tc->type_name :
-                                            (tc->vtable ? tc->vtable->type_name : nullptr);
+                    const char* comp_type = tc_component_type_name(tc);
                     if (comp_type && type_name == comp_type) {
                         return nb::borrow((PyObject*)tc->body);
                     }

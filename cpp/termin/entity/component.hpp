@@ -59,14 +59,9 @@ public:
     void release();  // Defined in .cpp - may delete this
     int ref_count() const { return _ref_count.load(); }
 
-    // Type identification (for serialization)
-    const char* type_name() const { return _c.type_name; }
-
-    // Set type name with string interning to avoid dangling pointers
-    void set_type_name(const char* name) {
-        static std::unordered_set<std::string> interned_names;
-        auto [it, _] = interned_names.insert(name);
-        _c.type_name = it->c_str();
+    // Type identification (for serialization) - uses type_entry from registry
+    const char* type_name() const {
+        return tc_component_type_name(&_c);
     }
 
     // Accessors for tc_component flags

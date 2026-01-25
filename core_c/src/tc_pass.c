@@ -1,9 +1,13 @@
 // tc_pass.c - Pass registry and external pass support
 #include "tc_pass.h"
 #include "tc_pipeline.h"
+#include "tc_pipeline_registry.h"
+#include "tc_type_registry.h"
+#include "termin_core.h"
 #include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 
 // ============================================================================
 // Pass Property Setters
@@ -24,91 +28,129 @@ void tc_pass_set_passthrough(tc_pass* p, bool passthrough) {
 }
 
 // ============================================================================
-// Pass Registry
+// Pass Registry - uses tc_type_registry for storage
 // ============================================================================
 
-#define MAX_PASS_TYPES 128
+static tc_type_registry* g_pass_registry = NULL;
 
-typedef struct {
-    char* type_name;
-    tc_pass_factory factory;
-    tc_pass_kind kind;
-} tc_pass_registry_entry;
+// Offset macros for intrusive list
+#define PASS_REGISTRY_PREV_OFFSET offsetof(tc_pass, registry_prev)
+#define PASS_REGISTRY_NEXT_OFFSET offsetof(tc_pass, registry_next)
 
-static tc_pass_registry_entry g_pass_registry[MAX_PASS_TYPES];
-static size_t g_pass_registry_count = 0;
-
-static tc_pass_registry_entry* find_registry_entry(const char* type_name) {
-    for (size_t i = 0; i < g_pass_registry_count; i++) {
-        if (strcmp(g_pass_registry[i].type_name, type_name) == 0) {
-            return &g_pass_registry[i];
-        }
+static void ensure_pass_registry_initialized(void) {
+    if (!g_pass_registry) {
+        g_pass_registry = tc_type_registry_new();
     }
-    return NULL;
 }
 
 void tc_pass_registry_register(
     const char* type_name,
     tc_pass_factory factory,
+    void* factory_userdata,
     tc_pass_kind kind
 ) {
     if (!type_name || !factory) return;
-    if (g_pass_registry_count >= MAX_PASS_TYPES) {
-        tc_log(TC_LOG_ERROR, "[tc_pass] Registry full, cannot register %s", type_name);
-        return;
-    }
 
-    // Check if already registered
-    if (find_registry_entry(type_name)) {
-        tc_log(TC_LOG_WARN, "[tc_pass] Type %s already registered, skipping", type_name);
-        return;
-    }
+    ensure_pass_registry_initialized();
 
-    tc_pass_registry_entry* entry = &g_pass_registry[g_pass_registry_count++];
-    entry->type_name = strdup(type_name);
-    entry->factory = factory;
-    entry->kind = kind;
+    tc_type_registry_register(
+        g_pass_registry,
+        type_name,
+        (tc_type_factory_fn)factory,
+        factory_userdata,
+        (int)kind
+    );
 }
 
 void tc_pass_registry_unregister(const char* type_name) {
-    for (size_t i = 0; i < g_pass_registry_count; i++) {
-        if (strcmp(g_pass_registry[i].type_name, type_name) == 0) {
-            free(g_pass_registry[i].type_name);
-            // Shift remaining entries
-            for (size_t j = i; j < g_pass_registry_count - 1; j++) {
-                g_pass_registry[j] = g_pass_registry[j + 1];
-            }
-            g_pass_registry_count--;
-            return;
-        }
-    }
+    if (!type_name || !g_pass_registry) return;
+    tc_type_registry_unregister(g_pass_registry, type_name);
 }
 
 bool tc_pass_registry_has(const char* type_name) {
-    return find_registry_entry(type_name) != NULL;
+    if (!g_pass_registry) return false;
+    return tc_type_registry_has(g_pass_registry, type_name);
 }
 
 tc_pass* tc_pass_registry_create(const char* type_name) {
-    tc_pass_registry_entry* entry = find_registry_entry(type_name);
-    if (!entry) {
-        tc_log(TC_LOG_ERROR, "[tc_pass] Unknown type: %s", type_name);
+    if (!g_pass_registry) return NULL;
+
+    tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
+    if (!entry || !entry->registered || !entry->factory) {
+        tc_log(TC_LOG_ERROR, "[tc_pass] Unknown type or no factory: %s", type_name);
         return NULL;
     }
-    return entry->factory();
+
+    // Create via type entry's factory
+    tc_pass* p = (tc_pass*)tc_type_entry_create(entry);
+    if (p) {
+        p->kind = (tc_pass_kind)entry->kind;
+
+        // Link to type registry for instance tracking
+        p->type_entry = entry;
+        p->type_version = entry->version;
+        tc_type_entry_link_instance(
+            entry,
+            p,
+            PASS_REGISTRY_PREV_OFFSET,
+            PASS_REGISTRY_NEXT_OFFSET
+        );
+    }
+    return p;
 }
 
 size_t tc_pass_registry_type_count(void) {
-    return g_pass_registry_count;
+    if (!g_pass_registry) return 0;
+    return tc_type_registry_count(g_pass_registry);
 }
 
 const char* tc_pass_registry_type_at(size_t index) {
-    if (index >= g_pass_registry_count) return NULL;
-    return g_pass_registry[index].type_name;
+    if (!g_pass_registry) return NULL;
+    return tc_type_registry_type_at(g_pass_registry, index);
 }
 
 tc_pass_kind tc_pass_registry_get_kind(const char* type_name) {
-    tc_pass_registry_entry* entry = find_registry_entry(type_name);
-    return entry ? entry->kind : TC_NATIVE_PASS;
+    if (!g_pass_registry) return TC_NATIVE_PASS;
+
+    tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
+    return entry ? (tc_pass_kind)entry->kind : TC_NATIVE_PASS;
+}
+
+tc_type_entry* tc_pass_registry_get_entry(const char* type_name) {
+    if (!type_name || !g_pass_registry) return NULL;
+    return tc_type_registry_get(g_pass_registry, type_name);
+}
+
+size_t tc_pass_registry_instance_count(const char* type_name) {
+    if (!type_name || !g_pass_registry) return 0;
+
+    tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
+    return tc_type_entry_instance_count(entry);
+}
+
+void tc_pass_unlink_from_registry(tc_pass* p) {
+    if (!p || !p->type_entry) return;
+
+    tc_type_entry_unlink_instance(
+        p->type_entry,
+        p,
+        PASS_REGISTRY_PREV_OFFSET,
+        PASS_REGISTRY_NEXT_OFFSET
+    );
+
+    p->type_entry = NULL;
+    p->type_version = 0;
+}
+
+// ============================================================================
+// Pass Registry Cleanup (called by tc_shutdown)
+// ============================================================================
+
+void tc_pass_registry_cleanup(void) {
+    if (g_pass_registry) {
+        tc_type_registry_free(g_pass_registry);
+        g_pass_registry = NULL;
+    }
 }
 
 // ============================================================================
@@ -180,6 +222,9 @@ static void external_release(tc_pass* p) {
 static void external_drop(tc_pass* p) {
     if (!p) return;
 
+    // Unlink from registry
+    tc_pass_unlink_from_registry(p);
+
     // Decrement Python refcount
     if (g_external_callbacks.decref && p->body) {
         g_external_callbacks.decref(p->body);
@@ -197,7 +242,6 @@ static void external_drop(tc_pass* p) {
 }
 
 static const tc_pass_vtable g_external_vtable = {
-    .type_name = "ExternalPass",
     .execute = external_execute,
     .get_reads = external_get_reads,
     .get_writes = external_get_writes,
@@ -226,13 +270,31 @@ tc_pass* tc_pass_new_external(void* body, const char* type_name) {
     p->body = body;
     p->externally_managed = true;
     p->kind = TC_EXTERNAL_PASS;
-    p->pass_name = type_name ? strdup(type_name) : NULL;
+
+    // Link to type registry for type name and instance tracking
+    if (type_name) {
+        ensure_pass_registry_initialized();
+        tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
+        if (entry) {
+            p->type_entry = entry;
+            p->type_version = entry->version;
+            tc_type_entry_link_instance(
+                entry,
+                p,
+                PASS_REGISTRY_PREV_OFFSET,
+                PASS_REGISTRY_NEXT_OFFSET
+            );
+        }
+    }
 
     return p;
 }
 
 void tc_pass_free_external(tc_pass* p) {
     if (p) {
+        // Unlink from registry
+        tc_pass_unlink_from_registry(p);
+
         if (p->pass_name) free(p->pass_name);
         if (p->viewport_name) free(p->viewport_name);
         if (p->debug_internal_symbol) free(p->debug_internal_symbol);
@@ -268,11 +330,17 @@ tc_pipeline* tc_pipeline_create(const char* name) {
     p->spec_count = 0;
     p->spec_capacity = 0;
 
+    // Register in global registry
+    tc_pipeline_registry_add(p);
+
     return p;
 }
 
 void tc_pipeline_destroy(tc_pipeline* p) {
     if (!p) return;
+
+    // Remove from global registry
+    tc_pipeline_registry_remove(p);
 
     // Release all passes (may drop if ref_count reaches 0)
     tc_pass* pass = p->first_pass;
@@ -285,9 +353,6 @@ void tc_pipeline_destroy(tc_pipeline* p) {
 
     // Free specs
     if (p->specs) {
-        for (size_t i = 0; i < p->spec_count; i++) {
-            // resource strings are not owned, don't free
-        }
         free(p->specs);
     }
 
@@ -301,7 +366,6 @@ void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     // Retain pass to prevent deletion while in pipeline
     tc_pass_retain(pass);
 
-
     pass->prev = p->last_pass;
     pass->next = NULL;
 
@@ -312,7 +376,6 @@ void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     }
     p->last_pass = pass;
     p->pass_count++;
-
 }
 
 void tc_pipeline_insert_pass_before(tc_pipeline* p, tc_pass* pass, tc_pass* before) {
@@ -443,4 +506,146 @@ size_t tc_pipeline_collect_specs(
     }
 
     return count;
+}
+
+// ============================================================================
+// Pipeline Registry Implementation
+// ============================================================================
+
+#define MAX_PIPELINES 64
+
+static tc_pipeline* g_pipelines[MAX_PIPELINES];
+static size_t g_pipeline_count = 0;
+static bool g_pipeline_registry_initialized = false;
+
+void tc_pipeline_registry_init(void) {
+    if (g_pipeline_registry_initialized) return;
+    memset(g_pipelines, 0, sizeof(g_pipelines));
+    g_pipeline_count = 0;
+    g_pipeline_registry_initialized = true;
+}
+
+void tc_pipeline_registry_shutdown(void) {
+    if (!g_pipeline_registry_initialized) return;
+    memset(g_pipelines, 0, sizeof(g_pipelines));
+    g_pipeline_count = 0;
+    g_pipeline_registry_initialized = false;
+}
+
+void tc_pipeline_registry_add(tc_pipeline* p) {
+    if (!p) return;
+    if (!g_pipeline_registry_initialized) {
+        tc_pipeline_registry_init();
+    }
+
+    // Check if already registered
+    for (size_t i = 0; i < g_pipeline_count; i++) {
+        if (g_pipelines[i] == p) return;
+    }
+
+    if (g_pipeline_count >= MAX_PIPELINES) {
+        tc_log(TC_LOG_ERROR, "[tc_pipeline_registry] Registry full, cannot add pipeline");
+        return;
+    }
+
+    g_pipelines[g_pipeline_count++] = p;
+}
+
+void tc_pipeline_registry_remove(tc_pipeline* p) {
+    if (!p || !g_pipeline_registry_initialized) return;
+
+    for (size_t i = 0; i < g_pipeline_count; i++) {
+        if (g_pipelines[i] == p) {
+            // Shift remaining entries
+            for (size_t j = i; j < g_pipeline_count - 1; j++) {
+                g_pipelines[j] = g_pipelines[j + 1];
+            }
+            g_pipeline_count--;
+            return;
+        }
+    }
+}
+
+size_t tc_pipeline_registry_count(void) {
+    return g_pipeline_count;
+}
+
+tc_pipeline* tc_pipeline_registry_get_at(size_t index) {
+    if (index >= g_pipeline_count) return NULL;
+    return g_pipelines[index];
+}
+
+tc_pipeline* tc_pipeline_registry_find_by_name(const char* name) {
+    if (!name) return NULL;
+
+    for (size_t i = 0; i < g_pipeline_count; i++) {
+        if (g_pipelines[i] && g_pipelines[i]->name &&
+            strcmp(g_pipelines[i]->name, name) == 0) {
+            return g_pipelines[i];
+        }
+    }
+    return NULL;
+}
+
+tc_pipeline_info* tc_pipeline_registry_get_all_info(size_t* count) {
+    if (!count) return NULL;
+    *count = 0;
+
+    if (g_pipeline_count == 0) return NULL;
+
+    tc_pipeline_info* infos = (tc_pipeline_info*)malloc(
+        g_pipeline_count * sizeof(tc_pipeline_info)
+    );
+    if (!infos) return NULL;
+
+    for (size_t i = 0; i < g_pipeline_count; i++) {
+        tc_pipeline* p = g_pipelines[i];
+        infos[i].ptr = p;
+        infos[i].name = p ? p->name : NULL;
+        infos[i].pass_count = p ? p->pass_count : 0;
+    }
+
+    *count = g_pipeline_count;
+    return infos;
+}
+
+tc_pass_info* tc_pass_registry_get_all_instance_info(size_t* count) {
+    if (!count) return NULL;
+    *count = 0;
+
+    // Count total passes
+    size_t total_passes = 0;
+    for (size_t i = 0; i < g_pipeline_count; i++) {
+        if (g_pipelines[i]) {
+            total_passes += g_pipelines[i]->pass_count;
+        }
+    }
+
+    if (total_passes == 0) return NULL;
+
+    tc_pass_info* infos = (tc_pass_info*)malloc(total_passes * sizeof(tc_pass_info));
+    if (!infos) return NULL;
+
+    size_t idx = 0;
+    for (size_t i = 0; i < g_pipeline_count; i++) {
+        tc_pipeline* pipeline = g_pipelines[i];
+        if (!pipeline) continue;
+
+        tc_pass* pass = pipeline->first_pass;
+        while (pass && idx < total_passes) {
+            infos[idx].ptr = pass;
+            infos[idx].pass_name = pass->pass_name;
+            infos[idx].type_name = tc_pass_type_name(pass);
+            infos[idx].pipeline_name = pipeline->name;
+            infos[idx].enabled = pass->enabled;
+            infos[idx].passthrough = pass->passthrough;
+            infos[idx].is_inplace = tc_pass_is_inplace(pass);
+            infos[idx].kind = (int)pass->kind;
+            idx++;
+            pass = pass->next;
+        }
+    }
+
+    *count = idx;
+    return infos;
 }

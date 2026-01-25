@@ -38,6 +38,10 @@ from termin._native.render import (
     tc_material_get_all_info,
     tc_material_count,
     TcMaterial,
+    tc_pipeline_registry_count,
+    tc_pipeline_registry_get_all_info,
+    tc_pass_registry_get_all_instance_info,
+    tc_pass_registry_get_all_types,
 )
 from termin.entity._entity_native import (
     component_registry_get_all_info,
@@ -122,6 +126,20 @@ class CoreRegistryViewer(QDialog):
         self._components_tree.setAlternatingRowColors(True)
         self._components_tree.itemClicked.connect(self._on_component_clicked)
         self._tab_widget.addTab(self._components_tree, "Components")
+
+        # Pipelines tab
+        self._pipelines_tree = QTreeWidget()
+        self._pipelines_tree.setHeaderLabels(["Name", "Pass Count"])
+        self._pipelines_tree.setAlternatingRowColors(True)
+        self._pipelines_tree.itemClicked.connect(self._on_pipeline_clicked)
+        self._tab_widget.addTab(self._pipelines_tree, "Pipelines")
+
+        # Passes tab
+        self._passes_tree = QTreeWidget()
+        self._passes_tree.setHeaderLabels(["Pass Name", "Type", "Pipeline", "Kind", "Enabled"])
+        self._passes_tree.setAlternatingRowColors(True)
+        self._passes_tree.itemClicked.connect(self._on_pass_clicked)
+        self._tab_widget.addTab(self._passes_tree, "Passes")
 
         # Scenes tab - with splitter for scenes and entities lists
         scenes_widget = QWidget()
@@ -214,6 +232,8 @@ class CoreRegistryViewer(QDialog):
         self._refresh_shaders()
         self._refresh_materials()
         self._refresh_components()
+        self._refresh_pipelines()
+        self._refresh_passes()
         self._refresh_scenes()
         self._update_status()
         self._details_text.clear()
@@ -572,6 +592,108 @@ class CoreRegistryViewer(QDialog):
         self._details_text.setText("\n".join(lines))
 
     # =========================================================================
+    # Pipelines
+    # =========================================================================
+
+    def _refresh_pipelines(self) -> None:
+        """Refresh pipeline list from tc_pipeline registry."""
+        self._pipelines_tree.clear()
+
+        infos = tc_pipeline_registry_get_all_info()
+        for info in sorted(infos, key=lambda x: x["name"] or ""):
+            name = info["name"] or "(unnamed)"
+            pass_count = str(info["pass_count"])
+
+            item = QTreeWidgetItem([name, pass_count])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("pipeline", info))
+            self._pipelines_tree.addTopLevelItem(item)
+
+        for i in range(2):
+            self._pipelines_tree.resizeColumnToContents(i)
+
+    def _on_pipeline_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show pipeline details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "pipeline":
+            return
+
+        info = data[1]
+        self._show_pipeline_details(info)
+
+    def _show_pipeline_details(self, info: dict) -> None:
+        """Display pipeline details in the details panel."""
+        lines = [
+            "=== PIPELINE ===",
+            "",
+            f"Name:           {info['name'] or '(unnamed)'}",
+            f"Pass count:     {info['pass_count']}",
+        ]
+
+        # Get passes for this pipeline
+        all_passes = tc_pass_registry_get_all_instance_info()
+        pipeline_passes = [p for p in all_passes if p["pipeline_name"] == info["name"]]
+
+        if pipeline_passes:
+            lines.extend([
+                "",
+                "--- Passes ---",
+            ])
+            for i, p in enumerate(pipeline_passes):
+                enabled = "+" if p["enabled"] else "-"
+                lines.append(f"  {i}: [{enabled}] {p['pass_name']} ({p['type_name']})")
+
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
+    # Passes
+    # =========================================================================
+
+    def _refresh_passes(self) -> None:
+        """Refresh pass list from all pipelines."""
+        self._passes_tree.clear()
+
+        infos = tc_pass_registry_get_all_instance_info()
+        for info in infos:
+            pass_name = info["pass_name"] or "(unnamed)"
+            type_name = info["type_name"] or "(unknown)"
+            pipeline_name = info["pipeline_name"] or "(none)"
+            kind = info["kind"]
+            enabled = "Yes" if info["enabled"] else "No"
+
+            item = QTreeWidgetItem([pass_name, type_name, pipeline_name, kind, enabled])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("pass", info))
+            self._passes_tree.addTopLevelItem(item)
+
+        for i in range(5):
+            self._passes_tree.resizeColumnToContents(i)
+
+    def _on_pass_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show pass details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "pass":
+            return
+
+        info = data[1]
+        self._show_pass_details(info)
+
+    def _show_pass_details(self, info: dict) -> None:
+        """Display pass details in the details panel."""
+        lines = [
+            "=== RENDER PASS ===",
+            "",
+            f"Pass name:      {info['pass_name'] or '(unnamed)'}",
+            f"Type name:      {info['type_name'] or '(unknown)'}",
+            f"Pipeline:       {info['pipeline_name'] or '(none)'}",
+            "",
+            "--- State ---",
+            f"Kind:           {info['kind']}",
+            f"Enabled:        {'Yes' if info['enabled'] else 'No'}",
+            f"Passthrough:    {'Yes' if info['passthrough'] else 'No'}",
+            f"Inplace:        {'Yes' if info['is_inplace'] else 'No'}",
+        ]
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
     # Scenes
     # =========================================================================
 
@@ -696,6 +818,8 @@ class CoreRegistryViewer(QDialog):
         shader_count_val = shader_count()
         material_count_val = tc_material_count()
         scene_count_val = tc_scene_registry_count()
+        pipeline_count_val = tc_pipeline_registry_count()
+        pass_count_val = len(tc_pass_registry_get_all_instance_info())
 
         mesh_infos = tc_mesh_get_all_info()
         mesh_memory = sum(info["memory_bytes"] for info in mesh_infos)
@@ -713,6 +837,7 @@ class CoreRegistryViewer(QDialog):
             f"Textures: {texture_count_val} ({self._format_bytes(texture_memory)}) | "
             f"Shaders: {shader_count_val} ({self._format_bytes(shader_memory)}) | "
             f"Materials: {material_count_val} | "
-            f"Components: {component_count_val} | "
+            f"Pipelines: {pipeline_count_val} | "
+            f"Passes: {pass_count_val} | "
             f"Scenes: {scene_count_val}"
         )

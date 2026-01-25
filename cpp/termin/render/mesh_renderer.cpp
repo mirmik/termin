@@ -7,7 +7,7 @@
 namespace termin {
 
 MeshRenderer::MeshRenderer() {
-    set_type_name("MeshRenderer");
+    // type_entry is set by registry when component is created via factory
     install_drawable_vtable(&_c);
 }
 

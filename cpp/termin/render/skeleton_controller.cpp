@@ -7,7 +7,7 @@ namespace termin {
 SkeletonController::SkeletonController()
     : CxxComponent()
 {
-    set_type_name("SkeletonController");
+    // type_entry is set by registry when component is created via factory
     _c.has_before_render = true;
 }
 

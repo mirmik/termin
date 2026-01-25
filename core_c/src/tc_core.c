@@ -205,6 +205,7 @@ static bool g_initialized = false;
 
 // Forward declarations for cleanup functions
 extern void tc_component_registry_cleanup(void);
+extern void tc_pass_registry_cleanup(void);
 extern void tc_inspect_cleanup(void);
 extern void tc_kind_cleanup(void);
 
@@ -234,6 +235,7 @@ void tc_shutdown(void) {
     tc_texture_shutdown();
     tc_mesh_shutdown();
     tc_component_registry_cleanup();
+    tc_pass_registry_cleanup();
     tc_inspect_cleanup();
     tc_kind_cleanup();
     tc_intern_cleanup();

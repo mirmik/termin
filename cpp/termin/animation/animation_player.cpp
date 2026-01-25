@@ -8,7 +8,7 @@ namespace termin {
 AnimationPlayer::AnimationPlayer()
     : CxxComponent()
 {
-    set_type_name("AnimationPlayer");
+    // type_entry is set by registry when component is created via factory
     _c.has_update = true;
 }
 

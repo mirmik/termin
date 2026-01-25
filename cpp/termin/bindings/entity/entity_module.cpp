@@ -160,10 +160,10 @@ NB_MODULE(_entity_native, m) {
         }, nb::arg("data"));
 
     // --- ComponentRegistry ---
+    // Note: register_native is not exposed to Python - it takes C function pointers.
+    // Python components should use register_python instead.
     nb::class_<ComponentRegistry>(m, "ComponentRegistry")
         .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
-        .def("register_native", &ComponentRegistry::register_native,
-             nb::arg("name"), nb::arg("factory"), nb::arg("parent") = nullptr)
         .def("register_python", [](ComponentRegistry&, const std::string& name, nb::object cls, nb::object parent) {
             if (parent.is_none()) {
                 ComponentRegistryPython::register_python(name, cls, nullptr);
@@ -173,9 +173,6 @@ NB_MODULE(_entity_native, m) {
             }
         }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
-        .def("create", [](ComponentRegistry&, const std::string& name) {
-            return ComponentRegistryPython::create(name);
-        }, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def_prop_ro("component_names", [](ComponentRegistry& reg) {
             return reg.list_all();
