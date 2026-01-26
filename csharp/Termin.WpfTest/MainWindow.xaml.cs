@@ -253,9 +253,7 @@ static class NativeLoader
 
 public partial class MainWindow : Window
 {
-    private float _angle;
     private bool _initialized;
-    private int _frameCount;
     private int _renderCount;
 
     // Pipeline rendering via SWIG C++ classes
@@ -264,17 +262,12 @@ public partial class MainWindow : Window
     private CameraComponent? _cameraComponent;
     private ColorPass? _colorPass;  // Keep reference to prevent GC collection
     private Scene? _scene;
-    private SWIGTYPE_p_void? _cachedSceneWrapper;
-    
-    // Flag to switch between pipeline and direct rendering
-    private bool _usePipelineRendering = true;
 
-    // Direct mesh rendering (fallback)
+    // Mesh resources
     private TcMeshHandle _meshHandle;
     private TcShaderHandle _shaderHandle;
     private TcMaterialHandle _materialHandle;
     private IntPtr _meshPtr;
-    private IntPtr _shaderPtr;
     private MeshRenderer? _meshRenderer;
 
     public MainWindow()
@@ -403,7 +396,6 @@ public partial class MainWindow : Window
         else
         {
             Console.WriteLine("[WARNING] Pass registry is empty - passes not registered!");
-            _usePipelineRendering = false;
             return;
         }
 
@@ -562,10 +554,10 @@ void main() {
             null
         );
 
-        _shaderPtr = TerminCore.ShaderGet(_shaderHandle);
-        if (_shaderPtr != IntPtr.Zero)
+        var shaderPtr = TerminCore.ShaderGet(_shaderHandle);
+        if (shaderPtr != IntPtr.Zero)
         {
-            TerminCore.ShaderCompileGpu(_shaderPtr);
+            TerminCore.ShaderCompileGpu(shaderPtr);
         }
     }
 
@@ -590,23 +582,17 @@ void main() {
             _scene?.Update(delta.TotalSeconds);
             _scene?.BeforeRender();
 
-            // Try pipeline rendering
-            if (_usePipelineRendering && _renderPipeline != null && _renderEngine != null && _cameraComponent != null)
+            // Pipeline rendering
+            if (_renderPipeline != null && _renderEngine != null && _cameraComponent != null)
             {
-                // IMPORTANT: Save WPF's FBO BEFORE any rendering (it will be changed by pipeline)
+                // Save WPF's FBO before rendering (pipeline will change it)
                 GL.GetInteger(GetPName.FramebufferBinding, out int wpfFbo);
-                
-                // Clear WPF FBO with dark red to see if clear works
-                GL.ClearColor(0.2f, 0.0f, 0.0f, 1.0f);
-                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
                 // Wrap scene handle for SWIG
                 var scenePtr = _scene?.Handle ?? IntPtr.Zero;
                 var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
 
-                if (_renderCount % 60 == 0)
-                    Console.WriteLine($"[Render] Frame {_renderCount}: scene={scenePtr:X}, wpfFbo={wpfFbo}, pipeline rendering...");
-
+                // Render via pipeline
                 _renderEngine.render_to_screen(
                     _renderPipeline,
                     width,
@@ -615,16 +601,13 @@ void main() {
                     _cameraComponent
                 );
 
-                // Get color FBO from pipeline and blit to WPF's FBO
+                // Blit color FBO to WPF's FBO
                 var colorFbo = _renderPipeline.get_fbo("color");
                 if (colorFbo != null)
                 {
                     int srcFboId = (int)colorFbo.get_fbo_id();
                     int srcW = colorFbo.get_width();
                     int srcH = colorFbo.get_height();
-                    
-                    if (_renderCount % 60 == 0)
-                        Console.WriteLine($"[Blit] src FBO={srcFboId} ({srcW}x{srcH}) -> wpf FBO={wpfFbo} ({width}x{height})");
                     
                     GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, srcFboId);
                     GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, wpfFbo);
@@ -636,80 +619,14 @@ void main() {
                     );
                     GL.BindFramebuffer(FramebufferTarget.Framebuffer, wpfFbo);
                 }
-                else
-                {
-                    Console.WriteLine("[Blit] colorFbo is null!");
-                }
-
-                if (_renderCount % 60 == 0)
-                    Console.WriteLine($"[Render] Frame {_renderCount}: render_to_screen done");
 
                 _renderCount++;
-            }
-            else
-            {
-                // Fallback: Direct rendering
-                Console.WriteLine($"[Render] Fallback: pipeline={_usePipelineRendering}, rp={_renderPipeline != null}, re={_renderEngine != null}, cam={_cameraComponent != null}");
-                DirectRender(delta, width, height, aspect);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Render] Exception: {ex}");
-            _usePipelineRendering = false;
         }
-    }
-
-    private void DirectRender(TimeSpan delta, int width, int height, double aspect)
-    {
-        // Direct rendering - demonstrates mesh/shader integration
-        GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-        if (_shaderPtr == IntPtr.Zero || _meshPtr == IntPtr.Zero)
-            return;
-
-        // Model matrix (rotating cube)
-        _angle += (float)delta.TotalSeconds * 45.0f;
-        var model = Matrix4.CreateRotationY(MathHelper.DegreesToRadians(_angle)) *
-                    Matrix4.CreateRotationX(MathHelper.DegreesToRadians(_angle * 0.5f));
-
-        // View matrix - camera at (0, -3, 2) looking at origin
-        var eye = new Vector3(0, -3, 2);
-        var target = new Vector3(0, 0, 0);
-        var up = new Vector3(0, 0, 1);
-        var view = Matrix4.LookAt(eye, target, up);
-
-        // Projection matrix
-        float fov = MathHelper.DegreesToRadians(60.0f);
-        float near = 0.1f;
-        float far = 100.0f;
-        var projection = Matrix4.CreatePerspectiveFieldOfView(fov, (float)aspect, near, far);
-
-        // Use shader and draw
-        TerminCore.ShaderUseGpu(_shaderPtr);
-
-        float[] modelData = MatrixToArray(model);
-        float[] viewData = MatrixToArray(view);
-        float[] projData = MatrixToArray(projection);
-
-        TerminCore.ShaderSetMat4(_shaderPtr, "u_model", modelData, false);
-        TerminCore.ShaderSetMat4(_shaderPtr, "u_view", viewData, false);
-        TerminCore.ShaderSetMat4(_shaderPtr, "u_projection", projData, false);
-        TerminCore.ShaderSetVec4(_shaderPtr, "u_color", 0.8f, 0.3f, 0.2f, 1.0f);
-
-        TerminCore.MeshDrawGpu(_meshPtr);
-    }
-
-    private static float[] MatrixToArray(Matrix4 m)
-    {
-        return new float[]
-        {
-            m.M11, m.M12, m.M13, m.M14,
-            m.M21, m.M22, m.M23, m.M24,
-            m.M31, m.M32, m.M33, m.M34,
-            m.M41, m.M42, m.M43, m.M44
-        };
     }
 
     protected override void OnClosed(EventArgs e)
