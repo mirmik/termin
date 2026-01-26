@@ -444,7 +444,7 @@ void bind_tc_pass(nb::module_& m) {
             if (!p) return nb::none();
 
             // For Python passes, check if they have a custom serialize method
-            if (p->kind == TC_EXTERNAL_PASS && p->body) {
+            if (p->kind == TC_EXTERNAL_PASS && p->body && p->externally_managed) {
                 nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
                 if (nb::hasattr(py_obj, "serialize")) {
                     nb::object result = py_obj.attr("serialize")();
@@ -454,7 +454,7 @@ void bind_tc_pass(nb::module_& m) {
                 }
             }
 
-            // Serialize via tc_inspect
+            // Serialize data via tc_inspect
             void* obj_ptr = nullptr;
             if (p->kind == TC_NATIVE_PASS) {
                 obj_ptr = CxxFramePass::from_tc(p);
@@ -462,20 +462,20 @@ void bind_tc_pass(nb::module_& m) {
                 obj_ptr = p->body;
             }
 
+            nb::object data = nb::dict();
+            if (obj_ptr) {
+                tc_value v = tc_inspect_serialize(obj_ptr, tc_pass_type_name(p));
+                data = tc_value_to_py(&v);
+                tc_value_free(&v);
+            }
+
             nb::dict result;
-            result["type"] = std::string(tc_pass_type_name(p));
-            result["pass_name"] = p->pass_name ? std::string(p->pass_name) : std::string();
+            result["type"] = self.type_name();
+            result["pass_name"] = self.pass_name();
             result["enabled"] = p->enabled;
             result["passthrough"] = p->passthrough;
             result["viewport_name"] = p->viewport_name ? std::string(p->viewport_name) : std::string();
-
-            if (obj_ptr) {
-                tc_value v = tc_inspect_serialize(obj_ptr, tc_pass_type_name(p));
-                result["data"] = tc_value_to_py(&v);
-                tc_value_free(&v);
-            } else {
-                result["data"] = nb::dict();
-            }
+            result["data"] = data;
             return result;
         })
         .def("deserialize_data", [](TcPassRef& self, nb::object data) {
