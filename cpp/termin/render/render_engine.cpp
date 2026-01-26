@@ -160,10 +160,6 @@ void RenderEngine::render_view_to_fbo(
             }
             samples = spec->samples > 0 ? spec->samples : 1;
             if (spec->format) format = *spec->format;
-            tc::Log::info("[RenderEngine::render] FBO '%s': merged spec samples=%d format='%s'",
-                canon, samples, format.c_str());
-        } else {
-            tc::Log::info("[RenderEngine::render] FBO '%s': no spec, samples=1", canon);
         }
 
         // Get or create FBO in pipeline's pool
