@@ -336,9 +336,8 @@ tc_pipeline* tc_pipeline_create(const char* name) {
     p->passes = NULL;
     p->pass_count = 0;
     p->pass_capacity = 0;
-    p->specs = NULL;
-    p->spec_count = 0;
-    p->spec_capacity = 0;
+    p->cpp_owner = NULL;   // Set by C++ RenderPipeline if used
+    p->py_wrapper = NULL;  // Set by Python bindings if needed
 
     // Register in global registry
     tc_pipeline_registry_add(p);
@@ -364,9 +363,6 @@ void tc_pipeline_destroy(tc_pipeline* p) {
 
     // Free passes array
     free(p->passes);
-
-    // Free specs
-    free(p->specs);
 
     free(p->name);
     free(p);
@@ -481,28 +477,7 @@ void tc_pipeline_foreach(tc_pipeline* p, tc_pipeline_pass_iter_fn callback, void
     }
 }
 
-void tc_pipeline_add_spec(tc_pipeline* p, const tc_resource_spec* spec) {
-    if (!p || !spec) return;
-
-    if (p->spec_count >= p->spec_capacity) {
-        size_t new_capacity = p->spec_capacity ? p->spec_capacity * 2 : 8;
-        tc_resource_spec* new_specs = (tc_resource_spec*)realloc(
-            p->specs, new_capacity * sizeof(tc_resource_spec)
-        );
-        if (!new_specs) return;
-        p->specs = new_specs;
-        p->spec_capacity = new_capacity;
-    }
-
-    p->specs[p->spec_count++] = *spec;
-}
-
-void tc_pipeline_clear_specs(tc_pipeline* p) {
-    if (p) {
-        p->spec_count = 0;
-    }
-}
-
+// Collect specs from passes only (pipeline-level specs are in C++ RenderPipeline)
 size_t tc_pipeline_collect_specs(
     tc_pipeline* p,
     tc_resource_spec* out_specs,
@@ -512,12 +487,7 @@ size_t tc_pipeline_collect_specs(
 
     size_t count = 0;
 
-    // Pipeline-level specs
-    for (size_t i = 0; i < p->spec_count && count < max_count; i++) {
-        out_specs[count++] = p->specs[i];
-    }
-
-    // Pass specs
+    // Pass specs only (pipeline specs are in C++ RenderPipeline::specs_)
     for (size_t i = 0; i < p->pass_count && count < max_count; i++) {
         tc_pass* pass = p->passes[i];
         if (pass && pass->enabled) {

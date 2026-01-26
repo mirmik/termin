@@ -8,12 +8,12 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/tc_scene_ref.hpp"
 
 extern "C" {
-#include "tc_pipeline.h"
 #include "tc_frame_graph.h"
 }
 
@@ -93,7 +93,7 @@ public:
 
     // Render single view to target FBO
     // Parameters:
-    //   pipeline: tc_pipeline containing passes
+    //   pipeline: RenderPipeline containing passes and specs
     //   target_fbo: target framebuffer (OUTPUT/DISPLAY)
     //   width, height: viewport size
     //   scene: scene to render
@@ -101,7 +101,7 @@ public:
     //   lights: pre-built lights array
     //   layer_mask: layer mask for filtering entities
     void render_view_to_fbo(
-        tc_pipeline* pipeline,
+        RenderPipeline* pipeline,
         FramebufferHandle* target_fbo,
         int width,
         int height,
@@ -115,7 +115,7 @@ public:
     // Render pipeline with multiple viewports
     // Each pass selects viewport by viewport_name, writes to that viewport's output_fbo
     void render_scene_pipeline_offscreen(
-        tc_pipeline* pipeline,
+        RenderPipeline* pipeline,
         tc_scene* scene,
         const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
         const std::vector<Light>& lights,

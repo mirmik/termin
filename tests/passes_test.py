@@ -91,7 +91,7 @@ class TestPasses(unittest.TestCase):
 
             pipeline = RenderPipeline(
                 _init_passes=[color_pass, present_pass],
-                pipeline_specs=[
+                _init_specs=[
                     ResourceSpec(
                         resource="empty",
                         clear_color=(0.2, 0.2, 0.2, 1.0),
@@ -379,7 +379,7 @@ void main() {
 
             pipeline_opaque = RenderPipeline(
                 _init_passes=[color_pass_opaque, present_pass],
-                pipeline_specs=[
+                _init_specs=[
                     ResourceSpec(
                         resource="empty",
                         clear_color=(0.0, 0.0, 0.0, 1.0),  # Чёрный фон
@@ -422,7 +422,7 @@ void main() {
 
             pipeline_transparent = RenderPipeline(
                 _init_passes=[color_pass_transparent, present_pass],
-                pipeline_specs=[
+                _init_specs=[
                     ResourceSpec(
                         resource="empty",
                         clear_color=(0.0, 0.0, 0.0, 1.0),  # Чёрный фон
@@ -571,7 +571,7 @@ void main() {
 
                 pipeline = RenderPipeline(
                     _init_passes=[color_pass, present_pass],
-                    pipeline_specs=[
+                    _init_specs=[
                         ResourceSpec(
                             resource="empty",
                             clear_color=(0.0, 0.0, 0.0, 1.0),
@@ -799,7 +799,7 @@ class TestPipelineSerialization(unittest.TestCase):
                     input_res="color_pp",
                 ),
             ],
-            pipeline_specs=[
+            _init_specs=[
                 ResourceSpec(
                     resource="empty",
                     clear_color=(0.1, 0.1, 0.1, 1.0),

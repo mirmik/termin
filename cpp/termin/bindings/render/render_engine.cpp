@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "termin/render/render_engine.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/camera/camera_component.hpp"
@@ -8,11 +9,6 @@
 
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/optional.h>
-
-extern "C" {
-#include "tc_pipeline.h"
-#include "tc_pass.h"
-}
 
 namespace termin {
 
@@ -25,7 +21,7 @@ void bind_render_engine(nb::module_& m) {
         .def(nb::init<GraphicsBackend*>(), nb::arg("graphics"))
         .def_rw("graphics", &RenderEngine::graphics)
         .def("render_view_to_fbo", [](RenderEngine& self,
-                                   tc_pipeline* pipeline,
+                                   RenderPipeline& pipeline,
                                    FramebufferHandle* target_fbo,
                                    int width,
                                    int height,
@@ -35,7 +31,7 @@ void bind_render_engine(nb::module_& m) {
                                    const std::vector<Light>& lights,
                                    uint64_t layer_mask) {
             self.render_view_to_fbo(
-                pipeline,
+                &pipeline,
                 target_fbo,
                 width,
                 height,
@@ -68,14 +64,14 @@ void bind_render_engine(nb::module_& m) {
         })
         .def("render_scene_pipeline_offscreen", [](
             RenderEngine& self,
-            tc_pipeline* pipeline,
+            RenderPipeline& pipeline,
             TcSceneRef scene_ref,
             const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
             const std::vector<Light>& lights,
             const std::string& default_viewport
         ) {
             self.render_scene_pipeline_offscreen(
-                pipeline,
+                &pipeline,
                 scene_ref.ptr(),
                 viewport_contexts,
                 lights,

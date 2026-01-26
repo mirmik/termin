@@ -18,12 +18,10 @@ struct tc_pipeline {
     size_t pass_count;
     size_t pass_capacity;
 
-    // Pipeline-level resource specs (additional to pass specs)
-    tc_resource_spec* specs;
-    size_t spec_count;
-    size_t spec_capacity;
+    // Pointer to C++ RenderPipeline owner (for casting back)
+    void* cpp_owner;
 
-    // Python wrapper
+    // Python object wrapper (for Python bindings)
     void* py_wrapper;
 };
 
@@ -70,10 +68,11 @@ TC_API void tc_pipeline_foreach(tc_pipeline* p, tc_pipeline_pass_iter_fn callbac
 // Resource Specs
 // ============================================================================
 
-TC_API void tc_pipeline_add_spec(tc_pipeline* p, const tc_resource_spec* spec);
-TC_API void tc_pipeline_clear_specs(tc_pipeline* p);
+// Note: Pipeline-level specs are stored in C++ RenderPipeline class.
+// Use RenderPipeline::collect_specs() to get all specs (pipeline + pass).
+// tc_pipeline_collect_specs is available for C code but only returns pass specs.
 
-// Get all specs (from pipeline + all passes)
+// Get all specs from passes only (for C code compatibility)
 // Returns count, fills out_specs array
 TC_API size_t tc_pipeline_collect_specs(
     tc_pipeline* p,

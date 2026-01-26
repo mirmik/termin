@@ -484,7 +484,7 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
     pass_nodes = [n for n in nodes if n.node_type in ("pass", "effect")]
 
     if not pass_nodes:
-        return RenderPipeline(name="empty", pipeline_specs=[])
+        return RenderPipeline(name="empty", _init_specs=[])
 
     # Build node to viewport mapping
     node_viewport_map = build_node_viewport_map(nodes, viewport_frames, debug=debug)
@@ -586,7 +586,7 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
     return RenderPipeline(
         name="compiled_graph",
         _init_passes=sorted_passes,
-        pipeline_specs=pipeline_specs,
+        _init_specs=pipeline_specs,
     )
 
 

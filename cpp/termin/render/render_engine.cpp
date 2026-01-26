@@ -101,7 +101,7 @@ RenderEngine::RenderEngine(GraphicsBackend* graphics)
 }
 
 void RenderEngine::render_view_to_fbo(
-    tc_pipeline* pipeline,
+    RenderPipeline* pipeline,
     FramebufferHandle* target_fbo,
     int width,
     int height,
@@ -121,7 +121,7 @@ void RenderEngine::render_view_to_fbo(
     }
 
     // Build frame graph
-    tc_frame_graph* fg = tc_frame_graph_build(pipeline);
+    tc_frame_graph* fg = tc_frame_graph_build(pipeline->ptr());
     if (!fg) {
         tc::Log::error("RenderEngine::render_view_to_fbo: failed to build frame graph");
         return;
@@ -134,9 +134,9 @@ void RenderEngine::render_view_to_fbo(
         return;
     }
 
-    // Collect resource specs from passes
+    // Collect resource specs from pipeline + passes
     tc_resource_spec specs[128] = {};  // Zero-initialize to avoid garbage in unset fields
-    size_t spec_count = tc_pipeline_collect_specs(pipeline, specs, 128);
+    size_t spec_count = pipeline->collect_specs(specs, 128);
 
     // Build spec map for quick lookup
     std::unordered_map<std::string, tc_resource_spec*> spec_map;
@@ -330,7 +330,7 @@ void RenderEngine::render_view_to_fbo(
 }
 
 void RenderEngine::render_scene_pipeline_offscreen(
-    tc_pipeline* pipeline,
+    RenderPipeline* pipeline,
     tc_scene* scene,
     const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
     const std::vector<Light>& lights,
@@ -365,7 +365,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
     int default_height = default_ctx.rect.height;
 
     // Build frame graph
-    tc_frame_graph* fg = tc_frame_graph_build(pipeline);
+    tc_frame_graph* fg = tc_frame_graph_build(pipeline->ptr());
     if (!fg) {
         tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: failed to build frame graph");
         return;
@@ -378,9 +378,9 @@ void RenderEngine::render_scene_pipeline_offscreen(
         return;
     }
 
-    // Collect resource specs from passes
+    // Collect resource specs from pipeline + passes
     tc_resource_spec specs[128] = {};  // Zero-initialize to avoid garbage in unset fields
-    size_t spec_count = tc_pipeline_collect_specs(pipeline, specs, 128);
+    size_t spec_count = pipeline->collect_specs(specs, 128);
 
     std::unordered_map<std::string, tc_resource_spec*> spec_map;
     for (size_t i = 0; i < spec_count; i++) {

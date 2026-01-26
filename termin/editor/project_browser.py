@@ -1406,7 +1406,7 @@ class MyComponent(PythonComponent):
                     pass_name="Present",
                 ),
             ],
-            pipeline_specs=[
+            _init_specs=[
                 ResourceSpec(
                     resource="empty",
                     clear_color=(0.1, 0.1, 0.1, 1.0),

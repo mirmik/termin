@@ -433,7 +433,7 @@ class RenderEngine:
         # Вызываем C++ RenderEngine
         with profiler.section("C++ Render Pipeline"):
             self._cpp_engine.render_view_to_fbo(
-                pipeline._tc_pipeline,
+                pipeline,
                 target_fbo,
                 pw,
                 ph,
@@ -506,7 +506,7 @@ class RenderEngine:
 
         # Execute via C++ RenderEngine
         self._cpp_engine.render_scene_pipeline_offscreen(
-            pipeline._tc_pipeline,
+            pipeline,
             scene._tc_scene.scene_ref(),
             cpp_viewport_contexts,
             lights,

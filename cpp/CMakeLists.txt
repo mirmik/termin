@@ -250,6 +250,7 @@ add_library(render_lib STATIC
     termin/render/mesh_renderer.cpp
     termin/render/frame_pass.cpp
     termin/render/render_engine.cpp
+    termin/render/render_pipeline.cpp
     termin/render/color_pass.cpp
     termin/render/depth_pass.cpp
     termin/render/normal_pass.cpp
@@ -417,6 +418,7 @@ nanobind_add_module(_native
     termin/bindings/render/wireframe.cpp
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/tc_pass_bindings.cpp
+    termin/bindings/render/render_pipeline_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp

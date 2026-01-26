@@ -145,7 +145,7 @@ class WebStreamServer:
         self._pipeline = RenderPipeline(
             name="streaming",
             _init_passes=[color_pass, present_pass],
-            pipeline_specs=[
+            _init_specs=[
                 ResourceSpec(
                     resource="empty",
                     clear_color=(0.1, 0.1, 0.15, 1.0),

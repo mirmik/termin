@@ -666,6 +666,9 @@ void bind_tc_pass(nb::module_& m) {
         return TcPassRef(tc_pipeline_get_pass_at(p, index));
     });
 
+    // Note: Pipeline resource specs are now managed via C++ RenderPipeline class.
+    // Use RenderPipeline.add_spec(), .clear_specs(), .pipeline_specs instead.
+
     // Frame graph - opaque handle via intptr_t
     // tc_frame_graph is defined only in .c file, so we use intptr_t
     m.def("tc_frame_graph_build", [](tc_pipeline* p) -> intptr_t {
