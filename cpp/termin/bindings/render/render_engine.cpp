@@ -56,6 +56,16 @@ void bind_render_engine(nb::module_& m) {
              nb::arg("lights"),
              nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("clear_fbo_pool", &RenderEngine::clear_fbo_pool)
+        .def("get_fbo", [](RenderEngine& self, const std::string& key) -> FramebufferHandle* {
+            return self.fbo_pool().get(key);
+        }, nb::arg("key"), nb::rv_policy::reference)
+        .def("get_fbo_keys", [](RenderEngine& self) -> std::vector<std::string> {
+            std::vector<std::string> keys;
+            for (const auto& entry : self.fbo_pool().entries) {
+                keys.push_back(entry.key);
+            }
+            return keys;
+        })
         .def("render_scene_pipeline_offscreen", [](
             RenderEngine& self,
             tc_pipeline* pipeline,
