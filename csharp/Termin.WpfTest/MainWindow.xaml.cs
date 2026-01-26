@@ -592,7 +592,7 @@ void main() {
             if (_usePipelineRendering && _renderPipeline != null && _renderEngine != null && _cameraComponent != null)
             {
                 // Clear and render via pipeline
-                GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+                GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
                 // Wrap scene handle for SWIG
