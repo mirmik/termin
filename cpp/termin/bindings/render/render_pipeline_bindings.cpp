@@ -26,8 +26,6 @@ void bind_render_pipeline(nb::module_& m) {
                            nb::list init_passes,
                            const std::vector<ResourceSpec>& init_specs) {
             new (self) RenderPipeline(name);
-            tc::Log::info("[RenderPipeline] __init__ name='%s' init_specs.size=%zu",
-                name.c_str(), init_specs.size());
             for (size_t i = 0; i < nb::len(init_passes); i++) {
                 nb::object pass_obj = init_passes[i];
                 // Get _tc_pass attribute from FramePass
@@ -52,8 +50,6 @@ void bind_render_pipeline(nb::module_& m) {
                 }
             }
             for (const auto& spec : init_specs) {
-                tc::Log::info("[RenderPipeline]   add_spec: resource='%s' samples=%d",
-                    spec.resource.c_str(), spec.samples);
                 self->add_spec(spec);
             }
         }, nb::arg("name") = "default",
@@ -151,6 +147,10 @@ void bind_render_pipeline(nb::module_& m) {
         .def("get_pass", [](RenderPipeline& self, const std::string& name) {
             return TcPassRef(self.get_pass(name));
         })
+        // Alias for compatibility
+        .def("get_pass_by_name", [](RenderPipeline& self, const std::string& name) {
+            return TcPassRef(self.get_pass(name));
+        })
         .def("get_pass_at", [](RenderPipeline& self, size_t index) {
             return TcPassRef(self.get_pass_at(index));
         })
@@ -207,20 +207,16 @@ void bind_render_pipeline(nb::module_& m) {
             nb::dict result;
             result["name"] = self.name();
 
-            // Serialize passes
+            // Serialize passes via TcPassRef
             nb::list passes_list;
             for (size_t i = 0; i < self.pass_count(); i++) {
                 tc_pass* p = self.get_pass_at(i);
                 if (!p) continue;
 
-                // Get Python binding wrapper
-                void* py_binding = tc_pass_get_binding(p, TC_BINDING_PYTHON);
-                if (py_binding) {
-                    nb::object py_pass = nb::borrow<nb::object>(static_cast<PyObject*>(py_binding));
-                    if (nb::hasattr(py_pass, "serialize")) {
-                        nb::object serialized = py_pass.attr("serialize")();
-                        passes_list.append(serialized);
-                    }
+                TcPassRef ref(p);
+                nb::object serialized = nb::cast(ref).attr("serialize")();
+                if (!serialized.is_none()) {
+                    passes_list.append(serialized);
                 }
             }
             result["passes"] = passes_list;

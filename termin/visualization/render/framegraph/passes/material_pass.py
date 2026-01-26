@@ -157,6 +157,29 @@ class MaterialPass(PostEffectPass):
         self._texture_resources[uniform_name] = resource_name
         return self
 
+    def add_extra_texture(self, socket_name: str, resource_name: str) -> "MaterialPass":
+        """
+        Add a texture from node graph socket.
+
+        Called by compiler for dynamic inputs. Converts socket name to uniform name.
+
+        Args:
+            socket_name: Node socket name (e.g., "input" or "depth_texture").
+            resource_name: Framegraph resource name.
+
+        Returns:
+            self for chaining.
+        """
+        if not resource_name or resource_name.startswith("empty_"):
+            return self
+        # Convert socket name to uniform name: depth_texture -> u_depth_texture
+        if socket_name.startswith("u_"):
+            uniform_name = socket_name
+        else:
+            uniform_name = f"u_{socket_name}"
+        self._texture_resources[uniform_name] = resource_name
+        return self
+
     @property
     def before_draw(self) -> Callable | None:
         """

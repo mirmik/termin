@@ -82,42 +82,43 @@ class TimeModifierController(PythonComponent):
         log.warning("[TimeModifierController] ChronosphereController not found in scene")
 
     def _find_time_effect(self) -> None:
-        """Find MaterialPostEffect named 'TimeSpection' in 'PostFX' pass."""
-        from termin.visualization.render.postprocess import PostProcessPass
-        from termin.visualization.render.posteffects.material_effect import MaterialPostEffect
+        # """Find MaterialPostEffect named 'TimeSpection' in 'PostFX' pass."""
+        # from termin.visualization.render.postprocess import PostProcessPass
+        # from termin.visualization.render.posteffects.material_effect import MaterialPostEffect
 
-        if self._camera is None:
-            log.warning("[TimeModifierController] No camera")
-            return
+        # if self._camera is None:
+        #     log.warning("[TimeModifierController] No camera")
+        #     return
 
-        # Get live pipeline from camera's viewport
-        viewport = self._camera.viewport
-        if viewport is None:
-            log.warning("[TimeModifierController] Camera has no viewport")
-            return
+        # # Get live pipeline from camera's viewport
+        # viewport = self._camera.viewport
+        # if viewport is None:
+        #     log.warning("[TimeModifierController] Camera has no viewport")
+        #     return
 
-        pipeline = viewport.pipeline
-        if pipeline is None:
-            log.warning("[TimeModifierController] Viewport has no pipeline")
-            return
+        # pipeline = viewport.pipeline
+        # if pipeline is None:
+        #     log.warning("[TimeModifierController] Viewport has no pipeline")
+        #     return
 
-        # Find PostFX pass
-        for render_pass in pipeline.passes:
-            if not isinstance(render_pass, PostProcessPass):
-                continue
-            if render_pass.pass_name != "PostFX":
-                continue
+        # # Find PostFX pass
+        # for render_pass in pipeline.passes:
+        #     if not isinstance(render_pass, PostProcessPass):
+        #         continue
+        #     if render_pass.pass_name != "PostFX":
+        #         continue
 
-            # Find TimeSpection effect
-            for effect in render_pass.effects:
-                if not isinstance(effect, MaterialPostEffect):
-                    continue
-                if effect.name == "TimeSpection":
-                    self._time_effect = effect
-                    log.info("[TimeModifierController] Found TimeSpection effect")
-                    return
+        #     # Find TimeSpection effect
+        #     for effect in render_pass.effects:
+        #         if not isinstance(effect, MaterialPostEffect):
+        #             continue
+        #         if effect.name == "TimeSpection":
+        #             self._time_effect = effect.to_python()
+        #             log.info("[TimeModifierController] Found TimeSpection effect")
+        #             return
 
-        log.warning("[TimeModifierController] TimeSpection effect not found in PostFX pass")
+        # log.warning("[TimeModifierController] TimeSpection effect not found in PostFX pass")
+        pass
 
     def _find_time_effect_pass(self) -> None:
         rm = RenderingManager.instance()
@@ -135,7 +136,7 @@ class TimeModifierController(PythonComponent):
             log.warning("[TimeModifierController] No TimeSpection pass found in pipeline")
             return
 
-        self._time_effect_pass = render_pass 
+        self._time_effect_pass = render_pass.to_python()
 
     def _before_draw(self, shader: "TcShader") -> None:
         """Callback to set uniforms for the post-effect shader."""
