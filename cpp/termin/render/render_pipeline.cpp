@@ -22,12 +22,11 @@ RenderPipeline::RenderPipeline(const std::string& name)
 }
 
 RenderPipeline::~RenderPipeline() {
-    // Release all passes
+    // Release all passes (release handles cleanup when ref_count reaches 0)
     for (size_t i = 0; i < pipeline_.pass_count; i++) {
         tc_pass* pass = pipeline_.passes[i];
         if (pass) {
             pass->owner_pipeline = nullptr;
-            tc_pass_destroy(pass);
             tc_pass_release(pass);
         }
     }
@@ -56,12 +55,11 @@ RenderPipeline::RenderPipeline(RenderPipeline&& other) noexcept
 
 RenderPipeline& RenderPipeline::operator=(RenderPipeline&& other) noexcept {
     if (this != &other) {
-        // Destroy current
+        // Release current passes
         for (size_t i = 0; i < pipeline_.pass_count; i++) {
             tc_pass* pass = pipeline_.passes[i];
             if (pass) {
                 pass->owner_pipeline = nullptr;
-                tc_pass_destroy(pass);
                 tc_pass_release(pass);
             }
         }

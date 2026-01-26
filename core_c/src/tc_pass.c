@@ -356,7 +356,6 @@ void tc_pipeline_destroy(tc_pipeline* p) {
         tc_pass* pass = p->passes[i];
         if (pass) {
             pass->owner_pipeline = NULL;
-            tc_pass_destroy(pass);
             tc_pass_release(pass);
         }
     }

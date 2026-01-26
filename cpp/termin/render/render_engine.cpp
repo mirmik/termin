@@ -1,5 +1,6 @@
 #include "render_engine.hpp"
 #include "tc_log.hpp"
+#include "termin/camera/camera_component.hpp"
 
 extern "C" {
 #include "tc_frame_graph.h"
@@ -21,6 +22,24 @@ void RenderEngine::render_to_screen(
     void* scene,
     CameraComponent* camera
 ) {
+    // Validate inputs before passing to render_view_to_fbo
+    if (!pipeline) {
+        tc::Log::error("[render_to_screen] pipeline is NULL");
+        return;
+    }
+    if (!scene) {
+        tc::Log::error("[render_to_screen] scene is NULL");
+        return;
+    }
+    if (!camera) {
+        tc::Log::error("[render_to_screen] camera is NULL");
+        return;
+    }
+    if (!camera->entity.valid()) {
+        tc::Log::error("[render_to_screen] camera->entity is invalid");
+        return;
+    }
+
     // Simplified render to screen (default framebuffer)
     std::vector<Light> empty_lights;
     render_view_to_fbo(
@@ -49,6 +68,12 @@ void RenderEngine::render_view_to_fbo(
 ) {
     if (!pipeline) {
         tc::Log::error("RenderEngine::render_view_to_fbo: pipeline is null");
+        return;
+    }
+    // Check pipeline->ptr() is valid
+    tc_pipeline* pp = pipeline->ptr();
+    if (!pp) {
+        tc::Log::error("RenderEngine::render_view_to_fbo: pipeline->ptr() is null");
         return;
     }
     if (!graphics) {

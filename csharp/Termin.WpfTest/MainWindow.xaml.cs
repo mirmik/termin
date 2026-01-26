@@ -255,12 +255,15 @@ public partial class MainWindow : Window
 {
     private float _angle;
     private bool _initialized;
+    private int _frameCount;
 
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
     private RenderEngine? _renderEngine;
     private CameraComponent? _cameraComponent;
+    private ColorPass? _colorPass;  // Keep reference to prevent GC collection
     private Scene? _scene;
+    private SWIGTYPE_p_void? _cachedSceneWrapper;
     
     // Flag to switch between pipeline and direct rendering
     private bool _usePipelineRendering = true;
@@ -305,8 +308,9 @@ public partial class MainWindow : Window
         TerminCore.ShaderInit();
         TerminCore.MaterialInit();
 
-        // Initialize C# component external body callbacks
+        // Initialize C# component and pass external body callbacks
         ComponentExternalBody.Initialize();
+        PassExternalBody.Initialize();
 
         GL.Enable(EnableCap.DepthTest);
 
@@ -422,14 +426,19 @@ public partial class MainWindow : Window
         _renderPipeline.add_spec(depthSpec);
 
         // Create and add ColorPass (SWIG class)
-        var colorPass = new ColorPass(
+        _colorPass = new ColorPass(
             input_res: "empty",
             output_res: "color",
             shadow_res: "",
             phase_mark: "opaque",
             pass_name: "Color"
         );
-        _renderPipeline.add_pass(colorPass.tc_pass_ptr());
+
+        // Register C# wrapper as external body (prevents GC while C++ holds reference)
+        var passBodyPtr = PassExternalBody.Register(_colorPass);
+        _colorPass.set_external_body(passBodyPtr);
+
+        _renderPipeline.add_pass(_colorPass.tc_pass_ptr());
         Console.WriteLine("[RenderPipeline] Added ColorPass");
 
         var passCount = _renderPipeline.pass_count();
@@ -560,46 +569,55 @@ void main() {
 
     private void GlControl_Render(TimeSpan delta)
     {
-        InitGL();
-
-        int width = (int)GlControl.ActualWidth;
-        int height = (int)GlControl.ActualHeight;
-        if (width <= 0 || height <= 0) return;
-
-        // Update camera aspect ratio
-        double aspect = width / (double)height;
-        if (_cameraComponent != null)
+        try
         {
-            _cameraComponent.aspect = aspect;
+            InitGL();
+
+            int width = (int)GlControl.ActualWidth;
+            int height = (int)GlControl.ActualHeight;
+            if (width <= 0 || height <= 0) return;
+
+            // Update camera aspect ratio
+            double aspect = width / (double)height;
+            if (_cameraComponent != null)
+            {
+                _cameraComponent.aspect = aspect;
+            }
+
+            // Update scene (for entity transforms)
+            _scene?.Update(delta.TotalSeconds);
+            _scene?.BeforeRender();
+
+            // Try pipeline rendering
+            if (_usePipelineRendering && _renderPipeline != null && _renderEngine != null && _cameraComponent != null)
+            {
+                // Clear and render via pipeline
+                GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+                // Wrap scene handle for SWIG
+                var scenePtr = _scene?.Handle ?? IntPtr.Zero;
+                Console.WriteLine($"[Render] scene={scenePtr:X}, width={width}, height={height}");
+                var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
+
+                _renderEngine.render_to_screen(
+                    _renderPipeline,
+                    width,
+                    height,
+                    sceneWrapper,
+                    _cameraComponent
+                );
+            }
+            else
+            {
+                // Fallback: Direct rendering
+                DirectRender(delta, width, height, aspect);
+            }
         }
-
-        // Update scene (for entity transforms)
-        _scene?.Update(delta.TotalSeconds);
-        _scene?.BeforeRender();
-
-        // Try pipeline rendering
-        if (_usePipelineRendering && _renderPipeline != null && _renderEngine != null && _cameraComponent != null)
+        catch (Exception ex)
         {
-            // Clear and render via pipeline
-            GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            // Wrap scene handle for SWIG
-            var scenePtr = _scene?.Handle ?? IntPtr.Zero;
-            var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
-
-            _renderEngine.render_to_screen(
-                _renderPipeline,
-                width,
-                height,
-                sceneWrapper,
-                _cameraComponent
-            );
-        }
-        else
-        {
-            // Fallback: Direct rendering
-            DirectRender(delta, width, height, aspect);
+            Console.WriteLine($"[Render] Exception: {ex}");
+            _usePipelineRendering = false;
         }
     }
 
@@ -657,22 +675,22 @@ void main() {
 
     protected override void OnClosed(EventArgs e)
     {
-        // Cleanup SWIG objects
-        _renderPipeline?.Dispose();
-        _renderPipeline = null;
+        // Cleanup scene first (this will properly remove components from entities)
+        _scene?.Dispose();
+        _scene = null;
 
-        _renderEngine?.Dispose();
-        _renderEngine = null;
+        // Then cleanup SWIG objects in reverse order of creation
+        _meshRenderer?.Dispose();
+        _meshRenderer = null;
 
         _cameraComponent?.Dispose();
         _cameraComponent = null;
 
-        _meshRenderer?.Dispose();
-        _meshRenderer = null;
+        _renderEngine?.Dispose();
+        _renderEngine = null;
 
-        // Cleanup scene
-        _scene?.Dispose();
-        _scene = null;
+        _renderPipeline?.Dispose();
+        _renderPipeline = null;
 
         // Cleanup termin resources
         TerminCore.MaterialShutdown();

@@ -415,6 +415,27 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_component_body_decref")]
     public static partial void ComponentBodyDecref(IntPtr body);
+
+    // ========================================================================
+    // Pass External Body Management (for C# prevent-GC mechanism)
+    // ========================================================================
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PassExternalCallbacks
+    {
+        public IntPtr execute;           // not used for C++ passes
+        public IntPtr get_reads;         // not used for C++ passes
+        public IntPtr get_writes;        // not used for C++ passes
+        public IntPtr get_inplace_aliases; // not used for C++ passes
+        public IntPtr get_resource_specs;  // not used for C++ passes
+        public IntPtr get_internal_symbols; // not used for C++ passes
+        public IntPtr destroy;           // not used for C++ passes
+        public IntPtr incref;
+        public IntPtr decref;
+    }
+
+    [LibraryImport(DLL, EntryPoint = "tc_pass_set_external_callbacks")]
+    public static partial void PassSetExternalCallbacks(ref PassExternalCallbacks callbacks);
 }
 
 /// <summary>
@@ -469,6 +490,76 @@ public static class ComponentExternalBody
 
     /// <summary>
     /// Register a C# object as external body for a component.
+    /// Returns the GCHandle IntPtr to pass to set_external_body().
+    /// </summary>
+    public static IntPtr Register(object obj)
+    {
+        var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
+        return GCHandle.ToIntPtr(handle);
+    }
+
+    /// <summary>
+    /// Get the C# object from an external body IntPtr.
+    /// </summary>
+    public static object? GetObject(IntPtr body)
+    {
+        if (body == IntPtr.Zero) return null;
+        var handle = GCHandle.FromIntPtr(body);
+        return handle.IsAllocated ? handle.Target : null;
+    }
+}
+
+/// <summary>
+/// Manages external body for C++ passes created from C#.
+/// Prevents GC from collecting the C# wrapper while C++ holds a reference.
+/// Same pattern as ComponentExternalBody but for passes.
+/// </summary>
+public static class PassExternalBody
+{
+    private static TerminCore.ComponentBodyIncrefDelegate? _increfDelegate;
+    private static TerminCore.ComponentBodyDecrefDelegate? _decrefDelegate;
+    private static bool _initialized;
+
+    /// <summary>
+    /// Initialize the external body callbacks for passes. Call once at startup.
+    /// </summary>
+    public static void Initialize()
+    {
+        if (_initialized) return;
+
+        _increfDelegate = IncrefCallback;
+        _decrefDelegate = DecrefCallback;
+
+        var callbacks = new TerminCore.PassExternalCallbacks
+        {
+            incref = Marshal.GetFunctionPointerForDelegate(_increfDelegate),
+            decref = Marshal.GetFunctionPointerForDelegate(_decrefDelegate)
+        };
+
+        TerminCore.PassSetExternalCallbacks(ref callbacks);
+        _initialized = true;
+    }
+
+    private static void IncrefCallback(IntPtr body)
+    {
+        // body is a GCHandle - incref is no-op since Normal handle prevents GC
+    }
+
+    private static void DecrefCallback(IntPtr body)
+    {
+        // body is a GCHandle - free it to allow GC
+        if (body != IntPtr.Zero)
+        {
+            var handle = GCHandle.FromIntPtr(body);
+            if (handle.IsAllocated)
+            {
+                handle.Free();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Register a C# object as external body for a pass.
     /// Returns the GCHandle IntPtr to pass to set_external_body().
     /// </summary>
     public static IntPtr Register(object obj)

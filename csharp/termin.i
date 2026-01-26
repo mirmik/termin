@@ -471,6 +471,9 @@ public:
 
     // Get tc_pass pointer for adding to pipeline
     tc_pass* tc_pass_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
 };
 
 // ============================================================================
