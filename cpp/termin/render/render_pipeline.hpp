@@ -2,8 +2,11 @@
 #pragma once
 
 #include "termin/render/resource_spec.hpp"
+#include "termin/render/fbo_pool.hpp"
+#include "termin/lighting/shadow.hpp"
 #include <vector>
 #include <string>
+#include <memory>
 
 extern "C" {
 #include "tc_pipeline.h"
@@ -14,7 +17,7 @@ namespace termin {
 /**
  * C++ render pipeline wrapper.
  *
- * Owns a tc_pipeline and stores ResourceSpecs.
+ * Owns a tc_pipeline, stores ResourceSpecs, and manages FBO pool.
  * tc_pipeline->py_wrapper points back to this object for casting.
  */
 class RenderPipeline {
@@ -22,6 +25,8 @@ public:
     tc_pipeline pipeline_;
     std::vector<ResourceSpec> specs_;
     std::string name_;
+    FBOPool fbo_pool_;
+    std::unordered_map<std::string, std::unique_ptr<ShadowMapArrayResource>> shadow_arrays_;
 
     RenderPipeline(const std::string& name = "default");
     ~RenderPipeline();
@@ -57,8 +62,17 @@ public:
     const ResourceSpec* get_spec_at(size_t index) const;
     const std::vector<ResourceSpec>& specs() const { return specs_; }
 
-    // Collect all specs (pipeline + pass specs) into tc_resource_spec array
-    size_t collect_specs(tc_resource_spec* out_specs, size_t max_count) const;
+    // Collect all specs (pipeline + pass specs)
+    std::vector<ResourceSpec> collect_specs() const;
+
+    // FBO pool access
+    FBOPool& fbo_pool() { return fbo_pool_; }
+    const FBOPool& fbo_pool() const { return fbo_pool_; }
+
+    // Shadow arrays access
+    std::unordered_map<std::string, std::unique_ptr<ShadowMapArrayResource>>& shadow_arrays() {
+        return shadow_arrays_;
+    }
 
     // Cast from tc_pipeline* (uses cpp_owner field)
     static RenderPipeline* from_tc_pipeline(tc_pipeline* p);

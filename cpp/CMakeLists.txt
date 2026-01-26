@@ -249,6 +249,7 @@ add_library(render_lib STATIC
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
     termin/render/frame_pass.cpp
+    termin/render/fbo_pool.cpp
     termin/render/render_engine.cpp
     termin/render/render_pipeline.cpp
     termin/render/color_pass.cpp
@@ -445,6 +446,7 @@ nanobind_add_module(_native
     termin/render/glsl_preprocessor.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
+    termin/render/fbo_pool.cpp
     termin/render/render_engine.cpp
     termin/render/color_pass.cpp
     termin/render/depth_pass.cpp

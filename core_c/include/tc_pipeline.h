@@ -73,10 +73,10 @@ TC_API void tc_pipeline_foreach(tc_pipeline* p, tc_pipeline_pass_iter_fn callbac
 // tc_pipeline_collect_specs is available for C code but only returns pass specs.
 
 // Get all specs from passes only (for C code compatibility)
-// Returns count, fills out_specs array
+// Returns count, fills out_specs array (out_specs is ResourceSpec* from C++)
 TC_API size_t tc_pipeline_collect_specs(
     tc_pipeline* p,
-    tc_resource_spec* out_specs,
+    void* out_specs,
     size_t max_count
 );
 

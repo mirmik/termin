@@ -1,7 +1,15 @@
 // render_pipeline_bindings.cpp - nanobind bindings for RenderPipeline
 #include "common.hpp"
+#include "tc_log.hpp"
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/array.h>
+
+extern "C" {
+#include "tc_binding.h"
+}
 
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/tc_pass.hpp"
@@ -70,14 +78,70 @@ void bind_render_pipeline(nb::module_& m) {
                 self.add_pass(pass->ptr());
             }
         })
+        // Accept Python FramePass objects via _tc_pass attribute
+        .def("add_pass", [](RenderPipeline& self, nb::object pass_obj) {
+            if (nb::hasattr(pass_obj, "_tc_pass")) {
+                nb::object tc_pass_obj = pass_obj.attr("_tc_pass");
+                if (!tc_pass_obj.is_none()) {
+                    if (nb::isinstance<TcPassRef>(tc_pass_obj)) {
+                        TcPassRef ref = nb::cast<TcPassRef>(tc_pass_obj);
+                        if (ref.valid()) {
+                            self.add_pass(ref.ptr());
+                        }
+                    } else if (nb::isinstance<TcPass>(tc_pass_obj)) {
+                        TcPass* pass = nb::cast<TcPass*>(tc_pass_obj);
+                        if (pass && pass->ptr()) {
+                            self.add_pass(pass->ptr());
+                        }
+                    }
+                }
+            }
+        })
         .def("remove_pass", [](RenderPipeline& self, TcPassRef pass_ref) {
             if (pass_ref.valid()) {
                 self.remove_pass(pass_ref.ptr());
             }
         })
+        // Accept Python FramePass objects via _tc_pass attribute
+        .def("remove_pass", [](RenderPipeline& self, nb::object pass_obj) {
+            if (nb::hasattr(pass_obj, "_tc_pass")) {
+                nb::object tc_pass_obj = pass_obj.attr("_tc_pass");
+                if (!tc_pass_obj.is_none() && nb::isinstance<TcPassRef>(tc_pass_obj)) {
+                    TcPassRef ref = nb::cast<TcPassRef>(tc_pass_obj);
+                    if (ref.valid()) {
+                        self.remove_pass(ref.ptr());
+                    }
+                }
+            }
+        })
         .def("insert_pass_before", [](RenderPipeline& self, TcPassRef pass_ref, TcPassRef before_ref) {
             if (pass_ref.valid()) {
                 self.insert_pass_before(pass_ref.ptr(), before_ref.valid() ? before_ref.ptr() : nullptr);
+            }
+        })
+        // Accept Python FramePass objects via _tc_pass attribute
+        .def("insert_pass_before", [](RenderPipeline& self, nb::object pass_obj, nb::object before_obj) {
+            tc_pass* pass_ptr = nullptr;
+            tc_pass* before_ptr = nullptr;
+
+            if (nb::hasattr(pass_obj, "_tc_pass")) {
+                nb::object tc_pass_obj = pass_obj.attr("_tc_pass");
+                if (!tc_pass_obj.is_none() && nb::isinstance<TcPassRef>(tc_pass_obj)) {
+                    TcPassRef ref = nb::cast<TcPassRef>(tc_pass_obj);
+                    if (ref.valid()) pass_ptr = ref.ptr();
+                }
+            }
+
+            if (!before_obj.is_none() && nb::hasattr(before_obj, "_tc_pass")) {
+                nb::object tc_pass_obj = before_obj.attr("_tc_pass");
+                if (!tc_pass_obj.is_none() && nb::isinstance<TcPassRef>(tc_pass_obj)) {
+                    TcPassRef ref = nb::cast<TcPassRef>(tc_pass_obj);
+                    if (ref.valid()) before_ptr = ref.ptr();
+                }
+            }
+
+            if (pass_ptr) {
+                self.insert_pass_before(pass_ptr, before_ptr);
             }
         })
         .def("get_pass", [](RenderPipeline& self, const std::string& name) {
@@ -120,8 +184,168 @@ void bind_render_pipeline(nb::module_& m) {
             // This method exists for API compatibility with old Python RenderPipeline
         })
 
+        // FBO pool access (moved from RenderEngine)
+        .def("get_fbo", [](RenderPipeline& self, const std::string& key) -> FramebufferHandle* {
+            return self.fbo_pool().get(key);
+        }, nb::arg("key"), nb::rv_policy::reference)
+        .def("get_fbo_keys", [](RenderPipeline& self) -> std::vector<std::string> {
+            return self.fbo_pool().keys();
+        })
+        .def("clear_fbo_pool", [](RenderPipeline& self) {
+            self.fbo_pool().clear();
+        })
+
         // Iteration support
-        .def("__len__", &RenderPipeline::pass_count);
+        .def("__len__", &RenderPipeline::pass_count)
+
+        // Serialize to dict
+        .def("serialize", [](RenderPipeline& self) -> nb::dict {
+            nb::dict result;
+            result["name"] = self.name();
+
+            // Serialize passes
+            nb::list passes_list;
+            for (size_t i = 0; i < self.pass_count(); i++) {
+                tc_pass* p = self.get_pass_at(i);
+                if (!p) continue;
+
+                // Get Python binding wrapper
+                void* py_binding = tc_pass_get_binding(p, TC_BINDING_PYTHON);
+                if (py_binding) {
+                    nb::object py_pass = nb::borrow<nb::object>(static_cast<PyObject*>(py_binding));
+                    if (nb::hasattr(py_pass, "serialize")) {
+                        nb::object serialized = py_pass.attr("serialize")();
+                        passes_list.append(serialized);
+                    }
+                }
+            }
+            result["passes"] = passes_list;
+
+            // Serialize pipeline specs
+            nb::list specs_list;
+            for (const auto& spec : self.specs()) {
+                nb::dict spec_dict;
+                spec_dict["resource"] = spec.resource;
+                spec_dict["resource_type"] = spec.resource_type;
+                if (spec.size) {
+                    nb::list sz;
+                    sz.append(spec.size->first);
+                    sz.append(spec.size->second);
+                    spec_dict["size"] = sz;
+                }
+                if (spec.clear_color) {
+                    const auto& cc = *spec.clear_color;
+                    nb::list color;
+                    color.append(cc[0]);
+                    color.append(cc[1]);
+                    color.append(cc[2]);
+                    color.append(cc[3]);
+                    spec_dict["clear_color"] = color;
+                }
+                if (spec.clear_depth) {
+                    spec_dict["clear_depth"] = *spec.clear_depth;
+                }
+                if (spec.format) {
+                    spec_dict["format"] = *spec.format;
+                }
+                if (spec.samples != 1) {
+                    spec_dict["samples"] = spec.samples;
+                }
+                specs_list.append(spec_dict);
+            }
+            result["pipeline_specs"] = specs_list;
+
+            return result;
+        })
+
+        // Deserialize from dict (static method)
+        .def_static("deserialize", [](nb::dict data, nb::object resource_manager) -> RenderPipeline* {
+            // Import FramePass for deserialization
+            nb::module_ core_module = nb::module_::import_("termin.visualization.render.framegraph.core");
+            nb::object FramePass = core_module.attr("FramePass");
+
+            std::string name = "default";
+            if (data.contains("name")) {
+                name = nb::cast<std::string>(data["name"]);
+            }
+
+            RenderPipeline* pipeline = new RenderPipeline(name);
+
+            // Deserialize passes
+            if (data.contains("passes")) {
+                nb::list passes = nb::cast<nb::list>(data["passes"]);
+                for (size_t i = 0; i < nb::len(passes); i++) {
+                    try {
+                        nb::dict pass_data = nb::cast<nb::dict>(passes[i]);
+                        nb::object frame_pass = FramePass.attr("deserialize")(pass_data, resource_manager);
+                        if (!frame_pass.is_none() && nb::hasattr(frame_pass, "_tc_pass")) {
+                            nb::object tc_pass_obj = frame_pass.attr("_tc_pass");
+                            if (!tc_pass_obj.is_none() && nb::isinstance<TcPassRef>(tc_pass_obj)) {
+                                TcPassRef ref = nb::cast<TcPassRef>(tc_pass_obj);
+                                if (ref.valid()) {
+                                    pipeline->add_pass(ref.ptr());
+                                }
+                            }
+                        }
+                    } catch (const std::exception& e) {
+                        tc::Log::error("RenderPipeline::deserialize: failed to deserialize pass %zu: %s",
+                                      i, e.what());
+                        throw;
+                    }
+                }
+            }
+
+            // Deserialize pipeline specs
+            if (data.contains("pipeline_specs")) {
+                nb::list specs = nb::cast<nb::list>(data["pipeline_specs"]);
+                for (size_t i = 0; i < nb::len(specs); i++) {
+                    nb::dict spec_data = nb::cast<nb::dict>(specs[i]);
+                    ResourceSpec spec;
+
+                    if (spec_data.contains("resource")) {
+                        spec.resource = nb::cast<std::string>(spec_data["resource"]);
+                    }
+                    if (spec_data.contains("resource_type")) {
+                        spec.resource_type = nb::cast<std::string>(spec_data["resource_type"]);
+                    }
+                    if (spec_data.contains("size")) {
+                        nb::list sz = nb::cast<nb::list>(spec_data["size"]);
+                        spec.size = std::make_pair(nb::cast<int>(sz[0]), nb::cast<int>(sz[1]));
+                    }
+                    if (spec_data.contains("clear_color")) {
+                        nb::list cc = nb::cast<nb::list>(spec_data["clear_color"]);
+                        spec.clear_color = std::array<double, 4>{
+                            nb::cast<double>(cc[0]), nb::cast<double>(cc[1]),
+                            nb::cast<double>(cc[2]), nb::cast<double>(cc[3])
+                        };
+                    }
+                    if (spec_data.contains("clear_depth")) {
+                        spec.clear_depth = nb::cast<float>(spec_data["clear_depth"]);
+                    }
+                    if (spec_data.contains("format")) {
+                        spec.format = nb::cast<std::string>(spec_data["format"]);
+                    }
+                    if (spec_data.contains("samples")) {
+                        spec.samples = nb::cast<int>(spec_data["samples"]);
+                    }
+
+                    pipeline->add_spec(spec);
+                }
+            }
+
+            return pipeline;
+        }, nb::rv_policy::take_ownership)
+
+        // Deep copy pipeline via serialization/deserialization
+        .def("copy", [](RenderPipeline& self, nb::object resource_manager) -> RenderPipeline* {
+            nb::dict data = nb::cast<nb::dict>(nb::cast(&self).attr("serialize")());
+
+            nb::module_ render_module = nb::module_::import_("termin._native.render");
+            nb::object RenderPipelineClass = render_module.attr("RenderPipeline");
+            nb::object result = RenderPipelineClass.attr("deserialize")(data, resource_manager);
+
+            return nb::cast<RenderPipeline*>(result);
+        }, nb::arg("resource_manager"), nb::rv_policy::take_ownership);
 }
 
 } // namespace termin

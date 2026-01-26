@@ -78,61 +78,16 @@ size_t CxxFramePass::_cb_get_inplace_aliases(tc_pass* p, const char** out, size_
     return pair_count;
 }
 
-size_t CxxFramePass::_cb_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t max) {
+size_t CxxFramePass::_cb_get_resource_specs(tc_pass* p, void* out, size_t max) {
     CxxFramePass* self = from_tc(p);
     if (!self || !out) return 0;
 
+    ResourceSpec* out_specs = static_cast<ResourceSpec*>(out);
     auto specs = self->get_resource_specs();
     size_t count = std::min(specs.size(), max);
 
     for (size_t i = 0; i < count; i++) {
-        const auto& spec = specs[i];
-        tc_resource_spec& tc_spec = out[i];
-
-        // Resource name - use interned string
-        tc_spec.resource = tc_intern_string(spec.resource.c_str());
-
-        // Resource type
-        strncpy(tc_spec.resource_type, spec.resource_type.c_str(), sizeof(tc_spec.resource_type) - 1);
-        tc_spec.resource_type[sizeof(tc_spec.resource_type) - 1] = '\0';
-
-        // Size
-        if (spec.size) {
-            tc_spec.fixed_width = spec.size->first;
-            tc_spec.fixed_height = spec.size->second;
-        } else {
-            tc_spec.fixed_width = 0;
-            tc_spec.fixed_height = 0;
-        }
-
-        // Samples
-        tc_spec.samples = spec.samples;
-
-        // Clear color
-        if (spec.clear_color) {
-            tc_spec.has_clear_color = true;
-            tc_spec.clear_color[0] = static_cast<float>(spec.clear_color.value()[0]);
-            tc_spec.clear_color[1] = static_cast<float>(spec.clear_color.value()[1]);
-            tc_spec.clear_color[2] = static_cast<float>(spec.clear_color.value()[2]);
-            tc_spec.clear_color[3] = static_cast<float>(spec.clear_color.value()[3]);
-        } else {
-            tc_spec.has_clear_color = false;
-        }
-
-        // Clear depth
-        if (spec.clear_depth) {
-            tc_spec.has_clear_depth = true;
-            tc_spec.clear_depth = *spec.clear_depth;
-        } else {
-            tc_spec.has_clear_depth = false;
-        }
-
-        // Format
-        if (spec.format) {
-            tc_spec.format = tc_intern_string(spec.format->c_str());
-        } else {
-            tc_spec.format = nullptr;
-        }
+        out_specs[i] = specs[i];
     }
 
     return count;

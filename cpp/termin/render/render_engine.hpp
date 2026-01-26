@@ -2,7 +2,6 @@
 
 #include <string>
 #include <unordered_map>
-#include <memory>
 #include <vector>
 
 #include "termin/render/graphics_backend.hpp"
@@ -31,42 +30,6 @@ struct ViewportContext {
     FramebufferHandle* output_fbo = nullptr;
 };
 
-// FBO Pool entry (move-only because of unique_ptr)
-struct FBOPoolEntry {
-    std::string key;
-    FramebufferHandlePtr fbo;
-    int width = 0;
-    int height = 0;
-    int samples = 1;
-    std::string format;
-    bool external = false;
-
-    FBOPoolEntry() = default;
-    FBOPoolEntry(FBOPoolEntry&&) = default;
-    FBOPoolEntry& operator=(FBOPoolEntry&&) = default;
-    FBOPoolEntry(const FBOPoolEntry&) = delete;
-    FBOPoolEntry& operator=(const FBOPoolEntry&) = delete;
-};
-
-// FBO Pool - manages framebuffer allocation and reuse
-class FBOPool {
-public:
-    std::vector<FBOPoolEntry> entries;
-
-    FramebufferHandle* ensure(
-        GraphicsBackend* graphics,
-        const std::string& key,
-        int width,
-        int height,
-        int samples = 1,
-        const std::string& format = ""
-    );
-
-    FramebufferHandle* get(const std::string& key);
-    void set(const std::string& key, FramebufferHandle* fbo);
-    void clear();
-};
-
 // C++ Render Engine
 //
 // Executes render pipelines using GraphicsBackend.
@@ -75,25 +38,13 @@ class RenderEngine {
 public:
     GraphicsBackend* graphics = nullptr;
 
-private:
-    FBOPool fbo_pool_;
-    std::unordered_map<std::string, std::unique_ptr<ShadowMapArrayResource>> shadow_arrays_;
-
 public:
     RenderEngine() = default;
     explicit RenderEngine(GraphicsBackend* graphics);
 
-    // Non-copyable (FBOPool contains unique_ptr)
-    RenderEngine(const RenderEngine&) = delete;
-    RenderEngine& operator=(const RenderEngine&) = delete;
-
-    // Movable
-    RenderEngine(RenderEngine&&) = default;
-    RenderEngine& operator=(RenderEngine&&) = default;
-
     // Render single view to target FBO
     // Parameters:
-    //   pipeline: RenderPipeline containing passes and specs
+    //   pipeline: RenderPipeline containing passes, specs, and FBO pool
     //   target_fbo: target framebuffer (OUTPUT/DISPLAY)
     //   width, height: viewport size
     //   scene: scene to render
@@ -121,12 +72,6 @@ public:
         const std::vector<Light>& lights,
         const std::string& default_viewport = ""
     );
-
-    // Clear FBO pool
-    void clear_fbo_pool() { fbo_pool_.clear(); }
-
-    // Access FBO pool for external management
-    FBOPool& fbo_pool() { return fbo_pool_; }
 };
 
 } // namespace termin

@@ -13,7 +13,6 @@ extern "C" {
 #include "tc_pipeline.h"
 #include "tc_pipeline_registry.h"
 #include "tc_frame_graph.h"
-#include "tc_render.h"
 #include "tc_log.h"
 #include "termin_core.h"
 #include "tc_inspect.h"
@@ -25,6 +24,8 @@ extern "C" {
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"
 #include "termin/render/execute_context.hpp"
+#include "termin/render/render_pipeline.hpp"
+#include "termin/render/resource_spec.hpp"
 
 namespace termin {
 
@@ -232,7 +233,7 @@ static size_t py_pass_get_inplace_aliases(void* wrapper, const char** out, size_
     }
 }
 
-static size_t py_pass_get_resource_specs(void* wrapper, tc_resource_spec* out, size_t max) {
+static size_t py_pass_get_resource_specs(void* wrapper, void* out, size_t max) {
     nb::gil_scoped_acquire gil;
     try {
         nb::object py_pass = nb::borrow<nb::object>(static_cast<PyObject*>(wrapper));
@@ -240,73 +241,56 @@ static size_t py_pass_get_resource_specs(void* wrapper, tc_resource_spec* out, s
         if (!nb::hasattr(py_pass, "get_resource_specs")) return 0;
 
         nb::object specs = py_pass.attr("get_resource_specs")();
+        ResourceSpec* out_specs = static_cast<ResourceSpec*>(out);
         size_t count = 0;
-
-        // Cache strings to avoid dangling pointers
-        nb::list cached_resources;
 
         for (auto item : specs) {
             if (count >= max) break;
 
             nb::object spec = nb::borrow<nb::object>(item);
-            tc_resource_spec& s = out[count];
-
-            // Zero out the struct first to avoid garbage in unset fields
-            memset(&s, 0, sizeof(tc_resource_spec));
+            ResourceSpec& s = out_specs[count];
+            s = ResourceSpec();
 
             // Get resource name
-            nb::str res_name = nb::cast<nb::str>(spec.attr("resource"));
-            cached_resources.append(res_name);
-            s.resource = PyUnicode_AsUTF8(res_name.ptr());
+            s.resource = nb::cast<std::string>(spec.attr("resource"));
 
             // Get resource_type (default to "fbo")
             if (nb::hasattr(spec, "resource_type") && !spec.attr("resource_type").is_none()) {
-                std::string rt = nb::cast<std::string>(spec.attr("resource_type"));
-                strncpy(s.resource_type, rt.c_str(), sizeof(s.resource_type) - 1);
-                s.resource_type[sizeof(s.resource_type) - 1] = '\0';
+                s.resource_type = nb::cast<std::string>(spec.attr("resource_type"));
             } else {
-                strncpy(s.resource_type, "fbo", sizeof(s.resource_type));
+                s.resource_type = "fbo";
             }
 
-            // Get dimensions
-            if (nb::hasattr(spec, "fixed_width")) {
-                s.fixed_width = nb::cast<int>(spec.attr("fixed_width"));
-            } else {
-                s.fixed_width = 0;
+            // Get size
+            if (nb::hasattr(spec, "size") && !spec.attr("size").is_none()) {
+                nb::tuple sz = nb::cast<nb::tuple>(spec.attr("size"));
+                s.size = std::make_pair(nb::cast<int>(sz[0]), nb::cast<int>(sz[1]));
             }
-            if (nb::hasattr(spec, "fixed_height")) {
-                s.fixed_height = nb::cast<int>(spec.attr("fixed_height"));
-            } else {
-                s.fixed_height = 0;
+
+            // Get samples
+            if (nb::hasattr(spec, "samples")) {
+                s.samples = nb::cast<int>(spec.attr("samples"));
             }
 
             // Get clear values
-            s.has_clear_color = false;
-            s.has_clear_depth = false;
             if (nb::hasattr(spec, "clear_color") && !spec.attr("clear_color").is_none()) {
                 nb::tuple cc = nb::cast<nb::tuple>(spec.attr("clear_color"));
-                s.clear_color[0] = nb::cast<float>(cc[0]);
-                s.clear_color[1] = nb::cast<float>(cc[1]);
-                s.clear_color[2] = nb::cast<float>(cc[2]);
-                s.clear_color[3] = nb::cast<float>(cc[3]);
-                s.has_clear_color = true;
+                s.clear_color = std::array<double, 4>{
+                    nb::cast<double>(cc[0]), nb::cast<double>(cc[1]),
+                    nb::cast<double>(cc[2]), nb::cast<double>(cc[3])
+                };
             }
             if (nb::hasattr(spec, "clear_depth") && !spec.attr("clear_depth").is_none()) {
                 s.clear_depth = nb::cast<float>(spec.attr("clear_depth"));
-                s.has_clear_depth = true;
             }
 
             // Get format
-            s.format = nullptr;
             if (nb::hasattr(spec, "format") && !spec.attr("format").is_none()) {
-                nb::str fmt = nb::cast<nb::str>(spec.attr("format"));
-                cached_resources.append(fmt);
-                s.format = PyUnicode_AsUTF8(fmt.ptr());
+                s.format = nb::cast<std::string>(spec.attr("format"));
             }
 
             count++;
         }
-        py_pass.attr("_cached_tc_specs") = cached_resources;
 
         return count;
     } catch (const std::exception& e) {
@@ -745,40 +729,6 @@ void bind_tc_pass(nb::module_& m) {
 
 
     // ========================================================================
-    // tc_fbo_pool bindings
-    // ========================================================================
-
-    // tc_fbo_pool as opaque handle
-    m.def("tc_fbo_pool_create", []() -> intptr_t {
-        return reinterpret_cast<intptr_t>(tc_fbo_pool_create());
-    });
-
-    m.def("tc_fbo_pool_destroy", [](intptr_t pool_ptr) {
-        tc_fbo_pool_destroy(reinterpret_cast<tc_fbo_pool*>(pool_ptr));
-    });
-
-    // Set FBO for key (stores Python object as void*)
-    m.def("tc_fbo_pool_set", [](intptr_t pool_ptr, const std::string& key, nb::object fbo) {
-        tc_fbo_pool* pool = reinterpret_cast<tc_fbo_pool*>(pool_ptr);
-        // Store Python object pointer (caller must keep fbo alive)
-        tc_fbo_pool_set(pool, key.c_str(), fbo.ptr());
-    });
-
-    // Get FBO for key (returns Python object or None)
-    m.def("tc_fbo_pool_get", [](intptr_t pool_ptr, const std::string& key) -> nb::object {
-        tc_fbo_pool* pool = reinterpret_cast<tc_fbo_pool*>(pool_ptr);
-        void* fbo = tc_fbo_pool_get(pool, key.c_str());
-        if (fbo == nullptr) {
-            return nb::none();
-        }
-        return nb::borrow<nb::object>(static_cast<PyObject*>(fbo));
-    });
-
-    m.def("tc_fbo_pool_clear", [](intptr_t pool_ptr) {
-        tc_fbo_pool_clear(reinterpret_cast<tc_fbo_pool*>(pool_ptr));
-    });
-
-    // ========================================================================
     // tc_resources bindings
     // ========================================================================
 
@@ -885,34 +835,32 @@ void bind_tc_pass(nb::module_& m) {
     m.def("tc_pipeline_collect_specs", [](tc_pipeline* pipeline) -> nb::dict {
         nb::dict result;
 
-        tc_resource_spec specs[128];
-        size_t count = tc_pipeline_collect_specs(pipeline, specs, 128);
+        // Get RenderPipeline from tc_pipeline
+        RenderPipeline* rp = RenderPipeline::from_tc_pipeline(pipeline);
+        if (!rp) return result;
 
-        for (size_t i = 0; i < count; i++) {
+        auto specs = rp->collect_specs();
+
+        for (const auto& spec : specs) {
             nb::dict spec_dict;
-            spec_dict["resource"] = nb::str(specs[i].resource);
-            spec_dict["resource_type"] = nb::str(specs[i].resource_type);
-            spec_dict["fixed_width"] = specs[i].fixed_width;
-            spec_dict["fixed_height"] = specs[i].fixed_height;
-            spec_dict["samples"] = specs[i].samples;
-            spec_dict["has_clear_color"] = specs[i].has_clear_color;
-            spec_dict["has_clear_depth"] = specs[i].has_clear_depth;
-            if (specs[i].has_clear_color) {
-                spec_dict["clear_color"] = nb::make_tuple(
-                    specs[i].clear_color[0],
-                    specs[i].clear_color[1],
-                    specs[i].clear_color[2],
-                    specs[i].clear_color[3]
-                );
+            spec_dict["resource"] = nb::str(spec.resource.c_str());
+            spec_dict["resource_type"] = nb::str(spec.resource_type.c_str());
+            if (spec.size) {
+                spec_dict["size"] = nb::make_tuple(spec.size->first, spec.size->second);
             }
-            if (specs[i].has_clear_depth) {
-                spec_dict["clear_depth"] = specs[i].clear_depth;
+            spec_dict["samples"] = spec.samples;
+            if (spec.clear_color) {
+                const auto& cc = *spec.clear_color;
+                spec_dict["clear_color"] = nb::make_tuple(cc[0], cc[1], cc[2], cc[3]);
             }
-            if (specs[i].format) {
-                spec_dict["format"] = nb::str(specs[i].format);
+            if (spec.clear_depth) {
+                spec_dict["clear_depth"] = *spec.clear_depth;
+            }
+            if (spec.format) {
+                spec_dict["format"] = nb::str(spec.format->c_str());
             }
 
-            result[nb::str(specs[i].resource)] = spec_dict;
+            result[nb::str(spec.resource.c_str())] = spec_dict;
         }
 
         return result;

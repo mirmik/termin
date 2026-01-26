@@ -31,7 +31,7 @@ class PipelinesMixin:
         """Get a copy of RenderPipeline by name (pipelines are mutable)."""
         pipeline = self._pipeline_registry.get(name)
         if pipeline is not None:
-            return pipeline.copy()
+            return pipeline.copy(self)
         return None
 
     def get_pipeline_asset(self, name: str) -> Optional["PipelineAsset"]:
@@ -44,7 +44,7 @@ class PipelinesMixin:
         if asset is not None:
             pipeline = asset.data
             if pipeline is not None:
-                return pipeline.copy()
+                return pipeline.copy(self)
         return None
 
     def list_pipeline_names(self) -> list[str]:

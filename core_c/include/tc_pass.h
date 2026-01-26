@@ -18,7 +18,6 @@ extern "C" {
 typedef struct tc_pass tc_pass;
 typedef struct tc_pass_vtable tc_pass_vtable;
 typedef struct tc_execute_context tc_execute_context;
-typedef struct tc_resource_spec tc_resource_spec;
 typedef struct tc_pipeline tc_pipeline;
 typedef struct tc_scene tc_scene;
 typedef struct tc_viewport tc_viewport;
@@ -53,23 +52,6 @@ struct tc_execute_context {
 };
 
 // ============================================================================
-// Resource Spec - declares resource requirements
-// ============================================================================
-
-struct tc_resource_spec {
-    const char* resource;        // Resource name
-    char resource_type[32];      // "fbo" (default), "shadow_map_array", etc.
-    int fixed_width;             // 0 = use viewport size
-    int fixed_height;            // 0 = use viewport size
-    int samples;                 // MSAA samples (1 = no MSAA)
-    float clear_color[4];        // RGBA clear color
-    float clear_depth;           // Depth clear value
-    bool has_clear_color;        // Whether to clear color
-    bool has_clear_depth;        // Whether to clear depth
-    const char* format;          // FBO format (NULL = default)
-};
-
-// ============================================================================
 // Pass VTable - virtual method table for passes
 // ============================================================================
 
@@ -86,8 +68,8 @@ struct tc_pass_vtable {
     // Returns number of pairs (not elements)
     size_t (*get_inplace_aliases)(tc_pass* self, const char** out_pairs, size_t max_pairs);
 
-    // Resource specs
-    size_t (*get_resource_specs)(tc_pass* self, tc_resource_spec* out_specs, size_t max_count);
+    // Resource specs (out_specs is ResourceSpec* from C++)
+    size_t (*get_resource_specs)(tc_pass* self, void* out_specs, size_t max_count);
 
     // Debug symbols (entity names for step-through debugging)
     size_t (*get_internal_symbols)(tc_pass* self, const char** out_symbols, size_t max_count);
@@ -233,7 +215,8 @@ static inline bool tc_pass_is_inplace(tc_pass* p) {
     return tc_pass_get_inplace_aliases(p, dummy, 1) > 0;
 }
 
-static inline size_t tc_pass_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t max) {
+// out is ResourceSpec* from C++
+static inline size_t tc_pass_get_resource_specs(tc_pass* p, void* out, size_t max) {
     if (p && p->vtable && p->vtable->get_resource_specs) {
         return p->vtable->get_resource_specs(p, out, max);
     }
@@ -324,7 +307,7 @@ typedef struct {
     size_t (*get_reads)(void* body, const char** out, size_t max);
     size_t (*get_writes)(void* body, const char** out, size_t max);
     size_t (*get_inplace_aliases)(void* body, const char** out, size_t max);
-    size_t (*get_resource_specs)(void* body, tc_resource_spec* out, size_t max);
+    size_t (*get_resource_specs)(void* body, void* out, size_t max);  // out is ResourceSpec* (C++)
     size_t (*get_internal_symbols)(void* body, const char** out, size_t max);
     void (*destroy)(void* body);
     void (*incref)(void* body);

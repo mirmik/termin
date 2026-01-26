@@ -29,7 +29,6 @@ set(TC_SOURCES
     src/tc_picking.c
     src/tc_pool.c
     src/tc_profiler.c
-    src/tc_render.c
     src/tc_resource_map.c
     src/tc_scene.c
     src/tc_scene_skybox.c
@@ -66,7 +65,6 @@ set(TC_HEADERS
     include/tc_profiler.h
     include/tc_quat.h
     include/tc_registry_utils.h
-    include/tc_render.h
     include/tc_resource.h
     include/tc_resource_map.h
     include/tc_scene.h

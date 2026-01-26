@@ -8,93 +8,6 @@ extern "C" {
 
 namespace termin {
 
-// ============================================================================
-// FBOPool
-// ============================================================================
-
-FramebufferHandle* FBOPool::ensure(
-    GraphicsBackend* graphics,
-    const std::string& key,
-    int width,
-    int height,
-    int samples,
-    const std::string& format
-) {
-    // Find existing entry
-    for (auto& entry : entries) {
-        if (entry.key == key) {
-            // Resize if needed
-            if (entry.fbo && (entry.width != width || entry.height != height)) {
-                entry.fbo->resize(width, height);
-                entry.width = width;
-                entry.height = height;
-            }
-            return entry.fbo.get();
-        }
-    }
-
-    // Create new entry
-    if (!graphics) {
-        tc::Log::error("FBOPool::ensure: graphics is null");
-        return nullptr;
-    }
-
-    auto fbo = graphics->create_framebuffer(width, height, samples, format);
-    if (!fbo) {
-        tc::Log::error("FBOPool::ensure: failed to create framebuffer '%s'", key.c_str());
-        return nullptr;
-    }
-
-    FramebufferHandle* ptr = fbo.get();
-
-    FBOPoolEntry entry;
-    entry.key = key;
-    entry.fbo = std::move(fbo);
-    entry.width = width;
-    entry.height = height;
-    entry.samples = samples;
-    entry.format = format;
-    entry.external = false;
-    entries.push_back(std::move(entry));
-
-    return ptr;
-}
-
-FramebufferHandle* FBOPool::get(const std::string& key) {
-    for (auto& entry : entries) {
-        if (entry.key == key) {
-            return entry.fbo.get();
-        }
-    }
-    return nullptr;
-}
-
-void FBOPool::set(const std::string& key, FramebufferHandle* fbo) {
-    for (auto& entry : entries) {
-        if (entry.key == key) {
-            // Don't destroy external FBO
-            entry.fbo.reset();
-            entry.external = true;
-            return;
-        }
-    }
-
-    // Create new external entry
-    FBOPoolEntry entry;
-    entry.key = key;
-    entry.fbo.reset();
-    entry.external = true;
-    entries.push_back(std::move(entry));
-}
-
-void FBOPool::clear() {
-    entries.clear();
-}
-
-// ============================================================================
-// RenderEngine
-// ============================================================================
-
 RenderEngine::RenderEngine(GraphicsBackend* graphics)
     : graphics(graphics)
 {
@@ -135,13 +48,12 @@ void RenderEngine::render_view_to_fbo(
     }
 
     // Collect resource specs from pipeline + passes
-    tc_resource_spec specs[128] = {};  // Zero-initialize to avoid garbage in unset fields
-    size_t spec_count = pipeline->collect_specs(specs, 128);
+    auto specs = pipeline->collect_specs();
 
     // Build spec map for quick lookup
-    std::unordered_map<std::string, tc_resource_spec*> spec_map;
-    for (size_t i = 0; i < spec_count; i++) {
-        spec_map[specs[i].resource] = &specs[i];
+    std::unordered_map<std::string, const ResourceSpec*> spec_map;
+    for (const auto& spec : specs) {
+        spec_map[spec.resource] = &spec;
     }
 
     // Allocate resources based on canonical names from frame graph
@@ -166,7 +78,7 @@ void RenderEngine::render_view_to_fbo(
         }
 
         // Find spec
-        tc_resource_spec* spec = nullptr;
+        const ResourceSpec* spec = nullptr;
         auto it = spec_map.find(canon);
         if (it != spec_map.end()) {
             spec = it->second;
@@ -183,18 +95,18 @@ void RenderEngine::render_view_to_fbo(
         }
 
         // Determine resource type
-        const char* resource_type = "fbo";
-        if (spec && spec->resource_type[0] != '\0') {
+        std::string resource_type = "fbo";
+        if (spec && !spec->resource_type.empty()) {
             resource_type = spec->resource_type;
         }
 
         // Handle shadow_map_array resources
-        if (strcmp(resource_type, "shadow_map_array") == 0) {
-            auto& shadow_array = shadow_arrays_[canon];
+        if (resource_type == "shadow_map_array") {
+            auto& shadow_array = pipeline->shadow_arrays()[canon];
             if (!shadow_array) {
                 int resolution = 1024;
-                if (spec && spec->fixed_width > 0) {
-                    resolution = spec->fixed_width;
+                if (spec && spec->size) {
+                    resolution = spec->size->first;
                 }
                 shadow_array = std::make_unique<ShadowMapArrayResource>(resolution);
             }
@@ -208,7 +120,7 @@ void RenderEngine::render_view_to_fbo(
         }
 
         // Skip other non-FBO resources
-        if (strcmp(resource_type, "fbo") != 0) {
+        if (resource_type != "fbo") {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
             for (size_t j = 0; j < alias_count; j++) {
@@ -224,35 +136,37 @@ void RenderEngine::render_view_to_fbo(
         std::string format;
 
         if (spec) {
-            if (spec->fixed_width > 0) fbo_width = spec->fixed_width;
-            if (spec->fixed_height > 0) fbo_height = spec->fixed_height;
+            if (spec->size) {
+                fbo_width = spec->size->first;
+                fbo_height = spec->size->second;
+            }
             samples = spec->samples > 0 ? spec->samples : 1;
-            if (spec->format) format = spec->format;
+            if (spec->format) format = *spec->format;
         }
 
-        // Get or create FBO
-        FramebufferHandle* fbo = fbo_pool_.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
+        // Get or create FBO in pipeline's pool
+        FBOPool& fbo_pool = pipeline->fbo_pool();
+        FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
 
-        // Set for all aliases
+        // Set for all aliases and register aliases in pool
         const char* aliases[64];
         size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
         for (size_t j = 0; j < alias_count; j++) {
             resources[aliases[j]] = fbo;
+            fbo_pool.add_alias(aliases[j], canon);
         }
     }
 
     // Clear resources according to specs
-    for (size_t i = 0; i < spec_count; i++) {
-        tc_resource_spec* spec = &specs[i];
-
-        if (strcmp(spec->resource_type, "fbo") != 0 && spec->resource_type[0] != '\0') {
+    for (const auto& spec : specs) {
+        if (spec.resource_type != "fbo" && !spec.resource_type.empty()) {
             continue;
         }
-        if (!spec->has_clear_color && !spec->has_clear_depth) {
+        if (!spec.clear_color && !spec.clear_depth) {
             continue;
         }
 
-        auto it = resources.find(spec->resource);
+        auto it = resources.find(spec.resource);
         if (it == resources.end() || it->second == nullptr) {
             continue;
         }
@@ -262,22 +176,24 @@ void RenderEngine::render_view_to_fbo(
 
         graphics->bind_framebuffer(fbo);
 
-        int fb_w = spec->fixed_width > 0 ? spec->fixed_width : width;
-        int fb_h = spec->fixed_height > 0 ? spec->fixed_height : height;
+        int fb_w = spec.size ? spec.size->first : width;
+        int fb_h = spec.size ? spec.size->second : height;
         graphics->set_viewport(0, 0, fb_w, fb_h);
 
-        if (spec->has_clear_color && spec->has_clear_depth) {
+        if (spec.clear_color && spec.clear_depth) {
+            const auto& cc = *spec.clear_color;
             graphics->clear_color_depth(
-                spec->clear_color[0], spec->clear_color[1],
-                spec->clear_color[2], spec->clear_color[3]
+                static_cast<float>(cc[0]), static_cast<float>(cc[1]),
+                static_cast<float>(cc[2]), static_cast<float>(cc[3])
             );
-        } else if (spec->has_clear_color) {
+        } else if (spec.clear_color) {
+            const auto& cc = *spec.clear_color;
             graphics->clear_color(
-                spec->clear_color[0], spec->clear_color[1],
-                spec->clear_color[2], spec->clear_color[3]
+                static_cast<float>(cc[0]), static_cast<float>(cc[1]),
+                static_cast<float>(cc[2]), static_cast<float>(cc[3])
             );
-        } else if (spec->has_clear_depth) {
-            graphics->clear_depth(spec->clear_depth);
+        } else if (spec.clear_depth) {
+            graphics->clear_depth(*spec.clear_depth);
         }
     }
 
@@ -379,12 +295,11 @@ void RenderEngine::render_scene_pipeline_offscreen(
     }
 
     // Collect resource specs from pipeline + passes
-    tc_resource_spec specs[128] = {};  // Zero-initialize to avoid garbage in unset fields
-    size_t spec_count = pipeline->collect_specs(specs, 128);
+    auto specs = pipeline->collect_specs();
 
-    std::unordered_map<std::string, tc_resource_spec*> spec_map;
-    for (size_t i = 0; i < spec_count; i++) {
-        spec_map[specs[i].resource] = &specs[i];
+    std::unordered_map<std::string, const ResourceSpec*> spec_map;
+    for (const auto& spec : specs) {
+        spec_map[spec.resource] = &spec;
     }
 
     // Allocate resources based on canonical names from frame graph
@@ -411,7 +326,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
         }
 
         // Find spec
-        tc_resource_spec* spec = nullptr;
+        const ResourceSpec* spec = nullptr;
         auto it = spec_map.find(canon);
         if (it != spec_map.end()) {
             spec = it->second;
@@ -427,19 +342,19 @@ void RenderEngine::render_scene_pipeline_offscreen(
         }
 
         // Determine resource type
-        const char* resource_type = "fbo";
-        if (spec && spec->resource_type[0] != '\0') {
+        std::string resource_type = "fbo";
+        if (spec && !spec->resource_type.empty()) {
             resource_type = spec->resource_type;
         }
 
         // Handle shadow_map_array resources
-        if (strcmp(resource_type, "shadow_map_array") == 0) {
+        if (resource_type == "shadow_map_array") {
             // Get or create ShadowMapArrayResource
-            auto& shadow_array = shadow_arrays_[canon];
+            auto& shadow_array = pipeline->shadow_arrays()[canon];
             if (!shadow_array) {
                 int resolution = 1024;
-                if (spec && spec->fixed_width > 0) {
-                    resolution = spec->fixed_width;
+                if (spec && spec->size) {
+                    resolution = spec->size->first;
                 }
                 shadow_array = std::make_unique<ShadowMapArrayResource>(resolution);
             }
@@ -454,7 +369,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
         }
 
         // Skip other non-FBO resources
-        if (strcmp(resource_type, "fbo") != 0) {
+        if (resource_type != "fbo") {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
             for (size_t j = 0; j < alias_count; j++) {
@@ -470,33 +385,37 @@ void RenderEngine::render_scene_pipeline_offscreen(
         std::string format;
 
         if (spec) {
-            if (spec->fixed_width > 0) fbo_width = spec->fixed_width;
-            if (spec->fixed_height > 0) fbo_height = spec->fixed_height;
+            if (spec->size) {
+                fbo_width = spec->size->first;
+                fbo_height = spec->size->second;
+            }
             samples = spec->samples > 0 ? spec->samples : 1;
-            if (spec->format) format = spec->format;
+            if (spec->format) format = *spec->format;
         }
 
-        FramebufferHandle* fbo = fbo_pool_.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
+        // Get or create FBO in pipeline's pool
+        FBOPool& fbo_pool = pipeline->fbo_pool();
+        FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
 
+        // Set for all aliases and register aliases in pool
         const char* aliases[64];
         size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
         for (size_t j = 0; j < alias_count; j++) {
             resources[aliases[j]] = fbo;
+            fbo_pool.add_alias(aliases[j], canon);
         }
     }
 
     // Clear resources according to specs
-    for (size_t i = 0; i < spec_count; i++) {
-        tc_resource_spec* spec = &specs[i];
-
-        if (strcmp(spec->resource_type, "fbo") != 0 && spec->resource_type[0] != '\0') {
+    for (const auto& spec : specs) {
+        if (spec.resource_type != "fbo" && !spec.resource_type.empty()) {
             continue;
         }
-        if (!spec->has_clear_color && !spec->has_clear_depth) {
+        if (!spec.clear_color && !spec.clear_depth) {
             continue;
         }
 
-        auto it = resources.find(spec->resource);
+        auto it = resources.find(spec.resource);
         if (it == resources.end() || it->second == nullptr) {
             continue;
         }
@@ -506,22 +425,24 @@ void RenderEngine::render_scene_pipeline_offscreen(
 
         graphics->bind_framebuffer(fbo);
 
-        int fb_w = spec->fixed_width > 0 ? spec->fixed_width : default_width;
-        int fb_h = spec->fixed_height > 0 ? spec->fixed_height : default_height;
+        int fb_w = spec.size ? spec.size->first : default_width;
+        int fb_h = spec.size ? spec.size->second : default_height;
         graphics->set_viewport(0, 0, fb_w, fb_h);
 
-        if (spec->has_clear_color && spec->has_clear_depth) {
+        if (spec.clear_color && spec.clear_depth) {
+            const auto& cc = *spec.clear_color;
             graphics->clear_color_depth(
-                spec->clear_color[0], spec->clear_color[1],
-                spec->clear_color[2], spec->clear_color[3]
+                static_cast<float>(cc[0]), static_cast<float>(cc[1]),
+                static_cast<float>(cc[2]), static_cast<float>(cc[3])
             );
-        } else if (spec->has_clear_color) {
+        } else if (spec.clear_color) {
+            const auto& cc = *spec.clear_color;
             graphics->clear_color(
-                spec->clear_color[0], spec->clear_color[1],
-                spec->clear_color[2], spec->clear_color[3]
+                static_cast<float>(cc[0]), static_cast<float>(cc[1]),
+                static_cast<float>(cc[2]), static_cast<float>(cc[3])
             );
-        } else if (spec->has_clear_depth) {
-            graphics->clear_depth(spec->clear_depth);
+        } else if (spec.clear_depth) {
+            graphics->clear_depth(*spec.clear_depth);
         }
     }
 

@@ -332,7 +332,9 @@ class RenderingManager:
         # Use default pipeline if not specified (copy to avoid shared state)
         if pipeline is None:
             if self._default_pipeline is not None:
-                pipeline = self._default_pipeline.copy()
+                from termin.assets.resources import ResourceManager
+                rm = ResourceManager.instance()
+                pipeline = self._default_pipeline.copy(rm)
 
         # Create viewport
         viewport = Viewport(

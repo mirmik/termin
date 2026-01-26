@@ -1173,27 +1173,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         return self._rendering_controller.get_viewport_state(self._current_viewport)
 
     def _get_fbos(self) -> dict:
-        """Get all resources (FBOs) from C++ RenderEngine's FBO pool."""
-        if self._rendering_controller is None:
-            return {}
-
-        # Get RenderEngine from RenderingManager
-        manager = self._rendering_controller._manager
-        if manager is None:
-            return {}
-
-        engine = manager.render_engine
-        if engine is None:
-            return {}
-
-        # Get C++ engine and query FBO pool
-        cpp_engine = engine._cpp_engine
-        if cpp_engine is None:
+        """Get all resources (FBOs) from current pipeline's FBO pool."""
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
             return {}
 
         result = {}
-        for key in cpp_engine.get_fbo_keys():
-            fbo = cpp_engine.get_fbo(key)
+        for key in pipeline.get_fbo_keys():
+            fbo = pipeline.get_fbo(key)
             if fbo is not None:
                 result[key] = fbo
         return result

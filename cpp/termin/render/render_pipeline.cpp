@@ -38,7 +38,9 @@ RenderPipeline::~RenderPipeline() {
 RenderPipeline::RenderPipeline(RenderPipeline&& other) noexcept
     : pipeline_(other.pipeline_),
       specs_(std::move(other.specs_)),
-      name_(std::move(other.name_))
+      name_(std::move(other.name_)),
+      fbo_pool_(std::move(other.fbo_pool_)),
+      shadow_arrays_(std::move(other.shadow_arrays_))
 {
     // Update cpp_owner to point to this
     pipeline_.cpp_owner = this;
@@ -69,6 +71,8 @@ RenderPipeline& RenderPipeline::operator=(RenderPipeline&& other) noexcept {
         pipeline_ = other.pipeline_;
         specs_ = std::move(other.specs_);
         name_ = std::move(other.name_);
+        fbo_pool_ = std::move(other.fbo_pool_);
+        shadow_arrays_ = std::move(other.shadow_arrays_);
         pipeline_.cpp_owner = this;
 
         // Clear other
@@ -201,65 +205,25 @@ const ResourceSpec* RenderPipeline::get_spec_at(size_t index) const {
     return &specs_[index];
 }
 
-size_t RenderPipeline::collect_specs(tc_resource_spec* out_specs, size_t max_count) const {
-    if (!out_specs) return 0;
-
-    size_t count = 0;
+std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
+    std::vector<ResourceSpec> result;
 
     // Pipeline-level specs
-    for (const auto& spec : specs_) {
-        if (count >= max_count) break;
-
-        tc_resource_spec& out = out_specs[count];
-        out.resource = spec.resource.c_str();
-        strncpy(out.resource_type, spec.resource_type.c_str(), sizeof(out.resource_type) - 1);
-        out.resource_type[sizeof(out.resource_type) - 1] = '\0';
-
-        if (spec.size) {
-            out.fixed_width = spec.size->first;
-            out.fixed_height = spec.size->second;
-        } else {
-            out.fixed_width = 0;
-            out.fixed_height = 0;
-        }
-
-        out.samples = spec.samples;
-
-        if (spec.clear_color) {
-            out.has_clear_color = true;
-            out.clear_color[0] = static_cast<float>(spec.clear_color.value()[0]);
-            out.clear_color[1] = static_cast<float>(spec.clear_color.value()[1]);
-            out.clear_color[2] = static_cast<float>(spec.clear_color.value()[2]);
-            out.clear_color[3] = static_cast<float>(spec.clear_color.value()[3]);
-        } else {
-            out.has_clear_color = false;
-        }
-
-        if (spec.clear_depth) {
-            out.has_clear_depth = true;
-            out.clear_depth = *spec.clear_depth;
-        } else {
-            out.has_clear_depth = false;
-        }
-
-        out.format = spec.format ? spec.format->c_str() : nullptr;
-
-        count++;
-    }
+    result.insert(result.end(), specs_.begin(), specs_.end());
 
     // Pass specs
-    for (size_t i = 0; i < pipeline_.pass_count && count < max_count; i++) {
+    for (size_t i = 0; i < pipeline_.pass_count; i++) {
         tc_pass* pass = pipeline_.passes[i];
         if (pass && pass->enabled) {
-            tc_resource_spec pass_specs[16];
+            ResourceSpec pass_specs[16];
             size_t pass_spec_count = tc_pass_get_resource_specs(pass, pass_specs, 16);
-            for (size_t j = 0; j < pass_spec_count && count < max_count; j++) {
-                out_specs[count++] = pass_specs[j];
+            for (size_t j = 0; j < pass_spec_count; j++) {
+                result.push_back(pass_specs[j]);
             }
         }
     }
 
-    return count;
+    return result;
 }
 
 RenderPipeline* RenderPipeline::from_tc_pipeline(tc_pipeline* p) {

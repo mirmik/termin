@@ -187,7 +187,7 @@ static size_t external_get_inplace_aliases(tc_pass* p, const char** out, size_t 
     return 0;
 }
 
-static size_t external_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t max) {
+static size_t external_get_resource_specs(tc_pass* p, void* out, size_t max) {
     if (g_external_callbacks.get_resource_specs && p->body) {
         return g_external_callbacks.get_resource_specs(p->body, out, max);
     }
@@ -477,29 +477,17 @@ void tc_pipeline_foreach(tc_pipeline* p, tc_pipeline_pass_iter_fn callback, void
     }
 }
 
-// Collect specs from passes only (pipeline-level specs are in C++ RenderPipeline)
+// Stub - real implementation is in C++ RenderPipeline::collect_specs()
+// This C function cannot work without knowing ResourceSpec size
 size_t tc_pipeline_collect_specs(
     tc_pipeline* p,
-    tc_resource_spec* out_specs,
+    void* out_specs,
     size_t max_count
 ) {
-    if (!p || !out_specs) return 0;
-
-    size_t count = 0;
-
-    // Pass specs only (pipeline specs are in C++ RenderPipeline::specs_)
-    for (size_t i = 0; i < p->pass_count && count < max_count; i++) {
-        tc_pass* pass = p->passes[i];
-        if (pass && pass->enabled) {
-            tc_resource_spec pass_specs[16];
-            size_t pass_spec_count = tc_pass_get_resource_specs(pass, pass_specs, 16);
-            for (size_t j = 0; j < pass_spec_count && count < max_count; j++) {
-                out_specs[count++] = pass_specs[j];
-            }
-        }
-    }
-
-    return count;
+    (void)p;
+    (void)out_specs;
+    (void)max_count;
+    return 0;
 }
 
 // ============================================================================

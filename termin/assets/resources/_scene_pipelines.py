@@ -62,7 +62,7 @@ class ScenePipelinesMixin:
         """
         pipeline = self._scene_pipeline_registry.get(name)
         if pipeline is not None:
-            return pipeline.copy()
+            return pipeline.copy(self)
         return None
 
     def get_scene_pipeline_asset(self, name: str) -> Optional["ScenePipelineAsset"]:
@@ -91,7 +91,7 @@ class ScenePipelinesMixin:
         if asset is not None:
             pipeline = asset.data
             if pipeline is not None:
-                return pipeline.copy()
+                return pipeline.copy(self)
         return None
 
     def get_scene_pipeline_asset_by_uuid(self, uuid: str) -> Optional["ScenePipelineAsset"]:

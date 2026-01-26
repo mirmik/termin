@@ -100,7 +100,7 @@ private:
     static size_t _cb_get_reads(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_writes(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_inplace_aliases(tc_pass* p, const char** out, size_t max);
-    static size_t _cb_get_resource_specs(tc_pass* p, tc_resource_spec* out, size_t max);
+    static size_t _cb_get_resource_specs(tc_pass* p, void* out, size_t max);
     static size_t _cb_get_internal_symbols(tc_pass* p, const char** out, size_t max);
     static void _cb_destroy(tc_pass* p);
     static void _cb_drop(tc_pass* p);
