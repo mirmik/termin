@@ -426,6 +426,7 @@ public partial class MainWindow : Window
         _renderPipeline.add_spec(depthSpec);
 
         // Create and add ColorPass (SWIG class)
+        // output_res = "color" writes to offscreen FBO, then present_to_screen blits to screen
         _colorPass = new ColorPass(
             input_res: "empty",
             output_res: "color",
@@ -597,7 +598,6 @@ void main() {
 
                 // Wrap scene handle for SWIG
                 var scenePtr = _scene?.Handle ?? IntPtr.Zero;
-                Console.WriteLine($"[Render] scene={scenePtr:X}, width={width}, height={height}");
                 var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
 
                 _renderEngine.render_to_screen(
@@ -606,6 +606,14 @@ void main() {
                     height,
                     sceneWrapper,
                     _cameraComponent
+                );
+
+                // Blit color FBO to screen
+                _renderEngine.present_to_screen(
+                    _renderPipeline,
+                    width,
+                    height,
+                    "color"
                 );
             }
             else

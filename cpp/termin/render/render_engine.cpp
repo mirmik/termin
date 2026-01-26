@@ -55,6 +55,34 @@ void RenderEngine::render_to_screen(
     );
 }
 
+void RenderEngine::present_to_screen(
+    RenderPipeline* pipeline,
+    int width,
+    int height,
+    const std::string& resource_name
+) {
+    if (!pipeline || !graphics) {
+        return;
+    }
+
+    // Get FBO from pipeline's pool
+    FramebufferHandle* src_fbo = pipeline->fbo_pool().get(resource_name);
+    if (!src_fbo) {
+        tc::Log::warn("[present_to_screen] FBO '%s' not found in pipeline", resource_name.c_str());
+        return;
+    }
+
+    // Blit to default framebuffer (screen)
+    graphics->blit_framebuffer(
+        src_fbo,
+        nullptr,  // dst = default framebuffer
+        0, 0, src_fbo->get_width(), src_fbo->get_height(),
+        0, 0, width, height,
+        true,   // blit color
+        false   // don't blit depth
+    );
+}
+
 void RenderEngine::render_view_to_fbo(
     RenderPipeline* pipeline,
     FramebufferHandle* target_fbo,

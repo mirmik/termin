@@ -370,6 +370,14 @@ public:
         void* scene,
         CameraComponent* camera
     );
+
+    // Present pipeline's color FBO to screen (blit)
+    void present_to_screen(
+        RenderPipeline* pipeline,
+        int width,
+        int height,
+        const std::string& resource_name = "color"
+    );
 };
 
 // ============================================================================

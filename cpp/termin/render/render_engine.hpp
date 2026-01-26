@@ -73,6 +73,15 @@ public:
         CameraComponent* camera
     );
 
+    // Present pipeline's color FBO to screen (blit to default framebuffer)
+    // Call after render_to_screen to display the result
+    void present_to_screen(
+        RenderPipeline* pipeline,
+        int width,
+        int height,
+        const std::string& resource_name = "color"
+    );
+
     // Render pipeline with multiple viewports
     // Each pass selects viewport by viewport_name, writes to that viewport's output_fbo
     void render_scene_pipeline_offscreen(
