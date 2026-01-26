@@ -3,6 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/set.h>
+#include <nanobind/stl/tuple.h>
 #include <cstring>
 #include <unordered_map>
 #include <memory>
@@ -415,6 +416,98 @@ void bind_tc_pass(nb::module_& m) {
         .def_prop_rw("enabled", &TcPassRef::enabled, &TcPassRef::set_enabled)
         .def_prop_rw("passthrough", &TcPassRef::passthrough, &TcPassRef::set_passthrough)
         .def("is_inplace", &TcPassRef::is_inplace)
+        .def_prop_ro("inplace", &TcPassRef::is_inplace)
+        .def_prop_ro("reads", [](TcPassRef& self) {
+            std::set<std::string> result;
+            tc_pass* p = self.ptr();
+            if (p) {
+                const char* names[64];
+                size_t count = tc_pass_get_reads(p, names, 64);
+                for (size_t i = 0; i < count; ++i) {
+                    if (names[i]) result.insert(names[i]);
+                }
+            }
+            return result;
+        })
+        .def_prop_ro("writes", [](TcPassRef& self) {
+            std::set<std::string> result;
+            tc_pass* p = self.ptr();
+            if (p) {
+                const char* names[64];
+                size_t count = tc_pass_get_writes(p, names, 64);
+                for (size_t i = 0; i < count; ++i) {
+                    if (names[i]) result.insert(names[i]);
+                }
+            }
+            return result;
+        })
+        .def("get_inplace_aliases", [](TcPassRef& self) {
+            // Returns list of tuples: [(src1, dst1), (src2, dst2), ...]
+            std::vector<std::tuple<std::string, std::string>> result;
+            tc_pass* p = self.ptr();
+            if (p) {
+                const char* pairs[32];
+                size_t count = tc_pass_get_inplace_aliases(p, pairs, 32);
+                // pairs contains [src1, dst1, src2, dst2, ...]
+                for (size_t i = 0; i + 1 < count; i += 2) {
+                    result.emplace_back(pairs[i] ? pairs[i] : "", pairs[i+1] ? pairs[i+1] : "");
+                }
+            }
+            return result;
+        })
+        .def("get_internal_symbols", [](TcPassRef& self) {
+            std::vector<std::string> result;
+            tc_pass* p = self.ptr();
+            if (p) {
+                const char* symbols[64];
+                size_t count = tc_pass_get_internal_symbols(p, symbols, 64);
+                for (size_t i = 0; i < count; ++i) {
+                    if (symbols[i]) result.push_back(symbols[i]);
+                }
+            }
+            return result;
+        })
+        .def("set_debug_internal_point", [](TcPassRef& self, const std::string& symbol) {
+            tc_pass* p = self.ptr();
+            if (p) {
+                if (p->debug_internal_symbol) {
+                    free(p->debug_internal_symbol);
+                    p->debug_internal_symbol = nullptr;
+                }
+                if (!symbol.empty()) {
+                    p->debug_internal_symbol = strdup(symbol.c_str());
+                }
+            }
+        }, nb::arg("symbol"))
+        .def("get_debug_internal_point", [](TcPassRef& self) -> std::string {
+            tc_pass* p = self.ptr();
+            if (p && p->debug_internal_symbol) {
+                return std::string(p->debug_internal_symbol);
+            }
+            return "";
+        })
+        .def("clear_debug_internal_point", [](TcPassRef& self) {
+            tc_pass* p = self.ptr();
+            if (p && p->debug_internal_symbol) {
+                free(p->debug_internal_symbol);
+                p->debug_internal_symbol = nullptr;
+            }
+        })
+        .def("set_debugger_window", [](TcPassRef& self, nb::object window,
+                                       nb::object depth_callback, nb::object error_callback) {
+            // Delegate to Python body
+            nb::object py_obj = tc_pass_to_python(self.ptr());
+            if (!py_obj.is_none() && nb::hasattr(py_obj, "set_debugger_window")) {
+                py_obj.attr("set_debugger_window")(window, depth_callback, error_callback);
+            }
+        }, nb::arg("window") = nb::none(), nb::arg("depth_callback") = nb::none(), nb::arg("error_callback") = nb::none())
+        .def("get_debugger_window", [](TcPassRef& self) -> nb::object {
+            nb::object py_obj = tc_pass_to_python(self.ptr());
+            if (!py_obj.is_none() && nb::hasattr(py_obj, "get_debugger_window")) {
+                return py_obj.attr("get_debugger_window")();
+            }
+            return nb::none();
+        })
         .def("to_python", [](TcPassRef& self) {
             return tc_pass_to_python(self.ptr());
         }, "Get Python object for this pass (for accessing type-specific properties)")

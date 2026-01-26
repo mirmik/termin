@@ -421,33 +421,6 @@ void bind_frame_pass(nb::module_& m) {
         .def("__repr__", [](const CxxFramePass& p) {
             return "<CxxFramePass '" + p.get_pass_name() + "'>";
         })
-        .def("serialize_data", [](CxxFramePass& self) {
-            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
-            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            return registry.attr("serialize_all")(nb::cast(&self));
-        })
-        .def("deserialize_data", [](CxxFramePass& self, nb::object data) {
-            if (data.is_none()) return;
-            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
-            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            registry.attr("deserialize_all")(nb::cast(&self), data);
-        }, nb::arg("data"))
-        .def("serialize", [](CxxFramePass& self, nb::object py_self) {
-            nb::dict result;
-            tc_pass* tc = self.tc_pass_ptr();
-            const char* type_name = tc_pass_type_name(tc);
-            result["type"] = nb::str(type_name);
-            result["pass_name"] = nb::str(self.get_pass_name().c_str());
-            result["enabled"] = self.get_enabled();
-            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
-            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            result["data"] = registry.attr("serialize_all")(py_self);
-            std::string vp_name = self.get_viewport_name();
-            if (!vp_name.empty()) {
-                result["viewport_name"] = nb::str(vp_name.c_str());
-            }
-            return result;
-        }, nb::arg("py_self"))
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             auto* pass = new CxxFramePass();
             if (data.contains("pass_name")) {
@@ -655,67 +628,8 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_inplace_aliases", &ColorPass::get_inplace_aliases)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
-        // reads/writes properties (aliases for compute_reads/compute_writes)
         .def_prop_ro("reads", &ColorPass::compute_reads)
         .def_prop_ro("writes", &ColorPass::compute_writes)
-        // Serialization methods
-        .def("serialize_data", [](ColorPass& self) {
-            // Import InspectRegistry from Python bindings
-            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
-            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            nb::dict result = nb::cast<nb::dict>(registry.attr("serialize_all")(nb::cast(&self)));
-            // Add extra_textures (not in INSPECT_FIELD)
-            if (!self.extra_textures.empty()) {
-                nb::dict extra;
-                for (const auto& [k, v] : self.extra_textures) {
-                    extra[nb::str(k.c_str())] = nb::str(v.c_str());
-                }
-                result["extra_textures"] = extra;
-            }
-            return result;
-        })
-        .def("deserialize_data", [](ColorPass& self, nb::object data) {
-            if (data.is_none()) return;
-            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
-            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            registry.attr("deserialize_all")(nb::cast(&self), data);
-            // Restore extra_textures
-            if (nb::isinstance<nb::dict>(data)) {
-                nb::dict d = nb::cast<nb::dict>(data);
-                if (d.contains("extra_textures")) {
-                    self.extra_textures.clear();
-                    nb::dict extra = nb::cast<nb::dict>(d["extra_textures"]);
-                    for (auto item : extra) {
-                        std::string k = nb::cast<std::string>(nb::str(item.first));
-                        std::string v = nb::cast<std::string>(nb::str(item.second));
-                        self.extra_textures[k] = v;
-                    }
-                }
-            }
-        })
-        .def("serialize", [](ColorPass& self) {
-            nb::dict result;
-            result["type"] = "ColorPass";
-            result["pass_name"] = nb::str(self.get_pass_name().c_str());
-            result["enabled"] = self.get_enabled();
-            // Get serialize_data result
-            nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
-            nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            nb::dict data = nb::cast<nb::dict>(registry.attr("serialize_all")(nb::cast(&self)));
-            if (!self.extra_textures.empty()) {
-                nb::dict extra;
-                for (const auto& [k, v] : self.extra_textures) {
-                    extra[nb::str(k.c_str())] = nb::str(v.c_str());
-                }
-                data["extra_textures"] = extra;
-            }
-            result["data"] = data;
-            std::string vp_name = self.get_viewport_name();
-            if (!vp_name.empty()) {
-                result["viewport_name"] = nb::str(vp_name.c_str());
-            }
-            return result;
-        })
         .def("execute_with_data", [](
             ColorPass& self,
             GraphicsBackend* graphics,
@@ -1016,24 +930,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("far_plane"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_rw("camera_name", &DepthPass::camera_name)
-        .def("serialize", [](DepthPass& self) {
-            nb::dict result;
-            result["type"] = "DepthPass";
-            result["pass_name"] = nb::str(self.get_pass_name().c_str());
-            result["enabled"] = self.get_enabled();
-            nb::dict data;
-            data["input_res"] = nb::str(self.input_res.c_str());
-            data["output_res"] = nb::str(self.output_res.c_str());
-            if (!self.camera_name.empty()) {
-                data["camera_name"] = nb::str(self.camera_name.c_str());
-            }
-            result["data"] = data;
-            std::string vp_name = self.get_viewport_name();
-            if (!vp_name.empty()) {
-                result["viewport_name"] = nb::str(vp_name.c_str());
-            }
-            return result;
-        })
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             std::string pass_name = "Depth";
             std::string camera_name = "";
@@ -1186,24 +1082,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("projection"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_rw("camera_name", &NormalPass::camera_name)
-        .def("serialize", [](NormalPass& self) {
-            nb::dict result;
-            result["type"] = "NormalPass";
-            result["pass_name"] = nb::str(self.get_pass_name().c_str());
-            result["enabled"] = self.get_enabled();
-            nb::dict data;
-            data["input_res"] = nb::str(self.input_res.c_str());
-            data["output_res"] = nb::str(self.output_res.c_str());
-            if (!self.camera_name.empty()) {
-                data["camera_name"] = nb::str(self.camera_name.c_str());
-            }
-            result["data"] = data;
-            std::string vp_name = self.get_viewport_name();
-            if (!vp_name.empty()) {
-                result["viewport_name"] = nb::str(vp_name.c_str());
-            }
-            return result;
-        })
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             std::string pass_name = "Normal";
             std::string camera_name = "";
@@ -1357,24 +1235,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("projection"),
         nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_rw("camera_name", &IdPass::camera_name)
-        .def("serialize", [](IdPass& self) {
-            nb::dict result;
-            result["type"] = "IdPass";
-            result["pass_name"] = nb::str(self.get_pass_name().c_str());
-            result["enabled"] = self.get_enabled();
-            nb::dict data;
-            data["input_res"] = nb::str(self.input_res.c_str());
-            data["output_res"] = nb::str(self.output_res.c_str());
-            if (!self.camera_name.empty()) {
-                data["camera_name"] = nb::str(self.camera_name.c_str());
-            }
-            result["data"] = data;
-            std::string vp_name = self.get_viewport_name();
-            if (!vp_name.empty()) {
-                result["viewport_name"] = nb::str(vp_name.c_str());
-            }
-            return result;
-        })
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             std::string pass_name = "IdPass";
             std::string camera_name = "";
@@ -1526,21 +1386,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("lights"),
         nb::arg("camera_view"),
         nb::arg("camera_projection"))
-        .def("serialize", [](ShadowPass& self) {
-            nb::dict result;
-            result["type"] = "ShadowPass";
-            result["pass_name"] = nb::str(self.get_pass_name().c_str());
-            result["enabled"] = self.get_enabled();
-            nb::dict data;
-            data["output_res"] = nb::str(self.output_res.c_str());
-            data["caster_offset"] = self.caster_offset;
-            result["data"] = data;
-            std::string vp_name = self.get_viewport_name();
-            if (!vp_name.empty()) {
-                result["viewport_name"] = nb::str(vp_name.c_str());
-            }
-            return result;
-        })
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             std::string pass_name = "Shadow";
             std::string output_res = "shadow_maps";

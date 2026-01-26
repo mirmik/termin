@@ -467,18 +467,26 @@ class ResourceManagerViewer(QDialog):
         ]
 
         if asset.is_loaded:
-            pipeline = asset.data
-            if pipeline is not None:
+            # ScenePipelineAsset stores graph data (nodes, connections), not serialized pipeline
+            graph_data = asset.data
+            if graph_data is not None:
                 lines.append(f"")
-                lines.append(f"=== Scene Pipeline Data ===")
-                lines.append(f"Pipeline Name: {pipeline.name}")
-                lines.append(f"Passes: {len(pipeline.passes)}")
+                lines.append(f"=== Scene Pipeline Graph ===")
+                nodes = graph_data.get("nodes", [])
+                connections = graph_data.get("connections", [])
+                lines.append(f"Nodes: {len(nodes)}")
+                lines.append(f"Connections: {len(connections)}")
                 lines.append(f"")
-                lines.append(f"=== Passes ===")
-                for i, pass_obj in enumerate(pipeline.passes):
-                    pass_name = pass_obj.pass_name if hasattr(pass_obj, 'pass_name') else type(pass_obj).__name__
-                    pass_type = type(pass_obj).__name__
-                    lines.append(f"  [{i}] {pass_name} ({pass_type})")
+                lines.append(f"=== Nodes ===")
+                for i, node_data in enumerate(nodes):
+                    node_type = node_data.get("type", "?")
+                    node_id = node_data.get("id", "?")
+                    params = node_data.get("params", {})
+                    pass_name = params.get("pass_name", "")
+                    if pass_name:
+                        lines.append(f"  [{i}] {node_type}: {pass_name}")
+                    else:
+                        lines.append(f"  [{i}] {node_type} (id={node_id})")
 
         self._details_text.setText("\n".join(lines))
 
@@ -663,8 +671,14 @@ class ResourceManagerViewer(QDialog):
         for name in self._resource_manager.list_scene_pipeline_names():
             asset = self._resource_manager.get_scene_pipeline_asset(name)
             if asset:
-                pipeline = asset.data if asset.is_loaded else None
-                passes_count = len(pipeline.passes) if pipeline else "?"
+                # ScenePipelineAsset stores graph data (nodes, connections), not serialized pipeline
+                graph_data = asset.data if asset.is_loaded else None
+                if graph_data:
+                    # Count pass nodes (nodes that are not ViewportFrame, ResourceNode, etc.)
+                    nodes = graph_data.get("nodes", [])
+                    passes_count = sum(1 for n in nodes if n.get("type", "").endswith("Pass"))
+                else:
+                    passes_count = "?"
                 status = f"{passes_count} passes"
                 version = str(asset.version) if hasattr(asset, 'version') else "-"
                 uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid

@@ -296,8 +296,8 @@ class FramePass:
         instance.passthrough = data.get("passthrough", False)
         instance.viewport_name = data.get("viewport_name", "")
 
-        # Десериализуем данные через InspectRegistry
-        instance.deserialize_data(data.get("data", {}))
+        # Десериализуем данные через TcPassRef (unified for C++ and Python passes)
+        instance._tc_pass.deserialize_data(data.get("data", {}))
 
         return instance
 

@@ -179,7 +179,7 @@ NB_MODULE(_entity_native, m) {
         })
         .def("list_all", &ComponentRegistry::list_all)
         .def("list_native", &ComponentRegistry::list_native)
-        .def("list_python", []() {
+        .def("list_python", [](ComponentRegistry& /*self*/) {
             return ComponentRegistryPython::list_python();
         })
         .def("clear", &ComponentRegistry::clear)
