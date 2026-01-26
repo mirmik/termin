@@ -41,7 +41,7 @@ public:
     void set_passthrough(bool v) { if (_c) _c->passthrough = v; }
 
     std::string type_name() const {
-        return _c ? tc_pass_type_name(_c) : "Pass";
+        return _c ? tc_pass_type_name(_c) : "BrokenPass_NullPtr";
     }
 
     bool is_inplace() const {

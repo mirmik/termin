@@ -186,7 +186,7 @@ static inline const char* tc_pass_type_name(const tc_pass* p) {
     if (p && p->type_entry && p->type_entry->type_name) {
         return p->type_entry->type_name;
     }
-    return "Pass";
+    return "BrokenPass_NoTypeEntry";
 }
 
 static inline size_t tc_pass_get_reads(tc_pass* p, const char** out, size_t max) {

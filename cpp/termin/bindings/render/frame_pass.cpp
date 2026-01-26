@@ -426,9 +426,8 @@ void bind_frame_pass(nb::module_& m) {
             if (data.contains("pass_name")) {
                 pass->set_pass_name(nb::cast<std::string>(data["pass_name"]));
             }
-            return pass;
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none(),
-           nb::rv_policy::take_ownership);
+            return init_pass_from_deserialize(pass, "CxxFramePass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none());
 
     // RenderContext
     nb::class_<RenderContext>(m, "RenderContext")
@@ -795,9 +794,8 @@ void bind_frame_pass(nb::module_& m) {
             std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "unnamed";
             auto* p = new ColorPass();
             p->set_pass_name(pass_name);
-            return p;
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none(),
-           nb::rv_policy::take_ownership);
+            return init_pass_from_deserialize(p, "ColorPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none());
 
     // Node graph attributes for ColorPass
     color_pass.attr("category") = "Render";
