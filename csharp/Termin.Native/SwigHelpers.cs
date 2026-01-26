@@ -19,11 +19,12 @@ public static class SwigHelpers
     }
 
     /// <summary>
-    /// Wrap an IntPtr as SWIGTYPE_p_CameraComponent for passing to SWIG methods.
+    /// Wrap an IntPtr as CameraComponent for passing to SWIG methods.
+    /// CameraComponent is now a fully defined type in SWIG.
     /// </summary>
-    public static SWIGTYPE_p_CameraComponent WrapCameraComponentPtr(IntPtr ptr)
+    public static CameraComponent WrapCameraComponentPtr(IntPtr ptr)
     {
-        return new SWIGTYPE_p_CameraComponent(ptr, false);
+        return new CameraComponent(ptr, false);
     }
 
     /// <summary>
