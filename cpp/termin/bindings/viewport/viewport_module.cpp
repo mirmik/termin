@@ -17,6 +17,17 @@ namespace nb = nanobind;
 
 namespace termin {
 
+// Destructor callback for viewport - cleans up Python references
+static void viewport_python_destructor(tc_viewport* vp, void* /*user_data*/) {
+    if (!vp) return;
+
+    // Decref pipeline's py_wrapper if present
+    if (vp->pipeline && vp->pipeline->py_wrapper) {
+        Py_DECREF(reinterpret_cast<PyObject*>(vp->pipeline->py_wrapper));
+        vp->pipeline->py_wrapper = nullptr;
+    }
+}
+
 void bind_tc_viewport_class(nb::module_& m) {
     nb::class_<TcViewport>(m, "Viewport")
         // Default constructor
@@ -54,6 +65,10 @@ void bind_tc_viewport_class(nb::module_& m) {
 
             // Create viewport (ref_count starts at 1)
             tc_viewport* vp = tc_viewport_new(name.c_str(), tc_s, tc_c);
+
+            // Set destructor callback for Python cleanup
+            vp->destructor_fn = viewport_python_destructor;
+            vp->destructor_user_data = nullptr;
 
             // Set rect
             tc_viewport_set_rect(vp, std::get<0>(rect), std::get<1>(rect),
@@ -218,6 +233,14 @@ void bind_tc_viewport_class(nb::module_& m) {
             },
             [](TcViewport& self, nb::object pipeline_obj) {
                 if (!self.ptr_) return;
+
+                // Decref old pipeline's py_wrapper if present
+                tc_pipeline* old_pl = self.ptr_->pipeline;
+                if (old_pl && old_pl->py_wrapper) {
+                    Py_DECREF(reinterpret_cast<PyObject*>(old_pl->py_wrapper));
+                    old_pl->py_wrapper = nullptr;
+                }
+
                 if (pipeline_obj.is_none()) {
                     self.ptr_->pipeline = nullptr;
                 } else {

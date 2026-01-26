@@ -13,6 +13,9 @@ extern "C" {
 // Viewport Structure
 // ============================================================================
 
+// Destructor callback type (for Python bindings to clean up py_wrapper)
+typedef void (*tc_viewport_destructor_fn)(struct tc_viewport* vp, void* user_data);
+
 struct tc_viewport {
     // Reference counting
     uint32_t ref_count;
@@ -39,6 +42,10 @@ struct tc_viewport {
     // Internal entities root (for viewport-specific objects)
     tc_entity_pool* internal_entities_pool;
     tc_entity_id internal_entities_id;
+
+    // Destructor callback (called before free, for Python bindings cleanup)
+    tc_viewport_destructor_fn destructor_fn;
+    void* destructor_user_data;
 };
 
 // ============================================================================

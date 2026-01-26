@@ -58,11 +58,19 @@ tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* ca
     vp->internal_entities_pool = NULL;
     vp->internal_entities_id = TC_ENTITY_ID_INVALID;
 
+    vp->destructor_fn = NULL;
+    vp->destructor_user_data = NULL;
+
     return vp;
 }
 
 void tc_viewport_free(tc_viewport* vp) {
     if (!vp) return;
+
+    // Call destructor callback if set (for Python bindings cleanup)
+    if (vp->destructor_fn) {
+        vp->destructor_fn(vp, vp->destructor_user_data);
+    }
 
     free(vp->name);
     free(vp->input_mode);

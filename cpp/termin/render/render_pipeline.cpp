@@ -1,5 +1,6 @@
 // render_pipeline.cpp - C++ RenderPipeline implementation
 #include "termin/render/render_pipeline.hpp"
+#include "tc_log.hpp"
 #include <cstring>
 
 extern "C" {
@@ -87,6 +88,23 @@ RenderPipeline& RenderPipeline::operator=(RenderPipeline&& other) noexcept {
 
 void RenderPipeline::add_pass(tc_pass* pass) {
     if (!pass) return;
+
+    // Check if pass is already in a pipeline
+    if (pass->owner_pipeline) {
+        if (pass->owner_pipeline == &pipeline_) {
+            tc::Log::warn("RenderPipeline::add_pass: pass '%s' is already in this pipeline '%s'",
+                          pass->pass_name ? pass->pass_name : "(unnamed)",
+                          name_.c_str());
+        } else {
+            tc::Log::warn("RenderPipeline::add_pass: pass '%s' is already in another pipeline, removing first",
+                          pass->pass_name ? pass->pass_name : "(unnamed)");
+            // Remove from old pipeline
+            RenderPipeline* old_owner = from_tc_pipeline(pass->owner_pipeline);
+            if (old_owner) {
+                old_owner->remove_pass(pass);
+            }
+        }
+    }
 
     // Ensure capacity
     if (pipeline_.pass_count >= pipeline_.pass_capacity) {

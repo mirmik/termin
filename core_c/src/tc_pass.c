@@ -379,6 +379,20 @@ static void pipeline_ensure_capacity(tc_pipeline* p) {
 void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     if (!p || !pass) return;
 
+    // Check if pass is already in a pipeline
+    if (pass->owner_pipeline) {
+        if (pass->owner_pipeline == p) {
+            tc_log(TC_LOG_WARN, "tc_pipeline_add_pass: pass '%s' is already in this pipeline",
+                   pass->pass_name ? pass->pass_name : "(unnamed)");
+            return;
+        } else {
+            tc_log(TC_LOG_WARN, "tc_pipeline_add_pass: pass '%s' is already in another pipeline",
+                   pass->pass_name ? pass->pass_name : "(unnamed)");
+            // Remove from old pipeline first
+            tc_pipeline_remove_pass(pass->owner_pipeline, pass);
+        }
+    }
+
     pipeline_ensure_capacity(p);
 
     // Retain pass to prevent deletion while in pipeline
