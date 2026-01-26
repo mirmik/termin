@@ -1,51 +1,46 @@
-"""Input event structures."""
+"""Input event structures.
+
+Re-exports C++ event classes from _entity_native module.
+These structures are used for input event dispatch between
+the platform layer and C++ components.
+
+Классы событий:
+    MouseButtonEvent: событие нажатия/отпускания кнопки мыши
+    MouseMoveEvent: событие перемещения мыши
+    ScrollEvent: событие прокрутки колеса мыши
+    KeyEvent: событие клавиатуры
+
+Константы:
+    MouseButton.Left/Right/Middle: кнопки мыши (0, 1, 2)
+    Action.Release/Press/Repeat: действия (0, 1, 2)
+    Mods.Shift/Ctrl/Alt/Super: модификаторы (1, 2, 4, 8)
+
+Все события содержат поле viewport типа TcViewport (Viewport).
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+# Import C++ event classes
+from termin.entity._entity_native import (
+    MouseButtonEvent,
+    MouseMoveEvent,
+    ScrollEvent,
+    KeyEvent,
+    MouseButton,
+    Action,
+    Mods,
+)
 
-if TYPE_CHECKING:
-    from termin.visualization.core.viewport import Viewport
+# Re-export Viewport for type hints
+from termin.viewport import Viewport
 
-
-@dataclass
-class MouseButtonEvent:
-    """Mouse button press/release event."""
-    viewport: "Viewport"
-    x: float
-    y: float
-    button: int
-    action: int
-    mods: int
-
-
-@dataclass
-class MouseMoveEvent:
-    """Mouse movement event."""
-    viewport: "Viewport"
-    x: float
-    y: float
-    dx: float
-    dy: float
-
-
-@dataclass
-class ScrollEvent:
-    """Mouse scroll event."""
-    viewport: "Viewport"
-    x: float
-    y: float
-    xoffset: float
-    yoffset: float
-    mods: int = 0
-
-
-@dataclass
-class KeyEvent:
-    """Keyboard event."""
-    viewport: "Viewport"
-    key: int
-    scancode: int
-    action: int
-    mods: int
+__all__ = [
+    "MouseButtonEvent",
+    "MouseMoveEvent",
+    "ScrollEvent",
+    "KeyEvent",
+    "MouseButton",
+    "Action",
+    "Mods",
+    "Viewport",
+]

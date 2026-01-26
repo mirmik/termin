@@ -115,15 +115,24 @@ class EditorDisplayInputManager:
         self._world_mode = mode
 
     def _dispatch_to_camera(self, viewport: "Viewport", event_name: str, event) -> None:
-        """Диспатчит событие в InputComponent'ы камеры viewport'а."""
-        from termin.visualization.core.component import InputComponent
+        """Диспатчит событие в InputComponent'ы камеры viewport'а.
+        
+        Проверка is_input_handler выполняется через tc_component API,
+        а не через isinstance, так как C++ компоненты (например OrbitCameraController)
+        не наследуют Python-класс InputComponent.
+        """
         camera = viewport.camera
         if camera is None or camera.entity is None:
             return
         for comp in camera.entity.components:
-            if isinstance(comp, InputComponent):
+            # Проверяем через tc_component_is_input_handler (C API)
+            is_handler = comp.is_input_handler
+            print(f"[_dispatch_to_camera] {type(comp).__name__} is_input_handler={is_handler}")
+            if is_handler:
                 handler = getattr(comp, event_name, None)
+                print(f"[_dispatch_to_camera] {event_name} handler={handler}")
                 if handler:
+                    print(f"[_dispatch_to_camera] CALLING {event_name} on {type(comp).__name__}")
                     handler(event)
 
     def _dispatch_to_editor_components(self, viewport: "Viewport", event_name: str, event) -> None:
@@ -149,11 +158,12 @@ class EditorDisplayInputManager:
         self._dispatch_to_entity_hierarchy(internal_root, event_name, event)
 
     def _dispatch_to_entity_hierarchy(self, entity: "Entity", event_name: str, event) -> None:
-        """Рекурсивно диспатчит событие в InputComponent'ы entity и его детей."""
-        from termin.visualization.core.python_component import InputComponent
-
+        """Рекурсивно диспатчит событие в InputComponent'ы entity и его детей.
+        
+        Проверка is_input_handler выполняется через tc_component API.
+        """
         for comp in entity.components:
-            if isinstance(comp, InputComponent) and comp.enabled:
+            if comp.is_input_handler and comp.enabled:
                 handler = getattr(comp, event_name, None)
                 if handler:
                     handler(event)

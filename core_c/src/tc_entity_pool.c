@@ -1154,8 +1154,6 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     // Register with scene if pool belongs to one
     tc_scene* scene = tc_entity_pool_get_scene(pool);
     const char* type_name = tc_component_type_name(c);
-    tc_log(TC_LOG_INFO, "[tc_entity_pool_add_component] pool=%p, scene=%p, component=%p, type='%s'", 
-           pool, scene, c, type_name ? type_name : "(null)");
     if (scene) {
         tc_scene_register_component(scene, c);
     }

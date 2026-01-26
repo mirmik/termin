@@ -21,6 +21,8 @@
 #include "entity_helpers.hpp"
 #include "entity_bindings.hpp"
 #include "../camera/camera_bindings.hpp"
+#include "../camera/orbit_camera_bindings.hpp"
+#include "../input/input_events_bindings.hpp"
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -103,6 +105,9 @@ public:
 NB_MODULE(_entity_native, m) {
     m.doc() = "Entity native module (Component, Entity, registries)";
 
+    // Import _viewport_native for TcViewport type (used by input events)
+    nb::module_::import_("termin.viewport._viewport_native");
+
     // --- CxxComponent (also exported as Component for compatibility) ---
     nb::class_<CxxComponent, PyCxxComponent>(m, "Component")
         .def(nb::init<>())
@@ -124,6 +129,7 @@ NB_MODULE(_entity_native, m) {
         .def_prop_ro("started", &CxxComponent::started)
         .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
+        .def_prop_ro("is_input_handler", &CxxComponent::is_input_handler)
         .def_prop_rw("entity",
             [](CxxComponent& c) -> nb::object {
                 if (c.entity.valid()) {
@@ -204,6 +210,12 @@ NB_MODULE(_entity_native, m) {
 
     // --- CameraComponent ---
     bind_camera_component(m);
+
+    // --- OrbitCameraController ---
+    bind_orbit_camera_controller(m);
+
+    // --- Input Events ---
+    bind_input_events(m);
 
     // --- EntityRegistry ---
     nb::class_<EntityRegistry>(m, "EntityRegistry")

@@ -161,6 +161,11 @@ class PythonComponent:
         self._tc.has_fixed_update = value
 
     @property
+    def is_input_handler(self) -> bool:
+        """Check if this component handles input events (has input_vtable installed)."""
+        return self._tc.is_input_handler
+
+    @property
     def entity(self) -> Optional[Entity]:
         """Get owner entity from C-level tc_component."""
         ent = self._tc.entity

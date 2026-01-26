@@ -107,6 +107,9 @@ public:
     bool has_before_render() const { return _c.has_before_render; }
     void set_has_before_render(bool v) { _c.has_before_render = v; }
 
+    // Check if component handles input events (has input_vtable installed)
+    bool is_input_handler() const { return tc_component_is_input_handler(&_c); }
+
     // Lifecycle hooks (virtual - subclasses override these)
     virtual void start() {}
     virtual void update(float dt) { (void)dt; }

@@ -6,6 +6,7 @@
 #include "termin/geom/quat.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/camera/camera.hpp"
+#include "termin/input/input_events.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
@@ -13,6 +14,7 @@
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/entity/component.hpp"
 #include "tc_pass.h"
 #include "tc_pipeline.h"
@@ -196,6 +198,114 @@ struct Camera {
     static Mat44 view_matrix(const Vec3& position, const Quat& rotation);
     static Mat44 view_matrix_look_at(const Vec3& eye, const Vec3& target, const Vec3& up = Vec3::unit_z());
 };
+
+// ============================================================================
+// Input Events - cross-platform event structures
+// ============================================================================
+
+// Forward declare tc_viewport for events
+typedef struct tc_viewport tc_viewport;
+
+/**
+ * Mouse button press/release event.
+ *
+ * viewport: указатель на tc_viewport
+ * x, y: позиция курсора в координатах viewport
+ * button: кнопка мыши (0=left, 1=right, 2=middle)
+ * action: действие (0=release, 1=press, 2=repeat)
+ * mods: модификаторы (Shift=1, Ctrl=2, Alt=4, Super=8)
+ */
+struct MouseButtonEvent {
+    tc_viewport* viewport;
+    double x;
+    double y;
+    int button;
+    int action;
+    int mods;
+
+    MouseButtonEvent();
+    MouseButtonEvent(tc_viewport* viewport, double x, double y, int button, int action, int mods = 0);
+};
+
+/**
+ * Mouse movement event.
+ *
+ * viewport: указатель на tc_viewport
+ * x, y: текущая позиция курсора
+ * dx, dy: дельта перемещения
+ */
+struct MouseMoveEvent {
+    tc_viewport* viewport;
+    double x;
+    double y;
+    double dx;
+    double dy;
+
+    MouseMoveEvent();
+    MouseMoveEvent(tc_viewport* viewport, double x, double y, double dx, double dy);
+};
+
+/**
+ * Mouse scroll event.
+ *
+ * viewport: указатель на tc_viewport
+ * x, y: позиция курсора
+ * xoffset, yoffset: смещение прокрутки (положительный yoffset = вверх/zoom in)
+ * mods: модификаторы
+ */
+struct ScrollEvent {
+    tc_viewport* viewport;
+    double x;
+    double y;
+    double xoffset;
+    double yoffset;
+    int mods;
+
+    ScrollEvent();
+    ScrollEvent(tc_viewport* viewport, double x, double y, double xoffset, double yoffset, int mods = 0);
+};
+
+/**
+ * Keyboard event.
+ *
+ * viewport: указатель на tc_viewport
+ * key: виртуальный код клавиши
+ * scancode: платформо-специфичный scancode
+ * action: действие (0=release, 1=press, 2=repeat)
+ * mods: модификаторы
+ */
+struct KeyEvent {
+    tc_viewport* viewport;
+    int key;
+    int scancode;
+    int action;
+    int mods;
+
+    KeyEvent();
+    KeyEvent(tc_viewport* viewport, int key, int scancode, int action, int mods = 0);
+};
+
+// Mouse button constants
+namespace MouseButton {
+    const int Left = 0;
+    const int Right = 1;
+    const int Middle = 2;
+}
+
+// Action constants
+namespace Action {
+    const int Release = 0;
+    const int Press = 1;
+    const int Repeat = 2;
+}
+
+// Modifier key flags
+namespace Mods {
+    const int Shift = 1;
+    const int Ctrl = 2;
+    const int Alt = 4;
+    const int Super = 8;
+}
 
 } // namespace termin
 
@@ -431,6 +541,45 @@ public:
     tc_component* tc_component_ptr();
 
     // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
+};
+
+// ============================================================================
+// OrbitCameraController - orbit camera controller
+// ============================================================================
+
+class OrbitCameraController {
+public:
+    double radius;
+    double min_radius;
+    double max_radius;
+
+    OrbitCameraController(
+        double radius = 5.0,
+        double min_radius = 1.0,
+        double max_radius = 100.0,
+        bool prevent_moving = false
+    );
+
+    // Camera operations
+    void orbit(double delta_azimuth, double delta_elevation);
+    void pan(double dx, double dy);
+    void zoom(double delta);
+    void center_on(const Vec3& position);
+
+    // State accessors
+    Vec3 target() const;
+    double azimuth() const;
+    double elevation() const;
+
+    // Movement control
+    void set_prevent_moving(bool prevent);
+    bool prevent_moving() const;
+
+    // Component pointer for C API interop
+    tc_component* tc_component_ptr();
+
+    // External body management
     void set_external_body(void* body);
 };
 
