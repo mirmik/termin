@@ -50,10 +50,28 @@ void RenderEngine::render_view_to_fbo(
     // Collect resource specs from pipeline + passes
     auto specs = pipeline->collect_specs();
 
-    // Build spec map for quick lookup
-    std::unordered_map<std::string, const ResourceSpec*> spec_map;
+    // Build spec map - merge specs with same resource name
+    // Pipeline specs come first and have priority for samples/format
+    std::unordered_map<std::string, ResourceSpec> spec_map;
     for (const auto& spec : specs) {
-        spec_map[spec.resource] = &spec;
+        auto it = spec_map.find(spec.resource);
+        if (it == spec_map.end()) {
+            spec_map[spec.resource] = spec;
+        } else {
+            ResourceSpec& existing = it->second;
+            if (spec.samples > 1 && existing.samples == 1) {
+                existing.samples = spec.samples;
+            }
+            if (spec.format && !existing.format) {
+                existing.format = spec.format;
+            }
+            if (spec.clear_color && !existing.clear_color) {
+                existing.clear_color = spec.clear_color;
+            }
+            if (spec.clear_depth && !existing.clear_depth) {
+                existing.clear_depth = spec.clear_depth;
+            }
+        }
     }
 
     // Allocate resources based on canonical names from frame graph
@@ -81,7 +99,7 @@ void RenderEngine::render_view_to_fbo(
         const ResourceSpec* spec = nullptr;
         auto it = spec_map.find(canon);
         if (it != spec_map.end()) {
-            spec = it->second;
+            spec = &it->second;
         } else {
             // Try aliases
             const char* aliases[64];
@@ -89,7 +107,7 @@ void RenderEngine::render_view_to_fbo(
             for (size_t j = 0; j < alias_count && !spec; j++) {
                 auto ait = spec_map.find(aliases[j]);
                 if (ait != spec_map.end()) {
-                    spec = ait->second;
+                    spec = &ait->second;
                 }
             }
         }
@@ -142,6 +160,10 @@ void RenderEngine::render_view_to_fbo(
             }
             samples = spec->samples > 0 ? spec->samples : 1;
             if (spec->format) format = *spec->format;
+            tc::Log::info("[RenderEngine::render] FBO '%s': merged spec samples=%d format='%s'",
+                canon, samples, format.c_str());
+        } else {
+            tc::Log::info("[RenderEngine::render] FBO '%s': no spec, samples=1", canon);
         }
 
         // Get or create FBO in pipeline's pool
@@ -297,9 +319,28 @@ void RenderEngine::render_scene_pipeline_offscreen(
     // Collect resource specs from pipeline + passes
     auto specs = pipeline->collect_specs();
 
-    std::unordered_map<std::string, const ResourceSpec*> spec_map;
+    // Build spec map - merge specs with same resource name
+    // Pipeline specs come first and have priority for samples/format
+    std::unordered_map<std::string, ResourceSpec> spec_map;
     for (const auto& spec : specs) {
-        spec_map[spec.resource] = &spec;
+        auto it = spec_map.find(spec.resource);
+        if (it == spec_map.end()) {
+            spec_map[spec.resource] = spec;
+        } else {
+            ResourceSpec& existing = it->second;
+            if (spec.samples > 1 && existing.samples == 1) {
+                existing.samples = spec.samples;
+            }
+            if (spec.format && !existing.format) {
+                existing.format = spec.format;
+            }
+            if (spec.clear_color && !existing.clear_color) {
+                existing.clear_color = spec.clear_color;
+            }
+            if (spec.clear_depth && !existing.clear_depth) {
+                existing.clear_depth = spec.clear_depth;
+            }
+        }
     }
 
     // Allocate resources based on canonical names from frame graph
@@ -329,14 +370,14 @@ void RenderEngine::render_scene_pipeline_offscreen(
         const ResourceSpec* spec = nullptr;
         auto it = spec_map.find(canon);
         if (it != spec_map.end()) {
-            spec = it->second;
+            spec = &it->second;
         } else {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
             for (size_t j = 0; j < alias_count && !spec; j++) {
                 auto ait = spec_map.find(aliases[j]);
                 if (ait != spec_map.end()) {
-                    spec = ait->second;
+                    spec = &ait->second;
                 }
             }
         }

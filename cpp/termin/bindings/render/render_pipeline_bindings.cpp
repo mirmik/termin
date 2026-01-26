@@ -26,6 +26,8 @@ void bind_render_pipeline(nb::module_& m) {
                            nb::list init_passes,
                            const std::vector<ResourceSpec>& init_specs) {
             new (self) RenderPipeline(name);
+            tc::Log::info("[RenderPipeline] __init__ name='%s' init_specs.size=%zu",
+                name.c_str(), init_specs.size());
             for (size_t i = 0; i < nb::len(init_passes); i++) {
                 nb::object pass_obj = init_passes[i];
                 // Get _tc_pass attribute from FramePass
@@ -50,6 +52,8 @@ void bind_render_pipeline(nb::module_& m) {
                 }
             }
             for (const auto& spec : init_specs) {
+                tc::Log::info("[RenderPipeline]   add_spec: resource='%s' samples=%d",
+                    spec.resource.c_str(), spec.samples);
                 self->add_spec(spec);
             }
         }, nb::arg("name") = "default",

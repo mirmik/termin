@@ -15,7 +15,24 @@ FramebufferHandle* FBOPool::ensure(
     // Find existing entry
     for (auto& entry : entries) {
         if (entry.key == key) {
-            // Resize if needed
+            // Check if we need to recreate (samples or format changed)
+            bool needs_recreate = (entry.samples != samples) ||
+                                  (entry.format != format);
+
+            if (needs_recreate && entry.fbo && !entry.external) {
+                // Recreate FBO with new samples/format
+                auto new_fbo = graphics->create_framebuffer(width, height, samples, format);
+                if (new_fbo) {
+                    entry.fbo = std::move(new_fbo);
+                    entry.width = width;
+                    entry.height = height;
+                    entry.samples = samples;
+                    entry.format = format;
+                }
+                return entry.fbo.get();
+            }
+
+            // Resize if needed (only size changed)
             if (entry.fbo && (entry.width != width || entry.height != height)) {
                 entry.fbo->resize(width, height);
                 entry.width = width;
