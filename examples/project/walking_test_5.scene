@@ -142,9 +142,6 @@
             "data": {
               "display_name": "",
               "enabled": false,
-              "navmesh": {
-                "type": "none"
-              },
               "material": {
                 "uuid": "b62e01e0-b3f6-4443-a367-b0edf8bffa60",
                 "name": "NavMeshFOV",
@@ -816,6 +813,22 @@
                   },
                   "cast_shadow": true,
                   "_override_material": false
+                }
+              },
+              {
+                "type": "ColliderComponent",
+                "data": {
+                  "display_name": "",
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
                 }
               }
             ],
@@ -13384,17 +13397,17 @@
   "editor": {
     "camera": {
       "position": [
-        3.4027466773986816,
-        -1.7268109321594238,
-        6.929144859313965
+        9.712282180786133,
+        -4.080144882202148,
+        2.352846145629883
       ],
       "rotation": [
-        -0.44008857721854305,
-        -0.21750533452835563,
-        0.3860097503086244,
-        0.7810313350436972
+        -0.24189208681506796,
+        -0.0037999473472982953,
+        0.015240753922059197,
+        0.9701760140079205
       ],
-      "radius": 11.5,
+      "radius": 14.5,
       "editor_entities": {
         "camera": [
           {
@@ -13410,7 +13423,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "radius": 11.5,
+              "radius": 14.5,
               "min_radius": 1,
               "max_radius": 100
             }
@@ -13438,7 +13451,7 @@
             "data": {
               "display_name": "",
               "enabled": true,
-              "colliders_enabled": false,
+              "colliders_enabled": true,
               "wireframe_enabled": false,
               "ortho_enabled": false
             }
@@ -13446,13 +13459,12 @@
         ]
       }
     },
-    "selected_entity": "3dad235e-0969-45d8-a8a0-a831e843616a",
     "expanded_entities": [
-      "000000000000000a",
-      "0000000000000130",
-      "0000000000000077",
       "0000000000000007",
       "814ba329-db24-48fe-b931-fe68ab904998",
+      "0000000000000130",
+      "000000000000000a",
+      "0000000000000077",
       "0000000000000131"
     ]
   },

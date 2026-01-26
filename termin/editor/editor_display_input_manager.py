@@ -127,12 +127,9 @@ class EditorDisplayInputManager:
         for comp in camera.entity.components:
             # Проверяем через tc_component_is_input_handler (C API)
             is_handler = comp.is_input_handler
-            print(f"[_dispatch_to_camera] {type(comp).__name__} is_input_handler={is_handler}")
             if is_handler:
                 handler = getattr(comp, event_name, None)
-                print(f"[_dispatch_to_camera] {event_name} handler={handler}")
                 if handler:
-                    print(f"[_dispatch_to_camera] CALLING {event_name} on {type(comp).__name__}")
                     handler(event)
 
     def _dispatch_to_editor_components(self, viewport: "Viewport", event_name: str, event) -> None:
