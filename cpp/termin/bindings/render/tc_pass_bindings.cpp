@@ -15,7 +15,11 @@ extern "C" {
 #include "tc_render.h"
 #include "tc_log.h"
 #include "termin_core.h"
+#include "tc_inspect.h"
 }
+
+#include "../../../../core_c/include/tc_inspect.hpp"
+#include "../tc_value_helpers.hpp"
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"
@@ -411,9 +415,85 @@ void bind_tc_pass(nb::module_& m) {
         .def_prop_rw("enabled", &TcPassRef::enabled, &TcPassRef::set_enabled)
         .def_prop_rw("passthrough", &TcPassRef::passthrough, &TcPassRef::set_passthrough)
         .def("is_inplace", &TcPassRef::is_inplace)
-        .def_prop_ro("body", [](TcPassRef& self) {
+        .def("to_python", [](TcPassRef& self) {
             return tc_pass_to_python(self.ptr());
-        });
+        }, "Get Python object for this pass (for accessing type-specific properties)")
+        .def_prop_ro("viewport_name", [](TcPassRef& self) {
+            tc_pass* p = self.ptr();
+            return p && p->viewport_name ? std::string(p->viewport_name) : std::string();
+        })
+        .def("serialize_data", [](TcPassRef& self) -> nb::object {
+            tc_pass* p = self.ptr();
+            if (!p) return nb::none();
+
+            void* obj_ptr = nullptr;
+            if (p->kind == TC_NATIVE_PASS) {
+                obj_ptr = CxxFramePass::from_tc(p);
+            } else {
+                obj_ptr = p->body;
+            }
+            if (!obj_ptr) return nb::none();
+
+            tc_value v = tc_inspect_serialize(obj_ptr, tc_pass_type_name(p));
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return result;
+        })
+        .def("serialize", [](TcPassRef& self) -> nb::object {
+            tc_pass* p = self.ptr();
+            if (!p) return nb::none();
+
+            // For Python passes, check if they have a custom serialize method
+            if (p->kind == TC_EXTERNAL_PASS && p->body) {
+                nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
+                if (nb::hasattr(py_obj, "serialize")) {
+                    nb::object result = py_obj.attr("serialize")();
+                    if (!result.is_none()) {
+                        return result;
+                    }
+                }
+            }
+
+            // Serialize via tc_inspect
+            void* obj_ptr = nullptr;
+            if (p->kind == TC_NATIVE_PASS) {
+                obj_ptr = CxxFramePass::from_tc(p);
+            } else {
+                obj_ptr = p->body;
+            }
+
+            nb::dict result;
+            result["type"] = std::string(tc_pass_type_name(p));
+            result["pass_name"] = p->pass_name ? std::string(p->pass_name) : std::string();
+            result["enabled"] = p->enabled;
+            result["passthrough"] = p->passthrough;
+            result["viewport_name"] = p->viewport_name ? std::string(p->viewport_name) : std::string();
+
+            if (obj_ptr) {
+                tc_value v = tc_inspect_serialize(obj_ptr, tc_pass_type_name(p));
+                result["data"] = tc_value_to_py(&v);
+                tc_value_free(&v);
+            } else {
+                result["data"] = nb::dict();
+            }
+            return result;
+        })
+        .def("deserialize_data", [](TcPassRef& self, nb::object data) {
+            tc_pass* p = self.ptr();
+            if (!p || data.is_none()) return;
+
+            void* obj_ptr = nullptr;
+            if (p->kind == TC_NATIVE_PASS) {
+                obj_ptr = CxxFramePass::from_tc(p);
+            } else {
+                obj_ptr = p->body;
+            }
+            if (!obj_ptr) return;
+
+            tc_value v = py_to_tc_value(data);
+            tc_inspect_deserialize(obj_ptr, tc_pass_type_name(p), &v, nullptr);
+            tc_value_free(&v);
+        }, nb::arg("data"));
 
     // TcPass - owning wrapper for Python passes
     nb::class_<TcPass>(m, "TcPass")

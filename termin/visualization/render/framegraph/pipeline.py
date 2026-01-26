@@ -2,7 +2,7 @@
 RenderPipeline — контейнер для конвейера рендеринга.
 
 Содержит:
-- passes: список FramePass, определяющих порядок рендеринга (читается из tc_pipeline)
+- passes: список TcPassRef для доступа к pass'ам через C API
 - pipeline_specs: спецификации ресурсов пайплайна
 """
 
@@ -19,6 +19,7 @@ from termin._native.render import (
     tc_pipeline_insert_pass_before,
     tc_pipeline_get_pass_at,
     TcPipeline,
+    TcPassRef,
 )
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 
@@ -62,12 +63,8 @@ class RenderPipeline:
         log.info(f"[RenderPipeline] created '{self.name}' with {self._tc_pipeline.pass_count} passes")
 
     @property
-    def passes(self) -> List["FramePass"]:
-        """
-        Returns list of passes from tc_pipeline.
-
-        Each tc_pass stores a body pointer to the Python FramePass object.
-        """
+    def passes(self) -> List["TcPassRef"]:
+        """Returns list of TcPassRef from tc_pipeline."""
         if self._tc_pipeline is None:
             return []
 
@@ -75,13 +72,11 @@ class RenderPipeline:
         count = self._tc_pipeline.pass_count
         for i in range(count):
             tc_pass = tc_pipeline_get_pass_at(self._tc_pipeline, i)
-            if tc_pass is not None:
-                body = tc_pass.body
-                if body is not None:
-                    result.append(body)
+            if tc_pass is not None and tc_pass.valid():
+                result.append(tc_pass)
         return result
 
-    def __iter__(self) -> Iterator["FramePass"]:
+    def __iter__(self) -> Iterator["TcPassRef"]:
         """Iterate over passes."""
         return iter(self.passes)
 
@@ -197,9 +192,14 @@ class RenderPipeline:
 
     def serialize(self) -> dict:
         """Сериализует RenderPipeline в словарь."""
+        passes_data = []
+        for p in self.passes:
+            serialized = p.serialize()
+            if serialized is not None:
+                passes_data.append(serialized)
         return {
             "name": self.name,
-            "passes": [p.serialize() for p in self.passes],
+            "passes": passes_data,
             "pipeline_specs": [spec.serialize() for spec in self.pipeline_specs],
         }
 
@@ -245,61 +245,18 @@ class RenderPipeline:
         return RenderPipeline.deserialize(self.serialize())
 
     def destroy(self) -> None:
-        """
-        Clean up pipeline resources and callbacks.
-
-        Iterates through all passes and destroys them (clears FBOs and callbacks).
-        Should be called before discarding a pipeline to prevent dangling references.
-        """
-        # Collect passes before destroying tc_pipeline
-        passes_to_destroy = list(self.passes)
-
+        """Clean up pipeline resources."""
         if self._tc_pipeline is not None:
             tc_pipeline_destroy(self._tc_pipeline)
             self._tc_pipeline = None
 
-        # Now destroy the passes
-        for render_pass in passes_to_destroy:
-            render_pass.destroy()
-
-    def get_pass(self, name: str) -> "FramePass | None":
-        """
-        Find a pass by name.
-
-        Args:
-            name: Pass name to find (matches pass_name attribute).
-
-        Returns:
-            FramePass with matching name or None.
-        """
-        for render_pass in self.passes:
-            if render_pass.pass_name == name:
-                return render_pass
+    def get_pass(self, name: str) -> "TcPassRef | None":
+        """Find a pass by name."""
+        for p in self.pass_refs:
+            if p.pass_name == name:
+                return p
         return None
 
-    def get_passes_by_type(self, pass_type: type) -> List["FramePass"]:
-        """
-        Find all passes of a given type.
-
-        Args:
-            pass_type: Type of passes to find.
-
-        Returns:
-            List of passes matching the type.
-        """
-        return [p for p in self.passes if isinstance(p, pass_type)]
-
-    def get_pass_by_name(self, name: str) -> "FramePass | None":
-        """
-        Find a pass by its name.
-
-        Args:
-            name: Name of the pass to find.
-
-        Returns:
-            FramePass with the specified name, or None if not found.
-        """
-        for render_pass in self.passes:
-            if render_pass.pass_name == name:
-                return render_pass
-        return None
+    def get_pass_by_name(self, name: str) -> "TcPassRef | None":
+        """Alias for get_pass."""
+        return self.get_pass(name)
