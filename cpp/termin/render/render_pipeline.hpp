@@ -69,6 +69,11 @@ public:
     FBOPool& fbo_pool() { return fbo_pool_; }
     const FBOPool& fbo_pool() const { return fbo_pool_; }
 
+    // Get specific FBO by name (for C# bindings)
+    FramebufferHandle* get_fbo(const std::string& name) {
+        return fbo_pool_.get(name);
+    }
+
     // Shadow arrays access
     std::unordered_map<std::string, std::unique_ptr<ShadowMapArrayResource>>& shadow_arrays() {
         return shadow_arrays_;

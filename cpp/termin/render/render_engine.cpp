@@ -62,15 +62,25 @@ void RenderEngine::present_to_screen(
     const std::string& resource_name
 ) {
     if (!pipeline || !graphics) {
+        tc::Log::warn("[present_to_screen] pipeline=%p graphics=%p", pipeline, graphics);
         return;
     }
 
     // Get FBO from pipeline's pool
     FramebufferHandle* src_fbo = pipeline->fbo_pool().get(resource_name);
     if (!src_fbo) {
-        tc::Log::warn("[present_to_screen] FBO '%s' not found in pipeline", resource_name.c_str());
+        tc::Log::warn("[present_to_screen] FBO '%s' not found in pipeline. Available FBOs:", resource_name.c_str());
+        // List available FBOs
+        auto& pool = pipeline->fbo_pool();
+        for (const auto& key : pool.keys()) {
+            auto* fbo = pool.get(key);
+            tc::Log::warn("  - '%s': %p", key.c_str(), fbo);
+        }
         return;
     }
+
+    tc::Log::info("[present_to_screen] Blitting '%s' (%dx%d) to screen (%dx%d)", 
+        resource_name.c_str(), src_fbo->get_width(), src_fbo->get_height(), width, height);
 
     // Blit to default framebuffer (screen)
     graphics->blit_framebuffer(

@@ -81,6 +81,13 @@ public:
         return tc_component_type_name(&_c);
     }
 
+protected:
+    // Link component to type registry entry by name.
+    // Call from derived class constructor: link_type_entry("MeshRenderer");
+    // This enables proper type identification for scene iteration.
+    void link_type_entry(const char* type_name);
+
+public:
     // Accessors for tc_component flags
     bool enabled() const { return _c.enabled; }
     void set_enabled(bool v) { _c.enabled = v; }

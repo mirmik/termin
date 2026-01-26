@@ -256,6 +256,7 @@ public partial class MainWindow : Window
     private float _angle;
     private bool _initialized;
     private int _frameCount;
+    private int _renderCount;
 
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
@@ -426,7 +427,7 @@ public partial class MainWindow : Window
         _renderPipeline.add_spec(depthSpec);
 
         // Create and add ColorPass (SWIG class)
-        // output_res = "color" writes to offscreen FBO, then present_to_screen blits to screen
+        // Render to "color" FBO, then blit to screen
         _colorPass = new ColorPass(
             input_res: "empty",
             output_res: "color",
@@ -592,13 +593,19 @@ void main() {
             // Try pipeline rendering
             if (_usePipelineRendering && _renderPipeline != null && _renderEngine != null && _cameraComponent != null)
             {
-                // Clear and render via pipeline
-                GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                // IMPORTANT: Save WPF's FBO BEFORE any rendering (it will be changed by pipeline)
+                GL.GetInteger(GetPName.FramebufferBinding, out int wpfFbo);
+                
+                // Clear WPF FBO with dark red to see if clear works
+                GL.ClearColor(0.2f, 0.0f, 0.0f, 1.0f);
                 GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
                 // Wrap scene handle for SWIG
                 var scenePtr = _scene?.Handle ?? IntPtr.Zero;
                 var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
+
+                if (_renderCount % 60 == 0)
+                    Console.WriteLine($"[Render] Frame {_renderCount}: scene={scenePtr:X}, wpfFbo={wpfFbo}, pipeline rendering...");
 
                 _renderEngine.render_to_screen(
                     _renderPipeline,
@@ -608,17 +615,41 @@ void main() {
                     _cameraComponent
                 );
 
-                // Blit color FBO to screen
-                _renderEngine.present_to_screen(
-                    _renderPipeline,
-                    width,
-                    height,
-                    "color"
-                );
+                // Get color FBO from pipeline and blit to WPF's FBO
+                var colorFbo = _renderPipeline.get_fbo("color");
+                if (colorFbo != null)
+                {
+                    int srcFboId = (int)colorFbo.get_fbo_id();
+                    int srcW = colorFbo.get_width();
+                    int srcH = colorFbo.get_height();
+                    
+                    if (_renderCount % 60 == 0)
+                        Console.WriteLine($"[Blit] src FBO={srcFboId} ({srcW}x{srcH}) -> wpf FBO={wpfFbo} ({width}x{height})");
+                    
+                    GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, srcFboId);
+                    GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, wpfFbo);
+                    GL.BlitFramebuffer(
+                        0, 0, srcW, srcH,
+                        0, 0, width, height,
+                        ClearBufferMask.ColorBufferBit,
+                        BlitFramebufferFilter.Nearest
+                    );
+                    GL.BindFramebuffer(FramebufferTarget.Framebuffer, wpfFbo);
+                }
+                else
+                {
+                    Console.WriteLine("[Blit] colorFbo is null!");
+                }
+
+                if (_renderCount % 60 == 0)
+                    Console.WriteLine($"[Render] Frame {_renderCount}: render_to_screen done");
+
+                _renderCount++;
             }
             else
             {
                 // Fallback: Direct rendering
+                Console.WriteLine($"[Render] Fallback: pipeline={_usePipelineRendering}, rp={_renderPipeline != null}, re={_renderEngine != null}, cam={_cameraComponent != null}");
                 DirectRender(delta, width, height, aspect);
             }
         }

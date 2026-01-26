@@ -7,6 +7,7 @@
 #include "../include/tc_profiler.h"
 #include "../include/tc_mesh.h"
 #include "../include/tc_material.h"
+#include "../include/tc_log.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -644,6 +645,12 @@ void tc_scene_foreach_drawable(
     // Get all drawable types from registry
     const char* drawable_types[64];
     size_t drawable_count = tc_component_registry_get_drawable_types(drawable_types, 64);
+    
+    tc_log(TC_LOG_INFO, "[tc_scene_foreach_drawable] scene=%p, drawable_count=%zu", s, drawable_count);
+    for (size_t i = 0; i < drawable_count; i++) {
+        tc_log(TC_LOG_INFO, "  drawable type[%zu]: %s", i, drawable_types[i]);
+    }
+    
     if (drawable_count == 0) return;
 
     bool check_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENABLED) != 0;
@@ -653,8 +660,9 @@ void tc_scene_foreach_drawable(
 
     // Iterate over all drawable types
     for (size_t t = 0; t < drawable_count; t++) {
-        for (tc_component* c = tc_scene_first_component_of_type(s, drawable_types[t]);
-             c != NULL; c = c->type_next) {
+        tc_component* first = tc_scene_first_component_of_type(s, drawable_types[t]);
+        tc_log(TC_LOG_INFO, "[tc_scene_foreach_drawable] type='%s' first_component=%p", drawable_types[t], first);
+        for (tc_component* c = first; c != NULL; c = c->type_next) {
 
             // Apply filters
             if (check_enabled && !c->enabled) {

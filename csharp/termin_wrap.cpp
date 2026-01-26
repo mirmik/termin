@@ -2108,6 +2108,50 @@ SWIGEXPORT void SWIGSTDCALL CSharp_TerminfNative_tc_pass_set_enabled___(void * j
 }
 
 
+SWIGEXPORT void SWIGSTDCALL CSharp_TerminfNative_delete_FramebufferHandle___(void * jarg1) {
+  termin::FramebufferHandle *arg1 = 0 ;
+  
+  arg1 = (termin::FramebufferHandle *)jarg1; 
+  delete arg1;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_TerminfNative_FramebufferHandle_get_fbo_id___(void * jarg1) {
+  unsigned int jresult ;
+  termin::FramebufferHandle *arg1 = 0 ;
+  unsigned int result;
+  
+  arg1 = (termin::FramebufferHandle *)jarg1; 
+  result = (unsigned int)((termin::FramebufferHandle const *)arg1)->get_fbo_id();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_TerminfNative_FramebufferHandle_get_width___(void * jarg1) {
+  int jresult ;
+  termin::FramebufferHandle *arg1 = 0 ;
+  int result;
+  
+  arg1 = (termin::FramebufferHandle *)jarg1; 
+  result = (int)((termin::FramebufferHandle const *)arg1)->get_width();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_TerminfNative_FramebufferHandle_get_height___(void * jarg1) {
+  int jresult ;
+  termin::FramebufferHandle *arg1 = 0 ;
+  int result;
+  
+  arg1 = (termin::FramebufferHandle *)jarg1; 
+  result = (int)((termin::FramebufferHandle const *)arg1)->get_height();
+  jresult = result; 
+  return jresult;
+}
+
+
 SWIGEXPORT void SWIGSTDCALL CSharp_TerminfNative_ResourceSpec_resource_set___(void * jarg1, const char * jarg2) {
   termin::ResourceSpec *arg1 = 0 ;
   std::string *arg2 = 0 ;
@@ -2433,6 +2477,25 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_TerminfNative_RenderPipeline_get_spec_at___
   arg1 = (termin::RenderPipeline *)jarg1; 
   arg2 = (size_t)jarg2; 
   result = (termin::ResourceSpec *)((termin::RenderPipeline const *)arg1)->get_spec_at(SWIG_STD_MOVE(arg2));
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_TerminfNative_RenderPipeline_get_fbo___(void * jarg1, const char * jarg2) {
+  void * jresult ;
+  termin::RenderPipeline *arg1 = 0 ;
+  std::string *arg2 = 0 ;
+  termin::FramebufferHandle *result = 0 ;
+  
+  arg1 = (termin::RenderPipeline *)jarg1; 
+  if (!jarg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "null string", 0);
+    return 0;
+  }
+  std::string arg2_str(jarg2);
+  arg2 = &arg2_str; 
+  result = (termin::FramebufferHandle *)(arg1)->get_fbo((std::string const &)*arg2);
   jresult = (void *)result; 
   return jresult;
 }

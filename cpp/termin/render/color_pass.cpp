@@ -250,8 +250,11 @@ void ColorPass::collect_draw_calls(
     cached_draw_calls_.clear();
 
     if (!scene) {
+        tc::Log::warn("[ColorPass] collect_draw_calls: scene is null!");
         return;
     }
+
+    tc::Log::info("[ColorPass] collect_draw_calls: scene=%p, phase='%s'", scene, phase_mark.c_str());
 
     // Collect draw calls via drawable iteration
     CollectDrawCallsData data;
@@ -339,12 +342,19 @@ void ColorPass::execute_with_data(
     // Get output framebuffer
     auto it = writes_fbos.find(output_res);
     if (it == writes_fbos.end() || it->second == nullptr) {
+        tc::Log::warn("[ColorPass] FBO '%s' not found in writes_fbos (size=%zu)", output_res.c_str(), writes_fbos.size());
+        for (auto& p : writes_fbos) {
+            tc::Log::warn("  - '%s': %p", p.first.c_str(), p.second);
+        }
         return;
     }
     FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
     if (!fb) {
+        tc::Log::warn("[ColorPass] FBO '%s' is not a FramebufferHandle", output_res.c_str());
         return;
     }
+
+    tc::Log::info("[ColorPass] Rendering to '%s' (%dx%d)", output_res.c_str(), rect.width, rect.height);
 
     // Bind framebuffer and set viewport
     graphics->bind_framebuffer(fb);
@@ -371,6 +381,9 @@ void ColorPass::execute_with_data(
     if (detailed) tc_profiler_begin_section("Collect");
     collect_draw_calls(scene, phase_mark, layer_mask);
     if (detailed) tc_profiler_end_section();
+
+    tc::Log::info("[ColorPass] Collected %zu draw calls for phase '%s'", 
+        cached_draw_calls_.size(), phase_mark.c_str());
 
     // Compute sort keys and sort (single pass with combined priority+distance key)
     if (detailed) tc_profiler_begin_section("Sort");

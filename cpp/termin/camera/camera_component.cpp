@@ -7,7 +7,8 @@
 namespace termin {
 
 CameraComponent::CameraComponent() {
-    // type_entry is set by registry when component is created via factory
+    // Link to type registry for proper type identification
+    link_type_entry("CameraComponent");
 }
 
 std::string CameraComponent::get_projection_type_str() const {

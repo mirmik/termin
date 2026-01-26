@@ -7,7 +7,8 @@
 namespace termin {
 
 MeshRenderer::MeshRenderer() {
-    // type_entry is set by registry when component is created via factory
+    // Link to type registry for proper type identification
+    link_type_entry("MeshRenderer");
     install_drawable_vtable(&_c);
 }
 

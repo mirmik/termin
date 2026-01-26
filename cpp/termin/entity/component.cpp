@@ -57,6 +57,14 @@ void CxxComponent::release() {
     }
 }
 
+void CxxComponent::link_type_entry(const char* type_name) {
+    tc_type_entry* entry = tc_component_registry_get_entry(type_name);
+    if (entry) {
+        _c.type_entry = entry;
+        _c.type_version = entry->version;
+    }
+}
+
 // Static callbacks that dispatch to C++ virtual methods
 void CxxComponent::_cb_start(tc_component* c) {
     auto* self = from_tc(c);

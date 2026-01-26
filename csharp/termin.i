@@ -235,12 +235,22 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 // Forward declarations
 namespace termin {
     class GraphicsBackend;
-    class FramebufferHandle;
     class Component;
     class CxxComponent;
     class Drawable;
     struct TcMesh;
     struct TcMaterial;
+}
+
+// FramebufferHandle - minimal interface for FBO access
+namespace termin {
+class FramebufferHandle {
+public:
+    virtual ~FramebufferHandle() = default;
+    virtual unsigned int get_fbo_id() const = 0;
+    virtual int get_width() const = 0;
+    virtual int get_height() const = 0;
+};
 }
 
 // Ignore problematic members
@@ -346,6 +356,9 @@ public:
     void clear_specs();
     size_t spec_count() const;
     const ResourceSpec* get_spec_at(size_t index) const;
+
+    // FBO access (for manual blit)
+    FramebufferHandle* get_fbo(const std::string& name);
 };
 
 // Forward declaration for CameraComponent (used in RenderEngine)
