@@ -8,47 +8,95 @@
 #include <any>
 #include <cstring>
 #include <atomic>
+#include <unordered_map>
 
 extern "C" {
 #include "tc_pass.h"
 }
 
+#include "termin/render/handles.hpp"
+#include "termin/render/resource_spec.hpp"
+
 namespace termin {
 
-/**
- * Base class for frame passes in the render graph.
- *
- * Architecture follows CxxComponent pattern:
- * - tc_pass _c is the FIRST member (enables container_of)
- * - Static vtable dispatches to virtual methods
- * - Reference counting for lifetime management
- *
- * Fields like pass_name, enabled, viewport_name are stored ONLY in _c
- * to avoid duplication. Use accessors to get/set them.
- */
-class FramePass {
+// Forward declarations
+class GraphicsBackend;
+class Scene;
+class Camera;
+class Light;
+struct ExecuteContext;
+
+// Viewport rectangle in pixels
+struct Rect4i {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
+// Resource map type: resource name -> framegraph resource
+using ResourceMap = std::unordered_map<std::string, FrameGraphResource*>;
+using FBOMap = ResourceMap;  // Legacy alias
+
+// Callbacks for frame debugger integration
+struct FrameDebuggerCallbacks {
+    void* user_data = nullptr;
+
+    void (*blit_from_pass)(
+        void* user_data,
+        FramebufferHandle* fb,
+        GraphicsBackend* graphics,
+        int width,
+        int height
+    ) = nullptr;
+
+    void (*capture_depth)(
+        void* user_data,
+        FramebufferHandle* fb,
+        int width,
+        int height,
+        float* out_data
+    ) = nullptr;
+
+    void (*on_error)(
+        void* user_data,
+        const char* message
+    ) = nullptr;
+
+    bool is_set() const { return blit_from_pass != nullptr; }
+};
+
+// Base class for C++ frame passes in the render graph.
+//
+// Architecture follows CxxComponent pattern:
+// - tc_pass _c is the FIRST member (enables container_of)
+// - Static vtable dispatches to virtual methods
+// - Reference counting for lifetime management
+//
+// Fields like pass_name, enabled, viewport_name are stored ONLY in _c
+// to avoid duplication. Use accessors to get/set them.
+class CxxFramePass {
 public:
     // FIRST member - enables pointer arithmetic for container_of
     tc_pass _c;
 
-    // C++ only fields (not in tc_pass)
-    std::set<std::string> reads;
-    std::set<std::string> writes;
+    // Debugger integration
+    FrameDebuggerCallbacks debugger_callbacks;
 
 private:
     std::atomic<int> _ref_count{0};
 
     // Cached strings for tc_pass callbacks (avoid dangling pointers)
-    mutable std::vector<std::string> _cached_reads;
-    mutable std::vector<std::string> _cached_writes;
+    // These store strings from get_inplace_aliases() and get_internal_symbols()
+    // which return std::string that must outlive the callback
     mutable std::vector<std::string> _cached_aliases;
     mutable std::vector<std::string> _cached_symbols;
 
-    // Static vtable for C++ FramePass objects
+    // Static vtable for C++ CxxFramePass objects
     static const tc_pass_vtable _cpp_vtable;
 
     // Static callbacks for vtable
-    static void _cb_execute(tc_pass* p, tc_execute_context* ctx);
+    static void _cb_execute(tc_pass* p, void* ctx);
     static size_t _cb_get_reads(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_writes(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_inplace_aliases(tc_pass* p, const char** out, size_t max);
@@ -60,37 +108,30 @@ private:
     static void _cb_release(tc_pass* p);
 
 public:
-    FramePass();
-
-    FramePass(
-        const std::string& name,
-        std::set<std::string> reads_set = {},
-        std::set<std::string> writes_set = {}
-    );
-
-    virtual ~FramePass();
+    CxxFramePass();
+    virtual ~CxxFramePass();
 
     // Prevent copying (tc_pass contains pointers)
-    FramePass(const FramePass&) = delete;
-    FramePass& operator=(const FramePass&) = delete;
+    CxxFramePass(const CxxFramePass&) = delete;
+    CxxFramePass& operator=(const CxxFramePass&) = delete;
 
     // Get tc_pass pointer
     tc_pass* tc_pass_ptr() { return &_c; }
     const tc_pass* tc_pass_ptr() const { return &_c; }
 
-    // Recover FramePass* from tc_pass* (container_of pattern)
+    // Recover CxxFramePass* from tc_pass* (container_of pattern)
     // Returns nullptr if p is not a native pass (e.g., Python pass)
-    static FramePass* from_tc(tc_pass* p) {
+    static CxxFramePass* from_tc(tc_pass* p) {
         if (!p || p->kind != TC_NATIVE_PASS) return nullptr;
-        return reinterpret_cast<FramePass*>(
-            reinterpret_cast<char*>(p) - offsetof(FramePass, _c)
+        return reinterpret_cast<CxxFramePass*>(
+            reinterpret_cast<char*>(p) - offsetof(CxxFramePass, _c)
         );
     }
 
-    static const FramePass* from_tc(const tc_pass* p) {
+    static const CxxFramePass* from_tc(const tc_pass* p) {
         if (!p || p->kind != TC_NATIVE_PASS) return nullptr;
-        return reinterpret_cast<const FramePass*>(
-            reinterpret_cast<const char*>(p) - offsetof(FramePass, _c)
+        return reinterpret_cast<const CxxFramePass*>(
+            reinterpret_cast<const char*>(p) - offsetof(CxxFramePass, _c)
         );
     }
 
@@ -178,17 +219,12 @@ public:
     // Virtual methods for subclasses to override
     // ========================================================================
 
-    virtual void execute(tc_execute_context* ctx) {}
+    virtual void execute(ExecuteContext& ctx) {}
 
     // Dynamic resource computation - override in subclasses
-    // Default implementation returns static reads/writes members
-    virtual std::set<std::string> compute_reads() const {
-        return reads;
-    }
-
-    virtual std::set<std::string> compute_writes() const {
-        return writes;
-    }
+    // Returns const char* pointers (use string literals or interned strings)
+    virtual std::set<const char*> compute_reads() const { return {}; }
+    virtual std::set<const char*> compute_writes() const { return {}; }
 
     virtual std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const {
         return {};
@@ -198,7 +234,28 @@ public:
         return {};
     }
 
+    // Resource specs - size, clear values, format
+    virtual std::vector<ResourceSpec> get_resource_specs() const {
+        return {};
+    }
+
     virtual void destroy() {}
+
+    // ========================================================================
+    // Debugger integration
+    // ========================================================================
+
+    void set_debugger_callbacks(const FrameDebuggerCallbacks& callbacks) {
+        debugger_callbacks = callbacks;
+    }
+
+    void clear_debugger_callbacks() {
+        debugger_callbacks = {};
+    }
+
+    bool has_debugger() const {
+        return debugger_callbacks.is_set();
+    }
 
     // ========================================================================
     // Convenience methods
@@ -220,9 +277,10 @@ public:
         return debug_internal_symbol_get();
     }
 
-    std::set<std::string> required_resources() const {
-        std::set<std::string> result = reads;
-        result.insert(writes.begin(), writes.end());
+    std::set<const char*> required_resources() const {
+        auto result = compute_reads();
+        auto w = compute_writes();
+        result.insert(w.begin(), w.end());
         return result;
     }
 
@@ -232,7 +290,7 @@ private:
 };
 
 // ============================================================================
-// Registration macro for FramePass-based classes
+// Registration macro for CxxFramePass-based classes
 // ============================================================================
 
 #define TC_REGISTER_FRAME_PASS(PassClass)                                    \

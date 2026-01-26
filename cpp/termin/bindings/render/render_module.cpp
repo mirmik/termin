@@ -61,6 +61,9 @@ void bind_render(nb::module_& m) {
 
     // SolidPrimitiveRenderer
     bind_solid_primitive(m);
+
+    // RenderEngine
+    bind_render_engine(m);
 }
 
 } // namespace termin

@@ -248,8 +248,8 @@ set_target_properties(entity_lib PROPERTIES
 add_library(render_lib STATIC
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
-    termin/render/cxx_pass.cpp
     termin/render/frame_pass.cpp
+    termin/render/render_engine.cpp
     termin/render/color_pass.cpp
     termin/render/depth_pass.cpp
     termin/render/normal_pass.cpp
@@ -421,6 +421,7 @@ nanobind_add_module(_native
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
+    termin/bindings/render/render_engine.cpp
     termin/sdl_bindings.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp
@@ -442,6 +443,7 @@ nanobind_add_module(_native
     termin/render/glsl_preprocessor.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
+    termin/render/render_engine.cpp
     termin/render/color_pass.cpp
     termin/render/depth_pass.cpp
     termin/render/normal_pass.cpp

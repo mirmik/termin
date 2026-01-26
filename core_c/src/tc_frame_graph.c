@@ -100,12 +100,11 @@ static bool add_dependent(tc_fg_node* node, int dep_index) {
 
 static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline* pipeline) {
     // First pass: collect all resources and their writers
-    tc_pass* pass = pipeline->first_pass;
     int pass_index = 0;
 
-    while (pass) {
-        if (!pass->enabled) {
-            pass = pass->next;
+    for (size_t pi = 0; pi < pipeline->pass_count; pi++) {
+        tc_pass* pass = pipeline->passes[pi];
+        if (!pass || !pass->enabled) {
             continue;
         }
 
@@ -153,28 +152,37 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline* pipeline) {
             get_or_create_resource(fg, reads[i]);
         }
 
-        pass = pass->next;
         pass_index++;
     }
 
     // Handle inplace aliases (set canonical names)
-    for (size_t i = 0; i < fg->node_count; i++) {
-        tc_fg_node* node = &fg->nodes[i];
+    // Run multiple iterations until no changes - handles transitive closure
+    // E.g., if A->B and B->C are aliases, we need A, B, C all to have same canonical
+    bool changed = true;
+    int max_iterations = 100;  // Safety limit
+    while (changed && max_iterations-- > 0) {
+        changed = false;
+        for (size_t i = 0; i < fg->node_count; i++) {
+            tc_fg_node* node = &fg->nodes[i];
 
-        const char* aliases[8];  // pairs: read0, write0, read1, write1, ...
-        size_t alias_count = tc_pass_get_inplace_aliases(node->pass, aliases, 4);
+            const char* aliases[8];  // pairs: read0, write0, read1, write1, ...
+            size_t alias_count = tc_pass_get_inplace_aliases(node->pass, aliases, 4);
 
-        for (size_t j = 0; j < alias_count; j++) {
-            const char* read_name = aliases[j * 2];
-            const char* write_name = aliases[j * 2 + 1];
+            for (size_t j = 0; j < alias_count; j++) {
+                const char* read_name = aliases[j * 2];
+                const char* write_name = aliases[j * 2 + 1];
 
-            tc_fg_resource* read_res = find_resource(fg, read_name);
-            tc_fg_resource* write_res = find_resource(fg, write_name);
+                tc_fg_resource* read_res = find_resource(fg, read_name);
+                tc_fg_resource* write_res = find_resource(fg, write_name);
 
-            if (read_res && write_res) {
-                // Write resource gets canonical name from read resource
-                free(write_res->canonical);
-                write_res->canonical = strdup(read_res->canonical);
+                if (read_res && write_res) {
+                    // Write resource gets canonical name from read resource
+                    if (strcmp(write_res->canonical, read_res->canonical) != 0) {
+                        free(write_res->canonical);
+                        write_res->canonical = strdup(read_res->canonical);
+                        changed = true;
+                    }
+                }
             }
         }
     }

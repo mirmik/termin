@@ -35,10 +35,10 @@ ShadowPass::ShadowPass(
     const std::string& output_res,
     const std::string& pass_name,
     float caster_offset
-) : RenderFramePass(pass_name, {}, {output_res}),
-    output_res(output_res),
+) : output_res(output_res),
     caster_offset(caster_offset)
 {
+    set_pass_name(pass_name);
 }
 
 
@@ -419,18 +419,6 @@ void main() {
             result.cascade_split_far
         );
     }
-}
-
-void ShadowPass::execute(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    void* scene,
-    void* camera,
-    const std::vector<Light*>* lights
-) {
-    // Legacy execute - not used, call execute_shadow_pass or execute(ExecuteContext&)
 }
 
 // Register ShadowPass in tc_pass_registry for C#/standalone C++ usage

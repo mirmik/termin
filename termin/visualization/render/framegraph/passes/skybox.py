@@ -99,6 +99,13 @@ class SkyBoxPass(RenderFramePass):
         if fb is None:
             return
 
+        # Check type - skip if not a FramebufferHandle
+        from termin.graphics import FramebufferHandle
+        if not isinstance(fb, FramebufferHandle):
+            from termin._native import log
+            log.warn(f"[SkyboxPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle")
+            return
+
         ctx.graphics.bind_framebuffer(fb)
         ctx.graphics.set_viewport(0, 0, width, height)
 

@@ -33,8 +33,8 @@ public:
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
-    // Execute using ExecuteContext - main entry point from Python
-    void execute(ExecuteContext& ctx) {
+    // Override from CxxFramePass
+    void execute(ExecuteContext& ctx) override {
         tc_scene* scene = ctx.scene.ptr();
         CameraComponent* camera = ctx.camera;
         Rect4i rect = ctx.rect;
@@ -73,18 +73,6 @@ public:
             projection,
             ctx.layer_mask
         );
-    }
-
-    void execute(
-        GraphicsBackend* graphics,
-        const FBOMap& reads_fbos,
-        const FBOMap& writes_fbos,
-        const Rect4i& rect,
-        void* scene,
-        void* camera,
-        const std::vector<Light*>* lights = nullptr
-    ) override {
-        // Legacy - not used
     }
 
     std::vector<ResourceSpec> get_resource_specs() const override {

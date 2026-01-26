@@ -160,7 +160,7 @@ void tc_pass_registry_cleanup(void) {
 static tc_external_pass_callbacks g_external_callbacks = {0};
 
 // External pass vtable callbacks
-static void external_execute(tc_pass* p, tc_execute_context* ctx) {
+static void external_execute(tc_pass* p, void* ctx) {
     if (g_external_callbacks.execute && p->body) {
         g_external_callbacks.execute(p->body, ctx);
     }
@@ -323,17 +323,19 @@ void tc_pass_body_decref(void* body) {
 }
 
 // ============================================================================
-// Pipeline Implementation
+// Pipeline Implementation (array-based storage)
 // ============================================================================
+
+#define INITIAL_PASS_CAPACITY 8
 
 tc_pipeline* tc_pipeline_create(const char* name) {
     tc_pipeline* p = (tc_pipeline*)calloc(1, sizeof(tc_pipeline));
     if (!p) return NULL;
 
     p->name = name ? strdup(name) : strdup("default");
-    p->first_pass = NULL;
-    p->last_pass = NULL;
+    p->passes = NULL;
     p->pass_count = 0;
+    p->pass_capacity = 0;
     p->specs = NULL;
     p->spec_count = 0;
     p->spec_capacity = 0;
@@ -351,87 +353,98 @@ void tc_pipeline_destroy(tc_pipeline* p) {
     tc_pipeline_registry_remove(p);
 
     // Release all passes (may drop if ref_count reaches 0)
-    tc_pass* pass = p->first_pass;
-    while (pass) {
-        tc_pass* next = pass->next;
-        tc_pass_destroy(pass);
-        tc_pass_release(pass);
-        pass = next;
+    for (size_t i = 0; i < p->pass_count; i++) {
+        tc_pass* pass = p->passes[i];
+        if (pass) {
+            pass->owner_pipeline = NULL;
+            tc_pass_destroy(pass);
+            tc_pass_release(pass);
+        }
     }
 
+    // Free passes array
+    free(p->passes);
+
     // Free specs
-    if (p->specs) {
-        free(p->specs);
-    }
+    free(p->specs);
 
     free(p->name);
     free(p);
 }
 
+static void pipeline_ensure_capacity(tc_pipeline* p) {
+    if (p->pass_count >= p->pass_capacity) {
+        size_t new_capacity = p->pass_capacity == 0 ? INITIAL_PASS_CAPACITY : p->pass_capacity * 2;
+        p->passes = (tc_pass**)realloc(p->passes, new_capacity * sizeof(tc_pass*));
+        p->pass_capacity = new_capacity;
+    }
+}
+
 void tc_pipeline_add_pass(tc_pipeline* p, tc_pass* pass) {
     if (!p || !pass) return;
+
+    pipeline_ensure_capacity(p);
 
     // Retain pass to prevent deletion while in pipeline
     tc_pass_retain(pass);
 
-    pass->prev = p->last_pass;
-    pass->next = NULL;
-
-    if (p->last_pass) {
-        p->last_pass->next = pass;
-    } else {
-        p->first_pass = pass;
-    }
-    p->last_pass = pass;
-    p->pass_count++;
+    pass->owner_pipeline = p;
+    p->passes[p->pass_count++] = pass;
 }
 
 void tc_pipeline_insert_pass_before(tc_pipeline* p, tc_pass* pass, tc_pass* before) {
     if (!p || !pass) return;
 
+    pipeline_ensure_capacity(p);
+
     // Retain pass to prevent deletion while in pipeline
     tc_pass_retain(pass);
+    pass->owner_pipeline = p;
 
-    if (!before || before == p->first_pass) {
+    if (!before) {
         // Insert at beginning
-        pass->prev = NULL;
-        pass->next = p->first_pass;
-        if (p->first_pass) {
-            p->first_pass->prev = pass;
-        }
-        p->first_pass = pass;
-        if (!p->last_pass) {
-            p->last_pass = pass;
-        }
-    } else {
-        pass->prev = before->prev;
-        pass->next = before;
-        if (before->prev) {
-            before->prev->next = pass;
-        }
-        before->prev = pass;
+        memmove(&p->passes[1], &p->passes[0], p->pass_count * sizeof(tc_pass*));
+        p->passes[0] = pass;
+        p->pass_count++;
+        return;
     }
+
+    // Find index of 'before'
+    size_t insert_idx = p->pass_count;  // default: append at end
+    for (size_t i = 0; i < p->pass_count; i++) {
+        if (p->passes[i] == before) {
+            insert_idx = i;
+            break;
+        }
+    }
+
+    // Shift elements to make room
+    memmove(&p->passes[insert_idx + 1], &p->passes[insert_idx],
+            (p->pass_count - insert_idx) * sizeof(tc_pass*));
+    p->passes[insert_idx] = pass;
     p->pass_count++;
 }
 
 void tc_pipeline_remove_pass(tc_pipeline* p, tc_pass* pass) {
     if (!p || !pass) return;
 
-    if (pass->prev) {
-        pass->prev->next = pass->next;
-    } else {
-        p->first_pass = pass->next;
+    // Find index
+    size_t idx = p->pass_count;
+    for (size_t i = 0; i < p->pass_count; i++) {
+        if (p->passes[i] == pass) {
+            idx = i;
+            break;
+        }
     }
 
-    if (pass->next) {
-        pass->next->prev = pass->prev;
-    } else {
-        p->last_pass = pass->prev;
-    }
+    if (idx >= p->pass_count) return;  // not found
 
-    pass->prev = NULL;
-    pass->next = NULL;
+    // Shift elements down
+    memmove(&p->passes[idx], &p->passes[idx + 1],
+            (p->pass_count - idx - 1) * sizeof(tc_pass*));
     p->pass_count--;
+
+    pass->owner_pipeline = NULL;
 
     // Release pass - may drop if ref_count reaches 0
     tc_pass_release(pass);
@@ -440,28 +453,32 @@ void tc_pipeline_remove_pass(tc_pipeline* p, tc_pass* pass) {
 tc_pass* tc_pipeline_get_pass(tc_pipeline* p, const char* name) {
     if (!p || !name) return NULL;
 
-    tc_pass* pass = p->first_pass;
-    while (pass) {
-        if (pass->pass_name && strcmp(pass->pass_name, name) == 0) {
+    for (size_t i = 0; i < p->pass_count; i++) {
+        tc_pass* pass = p->passes[i];
+        if (pass && pass->pass_name && strcmp(pass->pass_name, name) == 0) {
             return pass;
         }
-        pass = pass->next;
     }
     return NULL;
 }
 
 tc_pass* tc_pipeline_get_pass_at(tc_pipeline* p, size_t index) {
     if (!p || index >= p->pass_count) return NULL;
-
-    tc_pass* pass = p->first_pass;
-    for (size_t i = 0; i < index && pass; i++) {
-        pass = pass->next;
-    }
-    return pass;
+    return p->passes[index];
 }
 
 size_t tc_pipeline_pass_count(tc_pipeline* p) {
     return p ? p->pass_count : 0;
+}
+
+void tc_pipeline_foreach(tc_pipeline* p, tc_pipeline_pass_iter_fn callback, void* user_data) {
+    if (!p || !callback) return;
+
+    for (size_t i = 0; i < p->pass_count; i++) {
+        if (!callback(p, p->passes[i], i, user_data)) {
+            break;
+        }
+    }
 }
 
 void tc_pipeline_add_spec(tc_pipeline* p, const tc_resource_spec* spec) {
@@ -501,16 +518,15 @@ size_t tc_pipeline_collect_specs(
     }
 
     // Pass specs
-    tc_pass* pass = p->first_pass;
-    while (pass && count < max_count) {
-        if (pass->enabled) {
+    for (size_t i = 0; i < p->pass_count && count < max_count; i++) {
+        tc_pass* pass = p->passes[i];
+        if (pass && pass->enabled) {
             tc_resource_spec pass_specs[16];
             size_t pass_spec_count = tc_pass_get_resource_specs(pass, pass_specs, 16);
-            for (size_t i = 0; i < pass_spec_count && count < max_count; i++) {
-                out_specs[count++] = pass_specs[i];
+            for (size_t j = 0; j < pass_spec_count && count < max_count; j++) {
+                out_specs[count++] = pass_specs[j];
             }
         }
-        pass = pass->next;
     }
 
     return count;
@@ -639,8 +655,10 @@ tc_pass_info* tc_pass_registry_get_all_instance_info(size_t* count) {
         tc_pipeline* pipeline = g_pipelines[i];
         if (!pipeline) continue;
 
-        tc_pass* pass = pipeline->first_pass;
-        while (pass && idx < total_passes) {
+        for (size_t j = 0; j < pipeline->pass_count && idx < total_passes; j++) {
+            tc_pass* pass = pipeline->passes[j];
+            if (!pass) continue;
+
             infos[idx].ptr = pass;
             infos[idx].pass_name = pass->pass_name;
             infos[idx].type_name = tc_pass_type_name(pass);
@@ -651,7 +669,6 @@ tc_pass_info* tc_pass_registry_get_all_instance_info(size_t* count) {
             infos[idx].is_inplace = tc_pass_is_inplace(pass);
             infos[idx].kind = (int)pass->kind;
             idx++;
-            pass = pass->next;
         }
     }
 

@@ -130,8 +130,8 @@ public static partial class TerminCore
     [LibraryImport(DLL, EntryPoint = "tc_fbo_pool_destroy")]
     public static partial void FboPoolDestroy(IntPtr pool);
 
-    [LibraryImport(DLL, EntryPoint = "tc_render_pipeline")]
-    public static partial void RenderPipeline(
+    [LibraryImport(DLL, EntryPoint = "tc_render_view_to_fbo")]
+    public static partial void RenderViewToFbo(
         IntPtr pipeline,
         IntPtr fboPool,
         IntPtr targetFbo,

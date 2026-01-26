@@ -12,9 +12,11 @@ typedef struct tc_pipeline tc_pipeline;
 
 struct tc_pipeline {
     char* name;
-    tc_pass* first_pass;         // Linked list head
-    tc_pass* last_pass;          // Linked list tail
+
+    // Pass storage (dynamic array)
+    tc_pass** passes;
     size_t pass_count;
+    size_t pass_capacity;
 
     // Pipeline-level resource specs (additional to pass specs)
     tc_resource_spec* specs;
@@ -55,24 +57,14 @@ TC_API tc_pass* tc_pipeline_get_pass_at(tc_pipeline* p, size_t index);
 TC_API size_t tc_pipeline_pass_count(tc_pipeline* p);
 
 // ============================================================================
-// Iteration
+// Iteration (index-based)
 // ============================================================================
 
-static inline tc_pass* tc_pipeline_first(tc_pipeline* p) {
-    return p ? p->first_pass : NULL;
-}
+// Iterator callback: return true to continue, false to stop
+typedef bool (*tc_pipeline_pass_iter_fn)(tc_pipeline* p, tc_pass* pass, size_t index, void* user_data);
 
-static inline tc_pass* tc_pipeline_last(tc_pipeline* p) {
-    return p ? p->last_pass : NULL;
-}
-
-static inline tc_pass* tc_pass_next(tc_pass* pass) {
-    return pass ? pass->next : NULL;
-}
-
-static inline tc_pass* tc_pass_prev(tc_pass* pass) {
-    return pass ? pass->prev : NULL;
-}
+// Iterate over all passes in order
+TC_API void tc_pipeline_foreach(tc_pipeline* p, tc_pipeline_pass_iter_fn callback, void* user_data);
 
 // ============================================================================
 // Resource Specs

@@ -19,6 +19,7 @@ extern "C" {
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"
+#include "termin/render/execute_context.hpp"
 
 namespace termin {
 
@@ -93,9 +94,9 @@ inline nb::object tc_pass_to_python(tc_pass* p) {
         return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
     }
 
-    // Native pass (C++) without wrapper - use FramePass::from_tc and let nanobind create wrapper
+    // Native pass (C++) without wrapper - use CxxFramePass::from_tc and let nanobind create wrapper
     if (p->kind == TC_NATIVE_PASS) {
-        FramePass* fp = FramePass::from_tc(p);
+        CxxFramePass* fp = CxxFramePass::from_tc(p);
         if (fp) {
             return nb::cast(fp, nb::rv_policy::reference);
         }
@@ -108,22 +109,17 @@ inline nb::object tc_pass_to_python(tc_pass* p) {
 // External pass callbacks - dispatch to Python methods
 // ============================================================================
 
-static void py_pass_execute(void* wrapper, tc_execute_context* ctx) {
+static void py_pass_execute(void* wrapper, void* ctx) {
     nb::gil_scoped_acquire gil;
     try {
         nb::object py_pass = nb::borrow<nb::object>(static_cast<PyObject*>(wrapper));
 
-        // Build a simple dict for context
-        nb::dict py_ctx;
-        py_ctx["rect_x"] = ctx->rect_x;
-        py_ctx["rect_y"] = ctx->rect_y;
-        py_ctx["rect_width"] = ctx->rect_width;
-        py_ctx["rect_height"] = ctx->rect_height;
-        py_ctx["layer_mask"] = ctx->layer_mask;
+        // ctx is ExecuteContext*
+        ExecuteContext* exec_ctx = static_cast<ExecuteContext*>(ctx);
 
-        // Call Python execute method
+        // Call Python execute method with ExecuteContext
         if (nb::hasattr(py_pass, "execute")) {
-            py_pass.attr("execute")(py_ctx);
+            py_pass.attr("execute")(nb::cast(exec_ctx, nb::rv_policy::reference));
         }
     } catch (const std::exception& e) {
         tc_log(TC_LOG_ERROR, "[tc_pass] Python execute failed: %s", e.what());
@@ -250,10 +246,22 @@ static size_t py_pass_get_resource_specs(void* wrapper, tc_resource_spec* out, s
             nb::object spec = nb::borrow<nb::object>(item);
             tc_resource_spec& s = out[count];
 
+            // Zero out the struct first to avoid garbage in unset fields
+            memset(&s, 0, sizeof(tc_resource_spec));
+
             // Get resource name
             nb::str res_name = nb::cast<nb::str>(spec.attr("resource"));
             cached_resources.append(res_name);
             s.resource = PyUnicode_AsUTF8(res_name.ptr());
+
+            // Get resource_type (default to "fbo")
+            if (nb::hasattr(spec, "resource_type") && !spec.attr("resource_type").is_none()) {
+                std::string rt = nb::cast<std::string>(spec.attr("resource_type"));
+                strncpy(s.resource_type, rt.c_str(), sizeof(s.resource_type) - 1);
+                s.resource_type[sizeof(s.resource_type) - 1] = '\0';
+            } else {
+                strncpy(s.resource_type, "fbo", sizeof(s.resource_type));
+            }
 
             // Get dimensions
             if (nb::hasattr(spec, "fixed_width")) {

@@ -5,7 +5,9 @@
 #include "termin/render/opengl/opengl_mesh.hpp"
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
+#include "termin/lighting/shadow.hpp"
 #include "termin/geom/mat44.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -137,10 +139,22 @@ void bind_graphics_backend(nb::module_& m) {
             try {
                 auto* handle = nb::cast<FramebufferHandle*>(fbo);
                 self.bind_framebuffer(handle);
-            } catch (nb::cast_error&) {
-                // Must be Python OpenGLFramebufferHandle - get _fbo attribute
+                return;
+            } catch (nb::cast_error&) {}
+
+            // Check if it's a ShadowMapArrayResource (not a framebuffer)
+            try {
+                nb::cast<ShadowMapArrayResource*>(fbo);
+                tc::Log::error("bind_framebuffer: got ShadowMapArrayResource, expected FramebufferHandle");
+                return;
+            } catch (nb::cast_error&) {}
+
+            // Must be Python OpenGLFramebufferHandle - get _fbo attribute
+            if (nb::hasattr(fbo, "_fbo")) {
                 GLuint fbo_id = nb::cast<GLuint>(fbo.attr("_fbo"));
                 glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+            } else {
+                tc::Log::error("bind_framebuffer: unknown object type, no _fbo attribute");
             }
         })
         .def("read_pixel", &GraphicsBackend::read_pixel)

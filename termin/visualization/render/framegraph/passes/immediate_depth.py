@@ -59,17 +59,37 @@ class ImmediateDepthPass(RenderFramePass):
         return [(self.input_res, self.output_res)]
 
     def execute(self, ctx: "ExecuteContext") -> None:
+        from termin._native import log
+
         renderer = ImmediateRenderer.instance()
         if renderer is None:
             return
 
+        line_count = renderer.line_count_depth
+        tri_count = renderer.triangle_count_depth
+
         # Check if there's anything to render
-        if renderer.line_count_depth == 0 and renderer.triangle_count_depth == 0:
+        if line_count == 0 and tri_count == 0:
+            log.debug(f"[ImmediateDepthPass] No depth geometry to render, skipping")
             return
+
+        log.debug(f"[ImmediateDepthPass] Rendering {line_count} lines, {tri_count} triangles")
 
         px, py, pw, ph = ctx.rect
 
         fb = ctx.writes_fbos.get(self.output_res)
+        if fb is None:
+            log.warn(f"[ImmediateDepthPass] output '{self.output_res}' is None")
+            return
+
+        # Check type - must be FramebufferHandle
+        from termin.graphics import FramebufferHandle
+        if not isinstance(fb, FramebufferHandle):
+            log.warn(f"[ImmediateDepthPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle")
+            return
+
+        log.debug(f"[ImmediateDepthPass] Binding FBO for '{self.output_res}', size={fb.get_size()}")
+
         ctx.graphics.bind_framebuffer(fb)
         ctx.graphics.set_viewport(0, 0, pw, ph)
 
@@ -83,3 +103,4 @@ class ImmediateDepthPass(RenderFramePass):
             proj_matrix=proj,
             blend=True,
         )
+        log.debug(f"[ImmediateDepthPass] Done")

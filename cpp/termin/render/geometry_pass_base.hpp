@@ -7,7 +7,7 @@
 #include <optional>
 #include <array>
 
-#include "termin/render/render_frame_pass.hpp"
+#include "termin/render/frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/graphics_backend.hpp"
@@ -28,7 +28,7 @@
 
 namespace termin {
 
-class GeometryPassBase : public RenderFramePass {
+class GeometryPassBase : public CxxFramePass {
 public:
     // Pass configuration
     std::string input_res;
@@ -53,12 +53,12 @@ public:
     }
 
     // Dynamic resource computation based on current input_res/output_res values
-    std::set<std::string> compute_reads() const override {
-        return {input_res};
+    std::set<const char*> compute_reads() const override {
+        return {input_res.c_str()};
     }
 
-    std::set<std::string> compute_writes() const override {
-        return {output_res};
+    std::set<const char*> compute_writes() const override {
+        return {output_res.c_str()};
     }
 
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
@@ -106,10 +106,11 @@ protected:
         const std::string& name,
         const std::string& input,
         const std::string& output
-    ) : RenderFramePass(name, {input}, {output})
-      , input_res(input)
+    ) : input_res(input)
       , output_res(output)
-    {}
+    {
+        set_pass_name(name);
+    }
 
     // --- Virtual methods for customization ---
 

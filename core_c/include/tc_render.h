@@ -74,8 +74,8 @@ TC_API void tc_render_execute_pass(
     tc_execute_context* base_ctx
 );
 
-// Execute full pipeline
-TC_API void tc_render_pipeline(
+// Render single view to target FBO
+TC_API void tc_render_view_to_fbo(
     tc_pipeline* pipeline,
     tc_fbo_pool* pool,
     void* target_fbo,

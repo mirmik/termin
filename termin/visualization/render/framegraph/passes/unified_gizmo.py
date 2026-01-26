@@ -74,6 +74,18 @@ class UnifiedGizmoPass(RenderFramePass):
         px, py, pw, ph = ctx.rect
 
         fb = ctx.writes_fbos.get(self.output_res)
+        if fb is None:
+            from termin._native import log
+            log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is None, skipping")
+            return
+
+        # Check type - must be FramebufferHandle
+        from termin.graphics import FramebufferHandle
+        if not isinstance(fb, FramebufferHandle):
+            from termin._native import log
+            log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle, skipping")
+            return
+
         ctx.graphics.bind_framebuffer(fb)
         ctx.graphics.set_viewport(0, 0, pw, ph)
 

@@ -5,7 +5,7 @@
 #include <string>
 #include <cstdint>
 
-#include "termin/render/render_frame_pass.hpp"
+#include "termin/render/frame_pass.hpp"
 #include "termin/lighting/light.hpp"
 #include "termin/tc_scene_ref.hpp"
 
@@ -19,7 +19,7 @@ namespace termin {
 class CameraComponent;
 
 /**
- * Context passed to RenderFramePass.execute().
+ * Context passed to CxxFramePass.execute().
  *
  * Contains all data needed by passes to render:
  * - graphics: graphics backend

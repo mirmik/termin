@@ -1,5 +1,4 @@
 #include "color_pass.hpp"
-#include "cxx_pass.hpp"
 #include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
 #include "termin/lighting/lighting_upload.hpp"
@@ -86,8 +85,7 @@ ColorPass::ColorPass(
     const std::string& sort_mode,
     bool clear_depth,
     const std::string& camera_name
-) : RenderFramePass(pass_name, {input_res}, {output_res}),
-    input_res(input_res),
+) : input_res(input_res),
     output_res(output_res),
     shadow_res(shadow_res),
     phase_mark(phase_mark),
@@ -95,27 +93,24 @@ ColorPass::ColorPass(
     camera_name(camera_name),
     clear_depth(clear_depth)
 {
-    // Add shadow_res to reads if not empty
-    if (!shadow_res.empty()) {
-        reads.insert(shadow_res);
-    }
+    set_pass_name(pass_name);
 }
 
-std::set<std::string> ColorPass::compute_reads() const {
-    std::set<std::string> result;
-    result.insert(input_res);
+std::set<const char*> ColorPass::compute_reads() const {
+    std::set<const char*> result;
+    result.insert(input_res.c_str());
     if (!shadow_res.empty()) {
-        result.insert(shadow_res);
+        result.insert(shadow_res.c_str());
     }
     // Add extra texture resources
     for (const auto& [uniform_name, resource_name] : extra_textures) {
-        result.insert(resource_name);
+        result.insert(resource_name.c_str());
     }
     return result;
 }
 
-std::set<std::string> ColorPass::compute_writes() const {
-    return {output_res};
+std::set<const char*> ColorPass::compute_writes() const {
+    return {output_res.c_str()};
 }
 
 std::vector<std::pair<std::string, std::string>> ColorPass::get_inplace_aliases() const {
@@ -690,18 +685,6 @@ void ColorPass::execute(ExecuteContext& ctx) {
         shadow_settings,
         ctx.layer_mask
     );
-}
-
-void ColorPass::execute(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    void* scene,
-    void* camera,
-    const std::vector<Light*>* lights
-) {
-    // Legacy execute - not used, call execute_with_data instead
 }
 
 void ColorPass::maybe_blit_to_debugger(

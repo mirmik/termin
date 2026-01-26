@@ -310,7 +310,11 @@ void bind_graphics_backend(nb::module_& m) {
             try {
                 auto* handle = nb::cast<FramebufferHandle*>(fbo);
                 self.bind_framebuffer(handle);
-            } catch (nb::cast_error&) {
+                return;
+            } catch (nb::cast_error&) {}
+
+            // Check for _fbo attribute (Python FBO)
+            if (nb::hasattr(fbo, "_fbo")) {
                 GLuint fbo_id = nb::cast<GLuint>(fbo.attr("_fbo"));
                 glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
             }

@@ -365,7 +365,7 @@ void tc_render_execute_pass(
     tc_pass_execute(pass, &ctx);
 }
 
-void tc_render_pipeline(
+void tc_render_view_to_fbo(
     tc_pipeline* pipeline,
     tc_fbo_pool* pool,
     void* target_fbo,
@@ -380,12 +380,12 @@ void tc_render_pipeline(
     // Build frame graph
     tc_frame_graph* fg = tc_frame_graph_build(pipeline);
     if (!fg) {
-        tc_log(TC_LOG_ERROR, "[tc_render_pipeline] Failed to build frame graph");
+        tc_log(TC_LOG_ERROR, "[tc_render_view_to_fbo] Failed to build frame graph");
         return;
     }
 
     if (tc_frame_graph_get_error(fg) != TC_FG_OK) {
-        tc_log(TC_LOG_ERROR, "[tc_render_pipeline] Frame graph error: %s",
+        tc_log(TC_LOG_ERROR, "[tc_render_view_to_fbo] Frame graph error: %s",
                tc_frame_graph_get_error_message(fg));
         tc_frame_graph_destroy(fg);
         return;
@@ -401,7 +401,7 @@ void tc_render_pipeline(
     );
 
     if (!resources) {
-        tc_log(TC_LOG_ERROR, "[tc_render_pipeline] Failed to allocate resources");
+        tc_log(TC_LOG_ERROR, "[tc_render_view_to_fbo] Failed to allocate resources");
         tc_frame_graph_destroy(fg);
         return;
     }

@@ -19,6 +19,9 @@ typedef struct tc_pass tc_pass;
 typedef struct tc_pass_vtable tc_pass_vtable;
 typedef struct tc_execute_context tc_execute_context;
 typedef struct tc_resource_spec tc_resource_spec;
+typedef struct tc_pipeline tc_pipeline;
+typedef struct tc_scene tc_scene;
+typedef struct tc_viewport tc_viewport;
 
 // ============================================================================
 // Pass Kind - distinguishes native vs external passes
@@ -34,16 +37,17 @@ typedef enum tc_pass_kind {
 // ============================================================================
 
 struct tc_execute_context {
-    void* graphics;              // GraphicsBackend*
-    void* reads_fbos;            // FBO map for inputs
-    void* writes_fbos;           // FBO map for outputs
+    void* graphics;              // GraphicsBackend* (C++)
+    void* reads_fbos;            // FBO map for inputs (C++)
+    void* writes_fbos;           // FBO map for outputs (C++)
     int rect_x;
     int rect_y;
     int rect_width;
     int rect_height;
-    void* scene;                 // tc_scene*
-    void* camera;                // Camera*
-    void* lights;                // Light array
+    tc_scene* scene;             // Scene
+    tc_viewport* viewport;       // Viewport (resolution, camera context)
+    void* camera;                // CameraComponent* (C++)
+    void* lights;                // Light array (C++)
     size_t light_count;
     uint64_t layer_mask;
 };
@@ -71,7 +75,8 @@ struct tc_resource_spec {
 
 struct tc_pass_vtable {
     // Core execution
-    void (*execute)(tc_pass* self, tc_execute_context* ctx);
+    // ctx is ExecuteContext* for C++ passes, or language-specific context for external passes
+    void (*execute)(tc_pass* self, void* ctx);
 
     // Resource declarations (return count, fill arrays)
     size_t (*get_reads)(tc_pass* self, const char** out_reads, size_t max_count);
@@ -129,9 +134,8 @@ struct tc_pass {
     // bindings[TC_BINDING_PYTHON] = PyObject* wrapper for accessing native pass from Python
     void* bindings[TC_BINDING_MAX];
 
-    // Linked list for pipeline iteration
-    tc_pass* next;
-    tc_pass* prev;
+    // Owner pipeline (set when added to pipeline)
+    struct tc_pipeline* owner_pipeline;
 
     // Type registry link (for global instance tracking and hot reload)
     tc_type_entry* type_entry;
@@ -160,8 +164,7 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     for (int i = 0; i < TC_BINDING_MAX; i++) {
         p->bindings[i] = NULL;
     }
-    p->next = NULL;
-    p->prev = NULL;
+    p->owner_pipeline = NULL;
     p->type_entry = NULL;
     p->type_version = 0;
     p->registry_prev = NULL;
@@ -191,7 +194,7 @@ static inline void tc_pass_clear_binding(tc_pass* p, int lang) {
 // Pass Lifecycle Dispatch (null-safe)
 // ============================================================================
 
-static inline void tc_pass_execute(tc_pass* p, tc_execute_context* ctx) {
+static inline void tc_pass_execute(tc_pass* p, void* ctx) {
     if (p && p->enabled && !p->passthrough && p->vtable && p->vtable->execute) {
         p->vtable->execute(p, ctx);
     }
@@ -317,7 +320,7 @@ static inline bool tc_pass_type_is_current(const tc_pass* p) {
 // ============================================================================
 
 typedef struct {
-    void (*execute)(void* body, tc_execute_context* ctx);
+    void (*execute)(void* body, void* ctx);  // ctx is ExecuteContext* (C++)
     size_t (*get_reads)(void* body, const char** out, size_t max);
     size_t (*get_writes)(void* body, const char** out, size_t max);
     size_t (*get_inplace_aliases)(void* body, const char** out, size_t max);

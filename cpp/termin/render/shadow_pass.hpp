@@ -9,7 +9,7 @@
 namespace nb = nanobind;
 #endif
 
-#include "termin/render/render_frame_pass.hpp"
+#include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/lighting/shadow.hpp"
@@ -71,7 +71,7 @@ struct ShadowMapResult {
  *
  * Returns list of ShadowMapResult for use by ColorPass.
  */
-class ShadowPass : public RenderFramePass {
+class ShadowPass : public CxxFramePass {
 public:
     // Pass configuration
     std::string output_res = "shadow_maps";
@@ -93,12 +93,12 @@ public:
     virtual ~ShadowPass() = default;
 
     // Dynamic resource computation
-    std::set<std::string> compute_reads() const override {
+    std::set<const char*> compute_reads() const override {
         return {};
     }
 
-    std::set<std::string> compute_writes() const override {
-        return {output_res};
+    std::set<const char*> compute_writes() const override {
+        return {output_res.c_str()};
     }
 
     // Non-copyable (contains unique_ptr in fbo_pool_)
@@ -110,22 +110,10 @@ public:
     // Clean up FBO pool
     void destroy() override;
 
-    /**
-     * Execute shadow pass using ExecuteContext.
-     * Main entry point from Python.
-     */
-    void execute(ExecuteContext& ctx);
+    // Override from CxxFramePass
+    void execute(ExecuteContext& ctx) override;
 
-    /**
-     * Execute shadow pass, rendering shadow maps for all lights.
-     *
-     * @param graphics Graphics backend
-     * @param scene Scene pointer (tc_scene)
-     * @param lights Light sources
-     * @param camera_view Camera view matrix (for frustum fitting)
-     * @param camera_projection Camera projection matrix
-     * @return Vector of shadow map results
-     */
+    // Execute shadow pass, rendering shadow maps for all lights
     std::vector<ShadowMapResult> execute_shadow_pass(
         GraphicsBackend* graphics,
         tc_scene* scene,
@@ -133,17 +121,6 @@ public:
         const Mat44f& camera_view,
         const Mat44f& camera_projection
     );
-
-    // Legacy execute (required by base class) - not used
-    void execute(
-        GraphicsBackend* graphics,
-        const FBOMap& reads_fbos,
-        const FBOMap& writes_fbos,
-        const Rect4i& rect,
-        void* scene,
-        void* camera,
-        const std::vector<Light*>* lights = nullptr
-    ) override;
 
     std::vector<ResourceSpec> get_resource_specs() const override;
 

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include "termin/render/render_frame_pass.hpp"
+#include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/drawable.hpp"
@@ -40,7 +40,7 @@ namespace termin {
 // Starting texture unit for extra textures (after shadow maps 8-23)
 constexpr int EXTRA_TEXTURE_UNIT_START = 24;
 
-class ColorPass : public RenderFramePass {
+class ColorPass : public CxxFramePass {
 public:
     // Pass configuration
     std::string input_res = "empty";
@@ -130,36 +130,16 @@ public:
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
-    /**
-     * Execute using ExecuteContext.
-     *
-     * Extracts camera matrices and scene data from context,
-     * then calls execute_with_data().
-     */
-    void execute(ExecuteContext& ctx);
-
-    // Legacy execute (required by base class) - does nothing
-    void execute(
-        GraphicsBackend* graphics,
-        const FBOMap& reads_fbos,
-        const FBOMap& writes_fbos,
-        const Rect4i& rect,
-        void* scene,
-        void* camera,
-        const std::vector<Light*>* lights = nullptr
-    ) override;
+    // Override from CxxFramePass
+    void execute(ExecuteContext& ctx) override;
 
     std::vector<ResourceSpec> get_resource_specs() const override;
 
-    /**
-     * Compute read resources dynamically.
-     */
-    std::set<std::string> compute_reads() const;
+    // Compute read resources dynamically.
+    std::set<const char*> compute_reads() const override;
 
-    /**
-     * Compute write resources dynamically.
-     */
-    std::set<std::string> compute_writes() const;
+    // Compute write resources dynamically.
+    std::set<const char*> compute_writes() const override;
 
     /**
      * Get inplace aliases (input->output pairs that share the same FBO).

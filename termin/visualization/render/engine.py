@@ -55,6 +55,9 @@ try:
         tc_frame_graph_get_alias_groups,
         tc_resources_allocate_dict,
         TcFrameGraphError,
+        RenderEngine as CppRenderEngine,
+        ViewportContext as CppViewportContext,
+        Rect4i,
     )
 except ImportError as e:
     raise ImportError(f"tc_frame_graph bindings required: {e}") from e
@@ -258,6 +261,7 @@ class RenderEngine:
         """
         self.graphics = graphics
         self._logged_errors: set[str] = set()  # Кэш уже залогированных ошибок
+        self._cpp_engine = CppRenderEngine(graphics)  # C++ render engine
 
     def clear_error_cache(self) -> None:
         """Сбрасывает кэш ошибок (вызывать при смене пайплайна)."""
@@ -390,6 +394,7 @@ class RenderEngine:
         Рендерит view в указанный FBO (offscreen).
 
         Используется для рендера unmanaged viewports в их output_fbo.
+        Использует C++ RenderEngine для выполнения рендеринга.
 
         Параметры:
             view: RenderView (сцена, камера, pipeline).
@@ -397,7 +402,6 @@ class RenderEngine:
             target_fbo: Целевой FBO для рендера.
             size: Размер FBO (width, height).
         """
-        from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
         from termin._native import log
 
         pipeline = view.pipeline
@@ -405,8 +409,7 @@ class RenderEngine:
             log.warn("[engine] render_view_to_fbo: pipeline is None")
             return
 
-        frame_passes = pipeline.passes
-        if not frame_passes:
+        if not pipeline.passes:
             log.warn(f"[engine] render_view_to_fbo: no passes in '{pipeline.name}'")
             return
 
@@ -423,66 +426,23 @@ class RenderEngine:
         # Обновляем aspect ratio камеры
         view.camera.set_aspect(pw / float(max(1, ph)))
 
-        # Запрашиваем required_resources у render passes
-        for render_pass in frame_passes:
-            if isinstance(render_pass, RenderFramePass):
-                render_pass.required_resources()
-
-        # Строим framegraph schedule (using tc_frame_graph if available)
-        with profiler.section("Build Schedule"):
-            schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
-
-        # Собираем ResourceSpecs
-        resource_specs_map = {}
-        for render_pass in frame_passes:
-            for spec in render_pass.get_resource_specs():
-                resource_specs_map[spec.resource] = spec
-        if pipeline.pipeline_specs:
-            for spec in pipeline.pipeline_specs:
-                resource_specs_map[spec.resource] = spec
-
-        # Allocate resources based on alias_groups
-        with profiler.section("Allocate Resources"):
-            resources = _allocate_pipeline_resources(
-                self, state, alias_groups, resource_specs_map, target_fbo, size
-            )
-
-        # Clear resources according to specs
-        with profiler.section("Clear Resources"):
-            _clear_resources_by_spec(self.graphics, resources, resource_specs_map, size)
-
-        # Выполняем пассы
-        scene = view.scene
+        # Строим lights
         with profiler.section("Build Lights"):
             lights = scene.build_lights()
 
-        for render_pass in schedule:
-            self.graphics.reset_state()
-            self._clear_gl_errors()
-
-            pass_reads = {name: resources.get(name) for name in render_pass.reads}
-            pass_writes = {name: resources.get(name) for name in render_pass.writes}
-
-            ctx = ExecuteContext(
-                graphics=self.graphics,
-                reads_fbos=pass_reads,
-                writes_fbos=pass_writes,
-                rect=(0, 0, pw, ph),
-                scene=scene,
-                camera=view.camera,
-                viewport=view.viewport,
-                lights=lights,
-                layer_mask=view.layer_mask,
+        # Вызываем C++ RenderEngine
+        with profiler.section("C++ Render Pipeline"):
+            self._cpp_engine.render_view_to_fbo(
+                pipeline._tc_pipeline,
+                target_fbo,
+                pw,
+                ph,
+                scene._tc_scene.scene_ref(),
+                view.camera,
+                view.viewport,
+                lights,
+                view.layer_mask,
             )
-
-            with profiler.section(render_pass.pass_name):
-                render_pass.execute(ctx)
-
-            self._check_gl_errors(render_pass.pass_name)
-
-            for name in render_pass.writes:
-                if name in pass_writes and pass_writes[name] is not None:
-                    resources[name] = pass_writes[name]
 
     def render_scene_pipeline_offscreen(
         self,
@@ -505,10 +465,8 @@ class RenderEngine:
             shared_state: ViewportRenderState с общими ресурсами.
             default_viewport: Viewport по умолчанию для пассов без viewport_name.
         """
-        from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
+        from termin.visualization.render.framegraph import RenderFramePass
         from termin._native import log
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
 
         frame_passes = pipeline.passes
         if not frame_passes:
@@ -517,15 +475,7 @@ class RenderEngine:
         if scene.is_destroyed:
             return
 
-        # Выбираем первый доступный viewport как default
-        if not default_viewport and viewport_contexts:
-            default_viewport = next(iter(viewport_contexts.keys()))
-
-        default_ctx = viewport_contexts.get(default_viewport)
-        if default_ctx is None and viewport_contexts:
-            default_ctx = next(iter(viewport_contexts.values()))
-
-        if default_ctx is None:
+        if not viewport_contexts:
             log.error("[render_scene_pipeline_offscreen] No viewport contexts provided")
             return
 
@@ -539,73 +489,26 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Строим framegraph schedule (using tc_frame_graph if available)
-        with profiler.section("Build Schedule"):
-            schedule, alias_groups = _build_schedule_from_pipeline(pipeline, frame_passes)
+        # Build lights
+        lights = scene.build_lights()
 
-        # Собираем ResourceSpecs
-        resource_specs_map = {}
-        for render_pass in frame_passes:
-            for spec in render_pass.get_resource_specs():
-                resource_specs_map[spec.resource] = spec
-        if pipeline.pipeline_specs:
-            for spec in pipeline.pipeline_specs:
-                resource_specs_map[spec.resource] = spec
-
-        # Для scene pipeline используем размер default viewport
-        default_pw, default_ph = default_ctx.rect[2], default_ctx.rect[3]
-        default_size = (default_pw, default_ph)
-        target_fbo = default_ctx.output_fbo
-
-        # Allocate resources based on alias_groups
-        with profiler.section("Allocate Resources"):
-            resources = _allocate_pipeline_resources(
-                self, shared_state, alias_groups, resource_specs_map, target_fbo, default_size
-            )
-
-        # Clear resources according to specs
-        with profiler.section("Clear Resources"):
-            _clear_resources_by_spec(self.graphics, resources, resource_specs_map, default_size)
-
-        # Выполняем пассы
-        with profiler.section("Build Lights"):
-            lights = scene.build_lights()
-
-        for render_pass in schedule:
-            self.graphics.reset_state()
-            self._clear_gl_errors()
-
-            # Определяем viewport context для этого pass'а
-            pass_viewport_name = render_pass.viewport_name if render_pass.viewport_name else default_viewport
-            ctx = viewport_contexts.get(pass_viewport_name, default_ctx)
-
+        # Convert Python ViewportContext to C++ ViewportContext
+        cpp_viewport_contexts: Dict[str, CppViewportContext] = {}
+        for name, ctx in viewport_contexts.items():
+            cpp_ctx = CppViewportContext()
+            cpp_ctx.name = name
+            cpp_ctx.camera = ctx.camera
             px, py, pw, ph = ctx.rect
+            cpp_ctx.rect = Rect4i(px, py, pw, ph)
+            cpp_ctx.layer_mask = ctx.layer_mask
+            cpp_ctx.output_fbo = ctx.output_fbo
+            cpp_viewport_contexts[name] = cpp_ctx
 
-            # Если pass пишет в OUTPUT/DISPLAY, используем output_fbo этого viewport
-            pass_writes_dict = {name: resources.get(name) for name in render_pass.writes}
-            if ctx.output_fbo is not None:
-                for write_name in render_pass.writes:
-                    if write_name in ("OUTPUT", "DISPLAY"):
-                        pass_writes_dict[write_name] = ctx.output_fbo
-
-            pass_reads = {name: resources.get(name) for name in render_pass.reads}
-
-            exec_ctx = ExecuteContext(
-                graphics=self.graphics,
-                reads_fbos=pass_reads,
-                writes_fbos=pass_writes_dict,
-                rect=(px, py, pw, ph),
-                scene=scene,
-                camera=ctx.camera,
-                lights=lights,
-                layer_mask=ctx.layer_mask,
-            )
-
-            with profiler.section(render_pass.pass_name):
-                render_pass.execute(exec_ctx)
-
-            self._check_gl_errors(render_pass.pass_name)
-
-            for name in render_pass.writes:
-                if name in pass_writes_dict and pass_writes_dict[name] is not None:
-                    resources[name] = pass_writes_dict[name]
+        # Execute via C++ RenderEngine
+        self._cpp_engine.render_scene_pipeline_offscreen(
+            pipeline._tc_pipeline,
+            scene._tc_scene.scene_ref(),
+            cpp_viewport_contexts,
+            lights,
+            default_viewport,
+        )

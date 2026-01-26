@@ -43,9 +43,9 @@ static void* get_raw_pointer(nb::object obj) {
         return static_cast<void*>(mat.get());
     } catch (const nb::cast_error&) {}
 
-    // FramePass (ColorPass, ShadowPass, etc.)
+    // CxxFramePass (ColorPass, ShadowPass, etc.)
     try {
-        return static_cast<void*>(nb::cast<FramePass*>(obj));
+        return static_cast<void*>(nb::cast<CxxFramePass*>(obj));
     } catch (const nb::cast_error&) {}
 
     // For pure Python objects (PythonComponent etc), return PyObject*
