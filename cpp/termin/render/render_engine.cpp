@@ -138,13 +138,6 @@ void RenderEngine::render_view_to_fbo(
     tc_resource_spec specs[128] = {};  // Zero-initialize to avoid garbage in unset fields
     size_t spec_count = tc_pipeline_collect_specs(pipeline, specs, 128);
 
-    // Debug: log all collected specs
-    tc::Log::debug("[RenderEngine::render_view_to_fbo] Collected %zu resource specs:", spec_count);
-    for (size_t i = 0; i < spec_count; i++) {
-        tc::Log::debug("[RenderEngine::render_view_to_fbo]   spec[%zu]: resource='%s', type='%s'",
-                      i, specs[i].resource ? specs[i].resource : "(null)", specs[i].resource_type);
-    }
-
     // Build spec map for quick lookup
     std::unordered_map<std::string, tc_resource_spec*> spec_map;
     for (size_t i = 0; i < spec_count; i++) {
@@ -158,20 +151,6 @@ void RenderEngine::render_view_to_fbo(
 
     const char* canonical_names[256];
     size_t canon_count = tc_frame_graph_get_canonical_resources(fg, canonical_names, 256);
-
-    // Debug: log all alias groups
-    tc::Log::debug("[RenderEngine::render_view_to_fbo] canon_count=%zu, alias groups:", canon_count);
-    for (size_t i = 0; i < canon_count; i++) {
-        const char* canon = canonical_names[i];
-        const char* aliases[64];
-        size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
-        std::string aliases_str;
-        for (size_t j = 0; j < alias_count; j++) {
-            if (j > 0) aliases_str += ", ";
-            aliases_str += aliases[j];
-        }
-        tc::Log::debug("[RenderEngine::render_view_to_fbo]   Canon '%s' aliases: [%s]", canon, aliases_str.c_str());
-    }
 
     for (size_t i = 0; i < canon_count; i++) {
         const char* canon = canonical_names[i];
@@ -211,7 +190,6 @@ void RenderEngine::render_view_to_fbo(
 
         // Handle shadow_map_array resources
         if (strcmp(resource_type, "shadow_map_array") == 0) {
-            tc::Log::debug("[RenderEngine::render_view_to_fbo] Canon '%s' -> ShadowMapArrayResource", canon);
             auto& shadow_array = shadow_arrays_[canon];
             if (!shadow_array) {
                 int resolution = 1024;
@@ -231,7 +209,6 @@ void RenderEngine::render_view_to_fbo(
 
         // Skip other non-FBO resources
         if (strcmp(resource_type, "fbo") != 0) {
-            tc::Log::debug("[RenderEngine::render_view_to_fbo] Canon '%s' -> skipped (type='%s')", canon, resource_type);
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
             for (size_t j = 0; j < alias_count; j++) {
@@ -255,7 +232,6 @@ void RenderEngine::render_view_to_fbo(
 
         // Get or create FBO
         FramebufferHandle* fbo = fbo_pool_.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
-        tc::Log::debug("[RenderEngine::render_view_to_fbo] Canon '%s' -> FramebufferHandle %dx%d", canon, fbo_width, fbo_height);
 
         // Set for all aliases
         const char* aliases[64];
@@ -585,12 +561,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
             auto it = resources.find(reads[j]);
             FrameGraphResource* res = (it != resources.end()) ? it->second : nullptr;
             pass_reads[reads[j]] = res;
-
-            // Debug: check if resource is ShadowMapArrayResource
-            if (res && dynamic_cast<ShadowMapArrayResource*>(res)) {
-                tc::Log::debug("[RenderEngine] Pass '%s' reads '%s' -> ShadowMapArrayResource",
-                              pass->pass_name ? pass->pass_name : "(null)", reads[j]);
-            }
         }
 
         for (size_t j = 0; j < write_count; j++) {
@@ -602,12 +572,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
                 auto it = resources.find(write_name);
                 FrameGraphResource* res = (it != resources.end()) ? it->second : nullptr;
                 pass_writes[write_name] = res;
-
-                // Debug: check if resource is ShadowMapArrayResource
-                if (res && dynamic_cast<ShadowMapArrayResource*>(res)) {
-                    tc::Log::debug("[RenderEngine] Pass '%s' writes '%s' -> ShadowMapArrayResource",
-                                  pass->pass_name ? pass->pass_name : "(null)", write_name);
-                }
             }
         }
 

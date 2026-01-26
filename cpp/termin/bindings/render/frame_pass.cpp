@@ -421,17 +421,17 @@ void bind_frame_pass(nb::module_& m) {
         .def("__repr__", [](const CxxFramePass& p) {
             return "<CxxFramePass '" + p.get_pass_name() + "'>";
         })
-        .def("serialize_data", [](CxxFramePass& self, nb::object py_self) {
+        .def("serialize_data", [](CxxFramePass& self) {
             nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
             nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            return registry.attr("serialize_all")(py_self);
-        }, nb::arg("py_self"))
-        .def("deserialize_data", [](CxxFramePass& self, nb::object data, nb::object py_self) {
+            return registry.attr("serialize_all")(nb::cast(&self));
+        })
+        .def("deserialize_data", [](CxxFramePass& self, nb::object data) {
             if (data.is_none()) return;
             nb::module_ inspect_mod = nb::module_::import_("termin._native.inspect");
             nb::object registry = inspect_mod.attr("InspectRegistry").attr("instance")();
-            registry.attr("deserialize_all")(py_self, data);
-        }, nb::arg("data"), nb::arg("py_self"))
+            registry.attr("deserialize_all")(nb::cast(&self), data);
+        }, nb::arg("data"))
         .def("serialize", [](CxxFramePass& self, nb::object py_self) {
             nb::dict result;
             tc_pass* tc = self.tc_pass_ptr();
