@@ -43,11 +43,11 @@ static void csharp_body_decref(void* body) {
 %}
 
 // Export C API for C# to set callbacks and manage body
-extern "C" {
-    void tc_component_set_external_callbacks(const void* callbacks);
-    void tc_component_body_incref(void* body);
-    void tc_component_body_decref(void* body);
-}
+// Note: These are accessed via direct P/Invoke in TerminCore.cs, not through SWIG
+// We ignore them here to avoid type conversion issues
+%ignore tc_component_set_external_callbacks;
+%ignore tc_component_body_incref;
+%ignore tc_component_body_decref;
 
 // Opaque type for tc_component
 typedef struct tc_component tc_component;
@@ -274,6 +274,7 @@ namespace termin {
 %ignore termin::MeshRenderer::try_create_override_material;
 
 %ignore termin::CameraComponent::viewports_;
+%ignore termin::CameraComponent::set_aspect;  // Conflicts with property setter
 %ignore termin::CameraComponent::add_viewport;
 %ignore termin::CameraComponent::remove_viewport;
 %ignore termin::CameraComponent::has_viewport;
@@ -346,6 +347,9 @@ public:
     size_t spec_count() const;
     const ResourceSpec* get_spec_at(size_t index) const;
 };
+
+// Forward declaration for CameraComponent (used in RenderEngine)
+class CameraComponent;
 
 // ============================================================================
 // RenderEngine - executes render pipelines

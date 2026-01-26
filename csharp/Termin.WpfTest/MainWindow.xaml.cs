@@ -570,7 +570,7 @@ void main() {
         double aspect = width / (double)height;
         if (_cameraComponent != null)
         {
-            _cameraComponent.set_aspect(aspect);
+            _cameraComponent.aspect = aspect;
         }
 
         // Update scene (for entity transforms)
@@ -584,11 +584,15 @@ void main() {
             GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
+            // Wrap scene handle for SWIG
+            var scenePtr = _scene?.Handle ?? IntPtr.Zero;
+            var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
+
             _renderEngine.render_to_screen(
                 _renderPipeline,
                 width,
                 height,
-                _scene?.Handle ?? IntPtr.Zero,
+                sceneWrapper,
                 _cameraComponent
             );
         }

@@ -150,10 +150,6 @@ public:
         return result;
     }
 
-    // Access to underlying C component (for Scene integration)
-    tc_component* c_component() { return &_c; }
-    const tc_component* c_component() const { return &_c; }
-
 protected:
     CxxComponent();
 

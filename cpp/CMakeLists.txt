@@ -261,6 +261,7 @@ add_library(render_lib STATIC
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
     termin/lighting/shadow.cpp
+    termin/texture/tc_texture_handle.cpp
 )
 target_include_directories(render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
