@@ -274,3 +274,30 @@ void tc_component_registry_cleanup(void) {
         g_component_registry = NULL;
     }
 }
+
+// ============================================================================
+// External body management (for C#, Rust, etc.)
+// ============================================================================
+
+static tc_component_external_callbacks g_external_callbacks = {NULL, NULL};
+
+void tc_component_set_external_callbacks(const tc_component_external_callbacks* callbacks) {
+    if (callbacks) {
+        g_external_callbacks = *callbacks;
+    } else {
+        g_external_callbacks.incref = NULL;
+        g_external_callbacks.decref = NULL;
+    }
+}
+
+void tc_component_body_incref(void* body) {
+    if (body && g_external_callbacks.incref) {
+        g_external_callbacks.incref(body);
+    }
+}
+
+void tc_component_body_decref(void* body) {
+    if (body && g_external_callbacks.decref) {
+        g_external_callbacks.decref(body);
+    }
+}

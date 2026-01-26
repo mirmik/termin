@@ -59,6 +59,23 @@ public:
     void release();  // Defined in .cpp - may delete this
     int ref_count() const { return _ref_count.load(); }
 
+    // Get tc_component pointer (for C API interop)
+    tc_component* tc_component_ptr() { return &_c; }
+    const tc_component* tc_component_ptr() const { return &_c; }
+
+    // Alias for compatibility
+    tc_component* c_component() { return &_c; }
+    const tc_component* c_component() const { return &_c; }
+
+    // Setup external wrapper (for C#/Rust/other bindings)
+    // Caller is responsible for preventing wrapper from being GC'd
+    void set_external_body(void* body) {
+        tc_component_set_external_body(&_c, body);
+    }
+
+    // Check if externally managed
+    bool externally_managed() const { return _c.externally_managed; }
+
     // Type identification (for serialization) - uses type_entry from registry
     const char* type_name() const {
         return tc_component_type_name(&_c);

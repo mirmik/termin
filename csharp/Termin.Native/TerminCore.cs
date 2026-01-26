@@ -389,4 +389,101 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_pass_inspect_set", StringMarshalling = StringMarshalling.Utf8)]
     public static partial void PassInspectSet(IntPtr pass, string path, TcValue value, IntPtr scene);
+
+    // ========================================================================
+    // Component External Body Management (for C# prevent-GC mechanism)
+    // ========================================================================
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void ComponentBodyIncrefDelegate(IntPtr body);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void ComponentBodyDecrefDelegate(IntPtr body);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ComponentExternalCallbacks
+    {
+        public IntPtr incref;
+        public IntPtr decref;
+    }
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_external_callbacks")]
+    public static partial void ComponentSetExternalCallbacks(ref ComponentExternalCallbacks callbacks);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_body_incref")]
+    public static partial void ComponentBodyIncref(IntPtr body);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_body_decref")]
+    public static partial void ComponentBodyDecref(IntPtr body);
+}
+
+/// <summary>
+/// Manages external body for C++ components created from C#.
+/// Prevents GC from collecting the C# wrapper while C++ holds a reference.
+/// </summary>
+public static class ComponentExternalBody
+{
+    private static TerminCore.ComponentBodyIncrefDelegate? _increfDelegate;
+    private static TerminCore.ComponentBodyDecrefDelegate? _decrefDelegate;
+    private static bool _initialized;
+
+    /// <summary>
+    /// Initialize the external body callbacks. Call once at startup.
+    /// </summary>
+    public static void Initialize()
+    {
+        if (_initialized) return;
+
+        _increfDelegate = IncrefCallback;
+        _decrefDelegate = DecrefCallback;
+
+        var callbacks = new TerminCore.ComponentExternalCallbacks
+        {
+            incref = Marshal.GetFunctionPointerForDelegate(_increfDelegate),
+            decref = Marshal.GetFunctionPointerForDelegate(_decrefDelegate)
+        };
+
+        TerminCore.ComponentSetExternalCallbacks(ref callbacks);
+        _initialized = true;
+    }
+
+    private static void IncrefCallback(IntPtr body)
+    {
+        // body is a GCHandle - incref means allocate another Normal handle
+        // But since we use Normal handle which prevents GC, incref is no-op
+        // The C++ side will call decref when done
+    }
+
+    private static void DecrefCallback(IntPtr body)
+    {
+        // body is a GCHandle - free it to allow GC
+        if (body != IntPtr.Zero)
+        {
+            var handle = GCHandle.FromIntPtr(body);
+            if (handle.IsAllocated)
+            {
+                handle.Free();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Register a C# object as external body for a component.
+    /// Returns the GCHandle IntPtr to pass to set_external_body().
+    /// </summary>
+    public static IntPtr Register(object obj)
+    {
+        var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
+        return GCHandle.ToIntPtr(handle);
+    }
+
+    /// <summary>
+    /// Get the C# object from an external body IntPtr.
+    /// </summary>
+    public static object? GetObject(IntPtr body)
+    {
+        if (body == IntPtr.Zero) return null;
+        var handle = GCHandle.FromIntPtr(body);
+        return handle.IsAllocated ? handle.Target : null;
+    }
 }

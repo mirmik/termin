@@ -153,22 +153,35 @@ void CxxComponent::_cb_setup_editor_defaults(tc_component* c) {
 // Memory management callbacks
 void CxxComponent::_cb_drop(tc_component* c) {
     auto* self = from_tc(c);
-    if (self) {
+    // Don't delete if externally managed - external language owns the object
+    if (self && !c->externally_managed) {
         delete self;
     }
 }
 
 void CxxComponent::_cb_retain(tc_component* c) {
-    auto* self = from_tc(c);
-    if (self) {
-        self->retain();
+    if (!c) return;
+    // If externally managed, incref the body (C#/Rust wrapper)
+    if (c->externally_managed && c->body) {
+        tc_component_body_incref(c->body);
+    } else {
+        auto* self = from_tc(c);
+        if (self) {
+            self->retain();
+        }
     }
 }
 
 void CxxComponent::_cb_release(tc_component* c) {
-    auto* self = from_tc(c);
-    if (self) {
-        self->release();  // May delete self if ref_count reaches 0
+    if (!c) return;
+    // If externally managed, decref the body (C#/Rust wrapper)
+    if (c->externally_managed && c->body) {
+        tc_component_body_decref(c->body);
+    } else {
+        auto* self = from_tc(c);
+        if (self) {
+            self->release();  // May delete self if ref_count reaches 0
+        }
     }
 }
 

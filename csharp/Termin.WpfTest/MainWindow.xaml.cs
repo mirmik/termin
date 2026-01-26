@@ -305,6 +305,9 @@ public partial class MainWindow : Window
         TerminCore.ShaderInit();
         TerminCore.MaterialInit();
 
+        // Initialize C# component external body callbacks
+        ComponentExternalBody.Initialize();
+
         GL.Enable(EnableCap.DepthTest);
 
         // Get graphics backend (SWIG helper)
@@ -313,29 +316,48 @@ public partial class MainWindow : Window
         // Create render engine
         _renderEngine = new RenderEngine(graphics);
 
-        // Create camera component
+        // Create scene
+        _scene = new Scene();
+
+        // Create camera entity with CameraComponent
+        var cameraEntityId = _scene.Entities.CreateEntity("Camera");
+        _scene.Entities.SetPosition(cameraEntityId, new System.Numerics.Vector3(0, -3, 1));
+
         _cameraComponent = new CameraComponent();
         _cameraComponent.set_fov_degrees(60.0);
         _cameraComponent.near_clip = 0.1;
         _cameraComponent.far_clip = 100.0;
 
-        // Create scene
-        _scene = new Scene();
+        // Register C# wrapper as external body (prevents GC while C++ holds reference)
+        var cameraBodyPtr = ComponentExternalBody.Register(_cameraComponent);
+        _cameraComponent.set_external_body(cameraBodyPtr);
+
+        // Add component to entity
+        var cameraComponentPtr = _cameraComponent.tc_component_ptr();
+        TerminCore.EntityPoolAddComponent(_scene.Entities.Handle, cameraEntityId, cameraComponentPtr);
+        Console.WriteLine("[Init] Created CameraComponent and added to entity");
 
         // Create mesh and shader
         CreateCubeMesh();
         CreateShader();
         CreateMaterial();
 
-        // Create entity with MeshRenderer
+        // Create cube entity with MeshRenderer
         var cubeId = _scene.Entities.CreateEntity("Cube");
         _scene.Entities.SetPosition(cubeId, new System.Numerics.Vector3(0, 0, 0));
         
-        // Create and add MeshRenderer component (SWIG class)
         _meshRenderer = new MeshRenderer();
         _meshRenderer.set_mesh_by_name("cube");
         _meshRenderer.set_material_by_name("cube_material");
-        Console.WriteLine("[Init] Created MeshRenderer");
+
+        // Register C# wrapper as external body
+        var meshBodyPtr = ComponentExternalBody.Register(_meshRenderer);
+        _meshRenderer.set_external_body(meshBodyPtr);
+
+        // Add component to entity
+        var meshComponentPtr = _meshRenderer.tc_component_ptr();
+        TerminCore.EntityPoolAddComponent(_scene.Entities.Handle, cubeId, meshComponentPtr);
+        Console.WriteLine("[Init] Created MeshRenderer and added to entity");
 
         // Create render pipeline
         InitPipeline();

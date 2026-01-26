@@ -13,13 +13,55 @@
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/entity/component.hpp"
 #include "tc_pass.h"
 #include "tc_pipeline.h"
 #include "tc_opengl.h"
+#include "tc_component.h"
 %}
 
 // Use std::string
 %include "std_string.i"
+
+// ============================================================================
+// C# Component External Body Support
+// ============================================================================
+
+// C API for external body management
+%{
+// These are called from C# via P/Invoke to set up reference counting
+static void csharp_body_incref(void* body) {
+    // body is GCHandle.ToIntPtr() - prevent GC by allocating another handle
+    // Actually, we use Normal handle which already prevents GC
+    // So incref is a no-op, decref frees the handle
+}
+
+static void csharp_body_decref(void* body) {
+    // body is GCHandle.ToIntPtr() - free it to allow GC
+    // This is called from C# P/Invoke: TerminCore.ComponentBodyDecref
+}
+%}
+
+// Export C API for C# to set callbacks and manage body
+extern "C" {
+    void tc_component_set_external_callbacks(const void* callbacks);
+    void tc_component_body_incref(void* body);
+    void tc_component_body_decref(void* body);
+}
+
+// Opaque type for tc_component
+typedef struct tc_component tc_component;
+
+// Typemap for void* as IntPtr (for set_external_body)
+%typemap(cstype) void* body "System.IntPtr"
+%typemap(csin) void* body "$csinput"
+%typemap(imtype) void* body "System.IntPtr"
+
+// Typemap for tc_component* as IntPtr
+%typemap(cstype) tc_component* "System.IntPtr"
+%typemap(csout) tc_component* { return $imcall; }
+%typemap(imtype) tc_component* "System.IntPtr"
+%typemap(out) tc_component* %{ $result = (void*)$1; %}
 
 // Rename operators for C# compatibility
 %rename(Add) operator+;
@@ -359,6 +401,12 @@ public:
 
     // Position
     Vec3 get_position() const;
+
+    // Component pointer for C API interop
+    tc_component* tc_component_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -381,6 +429,12 @@ public:
     // Override material
     bool override_material() const;
     void set_override_material(bool value);
+
+    // Component pointer for C API interop
+    tc_component* tc_component_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
 };
 
 // ============================================================================

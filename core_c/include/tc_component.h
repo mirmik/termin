@@ -185,6 +185,11 @@ struct tc_component {
     // Factory sets this to true after doing its own retain.
     bool factory_retained;
 
+    // If true, component is managed by external language (C#, etc.)
+    // When externally_managed: retain/release call body incref/decref
+    // When not: retain/release use internal ref_count
+    bool externally_managed;
+
     // Intrusive list for scene's type-based component lists
     // Linked when registered with scene, unlinked on unregister
     tc_component* type_prev;
@@ -227,6 +232,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
     c->has_before_render = (vtable && vtable->before_render != NULL);
     c->factory_retained = false;
+    c->externally_managed = false;
     c->type_prev = NULL;
     c->type_next = NULL;
     c->type_entry = NULL;
@@ -506,6 +512,35 @@ static inline void tc_component_clear_binding(tc_component* c, tc_binding_type l
 static inline bool tc_component_is_language(tc_component* c, tc_language lang) {
     if (!c) return false;
     return c->native_language == lang;
+}
+
+// ============================================================================
+// External body management (for C#, Rust, etc.)
+// When externally_managed=true, retain/release call these on body
+// ============================================================================
+
+// Callbacks for external language reference counting
+typedef void (*tc_component_body_incref_fn)(void* body);
+typedef void (*tc_component_body_decref_fn)(void* body);
+
+// Global callbacks for external body management
+typedef struct {
+    tc_component_body_incref_fn incref;
+    tc_component_body_decref_fn decref;
+} tc_component_external_callbacks;
+
+// Set global external callbacks (call once at startup)
+TC_API void tc_component_set_external_callbacks(const tc_component_external_callbacks* callbacks);
+
+// Call external incref/decref on body (for externally_managed native components)
+TC_API void tc_component_body_incref(void* body);
+TC_API void tc_component_body_decref(void* body);
+
+// Set component as externally managed with body pointer
+static inline void tc_component_set_external_body(tc_component* c, void* body) {
+    if (!c) return;
+    c->body = body;
+    c->externally_managed = true;
 }
 
 #ifdef __cplusplus
