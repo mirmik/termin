@@ -254,8 +254,6 @@ void ColorPass::collect_draw_calls(
         return;
     }
 
-    tc::Log::info("[ColorPass] collect_draw_calls: scene=%p, phase='%s'", scene, phase_mark.c_str());
-
     // Collect draw calls via drawable iteration
     CollectDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
@@ -354,8 +352,6 @@ void ColorPass::execute_with_data(
         return;
     }
 
-    tc::Log::info("[ColorPass] Rendering to '%s' (%dx%d)", output_res.c_str(), rect.width, rect.height);
-
     // Bind framebuffer and set viewport
     graphics->bind_framebuffer(fb);
     graphics->check_gl_error("ColorPass: after bind_framebuffer");
@@ -381,9 +377,6 @@ void ColorPass::execute_with_data(
     if (detailed) tc_profiler_begin_section("Collect");
     collect_draw_calls(scene, phase_mark, layer_mask);
     if (detailed) tc_profiler_end_section();
-
-    tc::Log::info("[ColorPass] Collected %zu draw calls for phase '%s'", 
-        cached_draw_calls_.size(), phase_mark.c_str());
 
     // Compute sort keys and sort (single pass with combined priority+distance key)
     if (detailed) tc_profiler_begin_section("Sort");

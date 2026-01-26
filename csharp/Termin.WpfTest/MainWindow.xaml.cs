@@ -7,6 +7,7 @@ using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Wpf;
 using Termin.Native;
+using Termin.WpfTest.Input;
 
 namespace Termin.WpfTest;
 
@@ -256,6 +257,10 @@ public partial class MainWindow : Window
     private bool _initialized;
     private int _renderCount;
 
+    // Backend и InputManager
+    private GlWpfBackend? _backend;
+    private InputManager? _inputManager;
+
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
     private RenderEngine? _renderEngine;
@@ -283,6 +288,12 @@ public partial class MainWindow : Window
             MinorVersion = 5
         };
         GlControl.Start(settings);
+
+        // Создаём backend и input manager
+        _backend = new GlWpfBackend(GlControl);
+        _inputManager = new InputManager(_backend);
+        
+        Console.WriteLine("[Init] Backend and InputManager created");
     }
 
     private void InitGL()
@@ -583,10 +594,10 @@ void main() {
             _scene?.BeforeRender();
 
             // Pipeline rendering
-            if (_renderPipeline != null && _renderEngine != null && _cameraComponent != null)
+            if (_renderPipeline != null && _renderEngine != null && _cameraComponent != null && _backend != null)
             {
                 // Save WPF's FBO before rendering (pipeline will change it)
-                GL.GetInteger(GetPName.FramebufferBinding, out int wpfFbo);
+                int wpfFbo = _backend.GetCurrentFboId();
 
                 // Wrap scene handle for SWIG
                 var scenePtr = _scene?.Handle ?? IntPtr.Zero;
@@ -601,24 +612,8 @@ void main() {
                     _cameraComponent
                 );
 
-                // Blit color FBO to WPF's FBO
-                var colorFbo = _renderPipeline.get_fbo("color");
-                if (colorFbo != null)
-                {
-                    int srcFboId = (int)colorFbo.get_fbo_id();
-                    int srcW = colorFbo.get_width();
-                    int srcH = colorFbo.get_height();
-                    
-                    GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, srcFboId);
-                    GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, wpfFbo);
-                    GL.BlitFramebuffer(
-                        0, 0, srcW, srcH,
-                        0, 0, width, height,
-                        ClearBufferMask.ColorBufferBit,
-                        BlitFramebufferFilter.Nearest
-                    );
-                    GL.BindFramebuffer(FramebufferTarget.Framebuffer, wpfFbo);
-                }
+                // Blit color FBO to WPF's FBO via backend
+                _backend.BlitFromPipeline(_renderPipeline, "color", wpfFbo);
 
                 _renderCount++;
             }
@@ -631,6 +626,13 @@ void main() {
 
     protected override void OnClosed(EventArgs e)
     {
+        // Cleanup input first
+        _inputManager?.Dispose();
+        _inputManager = null;
+
+        _backend?.Dispose();
+        _backend = null;
+
         // Cleanup scene first (this will properly remove components from entities)
         _scene?.Dispose();
         _scene = null;
