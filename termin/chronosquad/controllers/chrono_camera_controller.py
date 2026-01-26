@@ -201,7 +201,7 @@ class ChronoCameraController(PythonComponent):
     # ----------------------------------------------------------------
 
     def _state(self, viewport: "Viewport") -> dict:
-        key = viewport._tc_viewport_ptr()
+        key = viewport._tc_viewport_ptr() # Use pointer as unique key
         if key not in self._states:
             self._states[key] = {"orbit": False, "pan": False, "last": None}
         return self._states[key]
