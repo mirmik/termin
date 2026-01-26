@@ -236,7 +236,7 @@ class EditorDisplayInputManager:
         read_x = int(vx)
         read_y = int(ph - vy - 1)
 
-        fb = fbo_pool.get(buffer_name)
+        fb = fbo_pool.get_fbo(buffer_name)
         if fb is None:
             return None
 
@@ -330,7 +330,7 @@ class EditorDisplayInputManager:
         read_x = int(vx)
         read_y = int(ph - vy - 1)
 
-        fb = fbo_pool.get(buffer_name)
+        fb = fbo_pool.get_fbo(buffer_name)
         if fb is None:
             return None
 

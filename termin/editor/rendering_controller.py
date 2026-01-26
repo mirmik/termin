@@ -759,19 +759,19 @@ class RenderingController:
             return layout.itemAt(0).widget()
         return None
 
-    def get_editor_fbo_pool(self) -> dict:
-        """Get FBO pool for the editor viewport (for picking)."""
+    def get_editor_fbo_pool(self):
+        """Get FBO pool (pipeline) for the editor viewport (for picking)."""
         return self.get_display_fbo_pool(self.editor_display)
 
-    def get_display_fbo_pool(self, display: Optional["Display"]) -> dict:
-        """Get FBO pool for a display's primary viewport (for picking)."""
+    def get_display_fbo_pool(self, display: Optional["Display"]):
+        """Get FBO pool (pipeline) for a display's primary viewport (for picking).
+
+        Returns the RenderPipeline which has get_fbo(key) method.
+        """
         if display is None or not display.viewports:
-            return {}
+            return None
         viewport = display.viewports[0]
-        state = self.get_viewport_state(viewport)
-        if state is None:
-            return {}
-        return state.fbos
+        return viewport.pipeline
 
     def get_display_backend_window(self, display: "Display") -> Optional["BackendWindow"]:
         """Get backend window for a display."""
