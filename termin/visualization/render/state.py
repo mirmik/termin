@@ -2,11 +2,10 @@
 ViewportRenderState — контейнер GPU ресурсов для viewport.
 
 Хранит:
-- fbos: пул FBO для ресурсов framegraph (промежуточные буферы)
-- shadow_map_arrays: пул ShadowMapArrayResource
 - output_fbo: финальный результат рендера viewport (для blit на дисплей)
+- fbos: deprecated, используется только Python RenderEngine (streaming, mesh preview)
 
-Pipeline теперь хранится в Viewport напрямую.
+Pipeline и FBO pool для основного рендера хранятся в RenderPipeline (C++).
 """
 
 from __future__ import annotations
@@ -24,69 +23,22 @@ class ViewportRenderState:
     """
     GPU ресурсы для viewport.
 
-    Управляет FBO пулом для framegraph ресурсов и output FBO
-    для финального результата рендера.
+    Управляет output FBO для финального результата рендера.
+    FBO pool для основного рендера хранится в RenderPipeline (C++).
 
     Атрибуты:
-        fbos: Словарь {resource_name -> FramebufferHandle} для framegraph.
-        shadow_map_arrays: Словарь {resource_name -> ShadowMapArrayResource}.
         output_fbo: FBO с финальным результатом рендера (для blit на дисплей).
+        fbos: DEPRECATED - используется только Python RenderEngine.
+        shadow_map_arrays: DEPRECATED - используется только Python RenderEngine.
     """
-    fbos: Dict[str, "FramebufferHandle"] = field(default_factory=dict)
-    shadow_map_arrays: Dict[str, "ShadowMapArrayResource"] = field(default_factory=dict)
-
     # Output FBO - финальный результат рендера viewport
     output_fbo: Optional["FramebufferHandle"] = None
     _output_size: Tuple[int, int] = (0, 0)
 
-    def get_fbo(self, name: str) -> Optional["FramebufferHandle"]:
-        """
-        Возвращает FBO по имени ресурса.
-        
-        Параметры:
-            name: Имя ресурса framegraph.
-        
-        Возвращает:
-            FramebufferHandle или None.
-        """
-        return self.fbos.get(name)
-
-    def set_fbo(self, name: str, fbo: "FramebufferHandle") -> None:
-        """
-        Устанавливает FBO для ресурса.
-        
-        Параметры:
-            name: Имя ресурса framegraph.
-            fbo: Хэндл фреймбуфера.
-        """
-        self.fbos[name] = fbo
-
-    def clear_fbos(self) -> None:
-        """
-        Удаляет все ресурсы из пула.
-
-        Вызывает delete() для каждого ресурса.
-        """
-        from termin._native import log
-
-        for name, resource in self.fbos.items():
-            if resource is not None:
-                try:
-                    resource.delete()
-                except Exception as e:
-                    log.warn(f"[ViewportRenderState] Failed to delete FBO '{name}': {e}")
-        self.fbos.clear()
-
-        # Очищаем shadow_map_arrays (FBO принадлежат C++ ShadowPass, не удаляем)
-        self.shadow_map_arrays.clear()
-
-    def get_shadow_map_array(self, name: str) -> Optional["ShadowMapArrayResource"]:
-        """Возвращает ShadowMapArrayResource по имени ресурса."""
-        return self.shadow_map_arrays.get(name)
-
-    def set_shadow_map_array(self, name: str, resource: "ShadowMapArrayResource") -> None:
-        """Устанавливает ShadowMapArrayResource для ресурса."""
-        self.shadow_map_arrays[name] = resource
+    # DEPRECATED: используется только Python RenderEngine (streaming, mesh preview)
+    # Основной рендер использует RenderPipeline.fbo_pool() (C++)
+    fbos: Dict[str, "FramebufferHandle"] = field(default_factory=dict)
+    shadow_map_arrays: Dict[str, "ShadowMapArrayResource"] = field(default_factory=dict)
 
     def ensure_output_fbo(
         self,
@@ -114,19 +66,37 @@ class ViewportRenderState:
             self._output_size = size
         return self.output_fbo
 
+    # DEPRECATED methods for Python RenderEngine compatibility
+    def get_shadow_map_array(self, name: str) -> Optional["ShadowMapArrayResource"]:
+        """DEPRECATED: используется только Python RenderEngine."""
+        return self.shadow_map_arrays.get(name)
+
+    def set_shadow_map_array(self, name: str, resource: "ShadowMapArrayResource") -> None:
+        """DEPRECATED: используется только Python RenderEngine."""
+        self.shadow_map_arrays[name] = resource
+
     def clear_all(self) -> None:
         """
         Освобождает все ресурсы включая output_fbo.
 
         Вызывайте при удалении viewport.
         """
-        self.clear_fbos()
+        # Clear deprecated fbos
+        from termin._native import log
+        for name, resource in self.fbos.items():
+            if resource is not None:
+                try:
+                    resource.delete()
+                except Exception as e:
+                    log.warn(f"[ViewportRenderState] Failed to delete FBO '{name}': {e}")
+        self.fbos.clear()
+        self.shadow_map_arrays.clear()
 
+        # Clear output_fbo
         if self.output_fbo is not None:
             try:
                 self.output_fbo.delete()
             except Exception as e:
-                from termin._native import log
                 log.warn(f"[ViewportRenderState] Failed to delete output_fbo: {e}")
             self.output_fbo = None
             self._output_size = (0, 0)

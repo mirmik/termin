@@ -564,10 +564,10 @@ class RenderingController:
                 # Destroy pipeline
                 if vp.pipeline is not None:
                     vp.pipeline.destroy()
-                # Clear FBOs and remove viewport state
+                # Clear viewport state (output_fbo)
                 state = self._manager.get_viewport_state(vp)
                 if state is not None:
-                    state.clear_fbos()
+                    state.clear_all()
                 self._manager.remove_viewport_state(vp)
                 display.remove_viewport(vp)
         self._viewport_list.refresh()
@@ -736,10 +736,10 @@ class RenderingController:
             # Destroy pipeline
             if vp.pipeline is not None:
                 vp.pipeline.destroy()
-            # Clear FBOs and remove viewport state
+            # Clear viewport state (output_fbo)
             state = self._manager.get_viewport_state(vp)
             if state is not None:
-                state.clear_fbos()
+                state.clear_all()
             self._manager.remove_viewport_state(vp)
             display.remove_viewport(vp)
 
@@ -1126,12 +1126,8 @@ class RenderingController:
         old_pipeline = viewport.pipeline
         viewport.pipeline = pipeline
 
-        # Clear FBO pool and destroy old pipeline when pipeline changes
+        # Destroy old pipeline when pipeline changes (FBOs are owned by pipeline)
         if old_pipeline is not pipeline:
-            state = self._manager.get_viewport_state(viewport)
-            if state is not None:
-                state.fbos.clear()
-            # Destroy old pipeline to release GL resources
             if old_pipeline is not None:
                 old_pipeline.destroy()
 

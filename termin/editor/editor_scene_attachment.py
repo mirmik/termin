@@ -201,10 +201,10 @@ class EditorSceneAttachment:
                 except Exception:
                     pass  # Context may be invalid during shutdown
 
-            # Clear viewport state FIRST (removes Python refs to C++ FBOs)
+            # Clear viewport state (output_fbo)
             state = self._rendering_controller.get_viewport_state(self._viewport)
             if state is not None:
-                state.clear_fbos()
+                state.clear_all()
                 self._rendering_controller._manager.remove_viewport_state(self._viewport)
 
             # Destroy pipeline AFTER (C++ ShadowPass::fbo_pool_ is deleted here)
@@ -276,9 +276,9 @@ class EditorSceneAttachment:
             # Destroy pipeline
             if vp.pipeline is not None:
                 vp.pipeline.destroy()
-            # Clear FBO state
+            # Clear viewport state (output_fbo)
             state = self._rendering_controller.get_viewport_state(vp)
             if state is not None:
-                state.clear_fbos()
+                state.clear_all()
                 self._rendering_controller._manager.remove_viewport_state(vp)
             self._display.remove_viewport(vp)
