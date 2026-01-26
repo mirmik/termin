@@ -63,6 +63,16 @@ public:
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
+    // Render to screen (default framebuffer, null target_fbo)
+    // Simplified interface for C# bindings
+    void render_to_screen(
+        RenderPipeline* pipeline,
+        int width,
+        int height,
+        void* scene,  // tc_scene* as void* for SWIG
+        CameraComponent* camera
+    );
+
     // Render pipeline with multiple viewports
     // Each pass selects viewport by viewport_name, writes to that viewport's output_fbo
     void render_scene_pipeline_offscreen(

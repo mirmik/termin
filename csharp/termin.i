@@ -6,8 +6,16 @@
 #include "termin/geom/quat.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/camera/camera.hpp"
+#include "termin/render/resource_spec.hpp"
+#include "termin/render/render_pipeline.hpp"
+#include "termin/render/render_engine.hpp"
+#include "termin/render/mesh_renderer.hpp"
+#include "termin/render/color_pass.hpp"
+#include "termin/render/depth_pass.hpp"
+#include "termin/camera/camera_component.hpp"
 #include "tc_pass.h"
 #include "tc_pipeline.h"
+#include "tc_opengl.h"
 %}
 
 // Use std::string
@@ -150,7 +158,7 @@ struct Camera {
 } // namespace termin
 
 // ============================================================================
-// Pass Registry API (C)
+// Pass Registry API (C) - kept for low-level access
 // ============================================================================
 
 // Opaque types
@@ -167,9 +175,286 @@ const char* tc_pass_registry_type_at(size_t index);
 void tc_pass_set_name(tc_pass* p, const char* name);
 void tc_pass_set_enabled(tc_pass* p, bool enabled);
 
-// Pipeline
-tc_pipeline* tc_pipeline_create(const char* name);
-void tc_pipeline_destroy(tc_pipeline* pipeline);
-void tc_pipeline_add_pass(tc_pipeline* pipeline, tc_pass* pass);
-size_t tc_pipeline_pass_count(tc_pipeline* pipeline);
-tc_pass* tc_pipeline_pass_at(tc_pipeline* pipeline, size_t index);
+// ============================================================================
+// C++ Render Classes
+// ============================================================================
+
+%{
+#include "termin/render/render_pipeline.hpp"
+#include "termin/render/render_engine.hpp"
+#include "termin/render/mesh_renderer.hpp"
+#include "termin/render/color_pass.hpp"
+#include "termin/render/depth_pass.hpp"
+#include "termin/camera/camera_component.hpp"
+#include "termin/render/graphics_backend.hpp"
+#include "termin/lighting/light.hpp"
+%}
+
+// Forward declarations
+namespace termin {
+    class GraphicsBackend;
+    class FramebufferHandle;
+    class Component;
+    class CxxComponent;
+    class Drawable;
+    struct TcMesh;
+    struct TcMaterial;
+}
+
+// Ignore problematic members
+%ignore termin::RenderPipeline::pipeline_;
+%ignore termin::RenderPipeline::specs_;
+%ignore termin::RenderPipeline::fbo_pool_;
+%ignore termin::RenderPipeline::shadow_arrays_;
+%ignore termin::RenderPipeline::fbo_pool;
+%ignore termin::RenderPipeline::shadow_arrays;
+%ignore termin::RenderPipeline::collect_specs;
+%ignore termin::RenderPipeline::operator=;
+
+%ignore termin::RenderEngine::render_scene_pipeline_offscreen;
+
+%ignore termin::MeshRenderer::mesh;
+%ignore termin::MeshRenderer::material;
+%ignore termin::MeshRenderer::_overridden_material;
+%ignore termin::MeshRenderer::_pending_override_data;
+%ignore termin::MeshRenderer::get_mesh;
+%ignore termin::MeshRenderer::get_material_ref;
+%ignore termin::MeshRenderer::get_material_ptr;
+%ignore termin::MeshRenderer::get_base_material;
+%ignore termin::MeshRenderer::get_overridden_material;
+%ignore termin::MeshRenderer::get_phase_marks;
+%ignore termin::MeshRenderer::phase_marks;
+%ignore termin::MeshRenderer::draw_geometry;
+%ignore termin::MeshRenderer::get_phases_for_mark;
+%ignore termin::MeshRenderer::get_geometry_draws;
+%ignore termin::MeshRenderer::get_override_data;
+%ignore termin::MeshRenderer::set_override_data;
+%ignore termin::MeshRenderer::try_create_override_material;
+
+%ignore termin::CameraComponent::viewports_;
+%ignore termin::CameraComponent::add_viewport;
+%ignore termin::CameraComponent::remove_viewport;
+%ignore termin::CameraComponent::has_viewport;
+%ignore termin::CameraComponent::viewport_count;
+%ignore termin::CameraComponent::viewport_at;
+%ignore termin::CameraComponent::clear_viewports;
+%ignore termin::CameraComponent::on_scene_inactive;
+%ignore termin::CameraComponent::screen_point_to_ray;
+
+%ignore termin::ColorPass::extra_textures;
+%ignore termin::ColorPass::entity_names;
+%ignore termin::ColorPass::extra_texture_uniforms;
+%ignore termin::ColorPass::last_gpu_time_ms;
+%ignore termin::ColorPass::clear_extra_textures;
+%ignore termin::ColorPass::set_extra_texture_uniform;
+
+%ignore termin::Light;
+
+// Ignore problematic optional fields in ResourceSpec
+%ignore termin::ResourceSpec::size;
+%ignore termin::ResourceSpec::clear_color;
+%ignore termin::ResourceSpec::clear_depth;
+%ignore termin::ResourceSpec::format;
+
+// Include ResourceSpec header
+%{
+#include "termin/render/resource_spec.hpp"
+%}
+
+namespace termin {
+
+// ============================================================================
+// ResourceSpec - FBO resource specification
+// ============================================================================
+
+struct ResourceSpec {
+    std::string resource;
+    std::string resource_type;
+    int samples;
+    std::string viewport_name;
+    float scale;
+
+    ResourceSpec();
+};
+
+// ============================================================================
+// RenderPipeline - manages passes and FBO resources
+// ============================================================================
+
+class RenderPipeline {
+public:
+    RenderPipeline(const std::string& name = "default");
+    ~RenderPipeline();
+
+    // Name
+    const std::string& name() const;
+    void set_name(const std::string& name);
+
+    // Pass management
+    void add_pass(tc_pass* pass);
+    void remove_pass(tc_pass* pass);
+    void insert_pass_before(tc_pass* pass, tc_pass* before);
+    tc_pass* get_pass(const std::string& name);
+    tc_pass* get_pass_at(size_t index);
+    size_t pass_count() const;
+
+    // Specs management
+    void add_spec(const ResourceSpec& spec);
+    void clear_specs();
+    size_t spec_count() const;
+    const ResourceSpec* get_spec_at(size_t index) const;
+};
+
+// ============================================================================
+// RenderEngine - executes render pipelines
+// ============================================================================
+
+class RenderEngine {
+public:
+    GraphicsBackend* graphics;
+
+    RenderEngine();
+    explicit RenderEngine(GraphicsBackend* graphics);
+
+    // Render to screen (default FBO)
+    void render_to_screen(
+        RenderPipeline* pipeline,
+        int width,
+        int height,
+        void* scene,
+        CameraComponent* camera
+    );
+};
+
+// ============================================================================
+// CameraComponent - camera for rendering
+// ============================================================================
+
+class CameraComponent {
+public:
+    CameraProjection projection_type;
+    double near_clip;
+    double far_clip;
+    double fov_y;
+    double aspect;
+    double ortho_size;
+
+    CameraComponent();
+
+    // Projection type
+    std::string get_projection_type_str() const;
+    void set_projection_type_str(const std::string& type);
+
+    // FOV in degrees
+    double get_fov_degrees() const;
+    void set_fov_degrees(double deg);
+
+    // Aspect ratio
+    void set_aspect(double a);
+
+    // Matrices
+    Mat44 get_view_matrix() const;
+    Mat44 get_projection_matrix() const;
+    Mat44 compute_projection_matrix(double aspect_override) const;
+
+    // Position
+    Vec3 get_position() const;
+};
+
+// ============================================================================
+// MeshRenderer - renders a mesh with material
+// ============================================================================
+
+class MeshRenderer {
+public:
+    bool cast_shadow;
+
+    MeshRenderer();
+    virtual ~MeshRenderer();
+
+    // Mesh by name
+    void set_mesh_by_name(const std::string& name);
+
+    // Material by name
+    void set_material_by_name(const std::string& name);
+
+    // Override material
+    bool override_material() const;
+    void set_override_material(bool value);
+};
+
+// ============================================================================
+// ColorPass - main color rendering pass
+// ============================================================================
+
+class ColorPass {
+public:
+    std::string input_res;
+    std::string output_res;
+    std::string shadow_res;
+    std::string phase_mark;
+    std::string sort_mode;
+    std::string camera_name;
+    bool clear_depth;
+    bool wireframe;
+    bool use_ubo;
+
+    ColorPass(
+        const std::string& input_res = "empty",
+        const std::string& output_res = "color",
+        const std::string& shadow_res = "shadow_maps",
+        const std::string& phase_mark = "opaque",
+        const std::string& pass_name = "Color",
+        const std::string& sort_mode = "none",
+        bool clear_depth = false,
+        const std::string& camera_name = ""
+    );
+    virtual ~ColorPass();
+
+    // Get tc_pass pointer for adding to pipeline
+    tc_pass* tc_pass_ptr();
+};
+
+// ============================================================================
+// DepthPass - depth-only rendering pass
+// ============================================================================
+
+class DepthPass {
+public:
+    std::string input_res;
+    std::string output_res;
+
+    DepthPass(
+        const std::string& input_res = "empty",
+        const std::string& output_res = "depth",
+        const std::string& pass_name = "Depth"
+    );
+    virtual ~DepthPass();
+
+    tc_pass* tc_pass_ptr();
+};
+
+} // namespace termin
+
+// ============================================================================
+// OpenGL Backend Initialization
+// ============================================================================
+
+%{
+#include "tc_opengl.h"
+%}
+
+// OpenGL init functions
+bool tc_opengl_init(void);
+bool tc_opengl_is_initialized(void);
+void tc_opengl_shutdown(void);
+void* tc_opengl_get_graphics(void);
+
+// Helper to cast void* to GraphicsBackend*
+%inline %{
+namespace termin {
+    GraphicsBackend* get_opengl_graphics() {
+        return static_cast<GraphicsBackend*>(tc_opengl_get_graphics());
+    }
+}
+%}

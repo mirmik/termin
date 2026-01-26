@@ -4,6 +4,7 @@
 extern "C" {
 #include "tc_frame_graph.h"
 #include "tc_pass.h"
+#include "tc_scene.h"
 }
 
 namespace termin {
@@ -11,6 +12,28 @@ namespace termin {
 RenderEngine::RenderEngine(GraphicsBackend* graphics)
     : graphics(graphics)
 {
+}
+
+void RenderEngine::render_to_screen(
+    RenderPipeline* pipeline,
+    int width,
+    int height,
+    void* scene,
+    CameraComponent* camera
+) {
+    // Simplified render to screen (default framebuffer)
+    std::vector<Light> empty_lights;
+    render_view_to_fbo(
+        pipeline,
+        nullptr,  // null = default framebuffer
+        width,
+        height,
+        static_cast<tc_scene*>(scene),
+        camera,
+        nullptr,  // no viewport
+        empty_lights,
+        0xFFFFFFFFFFFFFFFFULL
+    );
 }
 
 void RenderEngine::render_view_to_fbo(

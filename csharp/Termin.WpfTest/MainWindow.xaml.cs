@@ -256,18 +256,22 @@ public partial class MainWindow : Window
     private float _angle;
     private bool _initialized;
 
-    // Pipeline rendering (disabled for now - requires pass registration)
-    private IntPtr _pipeline;
-    private IntPtr _fboPool;
-    private IntPtr _graphics;
-    private Camera? _camera;
+    // Pipeline rendering via SWIG C++ classes
+    private RenderPipeline? _renderPipeline;
+    private RenderEngine? _renderEngine;
+    private CameraComponent? _cameraComponent;
     private Scene? _scene;
+    
+    // Flag to switch between pipeline and direct rendering
+    private bool _usePipelineRendering = true;
 
     // Direct mesh rendering (fallback)
     private TcMeshHandle _meshHandle;
     private TcShaderHandle _shaderHandle;
+    private TcMaterialHandle _materialHandle;
     private IntPtr _meshPtr;
     private IntPtr _shaderPtr;
+    private MeshRenderer? _meshRenderer;
 
     public MainWindow()
     {
@@ -290,7 +294,7 @@ public partial class MainWindow : Window
         _initialized = true;
 
         // Initialize termin OpenGL backend
-        if (!NativeLoader.TerminOpenGLInit())
+        if (!termin.tc_opengl_init())
         {
             MessageBox.Show("Failed to initialize Termin OpenGL backend", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
@@ -303,35 +307,62 @@ public partial class MainWindow : Window
 
         GL.Enable(EnableCap.DepthTest);
 
-        // Get graphics backend
-        _graphics = TerminOpenGL.GetGraphics();
+        // Get graphics backend (SWIG helper)
+        var graphics = termin.get_opengl_graphics();
 
-        // Create camera using Termin.Native SWIG wrapper
-        _camera = Camera.perspective_deg(60.0, 800.0 / 600.0);
+        // Create render engine
+        _renderEngine = new RenderEngine(graphics);
+
+        // Create camera component
+        _cameraComponent = new CameraComponent();
+        _cameraComponent.set_fov_degrees(60.0);
+        _cameraComponent.near_clip = 0.1;
+        _cameraComponent.far_clip = 100.0;
 
         // Create scene
         _scene = new Scene();
 
-        // Create entity (without MeshRenderer for now - just testing pipeline)
-        var cubeId = _scene.Entities.CreateEntity("Cube");
-        _scene.Entities.SetPosition(cubeId, new System.Numerics.Vector3(0, 0, 0));
-
-        // Create pipeline
-        InitPipeline();
-
-        // Create mesh and shader for direct rendering
+        // Create mesh and shader
         CreateCubeMesh();
         CreateShader();
+        CreateMaterial();
+
+        // Create entity with MeshRenderer
+        var cubeId = _scene.Entities.CreateEntity("Cube");
+        _scene.Entities.SetPosition(cubeId, new System.Numerics.Vector3(0, 0, 0));
+        
+        // Create and add MeshRenderer component (SWIG class)
+        _meshRenderer = new MeshRenderer();
+        _meshRenderer.set_mesh_by_name("cube");
+        _meshRenderer.set_material_by_name("cube_material");
+        Console.WriteLine("[Init] Created MeshRenderer");
+
+        // Create render pipeline
+        InitPipeline();
+    }
+
+    private void CreateMaterial()
+    {
+        // Create a simple material with our shader
+        _materialHandle = TerminCore.MaterialCreate(null, "cube_material");
+        var matPtr = TerminCore.MaterialGet(_materialHandle);
+        if (matPtr != IntPtr.Zero)
+        {
+            // Add phase with shader
+            TerminCore.MaterialAddPhase(matPtr, _shaderHandle, "opaque", 0);
+            TerminCore.MaterialSetColor(matPtr, 0.8f, 0.3f, 0.2f, 1.0f);
+            Console.WriteLine("[Init] Created material");
+        }
     }
 
     private void InitPipeline()
     {
         // Test pass registry
-        var typeCount = NativeLoader.PassRegistryTypeCount();
+        var typeCount = termin.tc_pass_registry_type_count();
         var passTypes = new List<string>();
-        for (nuint i = 0; i < typeCount; i++)
+        for (uint i = 0; i < typeCount; i++)
         {
-            var typeName = NativeLoader.PassRegistryTypeAt(i);
+            var typeName = termin.tc_pass_registry_type_at(i);
             if (typeName != null)
                 passTypes.Add(typeName);
         }
@@ -345,42 +376,42 @@ public partial class MainWindow : Window
         else
         {
             Console.WriteLine("[WARNING] Pass registry is empty - passes not registered!");
-        }
-
-        // Create pipeline with passes
-        _pipeline = NativeLoader.PipelineCreate("default");
-        if (_pipeline == IntPtr.Zero)
-        {
-            Console.WriteLine("[WARNING] Failed to create pipeline");
+            _usePipelineRendering = false;
             return;
         }
-        Console.WriteLine($"[Pipeline] Created at 0x{_pipeline:X}");
 
-        // Create and add passes
-        if (NativeLoader.PassRegistryHas("DepthPass"))
-        {
-            var depthPass = NativeLoader.PassRegistryCreate("DepthPass");
-            if (depthPass != IntPtr.Zero)
-            {
-                NativeLoader.PassSetName(depthPass, "Depth");
-                NativeLoader.PipelineAddPass(_pipeline, depthPass);
-                Console.WriteLine("[Pipeline] Added DepthPass");
-            }
-        }
+        // Create RenderPipeline (SWIG class with specs and FBO pool)
+        _renderPipeline = new RenderPipeline("default");
+        Console.WriteLine($"[RenderPipeline] Created: {_renderPipeline.name()}");
 
-        if (NativeLoader.PassRegistryHas("ColorPass"))
-        {
-            var colorPass = NativeLoader.PassRegistryCreate("ColorPass");
-            if (colorPass != IntPtr.Zero)
-            {
-                NativeLoader.PassSetName(colorPass, "Color");
-                NativeLoader.PipelineAddPass(_pipeline, colorPass);
-                Console.WriteLine("[Pipeline] Added ColorPass");
-            }
-        }
+        // Add resource specs
+        var colorSpec = new ResourceSpec();
+        colorSpec.resource = "color";
+        colorSpec.resource_type = "fbo";
+        colorSpec.scale = 1.0f;
+        colorSpec.samples = 1;
+        _renderPipeline.add_spec(colorSpec);
 
-        var passCount = NativeLoader.PipelinePassCount(_pipeline);
-        Console.WriteLine($"[Pipeline] Total passes: {passCount}");
+        var depthSpec = new ResourceSpec();
+        depthSpec.resource = "depth";
+        depthSpec.resource_type = "fbo";
+        depthSpec.scale = 1.0f;
+        depthSpec.samples = 1;
+        _renderPipeline.add_spec(depthSpec);
+
+        // Create and add ColorPass (SWIG class)
+        var colorPass = new ColorPass(
+            input_res: "empty",
+            output_res: "color",
+            shadow_res: "",
+            phase_mark: "opaque",
+            pass_name: "Color"
+        );
+        _renderPipeline.add_pass(colorPass.tc_pass_ptr());
+        Console.WriteLine("[RenderPipeline] Added ColorPass");
+
+        var passCount = _renderPipeline.pass_count();
+        Console.WriteLine($"[RenderPipeline] Total passes: {passCount}");
     }
 
     private unsafe void CreateCubeMesh()
@@ -515,11 +546,39 @@ void main() {
 
         // Update camera aspect ratio
         double aspect = width / (double)height;
-        if (_camera != null)
+        if (_cameraComponent != null)
         {
-            _camera.aspect = aspect;
+            _cameraComponent.set_aspect(aspect);
         }
 
+        // Update scene (for entity transforms)
+        _scene?.Update(delta.TotalSeconds);
+        _scene?.BeforeRender();
+
+        // Try pipeline rendering
+        if (_usePipelineRendering && _renderPipeline != null && _renderEngine != null && _cameraComponent != null)
+        {
+            // Clear and render via pipeline
+            GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            _renderEngine.render_to_screen(
+                _renderPipeline,
+                width,
+                height,
+                _scene?.Handle ?? IntPtr.Zero,
+                _cameraComponent
+            );
+        }
+        else
+        {
+            // Fallback: Direct rendering
+            DirectRender(delta, width, height, aspect);
+        }
+    }
+
+    private void DirectRender(TimeSpan delta, int width, int height, double aspect)
+    {
         // Direct rendering - demonstrates mesh/shader integration
         GL.ClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -539,9 +598,9 @@ void main() {
         var view = Matrix4.LookAt(eye, target, up);
 
         // Projection matrix
-        float fov = _camera != null ? (float)_camera.fov_y : MathHelper.DegreesToRadians(60.0f);
-        float near = _camera != null ? (float)_camera.near : 0.1f;
-        float far = _camera != null ? (float)_camera.far : 100.0f;
+        float fov = MathHelper.DegreesToRadians(60.0f);
+        float near = 0.1f;
+        float far = 100.0f;
         var projection = Matrix4.CreatePerspectiveFieldOfView(fov, (float)aspect, near, far);
 
         // Use shader and draw
@@ -572,31 +631,28 @@ void main() {
 
     protected override void OnClosed(EventArgs e)
     {
-        // Cleanup pipeline
-        if (_fboPool != IntPtr.Zero)
-        {
-            TerminCore.FboPoolDestroy(_fboPool);
-            _fboPool = IntPtr.Zero;
-        }
-        if (_pipeline != IntPtr.Zero)
-        {
-            TerminCore.PipelineDestroy(_pipeline);
-            _pipeline = IntPtr.Zero;
-        }
+        // Cleanup SWIG objects
+        _renderPipeline?.Dispose();
+        _renderPipeline = null;
+
+        _renderEngine?.Dispose();
+        _renderEngine = null;
+
+        _cameraComponent?.Dispose();
+        _cameraComponent = null;
+
+        _meshRenderer?.Dispose();
+        _meshRenderer = null;
 
         // Cleanup scene
         _scene?.Dispose();
         _scene = null;
 
-        // Cleanup camera
-        _camera?.Dispose();
-        _camera = null;
-
         // Cleanup termin resources
         TerminCore.MaterialShutdown();
         TerminCore.ShaderShutdown();
         TerminCore.MeshShutdown();
-        NativeLoader.TerminOpenGLShutdown();
+        termin.tc_opengl_shutdown();
 
         base.OnClosed(e);
     }
