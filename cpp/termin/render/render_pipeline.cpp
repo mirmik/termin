@@ -2,6 +2,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "tc_log.hpp"
 #include <cstring>
+#include <iostream>
 
 extern "C" {
 #include "tc_pass.h"
@@ -12,6 +13,8 @@ namespace termin {
 RenderPipeline::RenderPipeline(const std::string& name)
     : name_(name)
 {
+    std::cout << "Creating RenderPipeline: " << name << " ptr:" << (uintptr_t)this << std::endl;
+
     // Initialize tc_pipeline fields directly (don't use tc_pipeline_create)
     pipeline_.name = strdup(name.c_str());
     pipeline_.passes = nullptr;
@@ -22,16 +25,31 @@ RenderPipeline::RenderPipeline(const std::string& name)
 }
 
 RenderPipeline::~RenderPipeline() {
+    std::cout << "Destroying RenderPipeline:  ptr:" << (uintptr_t)this << " name: " << name_ << std::endl;
+    fflush(stdout);
+
     // Release all passes (release handles cleanup when ref_count reaches 0)
     for (size_t i = 0; i < pipeline_.pass_count; i++) {
+        
+        std::cout << "RenderPipeline: releasing pass " << i << " for pipeline: " << name_ << std::endl;
+        fflush(stdout);        
         tc_pass* pass = pipeline_.passes[i];
         if (pass) {
+            std::cout << "RenderPipeline: pass name: " 
+                      << (pass->pass_name ? pass->pass_name : "(unnamed)") << std::endl;
+            fflush(stdout);
+            
             pass->owner_pipeline = nullptr;
             tc_pass_release(pass);
         }
     }
 
+    std::cout << "RenderPipeline: freed passes for pipeline: " << name_ << std::endl;
+    fflush(stdout);
     free(pipeline_.passes);
+    
+    std::cout << "RenderPipeline: freed pipeline passes array for pipeline: " << name_ << std::endl;
+    fflush(stdout);
     free(pipeline_.name);
 }
 

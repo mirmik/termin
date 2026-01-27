@@ -15,7 +15,8 @@ namespace termin {
 /**
  * SDL2 window with OpenGL context.
  */
-class SDLWindow {
+class SDLWindow 
+{
 public:
     // Callback types
     using FramebufferSizeCallback = std::function<void(SDLWindow*, int, int)>;
@@ -34,6 +35,23 @@ public:
     static constexpr int MOUSE_BUTTON_RIGHT = 1;
     static constexpr int MOUSE_BUTTON_MIDDLE = 2;
 
+private:
+    SDL_Window* window_;
+    SDL_GLContext gl_context_;
+    bool should_close_;
+    int last_width_;
+    int last_height_;
+
+    OpenGLGraphicsBackend* graphics_;
+    FramebufferHandlePtr window_fb_handle_;
+
+    FramebufferSizeCallback framebuffer_size_callback_;
+    CursorPosCallback cursor_pos_callback_;
+    ScrollCallback scroll_callback_;
+    MouseButtonCallback mouse_button_callback_;
+    KeyCallback key_callback_;
+
+public:
     SDLWindow(int width, int height, const std::string& title, SDLWindow* share = nullptr)
         : window_(nullptr), gl_context_(nullptr), should_close_(false),
           last_width_(width), last_height_(height), graphics_(nullptr) {
@@ -244,21 +262,6 @@ private:
         if (sdl_mods & (KMOD_LALT | KMOD_RALT)) result |= 0x0004;
         return result;
     }
-
-    SDL_Window* window_;
-    SDL_GLContext gl_context_;
-    bool should_close_;
-    int last_width_;
-    int last_height_;
-
-    OpenGLGraphicsBackend* graphics_;
-    FramebufferHandlePtr window_fb_handle_;
-
-    FramebufferSizeCallback framebuffer_size_callback_;
-    CursorPosCallback cursor_pos_callback_;
-    ScrollCallback scroll_callback_;
-    MouseButtonCallback mouse_button_callback_;
-    KeyCallback key_callback_;
 };
 
 /**
