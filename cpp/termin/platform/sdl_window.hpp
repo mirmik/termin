@@ -241,7 +241,7 @@ public:
         }
     }
 
-private:
+    // Public static helpers for event translation
     static int translate_mouse_button(Uint8 button) {
         switch (button) {
             case SDL_BUTTON_LEFT: return MOUSE_BUTTON_LEFT;
@@ -255,7 +255,7 @@ private:
         // SDL: KMOD_LSHIFT=0x0001, KMOD_RSHIFT=0x0002
         // SDL: KMOD_LCTRL=0x0040, KMOD_RCTRL=0x0080
         // SDL: KMOD_LALT=0x0100, KMOD_RALT=0x0200
-        // GLFW: SHIFT=0x0001, CTRL=0x0002, ALT=0x0004, SUPER=0x0008
+        // TC_MOD: SHIFT=0x0001, CTRL=0x0002, ALT=0x0004, SUPER=0x0008
         int result = 0;
         if (sdl_mods & (KMOD_LSHIFT | KMOD_RSHIFT)) result |= 0x0001;
         if (sdl_mods & (KMOD_LCTRL | KMOD_RCTRL)) result |= 0x0002;
@@ -263,6 +263,9 @@ private:
         return result;
     }
 };
+
+// Forward declaration
+class SDLWindowRenderSurface;
 
 /**
  * SDL2 window backend - manages SDL initialization and windows.
@@ -289,61 +292,23 @@ public:
         return window;
     }
 
-    void poll_events() {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            uint32_t window_id = 0;
+    // Register render surface for input event routing
+    void register_surface(SDLWindowRenderSurface* surface);
+    void unregister_surface(SDLWindowRenderSurface* surface);
 
-            switch (event.type) {
-                case SDL_WINDOWEVENT:
-                    window_id = event.window.windowID;
-                    break;
-                case SDL_MOUSEMOTION:
-                case SDL_MOUSEBUTTONDOWN:
-                case SDL_MOUSEBUTTONUP:
-                case SDL_MOUSEWHEEL:
-                    window_id = event.motion.windowID;
-                    break;
-                case SDL_KEYDOWN:
-                case SDL_KEYUP:
-                    window_id = event.key.windowID;
-                    break;
-                case SDL_QUIT:
-                    // Quit event goes to all windows
-                    for (auto& [id, win] : windows_) {
-                        if (auto w = win.lock()) {
-                            w->handle_event(event);
-                        }
-                    }
-                    continue;
-            }
-
-            auto it = windows_.find(window_id);
-            if (it != windows_.end()) {
-                if (auto win = it->second.lock()) {
-                    win->handle_event(event);
-                }
-            }
-        }
-
-        // Clean up closed windows
-        for (auto it = windows_.begin(); it != windows_.end();) {
-            auto win = it->second.lock();
-            if (!win || win->should_close()) {
-                it = windows_.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
+    void poll_events();
 
     void terminate() {
         windows_.clear();
+        surfaces_.clear();
         SDL_Quit();
     }
 
 private:
     std::unordered_map<uint32_t, std::weak_ptr<SDLWindow>> windows_;
+    std::unordered_map<uint32_t, SDLWindowRenderSurface*> surfaces_;
+
+    void dispatch_event_to_surface(SDLWindowRenderSurface* surface, const SDL_Event& event);
 };
 
 } // namespace termin

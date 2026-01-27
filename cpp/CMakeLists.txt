@@ -423,6 +423,8 @@ nanobind_add_module(_native
     termin/bindings/render/wireframe.cpp
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/tc_pass_bindings.cpp
+    termin/bindings/render/tc_render_surface_bindings.cpp
+    termin/bindings/render/tc_input_manager_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
@@ -430,6 +432,7 @@ nanobind_add_module(_native
     termin/bindings/render/solid_primitive.cpp
     termin/bindings/render/render_engine.cpp
     termin/sdl_bindings.cpp
+    termin/platform/sdl_render_surface.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp
     # tc_viewport_bindings.cpp moved to _viewport_native module

@@ -5,6 +5,7 @@
 #include <nanobind/stl/shared_ptr.h>
 
 #include "termin/platform/sdl_window.hpp"
+#include "termin/platform/sdl_render_surface.hpp"
 
 namespace nb = nanobind;
 
@@ -105,6 +106,34 @@ void bind_sdl(nb::module_& m) {
             nb::arg("share") = nullptr)
         .def("poll_events", &SDLWindowBackend::poll_events)
         .def("terminate", &SDLWindowBackend::terminate);
+
+    // SDLWindowRenderSurface - C++ render surface wrapping SDLWindow and tc_render_surface
+    nb::class_<SDLWindowRenderSurface>(m, "SDLWindowRenderSurface")
+        .def(nb::init<int, int, const std::string&, SDLWindowBackend*, SDLWindowRenderSurface*>(),
+            nb::arg("width"), nb::arg("height"), nb::arg("title"),
+            nb::arg("backend"), nb::arg("share") = nullptr,
+            nb::keep_alive<1, 5>())  // keep backend alive
+        .def("tc_surface", [](SDLWindowRenderSurface& self) {
+            return self.tc_surface();
+        }, nb::rv_policy::reference)
+        .def("set_input_manager", &SDLWindowRenderSurface::set_input_manager,
+            nb::arg("manager"), nb::keep_alive<1, 2>())
+        .def("input_manager", &SDLWindowRenderSurface::input_manager,
+            nb::rv_policy::reference)
+        .def("window", [](SDLWindowRenderSurface& self) {
+            return self.window();
+        }, nb::rv_policy::reference)
+        .def("window_id", &SDLWindowRenderSurface::window_id)
+        .def("make_current", &SDLWindowRenderSurface::make_current)
+        .def("swap_buffers", &SDLWindowRenderSurface::swap_buffers)
+        .def("get_size", &SDLWindowRenderSurface::get_size)
+        .def("window_size", &SDLWindowRenderSurface::window_size)
+        .def("should_close", &SDLWindowRenderSurface::should_close)
+        .def("set_should_close", &SDLWindowRenderSurface::set_should_close, nb::arg("value"))
+        .def("get_cursor_pos", &SDLWindowRenderSurface::get_cursor_pos)
+        .def("set_graphics", &SDLWindowRenderSurface::set_graphics, nb::arg("graphics"))
+        .def("get_window_framebuffer", &SDLWindowRenderSurface::get_window_framebuffer,
+            nb::rv_policy::reference);
 }
 
 } // namespace termin

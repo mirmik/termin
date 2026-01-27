@@ -47,8 +47,9 @@ struct tc_viewport {
     tc_viewport_destructor_fn destructor_fn;
     void* destructor_user_data;
 
-    // New 
-    //tc_fbo* viewport_fbo;
+    // Linked list for display's viewport list
+    struct tc_viewport* display_prev;
+    struct tc_viewport* display_next;
 };
 
 // ============================================================================

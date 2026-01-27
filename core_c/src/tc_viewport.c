@@ -61,6 +61,9 @@ tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* ca
     vp->destructor_fn = NULL;
     vp->destructor_user_data = NULL;
 
+    vp->display_prev = NULL;
+    vp->display_next = NULL;
+
     return vp;
 }
 

@@ -15,7 +15,9 @@ set(TC_SOURCES
     src/tc_animation_registry.c
     src/tc_component.c
     src/tc_core.c
+    src/tc_display.c
     src/tc_entity_pool.c
+    src/tc_input_manager.c
     src/tc_frame_graph.c
     src/tc_gpu.c
     src/tc_hash_map.c
@@ -29,6 +31,7 @@ set(TC_SOURCES
     src/tc_picking.c
     src/tc_pool.c
     src/tc_profiler.c
+    src/tc_render_surface.c
     src/tc_resource_map.c
     src/tc_scene.c
     src/tc_scene_skybox.c
@@ -76,9 +79,12 @@ set(TC_HEADERS
     include/tc_types.h
     include/tc_vec3.h
     include/termin_core.h
+    include/render/tc_display.h
+    include/render/tc_input_manager.h
     include/render/tc_pass.h
-    include/render/tc_viewport.h
     include/render/tc_pipeline.h
+    include/render/tc_render_surface.h
+    include/render/tc_viewport.h
     include/render/tc_frame_graph.h
 )
 
