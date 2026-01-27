@@ -11,7 +11,7 @@
 #include <unordered_map>
 
 extern "C" {
-#include "tc_pass.h"
+#include "render/tc_pass.h"
 }
 
 #include "termin/render/handles.hpp"

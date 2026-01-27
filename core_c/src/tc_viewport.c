@@ -1,5 +1,5 @@
 // tc_viewport.c - Viewport implementation
-#include "tc_viewport.h"
+#include "render/tc_viewport.h"
 #include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>

@@ -19,7 +19,7 @@
 #include <cstdint>
 
 extern "C" {
-#include "tc_viewport.h"
+#include "render/tc_viewport.h"
 }
 
 namespace termin {

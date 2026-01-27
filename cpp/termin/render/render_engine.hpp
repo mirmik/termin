@@ -13,7 +13,7 @@
 #include "termin/tc_scene_ref.hpp"
 
 extern "C" {
-#include "tc_frame_graph.h"
+#include "render/tc_frame_graph.h"
 }
 
 namespace termin {

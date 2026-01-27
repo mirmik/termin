@@ -2,7 +2,7 @@
 #ifndef TC_PIPELINE_REGISTRY_H
 #define TC_PIPELINE_REGISTRY_H
 
-#include "tc_pipeline.h"
+#include "render/tc_pipeline.h"
 
 #ifdef __cplusplus
 extern "C" {

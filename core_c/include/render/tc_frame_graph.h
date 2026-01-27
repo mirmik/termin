@@ -2,8 +2,8 @@
 #ifndef TC_FRAME_GRAPH_H
 #define TC_FRAME_GRAPH_H
 
-#include "tc_pass.h"
-#include "tc_pipeline.h"
+#include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
 
 #ifdef __cplusplus
 extern "C" {

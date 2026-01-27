@@ -3,7 +3,7 @@
 // TcViewportRef - Non-owning reference to tc_viewport
 
 extern "C" {
-#include "tc_viewport.h"
+#include "render/tc_viewport.h"
 }
 
 namespace termin {

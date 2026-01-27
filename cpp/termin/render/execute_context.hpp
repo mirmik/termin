@@ -10,7 +10,7 @@
 #include "termin/tc_scene_ref.hpp"
 
 extern "C" {
-#include "tc_viewport.h"
+#include "render/tc_viewport.h"
 }
 
 namespace termin {

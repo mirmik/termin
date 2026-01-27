@@ -3,8 +3,8 @@
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {
-#include "tc_frame_graph.h"
-#include "tc_pass.h"
+#include "render/tc_frame_graph.h"
+#include "render/tc_pass.h"
 #include "tc_scene.h"
 }
 

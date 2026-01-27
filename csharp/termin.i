@@ -16,8 +16,8 @@
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/entity/component.hpp"
-#include "tc_pass.h"
-#include "tc_pipeline.h"
+#include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
 #include "tc_opengl.h"
 #include "tc_component.h"
 %}

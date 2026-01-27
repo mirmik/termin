@@ -7,7 +7,7 @@
 #include <nanobind/make_iterator.h>
 
 extern "C" {
-#include "tc_pass.h"
+#include "render/tc_pass.h"
 }
 
 #include "termin/render/frame_pass.hpp"

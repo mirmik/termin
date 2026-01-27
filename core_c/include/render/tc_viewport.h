@@ -46,6 +46,9 @@ struct tc_viewport {
     // Destructor callback (called before free, for Python bindings cleanup)
     tc_viewport_destructor_fn destructor_fn;
     void* destructor_user_data;
+
+    // New 
+    //tc_fbo* viewport_fbo;
 };
 
 // ============================================================================

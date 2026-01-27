@@ -1,6 +1,6 @@
 // tc_pass.c - Pass registry and external pass support
-#include "tc_pass.h"
-#include "tc_pipeline.h"
+#include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
 #include "tc_pipeline_registry.h"
 #include "tc_type_registry.h"
 #include "termin_core.h"

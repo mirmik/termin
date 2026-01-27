@@ -9,7 +9,7 @@
 #include <memory>
 
 extern "C" {
-#include "tc_pipeline.h"
+#include "render/tc_pipeline.h"
 }
 
 namespace termin {

@@ -2,7 +2,7 @@
 #ifndef TC_PIPELINE_H
 #define TC_PIPELINE_H
 
-#include "tc_pass.h"
+#include "render/tc_pass.h"
 
 #ifdef __cplusplus
 extern "C" {

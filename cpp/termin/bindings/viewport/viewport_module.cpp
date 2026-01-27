@@ -11,7 +11,7 @@
 #include "termin/camera/camera_component.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
 #include "termin_core.h"
-#include "tc_pipeline.h"
+#include "render/tc_pipeline.h"
 
 namespace nb = nanobind;
 

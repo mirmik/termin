@@ -11,7 +11,7 @@
 #else
 #include "../include/tc_inspect_cpp.hpp"
 #endif
-#include "../include/tc_pass.h"
+#include "../include/render/tc_pass.h"
 
 namespace tc {
 

@@ -46,7 +46,6 @@ set(TC_HEADERS
     include/tc_animation_registry.h
     include/tc_component.h
     include/tc_entity_pool.h
-    include/tc_frame_graph.h
     include/tc_gpu.h
     include/tc_handle.h
     include/tc_hash_map.h
@@ -57,9 +56,7 @@ set(TC_HEADERS
     include/tc_material_registry.h
     include/tc_mesh.h
     include/tc_mesh_registry.h
-    include/tc_pass.h
     include/tc_picking.h
-    include/tc_pipeline.h
     include/tc_pool.h
     include/tc_pose.h
     include/tc_profiler.h
@@ -78,8 +75,11 @@ set(TC_HEADERS
     include/tc_type_registry.h
     include/tc_types.h
     include/tc_vec3.h
-    include/tc_viewport.h
     include/termin_core.h
+    include/render/tc_pass.h
+    include/render/tc_viewport.h
+    include/render/tc_pipeline.h
+    include/render/tc_frame_graph.h
 )
 
 # Library target
