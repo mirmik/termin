@@ -39,7 +39,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         self._window_backend = window_backend
         self._graphics = graphics
 
-        self._sdl_window = None
+        self._surface = None
         self._display = None
         self._viewport = None
         self._scene = None
@@ -64,13 +64,13 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         self._create_sdl_window()
 
     def _create_sdl_window(self) -> None:
-        """Create embedded SDL window."""
-        self._sdl_window = self._window_backend.create_embedded_window(
+        """Create embedded SDL surface (C++ SDLWindowRenderSurface)."""
+        self._surface = self._window_backend.create_embedded_window(
             width=300, height=200, title="Mesh Preview"
         )
 
         # Embed SDL window into Qt
-        native_handle = self._sdl_window.native_handle
+        native_handle = self._surface.get_native_handle()
         self._qwindow = QWindow.fromWinId(native_handle)
         self._gl_container = QtWidgets.QWidget.createWindowContainer(self._qwindow, self)
 
@@ -83,7 +83,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         if self._initialized:
             return
 
-        self._sdl_window.make_current()
+        self._surface.make_current()
         self._init_scene()
         self._init_display()
         self._init_render_engine()
@@ -133,10 +133,8 @@ class MeshPreviewWidget(QtWidgets.QWidget):
     def _init_display(self) -> None:
         """Create display and viewport for preview rendering."""
         from termin.visualization.core.display import Display
-        from termin.visualization.render.surface import WindowRenderSurface
 
-        surface = WindowRenderSurface(self._sdl_window)
-        self._display = Display(surface)
+        self._display = Display(self._surface)
 
         # Create viewport with simple pipeline
         self._viewport = self._display.create_viewport(
@@ -245,7 +243,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         if not self._initialized:
             return
 
-        self._sdl_window.make_current()
+        self._surface.make_current()
 
         # Build render view
         from termin.visualization.render.view import RenderView
@@ -271,11 +269,10 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         return QtCore.QSize(300, 200)
 
     def resizeEvent(self, event) -> None:
-        """Handle resize - update SDL window size."""
+        """Handle resize - check_resize is called during render loop."""
         super().resizeEvent(event)
-        if self._sdl_window is not None:
-            size = event.size()
-            self._sdl_window.resize(size.width(), size.height())
+        if self._surface is not None:
+            self._surface.request_update()
 
     def mousePressEvent(self, event) -> None:
         """Handle mouse press for orbit control."""
@@ -321,6 +318,5 @@ class MeshPreviewWidget(QtWidgets.QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources."""
-        if self._sdl_window is not None:
-            self._sdl_window.destroy()
-            self._sdl_window = None
+        # C++ SDLWindowRenderSurface cleans up automatically when Python reference is released
+        self._surface = None

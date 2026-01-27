@@ -22,9 +22,15 @@ void bind_input_events(nb::module_& m) {
         "    action: 0=release, 1=press, 2=repeat\n"
         "    mods: Modifier flags (Shift=1, Ctrl=2, Alt=4, Super=8)")
         .def(nb::init<>())
-        .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y, 
+        .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
                            int button, int action, int mods) {
             new (self) MouseButtonEvent(viewport.get(), x, y, button, action, mods);
+        }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
+           nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0)
+        .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
+                           MouseButton button, Action action, int mods) {
+            new (self) MouseButtonEvent(viewport.get(), x, y,
+                static_cast<int>(button), static_cast<int>(action), mods);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0)
         .def_prop_rw("viewport",
@@ -129,6 +135,11 @@ void bind_input_events(nb::module_& m) {
             new (self) KeyEvent(viewport.get(), key, scancode, action, mods);
         }, nb::arg("viewport"), nb::arg("key"), nb::arg("scancode"),
            nb::arg("action"), nb::arg("mods") = 0)
+        .def("__init__", [](KeyEvent* self, const TcViewport& viewport, int key, int scancode,
+                           Action action, int mods) {
+            new (self) KeyEvent(viewport.get(), key, scancode, static_cast<int>(action), mods);
+        }, nb::arg("viewport"), nb::arg("key"), nb::arg("scancode"),
+           nb::arg("action"), nb::arg("mods") = 0)
         .def_prop_rw("viewport",
             [](const KeyEvent& self) {
                 return TcViewport::from_ptr(self.viewport);
@@ -149,22 +160,25 @@ void bind_input_events(nb::module_& m) {
                    ", mods=" + std::to_string(e.mods) + ")";
         });
 
-    // Constants submodule
-    auto mouse_button = m.def_submodule("MouseButton", "Mouse button constants");
-    mouse_button.attr("Left") = MouseButton::Left;
-    mouse_button.attr("Right") = MouseButton::Right;
-    mouse_button.attr("Middle") = MouseButton::Middle;
+    // Enums
+    nb::enum_<MouseButton>(m, "MouseButton", "Mouse button constants")
+        .value("Left", MouseButton::Left)
+        .value("Right", MouseButton::Right)
+        .value("Middle", MouseButton::Middle)
+        .export_values();
 
-    auto action = m.def_submodule("Action", "Action constants");
-    action.attr("Release") = Action::Release;
-    action.attr("Press") = Action::Press;
-    action.attr("Repeat") = Action::Repeat;
+    nb::enum_<Action>(m, "Action", "Action constants")
+        .value("Release", Action::Release)
+        .value("Press", Action::Press)
+        .value("Repeat", Action::Repeat)
+        .export_values();
 
-    auto mods = m.def_submodule("Mods", "Modifier key flags");
-    mods.attr("Shift") = Mods::Shift;
-    mods.attr("Ctrl") = Mods::Ctrl;
-    mods.attr("Alt") = Mods::Alt;
-    mods.attr("Super") = Mods::Super;
+    nb::enum_<Mods>(m, "Mods", "Modifier key flags")
+        .value("Shift", Mods::Shift)
+        .value("Ctrl", Mods::Ctrl)
+        .value("Alt", Mods::Alt)
+        .value("Super", Mods::Super)
+        .export_values();
 }
 
 } // namespace termin

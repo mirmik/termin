@@ -67,7 +67,7 @@ public:
 
         window_ = SDL_CreateWindow(
             title.c_str(),
-            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
             width, height,
             flags
         );
@@ -273,8 +273,11 @@ class SDLWindowRenderSurface;
 class SDLWindowBackend {
 public:
     SDLWindowBackend() {
-        if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-            throw std::runtime_error(std::string("Failed to initialize SDL: ") + SDL_GetError());
+        // Ensure SDL video is initialized (safe to call multiple times)
+        if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO)) {
+            if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+                throw std::runtime_error(std::string("Failed to initialize SDL: ") + SDL_GetError());
+            }
         }
     }
 
@@ -301,7 +304,7 @@ public:
     void terminate() {
         windows_.clear();
         surfaces_.clear();
-        SDL_Quit();
+        // SDL_Quit() is called externally (e.g., in run_editor.py)
     }
 
 private:

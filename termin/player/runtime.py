@@ -265,9 +265,13 @@ class PlayerRuntime:
         from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
         self._input_manager = SimpleDisplayInputManager(
-            backend_window=self.window,
             display=self._display,
         )
+
+        # Connect input manager to surface
+        surface = self._display.surface
+        if hasattr(surface, "set_input_manager"):
+            surface.set_input_manager(self._input_manager.tc_input_manager_ptr)
 
     def run(self):
         """Run the game loop."""

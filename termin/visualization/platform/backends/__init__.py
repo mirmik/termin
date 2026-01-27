@@ -36,7 +36,6 @@ from termin.visualization.platform.backends.sdl import (
 )
 from termin.visualization.platform.backends.sdl_embedded import (
     SDLEmbeddedWindowBackend,
-    SDLEmbeddedWindowHandle,
 )
 
 _default_graphics_backend: Optional[GraphicsBackend] = None
@@ -90,7 +89,6 @@ __all__ = [
     "SDLWindowBackend",
     "SDLWindowHandle",
     "SDLEmbeddedWindowBackend",
-    "SDLEmbeddedWindowHandle",
     "OpenGLGraphicsBackend",
     # Context management
     "register_context",

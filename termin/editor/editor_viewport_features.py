@@ -28,7 +28,7 @@ from termin.editor.editor_display_input_manager import EditorDisplayInputManager
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
-    from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend
+    from termin.visualization.platform.backends.base import GraphicsBackend
 
 
 class EditorViewportFeatures:
@@ -44,7 +44,7 @@ class EditorViewportFeatures:
     def __init__(
         self,
         display: "Display",
-        backend_window: "BackendWindow",
+        surface: object,
         graphics: "GraphicsBackend",
         gizmo_manager: GizmoManager,
         on_entity_picked: Callable[[Entity | None], None],
@@ -57,7 +57,7 @@ class EditorViewportFeatures:
 
         Args:
             display: Display reference (owned by RenderingController).
-            backend_window: Backend window reference (owned by RenderingController).
+            surface: SDLWindowRenderSurface reference (owned by RenderingController).
             graphics: Graphics backend reference.
             gizmo_manager: Unified gizmo manager.
             on_entity_picked: Callback when entity is selected.
@@ -66,7 +66,7 @@ class EditorViewportFeatures:
             request_update: Callback to request viewport update.
         """
         self._display = display
-        self._backend_window = backend_window
+        self._surface = surface
         self._graphics = graphics
         self._gizmo_manager = gizmo_manager
         self._on_entity_picked = on_entity_picked
@@ -100,7 +100,6 @@ class EditorViewportFeatures:
 
         # Create EditorDisplayInputManager
         self._input_manager = EditorDisplayInputManager(
-            backend_window=self._backend_window,
             display=self._display,
             graphics=self._graphics,
             get_fbo_pool=self._get_fbo_pool,
@@ -110,12 +109,15 @@ class EditorViewportFeatures:
         )
         self._input_manager.set_world_mode("editor")
 
+        # Connect input manager to surface
+        self._surface.set_input_manager(self._input_manager.tc_input_manager_ptr)
+
     # ---------- Target display switching ----------
 
     def set_target_display(
         self,
         display: "Display",
-        backend_window: "BackendWindow",
+        surface: object,
         get_fbo_pool: Callable[[], dict],
     ) -> None:
         """
@@ -126,12 +128,12 @@ class EditorViewportFeatures:
 
         Args:
             display: New display to handle.
-            backend_window: Backend window for the new display.
+            surface: SDLWindowRenderSurface for the new display.
             get_fbo_pool: Callback to get FBO pool for the new display.
         """
         # Update references
         self._display = display
-        self._backend_window = backend_window
+        self._surface = surface
         self._get_fbo_pool = get_fbo_pool
 
         # Clear pending events from old display
@@ -143,7 +145,6 @@ class EditorViewportFeatures:
 
         # Recreate EditorDisplayInputManager for the new display
         self._input_manager = EditorDisplayInputManager(
-            backend_window=self._backend_window,
             display=self._display,
             graphics=self._graphics,
             get_fbo_pool=self._get_fbo_pool,
@@ -153,18 +154,19 @@ class EditorViewportFeatures:
         )
         self._input_manager.set_world_mode("editor")
 
+        # Connect input manager to surface
+        self._surface.set_input_manager(self._input_manager.tc_input_manager_ptr)
+
     def detach_from_display(self) -> None:
         """
         Detach from current display (clear input callbacks).
 
         Called when the display switches away from "editor" mode.
         """
-        # Clear backend window callbacks
-        if self._backend_window is not None:
-            self._backend_window.set_cursor_pos_callback(None)
-            self._backend_window.set_scroll_callback(None)
-            self._backend_window.set_mouse_button_callback(None)
-            self._backend_window.set_key_callback(None)
+        # Clear input manager on surface
+        if self._display is not None:
+            surface = self._display.surface
+            surface.set_input_manager(0)
 
         # Clear pending events
         self._pending_pick_press = None

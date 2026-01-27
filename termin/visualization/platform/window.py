@@ -13,19 +13,15 @@ from termin.visualization.core.display import Display
 from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import (
     Action,
-    GraphicsBackend,
     MouseButton,
-    WindowBackend,
-    BackendWindow,
 )
 from termin.visualization.platform.input_manager import SimpleDisplayInputManager
-from termin.visualization.render.surface import RenderSurface, WindowRenderSurface
 
 if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.core.entity import Entity
     from termin.visualization.core.scene import Scene
-    from termin.visualization.ui.canvas import Canvas
+    from termin.visualization.platform.backends.base import GraphicsBackend
+    from termin._native.platform import SDLWindowBackend, SDLWindowRenderSurface
 
 
 class Window:
@@ -34,8 +30,7 @@ class Window:
 
     Предоставляет старый API Window для совместимости с examples.
     Внутри создаёт:
-    - BackendWindow (платформенное окно)
-    - WindowRenderSurface (поверхность рендеринга)
+    - SDLWindowRenderSurface (C++ окно + поверхность рендеринга)
     - Display (управление viewport'ами)
     - SimpleDisplayInputManager (обработка ввода)
     """
@@ -45,10 +40,9 @@ class Window:
         width: int,
         height: int,
         title: str,
-        graphics: GraphicsBackend,
-        window_backend: WindowBackend,
-        share: Optional["Window | BackendWindow"] = None,
-        **backend_kwargs,
+        graphics: "GraphicsBackend",
+        backend: "SDLWindowBackend",
+        share: Optional["Window | SDLWindowRenderSurface"] = None,
     ):
         """
         Создаёт окно с дисплеем и обработчиком ввода.
@@ -58,39 +52,38 @@ class Window:
             height: Высота окна в пикселях.
             title: Заголовок окна.
             graphics: Графический бэкенд.
-            window_backend: Бэкенд для создания окна.
+            backend: C++ SDLWindowBackend.
             share: Окно для sharing OpenGL контекста.
-            **backend_kwargs: Дополнительные параметры для бэкенда.
         """
-        self.graphics = graphics
-        self.window_backend = window_backend
+        from termin._native.platform import SDLWindowRenderSurface
 
-        # Определяем share handle
-        share_handle: Optional[BackendWindow] = None
+        self._graphics = graphics
+        self._backend = backend
+
+        # Определяем share surface
+        share_surface: Optional[SDLWindowRenderSurface] = None
         if isinstance(share, Window):
-            share_handle = share.handle
-        elif isinstance(share, BackendWindow):
-            share_handle = share
+            share_surface = share._surface
+        elif share is not None:
+            share_surface = share
 
-        # Создаём платформенное окно
-        self._backend_window: BackendWindow = window_backend.create_window(
-            width, height, title, share=share_handle, **backend_kwargs
+        # Создаём C++ SDLWindowRenderSurface (окно + surface)
+        self._surface: SDLWindowRenderSurface = SDLWindowRenderSurface(
+            width, height, title, backend, share_surface
         )
-        self._backend_window.set_user_pointer(self)
+        self._surface.set_graphics(graphics)
 
-        # Set graphics backend for framebuffer creation
-        self._backend_window.set_graphics(graphics)
-
-        # Создаём surface и display
-        self._render_surface = WindowRenderSurface(self._backend_window)
-        self._display = Display(self._render_surface)
+        # Создаём Display
+        self._display = Display(self._surface)
 
         # Создаём input manager
         self._input_manager = SimpleDisplayInputManager(
-            backend_window=self._backend_window,
             display=self._display,
             on_request_update=self._request_update,
         )
+
+        # Connect input manager to surface
+        self._surface.set_input_manager(self._input_manager.tc_input_manager_ptr)
 
         # Колбэки для внешнего кода (совместимость)
         self.on_mouse_button_event: Optional[
@@ -104,19 +97,14 @@ class Window:
         self._world_mode = "game"
 
     @property
-    def handle(self) -> BackendWindow:
-        """Платформенное окно (BackendWindow)."""
-        return self._backend_window
+    def surface(self) -> "SDLWindowRenderSurface":
+        """C++ SDLWindowRenderSurface."""
+        return self._surface
 
     @property
     def display(self) -> Display:
         """Display для управления viewport'ами."""
         return self._display
-
-    @property
-    def render_surface(self) -> RenderSurface:
-        """RenderSurface для рендеринга."""
-        return self._render_surface
 
     @property
     def viewports(self) -> List[Viewport]:
@@ -129,19 +117,27 @@ class Window:
 
     def close(self) -> None:
         """Закрывает окно."""
-        if self._backend_window is not None:
-            self._backend_window.close()
-            self._backend_window = None
+        # C++ surface handles cleanup
+        self._surface = None
 
     @property
     def should_close(self) -> bool:
         """Проверяет, должно ли окно закрыться."""
-        return self._backend_window is None or self._backend_window.should_close()
+        return self._surface is None or self._surface.should_close()
 
     def make_current(self) -> None:
         """Делает контекст текущим."""
-        if self._backend_window is not None:
-            self._backend_window.make_current()
+        if self._surface is not None:
+            self._surface.make_current()
+
+    def swap_buffers(self) -> None:
+        """Swap buffers."""
+        if self._surface is not None:
+            self._surface.swap_buffers()
+
+    def poll_events(self) -> None:
+        """Poll SDL events."""
+        self._backend.poll_events()
 
     def add_viewport(
         self,
@@ -160,8 +156,7 @@ class Window:
         Возвращает:
             Созданный Viewport.
         """
-        if not self._backend_window.drives_render():
-            self.make_current()
+        self.make_current()
 
         return self._display.create_viewport(
             scene=scene,
@@ -179,12 +174,18 @@ class Window:
 
     def _request_update(self) -> None:
         """Запрашивает перерисовку."""
-        if self._backend_window is not None:
-            self._backend_window.request_update()
+        if self._surface is not None:
+            self._surface.request_update()
 
     def _viewport_under_cursor(self, x: float, y: float) -> Optional[Viewport]:
         """Находит viewport под курсором."""
         return self._display.viewport_at_pixels(x, y)
+
+    def get_size(self) -> Tuple[int, int]:
+        """Returns framebuffer size."""
+        if self._surface is not None:
+            return self._surface.get_size()
+        return (0, 0)
 
 
 # Backwards compatibility

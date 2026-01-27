@@ -133,7 +133,12 @@ void bind_sdl(nb::module_& m) {
         .def("get_cursor_pos", &SDLWindowRenderSurface::get_cursor_pos)
         .def("set_graphics", &SDLWindowRenderSurface::set_graphics, nb::arg("graphics"))
         .def("get_window_framebuffer", &SDLWindowRenderSurface::get_window_framebuffer,
-            nb::rv_policy::reference);
+            nb::rv_policy::reference)
+        .def("get_native_handle", &SDLWindowRenderSurface::get_native_handle)
+        .def("request_update", &SDLWindowRenderSurface::request_update)
+        .def("needs_render", &SDLWindowRenderSurface::needs_render)
+        .def("clear_render_flag", &SDLWindowRenderSurface::clear_render_flag)
+        .def("check_resize", &SDLWindowRenderSurface::check_resize);
 }
 
 } // namespace termin

@@ -9,41 +9,27 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Global Python callbacks for external surfaces
-static nb::object g_py_get_framebuffer;
-static nb::object g_py_get_size;
-static nb::object g_py_make_current;
-static nb::object g_py_swap_buffers;
-static nb::object g_py_context_key;
-static nb::object g_py_poll_events;
-static nb::object g_py_get_window_size;
-static nb::object g_py_should_close;
-static nb::object g_py_set_should_close;
-static nb::object g_py_get_cursor_pos;
+// ============================================================================
+// VTable for SDLEmbeddedWindowHandle (Python class)
+// One vtable shared by all instances of this type.
+// Each function calls the corresponding method on the Python object (body).
+// ============================================================================
 
-// C callback implementations that call Python
-static uint32_t py_get_framebuffer(void* body) {
-    if (!body || g_py_get_framebuffer.is_none()) return 0;
-    nb::gil_scoped_acquire gil;
-    try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        nb::object result = g_py_get_framebuffer(py_obj);
-        return nb::cast<uint32_t>(result);
-    } catch (const std::exception& e) {
-        return 0;
-    }
+static uint32_t sdl_window_get_framebuffer(tc_render_surface* s) {
+    // Window framebuffer is always 0
+    return 0;
 }
 
-static void py_get_size(void* body, int* width, int* height) {
-    if (!body || g_py_get_size.is_none()) {
+static void sdl_window_get_size(tc_render_surface* s, int* width, int* height) {
+    if (!s->body) {
         if (width) *width = 0;
         if (height) *height = 0;
         return;
     }
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        nb::object result = g_py_get_size(py_obj);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        nb::object result = py_obj.attr("framebuffer_size")();
         auto tup = nb::cast<std::tuple<int, int>>(result);
         if (width) *width = std::get<0>(tup);
         if (height) *height = std::get<1>(tup);
@@ -53,64 +39,47 @@ static void py_get_size(void* body, int* width, int* height) {
     }
 }
 
-static void py_make_current(void* body) {
-    if (!body || g_py_make_current.is_none()) return;
+static void sdl_window_make_current(tc_render_surface* s) {
+    if (!s->body) return;
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_make_current(py_obj);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        py_obj.attr("make_current")();
     } catch (const std::exception& e) {
         // Ignore
     }
 }
 
-static void py_swap_buffers(void* body) {
-    if (!body || g_py_swap_buffers.is_none()) return;
+static void sdl_window_swap_buffers(tc_render_surface* s) {
+    if (!s->body) return;
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_swap_buffers(py_obj);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        py_obj.attr("swap_buffers")();
     } catch (const std::exception& e) {
         // Ignore
     }
 }
 
-static uintptr_t py_context_key(void* body) {
-    if (!body) return 0;
-    if (g_py_context_key.is_none()) {
-        return reinterpret_cast<uintptr_t>(body);
-    }
-    nb::gil_scoped_acquire gil;
-    try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        nb::object result = g_py_context_key(py_obj);
-        return nb::cast<uintptr_t>(result);
-    } catch (const std::exception& e) {
-        return reinterpret_cast<uintptr_t>(body);
-    }
+static uintptr_t sdl_window_context_key(tc_render_surface* s) {
+    // Use body pointer as context key
+    return reinterpret_cast<uintptr_t>(s->body);
 }
 
-static void py_poll_events(void* body) {
-    if (!body || g_py_poll_events.is_none()) return;
-    nb::gil_scoped_acquire gil;
-    try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_poll_events(py_obj);
-    } catch (const std::exception& e) {
-        // Ignore
-    }
+static void sdl_window_poll_events(tc_render_surface* s) {
+    // No-op - events are polled via SDLEmbeddedWindowBackend
 }
 
-static void py_get_window_size(void* body, int* width, int* height) {
-    if (!body || g_py_get_window_size.is_none()) {
-        // Fallback to get_size
-        py_get_size(body, width, height);
+static void sdl_window_get_window_size(tc_render_surface* s, int* width, int* height) {
+    if (!s->body) {
+        if (width) *width = 0;
+        if (height) *height = 0;
         return;
     }
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        nb::object result = g_py_get_window_size(py_obj);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        nb::object result = py_obj.attr("window_size")();
         auto tup = nb::cast<std::tuple<int, int>>(result);
         if (width) *width = std::get<0>(tup);
         if (height) *height = std::get<1>(tup);
@@ -120,39 +89,39 @@ static void py_get_window_size(void* body, int* width, int* height) {
     }
 }
 
-static bool py_should_close(void* body) {
-    if (!body || g_py_should_close.is_none()) return false;
+static bool sdl_window_should_close(tc_render_surface* s) {
+    if (!s->body) return true;
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        nb::object result = g_py_should_close(py_obj);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        nb::object result = py_obj.attr("should_close")();
         return nb::cast<bool>(result);
     } catch (const std::exception& e) {
-        return false;
+        return true;
     }
 }
 
-static void py_set_should_close(void* body, bool value) {
-    if (!body || g_py_set_should_close.is_none()) return;
+static void sdl_window_set_should_close(tc_render_surface* s, bool value) {
+    if (!s->body) return;
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_set_should_close(py_obj, value);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        py_obj.attr("_should_close") = value;
     } catch (const std::exception& e) {
         // Ignore
     }
 }
 
-static void py_get_cursor_pos(void* body, double* x, double* y) {
-    if (!body || g_py_get_cursor_pos.is_none()) {
+static void sdl_window_get_cursor_pos(tc_render_surface* s, double* x, double* y) {
+    if (!s->body) {
         if (x) *x = 0.0;
         if (y) *y = 0.0;
         return;
     }
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        nb::object result = g_py_get_cursor_pos(py_obj);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        nb::object result = py_obj.attr("get_cursor_pos")();
         auto tup = nb::cast<std::tuple<double, double>>(result);
         if (x) *x = std::get<0>(tup);
         if (y) *y = std::get<1>(tup);
@@ -162,88 +131,34 @@ static void py_get_cursor_pos(void* body, double* x, double* y) {
     }
 }
 
-static void py_destroy(void* body) {
-    // No-op: Python GC handles the object
+static void sdl_window_destroy(tc_render_surface* s) {
+    // No-op: Python owns the surface and will free it
 }
 
-static void py_incref(void* body) {
-    if (body) {
-        nb::gil_scoped_acquire gil;
-        Py_INCREF(reinterpret_cast<PyObject*>(body));
-    }
-}
+// Static vtable for SDLEmbeddedWindowHandle
+static const tc_render_surface_vtable g_sdl_window_vtable = {
+    .get_framebuffer = sdl_window_get_framebuffer,
+    .get_size = sdl_window_get_size,
+    .make_current = sdl_window_make_current,
+    .swap_buffers = sdl_window_swap_buffers,
+    .context_key = sdl_window_context_key,
+    .poll_events = sdl_window_poll_events,
+    .get_window_size = sdl_window_get_window_size,
+    .should_close = sdl_window_should_close,
+    .set_should_close = sdl_window_set_should_close,
+    .get_cursor_pos = sdl_window_get_cursor_pos,
+    .destroy = sdl_window_destroy,
+};
 
-static void py_decref(void* body) {
-    if (body) {
-        nb::gil_scoped_acquire gil;
-        Py_DECREF(reinterpret_cast<PyObject*>(body));
-    }
-}
-
-// Initialize external callbacks
-static void init_external_callbacks() {
-    static bool initialized = false;
-    if (initialized) return;
-    initialized = true;
-
-    tc_external_render_surface_callbacks cbs = {
-        .get_framebuffer = py_get_framebuffer,
-        .get_size = py_get_size,
-        .make_current = py_make_current,
-        .swap_buffers = py_swap_buffers,
-        .context_key = py_context_key,
-        .poll_events = py_poll_events,
-        .get_window_size = py_get_window_size,
-        .should_close = py_should_close,
-        .set_should_close = py_set_should_close,
-        .get_cursor_pos = py_get_cursor_pos,
-        .destroy = py_destroy,
-        .incref = py_incref,
-        .decref = py_decref,
-    };
-    tc_render_surface_set_external_callbacks(&cbs);
-}
+// ============================================================================
+// Python Bindings
+// ============================================================================
 
 void bind_tc_render_surface(nb::module_& m) {
-    // Initialize callbacks on module load
-    init_external_callbacks();
-
-    // Set Python callback functions
-    m.def("_set_render_surface_get_framebuffer_callback", [](nb::object cb) {
-        g_py_get_framebuffer = cb;
-    });
-    m.def("_set_render_surface_get_size_callback", [](nb::object cb) {
-        g_py_get_size = cb;
-    });
-    m.def("_set_render_surface_make_current_callback", [](nb::object cb) {
-        g_py_make_current = cb;
-    });
-    m.def("_set_render_surface_swap_buffers_callback", [](nb::object cb) {
-        g_py_swap_buffers = cb;
-    });
-    m.def("_set_render_surface_context_key_callback", [](nb::object cb) {
-        g_py_context_key = cb;
-    });
-    m.def("_set_render_surface_poll_events_callback", [](nb::object cb) {
-        g_py_poll_events = cb;
-    });
-    m.def("_set_render_surface_get_window_size_callback", [](nb::object cb) {
-        g_py_get_window_size = cb;
-    });
-    m.def("_set_render_surface_should_close_callback", [](nb::object cb) {
-        g_py_should_close = cb;
-    });
-    m.def("_set_render_surface_set_should_close_callback", [](nb::object cb) {
-        g_py_set_should_close = cb;
-    });
-    m.def("_set_render_surface_get_cursor_pos_callback", [](nb::object cb) {
-        g_py_get_cursor_pos = cb;
-    });
-
-    // Create external render surface from Python object
-    m.def("_render_surface_new_external", [](nb::object py_surface) -> uintptr_t {
+    // Create tc_render_surface for SDLEmbeddedWindowHandle
+    m.def("_render_surface_new_sdl_window", [](nb::object py_surface) -> uintptr_t {
         PyObject* ptr = py_surface.ptr();
-        tc_render_surface* surface = tc_render_surface_new_external(ptr);
+        tc_render_surface* surface = tc_render_surface_new_external(ptr, &g_sdl_window_vtable);
         return reinterpret_cast<uintptr_t>(surface);
     });
 
@@ -253,36 +168,16 @@ void bind_tc_render_surface(nb::module_& m) {
         tc_render_surface_free_external(surface);
     });
 
-    // Get size from tc_render_surface
-    m.def("_render_surface_get_size", [](uintptr_t ptr) -> std::tuple<int, int> {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);
-        int w = 0, h = 0;
-        tc_render_surface_get_size(surface, &w, &h);
-        return std::make_tuple(w, h);
+    // Get pointer from tc_render_surface (for passing to C code)
+    m.def("_render_surface_get_ptr", [](uintptr_t ptr) -> uintptr_t {
+        return ptr;
     });
 
-    // Make current
-    m.def("_render_surface_make_current", [](uintptr_t ptr) {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);
-        tc_render_surface_make_current(surface);
-    });
-
-    // Swap buffers
-    m.def("_render_surface_swap_buffers", [](uintptr_t ptr) {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);
-        tc_render_surface_swap_buffers(surface);
-    });
-
-    // Get framebuffer
-    m.def("_render_surface_get_framebuffer", [](uintptr_t ptr) -> uint32_t {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);
-        return tc_render_surface_get_framebuffer(surface);
-    });
-
-    // Context key
-    m.def("_render_surface_context_key", [](uintptr_t ptr) -> uintptr_t {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);
-        return tc_render_surface_context_key(surface);
+    // Set input manager for render surface
+    m.def("_render_surface_set_input_manager", [](uintptr_t surface_ptr, uintptr_t input_manager_ptr) {
+        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
+        tc_input_manager* input_manager = reinterpret_cast<tc_input_manager*>(input_manager_ptr);
+        tc_render_surface_set_input_manager(surface, input_manager);
     });
 
     // Set resize callback
@@ -301,7 +196,7 @@ void bind_tc_render_surface(nb::module_& m) {
                     try {
                         nb::object cb = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(userdata));
                         cb(w, h);
-                    } catch (...) {
+                    } catch (const std::exception& e) {
                         // Ignore
                     }
                 },
@@ -310,7 +205,7 @@ void bind_tc_render_surface(nb::module_& m) {
         }
     });
 
-    // Notify resize (for Python surfaces to call)
+    // Notify resize (call from Python when window resizes)
     m.def("_render_surface_notify_resize", [](uintptr_t ptr, int width, int height) {
         tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);
         tc_render_surface_notify_resize(surface, width, height);

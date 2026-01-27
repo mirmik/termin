@@ -199,9 +199,12 @@ class RenderingManager:
 
     def get_display_for_viewport(self, viewport: "Viewport") -> Optional["Display"]:
         """Find display that contains this viewport."""
+        target_ptr = viewport._tc_viewport_ptr()
         for display in self._displays:
-            if viewport in display.viewports:
-                return display
+            for vp in display.viewports:
+                if vp._tc_viewport_ptr() == target_ptr:
+                    return display
+        print(f"[get_display_for_viewport] NOT FOUND! viewport ptr={target_ptr}, displays={[(d.name, [v._tc_viewport_ptr() for v in d.viewports]) for d in self._displays]}")
         return None
 
     def add_display(self, display: "Display", name: Optional[str] = None) -> None:
@@ -227,7 +230,7 @@ class RenderingManager:
 
         # Clean up viewport states for viewports on this display
         for viewport in display.viewports:
-            viewport_id = id(viewport)
+            viewport_id = viewport._tc_viewport_ptr()
             state = self._viewport_states.pop(viewport_id, None)
             if state is not None:
                 state.clear_all()
@@ -393,13 +396,17 @@ class RenderingManager:
 
         for config in scene.viewport_configs:
             # Get or create display
+            print(f"[RenderingManager.attach_scene] Looking for display '{config.display_name}'")
+            print(f"[RenderingManager.attach_scene] Current displays: {[d.name for d in self._displays]}")
             display = self.get_or_create_display(config.display_name)
+            print(f"[RenderingManager.attach_scene] get_or_create_display returned: {display}")
             if display is None:
                 log.warn(
                     f"[RenderingManager] Cannot create display '{config.display_name}' "
                     f"for scene viewport"
                 )
                 continue
+            print(f"[RenderingManager.attach_scene] After get_or_create, displays: {[d.name for d in self._displays]}")
 
             # Find camera by UUID
             camera: Optional[CameraComponent] = None
@@ -458,6 +465,8 @@ class RenderingManager:
                 region=config.region,
                 pipeline=pipeline,
             )
+            print(f"[RenderingManager.attach_scene] Created viewport, display.viewports count: {len(display.viewports)}")
+            print(f"[RenderingManager.attach_scene] viewport in display.viewports: {viewport in display.viewports}")
             viewport.name = config.name
             viewport.depth = config.depth
             viewport.input_mode = config.input_mode
@@ -473,6 +482,8 @@ class RenderingManager:
         if scene not in self._attached_scenes:
             self._attached_scenes.append(scene)
 
+        print(f"[RenderingManager.attach_scene] Returning {len(viewports)} viewports")
+        print(f"[RenderingManager.attach_scene] Final displays: {[(d.name, len(d.viewports)) for d in self._displays]}")
         return viewports
 
     def _apply_scene_pipelines(self, scene: "Scene", viewports: List["Viewport"]) -> None:
@@ -603,11 +614,11 @@ class RenderingManager:
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get render state for a viewport."""
-        return self._viewport_states.get(id(viewport))
+        return self._viewport_states.get(viewport._tc_viewport_ptr())
 
     def remove_viewport_state(self, viewport: "Viewport") -> None:
         """Remove render state for a viewport (call after clearing FBOs)."""
-        state = self._viewport_states.pop(id(viewport), None)
+        state = self._viewport_states.pop(viewport._tc_viewport_ptr(), None)
         if state is not None:
             state.clear_all()
 
@@ -615,7 +626,7 @@ class RenderingManager:
         """Get or create render state for a viewport."""
         from termin.visualization.render.state import ViewportRenderState
 
-        viewport_id = id(viewport)
+        viewport_id = viewport._tc_viewport_ptr()
         if viewport_id not in self._viewport_states:
             self._viewport_states[viewport_id] = ViewportRenderState()
         return self._viewport_states[viewport_id]
@@ -783,10 +794,12 @@ class RenderingManager:
         for viewport_name in target_names:
             viewport = all_viewports.get(viewport_name)
             if viewport is None:
+                log.warn(f"[_render_scene_pipeline_offscreen] viewport '{viewport_name}' not found in displays")
                 continue
             if not viewport.enabled:
                 continue
             if viewport.camera is None:
+                log.warn(f"[_render_scene_pipeline_offscreen] viewport '{viewport_name}' has no camera")
                 continue
 
             if first_viewport is None:
@@ -915,11 +928,14 @@ class RenderingManager:
                 dw = max(1, int(vw * width))
                 dh = max(1, int(vh * height))
 
+                # Get actual FBO size for source rect
+                src_w, src_h = state.output_fbo.get_size()
+
                 # Blit output_fbo -> display_fbo
                 self._graphics.blit_framebuffer(
                     state.output_fbo,
                     display_fbo,
-                    (0, 0, dw, dh),  # src rect (full output_fbo)
+                    (0, 0, src_w, src_h),  # src rect (actual FBO size)
                     (dx, dy, dx + dw, dy + dh),  # dst rect on display
                 )
 

@@ -233,16 +233,16 @@ void OrbitCameraController::on_mouse_button(void* event) {
     ViewportState& state = _get_viewport_state(vp_key);
 
     // Middle mouse = orbit
-    if (e->button == MouseButton::Middle) {
-        state.orbit_active = (e->action == Action::Press);
+    if (e->button == static_cast<int>(MouseButton::Middle)) {
+        state.orbit_active = (e->action == static_cast<int>(Action::Press));
     }
     // Right mouse = pan
-    else if (e->button == MouseButton::Right) {
-        state.pan_active = (e->action == Action::Press);
+    else if (e->button == static_cast<int>(MouseButton::Right)) {
+        state.pan_active = (e->action == static_cast<int>(Action::Press));
     }
 
     // Reset last position on release
-    if (e->action == Action::Release) {
+    if (e->action == static_cast<int>(Action::Release)) {
         state.has_last = false;
     }
 }

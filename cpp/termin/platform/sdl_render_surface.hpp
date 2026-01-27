@@ -15,7 +15,9 @@ private:
     tc_render_surface surface_;
     tc_input_manager* input_manager_;
     SDLWindowBackend* backend_;
-    bool owns_window_;
+    bool needs_render_;
+    int last_width_;
+    int last_height_;
 
 public:
     SDLWindowRenderSurface(
@@ -45,6 +47,9 @@ public:
     const SDLWindow* window() const { return window_; }
     uint32_t window_id() const { return window_ ? window_->get_window_id() : 0; }
 
+    // Native handle for Qt embedding (HWND on Windows, NSWindow on macOS, X11 Window on Linux)
+    uintptr_t get_native_handle() const;
+
     // Surface methods (convenience)
     void make_current() { if (window_) window_->make_current(); }
     void swap_buffers() { if (window_) window_->swap_buffers(); }
@@ -57,6 +62,14 @@ public:
     // Graphics backend (for framebuffer creation)
     void set_graphics(OpenGLGraphicsBackend* graphics) { if (window_) window_->set_graphics(graphics); }
     FramebufferHandle* get_window_framebuffer() { return window_ ? window_->get_window_framebuffer() : nullptr; }
+
+    // Render flag for pull-mode rendering
+    void request_update() { needs_render_ = true; }
+    bool needs_render() const { return needs_render_; }
+    void clear_render_flag() { needs_render_ = false; }
+
+    // Check if window was resized and update state
+    bool check_resize();
 
 private:
     // VTable implementation

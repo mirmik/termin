@@ -102,31 +102,31 @@ struct KeyEvent {
 };
 
 /**
- * Mouse button constants.
+ * Mouse button enum.
  */
-namespace MouseButton {
-    constexpr int Left = 0;
-    constexpr int Right = 1;
-    constexpr int Middle = 2;
-}
+enum class MouseButton : int {
+    Left = 0,
+    Right = 1,
+    Middle = 2
+};
 
 /**
- * Action constants.
+ * Action enum.
  */
-namespace Action {
-    constexpr int Release = 0;
-    constexpr int Press = 1;
-    constexpr int Repeat = 2;
-}
+enum class Action : int {
+    Release = 0,
+    Press = 1,
+    Repeat = 2
+};
 
 /**
- * Modifier key flags.
+ * Modifier key flags enum.
  */
-namespace Mods {
-    constexpr int Shift = 1;
-    constexpr int Ctrl = 2;
-    constexpr int Alt = 4;
-    constexpr int Super = 8;
-}
+enum class Mods : int {
+    Shift = 1,
+    Ctrl = 2,
+    Alt = 4,
+    Super = 8
+};
 
 } // namespace termin

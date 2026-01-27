@@ -58,8 +58,7 @@ class OffscreenContext:
         self._gl_context = None
         self._graphics: Optional[GraphicsBackend] = None
 
-        # Ensure SDL is initialized
-        self._ensure_sdl()
+        # SDL must be initialized by caller (e.g., in run_editor.py)
 
         # OpenGL 3.3 Core
         video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
@@ -102,15 +101,6 @@ class OffscreenContext:
         # Ensure OpenGL functions are loaded
         self._graphics.ensure_ready()
         log.info("[OffscreenContext] Graphics backend initialized and ready")
-
-    def _ensure_sdl(self) -> None:
-        """Инициализирует SDL если ещё не инициализирован."""
-        import sdl2
-
-        # Check if already initialized by checking if we can get video driver
-        if sdl2.SDL_WasInit(sdl2.SDL_INIT_VIDEO) == 0:
-            if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-                raise RuntimeError(f"Failed to initialize SDL: {sdl2.SDL_GetError()}")
 
     @property
     def graphics(self) -> "GraphicsBackend":

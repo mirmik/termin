@@ -85,6 +85,11 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     # Create Qt application
     app = QApplication(sys.argv)
 
+    # Initialize SDL once at startup
+    import sdl2
+    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
+        raise RuntimeError(f"Failed to initialize SDL: {sdl2.SDL_GetError()}")
+
     # Setup graphics backend
     graphics = OpenGLGraphicsBackend()
     set_default_graphics_backend(graphics)
@@ -145,6 +150,7 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
 
     # Cleanup
     sdl_backend.terminate()
+    sdl2.SDL_Quit()
 
 
 if __name__ == "__main__":

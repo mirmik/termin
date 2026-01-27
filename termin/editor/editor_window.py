@@ -334,7 +334,7 @@ class EditorWindow(QMainWindow):
         self._editor_features: dict[int, EditorViewportFeatures] = {}
 
         # --- Create editor display through RenderingController ---
-        editor_display, backend_window = self._rendering_controller.create_editor_display(
+        editor_display, editor_surface = self._rendering_controller.create_editor_display(
             container=self.editorViewportTab,
             sdl_backend=self._sdl_backend,
             width=800,
@@ -355,7 +355,7 @@ class EditorWindow(QMainWindow):
         # Created before attachment - viewport will be created by attachment.attach()
         self.editor_viewport = EditorViewportFeatures(
             display=editor_display,
-            backend_window=backend_window,
+            surface=editor_surface,
             graphics=self.world.graphics,
             gizmo_manager=self.gizmo_manager,
             on_entity_picked=self._on_entity_picked_from_viewport,
@@ -1063,9 +1063,9 @@ class EditorWindow(QMainWindow):
     def _request_viewport_update(self) -> None:
         self.scene_manager.request_render()
         if self._rendering_controller is not None:
-            backend = self._rendering_controller.editor_backend_window
-            if backend is not None:
-                backend.request_update()
+            surface = self._rendering_controller.editor_surface
+            if surface is not None:
+                surface.request_update()
 
     def _after_render(self) -> None:
         for editor_features in self._editor_features.values():
@@ -1764,8 +1764,8 @@ class EditorWindow(QMainWindow):
                 # Already has editor features
                 return
 
-            backend_window = self._rendering_controller.get_display_backend_window(display)
-            if backend_window is None:
+            surface = self._rendering_controller.get_display_surface(display)
+            if surface is None:
                 return
 
             def get_fbo_pool(d=display):
@@ -1774,7 +1774,7 @@ class EditorWindow(QMainWindow):
             # Create new EditorViewportFeatures
             editor_features = EditorViewportFeatures(
                 display=display,
-                backend_window=backend_window,
+                surface=surface,
                 graphics=self.world.graphics,
                 gizmo_manager=self.gizmo_manager,
                 on_entity_picked=self._on_entity_picked_from_viewport,

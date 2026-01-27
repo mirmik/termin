@@ -137,27 +137,14 @@ static inline void tc_input_manager_destroy(tc_input_manager* m) {
 // External Input Manager Support (for Python/Rust/C#)
 // ============================================================================
 
-typedef struct {
-    void (*on_mouse_button)(void* body, int button, int action, int mods);
-    void (*on_mouse_move)(void* body, double x, double y);
-    void (*on_scroll)(void* body, double x, double y, int mods);
-    void (*on_key)(void* body, int key, int scancode, int action, int mods);
-    void (*on_char)(void* body, uint32_t codepoint);
-    void (*destroy)(void* body);
-    void (*incref)(void* body);
-    void (*decref)(void* body);
-} tc_external_input_manager_callbacks;
-
-// Set global callbacks for external input managers
-TC_API void tc_input_manager_set_external_callbacks(
-    const tc_external_input_manager_callbacks* callbacks
+// Create input manager with specified vtable and body
+TC_API tc_input_manager* tc_input_manager_new(
+    const tc_input_manager_vtable* vtable,
+    void* body
 );
 
-// Create external input manager wrapping a body object
-TC_API tc_input_manager* tc_input_manager_new_external(void* body);
-
-// Free external input manager
-TC_API void tc_input_manager_free_external(tc_input_manager* m);
+// Free input manager
+TC_API void tc_input_manager_free(tc_input_manager* m);
 
 #ifdef __cplusplus
 }

@@ -22,6 +22,20 @@ if TYPE_CHECKING:
     from termin.graphics import FramebufferHandle
 
 
+# --- tc_render_surface support ---
+
+class _TcSurfaceWrapper:
+    """Simple wrapper providing .ptr attribute for C interop."""
+    def __init__(self, ptr: int):
+        self.ptr = ptr
+
+
+def _create_tc_render_surface(surface: "SDLEmbeddedWindowHandle") -> int:
+    """Create tc_render_surface for SDLEmbeddedWindowHandle."""
+    from termin._native.render import _render_surface_new_sdl_window
+    return _render_surface_new_sdl_window(surface)
+
+
 def _translate_qt_key(qt_key: int) -> Key:
     """Translate Qt key code to our Key enum."""
     from PyQt6.QtCore import Qt
@@ -336,6 +350,22 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         # Graphics backend for framebuffer creation
         self._graphics = graphics
 
+        # Create tc_render_surface for C interop
+        self._tc_surface_ptr = _create_tc_render_surface(self)
+
+        # Input manager pointer (set via set_input_manager)
+        self._input_manager_ptr: int = 0
+
+    def tc_surface(self) -> "_TcSurfaceWrapper":
+        """Return wrapper with .ptr attribute for C interop."""
+        return _TcSurfaceWrapper(self._tc_surface_ptr)
+
+    def set_input_manager(self, input_manager_ptr: int) -> None:
+        """Set input manager for this render surface."""
+        from termin._native.render import _render_surface_set_input_manager
+        _render_surface_set_input_manager(self._tc_surface_ptr, input_manager_ptr)
+        self._input_manager_ptr = input_manager_ptr
+
     @property
     def native_handle(self) -> int:
         """Native window handle for Qt embedding."""
@@ -347,6 +377,12 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             video.SDL_ShowWindow(self._window)
 
     def close(self) -> None:
+        # Free tc_render_surface first
+        if self._tc_surface_ptr:
+            from termin._native.render import _render_surface_free_external
+            _render_surface_free_external(self._tc_surface_ptr)
+            self._tc_surface_ptr = 0
+
         if self._gl_context:
             video.SDL_GL_DeleteContext(self._gl_context)
             self._gl_context = None
@@ -365,6 +401,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         if self._window is not None:
             video.SDL_GL_SwapWindow(self._window)
 
+    def present(self) -> None:
+        """Alias for swap_buffers (for RenderSurface compatibility)."""
+        self.swap_buffers()
+
     def framebuffer_size(self) -> Tuple[int, int]:
         if self._window is None:
             return (0, 0)
@@ -372,6 +412,14 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         h = ctypes.c_int()
         video.SDL_GL_GetDrawableSize(self._window, ctypes.byref(w), ctypes.byref(h))
         return (w.value, h.value)
+
+    def get_size(self) -> Tuple[int, int]:
+        """Alias for framebuffer_size (for tc_render_surface compatibility)."""
+        return self.framebuffer_size()
+
+    def get_framebuffer(self) -> Any:
+        """Return FramebufferHandle for window (wraps FBO 0)."""
+        return self.get_window_framebuffer()
 
     def window_size(self) -> Tuple[int, int]:
         if self._window is None:
@@ -642,6 +690,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         if (new_w, new_h) != (self._last_width, self._last_height):
             self._last_width = new_w
             self._last_height = new_h
+            # Notify via tc_render_surface callback
+            if self._tc_surface_ptr:
+                from termin._native.render import _render_surface_notify_resize
+                _render_surface_notify_resize(self._tc_surface_ptr, new_w, new_h)
+            # Legacy callback
             if self._framebuffer_size_callback is not None:
                 self._framebuffer_size_callback(self, new_w, new_h)
             self._needs_render = True
@@ -666,15 +719,22 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 self._needs_render = True
 
         elif event_type == sdl2.SDL_MOUSEMOTION:
-            if self._cursor_pos_callback is not None:
+            # Route through tc_input_manager if set
+            if self._input_manager_ptr:
+                from termin._native.render import _input_manager_on_mouse_move
+                _input_manager_on_mouse_move(self._input_manager_ptr, float(event.motion.x), float(event.motion.y))
+            elif self._cursor_pos_callback is not None:
                 self._cursor_pos_callback(
                     self, float(event.motion.x), float(event.motion.y)
                 )
 
         elif event_type == sdl2.SDL_MOUSEWHEEL:
-            if self._scroll_callback is not None:
-                # Use tracked modifier state (updated via Qt key events)
-                mods = self.get_tracked_mods()
+            mods = self.get_tracked_mods()
+            # Route through tc_input_manager if set
+            if self._input_manager_ptr:
+                from termin._native.render import _input_manager_on_scroll
+                _input_manager_on_scroll(self._input_manager_ptr, float(event.wheel.x), float(event.wheel.y), mods)
+            elif self._scroll_callback is not None:
                 self._scroll_callback(
                     self, float(event.wheel.x), float(event.wheel.y), mods
                 )
@@ -683,15 +743,23 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             # Request focus from Qt when clicking on SDL window
             if self._focus_callback is not None:
                 self._focus_callback()
-            if self._mouse_button_callback is not None:
-                button = _translate_mouse_button(event.button.button)
-                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            button = _translate_mouse_button(event.button.button)
+            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            # Route through tc_input_manager if set
+            if self._input_manager_ptr:
+                from termin._native.render import _input_manager_on_mouse_button
+                _input_manager_on_mouse_button(self._input_manager_ptr, button.value, Action.PRESS.value, mods)
+            elif self._mouse_button_callback is not None:
                 self._mouse_button_callback(self, button, Action.PRESS, mods)
 
         elif event_type == sdl2.SDL_MOUSEBUTTONUP:
-            if self._mouse_button_callback is not None:
-                button = _translate_mouse_button(event.button.button)
-                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            button = _translate_mouse_button(event.button.button)
+            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            # Route through tc_input_manager if set
+            if self._input_manager_ptr:
+                from termin._native.render import _input_manager_on_mouse_button
+                _input_manager_on_mouse_button(self._input_manager_ptr, button.value, Action.RELEASE.value, mods)
+            elif self._mouse_button_callback is not None:
                 self._mouse_button_callback(self, button, Action.RELEASE, mods)
 
         elif event_type == sdl2.SDL_KEYDOWN:
@@ -700,7 +768,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             action = Action.REPEAT if event.key.repeat else Action.PRESS
             mods = _translate_sdl_mods(event.key.keysym.mod)
             log.info(f"[SDL] KEYDOWN: key={key}, mods={mods}")
-            if self._key_callback is not None:
+            # Route through tc_input_manager if set
+            if self._input_manager_ptr:
+                from termin._native.render import _input_manager_on_key
+                _input_manager_on_key(self._input_manager_ptr, key.value, event.key.keysym.scancode, action.value, mods)
+            elif self._key_callback is not None:
                 self._key_callback(self, key, event.key.keysym.scancode, action, mods)
 
         elif event_type == sdl2.SDL_KEYUP:
@@ -708,7 +780,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             key = _translate_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
             log.info(f"[SDL] KEYUP: key={key}, mods={mods}")
-            if self._key_callback is not None:
+            # Route through tc_input_manager if set
+            if self._input_manager_ptr:
+                from termin._native.render import _input_manager_on_key
+                _input_manager_on_key(self._input_manager_ptr, key.value, event.key.keysym.scancode, Action.RELEASE.value, mods)
+            elif self._key_callback is not None:
                 self._key_callback(
                     self, key, event.key.keysym.scancode, Action.RELEASE, mods
                 )

@@ -228,36 +228,17 @@ static inline void tc_render_surface_notify_resize(
 // External Surface Support (for Python/Rust/C#)
 // ============================================================================
 
-typedef struct {
-    uint32_t (*get_framebuffer)(void* body);
-    void (*get_size)(void* body, int* width, int* height);
-    void (*make_current)(void* body);
-    void (*swap_buffers)(void* body);
-    uintptr_t (*context_key)(void* body);
-    void (*poll_events)(void* body);
-    void (*get_window_size)(void* body, int* width, int* height);
-    bool (*should_close)(void* body);
-    void (*set_should_close)(void* body, bool value);
-    void (*get_cursor_pos)(void* body, double* x, double* y);
-    void (*destroy)(void* body);
-    void (*incref)(void* body);
-    void (*decref)(void* body);
-} tc_external_render_surface_callbacks;
-
-// Set global callbacks for external surfaces
-TC_API void tc_render_surface_set_external_callbacks(
-    const tc_external_render_surface_callbacks* callbacks
+// Create external surface with custom vtable
+// - body: pointer to external object (e.g., PyObject*)
+// - vtable: vtable for this surface type (one per type, shared by all instances)
+// Python side owns the tc_render_surface and frees it when done.
+TC_API tc_render_surface* tc_render_surface_new_external(
+    void* body,
+    const tc_render_surface_vtable* vtable
 );
 
-// Create external surface wrapping a body object
-TC_API tc_render_surface* tc_render_surface_new_external(void* body);
-
-// Free external surface (calls decref on body)
+// Free external surface
 TC_API void tc_render_surface_free_external(tc_render_surface* s);
-
-// Increment/decrement body refcount
-TC_API void tc_render_surface_body_incref(void* body);
-TC_API void tc_render_surface_body_decref(void* body);
 
 #ifdef __cplusplus
 }

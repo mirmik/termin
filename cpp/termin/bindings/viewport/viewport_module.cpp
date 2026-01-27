@@ -417,6 +417,11 @@ void bind_tc_viewport_class(nb::module_& m) {
             return reinterpret_cast<uintptr_t>(self.ptr_);
         })
 
+        // Stable handle for use as dictionary key
+        .def_prop_ro("handle", [](TcViewport& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(self.ptr_);
+        })
+
         // Create from raw pointer (for cross-module interop)
         .def_static("_from_ptr", [](uintptr_t ptr) {
             tc_viewport* vp = reinterpret_cast<tc_viewport*>(ptr);

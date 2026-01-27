@@ -1,7 +1,6 @@
 // tc_input_manager_bindings.cpp - Python bindings for tc_input_manager
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
-#include <nanobind/stl/tuple.h>
 
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
@@ -10,138 +9,157 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Global Python callbacks for external input managers
-static nb::object g_py_on_mouse_button;
-static nb::object g_py_on_mouse_move;
-static nb::object g_py_on_scroll;
-static nb::object g_py_on_key;
-static nb::object g_py_on_char;
+// ============================================================================
+// Per-class VTable Support
+// ============================================================================
 
-// C callback implementations that call Python
-static void py_on_mouse_button(void* body, int button, int action, int mods) {
-    if (!body || g_py_on_mouse_button.is_none()) return;
+// VTable stored per Python class. When Python class creates an input manager,
+// it passes its class-specific vtable pointer.
+
+struct PyInputManagerVTable {
+    nb::object on_mouse_button;
+    nb::object on_mouse_move;
+    nb::object on_scroll;
+    nb::object on_key;
+    nb::object on_char;
+    nb::object destroy;
+    tc_input_manager_vtable c_vtable;
+};
+
+// C callbacks that dispatch to Python methods via stored vtable
+static void py_on_mouse_button(tc_input_manager* m, int button, int action, int mods) {
+    if (!m || !m->body || !m->userdata) return;
+    PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
+    if (vt->on_mouse_button.is_none()) return;
+
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_on_mouse_button(py_obj, button, action, mods);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
+        vt->on_mouse_button(py_obj, button, action, mods);
     } catch (const std::exception& e) {
-        // Ignore
+        fprintf(stderr, "[py_on_mouse_button] exception: %s\n", e.what());
     }
 }
 
-static void py_on_mouse_move(void* body, double x, double y) {
-    if (!body || g_py_on_mouse_move.is_none()) return;
+static void py_on_mouse_move(tc_input_manager* m, double x, double y) {
+    if (!m || !m->body || !m->userdata) return;
+    PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
+    if (vt->on_mouse_move.is_none()) return;
+
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_on_mouse_move(py_obj, x, y);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
+        vt->on_mouse_move(py_obj, x, y);
     } catch (const std::exception& e) {
-        // Ignore
+        fprintf(stderr, "[py_on_mouse_move] exception: %s\n", e.what());
     }
 }
 
-static void py_on_scroll(void* body, double x, double y, int mods) {
-    if (!body || g_py_on_scroll.is_none()) return;
+static void py_on_scroll(tc_input_manager* m, double x, double y, int mods) {
+    if (!m || !m->body || !m->userdata) return;
+    PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
+    if (vt->on_scroll.is_none()) return;
+
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_on_scroll(py_obj, x, y, mods);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
+        vt->on_scroll(py_obj, x, y, mods);
     } catch (const std::exception& e) {
-        // Ignore
+        fprintf(stderr, "[py_on_scroll] exception: %s\n", e.what());
     }
 }
 
-static void py_on_key(void* body, int key, int scancode, int action, int mods) {
-    if (!body || g_py_on_key.is_none()) return;
+static void py_on_key(tc_input_manager* m, int key, int scancode, int action, int mods) {
+    if (!m || !m->body || !m->userdata) return;
+    PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
+    if (vt->on_key.is_none()) return;
+
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_on_key(py_obj, key, scancode, action, mods);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
+        vt->on_key(py_obj, key, scancode, action, mods);
     } catch (const std::exception& e) {
-        // Ignore
+        fprintf(stderr, "[py_on_key] exception: %s\n", e.what());
     }
 }
 
-static void py_on_char(void* body, uint32_t codepoint) {
-    if (!body || g_py_on_char.is_none()) return;
+static void py_on_char(tc_input_manager* m, uint32_t codepoint) {
+    if (!m || !m->body || !m->userdata) return;
+    PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
+    if (vt->on_char.is_none()) return;
+
     nb::gil_scoped_acquire gil;
     try {
-        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(body));
-        g_py_on_char(py_obj, codepoint);
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
+        vt->on_char(py_obj, codepoint);
     } catch (const std::exception& e) {
-        // Ignore
+        fprintf(stderr, "[py_on_char] exception: %s\n", e.what());
     }
 }
 
-static void py_input_destroy(void* body) {
-    // No-op: Python GC handles the object
+static void py_destroy(tc_input_manager* m) {
+    if (!m || !m->body) return;
+
+    nb::gil_scoped_acquire gil;
+    Py_DECREF(reinterpret_cast<PyObject*>(m->body));
+    m->body = nullptr;
 }
 
-static void py_input_incref(void* body) {
-    if (body) {
-        nb::gil_scoped_acquire gil;
-        Py_INCREF(reinterpret_cast<PyObject*>(body));
-    }
-}
-
-static void py_input_decref(void* body) {
-    if (body) {
-        nb::gil_scoped_acquire gil;
-        Py_DECREF(reinterpret_cast<PyObject*>(body));
-    }
-}
-
-// Initialize external callbacks
-static void init_input_external_callbacks() {
-    static bool initialized = false;
-    if (initialized) return;
-    initialized = true;
-
-    tc_external_input_manager_callbacks cbs = {
-        .on_mouse_button = py_on_mouse_button,
-        .on_mouse_move = py_on_mouse_move,
-        .on_scroll = py_on_scroll,
-        .on_key = py_on_key,
-        .on_char = py_on_char,
-        .destroy = py_input_destroy,
-        .incref = py_input_incref,
-        .decref = py_input_decref,
-    };
-    tc_input_manager_set_external_callbacks(&cbs);
-}
+// ============================================================================
+// Bindings
+// ============================================================================
 
 void bind_tc_input_manager(nb::module_& m) {
-    // Initialize callbacks on module load
-    init_input_external_callbacks();
+    // Create vtable for a Python class
+    // Returns opaque pointer to PyInputManagerVTable
+    m.def("_input_manager_create_vtable", [](
+        nb::object on_mouse_button,
+        nb::object on_mouse_move,
+        nb::object on_scroll,
+        nb::object on_key,
+        nb::object on_char
+    ) -> uintptr_t {
+        auto* vt = new PyInputManagerVTable();
+        vt->on_mouse_button = on_mouse_button;
+        vt->on_mouse_move = on_mouse_move;
+        vt->on_scroll = on_scroll;
+        vt->on_key = on_key;
+        vt->on_char = on_char;
 
-    // Set Python callback functions for external input managers
-    m.def("_set_input_manager_on_mouse_button_callback", [](nb::object cb) {
-        g_py_on_mouse_button = cb;
-    });
-    m.def("_set_input_manager_on_mouse_move_callback", [](nb::object cb) {
-        g_py_on_mouse_move = cb;
-    });
-    m.def("_set_input_manager_on_scroll_callback", [](nb::object cb) {
-        g_py_on_scroll = cb;
-    });
-    m.def("_set_input_manager_on_key_callback", [](nb::object cb) {
-        g_py_on_key = cb;
-    });
-    m.def("_set_input_manager_on_char_callback", [](nb::object cb) {
-        g_py_on_char = cb;
+        vt->c_vtable = {
+            .on_mouse_button = py_on_mouse_button,
+            .on_mouse_move = py_on_mouse_move,
+            .on_scroll = py_on_scroll,
+            .on_key = py_on_key,
+            .on_char = py_on_char,
+            .destroy = py_destroy,
+        };
+
+        return reinterpret_cast<uintptr_t>(vt);
     });
 
-    // Create external input manager from Python object
-    m.def("_input_manager_new_external", [](nb::object py_manager) -> uintptr_t {
-        PyObject* ptr = py_manager.ptr();
-        tc_input_manager* manager = tc_input_manager_new_external(ptr);
+    // Create input manager with class vtable
+    m.def("_input_manager_new", [](uintptr_t vtable_ptr, nb::object py_manager) -> uintptr_t {
+        if (!vtable_ptr) {
+            fprintf(stderr, "[_input_manager_new] vtable_ptr is NULL\n");
+            return 0;
+        }
+
+        PyInputManagerVTable* vt = reinterpret_cast<PyInputManagerVTable*>(vtable_ptr);
+        PyObject* body = py_manager.ptr();
+        Py_INCREF(body);
+
+        tc_input_manager* manager = tc_input_manager_new(&vt->c_vtable, body);
+        if (manager) {
+            manager->userdata = vt;  // Store vtable pointer for callbacks
+        }
         return reinterpret_cast<uintptr_t>(manager);
     });
 
-    // Free external input manager
-    m.def("_input_manager_free_external", [](uintptr_t ptr) {
+    // Free input manager
+    m.def("_input_manager_free", [](uintptr_t ptr) {
         tc_input_manager* manager = reinterpret_cast<tc_input_manager*>(ptr);
-        tc_input_manager_free_external(manager);
+        tc_input_manager_free(manager);
     });
 
     // Direct event dispatch (for forwarding from window)

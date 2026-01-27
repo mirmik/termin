@@ -106,9 +106,9 @@ class RenderingController:
         self._selected_display: Optional["Display"] = None
         self._selected_viewport: Optional["Viewport"] = None
 
-        # Map display id -> (tab container widget, BackendWindow, QWindow)
+        # Map display id -> (tab container widget, SDLWindowRenderSurface, QWindow)
         # QWindow is stored to prevent garbage collection
-        self._display_tabs: dict[int, Tuple[QWidget, "BackendWindow", QWindow]] = {}
+        self._display_tabs: dict[int, Tuple[QWidget, object, QWindow]] = {}
 
         # Map display id -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
@@ -217,35 +217,32 @@ class RenderingController:
         tab_layout.setSpacing(0)
 
         # Create SDL window with OpenGL context (shares context with offscreen)
-        backend_window = sdl_backend.create_embedded_window(
+        surface = sdl_backend.create_embedded_window(
             width=800,
             height=600,
             title=name,
         )
 
         # Embed SDL window into Qt via QWindow.fromWinId
-        native_handle = backend_window.native_handle
+        native_handle = surface.native_handle
         qwindow = QWindow.fromWinId(native_handle)
         gl_widget = QWidget.createWindowContainer(qwindow, tab_container)
         gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
         tab_layout.addWidget(gl_widget)
 
-        # Set up focus callback: when SDL gets mouse click, request Qt focus
-        backend_window.set_focus_callback(lambda w=gl_widget: w.setFocus())
-        # Install Qt keyboard event filter to forward key events to SDL
-        backend_window.install_qt_key_filter(gl_widget)
+        # Install Qt keyboard event filter and focus callback
+        surface.set_focus_callback(lambda w=gl_widget: w.setFocus())
+        surface.install_qt_key_filter(gl_widget)
 
-        # Create WindowRenderSurface and Display
-        from termin.visualization.render.surface import WindowRenderSurface
+        # Create Display
         from termin.visualization.core.display import Display
 
-        surface = WindowRenderSurface(backend_window)
         display = Display(surface, name=name)
 
         # Store mapping (include qwindow to prevent GC)
         display_id = id(display)
-        self._display_tabs[display_id] = (tab_container, backend_window, qwindow)
+        self._display_tabs[display_id] = (tab_container, surface, qwindow)
 
         # Add tab to center widget
         self._center_tabs.addTab(tab_container, name)
@@ -276,14 +273,21 @@ class RenderingController:
         # Group viewports by display
         display_viewports: dict[int, list[tuple["Viewport", ViewportConfig]]] = {}
 
+        print(f"[RenderingController.attach_scene] viewports count: {len(viewports)}")
+        print(f"[RenderingController.attach_scene] scene.viewport_configs count: {len(scene.viewport_configs)}")
+        for cfg in scene.viewport_configs:
+            print(f"[RenderingController.attach_scene]   config: display_name={cfg.display_name}, camera_uuid={cfg.camera_uuid}, input_mode={cfg.input_mode}")
+
         for viewport in viewports:
             display = self._manager.get_display_for_viewport(viewport)
+            print(f"[RenderingController.attach_scene] viewport camera={viewport.camera}, display={display.name if display else None}")
             if display is None:
                 continue
             display_id = id(display)
 
             # Find matching ViewportConfig
             config = self._find_viewport_config(scene, viewport, display)
+            print(f"[RenderingController.attach_scene] config for viewport: {config}")
             if config is None:
                 continue
 
@@ -318,6 +322,7 @@ class RenderingController:
         if display is None:
             display = self._manager.get_display_for_viewport(viewport)
         if display is None or viewport.camera is None:
+            print(f"[_find_viewport_config] returning None: display={display}, camera={viewport.camera}")
             return None
 
         display_name = display.name
@@ -325,10 +330,14 @@ class RenderingController:
         if viewport.camera.entity is not None:
             camera_uuid = viewport.camera.entity.uuid
 
+        print(f"[_find_viewport_config] looking for display_name={display_name}, camera_uuid={camera_uuid}")
+
         for config in scene.viewport_configs:
             if config.display_name == display_name and config.camera_uuid == camera_uuid:
+                print(f"[_find_viewport_config] FOUND match: {config}")
                 return config
 
+        print(f"[_find_viewport_config] NO match found")
         return None
 
     def _setup_display_input(self, display: "Display", input_mode: str) -> None:
@@ -339,24 +348,18 @@ class RenderingController:
             display: Display to set up input for.
             input_mode: Input mode ("none", "simple", "editor").
         """
+        print(f"[RenderingController] _setup_display_input: display={display.name}, input_mode={input_mode}")
         display_id = id(display)
 
-        # Get backend window
-        tab_info = self._display_tabs.get(display_id)
-        if tab_info is None:
-            return
-
-        _tab_container, backend_window, _qwindow = tab_info
+        # Get surface from display
+        surface = display.surface
 
         # Remove old input manager
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
-        # Clear callbacks first
-        backend_window.set_cursor_pos_callback(None)
-        backend_window.set_scroll_callback(None)
-        backend_window.set_mouse_button_callback(None)
-        backend_window.set_key_callback(None)
+        # Clear input manager on surface
+        surface.set_input_manager(0)
 
         if input_mode == "none":
             pass
@@ -364,11 +367,14 @@ class RenderingController:
             from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
             input_manager = SimpleDisplayInputManager(
-                backend_window=backend_window,
                 display=display,
                 on_request_update=self._request_update,
             )
             self._display_input_managers[display_id] = input_manager
+
+            # Connect input manager to surface
+            print(f"[RenderingController] _setup_display_input: setting ptr={input_manager.tc_input_manager_ptr}")
+            surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif input_mode == "editor":
             # Editor mode is handled by EditorWindow via callback
             if self._on_display_input_mode_changed_callback is not None:
@@ -511,10 +517,8 @@ class RenderingController:
 
         # Clean up tab resources
         if display_id in self._display_tabs:
-            tab_container, backend_window, _qwindow = self._display_tabs.pop(display_id)
-            # Close backend window
-            if backend_window is not None:
-                backend_window.close()
+            tab_container, surface, _qwindow = self._display_tabs.pop(display_id)
+            # Surface cleanup is handled by C++ destructor
 
         if self._selected_display is display:
             self._selected_display = None
@@ -556,9 +560,9 @@ class RenderingController:
             # Make GL context current for this display before deleting resources
             tab_info = self._display_tabs.get(display_id)
             if tab_info is not None:
-                _tab_container, backend_window, _qwindow = tab_info
-                if backend_window is not None:
-                    backend_window.make_current()
+                _tab_container, surface, _qwindow = tab_info
+                if surface is not None:
+                    surface.make_current()
 
             for vp in viewports_to_remove:
                 # Destroy pipeline
@@ -580,7 +584,7 @@ class RenderingController:
         sdl_backend: "SDLEmbeddedWindowBackend",
         width: int = 800,
         height: int = 600,
-    ) -> Tuple["Display", "BackendWindow"]:
+    ) -> Tuple["Display", object]:
         """
         Create the main editor display.
 
@@ -594,39 +598,35 @@ class RenderingController:
             height: Initial window height.
 
         Returns:
-            Tuple of (Display, BackendWindow) for editor use.
+            Tuple of (Display, SDLWindowRenderSurface) for editor use.
         """
-        from termin.visualization.render.surface import WindowRenderSurface
         from termin.visualization.core.display import Display
 
         # Configure SDL backend to share GL context with offscreen rendering context
-        # This ensures all displays use the same GL resources
         if self._manager.offscreen_context is not None:
             sdl_backend.set_share_context(
                 share_context=self._manager.offscreen_context.gl_context,
                 make_current_fn=self._manager.offscreen_context.make_current,
             )
-            # Also set graphics from offscreen context
             sdl_backend.set_graphics(self._manager.graphics)
 
         # Create SDL window (will share context with offscreen context)
-        backend_window = sdl_backend.create_embedded_window(
+        surface = sdl_backend.create_embedded_window(
             width=width,
             height=height,
             title="Editor Viewport",
         )
 
         # Embed SDL window into Qt
-        native_handle = backend_window.native_handle
+        native_handle = surface.native_handle
         qwindow = QWindow.fromWinId(native_handle)
         gl_widget = QWidget.createWindowContainer(qwindow, container)
         gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
 
-        # Set up focus callback: when SDL gets mouse click, request Qt focus
-        backend_window.set_focus_callback(lambda w=gl_widget: w.setFocus())
-        # Install Qt keyboard event filter to forward key events to SDL
-        backend_window.install_qt_key_filter(gl_widget)
+        # Install Qt keyboard event filter and focus callback
+        surface.set_focus_callback(lambda w=gl_widget: w.setFocus())
+        surface.install_qt_key_filter(gl_widget)
 
         # Add to container layout
         layout = container.layout()
@@ -636,19 +636,18 @@ class RenderingController:
             container.setLayout(layout)
         layout.addWidget(gl_widget)
 
-        # Create surface and display (editor_only=True by default)
-        surface = WindowRenderSurface(backend_window)
+        # Create display (editor_only=True by default)
         display = Display(surface, name="Editor", editor_only=True)
 
         # Store mapping
         display_id = id(display)
-        self._display_tabs[display_id] = (container, backend_window, qwindow)
+        self._display_tabs[display_id] = (container, surface, qwindow)
         self._editor_display_id = display_id
 
         # Add to displays list (editor display input is managed by EditorViewportFeatures)
         self.add_display(display, "Editor")
 
-        return display, backend_window
+        return display, surface
 
     def is_editor_display(self, display: "Display") -> bool:
         """Check if display is the editor display (not serialized)."""
@@ -665,14 +664,14 @@ class RenderingController:
         return None
 
     @property
-    def editor_backend_window(self) -> Optional["BackendWindow"]:
-        """Get the editor backend window."""
+    def editor_surface(self) -> Optional[object]:
+        """Get the editor SDLEmbeddedWindowHandle."""
         if self._editor_display_id is None:
             return None
         if self._editor_display_id not in self._display_tabs:
             return None
-        _container, backend_window, _qwindow = self._display_tabs[self._editor_display_id]
-        return backend_window
+        _container, surface, _qwindow = self._display_tabs[self._editor_display_id]
+        return surface
 
     def create_editor_viewport(
         self,
@@ -728,9 +727,9 @@ class RenderingController:
         if self._editor_display_id is not None:
             tab_info = self._display_tabs.get(self._editor_display_id)
             if tab_info is not None:
-                _tab_container, backend_window, _qwindow = tab_info
-                if backend_window is not None:
-                    backend_window.make_current()
+                _tab_container, surface, _qwindow = tab_info
+                if surface is not None:
+                    surface.make_current()
 
         for vp in list(display.viewports):
             # Destroy pipeline
@@ -752,7 +751,7 @@ class RenderingController:
             return None
         if self._editor_display_id not in self._display_tabs:
             return None
-        container, _backend_window, _qwindow = self._display_tabs[self._editor_display_id]
+        container, _sfc, _qwindow = self._display_tabs[self._editor_display_id]
         # The gl_widget is the first child of the container layout
         layout = container.layout()
         if layout is not None and layout.count() > 0:
@@ -773,14 +772,14 @@ class RenderingController:
         viewport = display.viewports[0]
         return viewport.pipeline
 
-    def get_display_backend_window(self, display: "Display") -> Optional["BackendWindow"]:
-        """Get backend window for a display."""
+    def get_display_sfc(self, display: "Display") -> Optional[object]:
+        """Get SDLWindowRenderSurface for a display."""
         display_id = id(display)
         tab_info = self._display_tabs.get(display_id)
         if tab_info is None:
             return None
-        _tab_container, backend_window, _qwindow = tab_info
-        return backend_window
+        _tab_container, surface, _qwindow = tab_info
+        return surface
 
     # --- Selection handling ---
 
@@ -864,46 +863,45 @@ class RenderingController:
         tab_layout.setSpacing(0)
 
         # Create SDL window with OpenGL context
-        backend_window = sdl_backend.create_embedded_window(
+        surface = sdl_backend.create_embedded_window(
             width=800,
             height=600,
             title=name,
         )
 
         # Embed SDL window into Qt via QWindow.fromWinId
-        native_handle = backend_window.native_handle
+        native_handle = surface.native_handle
         qwindow = QWindow.fromWinId(native_handle)
         gl_widget = QWidget.createWindowContainer(qwindow, tab_container)
         gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
         tab_layout.addWidget(gl_widget)
 
-        # Set up focus callback: when SDL gets mouse click, request Qt focus
-        backend_window.set_focus_callback(lambda w=gl_widget: w.setFocus())
-        # Install Qt keyboard event filter to forward key events to SDL
-        backend_window.install_qt_key_filter(gl_widget)
+        # Install Qt keyboard event filter and focus callback
+        surface.set_focus_callback(lambda w=gl_widget: w.setFocus())
+        surface.install_qt_key_filter(gl_widget)
 
-        # Create WindowRenderSurface and Display
-        from termin.visualization.render.surface import WindowRenderSurface
+        # Create Display
         from termin.visualization.core.display import Display
 
-        surface = WindowRenderSurface(backend_window)
         display = Display(surface)
 
         # Store mapping (include qwindow to prevent GC)
         display_id = id(display)
-        self._display_tabs[display_id] = (tab_container, backend_window, qwindow)
+        self._display_tabs[display_id] = (tab_container, surface, qwindow)
 
         # Create input manager for this display (default: simple mode)
         from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
         input_manager = SimpleDisplayInputManager(
-            backend_window=backend_window,
             display=display,
             on_request_update=self._request_update,
         )
         # Store input manager to prevent GC
         self._display_input_managers[display_id] = input_manager
+
+        # Connect input manager to surface
+        surface.set_input_manager(input_manager.tc_input_manager_ptr)
 
         # Add display (this will call _update_center_tabs)
         self.add_display(display, name)
@@ -970,14 +968,14 @@ class RenderingController:
         display = self._selected_display
         display_id = id(display)
 
-        # Get backend_window for this display
+        # Get surface for this display
         tab_info = self._display_tabs.get(display_id)
         if tab_info is None:
             return
 
-        _tab_container, backend_window, _qwindow = tab_info
+        _tab_container, surface, _qwindow = tab_info
 
-        self._apply_display_input_mode(display, backend_window, mode)
+        self._apply_display_input_mode(display, surface, mode)
 
         # Notify EditorWindow to handle editor mode setup/teardown
         if self._on_display_input_mode_changed_callback is not None:
@@ -985,9 +983,14 @@ class RenderingController:
 
         self._request_update()
 
-    def _apply_display_input_mode(self, display: "Display", backend_window, mode: str) -> None:
+    def _apply_display_input_mode(self, display: "Display", surface, mode: str) -> None:
         """Apply input mode to a display."""
         display_id = id(display)
+
+        print(f"[RenderingController] _update_display_input_mode: display={display.name}, mode={mode}")
+
+        # Get surface from display
+        surface = display.surface
 
         # Check if blocked from first viewport
         is_blocked = False
@@ -998,25 +1001,25 @@ class RenderingController:
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
-        # Clear callbacks first
-        backend_window.set_cursor_pos_callback(None)
-        backend_window.set_scroll_callback(None)
-        backend_window.set_mouse_button_callback(None)
-        backend_window.set_key_callback(None)
+        # Clear input manager on surface
+        surface.set_input_manager(0)
 
         # Create new input manager based on mode (unless blocked in editor)
         if mode == "none" or (mode == "editor" and is_blocked):
-            # No input handling - callbacks already cleared
+            # No input handling - input manager already cleared
             pass
         elif mode == "simple":
             from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
             input_manager = SimpleDisplayInputManager(
-                backend_window=backend_window,
                 display=display,
                 on_request_update=self._request_update,
             )
             self._display_input_managers[display_id] = input_manager
+
+            # Connect input manager to surface
+            print(f"[RenderingController] Setting SimpleDisplayInputManager on surface, ptr={input_manager.tc_input_manager_ptr}")
+            surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif mode == "editor":
             # Editor mode is handled by EditorWindow via callback
             # It will create EditorViewportFeatures which owns EditorDisplayInputManager
@@ -1230,7 +1233,7 @@ class RenderingController:
                 continue
 
             name = self._manager.get_display_name(display)
-            tab_container, _backend_window, _qwindow = self._display_tabs[display_id]
+            tab_container, _sfc, _qwindow = self._display_tabs[display_id]
             self._center_tabs.addTab(tab_container, name)
 
     def _request_update(self) -> None:
@@ -1240,25 +1243,25 @@ class RenderingController:
 
         # Also request update for all additional displays
         for display_id in self._display_tabs:
-            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
-            if backend_window is not None:
-                backend_window.request_update()
+            _tab_container, surface, _qwindow = self._display_tabs[display_id]
+            if surface is not None:
+                surface.request_update()
 
     def any_additional_display_needs_render(self) -> bool:
         """Check if any additional display needs rendering (excluding editor)."""
         for display_id in self._display_tabs:
             if display_id == self._editor_display_id:
                 continue
-            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
-            if backend_window is not None and backend_window.needs_render():
+            _tab_container, surface, _qwindow = self._display_tabs[display_id]
+            if surface is not None and surface.needs_render():
                 return True
         return False
 
     def any_display_needs_render(self) -> bool:
         """Check if any display needs rendering (including editor)."""
         for display_id in self._display_tabs:
-            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
-            if backend_window is not None and backend_window.needs_render():
+            _tab_container, surface, _qwindow = self._display_tabs[display_id]
+            if surface is not None and surface.needs_render():
                 return True
         return False
 
@@ -1283,14 +1286,14 @@ class RenderingController:
             if display_id not in self._display_tabs:
                 continue
 
-            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
-            if backend_window is None:
+            _tab_container, surface, _qwindow = self._display_tabs[display_id]
+            if surface is None:
                 continue
 
-            backend_window.make_current()
-            backend_window.check_resize()
+            surface.make_current()
+            surface.check_resize()
             self._manager._present_display(display)
-            backend_window.clear_render_flag()
+            surface.clear_render_flag()
 
         if frame_started_here:
             profiler.end_frame()

@@ -1,21 +1,25 @@
 """
-EditorDisplayInputManager — обработка ввода для редактора.
+EditorDisplayInputManager — input handling for editor.
 
-Расширяет функциональность SimpleDisplayInputManager:
-- Поддержка editor mode vs game mode
-- Picking через ID buffer
-- Внешние колбэки для редакторских событий
+Extends SimpleDisplayInputManager functionality:
+- Support for editor mode vs game mode
+- Picking via ID buffer
+- External callbacks for editor events
+
+Each Python class has its own vtable registered once.
 """
 
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional, Tuple, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
-from termin.visualization.platform.backends.base import (
-    Action,
-    Key,
-    MouseButton,
+from termin._native.render import (
+    _input_manager_create_vtable,
+    _input_manager_new,
+    _input_manager_free,
+    TC_INPUT_PRESS,
+    TC_INPUT_RELEASE,
 )
 from termin.visualization.core.camera import CameraController
 from termin.visualization.core.entity import Entity
@@ -25,52 +29,81 @@ from termin.visualization.core.input_events import (
     MouseMoveEvent,
     ScrollEvent,
     KeyEvent,
+    Action,
+    MouseButton,
 )
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.platform.backends.base import (
-        BackendWindow,
         FramebufferHandle,
         GraphicsBackend,
     )
 
 
+# Class-level vtable pointer (created once per class)
+_editor_vtable_ptr: int = 0
+
+
+def _get_editor_vtable() -> int:
+    """Get or create vtable for EditorDisplayInputManager."""
+    global _editor_vtable_ptr
+    if _editor_vtable_ptr == 0:
+        def on_mouse_button(manager, button, action, mods):
+            manager._on_mouse_button(button, action, mods)
+
+        def on_mouse_move(manager, x, y):
+            manager._on_mouse_move(x, y)
+
+        def on_scroll(manager, x, y, mods):
+            manager._on_scroll(x, y, mods)
+
+        def on_key(manager, key, scancode, action, mods):
+            manager._on_key(key, scancode, action, mods)
+
+        def on_char(manager, codepoint):
+            pass  # Not used in editor manager
+
+        _editor_vtable_ptr = _input_manager_create_vtable(
+            on_mouse_button, on_mouse_move, on_scroll, on_key, on_char
+        )
+    return _editor_vtable_ptr
+
+
 class EditorDisplayInputManager:
     """
-    Обработчик ввода для редактора.
+    Input handler for editor.
 
-    Поддерживает два режима:
-    - "editor": редакторский режим с picking, гизмо, внешними колбэками
-    - "game": игровой режим, роутит события в сцену
+    Supports two modes:
+    - "editor": editor mode with picking, gizmo, external callbacks
+    - "game": game mode, routes events to scene
 
-    Для picking требуется доступ к FBO pool через get_fbo_pool колбэк.
+    For picking requires access to FBO pool via get_fbo_pool callback.
     """
 
     def __init__(
         self,
-        backend_window: "BackendWindow",
         display: "Display",
         graphics: "GraphicsBackend",
         get_fbo_pool: Callable[[], dict] | None = None,
         on_request_update: Callable[[], None] | None = None,
-        on_mouse_button_event: Callable[[MouseButton, Action, float, float, Optional["Viewport"]], None] | None = None,
-        on_mouse_move_event: Callable[[float, float, Optional["Viewport"]], None] | None = None,
+        on_mouse_button_event: Callable[[MouseButton, Action, float, float, "Viewport | None"], None] | None = None,
+        on_mouse_move_event: Callable[[float, float, "Viewport | None"], None] | None = None,
     ):
         """
-        Создаёт EditorDisplayInputManager.
+        Create EditorDisplayInputManager.
 
-        Параметры:
-            backend_window: Платформенное окно для подписки на события.
-            display: Display для роутинга событий в viewport'ы.
-            graphics: GraphicsBackend для чтения пикселей из FBO.
-            get_fbo_pool: Колбэк для получения FBO pool (для picking).
-            on_request_update: Колбэк для запроса перерисовки.
-            on_mouse_button_event: Колбэк для внешней обработки кликов.
-            on_mouse_move_event: Колбэк для внешней обработки движения мыши.
+        Args:
+            display: Display to route events to viewports.
+            graphics: GraphicsBackend for reading pixels from FBO.
+            get_fbo_pool: Callback to get FBO pool (for picking).
+            on_request_update: Callback to request redraw.
+            on_mouse_button_event: Callback for external click handling.
+            on_mouse_move_event: Callback for external mouse move handling.
         """
-        self._backend_window = backend_window
+        self._tc_input_manager_ptr: int = 0
+
         self._display = display
         self._graphics = graphics
         self._get_fbo_pool = get_fbo_pool
@@ -78,8 +111,8 @@ class EditorDisplayInputManager:
         self._on_mouse_button_event = on_mouse_button_event
         self._on_mouse_move_event = on_mouse_move_event
 
-        self._active_viewport: Optional["Viewport"] = None
-        self._last_cursor: Optional[Tuple[float, float]] = None
+        self._active_viewport: "Viewport | None" = None
+        self._last_cursor: tuple[float, float] | None = None
         self._world_mode = "editor"  # "editor" or "game"
 
         # Double-click tracking
@@ -89,51 +122,60 @@ class EditorDisplayInputManager:
         # Current modifier keys state (updated on key events)
         self._current_mods: int = 0
 
-        # Подписываемся на события окна
-        backend_window.set_cursor_pos_callback(self._handle_cursor_pos)
-        backend_window.set_scroll_callback(self._handle_scroll)
-        backend_window.set_mouse_button_callback(self._handle_mouse_button)
-        backend_window.set_key_callback(self._handle_key)
+        # Create tc_input_manager with class vtable
+        vtable = _get_editor_vtable()
+        self._tc_input_manager_ptr = _input_manager_new(vtable, self)
+
+    def __del__(self):
+        if self._tc_input_manager_ptr:
+            _input_manager_free(self._tc_input_manager_ptr)
+            self._tc_input_manager_ptr = 0
+
+    @property
+    def tc_input_manager_ptr(self) -> int:
+        """Raw pointer to tc_input_manager (for C interop)."""
+        return self._tc_input_manager_ptr
 
     @property
     def display(self) -> "Display":
-        """Display, к которому привязан input manager."""
+        """Display that this input manager is attached to."""
         return self._display
 
     @property
-    def backend_window(self) -> "BackendWindow":
-        """Платформенное окно."""
-        return self._backend_window
-
-    @property
     def world_mode(self) -> str:
-        """Текущий режим: 'editor' или 'game'."""
+        """Current mode: 'editor' or 'game'."""
         return self._world_mode
 
     def set_world_mode(self, mode: str) -> None:
-        """Устанавливает режим работы."""
+        """Set operating mode."""
         self._world_mode = mode
 
     def _dispatch_to_camera(self, viewport: "Viewport", event_name: str, event) -> None:
-        """Диспатчит событие в InputComponent'ы камеры viewport'а.
-        
-        Проверка is_input_handler выполняется через tc_component API,
-        а не через isinstance, так как C++ компоненты (например OrbitCameraController)
-        не наследуют Python-класс InputComponent.
+        """Dispatch event to InputComponents on viewport's camera.
+
+        Checks is_input_handler via tc_component API, not via isinstance,
+        since C++ components (e.g. OrbitCameraController) don't inherit Python InputComponent.
         """
         camera = viewport.camera
-        if camera is None or camera.entity is None:
+        if camera is None:
+            print(f"[_dispatch_to_camera] {event_name}: camera is None")
+            return
+        if camera.entity is None:
+            print(f"[_dispatch_to_camera] {event_name}: camera.entity is None")
             return
         for comp in camera.entity.components:
-            # Проверяем через tc_component_is_input_handler (C API)
+            # Check via tc_component_is_input_handler (C API)
             is_handler = comp.is_input_handler
             if is_handler:
                 handler = getattr(comp, event_name, None)
                 if handler:
+                    print(f"[_dispatch_to_camera] calling {type(comp).__name__}.{event_name}")
                     handler(event)
+                else:
+                    print(f"[_dispatch_to_camera] {type(comp).__name__} has no {event_name}")
 
     def _dispatch_to_editor_components(self, viewport: "Viewport", event_name: str, event) -> None:
-        """Диспатчит событие в InputComponent'ы сцены с active_in_editor=True."""
+        """Dispatch event to InputComponents in scene with active_in_editor=True."""
         scene = viewport.scene
         if scene is None:
             return
@@ -148,16 +190,16 @@ class EditorDisplayInputManager:
             scene.dispatch_key_editor(event)
 
     def _dispatch_to_internal_entities(self, viewport: "Viewport", event_name: str, event) -> None:
-        """Диспатчит событие в InputComponent'ы из viewport.internal_entities."""
+        """Dispatch event to InputComponents in viewport.internal_entities."""
         internal_root = viewport.internal_entities
         if internal_root is None:
             return
         self._dispatch_to_entity_hierarchy(internal_root, event_name, event)
 
     def _dispatch_to_entity_hierarchy(self, entity: "Entity", event_name: str, event) -> None:
-        """Рекурсивно диспатчит событие в InputComponent'ы entity и его детей.
-        
-        Проверка is_input_handler выполняется через tc_component API.
+        """Recursively dispatch event to InputComponents of entity and its children.
+
+        Checks is_input_handler via tc_component API.
         """
         for comp in entity.components:
             if comp.is_input_handler and comp.enabled:
@@ -170,19 +212,21 @@ class EditorDisplayInputManager:
                 self._dispatch_to_entity_hierarchy(child_tf.entity, event_name, event)
 
     def _request_update(self) -> None:
-        """Запрашивает перерисовку."""
+        """Request redraw."""
         if self._on_request_update is not None:
             self._on_request_update()
-        else:
-            self._backend_window.request_update()
 
-    def _viewport_under_cursor(self, x: float, y: float) -> Optional["Viewport"]:
-        """Находит viewport под курсором."""
+    def _viewport_under_cursor(self, x: float, y: float) -> "Viewport | None":
+        """Find viewport under cursor."""
         return self._display.viewport_at_pixels(x, y)
 
-    def _viewport_rect_to_pixels(self, viewport: "Viewport") -> Tuple[int, int, int, int]:
-        """Преобразует rect viewport'а в пиксели."""
+    def _viewport_rect_to_pixels(self, viewport: "Viewport") -> tuple[int, int, int, int]:
+        """Convert viewport rect to pixels."""
         return self._display.viewport_rect_to_pixels(viewport)
+
+    def _get_cursor_pos(self) -> tuple[float, float]:
+        """Get cursor position from display surface."""
+        return self._display.surface.get_cursor_pos()
 
     # ----------------------------------------------------------------
     # Picking support
@@ -192,19 +236,19 @@ class EditorDisplayInputManager:
         self,
         x: float,
         y: float,
-        viewport: Optional["Viewport"] = None,
+        viewport: "Viewport | None" = None,
         buffer_name: str = "color",
-    ) -> Optional[Tuple[float, float, float, float]]:
+    ) -> tuple[float, float, float, float] | None:
         """
-        Читает цвет пикселя из FBO.
+        Read pixel color from FBO.
 
-        Параметры:
-            x, y: координаты в пикселях окна (origin сверху-слева).
-            viewport: viewport для которого читаем (или определяется автоматически).
-            buffer_name: имя ресурса в fbo_pool.
+        Args:
+            x, y: coordinates in window pixels (origin top-left).
+            viewport: viewport to read from (auto-detected if None).
+            buffer_name: resource name in fbo_pool.
 
-        Возвращает:
-            (r, g, b, a) в [0..1] или None.
+        Returns:
+            (r, g, b, a) in [0..1] or None.
         """
         if self._get_fbo_pool is None:
             return None
@@ -218,28 +262,29 @@ class EditorDisplayInputManager:
             if viewport is None:
                 return None
 
-        win_w, win_h = self._backend_window.window_size()
-        fb_w, fb_h = self._backend_window.framebuffer_size()
+        surface = self._display.surface
+        win_w, win_h = surface.window_size()
+        fb_w, fb_h = surface.get_size()
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
             return None
 
         px, py, pw, ph = self._viewport_rect_to_pixels(viewport)
 
-        # Переводим координаты мыши из логических в физические
+        # Convert mouse coordinates from logical to physical
         sx = fb_w / float(win_w)
         sy = fb_h / float(win_h)
         x_phys = x * sx
         y_phys = y * sy
 
-        # Локальные координаты внутри viewport'а
+        # Local coordinates within viewport
         vx = x_phys - px
         vy = y_phys - py
 
         if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
             return None
 
-        # Перевод в координаты FBO (origin снизу-слева)
+        # Convert to FBO coordinates (origin bottom-left)
         read_x = int(vx)
         read_y = int(ph - vy - 1)
 
@@ -248,8 +293,8 @@ class EditorDisplayInputManager:
             return None
 
         r, g, b, a = self._graphics.read_pixel(fb, read_x, read_y)
-        # Возвращаем framebuffer обратно на окно
-        window_fb = self._backend_window.get_window_framebuffer()
+        # Return framebuffer back to window
+        window_fb = surface.get_framebuffer()
         self._graphics.bind_framebuffer(window_fb)
         return (r, g, b, a)
 
@@ -257,17 +302,17 @@ class EditorDisplayInputManager:
         self,
         x: float,
         y: float,
-        viewport: Optional["Viewport"] = None,
-    ) -> Optional[Entity]:
+        viewport: "Viewport | None" = None,
+    ) -> Entity | None:
         """
-        Читает entity под пикселем из id-карты.
+        Read entity under pixel from id-map.
 
-        Параметры:
-            x, y: координаты в пикселях окна.
-            viewport: viewport для которого читаем.
+        Args:
+            x, y: coordinates in window pixels.
+            viewport: viewport to read from.
 
-        Возвращает:
-            Entity или None.
+        Returns:
+            Entity or None.
         """
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
@@ -286,19 +331,19 @@ class EditorDisplayInputManager:
         self,
         x: float,
         y: float,
-        viewport: Optional["Viewport"] = None,
+        viewport: "Viewport | None" = None,
         buffer_name: str = "id",
-    ) -> Optional[float]:
+    ) -> float | None:
         """
-        Читает глубину под пикселем из указанного буфера.
+        Read depth under pixel from specified buffer.
 
-        Параметры:
-            x, y: координаты в пикселях окна.
-            viewport: viewport для которого читаем.
-            buffer_name: имя буфера в FBO pool (по умолчанию 'id').
+        Args:
+            x, y: coordinates in window pixels.
+            viewport: viewport to read from.
+            buffer_name: buffer name in FBO pool (default 'id').
 
-        Возвращает:
-            Глубину в диапазоне [0, 1] или None.
+        Returns:
+            Depth in range [0, 1] or None.
         """
         if self._get_fbo_pool is None:
             return None
@@ -312,28 +357,29 @@ class EditorDisplayInputManager:
             if viewport is None:
                 return None
 
-        win_w, win_h = self._backend_window.window_size()
-        fb_w, fb_h = self._backend_window.framebuffer_size()
+        surface = self._display.surface
+        win_w, win_h = surface.window_size()
+        fb_w, fb_h = surface.get_size()
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
             return None
 
         px, py, pw, ph = self._viewport_rect_to_pixels(viewport)
 
-        # Переводим координаты мыши из логических в физические
+        # Convert mouse coordinates from logical to physical
         sx = fb_w / float(win_w)
         sy = fb_h / float(win_h)
         x_phys = x * sx
         y_phys = y * sy
 
-        # Локальные координаты внутри viewport'а
+        # Local coordinates within viewport
         vx = x_phys - px
         vy = y_phys - py
 
         if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
             return None
 
-        # Перевод в координаты FBO (origin снизу-слева)
+        # Convert to FBO coordinates (origin bottom-left)
         read_x = int(vx)
         read_y = int(ph - vy - 1)
 
@@ -342,31 +388,35 @@ class EditorDisplayInputManager:
             return None
 
         depth = self._graphics.read_depth_pixel(fb, read_x, read_y)
-        # Возвращаем framebuffer обратно на окно
-        window_fb = self._backend_window.get_window_framebuffer()
+        # Return framebuffer back to window
+        window_fb = surface.get_framebuffer()
         self._graphics.bind_framebuffer(window_fb)
         return depth
 
     # ----------------------------------------------------------------
-    # Event handlers
+    # Event handlers (called via C callbacks)
     # ----------------------------------------------------------------
 
-    def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods: int) -> None:
-        """Обработчик нажатия кнопки мыши."""
+    def _on_mouse_button(self, button: int, action: int, mods: int) -> None:
+        """Handle mouse button event."""
+        print(f"[EditorDisplayInputManager] _on_mouse_button: button={button}, action={action}, mods={mods}")
         if self._world_mode == "game":
             self._handle_mouse_button_game_mode(button, action, mods)
         else:
             self._handle_mouse_button_editor_mode(button, action, mods)
 
-    def _handle_mouse_button_game_mode(self, button: MouseButton, action: Action, mods: int) -> None:
-        """Обработка клика в игровом режиме."""
-        x, y = self._backend_window.get_cursor_pos()
+    def _handle_mouse_button_game_mode(self, button: int, action: int, mods: int) -> None:
+        """Handle click in game mode."""
+        x, y = self._get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
 
+        py_button = MouseButton(button)
+        py_action = Action(action)
+
         # Track active viewport
-        if action == Action.PRESS:
+        if action == TC_INPUT_PRESS:
             self._active_viewport = viewport
-        if action == Action.RELEASE:
+        if action == TC_INPUT_RELEASE:
             self._last_cursor = None
             if viewport is None:
                 viewport = self._active_viewport
@@ -376,12 +426,12 @@ class EditorDisplayInputManager:
         if viewport is not None:
             event = MouseButtonEvent(
                 viewport=viewport, x=x, y=y,
-                button=button, action=action, mods=mods
+                button=py_button, action=py_action, mods=mods
             )
             self._dispatch_to_camera(viewport, "on_mouse_button", event)
 
         # Object click handling (raycast)
-        if viewport is not None and action == Action.PRESS and button == MouseButton.LEFT:
+        if viewport is not None and action == TC_INPUT_PRESS and button == 0:  # LEFT
             cam = viewport.camera
             if cam is not None:
                 rect = self._viewport_rect_to_pixels(viewport)
@@ -392,31 +442,34 @@ class EditorDisplayInputManager:
                     for comp in entity.components:
                         on_click = getattr(comp, "on_click", None)
                         if on_click is not None:
-                            on_click(hit, button)
+                            on_click(hit, py_button)
 
         # Editor callbacks for picking/gizmo (allow editing in game mode)
         if self._on_mouse_button_event is not None:
-            self._on_mouse_button_event(button, action, x, y, viewport)
+            self._on_mouse_button_event(py_button, py_action, x, y, viewport)
 
         self._request_update()
 
-    def _handle_mouse_button_editor_mode(self, button: MouseButton, action: Action, mods: int) -> None:
-        """Обработка клика в редакторском режиме."""
-        x, y = self._backend_window.get_cursor_pos()
+    def _handle_mouse_button_editor_mode(self, button: int, action: int, mods: int) -> None:
+        """Handle click in editor mode."""
+        x, y = self._get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
+
+        py_button = MouseButton(button)
+        py_action = Action(action)
 
         # Double-click detection
         is_double_click = False
-        if action == Action.PRESS and button == MouseButton.LEFT:
+        if action == TC_INPUT_PRESS and button == 0:  # LEFT
             current_time = time.time()
             if current_time - self._last_click_time < self._double_click_threshold:
                 is_double_click = True
             self._last_click_time = current_time
 
         # Track active viewport
-        if action == Action.PRESS:
+        if action == TC_INPUT_PRESS:
             self._active_viewport = viewport
-        if action == Action.RELEASE:
+        if action == TC_INPUT_RELEASE:
             self._last_cursor = None
             if viewport is None:
                 viewport = self._active_viewport
@@ -426,7 +479,7 @@ class EditorDisplayInputManager:
         if viewport is not None:
             event = MouseButtonEvent(
                 viewport=viewport, x=x, y=y,
-                button=button, action=action, mods=mods
+                button=py_button, action=py_action, mods=mods
             )
             self._dispatch_to_internal_entities(viewport, "on_mouse_button", event)
             self._dispatch_to_editor_components(viewport, "on_mouse_button", event)
@@ -436,22 +489,22 @@ class EditorDisplayInputManager:
         if is_double_click and viewport is not None:
             self._handle_double_click(x, y, viewport)
 
-        # Внешний колбэк для редактора (picking, гизмо, etc.)
+        # External callback for editor (picking, gizmo, etc.)
         if self._on_mouse_button_event is not None:
-            self._on_mouse_button_event(button, action, x, y, viewport)
+            self._on_mouse_button_event(py_button, py_action, x, y, viewport)
 
         self._request_update()
 
     def _handle_double_click(self, x: float, y: float, viewport: "Viewport") -> None:
-        """Обработка двойного клика — центрирование камеры на объекте."""
+        """Handle double-click — center camera on object."""
         entity = self.pick_entity_at(x, y, viewport)
         if entity is None:
             return
 
-        # Получаем позицию entity
+        # Get entity position
         target_position = entity.transform.global_pose().lin
 
-        # Находим контроллер камеры
+        # Find camera controller
         camera = viewport.camera
         if camera is None or camera.entity is None:
             return
@@ -460,8 +513,8 @@ class EditorDisplayInputManager:
         if controller is not None:
             controller.center_on(target_position)
 
-    def _handle_cursor_pos(self, window, x: float, y: float) -> None:
-        """Обработчик движения мыши."""
+    def _on_mouse_move(self, x: float, y: float) -> None:
+        """Handle mouse move event."""
         if self._last_cursor is None:
             dx = dy = 0.0
         else:
@@ -471,22 +524,25 @@ class EditorDisplayInputManager:
         self._last_cursor = (x, y)
         viewport = self._active_viewport or self._viewport_under_cursor(x, y)
 
-        # Dispatch to editor components and camera
-        if viewport is not None:
-            event = MouseMoveEvent(viewport=viewport, x=x, y=y, dx=dx, dy=dy)
-            self._dispatch_to_internal_entities(viewport, "on_mouse_move", event)
-            self._dispatch_to_editor_components(viewport, "on_mouse_move", event)
-            self._dispatch_to_camera(viewport, "on_mouse_move", event)
+        if viewport is None:
+            print(f"[EditorDisplayInputManager] _on_mouse_move: NO VIEWPORT at ({x:.0f}, {y:.0f})")
+            return
 
-        # Внешний колбэк
+        # Dispatch to editor components and camera
+        event = MouseMoveEvent(viewport=viewport, x=x, y=y, dx=dx, dy=dy)
+        self._dispatch_to_internal_entities(viewport, "on_mouse_move", event)
+        self._dispatch_to_editor_components(viewport, "on_mouse_move", event)
+        self._dispatch_to_camera(viewport, "on_mouse_move", event)
+
+        # External callback
         if self._on_mouse_move_event is not None:
             self._on_mouse_move_event(x, y, viewport)
 
         self._request_update()
 
-    def _handle_scroll(self, window, xoffset: float, yoffset: float, mods: int = 0) -> None:
-        """Обработчик скролла."""
-        x, y = self._backend_window.get_cursor_pos()
+    def _on_scroll(self, xoffset: float, yoffset: float, mods: int) -> None:
+        """Handle scroll event."""
+        x, y = self._get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y) or self._active_viewport
 
         # Use mods from parameter if provided, otherwise fall back to tracked mods
@@ -504,14 +560,19 @@ class EditorDisplayInputManager:
 
         self._request_update()
 
-    def _handle_key(self, window, key: Key, scancode: int, action: Action, mods: int) -> None:
-        """Обработчик нажатия клавиши."""
+    def _on_key(self, key: int, scancode: int, action: int, mods: int) -> None:
+        """Handle key event."""
+        from termin.visualization.platform.backends.base import Key
+
         # Update current mods state for use in scroll events
         self._current_mods = mods
 
-        # ESC в игровом режиме закрывает окно
-        if self._world_mode == "game" and key == Key.ESCAPE and action == Action.PRESS:
-            self._backend_window.set_should_close(True)
+        # ESC in game mode closes window
+        if self._world_mode == "game" and key == Key.ESCAPE.value and action == TC_INPUT_PRESS:
+            self._display.surface.set_should_close(True)
+
+        py_action = Action(action)
+        py_key = Key(key)
 
         viewport = self._active_viewport or (
             self._display.viewports[0] if self._display.viewports else None
@@ -520,7 +581,7 @@ class EditorDisplayInputManager:
         if viewport is not None:
             event = KeyEvent(
                 viewport=viewport,
-                key=key, scancode=scancode, action=action, mods=mods
+                key=py_key, scancode=scancode, action=py_action, mods=mods
             )
             self._dispatch_to_internal_entities(viewport, "on_key", event)
             self._dispatch_to_editor_components(viewport, "on_key", event)

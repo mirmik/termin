@@ -1,5 +1,6 @@
 #include "sdl_render_surface.hpp"
 #include "render/tc_input_manager.h"
+#include <SDL2/SDL_syswm.h>
 
 namespace termin {
 
@@ -174,7 +175,9 @@ SDLWindowRenderSurface::SDLWindowRenderSurface(
     : window_(nullptr)
     , input_manager_(nullptr)
     , backend_(backend)
-    , owns_window_(true)
+    , needs_render_(true)
+    , last_width_(width)
+    , last_height_(height)
 {
     // Create SDL window
     SDLWindow* share_window = share ? share->window_ : nullptr;
@@ -182,7 +185,6 @@ SDLWindowRenderSurface::SDLWindowRenderSurface(
 
     // Initialize tc_render_surface
     tc_render_surface_init(&surface_, &s_vtable);
-    // body points to this for identification (not used for external callbacks)
     surface_.body = this;
 
     // Register in backend for event routing
@@ -197,7 +199,7 @@ SDLWindowRenderSurface::~SDLWindowRenderSurface() {
         backend_->unregister_surface(this);
     }
 
-    if (owns_window_ && window_) {
+    if (window_) {
         delete window_;
         window_ = nullptr;
     }
@@ -206,6 +208,40 @@ SDLWindowRenderSurface::~SDLWindowRenderSurface() {
 void SDLWindowRenderSurface::set_input_manager(tc_input_manager* manager) {
     input_manager_ = manager;
     tc_render_surface_set_input_manager(&surface_, manager);
+}
+
+bool SDLWindowRenderSurface::check_resize() {
+    auto [w, h] = get_size();
+    if (w != last_width_ || h != last_height_) {
+        last_width_ = w;
+        last_height_ = h;
+        needs_render_ = true;
+        tc_render_surface_notify_resize(&surface_, w, h);
+        return true;
+    }
+    return false;
+}
+
+uintptr_t SDLWindowRenderSurface::get_native_handle() const {
+    if (!window_) return 0;
+
+    // Get raw SDL_Window* from our wrapper
+    SDL_Window* sdl_win = SDL_GetWindowFromID(window_->get_window_id());
+    if (!sdl_win) return 0;
+
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (!SDL_GetWindowWMInfo(sdl_win, &info)) {
+        return 0;
+    }
+
+#ifdef _WIN32
+    return reinterpret_cast<uintptr_t>(info.info.win.window);
+#elif defined(__APPLE__)
+    return reinterpret_cast<uintptr_t>(info.info.cocoa.window);
+#else
+    return static_cast<uintptr_t>(info.info.x11.window);
+#endif
 }
 
 // ============================================================================
@@ -242,7 +278,6 @@ uintptr_t SDLWindowRenderSurface::vtable_context_key(tc_render_surface* self) {
 
 void SDLWindowRenderSurface::vtable_poll_events(tc_render_surface* self) {
     // poll_events вызывается через backend, не через отдельный surface
-    // Оставляем пустым - backend сам пулит
 }
 
 void SDLWindowRenderSurface::vtable_get_window_size(tc_render_surface* self, int* width, int* height) {
