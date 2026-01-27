@@ -169,7 +169,6 @@ class EditorDisplayInputManager:
             if is_handler:
                 handler = getattr(comp, event_name, None)
                 if handler:
-                    print(f"[_dispatch_to_camera] calling {type(comp).__name__}.{event_name}")
                     handler(event)
                 else:
                     print(f"[_dispatch_to_camera] {type(comp).__name__} has no {event_name}")
@@ -490,6 +489,7 @@ class EditorDisplayInputManager:
             self._handle_double_click(x, y, viewport)
 
         # External callback for editor (picking, gizmo, etc.)
+        print(f"[EditorDisplayInputManager] _on_mouse_button_event callback: {self._on_mouse_button_event}")
         if self._on_mouse_button_event is not None:
             self._on_mouse_button_event(py_button, py_action, x, y, viewport)
 

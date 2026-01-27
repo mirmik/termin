@@ -6,17 +6,8 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from typing import Any, Callable, Optional, Tuple
 
-
-class Action(IntEnum):
-    RELEASE = 0
-    PRESS = 1
-    REPEAT = 2
-
-
-class MouseButton(IntEnum):
-    LEFT = 0
-    RIGHT = 1
-    MIDDLE = 2
+# Re-export C++ enums for Action, MouseButton, Mods
+from termin.entity._entity_native import Action, MouseButton, Mods
 
 
 class Key(IntEnum):

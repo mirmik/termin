@@ -208,16 +208,23 @@ class ChronoCameraController(PythonComponent):
 
     def handle_mouse_button(self, event: "MouseButtonEvent") -> None:
         """Handle mouse button event."""
+        print(f"[ChronoCameraController] handle_mouse_button: button={event.button}, action={event.action}")
+        print(f"[ChronoCameraController]   MouseButton.MIDDLE={MouseButton.MIDDLE}, Action.PRESS={Action.PRESS}")
+        print(f"[ChronoCameraController]   button==MIDDLE: {event.button == MouseButton.MIDDLE}, action==PRESS: {event.action == Action.PRESS}")
         if self.camera_component is None:
+            print(f"[ChronoCameraController]   camera_component is None!")
             return
         if not self.camera_component.has_viewport(event.viewport):
+            print(f"[ChronoCameraController]   camera does not have viewport!")
             return
 
         state = self._state(event.viewport)
         if event.button == MouseButton.MIDDLE:
             state["orbit"] = event.action == Action.PRESS
+            print(f"[ChronoCameraController]   orbit={state['orbit']}")
         elif event.button == MouseButton.RIGHT:
             state["pan"] = event.action == Action.PRESS
+            print(f"[ChronoCameraController]   pan={state['pan']}")
         if event.action == Action.RELEASE:
             state["last"] = None
 

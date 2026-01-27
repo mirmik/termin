@@ -28,9 +28,9 @@ void bind_input_events(nb::module_& m) {
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0)
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
-                           MouseButton button, Action action, int mods) {
+                           MouseButton button_enum, Action action_enum, int mods) {
             new (self) MouseButtonEvent(viewport.get(), x, y,
-                static_cast<int>(button), static_cast<int>(action), mods);
+                static_cast<int>(button_enum), static_cast<int>(action_enum), mods);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0)
         .def_prop_rw("viewport",
@@ -42,8 +42,20 @@ void bind_input_events(nb::module_& m) {
             })
         .def_rw("x", &MouseButtonEvent::x)
         .def_rw("y", &MouseButtonEvent::y)
-        .def_rw("button", &MouseButtonEvent::button)
-        .def_rw("action", &MouseButtonEvent::action)
+        .def_prop_rw("button",
+            [](const MouseButtonEvent& self) {
+                return static_cast<MouseButton>(self.button);
+            },
+            [](MouseButtonEvent& self, MouseButton b) {
+                self.button = static_cast<int>(b);
+            })
+        .def_prop_rw("action",
+            [](const MouseButtonEvent& self) {
+                return static_cast<Action>(self.action);
+            },
+            [](MouseButtonEvent& self, Action a) {
+                self.action = static_cast<int>(a);
+            })
         .def_rw("mods", &MouseButtonEvent::mods)
         .def("__repr__", [](const MouseButtonEvent& e) {
             return "MouseButtonEvent(viewport=" + 
@@ -149,7 +161,13 @@ void bind_input_events(nb::module_& m) {
             })
         .def_rw("key", &KeyEvent::key)
         .def_rw("scancode", &KeyEvent::scancode)
-        .def_rw("action", &KeyEvent::action)
+        .def_prop_rw("action",
+            [](const KeyEvent& self) {
+                return static_cast<Action>(self.action);
+            },
+            [](KeyEvent& self, Action a) {
+                self.action = static_cast<int>(a);
+            })
         .def_rw("mods", &KeyEvent::mods)
         .def("__repr__", [](const KeyEvent& e) {
             return "KeyEvent(viewport=" + 
@@ -162,22 +180,22 @@ void bind_input_events(nb::module_& m) {
 
     // Enums
     nb::enum_<MouseButton>(m, "MouseButton", "Mouse button constants")
-        .value("Left", MouseButton::Left)
-        .value("Right", MouseButton::Right)
-        .value("Middle", MouseButton::Middle)
+        .value("LEFT", MouseButton::LEFT)
+        .value("RIGHT", MouseButton::RIGHT)
+        .value("MIDDLE", MouseButton::MIDDLE)
         .export_values();
 
     nb::enum_<Action>(m, "Action", "Action constants")
-        .value("Release", Action::Release)
-        .value("Press", Action::Press)
-        .value("Repeat", Action::Repeat)
+        .value("RELEASE", Action::RELEASE)
+        .value("PRESS", Action::PRESS)
+        .value("REPEAT", Action::REPEAT)
         .export_values();
 
     nb::enum_<Mods>(m, "Mods", "Modifier key flags")
-        .value("Shift", Mods::Shift)
-        .value("Ctrl", Mods::Ctrl)
-        .value("Alt", Mods::Alt)
-        .value("Super", Mods::Super)
+        .value("SHIFT", Mods::SHIFT)
+        .value("CTRL", Mods::CTRL)
+        .value("ALT", Mods::ALT)
+        .value("SUPER", Mods::SUPER)
         .export_values();
 }
 

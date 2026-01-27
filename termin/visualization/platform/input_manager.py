@@ -42,15 +42,18 @@ def _get_simple_vtable() -> int:
     global _simple_vtable_ptr
     if _simple_vtable_ptr == 0:
         def on_mouse_button(manager, button, action, mods):
+            print(f"[SimpleVTable] on_mouse_button: manager={manager}, button={button}, action={action}")
             manager._on_mouse_button(button, action, mods)
 
         def on_mouse_move(manager, x, y):
             manager._on_mouse_move(x, y)
 
         def on_scroll(manager, x, y, mods):
+            print(f"[SimpleVTable] on_scroll: manager={manager}")
             manager._on_scroll(x, y, mods)
 
         def on_key(manager, key, scancode, action, mods):
+            print(f"[SimpleVTable] on_key: manager={manager}")
             manager._on_key(key, scancode, action, mods)
 
         def on_char(manager, codepoint):
@@ -59,6 +62,7 @@ def _get_simple_vtable() -> int:
         _simple_vtable_ptr = _input_manager_create_vtable(
             on_mouse_button, on_mouse_move, on_scroll, on_key, on_char
         )
+        print(f"[SimpleVTable] Created vtable ptr={_simple_vtable_ptr}")
     return _simple_vtable_ptr
 
 
@@ -101,6 +105,7 @@ class SimpleDisplayInputManager:
         # Create tc_input_manager with class vtable
         vtable = _get_simple_vtable()
         self._tc_input_manager_ptr = _input_manager_new(vtable, self)
+        print(f"[SimpleDisplayInputManager] Created with ptr={self._tc_input_manager_ptr}, vtable={vtable}")
 
     def __del__(self):
         if self._tc_input_manager_ptr:
@@ -139,6 +144,7 @@ class SimpleDisplayInputManager:
         # Get cursor position from display surface
         x, y = self._get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
+        print(f"[SimpleDisplayInputManager._on_mouse_button] viewport={viewport}, x={x}, y={y}")
 
         # Track active viewport for drag operations
         if action == TC_INPUT_PRESS:
@@ -155,11 +161,14 @@ class SimpleDisplayInputManager:
 
         # Dispatch to scene
         if viewport is not None:
+            print(f"[SimpleDisplayInputManager._on_mouse_button] Dispatching to scene, viewport.scene={viewport.scene}")
             event = MouseButtonEvent(
                 viewport=viewport, x=x, y=y,
                 button=py_button, action=py_action, mods=mods
             )
             viewport.scene.dispatch_input("on_mouse_button", event)
+        else:
+            print(f"[SimpleDisplayInputManager._on_mouse_button] No viewport!")
 
         # Object click handling (raycast)
         if viewport is not None and action == TC_INPUT_PRESS and button == TC_MOUSE_BUTTON_LEFT:

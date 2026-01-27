@@ -105,28 +105,28 @@ struct KeyEvent {
  * Mouse button enum.
  */
 enum class MouseButton : int {
-    Left = 0,
-    Right = 1,
-    Middle = 2
+    LEFT = 0,
+    RIGHT = 1,
+    MIDDLE = 2
 };
 
 /**
  * Action enum.
  */
 enum class Action : int {
-    Release = 0,
-    Press = 1,
-    Repeat = 2
+    RELEASE = 0,
+    PRESS = 1,
+    REPEAT = 2
 };
 
 /**
  * Modifier key flags enum.
  */
 enum class Mods : int {
-    Shift = 1,
-    Ctrl = 2,
-    Alt = 4,
-    Super = 8
+    SHIFT = 1,
+    CTRL = 2,
+    ALT = 4,
+    SUPER = 8
 };
 
 } // namespace termin

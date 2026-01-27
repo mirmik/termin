@@ -243,13 +243,16 @@ class EditorViewportFeatures:
     # ---------- Input event handlers ----------
 
     def _on_mouse_button_event(self, button_type, action, x, y, viewport) -> None:
+        print(f"[EditorViewportFeatures._on_mouse_button_event] button={button_type}, action={action}, x={x}, y={y}")
         if button_type == MouseButton.LEFT and action == Action.RELEASE:
             self._pending_pick_release = (x, y, viewport)
+            print(f"[EditorViewportFeatures] Set _pending_pick_release")
             # End gizmo drag on release
             if self._gizmo_manager.is_dragging:
                 self._gizmo_manager.on_mouse_up()
         if button_type == MouseButton.LEFT and action == Action.PRESS:
             self._pending_pick_press = (x, y, viewport)
+            print(f"[EditorViewportFeatures] Set _pending_pick_press")
 
     def _on_mouse_move(self, x: float, y: float, viewport) -> None:
         if viewport is None:
@@ -269,6 +272,9 @@ class EditorViewportFeatures:
 
         Should be called by EditorWindow after RenderingController.render_all_displays().
         """
+        has_pending = self._pending_pick_press is not None or self._pending_pick_release is not None
+        if has_pending:
+            print(f"[EditorViewportFeatures.after_render] press={self._pending_pick_press is not None}, release={self._pending_pick_release is not None}")
         if self._pending_pick_press is not None:
             self._process_pending_pick_press(self._pending_pick_press)
         if self._pending_pick_release is not None:
