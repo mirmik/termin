@@ -338,6 +338,47 @@ public static partial class TerminCore
     public static partial IntPtr ComponentGetOwnerPool(IntPtr component);
 
     // ========================================================================
+    // Component Field Access (Inspect)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_int", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldInt(IntPtr component, string path, long value, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_float", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldFloat(IntPtr component, string path, float value, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_double", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldDouble(IntPtr component, string path, double value, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_bool", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldBool(IntPtr component, string path, [MarshalAs(UnmanagedType.U1)] bool value, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_string", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldString(IntPtr component, string path, string value, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_mesh", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldMesh(IntPtr component, string path, TcMeshHandle handle, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_field_material", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void ComponentSetFieldMaterial(IntPtr component, string path, TcMaterialHandle handle, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_field_int", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial long ComponentGetFieldInt(IntPtr component, string path);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_field_float", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial float ComponentGetFieldFloat(IntPtr component, string path);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_field_double", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial double ComponentGetFieldDouble(IntPtr component, string path);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_field_bool", StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ComponentGetFieldBool(IntPtr component, string path);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_field_string", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr ComponentGetFieldString(IntPtr component, string path);
+
+    // ========================================================================
     // Pass Registry
     // ========================================================================
 

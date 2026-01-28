@@ -12,6 +12,10 @@
 #include "../include/tc_inspect_cpp.hpp"
 #endif
 #include "../include/render/tc_pass.h"
+#include "../include/tc_mesh_registry.h"
+#include "../include/tc_material_registry.h"
+
+#include <string>
 
 namespace tc {
 
@@ -402,6 +406,125 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene*
     if (!obj) return;
 
     tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+}
+
+// ============================================================================
+// Simplified field setters for FFI
+// ============================================================================
+
+void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, tc_scene* scene) {
+    tc_value v = tc_value_int(value);
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+void tc_component_set_field_float(tc_component* c, const char* path, float value, tc_scene* scene) {
+    tc_value v = tc_value_float(value);
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+void tc_component_set_field_double(tc_component* c, const char* path, double value, tc_scene* scene) {
+    tc_value v = tc_value_double(value);
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+void tc_component_set_field_bool(tc_component* c, const char* path, bool value, tc_scene* scene) {
+    tc_value v = tc_value_bool(value);
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+void tc_component_set_field_string(tc_component* c, const char* path, const char* value, tc_scene* scene) {
+    tc_value v = tc_value_string(value ? value : "");
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene* scene) {
+    // Mesh is serialized as dict with uuid
+    const char* uuid = tc_mesh_uuid(handle);
+    if (!uuid) return;
+
+    tc_value v = tc_value_dict_new();
+    tc_value_dict_set(&v, "uuid", tc_value_string(uuid));
+    const char* name = tc_mesh_name(handle);
+    if (name) tc_value_dict_set(&v, "name", tc_value_string(name));
+
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene* scene) {
+    // Material is serialized as dict with uuid
+    const char* uuid = tc_material_uuid(handle);
+    if (!uuid) return;
+
+    tc_value v = tc_value_dict_new();
+    tc_value_dict_set(&v, "uuid", tc_value_string(uuid));
+    const char* name = tc_material_name(handle);
+    if (name) tc_value_dict_set(&v, "name", tc_value_string(name));
+
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+// ============================================================================
+// Simplified field getters for FFI
+// ============================================================================
+
+int64_t tc_component_get_field_int(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    int64_t result = 0;
+    if (v.type == TC_VALUE_INT) result = v.data.i;
+    else if (v.type == TC_VALUE_FLOAT) result = (int64_t)v.data.f;
+    else if (v.type == TC_VALUE_DOUBLE) result = (int64_t)v.data.d;
+    tc_value_free(&v);
+    return result;
+}
+
+float tc_component_get_field_float(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    float result = 0.0f;
+    if (v.type == TC_VALUE_FLOAT) result = v.data.f;
+    else if (v.type == TC_VALUE_DOUBLE) result = (float)v.data.d;
+    else if (v.type == TC_VALUE_INT) result = (float)v.data.i;
+    tc_value_free(&v);
+    return result;
+}
+
+double tc_component_get_field_double(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    double result = 0.0;
+    if (v.type == TC_VALUE_DOUBLE) result = v.data.d;
+    else if (v.type == TC_VALUE_FLOAT) result = (double)v.data.f;
+    else if (v.type == TC_VALUE_INT) result = (double)v.data.i;
+    tc_value_free(&v);
+    return result;
+}
+
+bool tc_component_get_field_bool(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    bool result = false;
+    if (v.type == TC_VALUE_BOOL) result = v.data.b;
+    else if (v.type == TC_VALUE_INT) result = v.data.i != 0;
+    tc_value_free(&v);
+    return result;
+}
+
+// Note: Returns pointer to internal buffer, caller should NOT free.
+// The string is valid until the next call to tc_component_get_field_string.
+static thread_local std::string g_field_string_result;
+
+const char* tc_component_get_field_string(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    g_field_string_result.clear();
+    if (v.type == TC_VALUE_STRING && v.data.s) {
+        g_field_string_result = v.data.s;
+    }
+    tc_value_free(&v);
+    return g_field_string_result.c_str();
 }
 
 } // extern "C"

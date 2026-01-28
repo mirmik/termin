@@ -124,6 +124,114 @@ public readonly struct ComponentRef
     }
 
     // ========================================================================
+    // Field Access (Inspect System)
+    // ========================================================================
+
+    /// <summary>
+    /// Set a field by path. Supports int, long, float, double, bool, string.
+    /// For mesh/material handles, use SetFieldMesh/SetFieldMaterial.
+    /// </summary>
+    public void SetField(string path, object value, Scene? scene = null)
+    {
+        if (_ptr == IntPtr.Zero || path == null) return;
+        var scenePtr = scene?.Handle ?? IntPtr.Zero;
+
+        switch (value)
+        {
+            case bool b:
+                TerminCore.ComponentSetFieldBool(_ptr, path, b, scenePtr);
+                break;
+            case int i:
+                TerminCore.ComponentSetFieldInt(_ptr, path, i, scenePtr);
+                break;
+            case long l:
+                TerminCore.ComponentSetFieldInt(_ptr, path, l, scenePtr);
+                break;
+            case float f:
+                TerminCore.ComponentSetFieldFloat(_ptr, path, f, scenePtr);
+                break;
+            case double d:
+                TerminCore.ComponentSetFieldDouble(_ptr, path, d, scenePtr);
+                break;
+            case string s:
+                TerminCore.ComponentSetFieldString(_ptr, path, s, scenePtr);
+                break;
+            case TcMeshHandle mh:
+                TerminCore.ComponentSetFieldMesh(_ptr, path, mh, scenePtr);
+                break;
+            case TcMaterialHandle matH:
+                TerminCore.ComponentSetFieldMaterial(_ptr, path, matH, scenePtr);
+                break;
+            default:
+                throw new ArgumentException($"Unsupported field type: {value.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// Set a mesh field by handle.
+    /// </summary>
+    public void SetFieldMesh(string path, TcMeshHandle handle, Scene? scene = null)
+    {
+        if (_ptr == IntPtr.Zero) return;
+        TerminCore.ComponentSetFieldMesh(_ptr, path, handle, scene?.Handle ?? IntPtr.Zero);
+    }
+
+    /// <summary>
+    /// Set a material field by handle.
+    /// </summary>
+    public void SetFieldMaterial(string path, TcMaterialHandle handle, Scene? scene = null)
+    {
+        if (_ptr == IntPtr.Zero) return;
+        TerminCore.ComponentSetFieldMaterial(_ptr, path, handle, scene?.Handle ?? IntPtr.Zero);
+    }
+
+    /// <summary>
+    /// Get an integer field value.
+    /// </summary>
+    public long GetFieldInt(string path)
+    {
+        if (_ptr == IntPtr.Zero) return 0;
+        return TerminCore.ComponentGetFieldInt(_ptr, path);
+    }
+
+    /// <summary>
+    /// Get a float field value.
+    /// </summary>
+    public float GetFieldFloat(string path)
+    {
+        if (_ptr == IntPtr.Zero) return 0f;
+        return TerminCore.ComponentGetFieldFloat(_ptr, path);
+    }
+
+    /// <summary>
+    /// Get a double field value.
+    /// </summary>
+    public double GetFieldDouble(string path)
+    {
+        if (_ptr == IntPtr.Zero) return 0.0;
+        return TerminCore.ComponentGetFieldDouble(_ptr, path);
+    }
+
+    /// <summary>
+    /// Get a boolean field value.
+    /// </summary>
+    public bool GetFieldBool(string path)
+    {
+        if (_ptr == IntPtr.Zero) return false;
+        return TerminCore.ComponentGetFieldBool(_ptr, path);
+    }
+
+    /// <summary>
+    /// Get a string field value.
+    /// </summary>
+    public string? GetFieldString(string path)
+    {
+        if (_ptr == IntPtr.Zero) return null;
+        var ptr = TerminCore.ComponentGetFieldString(_ptr, path);
+        return Marshal.PtrToStringUTF8(ptr);
+    }
+
+    // ========================================================================
     // Equality
     // ========================================================================
 

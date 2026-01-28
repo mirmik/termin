@@ -53,6 +53,18 @@ TC_API bool tc_mesh_ensure_loaded(tc_mesh_handle h);
 // Note: does NOT trigger lazy loading - use tc_mesh_ensure_loaded first
 TC_API tc_mesh* tc_mesh_get(tc_mesh_handle h);
 
+// Get mesh UUID (returns NULL if invalid)
+static inline const char* tc_mesh_uuid(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->header.uuid : NULL;
+}
+
+// Get mesh name (returns NULL if invalid or no name)
+static inline const char* tc_mesh_name(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->header.name : NULL;
+}
+
 // Check if handle is valid (not stale, points to existing mesh)
 TC_API bool tc_mesh_is_valid(tc_mesh_handle h);
 

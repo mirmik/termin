@@ -34,6 +34,18 @@ TC_API tc_material_handle tc_material_get_or_create(const char* uuid, const char
 // Get material data by handle (returns NULL if handle is invalid/stale)
 TC_API tc_material* tc_material_get(tc_material_handle h);
 
+// Get material UUID (returns NULL if invalid)
+static inline const char* tc_material_uuid(tc_material_handle h) {
+    tc_material* m = tc_material_get(h);
+    return m ? m->header.uuid : NULL;
+}
+
+// Get material name (returns NULL if invalid or no name)
+static inline const char* tc_material_name(tc_material_handle h) {
+    tc_material* m = tc_material_get(h);
+    return m ? m->header.name : NULL;
+}
+
 // Check if handle is valid (not stale, points to existing material)
 TC_API bool tc_material_is_valid(tc_material_handle h);
 
