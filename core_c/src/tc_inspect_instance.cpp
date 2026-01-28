@@ -14,6 +14,7 @@
 #include "../include/render/tc_pass.h"
 #include "../include/tc_mesh_registry.h"
 #include "../include/tc_material_registry.h"
+#include "tc_log.hpp"
 
 #include <string>
 

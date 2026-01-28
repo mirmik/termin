@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "termin_core.h"
+#include "tc_value.h"
 }
 
 #include <string>
@@ -148,6 +149,58 @@ public:
     // Trigger lazy load if mesh is declared but not loaded
     bool ensure_loaded() {
         return tc_mesh_ensure_loaded(handle);
+    }
+
+    // Serialize for kind registry (returns tc_value)
+    tc_value serialize_to_value() const {
+        tc_value d = tc_value_dict_new();
+        if (!is_valid()) {
+            return d;
+        }
+        tc_value_dict_set(&d, "uuid", tc_value_string(uuid()));
+        tc_value_dict_set(&d, "name", tc_value_string(name()));
+        return d;
+    }
+
+    // Deserialize from tc_value data
+    void deserialize_from(const tc_value* data, tc_scene* = nullptr) {
+        // Release current handle
+        if (tc_mesh* m = tc_mesh_get(handle)) {
+            tc_mesh_release(m);
+        }
+        handle = tc_mesh_handle_invalid();
+
+        if (!data || data->type != TC_VALUE_DICT) {
+            return;
+        }
+
+        // Try UUID first
+        tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(data), "uuid");
+        if (uuid_val && uuid_val->type == TC_VALUE_STRING && uuid_val->data.s) {
+            tc_mesh_handle h = tc_mesh_find(uuid_val->data.s);
+            if (!tc_mesh_handle_is_invalid(h)) {
+                handle = h;
+                if (tc_mesh* m = tc_mesh_get(handle)) {
+                    tc_mesh_add_ref(m);
+                    // Trigger lazy load if mesh is declared but not loaded
+                    tc_mesh_ensure_loaded(handle);
+                }
+                return;
+            }
+        }
+
+        // Try name lookup as fallback
+        tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(data), "name");
+        if (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s) {
+            tc_mesh_handle h = tc_mesh_find_by_name(name_val->data.s);
+            if (!tc_mesh_handle_is_invalid(h)) {
+                handle = h;
+                if (tc_mesh* m = tc_mesh_get(handle)) {
+                    tc_mesh_add_ref(m);
+                    tc_mesh_ensure_loaded(handle);
+                }
+            }
+        }
     }
 
     // Populate existing TcMesh with data from Mesh3

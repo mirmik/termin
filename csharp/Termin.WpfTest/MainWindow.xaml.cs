@@ -276,7 +276,7 @@ public partial class MainWindow : Window
     private TcShaderHandle _shaderHandle;
     private TcMaterialHandle _materialHandle;
     private IntPtr _meshPtr;
-    private MeshRenderer? _meshRenderer;
+    private ComponentRef _meshRenderer;  // MeshRenderer via inspect API
 
     // Note: External body registration is now automatic in SWIG-generated constructors.
     // GCHandle management is handled by ComponentExternalBody/PassExternalBody.
@@ -358,15 +358,24 @@ public partial class MainWindow : Window
         CreateShader();
         CreateMaterial();
 
-        // Create cube entity with MeshRenderer
+        // Create cube entity with MeshRenderer (using inspect API)
         var cubeEntity = _scene.Entities.CreateEntity("Cube");
         cubeEntity.Position = new System.Numerics.Vector3(0, 0, 0);
 
-        _meshRenderer = new MeshRenderer();
-        _meshRenderer.set_mesh_by_name("cube");
-        _meshRenderer.set_material_by_name("cube_material");
-        cubeEntity.AddComponent(_meshRenderer);
-        Console.WriteLine("[Init] Created MeshRenderer and added to entity");
+        _meshRenderer = cubeEntity.AddComponentByName("MeshRenderer");
+        Console.WriteLine($"[Debug] MeshRenderer valid: {_meshRenderer.IsValid}, type: {_meshRenderer.TypeName}");
+
+        // Check mesh/material uuid
+        var meshPtr = TerminCore.MeshGet(_meshHandle);
+        var matPtr = TerminCore.MaterialGet(_materialHandle);
+        Console.WriteLine($"[Debug] Mesh ptr: {meshPtr}, Material ptr: {matPtr}");
+
+        _meshRenderer.SetField("mesh", _meshHandle);
+        _meshRenderer.SetField("material", _materialHandle);
+
+        Console.WriteLine($"[Debug] MeshRenderer.Enabled: {_meshRenderer.Enabled}");
+        Console.WriteLine($"[Debug] MeshRenderer.IsDrawable: {_meshRenderer.IsDrawable}");
+        Console.WriteLine("[Init] Created MeshRenderer via inspect API");
 
         // Create render pipeline
         InitPipeline();
@@ -671,9 +680,8 @@ void main() {
         _scene?.Dispose();
         _scene = null;
 
-        // Then cleanup SWIG objects in reverse order of creation
-        _meshRenderer?.Dispose();
-        _meshRenderer = null;
+        // Note: _meshRenderer is ComponentRef (struct), no Dispose needed
+        // Component is destroyed when scene is disposed
 
         _orbitController?.Dispose();
         _orbitController = null;
