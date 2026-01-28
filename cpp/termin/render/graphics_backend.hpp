@@ -100,6 +100,10 @@ public:
     virtual FramebufferHandlePtr create_shadow_framebuffer(int width, int height) = 0;
     virtual UniformBufferHandlePtr create_uniform_buffer(size_t size) = 0;
 
+    // Create wrapper for external FBO (e.g., window default FBO)
+    // Does not allocate resources - just wraps existing FBO ID
+    virtual FramebufferHandlePtr create_external_framebuffer(uint32_t fbo_id, int width, int height) = 0;
+
     // Convenience overloads with Size2i
     FramebufferHandlePtr create_framebuffer(Size2i size, int samples = 1, const std::string& format = "") {
         return create_framebuffer(size.width, size.height, samples, format);
@@ -110,6 +114,9 @@ public:
 
     // --- Framebuffer operations ---
     virtual void bind_framebuffer(FramebufferHandle* fbo) = 0;
+
+    // Bind framebuffer by ID (for external FBOs like window default)
+    virtual void bind_framebuffer_id(uint32_t fbo_id) = 0;
     virtual void blit_framebuffer(
         FramebufferHandle* src,
         FramebufferHandle* dst,
@@ -128,6 +135,16 @@ public:
             dst_rect.x0, dst_rect.y0, dst_rect.x1, dst_rect.y1,
             blit_color, blit_depth);
     }
+
+    // Blit to raw FBO ID (for window/display framebuffers)
+    virtual void blit_framebuffer_to_id(
+        FramebufferHandle& src,
+        uint32_t dst_fbo_id,
+        const Rect2i& src_rect,
+        const Rect2i& dst_rect,
+        bool blit_color = true,
+        bool blit_depth = false
+    ) = 0;
 
     // --- Read operations ---
     virtual std::array<float, 4> read_pixel(FramebufferHandle* fbo, int x, int y) = 0;

@@ -708,7 +708,7 @@ public:
      * Create a handle that wraps an external FBO (e.g., window default FBO).
      * Does not allocate any resources - useful for window backends.
      */
-    FramebufferHandlePtr create_external_framebuffer(uint32_t fbo_id, int width, int height) {
+    FramebufferHandlePtr create_external_framebuffer(uint32_t fbo_id, int width, int height) override {
         return OpenGLFramebufferHandle::create_external(fbo_id, width, height);
     }
 
@@ -720,6 +720,10 @@ public:
         } else {
             glBindFramebuffer(GL_FRAMEBUFFER, fbo->get_fbo_id());
         }
+    }
+
+    void bind_framebuffer_id(uint32_t fbo_id) override {
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
     }
 
     void blit_framebuffer(
@@ -744,6 +748,33 @@ public:
             glBlitFramebuffer(
                 src_x0, src_y0, src_x1, src_y1,
                 dst_x0, dst_y0, dst_x1, dst_y1,
+                mask,
+                GL_NEAREST
+            );
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void blit_framebuffer_to_id(
+        FramebufferHandle& src,
+        uint32_t dst_fbo_id,
+        const Rect2i& src_rect,
+        const Rect2i& dst_rect,
+        bool blit_color = true,
+        bool blit_depth = false
+    ) override {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, src.get_fbo_id());
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_fbo_id);
+
+        GLbitfield mask = 0;
+        if (blit_color) mask |= GL_COLOR_BUFFER_BIT;
+        if (blit_depth) mask |= GL_DEPTH_BUFFER_BIT;
+
+        if (mask != 0) {
+            glBlitFramebuffer(
+                src_rect.x0, src_rect.y0, src_rect.x1, src_rect.y1,
+                dst_rect.x0, dst_rect.y0, dst_rect.x1, dst_rect.y1,
                 mask,
                 GL_NEAREST
             );

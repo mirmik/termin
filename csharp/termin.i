@@ -10,6 +10,7 @@
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
+#include "termin/render/rendering_manager.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
@@ -384,6 +385,7 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 %{
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
+#include "termin/render/rendering_manager.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/depth_pass.hpp"
@@ -551,6 +553,41 @@ public:
         int height,
         const std::string& resource_name = "color"
     );
+};
+
+// ============================================================================
+// RenderingManager - global rendering manager singleton
+// ============================================================================
+
+class RenderingManager {
+public:
+    // Singleton access
+    static RenderingManager& instance();
+    static void reset_for_testing();
+
+    // Configuration
+    void set_graphics(GraphicsBackend* graphics);
+    GraphicsBackend* graphics() const;
+
+    void set_render_engine(RenderEngine* engine);
+    RenderEngine* render_engine();
+
+    // Display management
+    void add_display(tc_display* display);
+    void remove_display(tc_display* display);
+    tc_display* get_display_by_name(const std::string& name) const;
+
+    // Rendering - Offscreen-First Model
+    void render_all(bool present = true);
+    void render_all_offscreen();
+    void present_all();
+
+    // Shutdown
+    void shutdown();
+
+private:
+    RenderingManager();
+    ~RenderingManager();
 };
 
 // ============================================================================
