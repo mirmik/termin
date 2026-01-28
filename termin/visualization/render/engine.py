@@ -467,6 +467,8 @@ class RenderEngine:
         """
         from termin.visualization.render.framegraph import RenderFramePass
         from termin._native import log
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
 
         frame_passes = pipeline.passes
         if not frame_passes:
@@ -490,25 +492,28 @@ class RenderEngine:
                 render_pass.required_resources()
 
         # Build lights
-        lights = scene.build_lights()
+        with profiler.section("Build Lights"):
+            lights = scene.build_lights()
 
         # Convert Python ViewportContext to C++ ViewportContext
-        cpp_viewport_contexts: Dict[str, CppViewportContext] = {}
-        for name, ctx in viewport_contexts.items():
-            cpp_ctx = CppViewportContext()
-            cpp_ctx.name = name
-            cpp_ctx.camera = ctx.camera
-            px, py, pw, ph = ctx.rect
-            cpp_ctx.rect = Rect4i(px, py, pw, ph)
-            cpp_ctx.layer_mask = ctx.layer_mask
-            cpp_ctx.output_fbo = ctx.output_fbo
-            cpp_viewport_contexts[name] = cpp_ctx
+        with profiler.section("Build Contexts"):
+            cpp_viewport_contexts: Dict[str, CppViewportContext] = {}
+            for name, ctx in viewport_contexts.items():
+                cpp_ctx = CppViewportContext()
+                cpp_ctx.name = name
+                cpp_ctx.camera = ctx.camera
+                px, py, pw, ph = ctx.rect
+                cpp_ctx.rect = Rect4i(px, py, pw, ph)
+                cpp_ctx.layer_mask = ctx.layer_mask
+                cpp_ctx.output_fbo = ctx.output_fbo
+                cpp_viewport_contexts[name] = cpp_ctx
 
         # Execute via C++ RenderEngine
-        self._cpp_engine.render_scene_pipeline_offscreen(
-            pipeline,
-            scene._tc_scene.scene_ref(),
-            cpp_viewport_contexts,
-            lights,
-            default_viewport,
-        )
+        with profiler.section("C++ Execute"):
+            self._cpp_engine.render_scene_pipeline_offscreen(
+                pipeline,
+                scene._tc_scene.scene_ref(),
+                cpp_viewport_contexts,
+                lights,
+                default_viewport,
+            )

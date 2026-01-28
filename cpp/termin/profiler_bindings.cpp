@@ -13,6 +13,7 @@ namespace termin {
 struct PySectionTiming {
     std::string name;
     double cpu_ms;
+    double children_ms;
     int call_count;
     int parent_index;
     int first_child;
@@ -37,6 +38,7 @@ static PyFrameProfile convert_frame(const tc_frame_profile* frame) {
         PySectionTiming ps;
         ps.name = s->name;
         ps.cpu_ms = s->cpu_ms;
+        ps.children_ms = s->children_ms;
         ps.call_count = s->call_count;
         ps.parent_index = s->parent_index;
         ps.first_child = s->first_child;
@@ -109,6 +111,7 @@ void bind_profiler(nb::module_& m) {
     nb::class_<PySectionTiming>(m, "SectionTiming")
         .def_ro("name", &PySectionTiming::name)
         .def_ro("cpu_ms", &PySectionTiming::cpu_ms)
+        .def_ro("children_ms", &PySectionTiming::children_ms)
         .def_ro("call_count", &PySectionTiming::call_count)
         .def_ro("parent_index", &PySectionTiming::parent_index)
         .def_ro("first_child", &PySectionTiming::first_child)

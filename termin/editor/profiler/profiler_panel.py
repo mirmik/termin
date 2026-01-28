@@ -37,6 +37,7 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         self._last_sections: Dict[str, SectionStats] = {}
         self._update_table_enabled = True
         self._ema_sections: Dict[str, float] = {}
+        self._ema_children: Dict[str, float] = {}
         self._ema_calls: Dict[str, int] = {}
         self._ema_total: float | None = None
         self._ema_alpha: float = 0.1  # f_new = f_prev*(1-α) + f_curr*α
@@ -91,11 +92,12 @@ class ProfilerPanel(QtWidgets.QDockWidget):
 
         # Table
         self._table = QtWidgets.QTreeWidget()
-        self._table.setHeaderLabels(["Section", "Time (ms)", "%", "Count"])
+        self._table.setHeaderLabels(["Section", "Time (ms)", "%", "Cov", "Count"])
         self._table.setColumnWidth(0, 180)
         self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 50)
         self._table.setColumnWidth(3, 50)
+        self._table.setColumnWidth(4, 50)
         self._table.setAlternatingRowColors(True)
         self._table.setRootIsDecorated(True)
         self._table.setIndentation(16)
@@ -137,6 +139,7 @@ class ProfilerPanel(QtWidgets.QDockWidget):
             self._fps_label.setText("-- FPS")
             self._last_sections.clear()
             self._ema_sections.clear()
+            self._ema_children.clear()
             self._ema_calls.clear()
             self._ema_total = None
 
@@ -151,6 +154,7 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         self._table.clear()
         self._last_sections.clear()
         self._ema_sections.clear()
+        self._ema_children.clear()
         self._ema_calls.clear()
         self._ema_total = None
 
@@ -220,7 +224,7 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         result: Dict[str, SectionStats] = {}
         for i, s in enumerate(sections):
             path = make_path(i)
-            result[path] = SectionStats(cpu_ms=s.cpu_ms, call_count=s.call_count)
+            result[path] = SectionStats(cpu_ms=s.cpu_ms, children_ms=s.children_ms, call_count=s.call_count)
         return result
 
     def _update_total_ema(self, total: float) -> float:
@@ -235,10 +239,13 @@ class ProfilerPanel(QtWidgets.QDockWidget):
 
         for key, stats in detailed.items():
             prev = self._ema_sections.get(key)
+            prev_children = self._ema_children.get(key)
             if prev is None:
                 self._ema_sections[key] = stats.cpu_ms
+                self._ema_children[key] = stats.children_ms
             else:
                 self._ema_sections[key] = prev * (1.0 - alpha) + stats.cpu_ms * alpha
+                self._ema_children[key] = (prev_children or 0.0) * (1.0 - alpha) + stats.children_ms * alpha
             self._ema_calls[key] = stats.call_count
 
         # Плавно затухаем секции, которые пропали
@@ -246,12 +253,18 @@ class ProfilerPanel(QtWidgets.QDockWidget):
             if key in detailed:
                 continue
             self._ema_sections[key] *= (1.0 - alpha)
+            self._ema_children[key] = self._ema_children.get(key, 0.0) * (1.0 - alpha)
             if self._ema_sections[key] < 0.01:
                 self._ema_sections.pop(key, None)
+                self._ema_children.pop(key, None)
                 self._ema_calls.pop(key, None)
 
         return {
-            key: SectionStats(cpu_ms=self._ema_sections[key], call_count=self._ema_calls.get(key, 0))
+            key: SectionStats(
+                cpu_ms=self._ema_sections[key],
+                children_ms=self._ema_children.get(key, 0.0),
+                call_count=self._ema_calls.get(key, 0)
+            )
             for key in self._ema_sections
         }
 
@@ -291,25 +304,38 @@ class ProfilerPanel(QtWidgets.QDockWidget):
             parts = path.split("/")
             pct = (stats.cpu_ms / total * 100) if total > 0 else 0
 
+            # Coverage: какая часть времени секции покрыта подсекциями
+            coverage = (stats.children_ms / stats.cpu_ms * 100) if stats.cpu_ms > 0 else 0
+
             # Создаём item
             item = QtWidgets.QTreeWidgetItem()
             item.setText(0, parts[-1])
             item.setText(1, f"{stats.cpu_ms:.2f}")
             item.setText(2, f"{pct:.1f}%")
+            # Показываем coverage только если есть подсекции
+            item.setText(3, f"{coverage:.0f}%" if stats.children_ms > 0 else "")
             # Показываем count только если > 1
-            item.setText(3, str(stats.call_count) if stats.call_count > 1 else "")
+            item.setText(4, str(stats.call_count) if stats.call_count > 1 else "")
             item.setData(0, QtCore.Qt.ItemDataRole.UserRole, path)
 
             # Выравнивание чисел вправо
             item.setTextAlignment(1, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
             item.setTextAlignment(2, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
             item.setTextAlignment(3, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
+            item.setTextAlignment(4, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
 
             # Цвет в зависимости от процента
             if pct > 50:
                 item.setForeground(1, QtGui.QColor(255, 100, 100))
             elif pct > 25:
                 item.setForeground(1, QtGui.QColor(255, 200, 100))
+
+            # Цвет coverage: красный если низкий (много непрофилированного времени)
+            if stats.children_ms > 0:
+                if coverage < 50:
+                    item.setForeground(3, QtGui.QColor(255, 100, 100))
+                elif coverage < 80:
+                    item.setForeground(3, QtGui.QColor(255, 200, 100))
 
             if len(parts) == 1:
                 # Root level

@@ -24,6 +24,7 @@ extern "C" {
 typedef struct tc_section_timing {
     char name[TC_PROFILER_MAX_NAME_LEN];
     double cpu_ms;
+    double children_ms;  // Total time of child sections (for coverage calculation)
     int call_count;
     int parent_index;  // -1 for root sections
     int first_child;   // -1 if no children

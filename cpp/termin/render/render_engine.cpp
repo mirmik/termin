@@ -1,5 +1,6 @@
 #include "render_engine.hpp"
 #include "tc_log.hpp"
+#include "tc_profiler.h"
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {
@@ -304,11 +305,16 @@ void RenderEngine::render_view_to_fbo(
     // Execute passes in schedule order
     size_t schedule_count = tc_frame_graph_schedule_count(fg);
 
+    tc_profiler_begin_section("Execute Passes");
     for (size_t i = 0; i < schedule_count; i++) {
         tc_pass* pass = tc_frame_graph_schedule_at(fg, i);
         if (!pass || !pass->enabled || pass->passthrough) {
             continue;
         }
+
+        // Profile each pass by name
+        const char* pass_name = pass->pass_name ? pass->pass_name : "UnnamedPass";
+        tc_profiler_begin_section(pass_name);
 
         graphics->reset_state();
 
@@ -344,7 +350,10 @@ void RenderEngine::render_view_to_fbo(
 
         // Execute pass via vtable (works for both C++ and Python passes)
         tc_pass_execute(pass, &ctx);
+
+        tc_profiler_end_section(); // pass_name
     }
+    tc_profiler_end_section(); // Execute Passes
 
     tc_frame_graph_destroy(fg);
 }
@@ -385,8 +394,10 @@ void RenderEngine::render_scene_pipeline_offscreen(
     int default_height = default_ctx.rect.height;
 
     // Build frame graph
+    tc_profiler_begin_section("Build Frame Graph");
     tc_frame_graph* fg = tc_frame_graph_build(pipeline->ptr());
     if (!fg) {
+        tc_profiler_end_section();
         tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: failed to build frame graph");
         return;
     }
@@ -395,10 +406,13 @@ void RenderEngine::render_scene_pipeline_offscreen(
         tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: frame graph error: %s",
                        tc_frame_graph_get_error_message(fg));
         tc_frame_graph_destroy(fg);
+        tc_profiler_end_section();
         return;
     }
+    tc_profiler_end_section();
 
     // Collect resource specs from pipeline + passes
+    tc_profiler_begin_section("Collect Specs");
     auto specs = pipeline->collect_specs();
 
     // Build spec map - merge specs with same resource name
@@ -424,8 +438,10 @@ void RenderEngine::render_scene_pipeline_offscreen(
             }
         }
     }
+    tc_profiler_end_section();
 
     // Allocate resources based on canonical names from frame graph
+    tc_profiler_begin_section("Allocate Resources");
     FBOMap resources;
 
     // Set OUTPUT/DISPLAY to default viewport's output_fbo
@@ -528,8 +544,10 @@ void RenderEngine::render_scene_pipeline_offscreen(
             fbo_pool.add_alias(aliases[j], canon);
         }
     }
+    tc_profiler_end_section();
 
     // Clear resources according to specs
+    tc_profiler_begin_section("Clear Resources");
     for (const auto& spec : specs) {
         if (spec.resource_type != "fbo" && !spec.resource_type.empty()) {
             continue;
@@ -568,15 +586,21 @@ void RenderEngine::render_scene_pipeline_offscreen(
             graphics->clear_depth(*spec.clear_depth);
         }
     }
+    tc_profiler_end_section();
 
     // Execute passes in schedule order
     size_t schedule_count = tc_frame_graph_schedule_count(fg);
 
+    tc_profiler_begin_section("Execute Passes");
     for (size_t i = 0; i < schedule_count; i++) {
         tc_pass* pass = tc_frame_graph_schedule_at(fg, i);
         if (!pass || !pass->enabled || pass->passthrough) {
             continue;
         }
+
+        // Profile each pass by name
+        const char* pass_name = pass->pass_name ? pass->pass_name : "UnnamedPass";
+        tc_profiler_begin_section(pass_name);
 
         graphics->reset_state();
 
@@ -633,7 +657,10 @@ void RenderEngine::render_scene_pipeline_offscreen(
 
         // Execute pass via vtable (works for both C++ and Python passes)
         tc_pass_execute(pass, &ctx);
+
+        tc_profiler_end_section(); // pass_name
     }
+    tc_profiler_end_section(); // Execute Passes
 
     tc_frame_graph_destroy(fg);
 }

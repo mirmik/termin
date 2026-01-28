@@ -44,6 +44,7 @@ from termin._native.profiler import TcProfiler
 class SectionStats(NamedTuple):
     """Статистика секции профилирования."""
     cpu_ms: float
+    children_ms: float
     call_count: int
 
 
@@ -53,6 +54,7 @@ class SectionTiming:
 
     name: str
     cpu_ms: float = 0.0
+    children_ms: float = 0.0
     call_count: int = 0
     children: Dict[str, "SectionTiming"] = field(default_factory=dict)
 
@@ -190,6 +192,7 @@ class Profiler:
                 timing = SectionTiming(
                     name=s.name,
                     cpu_ms=s.cpu_ms,
+                    children_ms=s.children_ms,
                     call_count=s.call_count,
                 )
                 out[s.name] = timing
@@ -231,12 +234,12 @@ class Profiler:
             return {}
 
         recent = history[-frames:]
-        totals: Dict[str, List[tuple]] = {}  # path -> [(cpu_ms, call_count), ...]
+        totals: Dict[str, List[tuple]] = {}  # path -> [(cpu_ms, children_ms, call_count), ...]
 
         def collect(sections: Dict[str, SectionTiming], prefix: str = "") -> None:
             for name, timing in sections.items():
                 full_path = f"{prefix}{name}" if prefix else name
-                totals.setdefault(full_path, []).append((timing.cpu_ms, timing.call_count))
+                totals.setdefault(full_path, []).append((timing.cpu_ms, timing.children_ms, timing.call_count))
                 collect(timing.children, f"{full_path}/")
 
         for frame in recent:
@@ -245,8 +248,9 @@ class Profiler:
         result = {}
         for name, samples in totals.items():
             avg_ms = sum(s[0] for s in samples) / len(samples)
-            avg_count = sum(s[1] for s in samples) / len(samples)
-            result[name] = SectionStats(cpu_ms=avg_ms, call_count=round(avg_count))
+            avg_children_ms = sum(s[1] for s in samples) / len(samples)
+            avg_count = sum(s[2] for s in samples) / len(samples)
+            result[name] = SectionStats(cpu_ms=avg_ms, children_ms=avg_children_ms, call_count=round(avg_count))
         return result
 
     def print_report(self, frames: int = 60) -> None:

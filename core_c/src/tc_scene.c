@@ -280,9 +280,12 @@ void tc_scene_update(tc_scene* s, double dt) {
     bool profile = tc_profiler_enabled();
 
     // 1. Process pending start
+    if (profile) tc_profiler_begin_section("Pending Start");
     process_pending_start(s, false);
+    if (profile) tc_profiler_end_section();
 
     // 2. Fixed update loop
+    if (profile) tc_profiler_begin_section("Fixed Update");
     s->accumulated_time += dt;
     while (s->accumulated_time >= s->fixed_timestep) {
         for (size_t i = 0; i < s->fixed_update_list.count; i++) {
@@ -295,8 +298,10 @@ void tc_scene_update(tc_scene* s, double dt) {
         }
         s->accumulated_time -= s->fixed_timestep;
     }
+    if (profile) tc_profiler_end_section();
 
     // 3. Regular update
+    if (profile) tc_profiler_begin_section("Update");
     for (size_t i = 0; i < s->update_list.count; i++) {
         tc_component* c = s->update_list.items[i];
         if (c->enabled && component_entity_enabled(c)) {
@@ -305,9 +310,12 @@ void tc_scene_update(tc_scene* s, double dt) {
             if (profile) tc_profiler_end_section();
         }
     }
+    if (profile) tc_profiler_end_section();
 
     // 4. Update entity transforms
+    if (profile) tc_profiler_begin_section("Update Transforms");
     tc_entity_pool_update_transforms(s->pool);
+    if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_editor_update(tc_scene* s, double dt) {
@@ -316,9 +324,12 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
     bool profile = tc_profiler_enabled();
 
     // Process pending start (editor mode)
+    if (profile) tc_profiler_begin_section("Pending Start");
     process_pending_start(s, true);
+    if (profile) tc_profiler_end_section();
 
     // Fixed update - only active_in_editor components
+    if (profile) tc_profiler_begin_section("Fixed Update");
     s->accumulated_time += dt;
     while (s->accumulated_time >= s->fixed_timestep) {
         for (size_t i = 0; i < s->fixed_update_list.count; i++) {
@@ -331,8 +342,10 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
         }
         s->accumulated_time -= s->fixed_timestep;
     }
+    if (profile) tc_profiler_end_section();
 
     // Regular update - only active_in_editor components
+    if (profile) tc_profiler_begin_section("Update");
     for (size_t i = 0; i < s->update_list.count; i++) {
         tc_component* c = s->update_list.items[i];
         if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
@@ -341,9 +354,12 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
             if (profile) tc_profiler_end_section();
         }
     }
+    if (profile) tc_profiler_end_section();
 
     // Update entity transforms
+    if (profile) tc_profiler_begin_section("Update Transforms");
     tc_entity_pool_update_transforms(s->pool);
+    if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_before_render(tc_scene* s) {

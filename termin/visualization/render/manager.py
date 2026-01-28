@@ -711,6 +711,8 @@ class RenderingManager:
         are rendered in a single pass. Scene pipelines can span multiple displays.
         """
         from termin._native import log
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
 
         if self._offscreen_context is None:
             log.warn("[render_all_offscreen] OffscreenContext not initialized, call initialize() first")
@@ -720,11 +722,12 @@ class RenderingManager:
             log.warn("[render_all_offscreen] Graphics backend not set")
             return
 
-        # Activate offscreen context
-        self._offscreen_context.make_current()
+        with profiler.section("Make Current"):
+            # Activate offscreen context
+            self._offscreen_context.make_current()
 
-        # Ensure graphics is ready (load GL functions)
-        self._graphics.ensure_ready()
+            # Ensure graphics is ready (load GL functions)
+            self._graphics.ensure_ready()
 
         # Lazy create render engine
         if self._render_engine is None:
@@ -739,26 +742,30 @@ class RenderingManager:
                     all_viewports_by_name[vp.name] = vp
 
         # 1. Execute scene pipelines (can span multiple displays)
-        for scene in self._attached_scenes:
-            for pipeline_name, pipeline in scene.compiled_pipelines.items():
-                self._render_scene_pipeline_offscreen(
-                    scene=scene,
-                    pipeline_name=pipeline_name,
-                    pipeline=pipeline,
-                    all_viewports=all_viewports_by_name,
-                )
+        with profiler.section("Scene Pipelines"):
+            for scene in self._attached_scenes:
+                for pipeline_name, pipeline in scene.compiled_pipelines.items():
+                    with profiler.section(f"Pipeline: {pipeline_name}"):
+                        self._render_scene_pipeline_offscreen(
+                            scene=scene,
+                            pipeline_name=pipeline_name,
+                            pipeline=pipeline,
+                            all_viewports=all_viewports_by_name,
+                        )
 
         # 2. Render unmanaged viewports
-        for display in self._displays:
-            for viewport in display.viewports:
-                if not viewport.enabled:
-                    continue
-                if viewport.managed_by_scene_pipeline:
-                    continue
-                if viewport.pipeline is None or viewport.scene is None:
-                    continue
+        with profiler.section("Unmanaged Viewports"):
+            for display in self._displays:
+                for viewport in display.viewports:
+                    if not viewport.enabled:
+                        continue
+                    if viewport.managed_by_scene_pipeline:
+                        continue
+                    if viewport.pipeline is None or viewport.scene is None:
+                        continue
 
-                self._render_viewport_offscreen(viewport)
+                    with profiler.section(f"Viewport: {viewport.name}"):
+                        self._render_viewport_offscreen(viewport)
 
     def _render_scene_pipeline_offscreen(
         self,

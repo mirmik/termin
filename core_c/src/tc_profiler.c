@@ -166,6 +166,7 @@ static int find_or_create_section(const char* name, int parent_index) {
     strncpy(section->name, name, TC_PROFILER_MAX_NAME_LEN - 1);
     section->name[TC_PROFILER_MAX_NAME_LEN - 1] = '\0';
     section->cpu_ms = 0.0;
+    section->children_ms = 0.0;
     section->call_count = 0;
     section->parent_index = parent_index;
     section->first_child = -1;
@@ -218,6 +219,12 @@ void tc_profiler_end_section(void) {
     tc_section_timing* section = &g_profiler.current_frame->sections[section_idx];
     section->cpu_ms += elapsed;
     section->call_count++;
+
+    // Add elapsed time to parent's children_ms for coverage calculation
+    if (section->parent_index >= 0) {
+        tc_section_timing* parent = &g_profiler.current_frame->sections[section->parent_index];
+        parent->children_ms += elapsed;
+    }
 }
 
 // ============================================================================

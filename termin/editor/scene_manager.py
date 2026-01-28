@@ -620,10 +620,14 @@ class SceneManager:
 
         Updates bone matrices for skinning, etc.
         """
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         for name, scene in self._scenes.items():
             mode = self._modes.get(name, SceneMode.INACTIVE)
             if mode != SceneMode.INACTIVE:
-                scene.before_render()
+                with profiler.section(f"Scene: {name}"):
+                    scene.before_render()
 
     def _update_timer_state(self) -> None:
         """Start or stop game timer based on whether GAME scenes exist."""
