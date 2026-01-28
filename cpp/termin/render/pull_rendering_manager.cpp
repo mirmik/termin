@@ -1,0 +1,247 @@
+// pull_rendering_manager.cpp - Pull-based rendering manager for WPF/Qt style rendering
+
+#include "termin/render/pull_rendering_manager.hpp"
+#include "termin/camera/camera_component.hpp"
+
+extern "C" {
+#include "tc_log.h"
+}
+
+#include <algorithm>
+
+namespace termin {
+
+// Singleton
+PullRenderingManager* PullRenderingManager::s_instance = nullptr;
+
+PullRenderingManager& PullRenderingManager::instance() {
+    if (!s_instance) {
+        s_instance = new PullRenderingManager();
+    }
+    return *s_instance;
+}
+
+void PullRenderingManager::reset_for_testing() {
+    if (s_instance) {
+        delete s_instance;
+        s_instance = nullptr;
+    }
+}
+
+PullRenderingManager::PullRenderingManager() = default;
+
+PullRenderingManager::~PullRenderingManager() {
+    shutdown();
+}
+
+// Configuration
+void PullRenderingManager::set_graphics(GraphicsBackend* graphics) {
+    graphics_ = graphics;
+}
+
+void PullRenderingManager::set_render_engine(RenderEngine* engine) {
+    render_engine_ = engine;
+    owned_render_engine_.reset();
+}
+
+RenderEngine* PullRenderingManager::render_engine() {
+    if (!render_engine_) {
+        if (!graphics_) {
+            tc_log(TC_LOG_ERROR, "[PullRenderingManager] Cannot create RenderEngine: graphics not set");
+            return nullptr;
+        }
+        owned_render_engine_ = std::make_unique<RenderEngine>(graphics_);
+        render_engine_ = owned_render_engine_.get();
+    }
+    return render_engine_;
+}
+
+// Display management
+void PullRenderingManager::add_display(tc_display* display) {
+    if (!display) return;
+
+    auto it = std::find(displays_.begin(), displays_.end(), display);
+    if (it != displays_.end()) return;
+
+    displays_.push_back(display);
+    tc_log(TC_LOG_INFO, "[PullRenderingManager] Added display: %s",
+           tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
+}
+
+void PullRenderingManager::remove_display(tc_display* display) {
+    if (!display) return;
+
+    auto it = std::find(displays_.begin(), displays_.end(), display);
+    if (it == displays_.end()) return;
+
+    // Clean up viewport states for viewports on this display
+    tc_viewport* vp = tc_display_get_first_viewport(display);
+    while (vp) {
+        remove_viewport_state(vp);
+        vp = vp->display_next;
+    }
+
+    displays_.erase(it);
+    tc_log(TC_LOG_INFO, "[PullRenderingManager] Removed display: %s",
+           tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
+}
+
+tc_display* PullRenderingManager::get_display_by_name(const std::string& name) const {
+    for (tc_display* d : displays_) {
+        const char* dname = tc_display_get_name(d);
+        if (dname && name == dname) {
+            return d;
+        }
+    }
+    return nullptr;
+}
+
+// Viewport state management
+ViewportRenderState* PullRenderingManager::get_viewport_state(tc_viewport* viewport) {
+    if (!viewport) return nullptr;
+    uintptr_t key = reinterpret_cast<uintptr_t>(viewport);
+    auto it = viewport_states_.find(key);
+    return (it != viewport_states_.end()) ? it->second.get() : nullptr;
+}
+
+ViewportRenderState* PullRenderingManager::get_or_create_viewport_state(tc_viewport* viewport) {
+    if (!viewport) return nullptr;
+    uintptr_t key = reinterpret_cast<uintptr_t>(viewport);
+    auto& state = viewport_states_[key];
+    if (!state) {
+        state = std::make_unique<ViewportRenderState>();
+    }
+    return state.get();
+}
+
+void PullRenderingManager::remove_viewport_state(tc_viewport* viewport) {
+    if (!viewport) return;
+    uintptr_t key = reinterpret_cast<uintptr_t>(viewport);
+    auto it = viewport_states_.find(key);
+    if (it != viewport_states_.end()) {
+        it->second->clear_all();
+        viewport_states_.erase(it);
+    }
+}
+
+// Pull-rendering: render and present single display
+void PullRenderingManager::render_display(tc_display* display) {
+    if (!display || !graphics_) return;
+
+    tc_render_surface* surface = tc_display_get_surface(display);
+    if (!surface) {
+        tc_log(TC_LOG_WARN, "[PullRenderingManager] render_display: surface is null");
+        return;
+    }
+
+    // Make display context current
+    tc_render_surface_make_current(surface);
+
+    int width, height;
+    tc_render_surface_get_size(surface, &width, &height);
+    if (width <= 0 || height <= 0) return;
+
+    uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
+
+    // Clear display
+    graphics_->bind_framebuffer_id(display_fbo);
+    graphics_->set_viewport(0, 0, width, height);
+    graphics_->clear_color_depth({0.1f, 0.1f, 0.1f, 1.0f});
+
+    // Collect viewports sorted by depth
+    std::vector<tc_viewport*> viewports;
+    tc_viewport* vp = tc_display_get_first_viewport(display);
+    while (vp) {
+        if (tc_viewport_get_enabled(vp)) {
+            viewports.push_back(vp);
+        }
+        vp = vp->display_next;
+    }
+    std::sort(viewports.begin(), viewports.end(), [](tc_viewport* a, tc_viewport* b) {
+        return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
+    });
+
+    // Render and blit each viewport
+    for (tc_viewport* viewport : viewports) {
+        // Skip viewports managed by scene pipeline
+        const char* managed_by = tc_viewport_get_managed_by(viewport);
+        if (managed_by && managed_by[0] != '\0') continue;
+
+        // Render viewport to offscreen FBO
+        render_viewport_offscreen(viewport);
+
+        // Blit to display
+        ViewportRenderState* state = get_viewport_state(viewport);
+        if (!state || !state->has_output_fbo()) continue;
+
+        int px, py, pw, ph;
+        tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
+
+        int src_w = state->output_width;
+        int src_h = state->output_height;
+
+        graphics_->blit_framebuffer_to_id(
+            *state->output_fbo,
+            display_fbo,
+            {0, 0, src_w, src_h},
+            {px, py, px + pw, py + ph}
+        );
+    }
+}
+
+void PullRenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
+    if (!viewport || !graphics_) return;
+
+    tc_scene* scene = tc_viewport_get_scene(viewport);
+    tc_component* camera_comp = tc_viewport_get_camera(viewport);
+    tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
+
+    if (!scene || !camera_comp || !pipeline) return;
+
+    RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
+    if (!render_pipeline) return;
+
+    CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
+    CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
+    if (!camera) return;
+
+    int px, py, pw, ph;
+    tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
+    if (pw <= 0 || ph <= 0) return;
+
+    ViewportRenderState* state = get_or_create_viewport_state(viewport);
+    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+
+    std::vector<Light> lights = collect_lights(scene);
+
+    RenderEngine* engine = render_engine();
+    engine->render_view_to_fbo(
+        render_pipeline,
+        output_fbo,
+        pw, ph,
+        scene,
+        camera,
+        viewport,
+        lights,
+        tc_viewport_get_layer_mask(viewport)
+    );
+}
+
+// Shutdown
+void PullRenderingManager::shutdown() {
+    for (auto& pair : viewport_states_) {
+        pair.second->clear_all();
+    }
+    viewport_states_.clear();
+    displays_.clear();
+    owned_render_engine_.reset();
+    render_engine_ = nullptr;
+    graphics_ = nullptr;
+}
+
+// Helpers
+std::vector<Light> PullRenderingManager::collect_lights(tc_scene* scene) {
+    return {};
+}
+
+} // namespace termin

@@ -257,21 +257,32 @@ public partial class MainWindow : Window
     private bool _initialized;
     private int _renderCount;
 
-    // Backend и Native Display
+    // Backend и Native Display (первый контрол)
     private GlWpfBackend? _backend;
     private WpfRenderSurface? _renderSurface;
     private NativeDisplayManager? _nativeDisplayManager;
     private IntPtr _viewportPtr;
 
+    // Backend и Native Display (второй контрол)
+    private GlWpfBackend? _backend2;
+    private WpfRenderSurface? _renderSurface2;
+    private NativeDisplayManager? _nativeDisplayManager2;
+    private IntPtr _viewportPtr2;
+
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
+    private RenderPipeline? _renderPipeline2;
     private RenderEngine? _renderEngine;
     private CameraComponent? _cameraComponent;
+    private CameraComponent? _cameraComponent2;
     private SWIGTYPE_p_termin__GraphicsBackend? _graphics;
-    private RenderingManager? _renderingManager;
+    private PullRenderingManager? _renderingManager;
     private OrbitCameraController? _orbitController;
+    private OrbitCameraController? _orbitController2;
     private ColorPass? _colorPass;  // Keep reference to prevent GC collection
+    private ColorPass? _colorPass2;
     private PresentToScreenPass? _presentPass;  // Copies color -> OUTPUT
+    private PresentToScreenPass? _presentPass2;
     private Scene? _scene;
 
     // Mesh resources
@@ -298,10 +309,20 @@ public partial class MainWindow : Window
         };
         GlControl.Start(settings);
 
-        // Создаём backend
-        _backend = new GlWpfBackend(GlControl);
+        // Second control shares context with first
+        var settings2 = new GLWpfControlSettings
+        {
+            MajorVersion = 4,
+            MinorVersion = 5,
+            ContextToUse = GlControl.Context
+        };
+        GlControl2.Start(settings2);
 
-        Console.WriteLine("[Init] Backend created");
+        // Создаём backend'ы для обоих контролов
+        _backend = new GlWpfBackend(GlControl);
+        _backend2 = new GlWpfBackend(GlControl2);
+
+        Console.WriteLine("[Init] Both backends created");
     }
 
     private void InitGL()
@@ -331,7 +352,7 @@ public partial class MainWindow : Window
         Console.WriteLine($"[Init] Graphics backend: {_graphics != null}");
 
         // Set up RenderingManager (store reference to prevent GC issues)
-        _renderingManager = RenderingManager.instance();
+        _renderingManager = PullRenderingManager.instance();
         _renderingManager.set_graphics(_graphics);
         Console.WriteLine("[Init] RenderingManager graphics set");
 
@@ -364,6 +385,27 @@ public partial class MainWindow : Window
         cameraEntity.AddComponent(_orbitController);
         Console.WriteLine("[Init] Created OrbitCameraController and added to camera entity");
 
+        // Create second camera entity with different position (top view)
+        var cameraEntity2 = _scene.Entities.CreateEntity("Camera2");
+        cameraEntity2.Position = new System.Numerics.Vector3(0, 0, 5);  // Top view
+
+        _cameraComponent2 = new CameraComponent();
+        _cameraComponent2.set_fov_degrees(60.0);
+        _cameraComponent2.near_clip = 0.1;
+        _cameraComponent2.far_clip = 100.0;
+        cameraEntity2.AddComponent(_cameraComponent2);
+
+        _orbitController2 = new OrbitCameraController(
+            radius: 5.0,
+            min_radius: 1.0,
+            max_radius: 100.0,
+            prevent_moving: false
+        );
+        cameraEntity2.AddComponent(_orbitController2);
+        // Set view from above by orbiting to elevation 80 degrees
+        _orbitController2.orbit(0, 80);
+        Console.WriteLine("[Init] Created second camera (top view)");
+
         // Create mesh and shader
         CreateCubeMesh();
         CreateShader();
@@ -388,11 +430,13 @@ public partial class MainWindow : Window
         Console.WriteLine($"[Debug] MeshRenderer.IsDrawable: {_meshRenderer.IsDrawable}");
         Console.WriteLine("[Init] Created MeshRenderer via inspect API");
 
-        // Create render pipeline
+        // Create render pipelines
         InitPipeline();
+        InitPipeline2();
 
-        // Create native display and input manager
+        // Create native displays and input managers
         InitNativeDisplay();
+        InitNativeDisplay2();
     }
 
     private void InitNativeDisplay()
@@ -424,6 +468,38 @@ public partial class MainWindow : Window
             _nativeDisplayManager.AddViewport(_viewportPtr);
 
             Console.WriteLine($"[Init] Created viewport with pipeline and added to display");
+        }
+    }
+
+    private void InitNativeDisplay2()
+    {
+        if (_backend2 == null || _scene == null || _cameraComponent2 == null || _renderPipeline2 == null) return;
+
+        // Create WpfRenderSurface for second control
+        _renderSurface2 = new WpfRenderSurface(GlControl2);
+
+        // Create NativeDisplayManager with tc_display and tc_simple_input_manager
+        _nativeDisplayManager2 = new NativeDisplayManager(_renderSurface2, _backend2, "WpfDisplay2");
+
+        // Add display to RenderingManager
+        var displayWrapper = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager2.DisplayPtr);
+        _renderingManager!.add_display(displayWrapper);
+        Console.WriteLine("[Init] Display2 added to RenderingManager");
+
+        // Create viewport with scene and second camera
+        _viewportPtr2 = TerminCore.ViewportNew("Secondary", _scene.Handle, _cameraComponent2.tc_component_ptr());
+        if (_viewportPtr2 != IntPtr.Zero)
+        {
+            // Full screen viewport
+            TerminCore.ViewportSetRect(_viewportPtr2, 0.0f, 0.0f, 1.0f, 1.0f);
+
+            // Set pipeline on viewport
+            TerminCore.ViewportSetPipeline(_viewportPtr2, SwigHelpers.GetPtr(_renderPipeline2.ptr()));
+
+            // Add to second display
+            _nativeDisplayManager2.AddViewport(_viewportPtr2);
+
+            Console.WriteLine($"[Init] Created viewport2 with pipeline2 and added to display2");
         }
     }
 
@@ -471,7 +547,7 @@ public partial class MainWindow : Window
 
         // Add resource specs for "color" FBO
         var colorSpec = new ResourceSpec();
-        colorSpec.resource = "color";
+        colorSpec.resource = "empty";
         colorSpec.resource_type = "fbo";
         colorSpec.scale = 1.0f;
         colorSpec.samples = 1;
@@ -495,6 +571,37 @@ public partial class MainWindow : Window
 
         var passCount = _renderPipeline.pass_count();
         Console.WriteLine($"[RenderPipeline] Total passes: {passCount}");
+    }
+
+    private void InitPipeline2()
+    {
+        // Create second RenderPipeline
+        _renderPipeline2 = new RenderPipeline("default2");
+        Console.WriteLine($"[RenderPipeline2] Created: {_renderPipeline2.name()}");
+
+        // Add resource specs for "color" FBO
+        var colorSpec = new ResourceSpec();
+        colorSpec.resource = "empty";
+        colorSpec.resource_type = "fbo";
+        colorSpec.scale = 1.0f;
+        colorSpec.samples = 1;
+        _renderPipeline2.add_spec(colorSpec);
+
+        // ColorPass: renders scene to "color" FBO
+        _colorPass2 = new ColorPass(
+            input_res: "empty",
+            output_res: "color",
+            shadow_res: "",
+            phase_mark: "opaque",
+            pass_name: "Color2"
+        );
+        _renderPipeline2.add_pass(_colorPass2.tc_pass_ptr());
+        Console.WriteLine("[RenderPipeline2] Added ColorPass (empty -> color)");
+
+        // PresentToScreenPass: copies "color" -> "OUTPUT"
+        _presentPass2 = new PresentToScreenPass("color", "OUTPUT");
+        _renderPipeline2.add_pass(_presentPass2.tc_pass_ptr());
+        Console.WriteLine("[RenderPipeline2] Added PresentToScreenPass (color -> OUTPUT)");
     }
 
     private unsafe void CreateCubeMesh()
@@ -640,14 +747,15 @@ void main() {
             _scene?.Update(delta.TotalSeconds);
             _scene?.BeforeRender();
 
-            // Render via RenderingManager
+            // Render via PullRenderingManager
             if (_renderSurface != null && _nativeDisplayManager != null && _renderingManager != null)
             {
-                // Cache WPF's FBO before rendering (offscreen rendering will change bindings)
+                // Cache WPF's FBO before rendering
                 _renderSurface.UpdateFramebuffer();
 
-                // Render all viewports and present to displays
-                _renderingManager.render_all(true);
+                // Render this display's viewports and blit to surface
+                var display = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager.DisplayPtr);
+                _renderingManager.render_display(display);
 
                 _renderCount++;
             }
@@ -658,29 +766,72 @@ void main() {
         }
     }
 
+    private void GlControl2_Render(TimeSpan delta)
+    {
+        try
+        {
+            int width = (int)GlControl2.ActualWidth;
+            int height = (int)GlControl2.ActualHeight;
+            if (width <= 0 || height <= 0) return;
+
+            // Update second camera aspect ratio
+            double aspect = width / (double)height;
+            if (_cameraComponent2 != null)
+            {
+                _cameraComponent2.aspect = aspect;
+            }
+
+            // Render via PullRenderingManager
+            if (_renderSurface2 != null && _nativeDisplayManager2 != null && _renderingManager != null)
+            {
+                // Cache WPF's FBO before rendering
+                _renderSurface2.UpdateFramebuffer();
+
+                // Render this display's viewports and blit to surface
+                var display = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager2.DisplayPtr);
+                _renderingManager.render_display(display);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Render2] Exception: {ex}");
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         // Shutdown RenderingManager first (clears viewport states, releases render engine)
         _renderingManager?.shutdown();
         _renderingManager = null;
 
-        // Cleanup native display (detaches input manager from surface)
+        // Cleanup native displays (detaches input managers from surfaces)
         _nativeDisplayManager?.Dispose();
         _nativeDisplayManager = null;
+        _nativeDisplayManager2?.Dispose();
+        _nativeDisplayManager2 = null;
 
-        // Free viewport
+        // Free viewports
         if (_viewportPtr != IntPtr.Zero)
         {
             TerminCore.ViewportFree(_viewportPtr);
             _viewportPtr = IntPtr.Zero;
         }
+        if (_viewportPtr2 != IntPtr.Zero)
+        {
+            TerminCore.ViewportFree(_viewportPtr2);
+            _viewportPtr2 = IntPtr.Zero;
+        }
 
-        // Free render surface
+        // Free render surfaces
         _renderSurface?.Dispose();
         _renderSurface = null;
+        _renderSurface2?.Dispose();
+        _renderSurface2 = null;
 
         _backend?.Dispose();
         _backend = null;
+        _backend2?.Dispose();
+        _backend2 = null;
 
         // Cleanup scene first (this will properly remove components from entities)
         _scene?.Dispose();
@@ -691,15 +842,21 @@ void main() {
 
         _orbitController?.Dispose();
         _orbitController = null;
+        _orbitController2?.Dispose();
+        _orbitController2 = null;
 
         _cameraComponent?.Dispose();
         _cameraComponent = null;
+        _cameraComponent2?.Dispose();
+        _cameraComponent2 = null;
 
         _renderEngine?.Dispose();
         _renderEngine = null;
 
         _renderPipeline?.Dispose();
         _renderPipeline = null;
+        _renderPipeline2?.Dispose();
+        _renderPipeline2 = null;
 
         // Cleanup termin resources
         TerminCore.MaterialShutdown();

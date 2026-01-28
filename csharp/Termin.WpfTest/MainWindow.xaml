@@ -8,6 +8,11 @@
         mc:Ignorable="d"
         Title="Termin WPF Test" Height="600" Width="800">
     <Grid>
-        <glWpf:GLWpfControl x:Name="GlControl" Render="GlControl_Render" />
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <glWpf:GLWpfControl x:Name="GlControl" Grid.Column="0" Render="GlControl_Render" />
+        <glWpf:GLWpfControl x:Name="GlControl2" Grid.Column="1" Render="GlControl2_Render" />
     </Grid>
 </Window>

@@ -11,6 +11,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/pull_rendering_manager.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/present_pass.hpp"
@@ -388,6 +389,7 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/pull_rendering_manager.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/present_pass.hpp"
@@ -594,6 +596,38 @@ public:
 private:
     RenderingManager();
     ~RenderingManager();
+};
+
+// ============================================================================
+// PullRenderingManager - pull-based rendering for WPF/Qt style
+// ============================================================================
+
+class PullRenderingManager {
+public:
+    // Singleton access
+    static PullRenderingManager& instance();
+    static void reset_for_testing();
+
+    // Configuration
+    void set_graphics(GraphicsBackend* graphics);
+    void set_render_engine(RenderEngine* engine);
+    RenderEngine* render_engine();
+
+    // Display management
+    void add_display(tc_display* display);
+    void remove_display(tc_display* display);
+    tc_display* get_display_by_name(const std::string& name) const;
+
+    // Pull-rendering API
+    // Renders all viewports of this display and blits to display surface.
+    void render_display(tc_display* display);
+
+    // Shutdown
+    void shutdown();
+
+private:
+    PullRenderingManager();
+    ~PullRenderingManager();
 };
 
 // ============================================================================

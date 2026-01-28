@@ -254,6 +254,7 @@ add_library(render_lib STATIC
     termin/render/render_engine.cpp
     termin/render/render_pipeline.cpp
     termin/render/rendering_manager.cpp
+    termin/render/pull_rendering_manager.cpp
     termin/render/color_pass.cpp
     termin/render/present_pass.cpp
     termin/render/depth_pass.cpp
