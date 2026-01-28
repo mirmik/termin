@@ -787,7 +787,8 @@ public:
             );
         }
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // Re-bind destination FBO (important for WPF where dst is not FBO 0)
+        glBindFramebuffer(GL_FRAMEBUFFER, dst_fbo_id);
     }
 
     // --- Read operations ---

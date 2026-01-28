@@ -304,15 +304,21 @@ void RenderEngine::render_view_to_fbo(
     // Execute passes in schedule order
     size_t schedule_count = tc_frame_graph_schedule_count(fg);
 
+    tc::Log::info("[render_view_to_fbo] schedule_count=%zu target_fbo=%p (%u)",
+        schedule_count, (void*)target_fbo, target_fbo ? target_fbo->get_fbo_id() : 0);
+
     tc_profiler_begin_section("Execute Passes");
     for (size_t i = 0; i < schedule_count; i++) {
         tc_pass* pass = tc_frame_graph_schedule_at(fg, i);
         if (!pass || !pass->enabled || pass->passthrough) {
+            tc::Log::info("[render_view_to_fbo] skipping pass %zu (pass=%p enabled=%d passthrough=%d)",
+                i, (void*)pass, pass ? pass->enabled : -1, pass ? pass->passthrough : -1);
             continue;
         }
 
         // Profile each pass by name
         const char* pass_name = pass->pass_name ? pass->pass_name : "UnnamedPass";
+        tc::Log::info("[render_view_to_fbo] executing pass %zu: '%s'", i, pass_name);
         tc_profiler_begin_section(pass_name);
 
         graphics->reset_state();
@@ -333,6 +339,8 @@ void RenderEngine::render_view_to_fbo(
         for (size_t j = 0; j < write_count; j++) {
             auto it = resources.find(writes[j]);
             pass_writes[writes[j]] = (it != resources.end()) ? it->second : nullptr;
+            tc::Log::info("[render_view_to_fbo] pass '%s' writes[%zu]='%s' fbo=%p",
+                pass_name, j, writes[j], pass_writes[writes[j]]);
         }
 
         // Build ExecuteContext

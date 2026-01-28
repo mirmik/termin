@@ -13,6 +13,7 @@
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
+#include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/orbit_camera_controller.hpp"
@@ -100,6 +101,7 @@ CSHARP_COMPONENT_EXTERNAL_BODY(termin::MeshRenderer)
 
 // Apply macros to pass classes
 CSHARP_PASS_EXTERNAL_BODY(termin::ColorPass)
+CSHARP_PASS_EXTERNAL_BODY(termin::PresentToScreenPass)
 CSHARP_PASS_EXTERNAL_BODY(termin::DepthPass)
 
 // Opaque type for tc_component
@@ -388,6 +390,7 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
+#include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/render/graphics_backend.hpp"
@@ -751,6 +754,27 @@ public:
         const std::string& pass_name = "Depth"
     );
     virtual ~DepthPass();
+
+    tc_pass* tc_pass_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
+};
+
+// ============================================================================
+// PresentToScreenPass - copies input FBO to output (no inplace aliases)
+// ============================================================================
+
+class PresentToScreenPass {
+public:
+    std::string input_res;
+    std::string output_res;
+
+    PresentToScreenPass(
+        const std::string& input_res = "color",
+        const std::string& output_res = "OUTPUT"
+    );
+    virtual ~PresentToScreenPass();
 
     tc_pass* tc_pass_ptr();
 

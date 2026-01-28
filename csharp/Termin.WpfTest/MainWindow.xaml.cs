@@ -271,6 +271,7 @@ public partial class MainWindow : Window
     private RenderingManager? _renderingManager;
     private OrbitCameraController? _orbitController;
     private ColorPass? _colorPass;  // Keep reference to prevent GC collection
+    private PresentToScreenPass? _presentPass;  // Copies color -> OUTPUT
     private Scene? _scene;
 
     // Mesh resources
@@ -468,26 +469,29 @@ public partial class MainWindow : Window
         _renderPipeline = new RenderPipeline("default");
         Console.WriteLine($"[RenderPipeline] Created: {_renderPipeline.name()}");
 
-        // Add resource specs
+        // Add resource specs for "color" FBO
         var colorSpec = new ResourceSpec();
-        colorSpec.resource = "empty";
+        colorSpec.resource = "color";
         colorSpec.resource_type = "fbo";
         colorSpec.scale = 1.0f;
-        colorSpec.samples = 4;
+        colorSpec.samples = 1;
         _renderPipeline.add_spec(colorSpec);
 
-        // Create and add ColorPass (SWIG class)
-        // Render directly to OUTPUT (which maps to viewport's output_fbo)
+        // ColorPass: renders scene to "color" FBO
         _colorPass = new ColorPass(
             input_res: "empty",
-            output_res: "OUTPUT",
+            output_res: "color",
             shadow_res: "",
             phase_mark: "opaque",
             pass_name: "Color"
         );
-
         _renderPipeline.add_pass(_colorPass.tc_pass_ptr());
-        Console.WriteLine("[RenderPipeline] Added ColorPass");
+        Console.WriteLine("[RenderPipeline] Added ColorPass (empty -> color)");
+
+        // PresentToScreenPass: copies "color" -> "OUTPUT" (breaks inplace chain)
+        _presentPass = new PresentToScreenPass("color", "OUTPUT");
+        _renderPipeline.add_pass(_presentPass.tc_pass_ptr());
+        Console.WriteLine("[RenderPipeline] Added PresentToScreenPass (color -> OUTPUT)");
 
         var passCount = _renderPipeline.pass_count();
         Console.WriteLine($"[RenderPipeline] Total passes: {passCount}");
