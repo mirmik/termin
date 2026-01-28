@@ -204,7 +204,6 @@ class RenderingManager:
             for vp in display.viewports:
                 if vp._tc_viewport_ptr() == target_ptr:
                     return display
-        print(f"[get_display_for_viewport] NOT FOUND! viewport ptr={target_ptr}, displays={[(d.name, [v._tc_viewport_ptr() for v in d.viewports]) for d in self._displays]}")
         return None
 
     def add_display(self, display: "Display", name: Optional[str] = None) -> None:
@@ -396,17 +395,13 @@ class RenderingManager:
 
         for config in scene.viewport_configs:
             # Get or create display
-            print(f"[RenderingManager.attach_scene] Looking for display '{config.display_name}'")
-            print(f"[RenderingManager.attach_scene] Current displays: {[d.name for d in self._displays]}")
             display = self.get_or_create_display(config.display_name)
-            print(f"[RenderingManager.attach_scene] get_or_create_display returned: {display}")
             if display is None:
                 log.warn(
                     f"[RenderingManager] Cannot create display '{config.display_name}' "
                     f"for scene viewport"
                 )
                 continue
-            print(f"[RenderingManager.attach_scene] After get_or_create, displays: {[d.name for d in self._displays]}")
 
             # Find camera by UUID
             camera: Optional[CameraComponent] = None
@@ -465,8 +460,6 @@ class RenderingManager:
                 region=config.region,
                 pipeline=pipeline,
             )
-            print(f"[RenderingManager.attach_scene] Created viewport, display.viewports count: {len(display.viewports)}")
-            print(f"[RenderingManager.attach_scene] viewport in display.viewports: {viewport in display.viewports}")
             viewport.name = config.name
             viewport.depth = config.depth
             viewport.input_mode = config.input_mode
@@ -482,8 +475,6 @@ class RenderingManager:
         if scene not in self._attached_scenes:
             self._attached_scenes.append(scene)
 
-        print(f"[RenderingManager.attach_scene] Returning {len(viewports)} viewports")
-        print(f"[RenderingManager.attach_scene] Final displays: {[(d.name, len(d.viewports)) for d in self._displays]}")
         return viewports
 
     def _apply_scene_pipelines(self, scene: "Scene", viewports: List["Viewport"]) -> None:

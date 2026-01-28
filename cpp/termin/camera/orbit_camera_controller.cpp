@@ -213,20 +213,14 @@ OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state
 // When called from C#, SWIG does the same conversion.
 
 void OrbitCameraController::on_mouse_button(void* event) {
-    tc_log(TC_LOG_INFO, "[OrbitCameraController::on_mouse_button] called, event=%p, _camera=%p", event, _camera);
     if (!_camera) {
-        tc_log(TC_LOG_WARN, "[OrbitCameraController::on_mouse_button] no camera, returning");
         return;
     }
 
     auto* e = static_cast<MouseButtonEvent*>(event);
     if (!e) {
-        tc_log(TC_LOG_WARN, "[OrbitCameraController::on_mouse_button] null event");
         return;
     }
-
-    tc_log(TC_LOG_INFO, "[OrbitCameraController::on_mouse_button] button=%d action=%d x=%.1f y=%.1f",
-           e->button, e->action, e->x, e->y);
 
     // Get viewport pointer as key for per-viewport state
     uintptr_t vp_key = reinterpret_cast<uintptr_t>(e->viewport);
@@ -268,11 +262,9 @@ void OrbitCameraController::on_mouse_move(void* event) {
     state.last_y = e->y;
 
     if (state.orbit_active) {
-        tc_log(TC_LOG_INFO, "[OrbitCameraController::on_mouse_move] ORBIT dx=%.2f dy=%.2f", e->dx, e->dy);
         // Orbit: negative dx because moving mouse right should rotate left
         orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
     } else if (state.pan_active) {
-        tc_log(TC_LOG_INFO, "[OrbitCameraController::on_mouse_move] PAN dx=%.2f dy=%.2f", e->dx, e->dy);
         pan(-e->dx * _pan_speed, e->dy * _pan_speed);
     }
 }

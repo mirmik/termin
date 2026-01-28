@@ -601,16 +601,16 @@ class SceneManager:
 
         should_render = has_play_scenes or self._render_requested
         if should_render:
+            self._render_requested = False  # Reset before callbacks to allow re-request
             with profiler.section(f"Scene Manager Before Render"):
                 self.before_render()
             from termin.visualization.render import RenderingManager
-            
+
             with profiler.section(f"Scene Manager Render"):
                RenderingManager.instance().render_all(present=True)
-            if self._on_after_render is not None:            
+            if self._on_after_render is not None:
                 with profiler.section(f"Scene Manager After Render"):
                     self._on_after_render()
-            self._render_requested = False
         
         profiler.end_frame()
 

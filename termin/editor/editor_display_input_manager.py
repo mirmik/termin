@@ -158,10 +158,8 @@ class EditorDisplayInputManager:
         """
         camera = viewport.camera
         if camera is None:
-            print(f"[_dispatch_to_camera] {event_name}: camera is None")
             return
         if camera.entity is None:
-            print(f"[_dispatch_to_camera] {event_name}: camera.entity is None")
             return
         for comp in camera.entity.components:
             # Check via tc_component_is_input_handler (C API)
@@ -170,8 +168,6 @@ class EditorDisplayInputManager:
                 handler = getattr(comp, event_name, None)
                 if handler:
                     handler(event)
-                else:
-                    print(f"[_dispatch_to_camera] {type(comp).__name__} has no {event_name}")
 
     def _dispatch_to_editor_components(self, viewport: "Viewport", event_name: str, event) -> None:
         """Dispatch event to InputComponents in scene with active_in_editor=True."""
@@ -398,7 +394,6 @@ class EditorDisplayInputManager:
 
     def _on_mouse_button(self, button: int, action: int, mods: int) -> None:
         """Handle mouse button event."""
-        print(f"[EditorDisplayInputManager] _on_mouse_button: button={button}, action={action}, mods={mods}")
         if self._world_mode == "game":
             self._handle_mouse_button_game_mode(button, action, mods)
         else:
@@ -489,7 +484,6 @@ class EditorDisplayInputManager:
             self._handle_double_click(x, y, viewport)
 
         # External callback for editor (picking, gizmo, etc.)
-        print(f"[EditorDisplayInputManager] _on_mouse_button_event callback: {self._on_mouse_button_event}")
         if self._on_mouse_button_event is not None:
             self._on_mouse_button_event(py_button, py_action, x, y, viewport)
 
@@ -525,7 +519,6 @@ class EditorDisplayInputManager:
         viewport = self._active_viewport or self._viewport_under_cursor(x, y)
 
         if viewport is None:
-            print(f"[EditorDisplayInputManager] _on_mouse_move: NO VIEWPORT at ({x:.0f}, {y:.0f})")
             return
 
         # Dispatch to editor components and camera
