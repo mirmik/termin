@@ -436,6 +436,156 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_pass_set_external_callbacks")]
     public static partial void PassSetExternalCallbacks(ref PassExternalCallbacks callbacks);
+
+    // ========================================================================
+    // Render Surface (tc_render_surface)
+    // ========================================================================
+
+    // VTable function pointer delegates
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate uint RenderSurfaceGetFramebufferDelegate(IntPtr surface);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceGetSizeDelegate(IntPtr surface, out int width, out int height);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceMakeCurrentDelegate(IntPtr surface);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceSwapBuffersDelegate(IntPtr surface);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate nuint RenderSurfaceContextKeyDelegate(IntPtr surface);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfacePollEventsDelegate(IntPtr surface);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceGetWindowSizeDelegate(IntPtr surface, out int width, out int height);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public delegate bool RenderSurfaceShouldCloseDelegate(IntPtr surface);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceSetShouldCloseDelegate(IntPtr surface, [MarshalAs(UnmanagedType.U1)] bool value);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceGetCursorPosDelegate(IntPtr surface, out double x, out double y);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RenderSurfaceDestroyDelegate(IntPtr surface);
+
+    // VTable structure (must match tc_render_surface_vtable in C)
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RenderSurfaceVTable
+    {
+        public IntPtr get_framebuffer;
+        public IntPtr get_size;
+        public IntPtr make_current;
+        public IntPtr swap_buffers;
+        public IntPtr context_key;
+        public IntPtr poll_events;
+        public IntPtr get_window_size;
+        public IntPtr should_close;
+        public IntPtr set_should_close;
+        public IntPtr get_cursor_pos;
+        public IntPtr destroy;
+    }
+
+    [LibraryImport(DLL, EntryPoint = "tc_render_surface_new_external")]
+    public static partial IntPtr RenderSurfaceNewExternal(IntPtr body, ref RenderSurfaceVTable vtable);
+
+    [LibraryImport(DLL, EntryPoint = "tc_render_surface_free_external")]
+    public static partial void RenderSurfaceFreeExternal(IntPtr surface);
+
+    // ========================================================================
+    // Display (tc_display)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_new", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr DisplayNew(string name, IntPtr surface);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_free")]
+    public static partial void DisplayFree(IntPtr display);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_set_name", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void DisplaySetName(IntPtr display, string name);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_get_name")]
+    public static partial IntPtr DisplayGetName(IntPtr display);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_get_size")]
+    public static partial void DisplayGetSize(IntPtr display, out int width, out int height);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_add_viewport")]
+    public static partial void DisplayAddViewport(IntPtr display, IntPtr viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_remove_viewport")]
+    public static partial void DisplayRemoveViewport(IntPtr display, IntPtr viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_get_viewport_count")]
+    public static partial nuint DisplayGetViewportCount(IntPtr display);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_get_first_viewport")]
+    public static partial IntPtr DisplayGetFirstViewport(IntPtr display);
+
+    [LibraryImport(DLL, EntryPoint = "tc_display_viewport_at_screen")]
+    public static partial IntPtr DisplayViewportAtScreen(IntPtr display, float px, float py);
+
+    // ========================================================================
+    // Input Manager (tc_input_manager)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_input_manager_dispatch_mouse_button")]
+    public static partial void InputManagerDispatchMouseButton(IntPtr manager, int button, int action, int mods);
+
+    [LibraryImport(DLL, EntryPoint = "tc_input_manager_dispatch_mouse_move")]
+    public static partial void InputManagerDispatchMouseMove(IntPtr manager, double x, double y);
+
+    [LibraryImport(DLL, EntryPoint = "tc_input_manager_dispatch_scroll")]
+    public static partial void InputManagerDispatchScroll(IntPtr manager, double x, double y, int mods);
+
+    [LibraryImport(DLL, EntryPoint = "tc_input_manager_dispatch_key")]
+    public static partial void InputManagerDispatchKey(IntPtr manager, int key, int scancode, int action, int mods);
+
+    [LibraryImport(DLL, EntryPoint = "tc_input_manager_dispatch_char")]
+    public static partial void InputManagerDispatchChar(IntPtr manager, uint codepoint);
+
+    // ========================================================================
+    // Simple Input Manager (tc_simple_input_manager)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_simple_input_manager_new")]
+    public static partial IntPtr SimpleInputManagerNew(IntPtr display);
+
+    [LibraryImport(DLL, EntryPoint = "tc_simple_input_manager_free")]
+    public static partial void SimpleInputManagerFree(IntPtr manager);
+
+    [LibraryImport(DLL, EntryPoint = "tc_simple_input_manager_base")]
+    public static partial IntPtr SimpleInputManagerBase(IntPtr manager);
+
+    // ========================================================================
+    // Viewport (tc_viewport)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_new", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr ViewportNew(string? name, IntPtr scene, IntPtr camera);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_free")]
+    public static partial void ViewportFree(IntPtr viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_scene")]
+    public static partial void ViewportSetScene(IntPtr viewport, IntPtr scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_scene")]
+    public static partial IntPtr ViewportGetScene(IntPtr viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_camera")]
+    public static partial void ViewportSetCamera(IntPtr viewport, IntPtr camera);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_rect")]
+    public static partial void ViewportSetRect(IntPtr viewport, float x, float y, float w, float h);
 }
 
 /// <summary>

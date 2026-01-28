@@ -146,6 +146,25 @@ TC_API tc_input_manager* tc_input_manager_new(
 // Free input manager
 TC_API void tc_input_manager_free(tc_input_manager* m);
 
+// ============================================================================
+// Exported Dispatch Functions (for C#/FFI - inline versions not exported)
+// ============================================================================
+
+TC_API void tc_input_manager_dispatch_mouse_button(
+    tc_input_manager* m, int button, int action, int mods);
+
+TC_API void tc_input_manager_dispatch_mouse_move(
+    tc_input_manager* m, double x, double y);
+
+TC_API void tc_input_manager_dispatch_scroll(
+    tc_input_manager* m, double x, double y, int mods);
+
+TC_API void tc_input_manager_dispatch_key(
+    tc_input_manager* m, int key, int scancode, int action, int mods);
+
+TC_API void tc_input_manager_dispatch_char(
+    tc_input_manager* m, uint32_t codepoint);
+
 #ifdef __cplusplus
 }
 #endif

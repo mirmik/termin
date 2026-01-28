@@ -33,3 +33,35 @@ void tc_input_manager_free(tc_input_manager* m) {
     tc_input_manager_destroy(m);
     free(m);
 }
+
+// ============================================================================
+// Exported Dispatch Functions (for C#/FFI - inline versions not exported)
+// ============================================================================
+
+TC_API void tc_input_manager_dispatch_mouse_button(
+    tc_input_manager* m, int button, int action, int mods
+) {
+    tc_input_manager_on_mouse_button(m, button, action, mods);
+}
+
+TC_API void tc_input_manager_dispatch_mouse_move(
+    tc_input_manager* m, double x, double y
+) {
+    tc_input_manager_on_mouse_move(m, x, y);
+}
+
+TC_API void tc_input_manager_dispatch_scroll(
+    tc_input_manager* m, double x, double y, int mods
+) {
+    tc_input_manager_on_scroll(m, x, y, mods);
+}
+
+TC_API void tc_input_manager_dispatch_key(
+    tc_input_manager* m, int key, int scancode, int action, int mods
+) {
+    tc_input_manager_on_key(m, key, scancode, action, mods);
+}
+
+TC_API void tc_input_manager_dispatch_char(tc_input_manager* m, uint32_t codepoint) {
+    tc_input_manager_on_char(m, codepoint);
+}

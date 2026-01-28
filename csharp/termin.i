@@ -285,27 +285,27 @@ struct KeyEvent {
     KeyEvent(tc_viewport* viewport, int key, int scancode, int action, int mods = 0);
 };
 
-// Mouse button constants
-namespace MouseButton {
-    const int Left = 0;
-    const int Right = 1;
-    const int Middle = 2;
-}
+// Mouse button constants - match C++ enum class MouseButton
+enum class MouseButton : int {
+    LEFT = 0,
+    RIGHT = 1,
+    MIDDLE = 2
+};
 
-// Action constants
-namespace Action {
-    const int Release = 0;
-    const int Press = 1;
-    const int Repeat = 2;
-}
+// Action constants - match C++ enum class Action
+enum class Action : int {
+    RELEASE = 0,
+    PRESS = 1,
+    REPEAT = 2
+};
 
-// Modifier key flags
-namespace Mods {
-    const int Shift = 1;
-    const int Ctrl = 2;
-    const int Alt = 4;
-    const int Super = 8;
-}
+// Modifier key flags - match C++ enum class KeyMod
+enum class KeyMod : int {
+    SHIFT = 1,
+    CTRL = 2,
+    ALT = 4,
+    SUPER = 8
+};
 
 } // namespace termin
 

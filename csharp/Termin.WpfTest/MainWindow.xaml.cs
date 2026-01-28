@@ -257,14 +257,17 @@ public partial class MainWindow : Window
     private bool _initialized;
     private int _renderCount;
 
-    // Backend и InputManager
+    // Backend и Native Display
     private GlWpfBackend? _backend;
-    private InputManager? _inputManager;
+    private WpfRenderSurface? _renderSurface;
+    private NativeDisplayManager? _nativeDisplayManager;
+    private IntPtr _viewportPtr;
 
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
     private RenderEngine? _renderEngine;
     private CameraComponent? _cameraComponent;
+    private OrbitCameraController? _orbitController;
     private ColorPass? _colorPass;  // Keep reference to prevent GC collection
     private Scene? _scene;
 
@@ -289,11 +292,10 @@ public partial class MainWindow : Window
         };
         GlControl.Start(settings);
 
-        // Создаём backend и input manager
+        // Создаём backend
         _backend = new GlWpfBackend(GlControl);
-        _inputManager = new InputManager(_backend);
-        
-        Console.WriteLine("[Init] Backend and InputManager created");
+
+        Console.WriteLine("[Init] Backend created");
     }
 
     private void InitGL()
@@ -346,6 +348,23 @@ public partial class MainWindow : Window
         TerminCore.EntityPoolAddComponent(_scene.Entities.Handle, cameraEntityId, cameraComponentPtr);
         Console.WriteLine("[Init] Created CameraComponent and added to entity");
 
+        // Create OrbitCameraController for camera movement
+        _orbitController = new OrbitCameraController(
+            radius: 5.0,
+            min_radius: 1.0,
+            max_radius: 100.0,
+            prevent_moving: false
+        );
+
+        // Register C# wrapper as external body
+        var orbitBodyPtr = ComponentExternalBody.Register(_orbitController);
+        _orbitController.set_external_body(orbitBodyPtr);
+
+        // Add OrbitCameraController to camera entity
+        var orbitComponentPtr = _orbitController.tc_component_ptr();
+        TerminCore.EntityPoolAddComponent(_scene.Entities.Handle, cameraEntityId, orbitComponentPtr);
+        Console.WriteLine("[Init] Created OrbitCameraController and added to camera entity");
+
         // Create mesh and shader
         CreateCubeMesh();
         CreateShader();
@@ -370,6 +389,33 @@ public partial class MainWindow : Window
 
         // Create render pipeline
         InitPipeline();
+
+        // Create native display and input manager
+        InitNativeDisplay();
+    }
+
+    private void InitNativeDisplay()
+    {
+        if (_backend == null || _scene == null || _cameraComponent == null) return;
+
+        // Create WpfRenderSurface
+        _renderSurface = new WpfRenderSurface(GlControl);
+
+        // Create NativeDisplayManager with tc_display and tc_simple_input_manager
+        _nativeDisplayManager = new NativeDisplayManager(_renderSurface, _backend, "WpfDisplay");
+
+        // Create viewport with scene and camera
+        _viewportPtr = TerminCore.ViewportNew("Main", _scene.Handle, _cameraComponent.tc_component_ptr());
+        if (_viewportPtr != IntPtr.Zero)
+        {
+            // Full screen viewport
+            TerminCore.ViewportSetRect(_viewportPtr, 0.0f, 0.0f, 1.0f, 1.0f);
+
+            // Add to display
+            _nativeDisplayManager.AddViewport(_viewportPtr);
+
+            Console.WriteLine($"[Init] Created viewport and added to display");
+        }
     }
 
     private void CreateMaterial()
@@ -626,9 +672,20 @@ void main() {
 
     protected override void OnClosed(EventArgs e)
     {
-        // Cleanup input first
-        _inputManager?.Dispose();
-        _inputManager = null;
+        // Cleanup native display first (detaches input manager from surface)
+        _nativeDisplayManager?.Dispose();
+        _nativeDisplayManager = null;
+
+        // Free viewport
+        if (_viewportPtr != IntPtr.Zero)
+        {
+            TerminCore.ViewportFree(_viewportPtr);
+            _viewportPtr = IntPtr.Zero;
+        }
+
+        // Free render surface
+        _renderSurface?.Dispose();
+        _renderSurface = null;
 
         _backend?.Dispose();
         _backend = null;
@@ -640,6 +697,9 @@ void main() {
         // Then cleanup SWIG objects in reverse order of creation
         _meshRenderer?.Dispose();
         _meshRenderer = null;
+
+        _orbitController?.Dispose();
+        _orbitController = null;
 
         _cameraComponent?.Dispose();
         _cameraComponent = null;

@@ -47,8 +47,11 @@ TC_API tc_simple_input_manager* tc_simple_input_manager_new(tc_display* display)
 // Free simple input manager
 TC_API void tc_simple_input_manager_free(tc_simple_input_manager* m);
 
+// Get base tc_input_manager pointer (exported for FFI)
+TC_API tc_input_manager* tc_simple_input_manager_base(tc_simple_input_manager* m);
+
 // ============================================================================
-// Accessors
+// Accessors (inline for C/C++ internal use)
 // ============================================================================
 
 // Get base tc_input_manager pointer (for attaching to surface)

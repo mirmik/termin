@@ -274,3 +274,7 @@ void tc_simple_input_manager_free(tc_simple_input_manager* m) {
 
     free(m);
 }
+
+tc_input_manager* tc_simple_input_manager_base(tc_simple_input_manager* m) {
+    return m ? &m->base : NULL;
+}
