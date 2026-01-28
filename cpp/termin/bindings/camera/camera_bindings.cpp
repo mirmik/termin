@@ -30,13 +30,22 @@ void bind_camera_component(nb::module_& m) {
             [](CameraComponent& c) { return c.far_clip; },
             [](CameraComponent& c, double v) { c.far_clip = v; })
 
+        // FOV mode
+        .def_prop_rw("fov_mode",
+            &CameraComponent::get_fov_mode_str,
+            &CameraComponent::set_fov_mode_str)
+
         // FOV (radians)
+        .def_rw("fov_x", &CameraComponent::fov_x)
         .def_rw("fov_y", &CameraComponent::fov_y)
 
-        // FOV (degrees) - convenience property
+        // FOV (degrees) - convenience properties
+        .def_prop_rw("fov_x_degrees",
+            &CameraComponent::get_fov_x_degrees,
+            &CameraComponent::set_fov_x_degrees)
         .def_prop_rw("fov_y_degrees",
-            &CameraComponent::get_fov_degrees,
-            &CameraComponent::set_fov_degrees)
+            &CameraComponent::get_fov_y_degrees,
+            &CameraComponent::set_fov_y_degrees)
 
         // Aspect ratio
         .def_rw("aspect", &CameraComponent::aspect)
@@ -128,7 +137,7 @@ void bind_camera_component(nb::module_& m) {
         ;
 
     // Factory function for PerspectiveCameraComponent
-    m.def("PerspectiveCameraComponent", [](double fov_y_degrees, double aspect, double near, double far) {
+    m.def("PerspectiveCameraComponent", [](double fov_degrees, double aspect, double near, double far) {
         auto* cam = new CameraComponent();
         // Link to CameraComponent type entry
         tc_type_entry* entry = tc_component_registry_get_entry("CameraComponent");
@@ -136,14 +145,15 @@ void bind_camera_component(nb::module_& m) {
             cam->c_component()->type_entry = entry;
             cam->c_component()->type_version = entry->version;
         }
-        cam->set_fov_degrees(fov_y_degrees);
+        cam->set_fov_x_degrees(fov_degrees);
+        cam->fov_mode = FovMode::FixHorizontal;
         cam->aspect = aspect;
         cam->near_clip = near;
         cam->far_clip = far;
         cam->projection_type = CameraProjection::Perspective;
         return cam;
     },
-    nb::arg("fov_y_degrees") = 60.0,
+    nb::arg("fov_degrees") = 60.0,
     nb::arg("aspect") = 1.0,
     nb::arg("near") = 0.1,
     nb::arg("far") = 100.0,

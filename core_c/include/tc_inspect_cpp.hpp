@@ -184,13 +184,19 @@ public:
         const char* label,
         const char* kind_str,
         std::function<T&(C*)> getter_fn,
-        std::function<void(C*, const T&)> setter_fn
+        std::function<void(C*, const T&)> setter_fn,
+        double min_val = 0.0,
+        double max_val = 1.0,
+        double step_val = 0.01
     ) {
         InspectFieldInfo info;
         info.type_name = type_name;
         info.path = path;
         info.label = label;
         info.kind = kind_str;
+        info.min = min_val;
+        info.max = max_val;
+        info.step = step_val;
 
         std::string kind_copy = kind_str;
 
@@ -455,10 +461,13 @@ struct InspectFieldCallbackRegistrar {
         const char* label,
         const char* kind,
         std::function<T&(C*)> getter,
-        std::function<void(C*, const T&)> setter
+        std::function<void(C*, const T&)> setter,
+        double min_val = 0.0,
+        double max_val = 1.0,
+        double step_val = 0.01
     ) {
         InspectRegistry::instance().add_with_callbacks<C, T>(
-            type_name, path, label, kind, getter, setter
+            type_name, path, label, kind, getter, setter, min_val, max_val, step_val
         );
     }
 };
@@ -566,9 +575,9 @@ struct InspectButtonRegistrar {
     inline static ::tc::InspectFieldRegistrar<cls, decltype(cls::field)> \
         _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, ##__VA_ARGS__};
 
-#define INSPECT_FIELD_CALLBACK(cls, type, name, label, kind, getter_fn, setter_fn) \
+#define INSPECT_FIELD_CALLBACK(cls, type, name, label, kind, getter_fn, setter_fn, ...) \
     inline static ::tc::InspectFieldCallbackRegistrar<cls, type> \
-        _inspect_reg_##cls##_##name{#cls, #name, label, kind, getter_fn, setter_fn};
+        _inspect_reg_##cls##_##name{#cls, #name, label, kind, getter_fn, setter_fn, ##__VA_ARGS__};
 
 #define SERIALIZABLE_FIELD(cls, name, getter_expr, setter_expr) \
     inline static ::tc::SerializableFieldRegistrar<cls> \

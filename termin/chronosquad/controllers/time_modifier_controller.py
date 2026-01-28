@@ -29,6 +29,7 @@ class TimeModifierController(PythonComponent):
         super().__init__(enabled=enabled)
         self._chronosphere_controller: ChronosphereController | None = None
         self._camera: CameraComponent | None = None
+        self._fov_camera: CameraComponent | None = None
         self._time_effect_pass: MaterialPass | None = None
         self._nav_mesh_pass: MaterialPass | None = None
         self._initialized = False
@@ -39,6 +40,7 @@ class TimeModifierController(PythonComponent):
             return
 
         self._find_camera()
+        self._find_fov_camera()
         self._find_chronosphere_controller()
         self._find_time_effect_pass()
         self._find_nav_mesh_pass()
@@ -64,6 +66,22 @@ class TimeModifierController(PythonComponent):
         self._camera = self.entity.get_component(CameraComponent)
         if self._camera is None:
             log.warning("[TimeModifierController] CameraComponent not found on entity")
+
+    def _find_fov_camera(self) -> None:
+        """Find FOVCamera entity and its CameraComponent."""
+        if self.scene is None:
+            return
+
+        fov_camera_entity = self.scene.find_entity_by_name("FOVCamera")
+        if fov_camera_entity is None:
+            log.warning("[TimeModifierController] FOVCamera entity not found")
+            return
+
+        self._fov_camera = fov_camera_entity.get_component_by_type("CameraComponent")
+        if self._fov_camera is None:
+            log.warning("[TimeModifierController] CameraComponent not found on FOVCamera")
+        else:
+            log.info("[TimeModifierController] Found FOVCamera")
 
     def _find_chronosphere_controller(self) -> None:
         """Find ChronosphereController in scene."""
@@ -156,9 +174,16 @@ class TimeModifierController(PythonComponent):
 
             shader.set_uniform_mat4("u_inv_view", view.inverse(), False)
             shader.set_uniform_mat4("u_inv_proj", proj.inverse(), False)
-
         else:
             log.warning("[TimeModifierController] No CameraComponent to set near/far uniforms")
+
+        # Set FOV camera uniforms for visibility check
+        if self._fov_camera is not None:
+            fov_view = self._fov_camera.get_view_matrix()
+            fov_proj = self._fov_camera.get_projection_matrix()
+
+            shader.set_uniform_mat4("u_fov_view", fov_view, False)
+            shader.set_uniform_mat4("u_fov_projection", fov_proj, False)
 
     def on_removed_from_entity(self) -> None:
         """Clean up callback when removed."""

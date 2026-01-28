@@ -219,6 +219,19 @@ struct Mat44f {
         return m;
     }
 
+    // Perspective with independent horizontal and vertical FOV (may cause distortion)
+    static Mat44f perspective_fov_xy(float fov_x, float fov_y, float near, float far) {
+        float fx = 1.0f / std::tan(fov_x * 0.5f);
+        float fy = 1.0f / std::tan(fov_y * 0.5f);
+        Mat44f m;
+        m(0, 0) = fx;
+        m(2, 1) = fy;
+        m(1, 2) = (far + near) / (far - near);
+        m(3, 2) = (-2.0f * far * near) / (far - near);
+        m(1, 3) = 1.0f;
+        return m;
+    }
+
     /**
      * Orthographic projection matrix.
      *
@@ -506,6 +519,19 @@ struct Mat44 {
         Mat44 m;
         m(0, 0) = f / aspect;
         m(2, 1) = f;
+        m(1, 2) = (far + near) / (far - near);
+        m(3, 2) = (-2.0 * far * near) / (far - near);
+        m(1, 3) = 1.0;
+        return m;
+    }
+
+    // Perspective with independent horizontal and vertical FOV (may cause distortion)
+    static Mat44 perspective_fov_xy(double fov_x, double fov_y, double near, double far) {
+        double fx = 1.0 / std::tan(fov_x * 0.5);
+        double fy = 1.0 / std::tan(fov_y * 0.5);
+        Mat44 m;
+        m(0, 0) = fx;
+        m(2, 1) = fy;
         m(1, 2) = (far + near) / (far - near);
         m(3, 2) = (-2.0 * far * near) / (far - near);
         m(1, 3) = 1.0;

@@ -696,7 +696,7 @@ class FieldWidgetFactory:
         if field.choices:
             return ComboFieldWidget(choices=field.choices)
 
-        if kind in ("float", "int"):
+        if kind in ("float", "int", "double"):
             return FloatFieldWidget(
                 is_int=(kind == "int"),
                 min_val=field.min,

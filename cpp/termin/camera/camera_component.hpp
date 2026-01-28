@@ -19,6 +19,13 @@
 
 namespace termin {
 
+// FOV mode - which axis is fixed
+enum class FovMode {
+    FixHorizontal,  // fov_x is used, fov_y computed from aspect
+    FixVertical,    // fov_y is used, fov_x computed from aspect
+    FixBoth         // both fov_x and fov_y are used (may cause distortion)
+};
+
 // CameraComponent - component that provides view/projection matrices.
 // Uses entity transform for view matrix computation.
 class ENTITY_API CameraComponent : public CxxComponent {
@@ -31,7 +38,9 @@ public:
     double far_clip = 100.0;
 
     // Perspective parameters
-    double fov_y = M_PI / 3.0;  // 60 degrees
+    FovMode fov_mode = FovMode::FixHorizontal;
+    double fov_x = M_PI / 3.0;  // 60 degrees horizontal FOV
+    double fov_y = M_PI / 4.0;  // 45 degrees vertical FOV
     double aspect = 1.0;
 
     // Orthographic parameters
@@ -52,9 +61,15 @@ public:
     std::string get_projection_type_str() const;
     void set_projection_type_str(const std::string& type);
 
+    // FOV mode accessors
+    std::string get_fov_mode_str() const;
+    void set_fov_mode_str(const std::string& mode);
+
     // FOV accessors (degrees)
-    double get_fov_degrees() const;
-    void set_fov_degrees(double deg);
+    double get_fov_x_degrees() const;
+    void set_fov_x_degrees(double deg);
+    double get_fov_y_degrees() const;
+    void set_fov_y_degrees(double deg);
 
     // Aspect ratio
     void set_aspect(double a);
@@ -81,6 +96,27 @@ public:
     // Screen point to ray (returns origin, direction pair)
     std::pair<Vec3, Vec3> screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const;
 };
+
+// Field registrations (outside class - needs complete type)
+// Note: fov_mode is registered manually in camera_component.cpp with choices
+
+INSPECT_FIELD_CALLBACK(CameraComponent, double, fov_x_degrees, "Horizontal FOV", "double",
+    [](CameraComponent* c) -> double& {
+        static double deg;
+        deg = c->get_fov_x_degrees();
+        return deg;
+    },
+    [](CameraComponent* c, const double& val) { c->set_fov_x_degrees(val); },
+    1.0, 360.0, 1.0)
+
+INSPECT_FIELD_CALLBACK(CameraComponent, double, fov_y_degrees, "Vertical FOV", "double",
+    [](CameraComponent* c) -> double& {
+        static double deg;
+        deg = c->get_fov_y_degrees();
+        return deg;
+    },
+    [](CameraComponent* c, const double& val) { c->set_fov_y_degrees(val); },
+    1.0, 360.0, 1.0)
 
 } // namespace termin
 
