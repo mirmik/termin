@@ -278,6 +278,15 @@ public partial class MainWindow : Window
     private IntPtr _meshPtr;
     private MeshRenderer? _meshRenderer;
 
+    // External body pointers (prevent GC collection)
+    private IntPtr _cameraBodyPtr;
+    private IntPtr _orbitBodyPtr;
+    private IntPtr _meshBodyPtr;
+    private IntPtr _passBodyPtr;
+
+    // GCHandles to prevent GC from collecting SWIG wrappers
+    private List<GCHandle> _pinnedHandles = new();
+
     public MainWindow()
     {
         // Pre-load native DLLs before any P/Invoke calls
@@ -340,8 +349,8 @@ public partial class MainWindow : Window
         _cameraComponent.far_clip = 100.0;
 
         // Register C# wrapper as external body (prevents GC while C++ holds reference)
-        var cameraBodyPtr = ComponentExternalBody.Register(_cameraComponent);
-        _cameraComponent.set_external_body(cameraBodyPtr);
+        _cameraBodyPtr = ComponentExternalBody.Register(_cameraComponent);
+        _cameraComponent.set_external_body(_cameraBodyPtr);
 
         // Add component to entity
         var cameraComponentPtr = _cameraComponent.tc_component_ptr();
@@ -357,8 +366,8 @@ public partial class MainWindow : Window
         );
 
         // Register C# wrapper as external body
-        var orbitBodyPtr = ComponentExternalBody.Register(_orbitController);
-        _orbitController.set_external_body(orbitBodyPtr);
+        _orbitBodyPtr = ComponentExternalBody.Register(_orbitController);
+        _orbitController.set_external_body(_orbitBodyPtr);
 
         // Add OrbitCameraController to camera entity
         var orbitComponentPtr = _orbitController.tc_component_ptr();
@@ -379,8 +388,8 @@ public partial class MainWindow : Window
         _meshRenderer.set_material_by_name("cube_material");
 
         // Register C# wrapper as external body
-        var meshBodyPtr = ComponentExternalBody.Register(_meshRenderer);
-        _meshRenderer.set_external_body(meshBodyPtr);
+        _meshBodyPtr = ComponentExternalBody.Register(_meshRenderer);
+        _meshRenderer.set_external_body(_meshBodyPtr);
 
         // Add component to entity
         var meshComponentPtr = _meshRenderer.tc_component_ptr();
@@ -392,6 +401,25 @@ public partial class MainWindow : Window
 
         // Create native display and input manager
         InitNativeDisplay();
+
+        // Pin all SWIG objects to prevent GC
+        PinSwigObjects();
+    }
+
+    private void PinSwigObjects()
+    {
+        // Pin all SWIG wrappers so GC doesn't collect them
+        if (_scene != null) _pinnedHandles.Add(GCHandle.Alloc(_scene));
+        if (_cameraComponent != null) _pinnedHandles.Add(GCHandle.Alloc(_cameraComponent));
+        if (_orbitController != null) _pinnedHandles.Add(GCHandle.Alloc(_orbitController));
+        if (_meshRenderer != null) _pinnedHandles.Add(GCHandle.Alloc(_meshRenderer));
+        if (_colorPass != null) _pinnedHandles.Add(GCHandle.Alloc(_colorPass));
+        if (_renderPipeline != null) _pinnedHandles.Add(GCHandle.Alloc(_renderPipeline));
+        if (_renderEngine != null) _pinnedHandles.Add(GCHandle.Alloc(_renderEngine));
+        if (_renderSurface != null) _pinnedHandles.Add(GCHandle.Alloc(_renderSurface));
+        if (_nativeDisplayManager != null) _pinnedHandles.Add(GCHandle.Alloc(_nativeDisplayManager));
+        if (_backend != null) _pinnedHandles.Add(GCHandle.Alloc(_backend));
+        Console.WriteLine($"[Init] Pinned {_pinnedHandles.Count} objects to prevent GC");
     }
 
     private void InitNativeDisplay()
@@ -486,8 +514,8 @@ public partial class MainWindow : Window
         );
 
         // Register C# wrapper as external body (prevents GC while C++ holds reference)
-        var passBodyPtr = PassExternalBody.Register(_colorPass);
-        _colorPass.set_external_body(passBodyPtr);
+        _passBodyPtr = PassExternalBody.Register(_colorPass);
+        _colorPass.set_external_body(_passBodyPtr);
 
         _renderPipeline.add_pass(_colorPass.tc_pass_ptr());
         Console.WriteLine("[RenderPipeline] Added ColorPass");
@@ -715,6 +743,14 @@ void main() {
         TerminCore.ShaderShutdown();
         TerminCore.MeshShutdown();
         termin.tc_opengl_shutdown();
+
+        // Free pinned handles
+        foreach (var handle in _pinnedHandles)
+        {
+            if (handle.IsAllocated)
+                handle.Free();
+        }
+        _pinnedHandles.Clear();
 
         base.OnClosed(e);
     }

@@ -6,6 +6,7 @@
 #include "tc_scene.h"
 #include "tc_component.h"
 #include "tc_input_event.h"
+#include "tc_log.h"
 
 #include <stdlib.h>
 #include <string.h>
