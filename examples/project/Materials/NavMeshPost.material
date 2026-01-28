@@ -1,0 +1,22 @@
+{
+  "uuid": "1239d631-f2fb-43f5-913c-289d52304b18",
+  "shader": "NavMeshPost",
+  "shader_uuid": "74e27622-bea3-47f8-9d99-809140e7e0d2",
+  "uniforms": {
+    "u_time": 0.0,
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_shininess": 32.0,
+    "u_emission_color": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "u_emission_intensity": 0.0
+  }
+}
