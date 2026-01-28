@@ -12,6 +12,7 @@
 #include "render/render_context.hpp"
 #include "tc_component_python_bindings.hpp"
 #include "entity/entity.hpp"
+#include "input/input_events.hpp"
 
 namespace nb = nanobind;
 
@@ -271,14 +272,17 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
 
 // ============================================================================
 // Input handler callback implementations
+// These receive C structs and wrap them as Python objects
 // ============================================================================
 
-static void py_input_cb_on_mouse_button(void* py_self, void* event) {
+static void py_input_cb_on_mouse_button(void* py_self, tc_mouse_button_event* event) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
-        nb::handle event_obj((PyObject*)event);
-        self.attr("on_mouse_button")(event_obj);
+        // Wrap C struct as C++ class, then nanobind creates Python object
+        termin::MouseButtonEvent cpp_event(*event);
+        nb::object py_event = nb::cast(cpp_event);
+        self.attr("on_mouse_button")(py_event);
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_mouse_button");
         PyErr_Print();
@@ -286,12 +290,13 @@ static void py_input_cb_on_mouse_button(void* py_self, void* event) {
     PyGILState_Release(gstate);
 }
 
-static void py_input_cb_on_mouse_move(void* py_self, void* event) {
+static void py_input_cb_on_mouse_move(void* py_self, tc_mouse_move_event* event) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
-        nb::handle event_obj((PyObject*)event);
-        self.attr("on_mouse_move")(event_obj);
+        termin::MouseMoveEvent cpp_event(*event);
+        nb::object py_event = nb::cast(cpp_event);
+        self.attr("on_mouse_move")(py_event);
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_mouse_move");
         PyErr_Print();
@@ -299,12 +304,13 @@ static void py_input_cb_on_mouse_move(void* py_self, void* event) {
     PyGILState_Release(gstate);
 }
 
-static void py_input_cb_on_scroll(void* py_self, void* event) {
+static void py_input_cb_on_scroll(void* py_self, tc_scroll_event* event) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
-        nb::handle event_obj((PyObject*)event);
-        self.attr("on_scroll")(event_obj);
+        termin::ScrollEvent cpp_event(*event);
+        nb::object py_event = nb::cast(cpp_event);
+        self.attr("on_scroll")(py_event);
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_scroll");
         PyErr_Print();
@@ -312,12 +318,13 @@ static void py_input_cb_on_scroll(void* py_self, void* event) {
     PyGILState_Release(gstate);
 }
 
-static void py_input_cb_on_key(void* py_self, void* event) {
+static void py_input_cb_on_key(void* py_self, tc_key_event* event) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
-        nb::handle event_obj((PyObject*)event);
-        self.attr("on_key")(event_obj);
+        termin::KeyEvent cpp_event(*event);
+        nb::object py_event = nb::cast(cpp_event);
+        self.attr("on_key")(py_event);
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_key");
         PyErr_Print();

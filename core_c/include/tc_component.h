@@ -71,24 +71,20 @@ struct tc_drawable_vtable {
 // Input VTable - for components that handle input events
 // ============================================================================
 
-// Forward declarations for input event types (opaque pointers)
-typedef struct tc_mouse_button_event tc_mouse_button_event;
-typedef struct tc_mouse_move_event tc_mouse_move_event;
-typedef struct tc_scroll_event tc_scroll_event;
-typedef struct tc_key_event tc_key_event;
+#include "tc_input_event.h"
 
 struct tc_input_vtable {
     // Mouse button press/release
-    void (*on_mouse_button)(tc_component* self, void* event);
+    void (*on_mouse_button)(tc_component* self, tc_mouse_button_event* event);
 
     // Mouse movement
-    void (*on_mouse_move)(tc_component* self, void* event);
+    void (*on_mouse_move)(tc_component* self, tc_mouse_move_event* event);
 
     // Scroll wheel
-    void (*on_scroll)(tc_component* self, void* event);
+    void (*on_scroll)(tc_component* self, tc_scroll_event* event);
 
     // Keyboard input
-    void (*on_key)(tc_component* self, void* event);
+    void (*on_key)(tc_component* self, tc_key_event* event);
 };
 
 // ============================================================================
@@ -380,25 +376,25 @@ static inline bool tc_component_is_input_handler(const tc_component* c) {
     return c && c->input_vtable != NULL;
 }
 
-static inline void tc_component_on_mouse_button(tc_component* c, void* event) {
+static inline void tc_component_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
     if (c && c->enabled && c->input_vtable && c->input_vtable->on_mouse_button) {
         c->input_vtable->on_mouse_button(c, event);
     }
 }
 
-static inline void tc_component_on_mouse_move(tc_component* c, void* event) {
+static inline void tc_component_on_mouse_move(tc_component* c, tc_mouse_move_event* event) {
     if (c && c->enabled && c->input_vtable && c->input_vtable->on_mouse_move) {
         c->input_vtable->on_mouse_move(c, event);
     }
 }
 
-static inline void tc_component_on_scroll(tc_component* c, void* event) {
+static inline void tc_component_on_scroll(tc_component* c, tc_scroll_event* event) {
     if (c && c->enabled && c->input_vtable && c->input_vtable->on_scroll) {
         c->input_vtable->on_scroll(c, event);
     }
 }
 
-static inline void tc_component_on_key(tc_component* c, void* event) {
+static inline void tc_component_on_key(tc_component* c, tc_key_event* event) {
     if (c && c->enabled && c->input_vtable && c->input_vtable->on_key) {
         c->input_vtable->on_key(c, event);
     }

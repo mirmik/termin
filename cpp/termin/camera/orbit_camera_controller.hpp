@@ -106,9 +106,9 @@ public:
 
     // === InputHandler interface ===
 
-    void on_mouse_button(void* event) override;
-    void on_mouse_move(void* event) override;
-    void on_scroll(void* event) override;
+    void on_mouse_button(tc_mouse_button_event* event) override;
+    void on_mouse_move(tc_mouse_move_event* event) override;
+    void on_scroll(tc_scroll_event* event) override;
 
     // === Internal methods (public for Python compatibility) ===
 

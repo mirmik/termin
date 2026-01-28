@@ -77,10 +77,7 @@ class Window:
         self._display = Display(self._surface)
 
         # Создаём input manager
-        self._input_manager = SimpleDisplayInputManager(
-            display=self._display,
-            on_request_update=self._request_update,
-        )
+        self._input_manager = SimpleDisplayInputManager(self._display.tc_display_ptr)
 
         # Connect input manager to surface
         self._surface.set_input_manager(self._input_manager.tc_input_manager_ptr)

@@ -6,7 +6,7 @@ namespace termin {
 
 // Static callback implementations for input vtable
 
-void InputHandler::_cb_on_mouse_button(tc_component* c, void* event) {
+void InputHandler::_cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
     if (!c || c->kind != TC_CXX_COMPONENT) return;
 
     CxxComponent* comp = CxxComponent::from_tc(c);
@@ -18,7 +18,7 @@ void InputHandler::_cb_on_mouse_button(tc_component* c, void* event) {
     handler->on_mouse_button(event);
 }
 
-void InputHandler::_cb_on_mouse_move(tc_component* c, void* event) {
+void InputHandler::_cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event) {
     if (!c || c->kind != TC_CXX_COMPONENT) return;
 
     CxxComponent* comp = CxxComponent::from_tc(c);
@@ -30,7 +30,7 @@ void InputHandler::_cb_on_mouse_move(tc_component* c, void* event) {
     handler->on_mouse_move(event);
 }
 
-void InputHandler::_cb_on_scroll(tc_component* c, void* event) {
+void InputHandler::_cb_on_scroll(tc_component* c, tc_scroll_event* event) {
     if (!c || c->kind != TC_CXX_COMPONENT) return;
 
     CxxComponent* comp = CxxComponent::from_tc(c);
@@ -42,7 +42,7 @@ void InputHandler::_cb_on_scroll(tc_component* c, void* event) {
     handler->on_scroll(event);
 }
 
-void InputHandler::_cb_on_key(tc_component* c, void* event) {
+void InputHandler::_cb_on_key(tc_component* c, tc_key_event* event) {
     if (!c || c->kind != TC_CXX_COMPONENT) return;
 
     CxxComponent* comp = CxxComponent::from_tc(c);

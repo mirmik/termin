@@ -11,6 +11,7 @@
 #include "mesh/tc_mesh_handle.hpp"
 #include "material/tc_material_handle.hpp"
 #include "collision/collision_world.hpp"
+#include "input/input_events.hpp"
 #include "../../core_c/include/tc_scene.h"
 #include <memory>
 #include "../../core_c/include/tc_scene_lighting.h"
@@ -521,12 +522,13 @@ void bind_tc_scene(nb::module_& m) {
            "Iterate components of type with callback(component) -> bool. Return False to stop.")
 
         // Input dispatch methods - dispatch to all input handler components via vtable
-        .def("dispatch_mouse_button", [](TcScene& self, nb::object event) {
+        // Events are C++ structs inheriting from C structs, passed as pointers
+        .def("dispatch_mouse_button", [](TcScene& self, MouseButtonEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_mouse_button_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -535,7 +537,6 @@ void bind_tc_scene(nb::module_& m) {
                     if (data->had_exception) return false;
 
                     try {
-                        // All input handlers must have input_vtable set
                         if (c->input_vtable && c->input_vtable->on_mouse_button) {
                             c->input_vtable->on_mouse_button(c, data->event_ptr);
                         }
@@ -554,12 +555,12 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch mouse button event to all input handlers")
 
-        .def("dispatch_mouse_move", [](TcScene& self, nb::object event) {
+        .def("dispatch_mouse_move", [](TcScene& self, MouseMoveEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_mouse_move_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -586,12 +587,12 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch mouse move event to all input handlers")
 
-        .def("dispatch_scroll", [](TcScene& self, nb::object event) {
+        .def("dispatch_scroll", [](TcScene& self, ScrollEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_scroll_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -618,12 +619,12 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch scroll event to all input handlers")
 
-        .def("dispatch_key", [](TcScene& self, nb::object event) {
+        .def("dispatch_key", [](TcScene& self, KeyEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_key_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -651,12 +652,12 @@ void bind_tc_scene(nb::module_& m) {
         }, nb::arg("event"), "Dispatch key event to all input handlers")
 
         // Editor dispatch methods (with active_in_editor filter)
-        .def("dispatch_mouse_button_editor", [](TcScene& self, nb::object event) {
+        .def("dispatch_mouse_button_editor", [](TcScene& self, MouseButtonEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_mouse_button_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -683,12 +684,12 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch mouse button event to editor input handlers")
 
-        .def("dispatch_mouse_move_editor", [](TcScene& self, nb::object event) {
+        .def("dispatch_mouse_move_editor", [](TcScene& self, MouseMoveEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_mouse_move_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -715,12 +716,12 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch mouse move event to editor input handlers")
 
-        .def("dispatch_scroll_editor", [](TcScene& self, nb::object event) {
+        .def("dispatch_scroll_editor", [](TcScene& self, ScrollEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_scroll_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,
@@ -747,12 +748,12 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch scroll event to editor input handlers")
 
-        .def("dispatch_key_editor", [](TcScene& self, nb::object event) {
+        .def("dispatch_key_editor", [](TcScene& self, KeyEvent& event) {
             struct DispatchData {
-                PyObject* event_ptr;
+                tc_key_event* event_ptr;
                 bool had_exception = false;
             };
-            DispatchData data{event.ptr()};
+            DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
                 self._s,

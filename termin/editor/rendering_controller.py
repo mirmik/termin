@@ -366,10 +366,7 @@ class RenderingController:
         elif input_mode == "simple":
             from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
-            input_manager = SimpleDisplayInputManager(
-                display=display,
-                on_request_update=self._request_update,
-            )
+            input_manager = SimpleDisplayInputManager(display.tc_display_ptr)
             self._display_input_managers[display_id] = input_manager
 
             # Connect input manager to surface
@@ -893,10 +890,7 @@ class RenderingController:
         # Create input manager for this display (default: simple mode)
         from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
-        input_manager = SimpleDisplayInputManager(
-            display=display,
-            on_request_update=self._request_update,
-        )
+        input_manager = SimpleDisplayInputManager(display.tc_display_ptr)
         # Store input manager to prevent GC
         self._display_input_managers[display_id] = input_manager
 
@@ -1011,10 +1005,7 @@ class RenderingController:
         elif mode == "simple":
             from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
-            input_manager = SimpleDisplayInputManager(
-                display=display,
-                on_request_update=self._request_update,
-            )
+            input_manager = SimpleDisplayInputManager(display.tc_display_ptr)
             self._display_input_managers[display_id] = input_manager
 
             # Connect input manager to surface

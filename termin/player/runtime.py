@@ -264,9 +264,7 @@ class PlayerRuntime:
         """Set up input handling."""
         from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
-        self._input_manager = SimpleDisplayInputManager(
-            display=self._display,
-        )
+        self._input_manager = SimpleDisplayInputManager(self._display.tc_display_ptr)
 
         # Connect input manager to surface
         surface = self._display.surface

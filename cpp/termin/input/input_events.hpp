@@ -1,17 +1,9 @@
 /**
  * @file input_events.hpp
- * @brief Input event structures for mouse, keyboard, and scroll events.
+ * @brief C++ wrappers for input event structures.
  *
- * These structures are used to pass input events between the platform layer
- * (Python/C#/WPF) and C++ components like OrbitCameraController.
- *
- * Поля событий:
- * - viewport: указатель на tc_viewport
- * - x, y: позиция курсора в координатах viewport
- * - dx, dy: дельта перемещения (для MouseMoveEvent)
- * - button: кнопка мыши (0=left, 1=right, 2=middle)
- * - action: действие (0=release, 1=press, 2=repeat)
- * - mods: модификаторы (Shift=1, Ctrl=2, Alt=4, Super=8)
+ * Uses C structures from tc_input_event.h as base,
+ * adds C++ constructors and methods.
  */
 
 #pragma once
@@ -19,6 +11,7 @@
 #include <cstdint>
 
 extern "C" {
+#include "tc_input_event.h"
 #include "render/tc_viewport.h"
 }
 
@@ -26,79 +19,102 @@ namespace termin {
 
 /**
  * Mouse button press/release event.
- *
- * Генерируется при нажатии/отпускании кнопки мыши.
+ * C++ wrapper for tc_mouse_button_event.
  */
-struct MouseButtonEvent {
-    tc_viewport* viewport;  ///< Viewport where event occurred
-    double x;               ///< Cursor X position in viewport coordinates
-    double y;               ///< Cursor Y position in viewport coordinates
-    int button;             ///< Button: 0=left, 1=right, 2=middle
-    int action;             ///< Action: 0=release, 1=press, 2=repeat
-    int mods;               ///< Modifier flags: Shift=1, Ctrl=2, Alt=4, Super=8
+struct MouseButtonEvent : public tc_mouse_button_event {
+    MouseButtonEvent() {
+        viewport = nullptr;
+        x = 0; y = 0;
+        button = 0; action = 0; mods = 0;
+    }
 
-    MouseButtonEvent() : viewport(nullptr), x(0), y(0), button(0), action(0), mods(0) {}
+    MouseButtonEvent(tc_viewport* vp, double x_, double y_, int btn, int act, int m = 0) {
+        viewport = vp;
+        x = x_; y = y_;
+        button = btn; action = act; mods = m;
+    }
 
-    MouseButtonEvent(tc_viewport* viewport, double x, double y, int button, int action, int mods = 0)
-        : viewport(viewport), x(x), y(y), button(button), action(action), mods(mods) {}
+    // Construct from C struct
+    explicit MouseButtonEvent(const tc_mouse_button_event& e) {
+        viewport = e.viewport;
+        x = e.x; y = e.y;
+        button = e.button; action = e.action; mods = e.mods;
+    }
 };
 
 /**
  * Mouse movement event.
- *
- * Генерируется при перемещении курсора мыши.
- * dx, dy — дельта относительно предыдущей позиции.
+ * C++ wrapper for tc_mouse_move_event.
  */
-struct MouseMoveEvent {
-    tc_viewport* viewport;  ///< Viewport where event occurred
-    double x;               ///< Current cursor X position
-    double y;               ///< Current cursor Y position
-    double dx;              ///< Delta X since last event
-    double dy;              ///< Delta Y since last event
+struct MouseMoveEvent : public tc_mouse_move_event {
+    MouseMoveEvent() {
+        viewport = nullptr;
+        x = 0; y = 0;
+        dx = 0; dy = 0;
+    }
 
-    MouseMoveEvent() : viewport(nullptr), x(0), y(0), dx(0), dy(0) {}
+    MouseMoveEvent(tc_viewport* vp, double x_, double y_, double dx_, double dy_) {
+        viewport = vp;
+        x = x_; y = y_;
+        dx = dx_; dy = dy_;
+    }
 
-    MouseMoveEvent(tc_viewport* viewport, double x, double y, double dx, double dy)
-        : viewport(viewport), x(x), y(y), dx(dx), dy(dy) {}
+    // Construct from C struct
+    explicit MouseMoveEvent(const tc_mouse_move_event& e) {
+        viewport = e.viewport;
+        x = e.x; y = e.y;
+        dx = e.dx; dy = e.dy;
+    }
 };
 
 /**
  * Mouse scroll event.
- *
- * Генерируется при прокрутке колеса мыши.
- * yoffset > 0 — прокрутка вверх (zoom in), yoffset < 0 — вниз (zoom out).
+ * C++ wrapper for tc_scroll_event.
  */
-struct ScrollEvent {
-    tc_viewport* viewport;  ///< Viewport where event occurred
-    double x;               ///< Cursor X position
-    double y;               ///< Cursor Y position
-    double xoffset;         ///< Horizontal scroll offset
-    double yoffset;         ///< Vertical scroll offset (positive = up/zoom in)
-    int mods;               ///< Modifier flags
+struct ScrollEvent : public tc_scroll_event {
+    ScrollEvent() {
+        viewport = nullptr;
+        x = 0; y = 0;
+        xoffset = 0; yoffset = 0; mods = 0;
+    }
 
-    ScrollEvent() : viewport(nullptr), x(0), y(0), xoffset(0), yoffset(0), mods(0) {}
+    ScrollEvent(tc_viewport* vp, double x_, double y_, double xoff, double yoff, int m = 0) {
+        viewport = vp;
+        x = x_; y = y_;
+        xoffset = xoff; yoffset = yoff; mods = m;
+    }
 
-    ScrollEvent(tc_viewport* viewport, double x, double y, double xoffset, double yoffset, int mods = 0)
-        : viewport(viewport), x(x), y(y), xoffset(xoffset), yoffset(yoffset), mods(mods) {}
+    // Construct from C struct
+    explicit ScrollEvent(const tc_scroll_event& e) {
+        viewport = e.viewport;
+        x = e.x; y = e.y;
+        xoffset = e.xoffset; yoffset = e.yoffset; mods = e.mods;
+    }
 };
 
 /**
  * Keyboard event.
- *
- * Генерируется при нажатии/отпускании клавиши.
- * key — виртуальный код клавиши (GLFW/platform-specific).
+ * C++ wrapper for tc_key_event.
  */
-struct KeyEvent {
-    tc_viewport* viewport;  ///< Viewport where event occurred
-    int key;                ///< Virtual key code
-    int scancode;           ///< Platform-specific scancode
-    int action;             ///< Action: 0=release, 1=press, 2=repeat
-    int mods;               ///< Modifier flags
+struct KeyEvent : public tc_key_event {
+    KeyEvent() {
+        viewport = nullptr;
+        key = 0; scancode = 0;
+        action = 0; mods = 0;
+    }
 
-    KeyEvent() : viewport(nullptr), key(0), scancode(0), action(0), mods(0) {}
+    KeyEvent(tc_viewport* vp, int k, int sc, int act, int m = 0) {
+        viewport = vp;
+        key = k; scancode = sc;
+        action = act; mods = m;
+    }
 
-    KeyEvent(tc_viewport* viewport, int key, int scancode, int action, int mods = 0)
-        : viewport(viewport), key(key), scancode(scancode), action(action), mods(mods) {}
+    // Construct from C struct
+    explicit KeyEvent(const tc_key_event& e) {
+        viewport = e.viewport;
+        key = e.key; scancode = e.scancode;
+        action = e.action; mods = e.mods;
+    }
 };
 
 /**

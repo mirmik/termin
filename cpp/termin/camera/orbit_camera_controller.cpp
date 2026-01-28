@@ -208,17 +208,10 @@ OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state
 }
 
 // === Input handlers ===
-// Events are passed as pointers to C++ event structures (MouseButtonEvent, etc.)
-// When called from Python, nanobind automatically converts Python objects to C++ structs.
-// When called from C#, SWIG does the same conversion.
+// Events are C struct pointers (tc_mouse_button_event*, etc.)
 
-void OrbitCameraController::on_mouse_button(void* event) {
-    if (!_camera) {
-        return;
-    }
-
-    auto* e = static_cast<MouseButtonEvent*>(event);
-    if (!e) {
+void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
+    if (!_camera || !e) {
         return;
     }
 
@@ -241,12 +234,9 @@ void OrbitCameraController::on_mouse_button(void* event) {
     }
 }
 
-void OrbitCameraController::on_mouse_move(void* event) {
+void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
     if (_prevent_moving) return;
-    if (!_camera) return;
-
-    auto* e = static_cast<MouseMoveEvent*>(event);
-    if (!e) return;
+    if (!_camera || !e) return;
 
     uintptr_t vp_key = reinterpret_cast<uintptr_t>(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
@@ -269,10 +259,8 @@ void OrbitCameraController::on_mouse_move(void* event) {
     }
 }
 
-void OrbitCameraController::on_scroll(void* event) {
+void OrbitCameraController::on_scroll(tc_scroll_event* e) {
     if (_prevent_moving) return;
-
-    auto* e = static_cast<ScrollEvent*>(event);
     if (!e) return;
 
     // Scroll up (positive yoffset) = zoom in (negative delta)

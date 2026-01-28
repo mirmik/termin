@@ -89,10 +89,12 @@ TC_API void tc_component_install_python_drawable_vtable(tc_component* c);
 // Python Input Handler callbacks
 // ============================================================================
 
-typedef void (*tc_py_input_on_mouse_button_fn)(void* py_self, void* event);
-typedef void (*tc_py_input_on_mouse_move_fn)(void* py_self, void* event);
-typedef void (*tc_py_input_on_scroll_fn)(void* py_self, void* event);
-typedef void (*tc_py_input_on_key_fn)(void* py_self, void* event);
+#include "tc_input_event.h"
+
+typedef void (*tc_py_input_on_mouse_button_fn)(void* py_self, tc_mouse_button_event* event);
+typedef void (*tc_py_input_on_mouse_move_fn)(void* py_self, tc_mouse_move_event* event);
+typedef void (*tc_py_input_on_scroll_fn)(void* py_self, tc_scroll_event* event);
+typedef void (*tc_py_input_on_key_fn)(void* py_self, tc_key_event* event);
 
 typedef struct {
     tc_py_input_on_mouse_button_fn on_mouse_button;

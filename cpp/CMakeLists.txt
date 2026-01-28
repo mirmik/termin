@@ -426,6 +426,7 @@ nanobind_add_module(_native
     termin/bindings/render/tc_render_surface_bindings.cpp
     termin/bindings/render/tc_input_manager_bindings.cpp
     termin/bindings/render/tc_display_bindings.cpp
+    termin/bindings/input/simple_display_input_manager_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
