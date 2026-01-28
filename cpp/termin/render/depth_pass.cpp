@@ -45,6 +45,6 @@ void main()
 )";
 
 // Register DepthPass in tc_pass_registry for C#/standalone C++ usage
-TC_REGISTER_FRAME_PASS(DepthPass);
+TC_REGISTER_FRAME_PASS_DERIVED(DepthPass, GeometryPassBase);
 
 } // namespace termin

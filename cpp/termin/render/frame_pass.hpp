@@ -14,6 +14,12 @@ extern "C" {
 #include "render/tc_pass.h"
 }
 
+#ifdef TERMIN_HAS_NANOBIND
+#include "tc_inspect.hpp"
+#else
+#include "tc_inspect_cpp.hpp"
+#endif
+
 #include "termin/render/handles.hpp"
 #include "termin/render/resource_spec.hpp"
 
@@ -309,6 +315,28 @@ private:
         _reg_##PassClass() {                                                 \
             tc_pass_registry_register(                                       \
                 #PassClass, _factory_##PassClass, nullptr, TC_NATIVE_PASS);  \
+        }                                                                    \
+    } _reg_instance_##PassClass
+
+// Registration macro with parent class for InspectRegistry inheritance
+#define TC_REGISTER_FRAME_PASS_DERIVED(PassClass, ParentClass)               \
+    static tc_pass* _factory_##PassClass(void* /*userdata*/) {               \
+        auto* pass = new PassClass();                                        \
+        pass->retain();                                                      \
+        tc_pass* c = pass->tc_pass_ptr();                                    \
+        tc_type_entry* entry = tc_pass_registry_get_entry(#PassClass);       \
+        if (entry) {                                                         \
+            c->type_entry = entry;                                           \
+            c->type_version = entry->version;                                \
+        }                                                                    \
+        return c;                                                            \
+    }                                                                        \
+    static struct _reg_##PassClass {                                         \
+        _reg_##PassClass() {                                                 \
+            tc_pass_registry_register(                                       \
+                #PassClass, _factory_##PassClass, nullptr, TC_NATIVE_PASS);  \
+            tc::InspectRegistry::instance().set_type_parent(                 \
+                #PassClass, #ParentClass);                                   \
         }                                                                    \
     } _reg_instance_##PassClass
 

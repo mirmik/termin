@@ -174,7 +174,10 @@
       "type": "DepthPass",
       "x": 171.27002620784629,
       "y": 846.5291991920476,
-      "name": "FOVDepth"
+      "name": "FOVDepth",
+      "params": {
+        "camera_name": "FOVCamera"
+      }
     },
     {
       "type": "MaterialPass",
@@ -251,7 +254,10 @@
     {
       "type": "DepthPass",
       "x": -434.3265127705372,
-      "y": 84.65729066539589
+      "y": 84.65729066539589,
+      "params": {
+        "camera_name": ""
+      }
     },
     {
       "type": "FBO",
@@ -279,7 +285,10 @@
     {
       "type": "NormalPass",
       "x": -427.02817870514497,
-      "y": 538.9003594185936
+      "y": 538.9003594185936,
+      "params": {
+        "camera_name": ""
+      }
     },
     {
       "type": "TonemapPass",
