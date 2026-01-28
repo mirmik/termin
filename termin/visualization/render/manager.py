@@ -722,7 +722,7 @@ class RenderingManager:
             log.warn("[render_all_offscreen] Graphics backend not set")
             return
 
-        with profiler.section("Make Current"):
+        with profiler.section("Offscreen Context"):
             # Activate offscreen context
             self._offscreen_context.make_current()
 
@@ -893,7 +893,7 @@ class RenderingManager:
         if surface is None:
             return
 
-        with profiler.section("Make Current"):
+        with profiler.section("Surface Context"):
             surface.make_current()
 
         width, height = surface.get_size()

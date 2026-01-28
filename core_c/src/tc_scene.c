@@ -312,10 +312,10 @@ void tc_scene_update(tc_scene* s, double dt) {
     }
     if (profile) tc_profiler_end_section();
 
-    // 4. Update entity transforms
-    if (profile) tc_profiler_begin_section("Update Transforms");
-    tc_entity_pool_update_transforms(s->pool);
-    if (profile) tc_profiler_end_section();
+    // // 4. Update entity transforms (Disabled. Dirty logic used for now)
+    // if (profile) tc_profiler_begin_section("Update Transforms");
+    // tc_entity_pool_update_transforms(s->pool);
+    // if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_editor_update(tc_scene* s, double dt) {
@@ -356,10 +356,10 @@ void tc_scene_editor_update(tc_scene* s, double dt) {
     }
     if (profile) tc_profiler_end_section();
 
-    // Update entity transforms
-    if (profile) tc_profiler_begin_section("Update Transforms");
-    tc_entity_pool_update_transforms(s->pool);
-    if (profile) tc_profiler_end_section();
+    // Update entity transforms (Disabled. Dirty logic used for now)
+    // if (profile) tc_profiler_begin_section("Update Transforms");
+    // tc_entity_pool_update_transforms(s->pool);
+    // if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_before_render(tc_scene* s) {

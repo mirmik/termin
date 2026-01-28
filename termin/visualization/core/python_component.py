@@ -50,10 +50,8 @@ class PythonComponent:
 
         # Auto-detect if update/fixed_update are overridden
         cls = type(self)
-        if cls.update is not PythonComponent.update:
-            self._tc.has_update = True
-        if cls.fixed_update is not PythonComponent.fixed_update:
-            self._tc.has_fixed_update = True
+        self._tc.has_update = cls.update is not PythonComponent.update
+        self._tc.has_fixed_update = cls.fixed_update is not PythonComponent.fixed_update
 
         # Install drawable vtable if this is a drawable component
         if cls.is_drawable:
