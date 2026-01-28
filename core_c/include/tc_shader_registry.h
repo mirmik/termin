@@ -64,13 +64,15 @@ TC_API bool tc_shader_set_sources(
 );
 
 // Create shader from sources (convenience function)
-// Returns handle to new or existing shader (if hash matches)
+// If uuid is provided: finds existing shader by uuid (updates sources) or creates new with that uuid
+// If uuid is NULL: returns existing shader if hash matches, otherwise creates new with auto-generated uuid
 TC_API tc_shader_handle tc_shader_from_sources(
     const char* vertex_source,
     const char* fragment_source,
     const char* geometry_source,  // may be NULL
     const char* name,             // may be NULL
-    const char* source_path       // may be NULL
+    const char* source_path,      // may be NULL
+    const char* uuid              // may be NULL - if set, shader gets this uuid
 );
 
 // ============================================================================

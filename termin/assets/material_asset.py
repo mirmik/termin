@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 from termin.assets.data_asset import DataAsset
+from termin.assets.shader_asset import make_phase_uuid
 from termin._native import log
 
 if TYPE_CHECKING:
@@ -305,10 +306,15 @@ def _parse_material_content(
 
     # Try to load shader by UUID first, fallback to name
     program = None
+    shader_asset_uuid = shader_uuid  # The actual asset uuid for phase uuid generation
     if shader_uuid:
         program = rm.get_shader_by_uuid(shader_uuid)
     if program is None:
         program = rm.get_shader(shader_name)
+        # Get shader asset uuid from registry
+        shader_asset = rm.get_shader_asset(shader_name)
+        if shader_asset is not None:
+            shader_asset_uuid = shader_asset.uuid
 
     if program is None:
         log.error(f"[MaterialAsset] Shader not found (uuid={shader_uuid}, name={shader_name}), creating empty material")
@@ -375,6 +381,11 @@ def _parse_material_content(
         # Build render state
         state = _build_render_state(shader_phase, phase_mark)
 
+        # Generate phase uuid for hot-reload support
+        phase_uuid = ""
+        if shader_asset_uuid:
+            phase_uuid = make_phase_uuid(shader_asset_uuid, shader_phase.phase_mark)
+
         # Add phase
         phase = mat.add_phase_from_sources(
             vertex_source=vertex_source,
@@ -384,6 +395,7 @@ def _parse_material_content(
             phase_mark=phase_mark,
             priority=shader_phase.priority,
             state=state,
+            shader_uuid=phase_uuid,
         )
 
         if phase is None:

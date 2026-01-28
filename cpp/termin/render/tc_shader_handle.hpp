@@ -228,7 +228,8 @@ public:
             fragment.c_str(),
             geometry.empty() ? nullptr : geometry.c_str(),
             name.empty() ? nullptr : name.c_str(),
-            source_path.empty() ? nullptr : source_path.c_str()
+            source_path.empty() ? nullptr : source_path.c_str(),
+            nullptr
         );
         if (tc_shader_handle_is_invalid(h)) {
             return TcShader();

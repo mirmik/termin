@@ -190,7 +190,8 @@ public:
         return tc_material_add_phase(m, shader_handle, mark, priority);
     }
 
-    // Add phase from shader sources (creates or finds shader by hash)
+    // Add phase from shader sources (creates or finds shader by uuid/hash)
+    // If shader_uuid is provided, shader is created/found with that uuid (for hot-reload)
     tc_material_phase* add_phase_from_sources(
         const char* vertex_source,
         const char* fragment_source,
@@ -198,14 +199,15 @@ public:
         const char* shader_name,
         const char* phase_mark,
         int priority,
-        const tc_render_state& state
+        const tc_render_state& state,
+        const char* shader_uuid = nullptr
     ) {
         tc_material* m = get();
         if (!m) return nullptr;
 
         // Create or find shader
         tc_shader_handle sh = tc_shader_from_sources(
-            vertex_source, fragment_source, geometry_source, shader_name, nullptr
+            vertex_source, fragment_source, geometry_source, shader_name, nullptr, shader_uuid
         );
         if (tc_shader_handle_is_invalid(sh)) return nullptr;
 

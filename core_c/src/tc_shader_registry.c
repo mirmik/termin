@@ -383,24 +383,46 @@ tc_shader_handle tc_shader_from_sources(
     const char* fragment_source,
     const char* geometry_source,
     const char* name,
-    const char* source_path
+    const char* source_path,
+    const char* uuid
 ) {
     if (!vertex_source || !fragment_source) {
         tc_log_error("tc_shader_from_sources: vertex and fragment sources required");
         return tc_shader_handle_invalid();
     }
 
-    // Compute hash to check for existing shader
+    // If uuid provided, find or create shader with that uuid
+    if (uuid && uuid[0] != '\0') {
+        tc_shader_handle existing = tc_shader_find(uuid);
+        if (!tc_shader_handle_is_invalid(existing)) {
+            // Update existing shader's sources
+            tc_shader* shader = tc_shader_get(existing);
+            tc_shader_set_sources(shader, vertex_source, fragment_source, geometry_source, name, source_path);
+            return existing;
+        }
+        // Create new shader with specified uuid
+        tc_shader_handle h = tc_shader_create(uuid);
+        if (tc_shader_handle_is_invalid(h)) {
+            return h;
+        }
+        tc_shader* shader = tc_shader_get(h);
+        if (!tc_shader_set_sources(shader, vertex_source, fragment_source, geometry_source, name, source_path)) {
+            tc_shader_destroy(h);
+            return tc_shader_handle_invalid();
+        }
+        return h;
+    }
+
+    // No uuid - use hash-based lookup
     char hash[TC_SHADER_HASH_LEN];
     tc_shader_compute_hash(vertex_source, fragment_source, geometry_source, hash);
 
-    // Check if shader with same hash exists
     tc_shader_handle existing = tc_shader_find_by_hash(hash);
     if (!tc_shader_handle_is_invalid(existing)) {
         return existing;
     }
 
-    // Create new shader
+    // Create new shader with auto-generated uuid
     tc_shader_handle h = tc_shader_create(NULL);
     if (tc_shader_handle_is_invalid(h)) {
         return h;

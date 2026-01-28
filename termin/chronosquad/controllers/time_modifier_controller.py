@@ -29,8 +29,8 @@ class TimeModifierController(PythonComponent):
         super().__init__(enabled=enabled)
         self._chronosphere_controller: ChronosphereController | None = None
         self._camera: CameraComponent | None = None
-        self._time_effect: MaterialPostEffect | None = None
         self._time_effect_pass: MaterialPass | None = None
+        self._nav_mesh_pass: MaterialPass | None = None
         self._initialized = False
 
     def start(self) -> None:
@@ -40,20 +40,20 @@ class TimeModifierController(PythonComponent):
 
         self._find_camera()
         self._find_chronosphere_controller()
-        self._find_time_effect()
         self._find_time_effect_pass()
-
-        if self._time_effect is not None:
-            self._time_effect.set_before_draw(self._before_draw)
-            log.info("[TimeModifierController] Connected to TimeModifier effect")
-        else:
-            log.warning("[TimeModifierController] TimeModifier effect not found; cannot connect")
+        self._find_nav_mesh_pass()
 
         if self._time_effect_pass is not None:
             self._time_effect_pass.before_draw = self._before_draw
             log.info("[TimeModifierController] Found MaterialPass for TimeModifier effect")
         else:
             log.warning("[TimeModifierController] MaterialPass for TimeModifier effect not found")
+
+        if self._nav_mesh_pass is not None:
+            self._nav_mesh_pass.before_draw = self._before_draw_nav_mesh
+            log.info("[TimeModifierController] Found MaterialPass for NavMeshPost effect")
+        else:
+            log.warning("[TimeModifierController] MaterialPass for NavMeshPost effect not found")
 
         self._initialized = True
 
@@ -81,45 +81,6 @@ class TimeModifierController(PythonComponent):
 
         log.warning("[TimeModifierController] ChronosphereController not found in scene")
 
-    def _find_time_effect(self) -> None:
-        # """Find MaterialPostEffect named 'TimeSpection' in 'PostFX' pass."""
-        # from termin.visualization.render.postprocess import PostProcessPass
-        # from termin.visualization.render.posteffects.material_effect import MaterialPostEffect
-
-        # if self._camera is None:
-        #     log.warning("[TimeModifierController] No camera")
-        #     return
-
-        # # Get live pipeline from camera's viewport
-        # viewport = self._camera.viewport
-        # if viewport is None:
-        #     log.warning("[TimeModifierController] Camera has no viewport")
-        #     return
-
-        # pipeline = viewport.pipeline
-        # if pipeline is None:
-        #     log.warning("[TimeModifierController] Viewport has no pipeline")
-        #     return
-
-        # # Find PostFX pass
-        # for render_pass in pipeline.passes:
-        #     if not isinstance(render_pass, PostProcessPass):
-        #         continue
-        #     if render_pass.pass_name != "PostFX":
-        #         continue
-
-        #     # Find TimeSpection effect
-        #     for effect in render_pass.effects:
-        #         if not isinstance(effect, MaterialPostEffect):
-        #             continue
-        #         if effect.name == "TimeSpection":
-        #             self._time_effect = effect.to_python()
-        #             log.info("[TimeModifierController] Found TimeSpection effect")
-        #             return
-
-        # log.warning("[TimeModifierController] TimeSpection effect not found in PostFX pass")
-        pass
-
     def _find_time_effect_pass(self) -> None:
         rm = RenderingManager.instance()
         if rm is None:
@@ -137,6 +98,24 @@ class TimeModifierController(PythonComponent):
             return
 
         self._time_effect_pass = render_pass.to_python()
+
+    def _find_nav_mesh_pass(self) -> None:
+        rm = RenderingManager.instance()
+        if rm is None:
+            log.error("[TimeModifierController] No RenderingManager instance")
+            return
+        
+        pipeline = rm.get_scene_pipeline("TestScenePipeline")
+        if pipeline is None:
+            log.error("[TimeModifierController] No TestScenePipeline found")
+            return
+
+        render_pass = pipeline.get_pass_by_name("NavMeshPost")
+        if render_pass is None:
+            log.warning("[TimeModifierController] No NavMeshPost pass found in pipeline")
+            return
+
+        self._nav_mesh_pass = render_pass.to_python()
 
     def _before_draw(self, shader: "TcShader") -> None:
         """Callback to set uniforms for the post-effect shader."""
@@ -164,6 +143,23 @@ class TimeModifierController(PythonComponent):
         else:
             log.warning("[TimeModifierController] No CameraComponent to set near/far uniforms")
 
+    def _before_draw_nav_mesh(self, shader: "TcShader") -> None:
+        """Callback to set uniforms for the NavMeshPost shader."""
+        # Set camera uniforms for depth decoding and world pos reconstruction
+        if self._camera is not None:
+            shader.set_uniform_float("u_near", self._camera.near)
+            shader.set_uniform_float("u_far", self._camera.far)
+
+            # Compute inverse view and projection matrices
+            view = self._camera.view_matrix()
+            proj = self._camera.projection_matrix()
+
+            shader.set_uniform_mat4("u_inv_view", view.inverse(), False)
+            shader.set_uniform_mat4("u_inv_proj", proj.inverse(), False)
+
+        else:
+            log.warning("[TimeModifierController] No CameraComponent to set near/far uniforms")
+
     def on_removed_from_entity(self) -> None:
         """Clean up callback when removed."""
         if self._time_effect is not None:
@@ -171,3 +167,9 @@ class TimeModifierController(PythonComponent):
             self._time_effect = None
         else:
             log.warning("[TimeModifierController] No TimeModifier effect to disconnect")
+
+        if self._nav_mesh_pass is not None:
+            self._nav_mesh_pass.set_before_draw(None)
+            self._nav_mesh_pass = None
+        else:
+            log.warning("[TimeModifierController] No NavMeshPost effect to disconnect")

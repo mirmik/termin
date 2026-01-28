@@ -373,7 +373,7 @@ void main() {
     // Depth-only pass
 }
 )";
-            h = tc_shader_from_sources(shadow_vert, shadow_frag, nullptr, "system:shadow", nullptr);
+            h = tc_shader_from_sources(shadow_vert, shadow_frag, nullptr, "system:shadow", nullptr, nullptr);
         }
         if (tc_shader_is_valid(h)) {
             static TcShader cached_shader;

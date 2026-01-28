@@ -350,7 +350,8 @@ void bind_tc_material(nb::module_& m) {
             const std::string& shader_name,
             const std::string& phase_mark,
             int priority,
-            const tc_render_state& state
+            const tc_render_state& state,
+            const std::string& shader_uuid
         ) -> tc_material_phase* {
             return self.add_phase_from_sources(
                 vertex_source.c_str(),
@@ -359,12 +360,14 @@ void bind_tc_material(nb::module_& m) {
                 shader_name.c_str(),
                 phase_mark.c_str(),
                 priority,
-                state
+                state,
+                shader_uuid.empty() ? nullptr : shader_uuid.c_str()
             );
         }, nb::arg("vertex_source"), nb::arg("fragment_source"),
            nb::arg("geometry_source") = "", nb::arg("shader_name") = "",
            nb::arg("phase_mark") = "opaque", nb::arg("priority") = 0,
            nb::arg("state") = tc_render_state_opaque(),
+           nb::arg("shader_uuid") = "",
            nb::rv_policy::reference)
         .def("bump_version", &TcMaterial::bump_version)
         // Apply with MVP

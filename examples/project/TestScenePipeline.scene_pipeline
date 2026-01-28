@@ -334,6 +334,10 @@
         [
           "normal_texture",
           "fbo"
+        ],
+        [
+          "fov",
+          "fbo"
         ]
       ]
     },
@@ -511,6 +515,12 @@
       "from_socket": "fbo",
       "to_node": 20,
       "to_socket": "output_res_target"
+    },
+    {
+      "from_node": 11,
+      "from_socket": "output_res",
+      "to_node": 20,
+      "to_socket": "fov"
     }
   ],
   "viewport_frames": [

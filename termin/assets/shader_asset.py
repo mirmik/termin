@@ -81,6 +81,9 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         # Build render state
         state = _build_render_state(shader_phase, shader_phase.phase_mark)
 
+        # Generate phase uuid for hot-reload support
+        phase_uuid = make_phase_uuid(shader_uuid, shader_phase.phase_mark) if shader_uuid else ""
+
         # Add phase
         phase = material.add_phase_from_sources(
             vertex_source=vertex_source,
@@ -90,6 +93,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
             phase_mark=shader_phase.phase_mark,
             priority=shader_phase.priority,
             state=state,
+            shader_uuid=phase_uuid,
         )
 
         if phase is None:
