@@ -452,18 +452,11 @@ public partial class MainWindow : Window
 
         // Add resource specs
         var colorSpec = new ResourceSpec();
-        colorSpec.resource = "color";
+        colorSpec.resource = "empty";
         colorSpec.resource_type = "fbo";
         colorSpec.scale = 1.0f;
-        colorSpec.samples = 1;
+        colorSpec.samples = 4;
         _renderPipeline.add_spec(colorSpec);
-
-        var depthSpec = new ResourceSpec();
-        depthSpec.resource = "depth";
-        depthSpec.resource_type = "fbo";
-        depthSpec.scale = 1.0f;
-        depthSpec.samples = 1;
-        _renderPipeline.add_spec(depthSpec);
 
         // Create and add ColorPass (SWIG class)
         // Render to "color" FBO, then blit to screen

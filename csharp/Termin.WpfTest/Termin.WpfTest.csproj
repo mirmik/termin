@@ -17,4 +17,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Copy native DLLs from build_csharp/bin -->
+  <ItemGroup>
+    <None Include="..\..\build_csharp\bin\termin_core.dll" CopyToOutputDirectory="PreserveNewest" Link="termin_core.dll" />
+    <None Include="..\..\build_csharp\bin\termin.dll" CopyToOutputDirectory="PreserveNewest" Link="termin.dll" />
+    <None Include="..\..\build_csharp\bin\entity_lib.dll" CopyToOutputDirectory="PreserveNewest" Link="entity_lib.dll" />
+  </ItemGroup>
+
 </Project>
