@@ -1301,3 +1301,57 @@ void tc_entity_pool_foreach(tc_entity_pool* pool, tc_entity_iter_fn callback, vo
         }
     }
 }
+
+// ============================================================================
+// Input Handler Iteration (for internal_entities dispatch)
+// ============================================================================
+
+// Helper to recursively iterate input handlers in subtree
+static bool foreach_input_handler_recursive(
+    tc_entity_pool* pool,
+    tc_entity_id entity_id,
+    tc_component_iter_fn callback,
+    void* user_data
+) {
+    if (!tc_entity_pool_alive(pool, entity_id)) return true;
+
+    // Check entity is enabled
+    if (!tc_entity_pool_enabled(pool, entity_id)) return true;
+
+    // Iterate components on this entity
+    size_t comp_count = tc_entity_pool_component_count(pool, entity_id);
+    for (size_t i = 0; i < comp_count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, entity_id, i);
+        if (!c || !c->enabled) continue;
+
+        // Check if component is input handler (has input_vtable)
+        if (tc_component_is_input_handler(c)) {
+            if (!callback(c, user_data)) {
+                return false;  // Stop iteration
+            }
+        }
+    }
+
+    // Recurse into children
+    size_t child_count = tc_entity_pool_children_count(pool, entity_id);
+    for (size_t i = 0; i < child_count; i++) {
+        tc_entity_id child_id = tc_entity_pool_child_at(pool, entity_id, i);
+        if (!foreach_input_handler_recursive(pool, child_id, callback, user_data)) {
+            return false;  // Stop iteration
+        }
+    }
+
+    return true;
+}
+
+void tc_entity_pool_foreach_input_handler_subtree(
+    tc_entity_pool* pool,
+    tc_entity_id root_id,
+    tc_component_iter_fn callback,
+    void* user_data
+) {
+    if (!pool || !callback) return;
+    if (!tc_entity_id_valid(root_id)) return;
+
+    foreach_input_handler_recursive(pool, root_id, callback, user_data);
+}

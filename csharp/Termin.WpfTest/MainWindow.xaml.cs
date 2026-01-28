@@ -387,7 +387,7 @@ public partial class MainWindow : Window
 
         // Create second camera entity with different position (top view)
         var cameraEntity2 = _scene.Entities.CreateEntity("Camera2");
-        cameraEntity2.Position = new System.Numerics.Vector3(0, 0, 5);  // Top view
+        cameraEntity2.Position = new System.Numerics.Vector3(0, -3, 1);
 
         _cameraComponent2 = new CameraComponent();
         _cameraComponent2.set_fov_degrees(60.0);
@@ -402,8 +402,6 @@ public partial class MainWindow : Window
             prevent_moving: false
         );
         cameraEntity2.AddComponent(_orbitController2);
-        // Set view from above by orbiting to elevation 80 degrees
-        _orbitController2.orbit(0, 80);
         Console.WriteLine("[Init] Created second camera (top view)");
 
         // Create mesh and shader

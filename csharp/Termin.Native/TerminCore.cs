@@ -31,6 +31,13 @@ public static partial class TerminCore
     [LibraryImport(DLL, EntryPoint = "tc_scene_entity_pool")]
     public static partial IntPtr SceneEntityPool(IntPtr scene);
 
+    // EntityPool lifecycle (for standalone pools)
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_create")]
+    public static partial IntPtr EntityPoolCreate(nuint initialCapacity);
+
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_destroy")]
+    public static partial void EntityPoolDestroy(IntPtr pool);
+
     [LibraryImport(DLL, EntryPoint = "tc_scene_entity_count")]
     public static partial nuint SceneEntityCount(IntPtr scene);
 
@@ -683,6 +690,20 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_get_pipeline")]
     public static partial IntPtr ViewportGetPipeline(IntPtr viewport);
+
+    // Internal entities (for viewport-specific components like camera controllers)
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_internal_entities")]
+    public static partial void ViewportSetInternalEntities(IntPtr viewport, IntPtr pool, TcEntityId entityId);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_has_internal_entities")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ViewportHasInternalEntities(IntPtr viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_pool")]
+    public static partial IntPtr ViewportGetInternalEntitiesPool(IntPtr viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_id")]
+    public static partial TcEntityId ViewportGetInternalEntitiesId(IntPtr viewport);
 }
 
 /// <summary>

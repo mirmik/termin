@@ -206,6 +206,22 @@ typedef bool (*tc_entity_iter_fn)(tc_entity_pool* pool, tc_entity_id id, void* u
 // Iterate over all alive entities
 TC_POOL_API void tc_entity_pool_foreach(tc_entity_pool* pool, tc_entity_iter_fn callback, void* user_data);
 
+// ============================================================================
+// Input Handler Iteration (for internal_entities dispatch)
+// ============================================================================
+
+// Callback type for component iteration (same as tc_scene.h)
+typedef bool (*tc_component_iter_fn)(tc_component* c, void* user_data);
+
+// Iterate input handler components in entity subtree (entity and all descendants)
+// Calls callback for each enabled component with input_vtable set
+TC_POOL_API void tc_entity_pool_foreach_input_handler_subtree(
+    tc_entity_pool* pool,
+    tc_entity_id root_id,
+    tc_component_iter_fn callback,
+    void* user_data
+);
+
 #ifdef __cplusplus
 }
 #endif

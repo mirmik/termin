@@ -128,6 +128,8 @@ void PullRenderingManager::remove_viewport_state(tc_viewport* viewport) {
 void PullRenderingManager::render_display(tc_display* display) {
     if (!display || !graphics_) return;
 
+    const char* dname = tc_display_get_name(display);
+
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
         tc_log(TC_LOG_WARN, "[PullRenderingManager] render_display: surface is null");
@@ -161,24 +163,36 @@ void PullRenderingManager::render_display(tc_display* display) {
         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
     });
 
+    tc_log(TC_LOG_INFO, "[PullRM] render_display %s: %zu viewports, fbo=%u, size=%dx%d",
+           dname ? dname : "(null)", viewports.size(), display_fbo, width, height);
+
     // Render and blit each viewport
     for (tc_viewport* viewport : viewports) {
         // Skip viewports managed by scene pipeline
         const char* managed_by = tc_viewport_get_managed_by(viewport);
         if (managed_by && managed_by[0] != '\0') continue;
 
+        // Update viewport pixel_rect based on current display size
+        tc_viewport_update_pixel_rect(viewport, width, height);
+
         // Render viewport to offscreen FBO
         render_viewport_offscreen(viewport);
 
         // Blit to display
         ViewportRenderState* state = get_viewport_state(viewport);
-        if (!state || !state->has_output_fbo()) continue;
+        if (!state || !state->has_output_fbo()) {
+            tc_log(TC_LOG_WARN, "[PullRM] viewport has no output_fbo after render");
+            continue;
+        }
 
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
         int src_w = state->output_width;
         int src_h = state->output_height;
+
+        tc_log(TC_LOG_INFO, "[PullRM] blit: src=%dx%d -> dst rect (%d,%d,%d,%d)",
+               src_w, src_h, px, py, px + pw, py + ph);
 
         graphics_->blit_framebuffer_to_id(
             *state->output_fbo,
@@ -196,7 +210,10 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
     tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
 
-    if (!scene || !camera_comp || !pipeline) return;
+    if (!scene || !camera_comp || !pipeline) {
+        tc_log(TC_LOG_WARN, "[PullRM] viewport missing scene/camera/pipeline");
+        return;
+    }
 
     RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
     if (!render_pipeline) return;
@@ -207,6 +224,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
 
     int px, py, pw, ph;
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
+    tc_log(TC_LOG_INFO, "[PullRM] viewport pixel_rect: (%d,%d) %dx%d", px, py, pw, ph);
     if (pw <= 0 || ph <= 0) return;
 
     ViewportRenderState* state = get_or_create_viewport_state(viewport);

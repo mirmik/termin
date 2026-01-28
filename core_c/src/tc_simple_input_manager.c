@@ -5,6 +5,7 @@
 #include "render/tc_viewport.h"
 #include "tc_scene.h"
 #include "tc_component.h"
+#include "tc_entity_pool.h"
 #include "tc_input_event.h"
 #include "tc_log.h"
 
@@ -40,6 +41,27 @@ static bool dispatch_key_cb(tc_component* c, void* user_data) {
 }
 
 // ============================================================================
+// Internal Entities Dispatch Helper
+// ============================================================================
+
+// Dispatch to input handlers in viewport's internal_entities subtree
+static void dispatch_to_internal_entities(
+    tc_viewport* viewport,
+    tc_component_iter_fn callback,
+    void* user_data
+) {
+    if (!viewport) return;
+    if (!tc_viewport_has_internal_entities(viewport)) return;
+
+    tc_entity_pool* pool = tc_viewport_get_internal_entities_pool(viewport);
+    tc_entity_id root_id = tc_viewport_get_internal_entities_id(viewport);
+
+    if (pool && tc_entity_id_valid(root_id)) {
+        tc_entity_pool_foreach_input_handler_subtree(pool, root_id, callback, user_data);
+    }
+}
+
+// ============================================================================
 // Event Handlers
 // ============================================================================
 
@@ -69,18 +91,22 @@ static void simple_on_mouse_button(tc_input_manager* m, int button, int action, 
         sim->active_viewport = NULL;
     }
 
-    // Dispatch to scene
+    // Dispatch to scene and internal_entities
     if (viewport != NULL) {
+        tc_mouse_button_event event;
+        event.viewport = viewport;
+        event.x = x;
+        event.y = y;
+        event.button = button;
+        event.action = action;
+        event.mods = mods;
+
+        // Dispatch to internal_entities first (camera controllers, etc.)
+        dispatch_to_internal_entities(viewport, dispatch_mouse_button_cb, &event);
+
+        // Then dispatch to scene
         tc_scene* scene = tc_viewport_get_scene(viewport);
         if (scene != NULL) {
-            tc_mouse_button_event event;
-            event.viewport = viewport;
-            event.x = x;
-            event.y = y;
-            event.button = button;
-            event.action = action;
-            event.mods = mods;
-
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_mouse_button_cb,
@@ -111,17 +137,21 @@ static void simple_on_mouse_move(tc_input_manager* m, double x, double y) {
         viewport = tc_display_viewport_at_screen(sim->display, (float)x, (float)y);
     }
 
-    // Dispatch to scene
+    // Dispatch to scene and internal_entities
     if (viewport != NULL) {
+        tc_mouse_move_event event;
+        event.viewport = viewport;
+        event.x = x;
+        event.y = y;
+        event.dx = dx;
+        event.dy = dy;
+
+        // Dispatch to internal_entities first
+        dispatch_to_internal_entities(viewport, dispatch_mouse_move_cb, &event);
+
+        // Then dispatch to scene
         tc_scene* scene = tc_viewport_get_scene(viewport);
         if (scene != NULL) {
-            tc_mouse_move_event event;
-            event.viewport = viewport;
-            event.x = x;
-            event.y = y;
-            event.dx = dx;
-            event.dy = dy;
-
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_mouse_move_cb,
@@ -148,18 +178,22 @@ static void simple_on_scroll(tc_input_manager* m, double xoffset, double yoffset
         viewport = sim->active_viewport;
     }
 
-    // Dispatch to scene
+    // Dispatch to scene and internal_entities
     if (viewport != NULL) {
+        tc_scroll_event event;
+        event.viewport = viewport;
+        event.x = x;
+        event.y = y;
+        event.xoffset = xoffset;
+        event.yoffset = yoffset;
+        event.mods = mods;
+
+        // Dispatch to internal_entities first
+        dispatch_to_internal_entities(viewport, dispatch_scroll_cb, &event);
+
+        // Then dispatch to scene
         tc_scene* scene = tc_viewport_get_scene(viewport);
         if (scene != NULL) {
-            tc_scroll_event event;
-            event.viewport = viewport;
-            event.x = x;
-            event.y = y;
-            event.xoffset = xoffset;
-            event.yoffset = yoffset;
-            event.mods = mods;
-
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_scroll_cb,
@@ -190,17 +224,21 @@ static void simple_on_key(tc_input_manager* m, int key, int scancode, int action
         viewport = tc_display_get_first_viewport(sim->display);
     }
 
-    // Dispatch to scene
+    // Dispatch to scene and internal_entities
     if (viewport != NULL) {
+        tc_key_event event;
+        event.viewport = viewport;
+        event.key = key;
+        event.scancode = scancode;
+        event.action = action;
+        event.mods = mods;
+
+        // Dispatch to internal_entities first
+        dispatch_to_internal_entities(viewport, dispatch_key_cb, &event);
+
+        // Then dispatch to scene
         tc_scene* scene = tc_viewport_get_scene(viewport);
         if (scene != NULL) {
-            tc_key_event event;
-            event.viewport = viewport;
-            event.key = key;
-            event.scancode = scancode;
-            event.action = action;
-            event.mods = mods;
-
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_key_cb,

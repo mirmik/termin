@@ -20,6 +20,17 @@ public class EntityPool : IDisposable
         _ownsHandle = ownsHandle;
     }
 
+    /// <summary>
+    /// Create a new standalone entity pool (not associated with a scene).
+    /// </summary>
+    public static EntityPool Create(int initialCapacity = 16)
+    {
+        var handle = TerminCore.EntityPoolCreate((nuint)initialCapacity);
+        if (handle == IntPtr.Zero)
+            throw new InvalidOperationException("Failed to create EntityPool");
+        return new EntityPool(handle, ownsHandle: true);
+    }
+
     public int Count => (int)TerminCore.EntityPoolCount(_handle);
 
     /// <summary>
@@ -139,12 +150,12 @@ public class EntityPool : IDisposable
 
     public void Dispose()
     {
-        if (!_disposed && _ownsHandle)
+        if (!_disposed && _ownsHandle && _handle != IntPtr.Zero)
         {
-            // EntityPool is usually owned by Scene, so we don't destroy it here
+            TerminCore.EntityPoolDestroy(_handle);
             _handle = IntPtr.Zero;
-            _disposed = true;
         }
+        _disposed = true;
         GC.SuppressFinalize(this);
     }
 
