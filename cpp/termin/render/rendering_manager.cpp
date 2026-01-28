@@ -258,8 +258,6 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
-    tc_log(TC_LOG_INFO, "[RenderingManager] render_all_offscreen: %zu displays", displays_.size());
-
     // Render all viewports from all displays
     for (tc_display* display : displays_) {
         // Make display context current before rendering its viewports
@@ -269,21 +267,16 @@ void RenderingManager::render_all_offscreen() {
         }
 
         tc_viewport* vp = tc_display_get_first_viewport(display);
-        int vp_count = 0;
         while (vp) {
-            vp_count++;
             if (tc_viewport_get_enabled(vp)) {
                 // Skip viewports managed by scene pipeline
                 const char* managed_by = tc_viewport_get_managed_by(vp);
                 if (!managed_by || managed_by[0] == '\0') {
-                    tc_log(TC_LOG_INFO, "[RenderingManager] rendering viewport '%s'",
-                        vp->name ? vp->name : "(null)");
                     render_viewport_offscreen(vp);
                 }
             }
             vp = vp->display_next;
         }
-        tc_log(TC_LOG_INFO, "[RenderingManager] display has %d viewports", vp_count);
     }
 }
 
@@ -314,9 +307,6 @@ void RenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
     FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
-    tc_log(TC_LOG_INFO, "[RenderingManager] render_viewport_offscreen: output_fbo=%u (%dx%d)",
-        output_fbo ? output_fbo->get_fbo_id() : 0, pw, ph);
-
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
 
@@ -332,11 +322,6 @@ void RenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
         lights,
         tc_viewport_get_layer_mask(viewport)
     );
-
-    // Debug: read center pixel to check if anything was rendered
-    auto pixel = graphics_->read_pixel(output_fbo, pw/2, ph/2);
-    tc_log(TC_LOG_INFO, "[RenderingManager] output_fbo center pixel: (%.2f, %.2f, %.2f, %.2f)",
-        pixel[0], pixel[1], pixel[2], pixel[3]);
 }
 
 void RenderingManager::present_all() {
@@ -381,16 +366,10 @@ void RenderingManager::present_display(tc_display* display) {
         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
     });
 
-    tc_log(TC_LOG_INFO, "[RenderingManager] present_display: %zu viewports to blit", viewports.size());
-
     // Blit viewports
     for (tc_viewport* viewport : viewports) {
         ViewportRenderState* state = get_viewport_state(viewport);
-        if (!state || !state->has_output_fbo()) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] viewport '%s' has no output_fbo (state=%p)",
-                viewport->name ? viewport->name : "(null)", (void*)state);
-            continue;
-        }
+        if (!state || !state->has_output_fbo()) continue;
 
         // Get viewport position on display
         int px, py, pw, ph;
@@ -399,10 +378,6 @@ void RenderingManager::present_display(tc_display* display) {
         // Get output FBO size
         int src_w = state->output_width;
         int src_h = state->output_height;
-
-        tc_log(TC_LOG_INFO, "[RenderingManager] blit: src_fbo=%u (%dx%d) -> dst_fbo=%u at (%d,%d,%d,%d)",
-            state->output_fbo->get_fbo_id(), src_w, src_h,
-            display_fbo, px, py, px + pw, py + ph);
 
         // Blit output_fbo → display_fbo
         graphics_->blit_framebuffer_to_id(
