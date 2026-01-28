@@ -3,6 +3,7 @@
 #include <nanobind/stl/string.h>
 
 #include "render/tc_input_manager.h"
+#include "render/tc_simple_input_manager.h"
 #include "render/tc_render_surface.h"
 
 namespace nb = nanobind;
@@ -206,6 +207,31 @@ void bind_tc_input_manager(nb::module_& m) {
     m.attr("TC_MOD_CONTROL") = TC_MOD_CONTROL;
     m.attr("TC_MOD_ALT") = TC_MOD_ALT;
     m.attr("TC_MOD_SUPER") = TC_MOD_SUPER;
+
+    // ========================================================================
+    // tc_simple_input_manager - C implementation of SimpleDisplayInputManager
+    // ========================================================================
+
+    // Create simple input manager for display
+    m.def("_simple_input_manager_new", [](uintptr_t display_ptr) -> uintptr_t {
+        tc_display* display = reinterpret_cast<tc_display*>(display_ptr);
+        tc_simple_input_manager* m = tc_simple_input_manager_new(display);
+        return reinterpret_cast<uintptr_t>(m);
+    }, nb::arg("display_ptr"),
+       "Create simple input manager for display.\n"
+       "Auto-attaches to display's surface.");
+
+    // Free simple input manager
+    m.def("_simple_input_manager_free", [](uintptr_t ptr) {
+        tc_simple_input_manager* m = reinterpret_cast<tc_simple_input_manager*>(ptr);
+        tc_simple_input_manager_free(m);
+    });
+
+    // Get tc_input_manager pointer (for manual event dispatch)
+    m.def("_simple_input_manager_get_input_manager", [](uintptr_t ptr) -> uintptr_t {
+        tc_simple_input_manager* m = reinterpret_cast<tc_simple_input_manager*>(ptr);
+        return reinterpret_cast<uintptr_t>(tc_simple_input_manager_get_input_manager(m));
+    });
 }
 
 } // namespace termin

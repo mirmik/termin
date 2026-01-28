@@ -18,6 +18,7 @@ set(TC_SOURCES
     src/tc_display.c
     src/tc_entity_pool.c
     src/tc_input_manager.c
+    src/tc_simple_input_manager.c
     src/tc_frame_graph.c
     src/tc_gpu.c
     src/tc_hash_map.c
@@ -81,6 +82,7 @@ set(TC_HEADERS
     include/termin_core.h
     include/render/tc_display.h
     include/render/tc_input_manager.h
+    include/render/tc_simple_input_manager.h
     include/render/tc_pass.h
     include/render/tc_pipeline.h
     include/render/tc_render_surface.h

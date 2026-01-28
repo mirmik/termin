@@ -346,7 +346,7 @@ class RenderingController:
 
         Args:
             display: Display to set up input for.
-            input_mode: Input mode ("none", "simple", "editor").
+            input_mode: Input mode ("none", "simple", "basic", "editor").
         """
         print(f"[RenderingController] _setup_display_input: display={display.name}, input_mode={input_mode}")
         display_id = id(display)
@@ -371,6 +371,15 @@ class RenderingController:
 
             # Connect input manager to surface
             print(f"[RenderingController] _setup_display_input: setting ptr={input_manager.tc_input_manager_ptr}")
+            surface.set_input_manager(input_manager.tc_input_manager_ptr)
+        elif input_mode == "basic":
+            # Basic C input manager (no raycast, cross-language compatible)
+            from termin.visualization.platform.input_manager import BasicDisplayInputManager
+
+            input_manager = BasicDisplayInputManager(display.tc_display_ptr)
+            self._display_input_managers[display_id] = input_manager
+
+            print(f"[RenderingController] _setup_display_input: setting basic ptr={input_manager.tc_input_manager_ptr}")
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif input_mode == "editor":
             # Editor mode is handled by EditorWindow via callback
@@ -1010,6 +1019,14 @@ class RenderingController:
 
             # Connect input manager to surface
             print(f"[RenderingController] Setting SimpleDisplayInputManager on surface, ptr={input_manager.tc_input_manager_ptr}")
+            surface.set_input_manager(input_manager.tc_input_manager_ptr)
+        elif mode == "basic":
+            from termin.visualization.platform.input_manager import BasicDisplayInputManager
+
+            input_manager = BasicDisplayInputManager(display.tc_display_ptr)
+            self._display_input_managers[display_id] = input_manager
+
+            print(f"[RenderingController] Setting BasicDisplayInputManager on surface, ptr={input_manager.tc_input_manager_ptr}")
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif mode == "editor":
             # Editor mode is handled by EditorWindow via callback

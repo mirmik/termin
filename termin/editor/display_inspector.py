@@ -40,13 +40,14 @@ class DisplayInspector(QWidget):
 
     name_changed = pyqtSignal(str)
     display_changed = pyqtSignal()
-    input_mode_changed = pyqtSignal(str)  # "none", "simple", "editor"
+    input_mode_changed = pyqtSignal(str)  # "none", "simple", "basic", "editor"
     block_input_in_editor_changed = pyqtSignal(bool)
 
     # Available input modes
     INPUT_MODES = [
         ("none", "None"),
         ("simple", "Simple (Game)"),
+        ("basic", "Basic (C)"),
         ("editor", "Editor"),
     ]
 
@@ -107,7 +108,8 @@ class DisplayInspector(QWidget):
         self._input_mode_combo.setToolTip(
             "Input handling mode for this display:\n"
             "- None: No input handling\n"
-            "- Simple (Game): Routes input to scene (OrbitCamera, etc.)\n"
+            "- Simple (Game): Routes input to scene with raycast\n"
+            "- Basic (C): Routes input to scene (C impl, no raycast)\n"
             "- Editor: Full editor input (picking, gizmo, etc.)"
         )
         for mode_id, mode_label in self.INPUT_MODES:
