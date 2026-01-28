@@ -175,35 +175,6 @@ public:
         tc_scene_set_py_wrapper(_s, wrapper.ptr());
     }
 
-private:
-    // Update entity references in all components of an entity (and its children)
-    void update_component_entity_refs(Entity& ent) {
-        size_t count = ent.component_count();
-        for (size_t i = 0; i < count; i++) {
-            tc_component* tc = ent.component_at(i);
-            if (!tc) continue;
-
-            if (tc->kind == TC_CXX_COMPONENT) {
-                // C++ component - update entity field directly
-                CxxComponent* cxx = CxxComponent::from_tc(tc);
-                if (cxx) {
-                    cxx->entity = ent;
-                }
-            } else if (tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
-                // Python component - update via Python attribute
-                // All Python components have 'entity' field declared in base class
-                nb::gil_scoped_acquire gil;
-                nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->body);
-                py_comp.attr("entity") = nb::cast(ent);
-            }
-        }
-
-        // Recursively update children
-        for (Entity child : ent.children()) {
-            update_component_entity_refs(child);
-        }
-    }
-
 public:
     // Create a new entity directly in scene's pool
     Entity create_entity(const std::string& name = "") {
@@ -293,12 +264,7 @@ public:
             return Entity();
         }
 
-        Entity new_entity(dst_pool, new_id);
-
-        // Update entity reference in all components (including children)
-        update_component_entity_refs(new_entity);
-
-        return new_entity;
+        return Entity(dst_pool, new_id);
     }
 
     // Collision world access

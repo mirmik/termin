@@ -521,6 +521,9 @@ public:
 
     // FBO access (for manual blit)
     FramebufferHandle* get_fbo(const std::string& name);
+
+    // Access tc_pipeline pointer (for viewport binding)
+    tc_pipeline* ptr();
 };
 
 // Forward declaration for CameraComponent (used in RenderEngine)

@@ -103,10 +103,10 @@ void bind_orbit_camera_controller(nb::module_& m) {
         // camera_component property (Python used this)
         .def_prop_ro("camera_component", [](OrbitCameraController& c) -> nb::object {
             // Get CameraComponent from same entity
-            if (!c.entity.valid()) {
+            if (!c.entity().valid()) {
                 return nb::none();
             }
-            CameraComponent* cam = c.entity.get_component<CameraComponent>();
+            CameraComponent* cam = c.entity().get_component<CameraComponent>();
             if (!cam) {
                 return nb::none();
             }

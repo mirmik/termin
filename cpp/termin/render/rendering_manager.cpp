@@ -253,14 +253,17 @@ void RenderingManager::render_all_offscreen() {
     }
 
     RenderEngine* engine = render_engine();
-    if (!engine) return;
+    if (!engine) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: no render engine");
+        return;
+    }
 
     // Render all viewports from all displays
     for (tc_display* display : displays_) {
         tc_viewport* vp = tc_display_get_first_viewport(display);
         while (vp) {
             if (tc_viewport_get_enabled(vp)) {
-                // Skip viewports managed by scene pipeline (for future scene pipeline support)
+                // Skip viewports managed by scene pipeline
                 const char* managed_by = tc_viewport_get_managed_by(vp);
                 if (!managed_by || managed_by[0] == '\0') {
                     render_viewport_offscreen(vp);
@@ -284,8 +287,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
     RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
     if (!render_pipeline) return;
 
-    // Get CameraComponent
-    CameraComponent* camera = static_cast<CameraComponent*>(camera_comp->body);
+    // Get CameraComponent from tc_component using container_of pattern
+    CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
+    CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
     if (!camera) return;
 
     // Get pixel rect

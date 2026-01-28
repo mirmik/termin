@@ -105,8 +105,7 @@ void CxxComponent::_cb_on_destroy(tc_component* c) {
 void CxxComponent::_cb_on_added_to_entity(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
-        // Synchronize C++ Entity with tc_component owner fields
-        self->entity = Entity(c->owner_pool, c->owner_entity_id);
+        // entity() now reads from c->owner_pool/owner_entity_id directly
         self->on_added_to_entity();
     }
 }
@@ -115,8 +114,7 @@ void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->on_removed_from_entity();
-        // Clear C++ Entity reference
-        self->entity = Entity();
+        // entity() will return invalid after c->owner_pool is cleared
     }
 }
 

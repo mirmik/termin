@@ -29,7 +29,7 @@ public:
     void start() override {
 #ifdef TERMIN_HAS_NANOBIND
         // Get Python component by type name
-        tc_component* tc = entity.get_component_by_type_name("ColliderComponent");
+        tc_component* tc = entity().get_component_by_type_name("ColliderComponent");
         if (tc && tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
             collider_component = nb::borrow((PyObject*)tc->body);
             nb::object collider_obj = collider_component.attr("attached_collider");
@@ -43,15 +43,15 @@ public:
     }
 
     void update(float dt) override {
-        if (!entity.valid() || !entity.transform().valid()) return;
+        if (!entity().valid() || !entity().transform().valid()) return;
 
-        GeneralPose3 pose = entity.transform().local_pose();
+        GeneralPose3 pose = entity().transform().local_pose();
         auto screw = Screw3{
             Vec3{0.0, 0.0, speed},
             Vec3{0.0, 0.0, 0.0}
         }.scaled(dt);
         pose = (pose * screw.to_pose()).normalized();
-        entity.transform().relocate(pose);
+        entity().transform().relocate(pose);
 
         if (collider) {
             collider->angular_velocity = Vec3{0.0, 0.0, speed};

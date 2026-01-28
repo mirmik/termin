@@ -130,19 +130,13 @@ NB_MODULE(_entity_native, m) {
         .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
         .def_prop_ro("is_input_handler", &CxxComponent::is_input_handler)
-        .def_prop_rw("entity",
+        .def_prop_ro("entity",
             [](CxxComponent& c) -> nb::object {
-                if (c.entity.valid()) {
-                    return nb::cast(c.entity);
+                Entity ent = c.entity();
+                if (ent.valid()) {
+                    return nb::cast(ent);
                 }
                 return nb::none();
-            },
-            [](CxxComponent& c, nb::object value) {
-                if (value.is_none()) {
-                    c.entity = Entity();
-                } else {
-                    c.entity = nb::cast<Entity>(value);
-                }
             })
         .def("c_component_ptr", [](CxxComponent& c) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(c.c_component());

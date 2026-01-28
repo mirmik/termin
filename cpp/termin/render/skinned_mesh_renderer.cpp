@@ -158,10 +158,10 @@ void SkinnedMeshRenderer::start() {
     Component::start();
 
     // After deserialization, skeleton_controller may be null - try to find it
-    if (_skeleton_controller == nullptr && entity.valid()) {
+    if (_skeleton_controller == nullptr && entity().valid()) {
         // Look for SkeletonController by type name
         // Check parent entity first (typical for GLB structure)
-        Entity parent_entity = entity.parent();
+        Entity parent_entity = entity().parent();
 
         if (parent_entity.valid()) {
             Component* controller = parent_entity.get_component_by_type("SkeletonController");
@@ -172,7 +172,7 @@ void SkinnedMeshRenderer::start() {
 
         // Also check current entity
         if (_skeleton_controller == nullptr) {
-            Component* controller = entity.get_component_by_type("SkeletonController");
+            Component* controller = entity().get_component_by_type("SkeletonController");
             if (controller != nullptr) {
                 _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
             }

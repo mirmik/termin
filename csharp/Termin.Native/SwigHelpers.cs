@@ -42,4 +42,28 @@ public static class SwigHelpers
     {
         return new SWIGTYPE_p_termin__GraphicsBackend(ptr, false);
     }
+
+    /// <summary>
+    /// Wrap an IntPtr as SWIGTYPE_p_tc_display for passing to SWIG methods.
+    /// </summary>
+    public static SWIGTYPE_p_tc_display WrapTcDisplayPtr(IntPtr ptr)
+    {
+        return new SWIGTYPE_p_tc_display(ptr, false);
+    }
+
+    /// <summary>
+    /// Wrap an IntPtr as SWIGTYPE_p_tc_pipeline for passing to SWIG methods.
+    /// </summary>
+    public static SWIGTYPE_p_tc_pipeline WrapTcPipelinePtr(IntPtr ptr)
+    {
+        return new SWIGTYPE_p_tc_pipeline(ptr, false);
+    }
+
+    /// <summary>
+    /// Get IntPtr from SWIGTYPE_p_tc_pipeline.
+    /// </summary>
+    public static IntPtr GetPtr(SWIGTYPE_p_tc_pipeline obj)
+    {
+        return SWIGTYPE_p_tc_pipeline.getCPtr(obj).Handle;
+    }
 }

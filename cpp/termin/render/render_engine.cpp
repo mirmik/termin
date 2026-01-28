@@ -36,7 +36,7 @@ void RenderEngine::render_to_screen(
         tc::Log::error("[render_to_screen] camera is NULL");
         return;
     }
-    if (!camera->entity.valid()) {
+    if (!camera->entity().valid()) {
         tc::Log::error("[render_to_screen] camera->entity is invalid");
         return;
     }
@@ -109,7 +109,6 @@ void RenderEngine::render_view_to_fbo(
         tc::Log::error("RenderEngine::render_view_to_fbo: pipeline is null");
         return;
     }
-    // Check pipeline->ptr() is valid
     tc_pipeline* pp = pipeline->ptr();
     if (!pp) {
         tc::Log::error("RenderEngine::render_view_to_fbo: pipeline->ptr() is null");
@@ -138,7 +137,6 @@ void RenderEngine::render_view_to_fbo(
     auto specs = pipeline->collect_specs();
 
     // Build spec map - merge specs with same resource name
-    // Pipeline specs come first and have priority for samples/format
     std::unordered_map<std::string, ResourceSpec> spec_map;
     for (const auto& spec : specs) {
         auto it = spec_map.find(spec.resource);
@@ -188,7 +186,6 @@ void RenderEngine::render_view_to_fbo(
         if (it != spec_map.end()) {
             spec = &it->second;
         } else {
-            // Try aliases
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
             for (size_t j = 0; j < alias_count && !spec; j++) {
@@ -277,7 +274,9 @@ void RenderEngine::render_view_to_fbo(
         }
 
         FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(it->second);
-        if (!fbo) continue;
+        if (!fbo) {
+            continue;
+        }
 
         graphics->bind_framebuffer(fbo);
 
@@ -348,7 +347,7 @@ void RenderEngine::render_view_to_fbo(
         ctx.lights = lights;
         ctx.layer_mask = layer_mask;
 
-        // Execute pass via vtable (works for both C++ and Python passes)
+        // Execute pass via vtable
         tc_pass_execute(pass, &ctx);
 
         tc_profiler_end_section(); // pass_name

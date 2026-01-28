@@ -677,6 +677,12 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_rect")]
     public static partial void ViewportSetRect(IntPtr viewport, float x, float y, float w, float h);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_pipeline")]
+    public static partial void ViewportSetPipeline(IntPtr viewport, IntPtr pipeline);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_pipeline")]
+    public static partial IntPtr ViewportGetPipeline(IntPtr viewport);
 }
 
 /// <summary>

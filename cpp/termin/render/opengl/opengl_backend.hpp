@@ -715,11 +715,18 @@ public:
     // --- Framebuffer operations ---
 
     void bind_framebuffer(FramebufferHandle* fbo) override {
-        if (fbo == nullptr) {
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        } else {
-            glBindFramebuffer(GL_FRAMEBUFFER, fbo->get_fbo_id());
+        if (glad_glBindFramebuffer == nullptr) {
+            tc::Log::error("[OpenGLGraphicsBackend] bind_framebuffer: glad_glBindFramebuffer is NULL! GLAD not loaded?");
+            return;
         }
+        // Check GL error state before bind
+        GLenum pre_err = glGetError();
+        if (pre_err != GL_NO_ERROR) {
+            tc::Log::warn("[OpenGLGraphicsBackend] bind_framebuffer: pre-existing GL error: 0x%X", pre_err);
+        }
+
+        GLuint fbo_id = fbo ? fbo->get_fbo_id() : 0;
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
     }
 
     void bind_framebuffer_id(uint32_t fbo_id) override {

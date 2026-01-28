@@ -267,6 +267,8 @@ public partial class MainWindow : Window
     private RenderPipeline? _renderPipeline;
     private RenderEngine? _renderEngine;
     private CameraComponent? _cameraComponent;
+    private SWIGTYPE_p_termin__GraphicsBackend? _graphics;
+    private RenderingManager? _renderingManager;
     private OrbitCameraController? _orbitController;
     private ColorPass? _colorPass;  // Keep reference to prevent GC collection
     private Scene? _scene;
@@ -324,10 +326,18 @@ public partial class MainWindow : Window
         GL.Enable(EnableCap.DepthTest);
 
         // Get graphics backend (SWIG helper)
-        var graphics = termin.get_opengl_graphics();
+        _graphics = termin.get_opengl_graphics();
+        Console.WriteLine($"[Init] Graphics backend: {_graphics != null}");
 
-        // Create render engine
-        _renderEngine = new RenderEngine(graphics);
+        // Set up RenderingManager (store reference to prevent GC issues)
+        _renderingManager = RenderingManager.instance();
+        _renderingManager.set_graphics(_graphics);
+        Console.WriteLine("[Init] RenderingManager graphics set");
+
+        // Create render engine (RenderingManager will use it)
+        _renderEngine = new RenderEngine(_graphics);
+        _renderingManager.set_render_engine(_renderEngine);
+        Console.WriteLine("[Init] RenderingManager render engine set");
 
         // Create scene
         _scene = new Scene();
@@ -386,13 +396,18 @@ public partial class MainWindow : Window
 
     private void InitNativeDisplay()
     {
-        if (_backend == null || _scene == null || _cameraComponent == null) return;
+        if (_backend == null || _scene == null || _cameraComponent == null || _renderPipeline == null) return;
 
         // Create WpfRenderSurface
         _renderSurface = new WpfRenderSurface(GlControl);
 
         // Create NativeDisplayManager with tc_display and tc_simple_input_manager
         _nativeDisplayManager = new NativeDisplayManager(_renderSurface, _backend, "WpfDisplay");
+
+        // Add display to RenderingManager
+        var displayWrapper = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager.DisplayPtr);
+        _renderingManager!.add_display(displayWrapper);
+        Console.WriteLine("[Init] Display added to RenderingManager");
 
         // Create viewport with scene and camera
         _viewportPtr = TerminCore.ViewportNew("Main", _scene.Handle, _cameraComponent.tc_component_ptr());
@@ -401,10 +416,13 @@ public partial class MainWindow : Window
             // Full screen viewport
             TerminCore.ViewportSetRect(_viewportPtr, 0.0f, 0.0f, 1.0f, 1.0f);
 
+            // Set pipeline on viewport (for RenderingManager)
+            TerminCore.ViewportSetPipeline(_viewportPtr, SwigHelpers.GetPtr(_renderPipeline.ptr()));
+
             // Add to display
             _nativeDisplayManager.AddViewport(_viewportPtr);
 
-            Console.WriteLine($"[Init] Created viewport and added to display");
+            Console.WriteLine($"[Init] Created viewport with pipeline and added to display");
         }
     }
 
@@ -459,10 +477,10 @@ public partial class MainWindow : Window
         _renderPipeline.add_spec(colorSpec);
 
         // Create and add ColorPass (SWIG class)
-        // Render to "color" FBO, then blit to screen
+        // Render directly to OUTPUT (which maps to viewport's output_fbo)
         _colorPass = new ColorPass(
             input_res: "empty",
-            output_res: "color",
+            output_res: "OUTPUT",
             shadow_res: "",
             phase_mark: "opaque",
             pass_name: "Color"
@@ -618,27 +636,14 @@ void main() {
             _scene?.Update(delta.TotalSeconds);
             _scene?.BeforeRender();
 
-            // Pipeline rendering
-            if (_renderPipeline != null && _renderEngine != null && _cameraComponent != null && _backend != null)
+            // Render via RenderingManager
+            if (_renderSurface != null && _nativeDisplayManager != null && _renderingManager != null)
             {
-                // Save WPF's FBO before rendering (pipeline will change it)
-                int wpfFbo = _backend.GetCurrentFboId();
+                // Cache WPF's FBO before rendering (offscreen rendering will change bindings)
+                _renderSurface.UpdateFramebuffer();
 
-                // Wrap scene handle for SWIG
-                var scenePtr = _scene?.Handle ?? IntPtr.Zero;
-                var sceneWrapper = SwigHelpers.WrapVoidPtr(scenePtr);
-
-                // Render via pipeline
-                _renderEngine.render_to_screen(
-                    _renderPipeline,
-                    width,
-                    height,
-                    sceneWrapper,
-                    _cameraComponent
-                );
-
-                // Blit color FBO to WPF's FBO via backend
-                _backend.BlitFromPipeline(_renderPipeline, "color", wpfFbo);
+                // Render all viewports and present to displays
+                _renderingManager.render_all(true);
 
                 _renderCount++;
             }
@@ -651,7 +656,11 @@ void main() {
 
     protected override void OnClosed(EventArgs e)
     {
-        // Cleanup native display first (detaches input manager from surface)
+        // Shutdown RenderingManager first (clears viewport states, releases render engine)
+        _renderingManager?.shutdown();
+        _renderingManager = null;
+
+        // Cleanup native display (detaches input manager from surface)
         _nativeDisplayManager?.Dispose();
         _nativeDisplayManager = null;
 

@@ -65,33 +65,20 @@ Entity Entity::create_with_uuid(tc_entity_pool* pool, const std::string& name, c
 
 void Entity::add_component(Component* component) {
     if (!component || !valid()) return;
-
-    component->entity = *this;
+    // entity() reads from tc_component owner fields, set by tc_entity_pool_add_component
     tc_entity_pool_add_component(_pool, _id, component->c_component());
-    // on_added_to_entity is called inside tc_entity_pool_add_component
 }
 
 void Entity::add_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
-
-    // For CxxComponents, set the entity reference
-    if (c->kind == TC_NATIVE_COMPONENT) {
-        CxxComponent* cxx = CxxComponent::from_tc(c);
-        if (cxx) {
-            cxx->entity = *this;
-        }
-    }
-
+    // entity() reads from tc_component owner fields, set by tc_entity_pool_add_component
     tc_entity_pool_add_component(_pool, _id, c);
-    // on_added_to_entity is called inside tc_entity_pool_add_component
 }
 
 void Entity::remove_component(Component* component) {
     if (!component || !valid()) return;
-
+    // entity() will return invalid after owner fields are cleared
     tc_entity_pool_remove_component(_pool, _id, component->c_component());
-    // on_removed_from_entity is called inside tc_entity_pool_remove_component
-    component->entity = Entity();  // Invalid entity
 }
 
 void Entity::remove_component_ptr(tc_component* c) {

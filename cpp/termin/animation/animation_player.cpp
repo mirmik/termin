@@ -45,12 +45,12 @@ void AnimationPlayer::_rebuild_clips_map() {
 }
 
 void AnimationPlayer::_acquire_skeleton() {
-    if (!entity.valid()) {
+    if (!entity().valid()) {
         tc::Log::warn("[AnimationPlayer::_acquire_skeleton] entity not valid");
         return;
     }
 
-    SkeletonController* sc = entity.get_component<SkeletonController>();
+    SkeletonController* sc = entity().get_component<SkeletonController>();
     if (sc != nullptr) {
         _target_skeleton = sc->skeleton_instance();
         tc::Log::info("[AnimationPlayer::_acquire_skeleton] SkeletonController found, skeleton=%p",

@@ -36,12 +36,12 @@ void CameraComponent::set_aspect(double a) {
 }
 
 Mat44 CameraComponent::get_view_matrix() const {
-    if (!entity.valid()) {
+    if (!entity().valid()) {
         return Mat44::identity();
     }
 
     // Get global pose (ignore scale for view matrix)
-    GeneralPose3 gpose = entity.transform().global_pose();
+    GeneralPose3 gpose = entity().transform().global_pose();
     Pose3 pose(gpose.ang, gpose.lin);
     Pose3 inv_pose = pose.inverse();
     return inv_pose.as_mat44();
@@ -64,10 +64,10 @@ Mat44 CameraComponent::compute_projection_matrix(double aspect_override) const {
 }
 
 Vec3 CameraComponent::get_position() const {
-    if (!entity.valid()) {
+    if (!entity().valid()) {
         return Vec3::zero();
     }
-    return entity.transform().global_position();
+    return entity().transform().global_position();
 }
 
 void CameraComponent::add_viewport(const TcViewport& vp) {

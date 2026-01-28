@@ -35,7 +35,7 @@ SkeletonInstance* SkeletonController::skeleton_instance() {
             _skeleton_instance = std::make_unique<SkeletonInstance>(
                 skel,
                 bone_entities,
-                entity
+                entity()
             );
             _skeleton_instance->update();
         } else {

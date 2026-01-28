@@ -32,10 +32,10 @@ void OrbitCameraController::on_added() {
     CxxComponent::on_added();
 
     // Find CameraComponent on same entity
-    _camera = entity.get_component<CameraComponent>();
+    _camera = entity().get_component<CameraComponent>();
     if (!_camera) {
         tc_log(TC_LOG_ERROR, "[OrbitCameraController] No CameraComponent found on entity '%s'",
-               entity.name());
+               entity().name());
     }
 
     _sync_from_transform();
@@ -44,11 +44,11 @@ void OrbitCameraController::on_added() {
 void OrbitCameraController::update(float dt) {
     (void)dt;
 
-    if (!entity.valid()) return;
+    if (!entity().valid()) return;
 
     // Check for external transform changes
-    Vec3 pos = entity.transform().global_position();
-    Quat rot = entity.transform().global_rotation();
+    Vec3 pos = entity().transform().global_position();
+    Quat rot = entity().transform().global_rotation();
 
     if (_has_last_transform) {
         // Check if position changed
@@ -83,10 +83,10 @@ void OrbitCameraController::_sync_from_transform() {
      * Forward direction uses Y-forward convention (local Y is forward).
      * Target is position + forward * radius.
      */
-    if (!entity.valid()) return;
+    if (!entity().valid()) return;
 
-    Vec3 pos = entity.transform().global_position();
-    Quat rot = entity.transform().global_rotation();
+    Vec3 pos = entity().transform().global_position();
+    Quat rot = entity().transform().global_rotation();
 
     // Get rotation matrix
     double rm[9];
@@ -136,7 +136,7 @@ void OrbitCameraController::_update_pose() {
      * Azimuth rotates around Z axis (up).
      * Elevation raises/lowers the camera.
      */
-    if (!entity.valid()) return;
+    if (!entity().valid()) return;
 
     double r = _clamp(radius, min_radius, max_radius);
     double cos_elev = std::cos(_elevation);
@@ -150,11 +150,11 @@ void OrbitCameraController::_update_pose() {
 
     // Create pose looking at target
     Pose3 pose = Pose3::looking_at(eye, _target);
-    entity.transform().relocate(pose);
+    entity().transform().relocate(pose);
 
     // Update last known position to avoid re-sync
-    _last_position = entity.transform().global_position();
-    _last_rotation = entity.transform().global_rotation();
+    _last_position = entity().transform().global_position();
+    _last_rotation = entity().transform().global_rotation();
 }
 
 void OrbitCameraController::orbit(double delta_azimuth, double delta_elevation) {
@@ -180,10 +180,10 @@ void OrbitCameraController::zoom(double delta) {
 }
 
 void OrbitCameraController::pan(double dx, double dy) {
-    if (!entity.valid()) return;
+    if (!entity().valid()) return;
 
     // Get rotation matrix for local axes
-    Quat rot = entity.transform().global_rotation();
+    Quat rot = entity().transform().global_rotation();
     double rm[9];
     rot.to_matrix(rm);
 

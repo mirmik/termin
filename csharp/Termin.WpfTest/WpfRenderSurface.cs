@@ -23,6 +23,9 @@ public class WpfRenderSurface : IDisposable
     private double _cursorY;
     private bool _shouldClose;
 
+    // Cached WPF FBO ID (must be updated before render)
+    private uint _cachedFboId;
+
     // Keep delegates alive to prevent GC
     private TerminCore.RenderSurfaceGetFramebufferDelegate? _getFramebuffer;
     private TerminCore.RenderSurfaceGetSizeDelegate? _getSize;
@@ -43,6 +46,15 @@ public class WpfRenderSurface : IDisposable
     /// Native tc_render_surface pointer.
     /// </summary>
     public IntPtr SurfacePtr => _surfacePtr;
+
+    /// <summary>
+    /// Update the cached FBO ID. Call at the start of each frame before RenderingManager.render_all().
+    /// </summary>
+    public void UpdateFramebuffer()
+    {
+        GL.GetInteger(GetPName.FramebufferBinding, out int fboId);
+        _cachedFboId = (uint)fboId;
+    }
 
     public WpfRenderSurface(GLWpfControl control)
     {
@@ -122,9 +134,9 @@ public class WpfRenderSurface : IDisposable
 
     private static uint GetFramebufferCallback(IntPtr surface)
     {
-        // WPF uses its own FBO, return current bound FBO
-        GL.GetInteger(GetPName.FramebufferBinding, out int fboId);
-        return (uint)fboId;
+        // Return cached FBO (must call UpdateFramebuffer() before render)
+        var self = GetSelf(surface);
+        return self?._cachedFboId ?? 0;
     }
 
     private static void GetSizeCallback(IntPtr surface, out int width, out int height)

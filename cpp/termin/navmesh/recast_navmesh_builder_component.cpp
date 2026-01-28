@@ -1592,14 +1592,14 @@ static void collect_meshes_recursive(Entity ent, const Mat44& base_inv, std::vec
 }
 
 void RecastNavMeshBuilderComponent::build_from_entity() {
-    if (!entity.valid()) {
+    if (!entity().valid()) {
         tc_log_error("RecastNavMeshBuilderComponent: no entity");
         return;
     }
 
     // Get base entity world transform and compute its inverse (B^-1)
     double b_data[16];
-    entity.get_world_matrix(b_data);
+    entity().get_world_matrix(b_data);
     Mat44 base_world;
     std::memcpy(base_world.ptr(), b_data, sizeof(b_data));
     Mat44 base_inv = base_world.inverse();
@@ -1607,7 +1607,7 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
     bool recurse = (mesh_source == static_cast<int>(MeshSource::AllDescendants));
     tc_log_info("[NavMesh] Build mode: %s, base entity: %s",
         recurse ? "AllDescendants" : "CurrentMesh",
-        entity.name() ? entity.name() : "(unnamed)");
+        entity().name() ? entity().name() : "(unnamed)");
     tc_log_info("[NavMesh] Base world matrix col0: (%.2f, %.2f, %.2f, %.2f)",
         b_data[0], b_data[1], b_data[2], b_data[3]);
     tc_log_info("[NavMesh] Base world matrix col1: (%.2f, %.2f, %.2f, %.2f)",
@@ -1620,7 +1620,7 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
     std::vector<float> verts;
     std::vector<int> tris;
 
-    collect_meshes_recursive(entity, base_inv, verts, tris, recurse);
+    collect_meshes_recursive(entity(), base_inv, verts, tris, recurse);
 
     if (verts.empty() || tris.empty()) {
         tc_log_error("RecastNavMeshBuilderComponent: no mesh geometry found");
