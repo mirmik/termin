@@ -107,6 +107,16 @@ public static partial class TerminCore
     [LibraryImport(DLL, EntryPoint = "tc_entity_pool_set_parent")]
     public static partial void EntityPoolSetParent(IntPtr pool, TcEntityId id, TcEntityId parent);
 
+    // Components
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_component_count")]
+    public static partial nuint EntityPoolComponentCount(IntPtr pool, TcEntityId id);
+
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_component_at")]
+    public static partial IntPtr EntityPoolComponentAt(IntPtr pool, TcEntityId id, nuint index);
+
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_remove_component")]
+    public static partial void EntityPoolRemoveComponent(IntPtr pool, TcEntityId id, IntPtr component);
+
     // ========================================================================
     // Pipeline
     // ========================================================================
@@ -288,6 +298,44 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_entity_pool_add_component")]
     public static partial void EntityPoolAddComponent(IntPtr pool, TcEntityId id, IntPtr component);
+
+    // ========================================================================
+    // Component Properties (for ComponentRef)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_type_name")]
+    public static partial IntPtr ComponentGetTypeName(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_enabled")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ComponentGetEnabled(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_enabled")]
+    public static partial void ComponentSetEnabled(IntPtr component, [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_active_in_editor")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ComponentGetActiveInEditor(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_set_active_in_editor")]
+    public static partial void ComponentSetActiveInEditor(IntPtr component, [MarshalAs(UnmanagedType.U1)] bool active);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_is_drawable")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ComponentGetIsDrawable(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_is_input_handler")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ComponentGetIsInputHandler(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_kind")]
+    public static partial int ComponentGetKind(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_owner_entity_id")]
+    public static partial TcEntityId ComponentGetOwnerEntityId(IntPtr component);
+
+    [LibraryImport(DLL, EntryPoint = "tc_component_get_owner_pool")]
+    public static partial IntPtr ComponentGetOwnerPool(IntPtr component);
 
     // ========================================================================
     // Pass Registry

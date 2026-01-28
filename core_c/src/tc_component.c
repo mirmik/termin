@@ -301,3 +301,49 @@ void tc_component_body_decref(void* body) {
         g_external_callbacks.decref(body);
     }
 }
+
+// ============================================================================
+// Component property accessors (for FFI bindings)
+// ============================================================================
+
+const char* tc_component_get_type_name(const tc_component* c) {
+    return tc_component_type_name(c);
+}
+
+bool tc_component_get_enabled(const tc_component* c) {
+    return c ? c->enabled : false;
+}
+
+void tc_component_set_enabled(tc_component* c, bool enabled) {
+    if (c) c->enabled = enabled;
+}
+
+bool tc_component_get_active_in_editor(const tc_component* c) {
+    return c ? c->active_in_editor : false;
+}
+
+void tc_component_set_active_in_editor(tc_component* c, bool active) {
+    if (c) c->active_in_editor = active;
+}
+
+bool tc_component_get_is_drawable(const tc_component* c) {
+    return tc_component_is_drawable(c);
+}
+
+bool tc_component_get_is_input_handler(const tc_component* c) {
+    return c && c->input_vtable != NULL;
+}
+
+tc_component_kind tc_component_get_kind(const tc_component* c) {
+    return c ? c->kind : TC_NATIVE_COMPONENT;
+}
+
+tc_entity_id tc_component_get_owner_entity_id(const tc_component* c) {
+    if (c) return c->owner_entity_id;
+    tc_entity_id invalid = {0xFFFFFFFF, 0};
+    return invalid;
+}
+
+tc_entity_pool* tc_component_get_owner_pool(const tc_component* c) {
+    return c ? c->owner_pool : NULL;
+}

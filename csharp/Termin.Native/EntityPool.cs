@@ -22,14 +22,30 @@ public class EntityPool : IDisposable
 
     public int Count => (int)TerminCore.EntityPoolCount(_handle);
 
-    public TcEntityId CreateEntity(string name)
+    /// <summary>
+    /// Create a new entity with the given name.
+    /// </summary>
+    public Entity CreateEntity(string name)
     {
-        return TerminCore.EntityPoolAlloc(_handle, name);
+        var id = TerminCore.EntityPoolAlloc(_handle, name);
+        return new Entity(this, id);
     }
 
-    public TcEntityId CreateEntity(string name, string uuid)
+    /// <summary>
+    /// Create a new entity with the given name and UUID.
+    /// </summary>
+    public Entity CreateEntity(string name, string uuid)
     {
-        return TerminCore.EntityPoolAllocWithUuid(_handle, name, uuid);
+        var id = TerminCore.EntityPoolAllocWithUuid(_handle, name, uuid);
+        return new Entity(this, id);
+    }
+
+    /// <summary>
+    /// Get an Entity wrapper for an existing entity ID.
+    /// </summary>
+    public Entity GetEntity(TcEntityId id)
+    {
+        return new Entity(this, id);
     }
 
     public void DestroyEntity(TcEntityId id)

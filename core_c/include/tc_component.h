@@ -539,6 +539,21 @@ static inline void tc_component_set_external_body(tc_component* c, void* body) {
     c->externally_managed = true;
 }
 
+// ============================================================================
+// Component property accessors (for FFI bindings)
+// ============================================================================
+
+TC_API const char* tc_component_get_type_name(const tc_component* c);
+TC_API bool tc_component_get_enabled(const tc_component* c);
+TC_API void tc_component_set_enabled(tc_component* c, bool enabled);
+TC_API bool tc_component_get_active_in_editor(const tc_component* c);
+TC_API void tc_component_set_active_in_editor(tc_component* c, bool active);
+TC_API bool tc_component_get_is_drawable(const tc_component* c);
+TC_API bool tc_component_get_is_input_handler(const tc_component* c);
+TC_API tc_component_kind tc_component_get_kind(const tc_component* c);
+TC_API tc_entity_id tc_component_get_owner_entity_id(const tc_component* c);
+TC_API tc_entity_pool* tc_component_get_owner_pool(const tc_component* c);
+
 #ifdef __cplusplus
 }
 #endif

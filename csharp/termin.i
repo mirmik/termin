@@ -26,30 +26,80 @@
 %include "std_string.i"
 
 // ============================================================================
-// C# Component External Body Support
+// C# Component External Body Support - Auto-registration
 // ============================================================================
 
-// C API for external body management
-%{
-// These are called from C# via P/Invoke to set up reference counting
-static void csharp_body_incref(void* body) {
-    // body is GCHandle.ToIntPtr() - prevent GC by allocating another handle
-    // Actually, we use Normal handle which already prevents GC
-    // So incref is a no-op, decref frees the handle
-}
-
-static void csharp_body_decref(void* body) {
-    // body is GCHandle.ToIntPtr() - free it to allow GC
-    // This is called from C# P/Invoke: TerminCore.ComponentBodyDecref
-}
-%}
-
-// Export C API for C# to set callbacks and manage body
-// Note: These are accessed via direct P/Invoke in TerminCore.cs, not through SWIG
-// We ignore them here to avoid type conversion issues
+// Ignore C API functions - accessed via direct P/Invoke in TerminCore.cs
 %ignore tc_component_set_external_callbacks;
 %ignore tc_component_body_incref;
 %ignore tc_component_body_decref;
+
+// ============================================================================
+// Macro: Add auto external body registration to Component classes
+// Usage: CSHARP_COMPONENT_EXTERNAL_BODY(termin::CameraComponent)
+// ============================================================================
+%define CSHARP_COMPONENT_EXTERNAL_BODY(CTYPE)
+
+// Add private field and initialization method to the class
+%typemap(cscode) CTYPE %{
+    // GCHandle prevents GC from collecting this object while C++ holds a reference
+    private System.Runtime.InteropServices.GCHandle _externalBodyHandle;
+
+    private void InitExternalBody() {
+        // Initialize callbacks once (safe to call multiple times)
+        ComponentExternalBody.Initialize();
+        // Allocate GCHandle to prevent GC collection
+        _externalBodyHandle = System.Runtime.InteropServices.GCHandle.Alloc(this);
+        // Tell C++ about our handle so it can prevent GC while holding reference
+        set_external_body(System.Runtime.InteropServices.GCHandle.ToIntPtr(_externalBodyHandle));
+    }
+%}
+
+// Modify constructor to call InitExternalBody after creation
+%typemap(csconstruct) CTYPE %{: this($imcall, true) {
+    if (terminPINVOKE.SWIGPendingException.Pending) throw terminPINVOKE.SWIGPendingException.Retrieve();
+    InitExternalBody();
+  }%}
+
+%enddef
+
+// ============================================================================
+// Macro: Add auto external body registration to Pass classes
+// Usage: CSHARP_PASS_EXTERNAL_BODY(termin::ColorPass)
+// ============================================================================
+%define CSHARP_PASS_EXTERNAL_BODY(CTYPE)
+
+// Add private field and initialization method to the class
+%typemap(cscode) CTYPE %{
+    // GCHandle prevents GC from collecting this object while C++ holds a reference
+    private System.Runtime.InteropServices.GCHandle _externalBodyHandle;
+
+    private void InitExternalBody() {
+        // Initialize callbacks once (safe to call multiple times)
+        PassExternalBody.Initialize();
+        // Allocate GCHandle to prevent GC collection
+        _externalBodyHandle = System.Runtime.InteropServices.GCHandle.Alloc(this);
+        // Tell C++ about our handle so it can prevent GC while holding reference
+        set_external_body(System.Runtime.InteropServices.GCHandle.ToIntPtr(_externalBodyHandle));
+    }
+%}
+
+// Modify constructor to call InitExternalBody after creation
+%typemap(csconstruct) CTYPE %{: this($imcall, true) {
+    if (terminPINVOKE.SWIGPendingException.Pending) throw terminPINVOKE.SWIGPendingException.Retrieve();
+    InitExternalBody();
+  }%}
+
+%enddef
+
+// Apply macros to component classes (must be before class declarations)
+CSHARP_COMPONENT_EXTERNAL_BODY(termin::CameraComponent)
+CSHARP_COMPONENT_EXTERNAL_BODY(termin::OrbitCameraController)
+CSHARP_COMPONENT_EXTERNAL_BODY(termin::MeshRenderer)
+
+// Apply macros to pass classes
+CSHARP_PASS_EXTERNAL_BODY(termin::ColorPass)
+CSHARP_PASS_EXTERNAL_BODY(termin::DepthPass)
 
 // Opaque type for tc_component
 typedef struct tc_component tc_component;
@@ -663,6 +713,9 @@ public:
     virtual ~DepthPass();
 
     tc_pass* tc_pass_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
 };
 
 } // namespace termin
