@@ -280,7 +280,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
-        # Try 10-bit color (compromise between 8-bit banding and 16-bit HDR issues)
+        # Use 10-bit color (best balance: no banding, no Windows HDR issues)
         video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, 10)
         video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, 10)
         video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, 10)

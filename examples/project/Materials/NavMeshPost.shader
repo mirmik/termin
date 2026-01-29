@@ -135,8 +135,8 @@ void main()
     float linear_depth = texture(u_depth_texture, v_uv).r;
 
     //Debug: just pass through depth value unchanged
-    FragColor = vec4(linear_depth, linear_depth, linear_depth, 1.0);
-    return;
+    // FragColor = vec4(linear_depth, linear_depth, linear_depth, 1.0);
+    // return;
 
     // // Skip sky/far pixels
     // if (linear_depth >= 1.0) {
