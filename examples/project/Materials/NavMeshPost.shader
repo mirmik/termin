@@ -52,6 +52,7 @@ uniform mat4 u_fov_view;
 uniform mat4 u_fov_projection;
 uniform float u_fov_distance;
 uniform float u_depth_bias;
+uniform vec3 u_fov_camera_pos;
 
 out vec4 FragColor;
 
@@ -79,14 +80,14 @@ vec3 reconstruct_world_pos(vec2 uv, float linear_depth) {
 }
 
 // Single texel visibility test
-bool visibility_test(float fov_linear_depth, ivec2 texel_coord, ivec2 tex_size) {
+bool visibility_test(float fov_linear_depth, ivec2 texel_coord, ivec2 tex_size, float depth_bias) {
     texel_coord = clamp(texel_coord, ivec2(0), tex_size - 1);
     float stored_depth = texelFetch(u_fov, texel_coord, 0).r * u_fov_distance;
-    return fov_linear_depth <= stored_depth + u_depth_bias;
+    return fov_linear_depth <= stored_depth + depth_bias;
 }
 
 // Returns visibility as float [0..1] using bilinear interpolation of visibility tests
-float visibility_from_fov(vec3 world_pos) {
+float visibility_from_fov(vec3 world_pos, float depth_bias) {
     // Transform world position to FOV camera view space
     vec4 fov_view_pos = u_fov_view * vec4(world_pos, 1.0);
 
@@ -131,10 +132,10 @@ float visibility_from_fov(vec3 world_pos) {
     vec2 f = fract(texel_pos);
 
     // Visibility test for each of 4 texels (0 or 1)
-    float v00 = visibility_test(fov_linear_depth, texel_00, tex_size) ? 1.0 : 0.0;
-    float v10 = visibility_test(fov_linear_depth, texel_10, tex_size) ? 1.0 : 0.0;
-    float v01 = visibility_test(fov_linear_depth, texel_01, tex_size) ? 1.0 : 0.0;
-    float v11 = visibility_test(fov_linear_depth, texel_11, tex_size) ? 1.0 : 0.0;
+    float v00 = visibility_test(fov_linear_depth, texel_00, tex_size, depth_bias) ? 1.0 : 0.0;
+    float v10 = visibility_test(fov_linear_depth, texel_10, tex_size, depth_bias) ? 1.0 : 0.0;
+    float v01 = visibility_test(fov_linear_depth, texel_01, tex_size, depth_bias) ? 1.0 : 0.0;
+    float v11 = visibility_test(fov_linear_depth, texel_11, tex_size, depth_bias) ? 1.0 : 0.0;
 
     // Bilinear interpolation of visibility results
     float v_bottom = mix(v00, v10, f.x);
@@ -143,8 +144,8 @@ float visibility_from_fov(vec3 world_pos) {
 }
 
 // Bool version with threshold
-bool is_visible_from_fov(vec3 world_pos) {
-    return visibility_from_fov(world_pos) >= 0.5;
+bool is_visible_from_fov(vec3 world_pos, float depth_bias) {
+    return visibility_from_fov(world_pos, depth_bias) >= 0.5;
 }
 
 float fov_linear_depth_from_world_pos(vec3 world_pos) {
@@ -169,9 +170,38 @@ void main()
     //     FragColor = color;
     //     return;
     // }
+ 
 
     // Reconstruct world position
     vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
+    vec3 normal = texture(u_normal_texture, v_uv).rgb * 2.0 - 1.0;
+    vec3 offseted_world_pos = world_pos + normal * 0.01;
+
+    vec3 fov_dir = normalize(world_pos - u_fov_camera_pos);
+
+    // {
+    //     FragColor = vec4(normal * 0.5 + 0.5, 1.0);
+    //     return;
+    // }
+    
+    // {
+    //     FragColor = vec4(normal * 0.5 + 0.5, 1.0);
+    //     return;
+    // }
+
+    // {
+    //     FragColor = vec4(fov_dir * 0.5 + 0.5, 1.0);
+    //     return;
+    // }
+
+
+    float dot_fov_normal = (-dot(fov_dir, normal) * 0.5 + 0.5);
+    
+    if (dot_fov_normal < 0.0) {
+        // Facing away from FOV camera, consider not visible
+        FragColor = vec4(dot_fov_normal, dot_fov_normal, dot_fov_normal, 1.0);
+        return;
+    }
 
         // DEBUG
         // float debug_depth = fov_linear_depth_from_world_pos(world_pos) / u_fov_distance;
@@ -179,7 +209,11 @@ void main()
         // return;
 
     // Check FOV visibility and tint green if visible
-    if (is_visible_from_fov(world_pos)) {
+
+
+
+
+    if (is_visible_from_fov(offseted_world_pos, u_depth_bias)) {
         color.rgb = mix(color.rgb, vec3(0.0, 1.0, 0.0), 0.3);
     }
 

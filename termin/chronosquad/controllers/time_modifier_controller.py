@@ -181,9 +181,11 @@ class TimeModifierController(PythonComponent):
         if self._fov_camera is not None:
             fov_view = self._fov_camera.get_view_matrix()
             fov_proj = self._fov_camera.get_projection_matrix()
+            fov_pos = self._fov_camera.entity.transform.global_position
 
             shader.set_uniform_mat4("u_fov_view", fov_view, False)
             shader.set_uniform_mat4("u_fov_projection", fov_proj, False)
+            shader.set_uniform_vec3("u_fov_camera_pos", fov_pos)
 
     def on_removed_from_entity(self) -> None:
         """Clean up callback when removed."""
