@@ -59,7 +59,7 @@ class ViewportRenderState:
             FramebufferHandle нужного размера.
         """
         if self.output_fbo is None:
-            self.output_fbo = graphics.create_framebuffer(size)
+            self.output_fbo = graphics.create_framebuffer(size, samples=1, format="rgba16f")
             self._output_size = size
         elif self._output_size != size:
             self.output_fbo.resize(size)

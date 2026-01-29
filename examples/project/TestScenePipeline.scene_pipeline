@@ -36,8 +36,8 @@
     },
     {
       "type": "Present",
-      "x": 1519.922423508409,
-      "y": -298.77209108235843
+      "x": 1510.3302597691884,
+      "y": -234.81399160166313
     },
     {
       "type": "ColorPass",
@@ -156,7 +156,7 @@
       "node_type": "resource",
       "name": "FOV_FBO",
       "params": {
-        "format": "r16f",
+        "format": "rgba16f",
         "samples": "1",
         "filter": "linear",
         "size_mode": "fixed",
@@ -312,7 +312,7 @@
       "y": -595.77613866922,
       "node_type": "resource",
       "params": {
-        "format": "rgba8",
+        "format": "rgba16f",
         "samples": "1",
         "filter": "linear",
         "size_mode": "viewport",
@@ -457,12 +457,6 @@
       "to_socket": "input_res"
     },
     {
-      "from_node": 18,
-      "from_socket": "output_res",
-      "to_node": 3,
-      "to_socket": "input_res"
-    },
-    {
       "from_node": 19,
       "from_socket": "fbo",
       "to_node": 18,
@@ -539,6 +533,12 @@
       "from_socket": "output_res",
       "to_node": 20,
       "to_socket": "fov"
+    },
+    {
+      "from_node": 18,
+      "from_socket": "output_res",
+      "to_node": 3,
+      "to_socket": "input_res"
     }
   ],
   "viewport_frames": [

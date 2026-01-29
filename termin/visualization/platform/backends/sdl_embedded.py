@@ -280,6 +280,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
+        # Try 10-bit color (compromise between 8-bit banding and 16-bit HDR issues)
+        video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, 10)
+        video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, 10)
+        video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, 10)
+
         # Enable context sharing if a context is provided
         # Note: SDL_GL_SHARE_WITH_CURRENT_CONTEXT means "share with whatever context
         # is current at the time of SDL_GL_CreateContext". The caller must ensure
@@ -316,6 +321,16 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0)
 
         video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+
+        # Log actual color depth we got
+        r_size = ctypes.c_int()
+        g_size = ctypes.c_int()
+        b_size = ctypes.c_int()
+        video.SDL_GL_GetAttribute(video.SDL_GL_RED_SIZE, ctypes.byref(r_size))
+        video.SDL_GL_GetAttribute(video.SDL_GL_GREEN_SIZE, ctypes.byref(g_size))
+        video.SDL_GL_GetAttribute(video.SDL_GL_BLUE_SIZE, ctypes.byref(b_size))
+        from termin._native import log
+        log.info(f"[SDL] Window color depth: R={r_size.value} G={g_size.value} B={b_size.value}")
 
         # Disable VSync - we control frame rate ourselves
         video.SDL_GL_SetSwapInterval(0)

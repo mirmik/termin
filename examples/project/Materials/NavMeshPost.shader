@@ -134,19 +134,23 @@ void main()
     // Get linear depth from depth texture
     float linear_depth = texture(u_depth_texture, v_uv).r;
 
-    // Skip sky/far pixels
-    if (linear_depth >= 1.0) {
-        FragColor = color;
-        return;
-    }
+    //Debug: just pass through depth value unchanged
+    FragColor = vec4(linear_depth, linear_depth, linear_depth, 1.0);
+    return;
+
+    // // Skip sky/far pixels
+    // if (linear_depth >= 1.0) {
+    //     FragColor = color;
+    //     return;
+    // }
 
     // Reconstruct world position
     vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
 
         // DEBUG
-        float debug_depth = fov_linear_depth_from_world_pos(world_pos) / u_fov_distance;
-        FragColor = vec4(vec3(debug_depth), 1.0);
-        return;
+        // float debug_depth = fov_linear_depth_from_world_pos(world_pos) / u_fov_distance;
+        // FragColor = vec4(vec3(debug_depth), 1.0);
+        // return;
 
     // Check FOV visibility and tint green if visible
     if (is_visible_from_fov(world_pos)) {
