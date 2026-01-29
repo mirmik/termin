@@ -5,6 +5,7 @@
 #include <string>
 
 #include "termin/render/handles.hpp"
+#include "termin/render/types.hpp"
 #include "termin/render/opengl/opengl_texture.hpp"
 
 namespace termin {
@@ -34,9 +35,9 @@ inline FBOFormat parse_fbo_format(const std::string& format_str) {
  */
 class OpenGLFramebufferHandle : public FramebufferHandle {
 public:
-    OpenGLFramebufferHandle(int width, int height, int samples = 1, FBOFormat format = FBOFormat::RGBA8)
+    OpenGLFramebufferHandle(int width, int height, int samples = 1, FBOFormat format = FBOFormat::RGBA8, TextureFilter filter = TextureFilter::LINEAR)
         : fbo_(0), color_tex_(0), depth_rb_(0),
-          width_(width), height_(height), samples_(samples), format_(format),
+          width_(width), height_(height), samples_(samples), format_(format), filter_(filter),
           owns_attachments_(true), color_ref_(0) {
         create();
     }
@@ -131,6 +132,61 @@ public:
         }
     }
 
+    std::string get_actual_gl_format() const override {
+        if (color_tex_ == 0) return "no_texture";
+
+        GLint internal_format = 0;
+        GLenum target = samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+        glBindTexture(target, color_tex_);
+        glGetTexLevelParameteriv(target, 0, GL_TEXTURE_INTERNAL_FORMAT, &internal_format);
+        glBindTexture(target, 0);
+
+        switch (internal_format) {
+            case GL_R8: return "GL_R8";
+            case GL_R16F: return "GL_R16F";
+            case GL_R32F: return "GL_R32F";
+            case GL_RGBA8: return "GL_RGBA8";
+            case GL_RGBA16F: return "GL_RGBA16F";
+            case GL_RGBA32F: return "GL_RGBA32F";
+            case GL_RGB8: return "GL_RGB8";
+            case GL_RGB16F: return "GL_RGB16F";
+            case GL_DEPTH_COMPONENT16: return "GL_DEPTH16";
+            case GL_DEPTH_COMPONENT24: return "GL_DEPTH24";
+            case GL_DEPTH_COMPONENT32F: return "GL_DEPTH32F";
+            default: return "GL_0x" + std::to_string(internal_format);
+        }
+    }
+
+    int get_actual_gl_width() const {
+        if (color_tex_ == 0) return 0;
+        GLint w = 0;
+        GLenum target = samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+        glBindTexture(target, color_tex_);
+        glGetTexLevelParameteriv(target, 0, GL_TEXTURE_WIDTH, &w);
+        glBindTexture(target, 0);
+        return w;
+    }
+
+    int get_actual_gl_height() const {
+        if (color_tex_ == 0) return 0;
+        GLint h = 0;
+        GLenum target = samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+        glBindTexture(target, color_tex_);
+        glGetTexLevelParameteriv(target, 0, GL_TEXTURE_HEIGHT, &h);
+        glBindTexture(target, 0);
+        return h;
+    }
+
+    int get_actual_gl_samples() const {
+        if (color_tex_ == 0) return 0;
+        if (samples_ <= 1) return 1;
+        GLint s = 0;
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, color_tex_);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D_MULTISAMPLE, 0, GL_TEXTURE_SAMPLES, &s);
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+        return s;
+    }
+
     GPUTextureHandle* color_texture() override {
         color_ref_.set_tex_id(color_tex_);
         color_ref_.set_target(samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D);
@@ -200,8 +256,11 @@ private:
             glGenTextures(1, &color_tex_);
             glBindTexture(GL_TEXTURE_2D, color_tex_);
             glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width_, height_, 0, pixel_format, pixel_type, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            // Apply filter mode
+            GLenum gl_filter = (filter_ == TextureFilter::NEAREST) ? GL_NEAREST : GL_LINEAR;
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_tex_, 0);
@@ -228,6 +287,7 @@ private:
     int height_;
     int samples_;
     FBOFormat format_;
+    TextureFilter filter_;
     bool owns_attachments_;
     OpenGLTextureRef color_ref_;
 };

@@ -60,7 +60,7 @@
     {
       "type": "BloomPass",
       "x": 974.0306677554806,
-      "y": -305.7075567046195,
+      "y": -283.12802024620197,
       "node_type": "effect",
       "params": {
         "threshold": 1.0,
@@ -78,6 +78,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "4",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 100,
@@ -102,6 +103,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 100,
@@ -131,6 +133,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 100,
@@ -155,6 +158,7 @@
       "params": {
         "format": "r16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "fixed",
         "scale": "1.0",
         "width": 1024,
@@ -213,6 +217,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 1024,
@@ -236,6 +241,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 1024,
@@ -267,6 +273,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 1024,
@@ -307,6 +314,7 @@
       "params": {
         "format": "rgba8",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 1024,
@@ -358,6 +366,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
+        "filter": "linear",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 1024,

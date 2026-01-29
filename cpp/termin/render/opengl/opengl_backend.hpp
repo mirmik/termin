@@ -691,9 +691,9 @@ public:
         return std::make_unique<OpenGLTextureHandle>(data, width, height, channels, mipmap, clamp);
     }
 
-    FramebufferHandlePtr create_framebuffer(int width, int height, int samples, const std::string& format = "") override {
+    FramebufferHandlePtr create_framebuffer(int width, int height, int samples, const std::string& format = "", TextureFilter filter = TextureFilter::LINEAR) override {
         FBOFormat fmt = format.empty() ? FBOFormat::RGBA8 : parse_fbo_format(format);
-        return std::make_unique<OpenGLFramebufferHandle>(width, height, samples, fmt);
+        return std::make_unique<OpenGLFramebufferHandle>(width, height, samples, fmt, filter);
     }
 
     FramebufferHandlePtr create_shadow_framebuffer(int width, int height) override {

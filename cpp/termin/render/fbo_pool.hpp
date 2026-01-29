@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "termin/render/graphics_backend.hpp"
+#include "termin/render/resource_spec.hpp"
 
 namespace termin {
 
@@ -18,6 +19,7 @@ struct FBOPoolEntry {
     int height = 0;
     int samples = 1;
     std::string format;
+    TextureFilter filter = TextureFilter::LINEAR;
     bool external = false;
 
     FBOPoolEntry() = default;
@@ -39,7 +41,8 @@ public:
         int width,
         int height,
         int samples = 1,
-        const std::string& format = ""
+        const std::string& format = "",
+        TextureFilter filter = TextureFilter::LINEAR
     );
 
     FramebufferHandle* get(const std::string& key);

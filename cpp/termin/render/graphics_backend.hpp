@@ -96,7 +96,7 @@ public:
         return create_texture(data, size.width, size.height, channels, mipmap, clamp);
     }
 
-    virtual FramebufferHandlePtr create_framebuffer(int width, int height, int samples = 1, const std::string& format = "") = 0;
+    virtual FramebufferHandlePtr create_framebuffer(int width, int height, int samples = 1, const std::string& format = "", TextureFilter filter = TextureFilter::LINEAR) = 0;
     virtual FramebufferHandlePtr create_shadow_framebuffer(int width, int height) = 0;
     virtual UniformBufferHandlePtr create_uniform_buffer(size_t size) = 0;
 

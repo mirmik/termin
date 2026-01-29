@@ -1245,6 +1245,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 else:
                     info_parts.append("MSAA: нет")
                 info_parts.append(f"FBO ID: {fbo.get_fbo_id()}")
+                # Real GL parameters
+                gl_fmt = fbo.get_actual_gl_format()
+                gl_w = fbo.get_actual_gl_width()
+                gl_h = fbo.get_actual_gl_height()
+                gl_s = fbo.get_actual_gl_samples()
+                info_parts.append(f"<span style='color: #88ff88;'>GL: {gl_fmt} {gl_w}×{gl_h} s={gl_s}</span>")
         elif isinstance(resource, FramebufferHandle):
             info_parts.append("Тип: FramebufferHandle")
             w, h = resource.get_size()
@@ -1258,6 +1264,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             else:
                 info_parts.append("MSAA: нет")
             info_parts.append(f"FBO ID: {resource.get_fbo_id()}")
+            # Real GL parameters
+            gl_fmt = resource.get_actual_gl_format()
+            gl_w = resource.get_actual_gl_width()
+            gl_h = resource.get_actual_gl_height()
+            gl_s = resource.get_actual_gl_samples()
+            info_parts.append(f"<span style='color: #88ff88;'>GL: {gl_fmt} {gl_w}×{gl_h} s={gl_s}</span>")
         else:
             info_parts.append(f"Тип: {type(resource).__name__}")
 

@@ -65,4 +65,10 @@ struct Rect2i {
     }
 };
 
+// Texture filter mode for FBO color attachments
+enum class TextureFilter {
+    LINEAR,   // GL_LINEAR - smooth interpolation
+    NEAREST   // GL_NEAREST - pixelated/blocky
+};
+
 } // namespace termin

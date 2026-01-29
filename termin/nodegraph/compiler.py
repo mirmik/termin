@@ -270,6 +270,11 @@ def infer_resource_spec(
             except ValueError:
                 pass
 
+        filter_mode = node.get_param("filter")
+        if filter_mode:
+            from termin._native.render import TextureFilter
+            spec["filter"] = TextureFilter.NEAREST if filter_mode == "nearest" else TextureFilter.LINEAR
+
         # Size mode: viewport or fixed
         size_mode = node.get_param("size_mode")
         if size_mode == "fixed":
@@ -494,6 +499,8 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
 
     # Collect FBO nodes mapped by their socket names
     fbo_nodes_map = collect_fbo_nodes(nodes, socket_names)
+    if debug:
+        print(f"DEBUG: fbo_nodes_map keys = {list(fbo_nodes_map.keys())}")
 
     # Build resource to viewport mapping from FBO nodes positions
     # (viewport_name is determined by which ViewportFrame contains the FBO node)
@@ -569,6 +576,9 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
             # No _target connection - use auto-generated name
             spec_params = infer_resource_spec(canon_name, fbo_nodes_map, pass_classes)
 
+        if debug:
+            print(f"DEBUG: res_name={res_name}, canon_name={canon_name}, fbo_name={fbo_name}, spec_params={spec_params}")
+
         if spec_params:
             # Add viewport_name to spec - check both the resource and its FBO alias
             viewport_name = resource_to_viewport.get(res_name, "")
@@ -580,8 +590,9 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
             try:
                 spec = ResourceSpec(**spec_params)
                 pipeline_specs.append(spec)
-            except Exception:
-                pass
+            except Exception as e:
+                from termin._native import log
+                log.error(f"Failed to create ResourceSpec: {e}, params={spec_params}")
 
     return RenderPipeline(
         name="compiled_graph",

@@ -4,6 +4,8 @@
 #include <optional>
 #include <array>
 
+#include "termin/render/types.hpp"
+
 namespace termin {
 
 /**
@@ -33,6 +35,9 @@ struct ResourceSpec {
     // Scale factor for viewport-relative sizing (1.0 = full resolution)
     float scale = 1.0f;
 
+    // Texture filter mode for color attachment
+    TextureFilter filter = TextureFilter::LINEAR;
+
     ResourceSpec() = default;
 
     ResourceSpec(
@@ -44,7 +49,8 @@ struct ResourceSpec {
         std::optional<std::string> format_ = std::nullopt,
         int samples_ = 1,
         std::string viewport_name_ = "",
-        float scale_ = 1.0f
+        float scale_ = 1.0f,
+        TextureFilter filter_ = TextureFilter::LINEAR
     ) : resource(std::move(resource_)),
         resource_type(std::move(resource_type_)),
         size(std::move(size_)),
@@ -53,7 +59,8 @@ struct ResourceSpec {
         format(std::move(format_)),
         samples(samples_),
         viewport_name(std::move(viewport_name_)),
-        scale(scale_) {}
+        scale(scale_),
+        filter(filter_) {}
 };
 
 } // namespace termin

@@ -84,6 +84,12 @@ public:
     virtual bool is_msaa() const = 0;
     virtual std::string get_format() const = 0;
 
+    // Query actual GL parameters from the color texture (for debugging)
+    virtual std::string get_actual_gl_format() const { return "unknown"; }
+    virtual int get_actual_gl_width() const { return 0; }
+    virtual int get_actual_gl_height() const { return 0; }
+    virtual int get_actual_gl_samples() const { return 0; }
+
     // Convenience methods
     Size2i get_size() const { return Size2i(get_width(), get_height()); }
     void resize(Size2i size) { resize(size.width, size.height); }

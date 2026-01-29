@@ -5,6 +5,11 @@
 namespace termin {
 
 void bind_resource_spec(nb::module_& m) {
+    // Bind TextureFilter enum
+    nb::enum_<TextureFilter>(m, "TextureFilter")
+        .value("LINEAR", TextureFilter::LINEAR)
+        .value("NEAREST", TextureFilter::NEAREST);
+
     nb::class_<ResourceSpec>(m, "ResourceSpec")
         .def(nb::init<>())
         .def(nb::init<std::string, std::string>(),
@@ -20,7 +25,8 @@ void bind_resource_spec(nb::module_& m) {
             nb::object format,
             int samples,
             const std::string& viewport_name,
-            float scale
+            float scale,
+            TextureFilter filter
         ) {
             new (self) ResourceSpec();
             self->resource = resource;
@@ -28,6 +34,7 @@ void bind_resource_spec(nb::module_& m) {
             self->samples = samples;
             self->viewport_name = viewport_name;
             self->scale = scale;
+            self->filter = filter;
 
             if (!size.is_none()) {
                 nb::tuple t = nb::cast<nb::tuple>(size);
@@ -55,13 +62,15 @@ void bind_resource_spec(nb::module_& m) {
             nb::arg("format") = nb::none(),
             nb::arg("samples") = 1,
             nb::arg("viewport_name") = "",
-            nb::arg("scale") = 1.0f
+            nb::arg("scale") = 1.0f,
+            nb::arg("filter") = TextureFilter::LINEAR
         )
         .def_rw("resource", &ResourceSpec::resource)
         .def_rw("resource_type", &ResourceSpec::resource_type)
         .def_rw("samples", &ResourceSpec::samples)
         .def_rw("viewport_name", &ResourceSpec::viewport_name)
         .def_rw("scale", &ResourceSpec::scale)
+        .def_rw("filter", &ResourceSpec::filter)
         // size property: optional<pair<int,int>> <-> tuple or None
         .def_prop_rw("size",
             [](const ResourceSpec& self) -> nb::object {
@@ -167,6 +176,9 @@ void bind_resource_spec(nb::module_& m) {
             if (self.scale != 1.0f) {
                 data["scale"] = self.scale;
             }
+            if (self.filter != TextureFilter::LINEAR) {
+                data["filter"] = self.filter == TextureFilter::NEAREST ? "nearest" : "linear";
+            }
             return data;
         })
         // deserialize() classmethod - handles both list and tuple
@@ -205,6 +217,10 @@ void bind_resource_spec(nb::module_& m) {
             }
             if (data.contains("scale")) {
                 spec.scale = nb::cast<float>(data["scale"]);
+            }
+            if (data.contains("filter")) {
+                std::string f = nb::cast<std::string>(data["filter"]);
+                spec.filter = (f == "nearest") ? TextureFilter::NEAREST : TextureFilter::LINEAR;
             }
             return spec;
         }, nb::arg("data"));

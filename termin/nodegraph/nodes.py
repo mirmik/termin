@@ -93,6 +93,15 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
         choices=["1", "2", "4", "8"],
     ))
 
+    # Texture filter mode
+    node.add_param(NodeParam(
+        name="filter",
+        label="Filter",
+        param_type="choice",
+        default="linear",
+        choices=["linear", "nearest"],
+    ))
+
     # Size mode: viewport (use viewport size * scale) or fixed
     node.add_param(NodeParam(
         name="size_mode",

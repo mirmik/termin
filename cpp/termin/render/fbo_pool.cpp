@@ -10,24 +10,27 @@ FramebufferHandle* FBOPool::ensure(
     int width,
     int height,
     int samples,
-    const std::string& format
+    const std::string& format,
+    TextureFilter filter
 ) {
     // Find existing entry
     for (auto& entry : entries) {
         if (entry.key == key) {
-            // Check if we need to recreate (samples or format changed)
+            // Check if we need to recreate (samples, format, or filter changed)
             bool needs_recreate = (entry.samples != samples) ||
-                                  (entry.format != format);
+                                  (entry.format != format) ||
+                                  (entry.filter != filter);
 
             if (needs_recreate && entry.fbo && !entry.external) {
-                // Recreate FBO with new samples/format
-                auto new_fbo = graphics->create_framebuffer(width, height, samples, format);
+                // Recreate FBO with new samples/format/filter
+                auto new_fbo = graphics->create_framebuffer(width, height, samples, format, filter);
                 if (new_fbo) {
                     entry.fbo = std::move(new_fbo);
                     entry.width = width;
                     entry.height = height;
                     entry.samples = samples;
                     entry.format = format;
+                    entry.filter = filter;
                 }
                 return entry.fbo.get();
             }
@@ -48,7 +51,7 @@ FramebufferHandle* FBOPool::ensure(
         return nullptr;
     }
 
-    auto fbo = graphics->create_framebuffer(width, height, samples, format);
+    auto fbo = graphics->create_framebuffer(width, height, samples, format, filter);
     if (!fbo) {
         tc::Log::error("FBOPool::ensure: failed to create framebuffer '%s'", key.c_str());
         return nullptr;
@@ -63,6 +66,7 @@ FramebufferHandle* FBOPool::ensure(
     entry.height = height;
     entry.samples = samples;
     entry.format = format;
+    entry.filter = filter;
     entry.external = false;
     entries.push_back(std::move(entry));
 

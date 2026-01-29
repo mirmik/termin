@@ -121,6 +121,12 @@ bool is_visible_from_fov(vec3 world_pos) {
     return true;
 }
 
+float fov_linear_depth_from_world_pos(vec3 world_pos) {
+    // Transform world position to FOV camera view space
+    vec4 fov_view_pos = u_fov_view * vec4(world_pos, 1.0);
+    return fov_view_pos.y;
+}
+
 void main()
 {
     vec4 color = texture(u_input_tex, v_uv);
@@ -137,9 +143,15 @@ void main()
     // Reconstruct world position
     vec3 world_pos = reconstruct_world_pos(v_uv, linear_depth);
 
+        // DEBUG
+        float debug_depth = fov_linear_depth_from_world_pos(world_pos) / u_fov_distance;
+        FragColor = vec4(vec3(debug_depth), 1.0);
+        return;
+
     // Check FOV visibility and tint green if visible
     if (is_visible_from_fov(world_pos)) {
         color.rgb = mix(color.rgb, vec3(0.0, 1.0, 0.0), 0.3);
+    
     }
 
     FragColor = color;

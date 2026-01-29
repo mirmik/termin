@@ -233,6 +233,7 @@ void RenderEngine::render_view_to_fbo(
         int fbo_height = height;
         int samples = 1;
         std::string format;
+        TextureFilter filter = TextureFilter::LINEAR;
 
         if (spec) {
             if (spec->size) {
@@ -241,11 +242,12 @@ void RenderEngine::render_view_to_fbo(
             }
             samples = spec->samples > 0 ? spec->samples : 1;
             if (spec->format) format = *spec->format;
+            filter = spec->filter;
         }
 
         // Get or create FBO in pipeline's pool
         FBOPool& fbo_pool = pipeline->fbo_pool();
-        FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
+        FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format, filter);
 
         // Set for all aliases and register aliases in pool
         const char* aliases[64];
@@ -518,6 +520,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
         int fbo_height = default_height;
         int samples = 1;
         std::string format;
+        TextureFilter filter = TextureFilter::LINEAR;
 
         if (spec) {
             if (spec->size) {
@@ -526,11 +529,12 @@ void RenderEngine::render_scene_pipeline_offscreen(
             }
             samples = spec->samples > 0 ? spec->samples : 1;
             if (spec->format) format = *spec->format;
+            filter = spec->filter;
         }
 
         // Get or create FBO in pipeline's pool
         FBOPool& fbo_pool = pipeline->fbo_pool();
-        FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format);
+        FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format, filter);
 
         // Set for all aliases and register aliases in pool
         const char* aliases[64];
