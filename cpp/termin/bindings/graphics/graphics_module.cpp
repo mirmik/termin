@@ -15,6 +15,10 @@
 #include "termin/render/opengl/opengl_mesh.hpp"
 #include "termin/geom/mat44.hpp"
 
+extern "C" {
+#include "tc_project_settings.h"
+}
+
 namespace nb = nanobind;
 
 namespace {
@@ -530,6 +534,23 @@ void bind_graphics_backend(nb::module_& m) {
     m.def("init_opengl", &init_opengl, "Initialize OpenGL via glad. Call after context creation.");
 }
 
+void bind_project_settings(nb::module_& m) {
+    // RenderSyncMode enum
+    nb::enum_<tc_render_sync_mode>(m, "RenderSyncMode")
+        .value("NONE", TC_RENDER_SYNC_NONE)
+        .value("FLUSH", TC_RENDER_SYNC_FLUSH)
+        .value("FINISH", TC_RENDER_SYNC_FINISH);
+
+    // Project settings functions
+    m.def("get_render_sync_mode", []() {
+        return tc_project_settings_get_render_sync_mode();
+    }, "Get render sync mode between passes");
+
+    m.def("set_render_sync_mode", [](tc_render_sync_mode mode) {
+        tc_project_settings_set_render_sync_mode(mode);
+    }, nb::arg("mode"), "Set render sync mode between passes");
+}
+
 } // anonymous namespace
 
 NB_MODULE(_graphics_native, m) {
@@ -539,4 +560,5 @@ NB_MODULE(_graphics_native, m) {
     bind_render_state(m);
     bind_gpu_handles(m);
     bind_graphics_backend(m);
+    bind_project_settings(m);
 }

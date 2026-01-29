@@ -277,3 +277,22 @@ class DialogManager:
         dialog.finished.connect(lambda: setattr(self, '_agent_types_dialog', None))
         self._agent_types_dialog = dialog
         dialog.show()
+
+    def show_project_settings_dialog(self) -> None:
+        """Opens project settings dialog."""
+        from termin.editor.project_settings_dialog import ProjectSettingsDialog
+
+        # Reuse existing dialog if open
+        if hasattr(self, '_project_settings_dialog') and self._project_settings_dialog is not None:
+            self._project_settings_dialog.raise_()
+            self._project_settings_dialog.activateWindow()
+            return
+
+        dialog = ProjectSettingsDialog(
+            parent=self._parent,
+            on_changed=self._request_viewport_update,
+        )
+        dialog.setModal(False)
+        dialog.finished.connect(lambda: setattr(self, '_project_settings_dialog', None))
+        self._project_settings_dialog = dialog
+        dialog.show()

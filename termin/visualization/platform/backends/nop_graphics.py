@@ -215,3 +215,9 @@ class NOPGraphicsBackend(GraphicsBackend):
 
     def reset_state(self):
         return None
+
+    def flush(self):
+        pass
+
+    def finish(self):
+        pass

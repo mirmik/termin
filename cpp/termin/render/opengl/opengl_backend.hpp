@@ -1018,6 +1018,16 @@ public:
         while (glGetError() != GL_NO_ERROR) {}
     }
 
+    // --- Synchronization ---
+
+    void flush() override {
+        glFlush();
+    }
+
+    void finish() override {
+        glFinish();
+    }
+
     // --- GPU Timer Queries ---
 
     void begin_gpu_query(const char* name) override {

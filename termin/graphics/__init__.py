@@ -25,6 +25,10 @@ from termin.graphics._graphics_native import (
     DrawMode,
     # Functions
     init_opengl,
+    # Project settings (render sync)
+    RenderSyncMode,
+    get_render_sync_mode,
+    set_render_sync_mode,
 )
 
 __all__ = [
@@ -43,4 +47,7 @@ __all__ = [
     "OpenGLGraphicsBackend",
     "DrawMode",
     "init_opengl",
+    "RenderSyncMode",
+    "get_render_sync_mode",
+    "set_render_sync_mode",
 ]

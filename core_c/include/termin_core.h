@@ -42,6 +42,7 @@
 #include "tc_material.h"
 #include "tc_material_registry.h"
 #include "tc_scene_registry.h"
+#include "tc_project_settings.h"
 #include "render/tc_viewport.h"
 #include "tc_gpu.h"
 

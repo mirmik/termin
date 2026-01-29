@@ -189,6 +189,12 @@ public:
     // Clear any accumulated GL errors without logging
     virtual void clear_gl_errors() = 0;
 
+    // --- Synchronization ---
+    // Force submit commands to GPU (non-blocking)
+    virtual void flush() = 0;
+    // Wait for GPU to complete all commands (blocking)
+    virtual void finish() = 0;
+
     // --- GPU Timer Queries ---
     // Begin a GPU timer query section (non-blocking)
     virtual void begin_gpu_query(const char* name) = 0;

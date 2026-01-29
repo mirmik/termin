@@ -307,6 +307,22 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
+    def flush(self) -> None:
+        """
+        Force submit commands to GPU (non-blocking).
+        Equivalent to glFlush().
+        """
+        ...
+
+    @abstractmethod
+    def finish(self) -> None:
+        """
+        Wait for GPU to complete all commands (blocking).
+        Equivalent to glFinish().
+        """
+        ...
+
+    @abstractmethod
     def create_framebuffer(self, size: Tuple[int, int], samples: int = 1) -> "FramebufferHandle":
         """
         Создаёт framebuffer с цветовым и depth attachment.

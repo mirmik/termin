@@ -7,6 +7,7 @@ extern "C" {
 #include "render/tc_frame_graph.h"
 #include "render/tc_pass.h"
 #include "tc_scene.h"
+#include "tc_project_settings.h"
 }
 
 namespace termin {
@@ -349,6 +350,14 @@ void RenderEngine::render_view_to_fbo(
         // Execute pass via vtable
         tc_pass_execute(pass, &ctx);
 
+        // Apply render sync between passes (for debugging)
+        tc_render_sync_mode sync_mode = tc_project_settings_get_render_sync_mode();
+        if (sync_mode == TC_RENDER_SYNC_FLUSH) {
+            graphics->flush();
+        } else if (sync_mode == TC_RENDER_SYNC_FINISH) {
+            graphics->finish();
+        }
+
         tc_profiler_end_section(); // pass_name
     }
     tc_profiler_end_section(); // Execute Passes
@@ -657,6 +666,14 @@ void RenderEngine::render_scene_pipeline_offscreen(
 
         // Execute pass via vtable (works for both C++ and Python passes)
         tc_pass_execute(pass, &ctx);
+
+        // Apply render sync between passes (for debugging)
+        tc_render_sync_mode sync_mode = tc_project_settings_get_render_sync_mode();
+        if (sync_mode == TC_RENDER_SYNC_FLUSH) {
+            graphics->flush();
+        } else if (sync_mode == TC_RENDER_SYNC_FINISH) {
+            graphics->finish();
+        }
 
         tc_profiler_end_section(); // pass_name
     }

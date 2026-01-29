@@ -43,6 +43,7 @@ class MenuBarController:
         on_undo: Callable,
         on_redo: Callable,
         on_settings: Callable,
+        on_project_settings: Callable,
         on_scene_properties: Callable,
         on_layers_settings: Callable,
         on_shadow_settings: Callable,
@@ -98,6 +99,7 @@ class MenuBarController:
             on_undo=on_undo,
             on_redo=on_redo,
             on_settings=on_settings,
+            on_project_settings=on_project_settings,
             on_scene_properties=on_scene_properties,
             on_layers_settings=on_layers_settings,
             on_shadow_settings=on_shadow_settings,
@@ -136,6 +138,7 @@ class MenuBarController:
         on_undo: Callable,
         on_redo: Callable,
         on_settings: Callable,
+        on_project_settings: Callable,
         on_scene_properties: Callable,
         on_layers_settings: Callable,
         on_shadow_settings: Callable,
@@ -230,6 +233,9 @@ class MenuBarController:
 
         settings_action = edit_menu.addAction("Settings...")
         settings_action.triggered.connect(on_settings)
+
+        project_settings_action = edit_menu.addAction("Project Settings...")
+        project_settings_action.triggered.connect(on_project_settings)
 
         # View menu
         self._action_fullscreen = view_menu.addAction("Fullscreen")

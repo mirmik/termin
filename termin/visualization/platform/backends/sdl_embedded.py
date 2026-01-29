@@ -281,9 +281,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
         # Use 10-bit color (better gradients on 10-bit monitors, but may add ~4ms swap delay)
-        video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, 10)
-        video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, 10)
-        video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, 10)
+        BITS = 8
+        video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, BITS)
+        video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, BITS)
+        video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, BITS)
 
         # Enable context sharing if a context is provided
         # Note: SDL_GL_SHARE_WITH_CURRENT_CONTEXT means "share with whatever context

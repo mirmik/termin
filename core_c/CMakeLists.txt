@@ -32,6 +32,7 @@ set(TC_SOURCES
     src/tc_picking.c
     src/tc_pool.c
     src/tc_profiler.c
+    src/tc_project_settings.c
     src/tc_render_surface.c
     src/tc_resource_map.c
     src/tc_scene.c
@@ -64,6 +65,7 @@ set(TC_HEADERS
     include/tc_pool.h
     include/tc_pose.h
     include/tc_profiler.h
+    include/tc_project_settings.h
     include/tc_quat.h
     include/tc_registry_utils.h
     include/tc_resource.h

@@ -485,6 +485,7 @@ class EditorWindow(QMainWindow):
             on_undo=self.undo,
             on_redo=self.redo,
             on_settings=self._show_settings_dialog,
+            on_project_settings=self._show_project_settings_dialog,
             on_scene_properties=self._show_scene_properties,
             on_layers_settings=self._show_layers_dialog,
             on_shadow_settings=self._show_shadow_settings_dialog,
@@ -999,6 +1000,10 @@ class EditorWindow(QMainWindow):
     def _show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
         self._dialog_manager.show_settings_dialog()
+
+    def _show_project_settings_dialog(self) -> None:
+        """Opens project settings dialog."""
+        self._dialog_manager.show_project_settings_dialog()
 
     def _on_resource_reloaded(self, resource_type: str, resource_name: str) -> None:
         """Callback for resource reload."""

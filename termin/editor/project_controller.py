@@ -87,6 +87,9 @@ class EditorProjectController:
         # Обновляем имя проекта и заголовок окна
         if project_root is not None:
             self._project_name = project_root.name
+            # Загружаем настройки проекта
+            from termin.project.settings import ProjectSettingsManager
+            ProjectSettingsManager.instance().set_project_path(project_root)
             # Загружаем настройки навигации для проекта
             from termin.navmesh.settings import NavigationSettingsManager
             NavigationSettingsManager.instance().set_project_path(project_root)
@@ -168,6 +171,10 @@ class EditorProjectController:
 
         # Сохраняем путь для следующего запуска
         self._settings.set_last_project_file(project_file)
+
+        # Загружаем настройки проекта
+        from termin.project.settings import ProjectSettingsManager
+        ProjectSettingsManager.instance().set_project_path(project_root)
 
         # Загружаем настройки навигации для проекта
         from termin.navmesh.settings import NavigationSettingsManager
