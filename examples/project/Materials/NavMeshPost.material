@@ -4,7 +4,7 @@
   "shader_uuid": "74e27622-bea3-47f8-9d99-809140e7e0d2",
   "uniforms": {
     "u_fov_distance": 100.0,
-    "u_depth_bias": 0.20000000298023224,
+    "u_depth_bias": 0.10000000149011612,
     "u_time": 0.0,
     "u_color": [
       1.0,
