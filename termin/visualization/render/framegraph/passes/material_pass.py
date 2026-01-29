@@ -412,27 +412,6 @@ class MaterialPass(PostEffectPass):
         camera,
     ) -> None:
         """Apply material-based effect."""
-        # Debug: log actual GL formats for inputs
-        mat_name = self.material_name or "(no material)"
-        for uniform_name, resource_name in self._texture_resources.items():
-            if not resource_name:
-                continue
-            fbo = reads_fbos.get(resource_name)
-            if fbo is not None:
-                try:
-                    gl_format = fbo.get_actual_gl_format()
-                    log.info(f"[MaterialPass:{mat_name}] INPUT {uniform_name} <- {resource_name}: {gl_format}")
-                except Exception as e:
-                    log.error(f"[MaterialPass:{mat_name}] Failed to get format for {resource_name}: {e}")
-
-        # Debug: log output FBO format
-        if output_fbo is not None:
-            try:
-                out_format = output_fbo.get_actual_gl_format()
-                log.info(f"[MaterialPass:{mat_name}] OUTPUT {self.output_res}: {out_format}")
-            except Exception as e:
-                log.error(f"[MaterialPass:{mat_name}] Failed to get output format: {e}")
-
         material = self._get_material()
 
         if material is None or not material.phases:

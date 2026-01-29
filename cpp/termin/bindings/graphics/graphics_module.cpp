@@ -252,6 +252,8 @@ void bind_gpu_handles(nb::module_& m) {
         .def("get_actual_gl_width", &FramebufferHandle::get_actual_gl_width)
         .def("get_actual_gl_height", &FramebufferHandle::get_actual_gl_height)
         .def("get_actual_gl_samples", &FramebufferHandle::get_actual_gl_samples)
+        .def("get_filter", &FramebufferHandle::get_filter)
+        .def("get_actual_gl_filter", &FramebufferHandle::get_actual_gl_filter)
         .def("color_texture", &FramebufferHandle::color_texture, nb::rv_policy::reference)
         .def("depth_texture", &FramebufferHandle::depth_texture, nb::rv_policy::reference)
         .def("set_external_target", static_cast<void (FramebufferHandle::*)(uint32_t, int, int)>(&FramebufferHandle::set_external_target))

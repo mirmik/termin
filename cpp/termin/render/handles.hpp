@@ -90,6 +90,10 @@ public:
     virtual int get_actual_gl_height() const { return 0; }
     virtual int get_actual_gl_samples() const { return 0; }
 
+    // Filter mode (requested and actual)
+    virtual std::string get_filter() const { return "unknown"; }
+    virtual std::string get_actual_gl_filter() const { return "unknown"; }
+
     // Convenience methods
     Size2i get_size() const { return Size2i(get_width(), get_height()); }
     void resize(Size2i size) { resize(size.width, size.height); }

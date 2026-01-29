@@ -187,6 +187,43 @@ public:
         return s;
     }
 
+    std::string get_filter() const override {
+        switch (filter_) {
+            case TextureFilter::LINEAR: return "linear";
+            case TextureFilter::NEAREST: return "nearest";
+            default: return "unknown";
+        }
+    }
+
+    std::string get_actual_gl_filter() const override {
+        if (color_tex_ == 0) return "no_texture";
+        if (samples_ > 1) return "msaa_no_filter";
+
+        GLint min_filter = 0, mag_filter = 0;
+        glBindTexture(GL_TEXTURE_2D, color_tex_);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &min_filter);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &mag_filter);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        std::string result;
+        switch (min_filter) {
+            case GL_NEAREST: result = "GL_NEAREST"; break;
+            case GL_LINEAR: result = "GL_LINEAR"; break;
+            case GL_NEAREST_MIPMAP_NEAREST: result = "GL_NEAREST_MIPMAP_NEAREST"; break;
+            case GL_LINEAR_MIPMAP_NEAREST: result = "GL_LINEAR_MIPMAP_NEAREST"; break;
+            case GL_NEAREST_MIPMAP_LINEAR: result = "GL_NEAREST_MIPMAP_LINEAR"; break;
+            case GL_LINEAR_MIPMAP_LINEAR: result = "GL_LINEAR_MIPMAP_LINEAR"; break;
+            default: result = "GL_0x" + std::to_string(min_filter); break;
+        }
+        result += "/";
+        switch (mag_filter) {
+            case GL_NEAREST: result += "GL_NEAREST"; break;
+            case GL_LINEAR: result += "GL_LINEAR"; break;
+            default: result += "GL_0x" + std::to_string(mag_filter); break;
+        }
+        return result;
+    }
+
     GPUTextureHandle* color_texture() override {
         color_ref_.set_tex_id(color_tex_);
         color_ref_.set_target(samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D);

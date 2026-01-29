@@ -151,18 +151,18 @@
     },
     {
       "type": "FBO",
-      "x": -100.72643598924816,
-      "y": 844.8355960549179,
+      "x": -102.75094668136626,
+      "y": 844.1607591575453,
       "node_type": "resource",
       "name": "FOV_FBO",
       "params": {
         "format": "rgba16f",
         "samples": "1",
-        "filter": "linear",
+        "filter": "nearest",
         "size_mode": "fixed",
         "scale": "1.0",
         "width": 1024,
-        "height": 8192,
+        "height": 1024,
         "has_color": true,
         "has_depth": true,
         "clear_color": true,
@@ -176,8 +176,8 @@
     },
     {
       "type": "DepthPass",
-      "x": 171.27002620784629,
-      "y": 846.5291991920476,
+      "x": 136.0611446057925,
+      "y": 848.8764579655178,
       "name": "FOVDepth",
       "params": {
         "camera_name": "FOVCamera"
@@ -241,7 +241,7 @@
       "params": {
         "format": "rgba16f",
         "samples": "1",
-        "filter": "linear",
+        "filter": "nearest",
         "size_mode": "viewport",
         "scale": "1.0",
         "width": 1024,
@@ -487,18 +487,6 @@
       "to_socket": "input_res"
     },
     {
-      "from_node": 11,
-      "from_socket": "output_res",
-      "to_node": 2,
-      "to_socket": "u_fov"
-    },
-    {
-      "from_node": 11,
-      "from_socket": "output_res",
-      "to_node": 4,
-      "to_socket": "u_fov"
-    },
-    {
       "from_node": 15,
       "from_socket": "output_res",
       "to_node": 20,
@@ -529,16 +517,28 @@
       "to_socket": "output_res_target"
     },
     {
-      "from_node": 11,
-      "from_socket": "output_res",
-      "to_node": 20,
-      "to_socket": "fov"
-    },
-    {
       "from_node": 18,
       "from_socket": "output_res",
       "to_node": 3,
       "to_socket": "input_res"
+    },
+    {
+      "from_node": 11,
+      "from_socket": "output_res",
+      "to_node": 4,
+      "to_socket": "u_fov"
+    },
+    {
+      "from_node": 11,
+      "from_socket": "output_res",
+      "to_node": 2,
+      "to_socket": "u_fov"
+    },
+    {
+      "from_node": 11,
+      "from_socket": "output_res",
+      "to_node": 20,
+      "to_socket": "fov"
     }
   ],
   "viewport_frames": [

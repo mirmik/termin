@@ -280,7 +280,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
-        # Use 10-bit color (best balance: no banding, no Windows HDR issues)
+        # Use 10-bit color (better gradients on 10-bit monitors, but may add ~4ms swap delay)
         video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, 10)
         video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, 10)
         video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, 10)
@@ -332,8 +332,12 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         from termin._native import log
         log.info(f"[SDL] Window color depth: R={r_size.value} G={g_size.value} B={b_size.value}")
 
-        # Disable VSync - we control frame rate ourselves
-        video.SDL_GL_SetSwapInterval(0)
+        # Disable VSync (note: 10-bit mode may force vsync due to driver/DWM behavior)
+        swap_result = video.SDL_GL_SetSwapInterval(0)
+        actual_swap = video.SDL_GL_GetSwapInterval()
+        if swap_result != 0:
+            log.warn(f"[SDL] Failed to set SwapInterval=0: {sdl2.SDL_GetError()}")
+        log.info(f"[SDL] SwapInterval: requested=0, result={swap_result}, actual={actual_swap}")
 
         # Get native handle for Qt embedding
         self._native_handle = _get_native_window_handle(self._window)

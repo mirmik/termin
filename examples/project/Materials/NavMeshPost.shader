@@ -78,8 +78,15 @@ vec3 reconstruct_world_pos(vec2 uv, float linear_depth) {
     return world_pos.xyz;
 }
 
-// Check if pixel is visible from FOV camera
-bool is_visible_from_fov(vec3 world_pos) {
+// Single texel visibility test
+bool visibility_test(float fov_linear_depth, ivec2 texel_coord, ivec2 tex_size) {
+    texel_coord = clamp(texel_coord, ivec2(0), tex_size - 1);
+    float stored_depth = texelFetch(u_fov, texel_coord, 0).r * u_fov_distance;
+    return fov_linear_depth <= stored_depth + u_depth_bias;
+}
+
+// Returns visibility as float [0..1] using bilinear interpolation of visibility tests
+float visibility_from_fov(vec3 world_pos) {
     // Transform world position to FOV camera view space
     vec4 fov_view_pos = u_fov_view * vec4(world_pos, 1.0);
 
@@ -88,12 +95,12 @@ bool is_visible_from_fov(vec3 world_pos) {
 
     // Check if in front of FOV camera
     if (fov_linear_depth < 0.0) {
-        return false;
+        return 0.0;
     }
 
     // Check max distance
     if (fov_linear_depth > u_fov_distance) {
-        return false;
+        return 0.0;
     }
 
     // Transform to FOV camera clip space
@@ -104,21 +111,40 @@ bool is_visible_from_fov(vec3 world_pos) {
 
     // Check if within FOV frustum [-1, 1]
     if (ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0) {
-        return false;
+        return 0.0;
     }
 
     // Convert NDC to UV [0, 1]
     vec2 fov_uv = ndc.xy * 0.5 + 0.5;
 
-    // Sample depth from FOV depth texture (linear depth normalized to [0,1])
-    float stored_depth = texture(u_fov, fov_uv).r * u_fov_distance;
+    // Get texture size and texel position
+    ivec2 tex_size = textureSize(u_fov, 0);
+    vec2 texel_pos = fov_uv * vec2(tex_size) - 0.5;
 
-    // Visibility test: pixel is visible if its depth <= stored depth + bias
-    if (fov_linear_depth > stored_depth + u_depth_bias) {
-        return false;
-    }
+    // Get the 4 nearest texel coordinates
+    ivec2 texel_00 = ivec2(floor(texel_pos));
+    ivec2 texel_10 = texel_00 + ivec2(1, 0);
+    ivec2 texel_01 = texel_00 + ivec2(0, 1);
+    ivec2 texel_11 = texel_00 + ivec2(1, 1);
 
-    return true;
+    // Bilinear weights
+    vec2 f = fract(texel_pos);
+
+    // Visibility test for each of 4 texels (0 or 1)
+    float v00 = visibility_test(fov_linear_depth, texel_00, tex_size) ? 1.0 : 0.0;
+    float v10 = visibility_test(fov_linear_depth, texel_10, tex_size) ? 1.0 : 0.0;
+    float v01 = visibility_test(fov_linear_depth, texel_01, tex_size) ? 1.0 : 0.0;
+    float v11 = visibility_test(fov_linear_depth, texel_11, tex_size) ? 1.0 : 0.0;
+
+    // Bilinear interpolation of visibility results
+    float v_bottom = mix(v00, v10, f.x);
+    float v_top = mix(v01, v11, f.x);
+    return mix(v_bottom, v_top, f.y);
+}
+
+// Bool version with threshold
+bool is_visible_from_fov(vec3 world_pos) {
+    return visibility_from_fov(world_pos) >= 0.5;
 }
 
 float fov_linear_depth_from_world_pos(vec3 world_pos) {
@@ -155,7 +181,6 @@ void main()
     // Check FOV visibility and tint green if visible
     if (is_visible_from_fov(world_pos)) {
         color.rgb = mix(color.rgb, vec3(0.0, 1.0, 0.0), 0.3);
-    
     }
 
     FragColor = color;
