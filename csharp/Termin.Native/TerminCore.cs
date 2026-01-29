@@ -239,7 +239,8 @@ public static partial class TerminCore
         string fragmentSource,
         string? geometrySource,
         string? name,
-        string? sourcePath
+        string? sourcePath,
+        string? uuid
     );
 
     [LibraryImport(DLL, EntryPoint = "tc_shader_get")]

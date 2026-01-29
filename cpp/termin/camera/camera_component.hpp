@@ -71,6 +71,10 @@ public:
     double get_fov_y_degrees() const;
     void set_fov_y_degrees(double deg);
 
+    // Legacy FOV accessors (alias for fov_x, used by C# bindings)
+    double get_fov_degrees() const { return get_fov_x_degrees(); }
+    void set_fov_degrees(double deg) { set_fov_x_degrees(deg); }
+
     // Aspect ratio
     void set_aspect(double a);
 

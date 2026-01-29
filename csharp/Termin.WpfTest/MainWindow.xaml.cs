@@ -275,6 +275,10 @@ public partial class MainWindow : Window
     private RenderEngine? _renderEngine;
     private CameraComponent? _cameraComponent;
     private CameraComponent? _cameraComponent2;
+    private EntityPool? _internalEntitiesPool;
+    private EntityPool? _internalEntitiesPool2;
+    private TcEntityId _internalRootId;
+    private TcEntityId _internalRootId2;
     private SWIGTYPE_p_termin__GraphicsBackend? _graphics;
     private PullRenderingManager? _renderingManager;
     private OrbitCameraController? _orbitController;
@@ -364,8 +368,12 @@ public partial class MainWindow : Window
         // Create scene
         _scene = new Scene();
 
-        // Create camera entity with CameraComponent
-        var cameraEntity = _scene.Entities.CreateEntity("Camera");
+        // Create internal entities pool for first viewport's camera
+        _internalEntitiesPool = EntityPool.Create(16);
+        var internalRoot = _internalEntitiesPool.CreateEntity("InternalRoot");
+        _internalRootId = internalRoot.Id;
+        var cameraEntity = _internalEntitiesPool.CreateEntity("Camera");
+        cameraEntity.SetParent(internalRoot);
         cameraEntity.Position = new System.Numerics.Vector3(0, -3, 1);
 
         _cameraComponent = new CameraComponent();
@@ -373,7 +381,7 @@ public partial class MainWindow : Window
         _cameraComponent.near_clip = 0.1;
         _cameraComponent.far_clip = 100.0;
         cameraEntity.AddComponent(_cameraComponent);
-        Console.WriteLine("[Init] Created CameraComponent and added to entity");
+        Console.WriteLine("[Init] Created CameraComponent in internal entities pool");
 
         // Create OrbitCameraController for camera movement
         _orbitController = new OrbitCameraController(
@@ -383,10 +391,14 @@ public partial class MainWindow : Window
             prevent_moving: false
         );
         cameraEntity.AddComponent(_orbitController);
-        Console.WriteLine("[Init] Created OrbitCameraController and added to camera entity");
+        Console.WriteLine("[Init] Created OrbitCameraController in internal entities pool");
 
-        // Create second camera entity with different position (top view)
-        var cameraEntity2 = _scene.Entities.CreateEntity("Camera2");
+        // Create internal entities pool for second viewport's camera
+        _internalEntitiesPool2 = EntityPool.Create(16);
+        var internalRoot2 = _internalEntitiesPool2.CreateEntity("InternalRoot2");
+        _internalRootId2 = internalRoot2.Id;
+        var cameraEntity2 = _internalEntitiesPool2.CreateEntity("Camera2");
+        cameraEntity2.SetParent(internalRoot2);
         cameraEntity2.Position = new System.Numerics.Vector3(0, -3, 1);
 
         _cameraComponent2 = new CameraComponent();
@@ -402,7 +414,7 @@ public partial class MainWindow : Window
             prevent_moving: false
         );
         cameraEntity2.AddComponent(_orbitController2);
-        Console.WriteLine("[Init] Created second camera (top view)");
+        Console.WriteLine("[Init] Created second camera in internal entities pool 2");
 
         // Create mesh and shader
         CreateCubeMesh();
@@ -439,7 +451,7 @@ public partial class MainWindow : Window
 
     private void InitNativeDisplay()
     {
-        if (_backend == null || _scene == null || _cameraComponent == null || _renderPipeline == null) return;
+        if (_backend == null || _scene == null || _cameraComponent == null || _renderPipeline == null || _internalEntitiesPool == null) return;
 
         // Create WpfRenderSurface
         _renderSurface = new WpfRenderSurface(GlControl);
@@ -462,6 +474,10 @@ public partial class MainWindow : Window
             // Set pipeline on viewport (for RenderingManager)
             TerminCore.ViewportSetPipeline(_viewportPtr, SwigHelpers.GetPtr(_renderPipeline.ptr()));
 
+            // Set internal entities (camera lives here)
+            TerminCore.ViewportSetInternalEntities(_viewportPtr, _internalEntitiesPool!.Handle, _internalRootId);
+            Console.WriteLine("[Init] Set internal entities for viewport");
+
             // Add to display
             _nativeDisplayManager.AddViewport(_viewportPtr);
 
@@ -471,7 +487,7 @@ public partial class MainWindow : Window
 
     private void InitNativeDisplay2()
     {
-        if (_backend2 == null || _scene == null || _cameraComponent2 == null || _renderPipeline2 == null) return;
+        if (_backend2 == null || _scene == null || _cameraComponent2 == null || _renderPipeline2 == null || _internalEntitiesPool2 == null) return;
 
         // Create WpfRenderSurface for second control
         _renderSurface2 = new WpfRenderSurface(GlControl2);
@@ -493,6 +509,10 @@ public partial class MainWindow : Window
 
             // Set pipeline on viewport
             TerminCore.ViewportSetPipeline(_viewportPtr2, SwigHelpers.GetPtr(_renderPipeline2.ptr()));
+
+            // Set internal entities (camera lives here)
+            TerminCore.ViewportSetInternalEntities(_viewportPtr2, _internalEntitiesPool2!.Handle, _internalRootId2);
+            Console.WriteLine("[Init] Set internal entities for viewport2");
 
             // Add to second display
             _nativeDisplayManager2.AddViewport(_viewportPtr2);
@@ -714,6 +734,7 @@ void main() {
             fragmentShaderSource,
             null,
             "simple_lit",
+            null,
             null
         );
 
@@ -847,6 +868,12 @@ void main() {
         _cameraComponent = null;
         _cameraComponent2?.Dispose();
         _cameraComponent2 = null;
+
+        // Dispose internal entities pools (after components are freed)
+        _internalEntitiesPool?.Dispose();
+        _internalEntitiesPool = null;
+        _internalEntitiesPool2?.Dispose();
+        _internalEntitiesPool2 = null;
 
         _renderEngine?.Dispose();
         _renderEngine = null;
