@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -135,6 +136,38 @@ public class EntityPool : IDisposable
     public void UpdateTransforms()
     {
         TerminCore.EntityPoolUpdateTransforms(_handle);
+    }
+
+    /// <summary>
+    /// Get all entities as Entity wrappers.
+    /// </summary>
+    public IEnumerable<Entity> GetAllEntities()
+    {
+        // For now, iterate through possible indices. This is a simplified approach.
+        // A proper implementation would query the pool for valid entity IDs.
+        var count = (int)Count;
+        for (uint i = 0; i < count * 2 && count > 0; i++) // scan up to 2x count to find all
+        {
+            var id = new TcEntityId { Index = i, Generation = 0 };
+            // Try different generations
+            for (uint gen = 0; gen < 4; gen++)
+            {
+                id.Generation = gen;
+                if (IsAlive(id))
+                {
+                    yield return new Entity(this, id);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Delete an entity.
+    /// </summary>
+    public void DeleteEntity(TcEntityId id)
+    {
+        TerminCore.EntityPoolFree(_handle, id);
     }
 
     // Flags

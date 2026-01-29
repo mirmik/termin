@@ -705,6 +705,44 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_id")]
     public static partial TcEntityId ViewportGetInternalEntitiesId(IntPtr viewport);
+
+    // ========================================================================
+    // Primitive Mesh Generation (tc_primitive_mesh)
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_cube")]
+    public static partial IntPtr PrimitiveCube(float sizeX, float sizeY, float sizeZ);
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_sphere")]
+    public static partial IntPtr PrimitiveSphere(float radius, int meridians, int parallels);
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_cylinder")]
+    public static partial IntPtr PrimitiveCylinder(float radius, float height, int segments);
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_cone")]
+    public static partial IntPtr PrimitiveCone(float radius, float height, int segments);
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_plane")]
+    public static partial IntPtr PrimitivePlane(float width, float height, int segmentsW, int segmentsH);
+
+    // Lazy singleton primitives - return handles to shared meshes in registry
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_unit_cube")]
+    public static partial TcMeshHandle PrimitiveUnitCube();
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_unit_sphere")]
+    public static partial TcMeshHandle PrimitiveUnitSphere();
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_unit_cylinder")]
+    public static partial TcMeshHandle PrimitiveUnitCylinder();
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_unit_cone")]
+    public static partial TcMeshHandle PrimitiveUnitCone();
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_unit_plane")]
+    public static partial TcMeshHandle PrimitiveUnitPlane();
+
+    [LibraryImport(DLL, EntryPoint = "tc_primitive_cleanup")]
+    public static partial void PrimitiveCleanup();
 }
 
 /// <summary>

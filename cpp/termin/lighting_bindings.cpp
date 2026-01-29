@@ -5,6 +5,8 @@
 #include <nanobind/operators.h>
 
 #include "termin/lighting/lighting.hpp"
+#include "termin/lighting/light_component.hpp"
+#include "termin/entity/component.hpp"
 #include "termin/geom/vec3.hpp"
 
 namespace nb = nanobind;
@@ -260,5 +262,56 @@ NB_MODULE(_lighting_native, m) {
             return "Light(type=" + std::string(light_type_to_string(l.type)) +
                    ", intensity=" + std::to_string(l.intensity) +
                    ", name='" + l.name + "')";
+        });
+
+    // Import _entity_native to get CxxComponent type
+    nb::module_::import_("termin.entity._entity_native");
+
+    // LightComponent - component that provides a light source
+    nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
+        .def(nb::init<>())
+
+        // Light type
+        .def_prop_rw("light_type",
+            &LightComponent::get_light_type_str,
+            &LightComponent::set_light_type_str)
+
+        // Color
+        .def_prop_rw("color",
+            [](const LightComponent& c) { return vec3_to_numpy(c.color); },
+            [](LightComponent& c, nb::object v) { c.color = numpy_to_vec3(v); })
+
+        // Intensity
+        .def_rw("intensity", &LightComponent::intensity)
+
+        // Shadow parameters
+        .def_prop_rw("shadows_enabled",
+            &LightComponent::get_shadows_enabled,
+            &LightComponent::set_shadows_enabled)
+        .def_prop_rw("shadows_map_resolution",
+            &LightComponent::get_shadows_map_resolution,
+            &LightComponent::set_shadows_map_resolution)
+        .def_prop_rw("cascade_count",
+            &LightComponent::get_cascade_count,
+            &LightComponent::set_cascade_count)
+        .def_prop_rw("max_distance",
+            &LightComponent::get_max_distance,
+            &LightComponent::set_max_distance)
+        .def_prop_rw("split_lambda",
+            &LightComponent::get_split_lambda,
+            &LightComponent::set_split_lambda)
+        .def_prop_rw("cascade_blend",
+            &LightComponent::get_cascade_blend,
+            &LightComponent::set_cascade_blend)
+
+        // Full shadows access
+        .def_rw("shadows", &LightComponent::shadows)
+
+        // Convert to Light for rendering
+        .def("to_light", &LightComponent::to_light)
+
+        // c_component_ptr for compatibility
+        .def("c_component_ptr", [](LightComponent& c) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(c.c_component());
         });
 }

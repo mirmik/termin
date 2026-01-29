@@ -28,6 +28,7 @@ set(TC_SOURCES
     src/tc_material_registry.c
     src/tc_mesh.c
     src/tc_mesh_registry.c
+    src/tc_primitive_mesh.c
     src/tc_pass.c
     src/tc_picking.c
     src/tc_pool.c

@@ -1,9 +1,7 @@
-﻿<Application x:Class="Termin.WpfTest.App"
+<Application x:Class="SceneApp.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:Termin.WpfTest"
-             StartupUri="SceneViewerTestWindow.xaml">
+             StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
     </Application.Resources>
 </Application>

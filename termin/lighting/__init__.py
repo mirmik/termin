@@ -6,6 +6,7 @@ from termin import _dll_setup  # noqa: F401
 from termin.lighting._lighting_native import (
     AttenuationCoefficients,
     Light,
+    LightComponent,
     LightSample,
     LightShadowParams,
     LightType,
@@ -16,6 +17,7 @@ from termin.lighting._lighting_native import (
 __all__ = [
     "AttenuationCoefficients",
     "Light",
+    "LightComponent",
     "LightSample",
     "LightShadowParams",
     "LightType",

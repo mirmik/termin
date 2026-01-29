@@ -101,8 +101,9 @@ target_compile_options(_collision_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Lighting native module (Light, AttenuationCoefficients) - using nanobind
+# Lighting native module (Light, AttenuationCoefficients, LightComponent) - using nanobind
 nanobind_add_module(_lighting_native termin/lighting_bindings.cpp)
+target_link_libraries(_lighting_native PRIVATE entity_lib)
 target_compile_options(_lighting_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -214,6 +215,7 @@ set(ENTITY_LIB_SOURCES
     termin/entity/components/rotator_component.cpp
     termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
+    termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
@@ -255,6 +257,7 @@ add_library(render_lib STATIC
     termin/render/render_pipeline.cpp
     termin/render/rendering_manager.cpp
     termin/render/pull_rendering_manager.cpp
+    termin/render/wireframe_renderer.cpp
     termin/render/color_pass.cpp
     termin/render/collider_gizmo_pass.cpp
     termin/render/present_pass.cpp

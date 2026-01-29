@@ -1,0 +1,25 @@
+<Window x:Class="Termin.WpfTest.SceneViewerTestWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Termin.WpfTest.Controls"
+        Title="Scene Viewer Test" Height="600" Width="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+            <Button Content="Add Cube" Click="AddCube_Click" Margin="2"/>
+            <Button Content="Add Sphere" Click="AddSphere_Click" Margin="2"/>
+            <Button Content="Reset Camera" Click="ResetCamera_Click" Margin="2"/>
+            <!-- TODO: Enable when ColliderGizmoPass is available -->
+            <!-- <CheckBox Content="Show Colliders" IsChecked="{Binding ShowColliders, ElementName=SceneViewer}"
+                      VerticalAlignment="Center" Margin="10,0"/> -->
+        </StackPanel>
+
+        <!-- Scene Viewer -->
+        <controls:TerminSceneViewerControl x:Name="SceneViewer" Grid.Row="1"/>
+    </Grid>
+</Window>
