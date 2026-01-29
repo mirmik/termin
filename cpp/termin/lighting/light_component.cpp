@@ -64,6 +64,9 @@ static struct _LightTypeFieldRegistrar {
             auto* c = static_cast<LightComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_light_type_str(value.data.s);
+            } else if (value.type == TC_VALUE_INT) {
+                // Legacy: old scenes store light_type as int (0=Directional, 1=Point, 2=Spot)
+                c->light_type = static_cast<LightType>(value.data.i);
             }
         };
 
@@ -90,6 +93,19 @@ static struct _LightColorFieldRegistrar {
             auto* c = static_cast<LightComponent*>(obj);
             if (value.type == TC_VALUE_VEC3) {
                 c->color = Vec3(value.data.v3.x, value.data.v3.y, value.data.v3.z);
+            } else if (value.type == TC_VALUE_LIST && tc_value_list_size(&value) == 3) {
+                // JSON stores color as [r, g, b] array
+                tc_value* r = tc_value_list_get(&value, 0);
+                tc_value* g = tc_value_list_get(&value, 1);
+                tc_value* b = tc_value_list_get(&value, 2);
+                auto get_double = [](tc_value* v) -> double {
+                    if (!v) return 0.0;
+                    if (v->type == TC_VALUE_DOUBLE) return v->data.d;
+                    if (v->type == TC_VALUE_FLOAT) return v->data.f;
+                    if (v->type == TC_VALUE_INT) return static_cast<double>(v->data.i);
+                    return 0.0;
+                };
+                c->color = Vec3(get_double(r), get_double(g), get_double(b));
             }
         };
 
@@ -98,7 +114,7 @@ static struct _LightColorFieldRegistrar {
 } _light_color_registrar;
 
 // Register intensity field
-INSPECT_FIELD(LightComponent, intensity, "Intensity", "float", 0.0, 100.0, 0.1)
+INSPECT_FIELD(LightComponent, intensity, "Intensity", "double", 0.0, 100.0, 0.1)
 
 // Register shadow fields
 static struct _LightShadowFieldsRegistrar {
@@ -120,6 +136,8 @@ static struct _LightShadowFieldsRegistrar {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_BOOL) {
                     c->shadows.enabled = value.data.b;
+                } else if (value.type == TC_VALUE_INT) {
+                    c->shadows.enabled = value.data.i != 0;
                 }
             };
 
@@ -145,7 +163,11 @@ static struct _LightShadowFieldsRegistrar {
             info.setter = [](void* obj, tc_value value, tc_scene*) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_INT) {
-                    c->shadows.map_resolution = value.data.i;
+                    c->shadows.map_resolution = static_cast<int>(value.data.i);
+                } else if (value.type == TC_VALUE_FLOAT) {
+                    c->shadows.map_resolution = static_cast<int>(value.data.f);
+                } else if (value.type == TC_VALUE_DOUBLE) {
+                    c->shadows.map_resolution = static_cast<int>(value.data.d);
                 }
             };
 
@@ -171,7 +193,11 @@ static struct _LightShadowFieldsRegistrar {
             info.setter = [](void* obj, tc_value value, tc_scene*) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_INT) {
-                    c->shadows.cascade_count = value.data.i;
+                    c->shadows.cascade_count = static_cast<int>(value.data.i);
+                } else if (value.type == TC_VALUE_FLOAT) {
+                    c->shadows.cascade_count = static_cast<int>(value.data.f);
+                } else if (value.type == TC_VALUE_DOUBLE) {
+                    c->shadows.cascade_count = static_cast<int>(value.data.d);
                 }
             };
 
@@ -200,6 +226,8 @@ static struct _LightShadowFieldsRegistrar {
                     c->shadows.max_distance = value.data.f;
                 } else if (value.type == TC_VALUE_DOUBLE) {
                     c->shadows.max_distance = static_cast<float>(value.data.d);
+                } else if (value.type == TC_VALUE_INT) {
+                    c->shadows.max_distance = static_cast<float>(value.data.i);
                 }
             };
 
@@ -228,6 +256,8 @@ static struct _LightShadowFieldsRegistrar {
                     c->shadows.split_lambda = value.data.f;
                 } else if (value.type == TC_VALUE_DOUBLE) {
                     c->shadows.split_lambda = static_cast<float>(value.data.d);
+                } else if (value.type == TC_VALUE_INT) {
+                    c->shadows.split_lambda = static_cast<float>(value.data.i);
                 }
             };
 
@@ -251,6 +281,8 @@ static struct _LightShadowFieldsRegistrar {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_BOOL) {
                     c->shadows.cascade_blend = value.data.b;
+                } else if (value.type == TC_VALUE_INT) {
+                    c->shadows.cascade_blend = value.data.i != 0;
                 }
             };
 

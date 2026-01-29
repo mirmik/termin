@@ -166,10 +166,19 @@ public:
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [member, kind_copy](void* obj, tc_value value, tc_scene* scene) {
+        std::string type_copy = type_name;
+        std::string path_copy = path;
+
+        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene* scene) {
             std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
             if (val.has_value()) {
-                static_cast<C*>(obj)->*member = std::any_cast<T>(val);
+                try {
+                    static_cast<C*>(obj)->*member = std::any_cast<T>(val);
+                } catch (const std::bad_any_cast& e) {
+                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                                   "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
+                                   type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
+                }
             }
         };
 
@@ -205,10 +214,19 @@ public:
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [setter_fn, kind_copy](void* obj, tc_value value, tc_scene* scene) {
+        std::string type_copy = type_name;
+        std::string path_copy = path;
+
+        info.setter = [setter_fn, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene* scene) {
             std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
             if (val.has_value()) {
-                setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
+                try {
+                    setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
+                } catch (const std::bad_any_cast& e) {
+                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                                   "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
+                                   type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
+                }
             }
         };
 
@@ -232,16 +250,24 @@ public:
         info.kind = kind_str;
 
         std::string kind_copy = kind_str;
+        std::string type_copy = type_name;
+        std::string path_copy = path;
 
         info.getter = [getter_fn, kind_copy](void* obj) -> tc_value {
             T val = getter_fn(static_cast<C*>(obj));
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [setter_fn, kind_copy](void* obj, tc_value value, tc_scene* scene) {
+        info.setter = [setter_fn, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene* scene) {
             std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
             if (val.has_value()) {
-                setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
+                try {
+                    setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
+                } catch (const std::bad_any_cast& e) {
+                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                                   "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
+                                   type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
+                }
             }
         };
 
@@ -261,16 +287,24 @@ public:
         info.kind = kind_str;
 
         std::string kind_copy = kind_str;
+        std::string type_copy = type_name;
+        std::string path_copy = path;
 
         info.getter = [member, kind_copy](void* obj) -> tc_value {
             H val = static_cast<C*>(obj)->*member;
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [member, kind_copy](void* obj, tc_value value, tc_scene* scene) {
+        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene* scene) {
             std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
             if (val.has_value()) {
-                static_cast<C*>(obj)->*member = std::any_cast<H>(val);
+                try {
+                    static_cast<C*>(obj)->*member = std::any_cast<H>(val);
+                } catch (const std::bad_any_cast& e) {
+                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                                   "Check that field type matches kind",
+                                   type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
+                }
             }
         };
 
@@ -390,7 +424,14 @@ public:
 
     void set_tc_value(void* obj, const std::string& type_name, const std::string& field_path, tc_value value, tc_scene* scene) {
         const InspectFieldInfo* f = find_field(type_name, field_path);
-        if (!f || !f->setter) return;
+        if (!f) {
+            tc::Log::warn("[Inspect] Field '%s.%s' not found", type_name.c_str(), field_path.c_str());
+            return;
+        }
+        if (!f->setter) {
+            tc::Log::warn("[Inspect] Field '%s.%s' has no setter", type_name.c_str(), field_path.c_str());
+            return;
+        }
         f->setter(obj, value, scene);
     }
 
@@ -496,16 +537,24 @@ struct InspectFieldChoicesRegistrar {
         }
 
         std::string kind_copy = kind_str;
+        std::string type_copy = type_name;
+        std::string path_copy = path;
 
         info.getter = [member, kind_copy](void* obj) -> tc_value {
             T val = static_cast<C*>(obj)->*member;
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [member, kind_copy](void* obj, tc_value value, tc_scene* scene) {
+        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene* scene) {
             std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
             if (val.has_value()) {
-                static_cast<C*>(obj)->*member = std::any_cast<T>(val);
+                try {
+                    static_cast<C*>(obj)->*member = std::any_cast<T>(val);
+                } catch (const std::bad_any_cast& e) {
+                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                                   "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
+                                   type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
+                }
             }
         };
 

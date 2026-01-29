@@ -382,17 +382,28 @@ bool tc_inspect_find_field_info(const char* type_name, const char* path, tc_fiel
 
 tc_value tc_inspect_get(void* obj, const char* type_name, const char* path) {
     tc_inspect_lang lang = tc_inspect_type_lang(type_name);
-    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].get) {
-        return g_vtables[lang].get(obj, type_name, path, g_vtables[lang].ctx);
+    if (lang >= TC_INSPECT_LANG_COUNT) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_get: type '%s' not found in any language vtable", type_name ? type_name : "null");
+        return tc_value_nil();
     }
-    return tc_value_nil();
+    if (!g_vtables[lang].get) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_get: no getter for type '%s' (lang=%d)", type_name ? type_name : "null", lang);
+        return tc_value_nil();
+    }
+    return g_vtables[lang].get(obj, type_name, path, g_vtables[lang].ctx);
 }
 
 void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene) {
     tc_inspect_lang lang = tc_inspect_type_lang(type_name);
-    if (lang < TC_INSPECT_LANG_COUNT && g_vtables[lang].set) {
-        g_vtables[lang].set(obj, type_name, path, value, scene, g_vtables[lang].ctx);
+    if (lang >= TC_INSPECT_LANG_COUNT) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_set: type '%s' not found in any language vtable", type_name ? type_name : "null");
+        return;
     }
+    if (!g_vtables[lang].set) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_set: no setter for type '%s' (lang=%d)", type_name ? type_name : "null", lang);
+        return;
+    }
+    g_vtables[lang].set(obj, type_name, path, value, scene, g_vtables[lang].ctx);
 }
 
 void tc_inspect_action(void* obj, const char* type_name, const char* path) {
@@ -436,9 +447,29 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
 }
 
 void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, tc_scene* scene) {
-    if (!data || data->type != TC_VALUE_DICT) return;
+    if (!obj) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_deserialize: obj is NULL for type '%s'", type_name ? type_name : "unknown");
+        return;
+    }
+    if (!type_name) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_deserialize: type_name is NULL");
+        return;
+    }
+    if (!data) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_deserialize: data is NULL for type '%s'", type_name);
+        return;
+    }
+    if (data->type != TC_VALUE_DICT) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_deserialize: data is not a dict for type '%s' (got type %d)", type_name, data->type);
+        return;
+    }
 
     size_t count = tc_inspect_field_count(type_name);
+    if (count == 0) {
+        tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_deserialize: no fields registered for type '%s'", type_name);
+        return;
+    }
+
     for (size_t i = 0; i < count; i++) {
         tc_field_info f;
         if (!tc_inspect_get_field_info(type_name, i, &f)) continue;

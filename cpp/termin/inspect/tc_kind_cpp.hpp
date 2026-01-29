@@ -99,10 +99,15 @@ public:
     // Deserialize value
     std::any deserialize(const std::string& kind_name, const tc_value* data, tc_scene* scene = nullptr) const {
         auto* kind = get(kind_name);
-        if (kind && kind->deserialize) {
-            return kind->deserialize(data, scene);
+        if (!kind) {
+            tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' not registered in KindRegistryCpp", kind_name.c_str());
+            return std::any{};
         }
-        return std::any{};
+        if (!kind->deserialize) {
+            tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' has no deserialize handler", kind_name.c_str());
+            return std::any{};
+        }
+        return kind->deserialize(data, scene);
     }
 };
 

@@ -134,7 +134,14 @@ public:
 
     // Deserialize data into component with explicit scene context
     void deserialize_data(nb::object data, TcSceneRef scene_ref = TcSceneRef()) {
-        if (!_c || data.is_none()) return;
+        if (!_c) {
+            tc::Log::warn("[Inspect] deserialize_data called on invalid component reference");
+            return;
+        }
+        if (data.is_none()) {
+            tc::Log::warn("[Inspect] deserialize_data called with None data for %s", tc_component_type_name(_c));
+            return;
+        }
 
         void* obj_ptr = nullptr;
         if (_c->kind == TC_NATIVE_COMPONENT) {
@@ -142,7 +149,10 @@ public:
         } else {
             obj_ptr = _c->body;
         }
-        if (!obj_ptr) return;
+        if (!obj_ptr) {
+            tc::Log::warn("[Inspect] deserialize_data: null object pointer for %s", tc_component_type_name(_c));
+            return;
+        }
 
         tc_value v = py_to_tc_value(data);
         tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene_ref.ptr());
