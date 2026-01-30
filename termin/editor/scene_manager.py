@@ -12,26 +12,21 @@ Responsibilities:
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import tempfile
-from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
 
 import numpy as np
 from PyQt6.QtCore import QTimer, QElapsedTimer
 
+from termin._native.scene import SceneManager as CxxSceneManager, SceneMode
+
+__all__ = ["SceneManager", "SceneMode"]
+
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
-
-
-class SceneMode(Enum):
-    """Scene update mode."""
-    INACTIVE = 0  # Loaded but not updated
-    STOP = 1      # Editor update (gizmos, selection)
-    PLAY = 2      # Full simulation
 
 
 def numpy_encoder(obj):
@@ -62,7 +57,7 @@ def _validate_serializable(obj, path: str = ""):
     raise TypeError(f"Non-serializable type {type(obj).__name__} at path: {path or 'root'}")
 
 
-class SceneManager:
+class SceneManager(CxxSceneManager):
     """
     Manages scene lifecycle, update cycles, and editor state.
 
@@ -110,6 +105,8 @@ class SceneManager:
             set_expanded_entities: Callback to set expanded entity names.
             rescan_file_resources: Callback to rescan project file resources.
         """
+        super().__init__()
+
         self._resource_manager = resource_manager
         self._scene_factory = scene_factory
         self._on_after_render = on_after_render
@@ -132,15 +129,13 @@ class SceneManager:
         self._set_expanded_entities = set_expanded_entities
         self._rescan_file_resources = rescan_file_resources
 
-        # Named scenes
+        # Named scenes (Python Scene objects)
         self._scenes: dict[str, "Scene"] = {}
-        self._modes: dict[str, SceneMode] = {}
         self._paths: dict[str, str | None] = {}  # scene_name -> file_path
         self._editor_data: dict[str, dict] = {}  # scene_name -> stored editor data
 
         # Resources initialized flag
         self._resources_initialized: bool = False
-        self._render_requested: bool = False
 
     @property
     def resource_manager(self) -> "ResourceManager":
@@ -193,10 +188,32 @@ class SceneManager:
 
         scene = self._create_new_scene(name)
         self._scenes[name] = scene
-        self._modes[name] = SceneMode.INACTIVE
         self._paths[name] = None
 
+        # Register in C++ SceneManager
+        self.register_scene(name, scene._tc_scene.scene_ptr())
+
         return scene
+
+    def add_existing_scene(self, name: str, scene: "Scene") -> None:
+        """
+        Register an existing scene with the manager.
+
+        Args:
+            name: Scene name (must be unique).
+            scene: Existing Scene object.
+
+        Raises:
+            ValueError: If scene with this name already exists.
+        """
+        if name in self._scenes:
+            raise ValueError(f"Scene '{name}' already exists")
+
+        self._scenes[name] = scene
+        self._paths[name] = None
+
+        # Register in C++ SceneManager
+        self.register_scene(name, scene._tc_scene.scene_ptr())
 
     def copy_scene(self, source_name: str, dest_name: str) -> "Scene":
         """
@@ -230,8 +247,10 @@ class SceneManager:
         dest.editor_entities_data = source.editor_entities_data
 
         self._scenes[dest_name] = dest
-        self._modes[dest_name] = SceneMode.INACTIVE
         self._paths[dest_name] = None  # Copy has no file path
+
+        # Register in C++ SceneManager
+        self.register_scene(dest_name, dest._tc_scene.scene_ptr())
 
         return dest
 
@@ -267,8 +286,10 @@ class SceneManager:
             scene.load_from_data(scene_data, context=None, update_settings=True)
 
         self._scenes[name] = scene
-        self._modes[name] = SceneMode.INACTIVE
         self._paths[name] = path
+
+        # Register in C++ SceneManager
+        self.register_scene(name, scene._tc_scene.scene_ptr())
 
         # Store editor data for later application (after editor entities are created)
         self._editor_data[name] = self._extract_editor_data(data)
@@ -459,8 +480,10 @@ class SceneManager:
         if self._on_before_scene_close is not None:
             self._on_before_scene_close(scene)
 
+        # Unregister from C++ SceneManager
+        self.unregister_scene(name)
+
         self._scenes.pop(name)
-        self._modes.pop(name, None)
         self._paths.pop(name, None)
         self._editor_data.pop(name, None)
 
@@ -504,16 +527,17 @@ class SceneManager:
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
 
-        old_mode = self._modes.get(name, SceneMode.INACTIVE)
+        old_mode = CxxSceneManager.get_mode(self, name)
         scene = self._scenes[name]
 
-        # When transitioning to INACTIVE, notify components and remove viewports
+        # When transitioning to INACTIVE, notify viewports callback
+        # (Component notifications are handled in C++ tc_scene_set_mode)
         if mode == SceneMode.INACTIVE and old_mode != SceneMode.INACTIVE:
-            scene.notify_scene_inactive()
             if self._on_before_scene_close is not None:
                 self._on_before_scene_close(scene)
 
-        self._modes[name] = mode
+        # Set mode in C++ (this also notifies components)
+        CxxSceneManager.set_mode(self, name, mode)
         self._update_timer_state()
 
     def get_mode(self, name: str) -> SceneMode:
@@ -531,7 +555,7 @@ class SceneManager:
         """
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
-        return self._modes[name]
+        return CxxSceneManager.get_mode(self, name)
 
     # --- Editor Entities ---
 
@@ -570,69 +594,46 @@ class SceneManager:
 
     # --- Update Cycle ---
 
-    def tick(self, dt: float) -> None:
+    def tick(self, dt: float) -> bool:
         """
         Update all active scenes.
 
         Args:
             dt: Delta time in seconds.
+
+        Returns:
+            True if render was performed.
         """
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
         profiler.begin_frame()
 
-        has_play_scenes = any(m == SceneMode.PLAY for m in self._modes.values())
-        
-        for name, scene in self._scenes.items():
-            mode = self._modes.get(name, SceneMode.INACTIVE)
+        # Call C++ tick which updates all scenes based on their mode
+        # Returns True if render is needed (has PLAY scenes or render_requested)
+        should_render = CxxSceneManager.tick(self, dt)
 
-            if mode == SceneMode.INACTIVE:
-                continue
-            elif mode == SceneMode.STOP:
-                # Editor mode: minimal update for gizmos, etc.
-                with profiler.section(f"Scene Editor Update: {name}"):
-                    scene.editor_update(dt)
-            elif mode == SceneMode.PLAY:
-                # Game mode: full simulation
-                with profiler.section(f"Scene Update: {name}"):
-                    scene.update(dt)
-
-        should_render = has_play_scenes or self._render_requested
         if should_render:
-            self._render_requested = False  # Reset before callbacks to allow re-request
-            with profiler.section(f"Scene Manager Before Render"):
-                self.before_render()
+            with profiler.section("Scene Manager Before Render"):
+                # C++ before_render handles calling scene.before_render()
+                CxxSceneManager.before_render(self)
+
             from termin.visualization.render import RenderingManager
+            with profiler.section("Scene Manager Render"):
+                RenderingManager.instance().render_all(present=True)
 
-            with profiler.section(f"Scene Manager Render"):
-               RenderingManager.instance().render_all(present=True)
             if self._on_after_render is not None:
-                with profiler.section(f"Scene Manager After Render"):
+                with profiler.section("Scene Manager After Render"):
                     self._on_after_render()
-        
+
         profiler.end_frame()
-
-    def before_render(self) -> None:
-        """
-        Call before_render on all non-INACTIVE scenes.
-
-        Updates bone matrices for skinning, etc.
-        """
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-
-        for name, scene in self._scenes.items():
-            mode = self._modes.get(name, SceneMode.INACTIVE)
-            if mode != SceneMode.INACTIVE:
-                with profiler.section(f"Scene: {name}"):
-                    scene.before_render()
+        return should_render
 
     def _update_timer_state(self) -> None:
         """Start or stop game timer based on whether GAME scenes exist."""
         if not self._use_internal_timer:
             return
-        has_game_scenes = any(m == SceneMode.PLAY for m in self._modes.values())
+        has_game_scenes = self.has_play_scenes()
 
         if has_game_scenes and not self._game_timer.isActive():
             self._elapsed_timer.start()
@@ -647,9 +648,7 @@ class SceneManager:
 
         self.tick(dt)
 
-    def request_render(self) -> None:
-        """Request render on the next tick."""
-        self._render_requested = True
+    # request_render is inherited from CxxSceneManager
 
     def set_render_callbacks(
         self,
@@ -688,7 +687,7 @@ class SceneManager:
         """
         info = {}
         for name, scene in self._scenes.items():
-            mode = self._modes.get(name, SceneMode.INACTIVE)
+            mode = CxxSceneManager.get_mode(self, name)
             info[name] = {
                 "mode": mode.name,
                 "entity_count": len(list(scene.entities)),

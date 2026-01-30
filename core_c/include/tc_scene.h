@@ -13,6 +13,16 @@ extern "C" {
 #endif
 
 // ============================================================================
+// Scene Mode
+// ============================================================================
+
+typedef enum tc_scene_mode {
+    TC_SCENE_MODE_INACTIVE = 0,  // Loaded but not updated
+    TC_SCENE_MODE_STOP = 1,      // Editor update (gizmos, selection)
+    TC_SCENE_MODE_PLAY = 2       // Full simulation
+} tc_scene_mode;
+
+// ============================================================================
 // Scene Creation / Destruction
 // ============================================================================
 
@@ -176,6 +186,14 @@ TC_API tc_scene_component_type* tc_scene_get_all_component_types(
     tc_scene* s,
     size_t* out_count
 );
+
+// ============================================================================
+// Scene Mode
+// ============================================================================
+
+// Get/set scene mode (INACTIVE, STOP, PLAY)
+TC_API tc_scene_mode tc_scene_get_mode(const tc_scene* s);
+TC_API void tc_scene_set_mode(tc_scene* s, tc_scene_mode mode);
 
 // ============================================================================
 // Collision World

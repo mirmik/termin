@@ -444,6 +444,8 @@ nanobind_add_module(_native
     termin/platform/sdl_render_surface.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp
+    termin/scene/scene_manager.cpp
+    termin/scene/scene_manager_bindings.cpp
     # tc_viewport_bindings.cpp moved to _viewport_native module
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp

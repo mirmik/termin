@@ -85,6 +85,9 @@ struct tc_scene {
     // Owned entity pool
     tc_entity_pool* pool;
 
+    // Scene mode (INACTIVE, STOP, PLAY)
+    tc_scene_mode mode;
+
     // Component lifecycle lists
     ComponentList pending_start;
     ComponentList update_list;
@@ -121,6 +124,7 @@ tc_scene* tc_scene_new(void) {
 
     s->pool = tc_entity_pool_create(512);
     tc_entity_pool_set_scene(s->pool, s);
+    s->mode = TC_SCENE_MODE_INACTIVE;
     list_init(&s->pending_start);
     list_init(&s->update_list);
     list_init(&s->fixed_update_list);
@@ -827,4 +831,26 @@ void tc_scene_set_shadow_settings(tc_scene* s, int method, float softness, float
     s->lighting.shadow_method = method;
     s->lighting.shadow_softness = softness;
     s->lighting.shadow_bias = bias;
+}
+
+// ============================================================================
+// Scene Mode
+// ============================================================================
+
+tc_scene_mode tc_scene_get_mode(const tc_scene* s) {
+    return s ? s->mode : TC_SCENE_MODE_INACTIVE;
+}
+
+void tc_scene_set_mode(tc_scene* s, tc_scene_mode mode) {
+    if (!s) return;
+
+    tc_scene_mode old_mode = s->mode;
+    s->mode = mode;
+
+    // Notify components when transitioning to/from INACTIVE
+    if (mode == TC_SCENE_MODE_INACTIVE && old_mode != TC_SCENE_MODE_INACTIVE) {
+        tc_scene_notify_scene_inactive(s);
+    } else if (mode != TC_SCENE_MODE_INACTIVE && old_mode == TC_SCENE_MODE_INACTIVE) {
+        tc_scene_notify_scene_active(s);
+    }
 }

@@ -12,6 +12,7 @@ extern "C" {
 #include "bindings/render/tc_display_bindings.hpp"
 #include "bindings/input/simple_display_input_manager_bindings.hpp"
 #include "scene_bindings.hpp"
+#include "scene/scene_manager_bindings.hpp"
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -74,6 +75,7 @@ NB_MODULE(_native, m) {
     termin::bind_sdl(platform_module);
     termin::bind_tc_scene(scene_module);
     termin::bind_tc_scene_lighting(scene_module);
+    termin::bind_scene_manager(scene_module);
     // TcViewport is now in separate _viewport_native module
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);

@@ -356,6 +356,14 @@ void bind_tc_scene(nb::module_& m) {
         // Scene name
         .def_prop_rw("name", &TcScene::name, &TcScene::set_name)
 
+        // Scene mode
+        .def("get_mode", [](TcScene& self) {
+            return tc_scene_get_mode(self._s);
+        }, "Get scene mode (INACTIVE, STOP, PLAY)")
+        .def("set_mode", [](TcScene& self, tc_scene_mode mode) {
+            tc_scene_set_mode(self._s, mode);
+        }, nb::arg("mode"), "Set scene mode")
+
         // Python wrapper for callbacks
         .def("set_py_wrapper", &TcScene::set_py_wrapper, nb::arg("wrapper"),
              "Set Python Scene wrapper for component auto-registration")

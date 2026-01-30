@@ -180,20 +180,17 @@ class Scene:
         """Get skybox cube mesh (TcMesh). Creates lazily if needed."""
         mesh = self._tc_scene.get_skybox_mesh()
         if not mesh.is_valid:
-            mesh = self._skybox._ensure_skybox_mesh()
+            mesh = self._skybox.ensure_mesh()
             self._tc_scene.set_skybox_mesh(mesh)
         return mesh
 
     def skybox_material(self) -> "Material | None":
         """Get skybox material based on current skybox_type. Creates lazily if needed."""
-        if self.skybox_type == "none":
+        skybox_type = self.skybox_type
+        if skybox_type == "none":
             return None
-        # SkyboxManager creates material based on skybox_type stored in tc_scene
-        # We need to sync type to SkyboxManager for material creation
-        self._skybox.skybox_type = self.skybox_type
-        material = self._skybox.material
+        material = self._skybox.get_material(skybox_type)
         if material is not None:
-            # Material is now alias for TcMaterial, pass directly
             self._tc_scene.set_skybox_material(material)
         return material
 

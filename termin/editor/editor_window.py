@@ -104,8 +104,8 @@ class EditorWindow(QMainWindow):
         # Создаём начальную сцену (или используем переданную)
         self._editor_scene_name = "untitled"
         if initial_scene is not None:
-            self.scene_manager._scenes[self._editor_scene_name] = initial_scene
-            self.scene_manager._modes[self._editor_scene_name] = SceneMode.STOP
+            self.scene_manager.add_existing_scene(self._editor_scene_name, initial_scene)
+            self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         else:
             self.scene_manager.create_scene(self._editor_scene_name)
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
