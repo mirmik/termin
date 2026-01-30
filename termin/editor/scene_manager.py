@@ -115,8 +115,11 @@ class SceneManager(CxxSceneManager):
 
         # Game loop timer (auto-starts when GAME scenes exist)
         self._game_timer = QTimer()
+        self._game_timer.setSingleShot(True)
         self._game_timer.timeout.connect(self._game_loop_tick)
         self._elapsed_timer = QElapsedTimer()
+        self._timer_running = False
+        self._target_frame_ms = 16  # ~60 FPS
 
         # Editor state callbacks
         self._get_editor_camera_data = get_editor_camera_data
@@ -635,11 +638,13 @@ class SceneManager(CxxSceneManager):
             return
         has_game_scenes = self.has_play_scenes()
 
-        if has_game_scenes and not self._game_timer.isActive():
+        if has_game_scenes and not self._timer_running:
             self._elapsed_timer.start()
-            self._game_timer.start(16)  # ~60 FPS
-        elif not has_game_scenes and self._game_timer.isActive():
+            self._timer_running = True
+            self._game_timer.start(self._target_frame_ms)
+        elif not has_game_scenes and self._timer_running:
             self._game_timer.stop()
+            self._timer_running = False
 
     def _game_loop_tick(self) -> None:
         """Called by game timer to update GAME scenes."""
@@ -647,6 +652,13 @@ class SceneManager(CxxSceneManager):
         dt = elapsed_ms / 1000.0
 
         self.tick(dt)
+
+        # Schedule next tick if still running
+        if self._timer_running:
+            tick_duration_ms = self._elapsed_timer.elapsed()
+            remaining_ms = self._target_frame_ms - tick_duration_ms
+            next_interval = max(0, remaining_ms)
+            self._game_timer.start(next_interval)
 
     # request_render is inherited from CxxSceneManager
 
