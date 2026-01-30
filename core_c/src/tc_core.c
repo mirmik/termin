@@ -208,6 +208,7 @@ extern void tc_component_registry_cleanup(void);
 extern void tc_pass_registry_cleanup(void);
 extern void tc_inspect_cleanup(void);
 extern void tc_kind_cleanup(void);
+extern void tc_viewport_pool_shutdown(void);
 
 void tc_init(void) {
     if (g_initialized) return;
@@ -227,6 +228,7 @@ void tc_shutdown(void) {
     if (!g_initialized) return;
 
     // Cleanup in reverse order of dependency
+    tc_viewport_pool_shutdown();
     tc_scene_registry_shutdown();
     tc_material_shutdown();
     tc_animation_shutdown();

@@ -199,10 +199,10 @@ class RenderingManager:
 
     def get_display_for_viewport(self, viewport: "Viewport") -> Optional["Display"]:
         """Find display that contains this viewport."""
-        target_ptr = viewport._tc_viewport_ptr()
+        target_handle = viewport.handle
         for display in self._displays:
             for vp in display.viewports:
-                if vp._tc_viewport_ptr() == target_ptr:
+                if vp.handle == target_handle:
                     return display
         return None
 
@@ -229,7 +229,7 @@ class RenderingManager:
 
         # Clean up viewport states for viewports on this display
         for viewport in display.viewports:
-            viewport_id = viewport._tc_viewport_ptr()
+            viewport_id = viewport.handle
             state = self._viewport_states.pop(viewport_id, None)
             if state is not None:
                 state.clear_all()
@@ -603,11 +603,11 @@ class RenderingManager:
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get render state for a viewport."""
-        return self._viewport_states.get(viewport._tc_viewport_ptr())
+        return self._viewport_states.get(viewport.handle)
 
     def remove_viewport_state(self, viewport: "Viewport") -> None:
         """Remove render state for a viewport (call after clearing FBOs)."""
-        state = self._viewport_states.pop(viewport._tc_viewport_ptr(), None)
+        state = self._viewport_states.pop(viewport.handle, None)
         if state is not None:
             state.clear_all()
 
@@ -615,7 +615,7 @@ class RenderingManager:
         """Get or create render state for a viewport."""
         from termin.visualization.render.state import ViewportRenderState
 
-        viewport_id = viewport._tc_viewport_ptr()
+        viewport_id = viewport.handle
         if viewport_id not in self._viewport_states:
             self._viewport_states[viewport_id] = ViewportRenderState()
         return self._viewport_states[viewport_id]

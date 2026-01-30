@@ -11,6 +11,7 @@
 
 extern "C" {
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 }
 
 namespace termin {
@@ -36,7 +37,7 @@ struct ExecuteContext {
     Rect4i rect;
     TcSceneRef scene;
     CameraComponent* camera = nullptr;
-    tc_viewport* viewport = nullptr;
+    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
     std::vector<Light> lights;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
 };

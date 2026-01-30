@@ -3,6 +3,7 @@
 #include "render/tc_simple_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 #include "tc_scene.h"
 #include "tc_component.h"
 #include "tc_entity_pool.h"
@@ -46,11 +47,11 @@ static bool dispatch_key_cb(tc_component* c, void* user_data) {
 
 // Dispatch to input handlers in viewport's internal_entities subtree
 static void dispatch_to_internal_entities(
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     tc_component_iter_fn callback,
     void* user_data
 ) {
-    if (!viewport) return;
+    if (!tc_viewport_handle_valid(viewport)) return;
     if (!tc_viewport_has_internal_entities(viewport)) return;
 
     tc_entity_pool* pool = tc_viewport_get_internal_entities_pool(viewport);
@@ -77,7 +78,7 @@ static void simple_on_mouse_button(tc_input_manager* m, int button, int action, 
     }
 
     // Find viewport under cursor
-    tc_viewport* viewport = tc_display_viewport_at_screen(sim->display, (float)x, (float)y);
+    tc_viewport_handle viewport = tc_display_viewport_at_screen(sim->display, (float)x, (float)y);
 
     // Track active viewport for drag operations
     if (action == TC_INPUT_PRESS) {
@@ -85,14 +86,14 @@ static void simple_on_mouse_button(tc_input_manager* m, int button, int action, 
     }
     if (action == TC_INPUT_RELEASE) {
         sim->has_cursor = false;
-        if (viewport == NULL) {
+        if (!tc_viewport_handle_valid(viewport)) {
             viewport = sim->active_viewport;
         }
-        sim->active_viewport = NULL;
+        sim->active_viewport = TC_VIEWPORT_HANDLE_INVALID;
     }
 
     // Dispatch to scene and internal_entities
-    if (viewport != NULL) {
+    if (tc_viewport_handle_valid(viewport)) {
         tc_mouse_button_event event;
         event.viewport = viewport;
         event.x = x;
@@ -132,13 +133,13 @@ static void simple_on_mouse_move(tc_input_manager* m, double x, double y) {
     sim->has_cursor = true;
 
     // Find viewport (prefer active for drag)
-    tc_viewport* viewport = sim->active_viewport;
-    if (viewport == NULL && sim->display) {
+    tc_viewport_handle viewport = sim->active_viewport;
+    if (!tc_viewport_handle_valid(viewport) && sim->display) {
         viewport = tc_display_viewport_at_screen(sim->display, (float)x, (float)y);
     }
 
     // Dispatch to scene and internal_entities
-    if (viewport != NULL) {
+    if (tc_viewport_handle_valid(viewport)) {
         tc_mouse_move_event event;
         event.viewport = viewport;
         event.x = x;
@@ -170,16 +171,16 @@ static void simple_on_scroll(tc_input_manager* m, double xoffset, double yoffset
     double y = sim->last_cursor_y;
 
     // Find viewport under cursor
-    tc_viewport* viewport = NULL;
+    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
     if (sim->display) {
         viewport = tc_display_viewport_at_screen(sim->display, (float)x, (float)y);
     }
-    if (viewport == NULL) {
+    if (!tc_viewport_handle_valid(viewport)) {
         viewport = sim->active_viewport;
     }
 
     // Dispatch to scene and internal_entities
-    if (viewport != NULL) {
+    if (tc_viewport_handle_valid(viewport)) {
         tc_scroll_event event;
         event.viewport = viewport;
         event.x = x;
@@ -219,13 +220,13 @@ static void simple_on_key(tc_input_manager* m, int key, int scancode, int action
     }
 
     // Find viewport
-    tc_viewport* viewport = sim->active_viewport;
-    if (viewport == NULL && sim->display) {
+    tc_viewport_handle viewport = sim->active_viewport;
+    if (!tc_viewport_handle_valid(viewport) && sim->display) {
         viewport = tc_display_get_first_viewport(sim->display);
     }
 
     // Dispatch to scene and internal_entities
-    if (viewport != NULL) {
+    if (tc_viewport_handle_valid(viewport)) {
         tc_key_event event;
         event.viewport = viewport;
         event.key = key;
@@ -288,7 +289,7 @@ tc_simple_input_manager* tc_simple_input_manager_new(tc_display* display) {
 
     // Store display
     m->display = display;
-    m->active_viewport = NULL;
+    m->active_viewport = TC_VIEWPORT_HANDLE_INVALID;
     m->last_cursor_x = 0.0;
     m->last_cursor_y = 0.0;
     m->has_cursor = false;

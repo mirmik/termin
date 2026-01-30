@@ -6,6 +6,7 @@
 #include "render/tc_display.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 
 namespace nb = nanobind;
 
@@ -96,55 +97,59 @@ void bind_tc_display(nb::module_& m) {
         return std::make_tuple(w, h);
     }, nb::arg("ptr"));
 
-    // Viewport management
-    m.def("_display_add_viewport", [](uintptr_t display_ptr, uintptr_t viewport_ptr) {
+    // Viewport management - using viewport handle tuples (index, generation)
+    m.def("_display_add_viewport", [](uintptr_t display_ptr, std::tuple<uint32_t, uint32_t> vh) {
         tc_display* d = reinterpret_cast<tc_display*>(display_ptr);
-        tc_viewport* vp = reinterpret_cast<tc_viewport*>(viewport_ptr);
-        if (d && vp) {
-            tc_display_add_viewport(d, vp);
+        if (d) {
+            tc_viewport_handle handle;
+            handle.index = std::get<0>(vh);
+            handle.generation = std::get<1>(vh);
+            tc_display_add_viewport(d, handle);
         }
-    }, nb::arg("display_ptr"), nb::arg("viewport_ptr"));
+    }, nb::arg("display_ptr"), nb::arg("viewport_handle"));
 
-    m.def("_display_remove_viewport", [](uintptr_t display_ptr, uintptr_t viewport_ptr) {
+    m.def("_display_remove_viewport", [](uintptr_t display_ptr, std::tuple<uint32_t, uint32_t> vh) {
         tc_display* d = reinterpret_cast<tc_display*>(display_ptr);
-        tc_viewport* vp = reinterpret_cast<tc_viewport*>(viewport_ptr);
-        if (d && vp) {
-            tc_display_remove_viewport(d, vp);
+        if (d) {
+            tc_viewport_handle handle;
+            handle.index = std::get<0>(vh);
+            handle.generation = std::get<1>(vh);
+            tc_display_remove_viewport(d, handle);
         }
-    }, nb::arg("display_ptr"), nb::arg("viewport_ptr"));
+    }, nb::arg("display_ptr"), nb::arg("viewport_handle"));
 
     m.def("_display_get_viewport_count", [](uintptr_t ptr) -> size_t {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
         return d ? tc_display_get_viewport_count(d) : 0;
     }, nb::arg("ptr"));
 
-    m.def("_display_get_first_viewport", [](uintptr_t ptr) -> uintptr_t {
+    m.def("_display_get_first_viewport", [](uintptr_t ptr) -> std::tuple<uint32_t, uint32_t> {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return 0;
-        tc_viewport* vp = tc_display_get_first_viewport(d);
-        return reinterpret_cast<uintptr_t>(vp);
+        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
+        tc_viewport_handle vh = tc_display_get_first_viewport(d);
+        return std::make_tuple(vh.index, vh.generation);
     }, nb::arg("ptr"));
 
-    m.def("_display_get_viewport_at_index", [](uintptr_t ptr, size_t index) -> uintptr_t {
+    m.def("_display_get_viewport_at_index", [](uintptr_t ptr, size_t index) -> std::tuple<uint32_t, uint32_t> {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return 0;
-        tc_viewport* vp = tc_display_get_viewport_at_index(d, index);
-        return reinterpret_cast<uintptr_t>(vp);
+        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
+        tc_viewport_handle vh = tc_display_get_viewport_at_index(d, index);
+        return std::make_tuple(vh.index, vh.generation);
     }, nb::arg("ptr"), nb::arg("index"));
 
     // Viewport lookup by coordinates
-    m.def("_display_viewport_at", [](uintptr_t ptr, float x, float y) -> uintptr_t {
+    m.def("_display_viewport_at", [](uintptr_t ptr, float x, float y) -> std::tuple<uint32_t, uint32_t> {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return 0;
-        tc_viewport* vp = tc_display_viewport_at(d, x, y);
-        return reinterpret_cast<uintptr_t>(vp);
+        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
+        tc_viewport_handle vh = tc_display_viewport_at(d, x, y);
+        return std::make_tuple(vh.index, vh.generation);
     }, nb::arg("ptr"), nb::arg("x"), nb::arg("y"));
 
-    m.def("_display_viewport_at_screen", [](uintptr_t ptr, float px, float py) -> uintptr_t {
+    m.def("_display_viewport_at_screen", [](uintptr_t ptr, float px, float py) -> std::tuple<uint32_t, uint32_t> {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return 0;
-        tc_viewport* vp = tc_display_viewport_at_screen(d, px, py);
-        return reinterpret_cast<uintptr_t>(vp);
+        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
+        tc_viewport_handle vh = tc_display_viewport_at_screen(d, px, py);
+        return std::make_tuple(vh.index, vh.generation);
     }, nb::arg("ptr"), nb::arg("px"), nb::arg("py"));
 
     // Update all pixel rects

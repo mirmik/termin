@@ -6,6 +6,11 @@
 
 namespace termin {
 
+// Helper to create a unique key from viewport handle
+static inline uintptr_t viewport_key(tc_viewport_handle h) {
+    return (static_cast<uintptr_t>(h.index) << 32) | h.generation;
+}
+
 // Register component type
 REGISTER_COMPONENT(OrbitCameraController, CxxComponent);
 
@@ -216,7 +221,7 @@ void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
     }
 
     // Get viewport pointer as key for per-viewport state
-    uintptr_t vp_key = reinterpret_cast<uintptr_t>(e->viewport);
+    uintptr_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
 
     // Middle mouse = orbit
@@ -238,7 +243,7 @@ void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
     if (_prevent_moving) return;
     if (!_camera || !e) return;
 
-    uintptr_t vp_key = reinterpret_cast<uintptr_t>(e->viewport);
+    uintptr_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
 
     if (!state.has_last) {

@@ -257,20 +257,23 @@ struct Camera {
 // Input Events - cross-platform event structures
 // ============================================================================
 
-// Forward declare tc_viewport for events
-typedef struct tc_viewport tc_viewport;
+// Viewport handle - generational index for safe viewport references
+struct tc_viewport_handle {
+    unsigned int index;
+    unsigned int generation;
+};
 
 /**
  * Mouse button press/release event.
  *
- * viewport: указатель на tc_viewport
+ * viewport: handle to viewport (index + generation)
  * x, y: позиция курсора в координатах viewport
  * button: кнопка мыши (0=left, 1=right, 2=middle)
  * action: действие (0=release, 1=press, 2=repeat)
  * mods: модификаторы (Shift=1, Ctrl=2, Alt=4, Super=8)
  */
 struct MouseButtonEvent {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     double x;
     double y;
     int button;
@@ -278,37 +281,37 @@ struct MouseButtonEvent {
     int mods;
 
     MouseButtonEvent();
-    MouseButtonEvent(tc_viewport* viewport, double x, double y, int button, int action, int mods = 0);
+    MouseButtonEvent(tc_viewport_handle viewport, double x, double y, int button, int action, int mods = 0);
 };
 
 /**
  * Mouse movement event.
  *
- * viewport: указатель на tc_viewport
+ * viewport: handle to viewport (index + generation)
  * x, y: текущая позиция курсора
  * dx, dy: дельта перемещения
  */
 struct MouseMoveEvent {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     double x;
     double y;
     double dx;
     double dy;
 
     MouseMoveEvent();
-    MouseMoveEvent(tc_viewport* viewport, double x, double y, double dx, double dy);
+    MouseMoveEvent(tc_viewport_handle viewport, double x, double y, double dx, double dy);
 };
 
 /**
  * Mouse scroll event.
  *
- * viewport: указатель на tc_viewport
+ * viewport: handle to viewport (index + generation)
  * x, y: позиция курсора
  * xoffset, yoffset: смещение прокрутки (положительный yoffset = вверх/zoom in)
  * mods: модификаторы
  */
 struct ScrollEvent {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     double x;
     double y;
     double xoffset;
@@ -316,27 +319,27 @@ struct ScrollEvent {
     int mods;
 
     ScrollEvent();
-    ScrollEvent(tc_viewport* viewport, double x, double y, double xoffset, double yoffset, int mods = 0);
+    ScrollEvent(tc_viewport_handle viewport, double x, double y, double xoffset, double yoffset, int mods = 0);
 };
 
 /**
  * Keyboard event.
  *
- * viewport: указатель на tc_viewport
+ * viewport: handle to viewport (index + generation)
  * key: виртуальный код клавиши
  * scancode: платформо-специфичный scancode
  * action: действие (0=release, 1=press, 2=repeat)
  * mods: модификаторы
  */
 struct KeyEvent {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     int key;
     int scancode;
     int action;
     int mods;
 
     KeyEvent();
-    KeyEvent(tc_viewport* viewport, int key, int scancode, int action, int mods = 0);
+    KeyEvent(tc_viewport_handle viewport, int key, int scancode, int action, int mods = 0);
 };
 
 // Mouse button constants - match C++ enum class MouseButton

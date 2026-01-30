@@ -5,6 +5,7 @@
 #include "tc_types.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -24,9 +25,9 @@ typedef struct tc_display {
     // Underlying render surface
     tc_render_surface* surface;
 
-    // Linked list of viewports
-    tc_viewport* first_viewport;
-    tc_viewport* last_viewport;
+    // Linked list of viewports (using handles)
+    tc_viewport_handle first_viewport;
+    tc_viewport_handle last_viewport;
     size_t viewport_count;
 } tc_display;
 
@@ -70,20 +71,20 @@ TC_API void tc_display_swap_buffers(tc_display* display);
 // Viewport Management
 // ============================================================================
 
-// Add viewport to display (increments viewport refcount)
-TC_API void tc_display_add_viewport(tc_display* display, tc_viewport* viewport);
+// Add viewport to display
+TC_API void tc_display_add_viewport(tc_display* display, tc_viewport_handle viewport);
 
-// Remove viewport from display (decrements viewport refcount)
-TC_API void tc_display_remove_viewport(tc_display* display, tc_viewport* viewport);
+// Remove viewport from display
+TC_API void tc_display_remove_viewport(tc_display* display, tc_viewport_handle viewport);
 
 // Get viewport count
 TC_API size_t tc_display_get_viewport_count(const tc_display* display);
 
 // Get first viewport (for iteration)
-TC_API tc_viewport* tc_display_get_first_viewport(const tc_display* display);
+TC_API tc_viewport_handle tc_display_get_first_viewport(const tc_display* display);
 
 // Get viewport by index (O(n) - use iteration for performance)
-TC_API tc_viewport* tc_display_get_viewport_at_index(const tc_display* display, size_t index);
+TC_API tc_viewport_handle tc_display_get_viewport_at_index(const tc_display* display, size_t index);
 
 // ============================================================================
 // Viewport Lookup by Coordinates
@@ -91,15 +92,15 @@ TC_API tc_viewport* tc_display_get_viewport_at_index(const tc_display* display, 
 
 // Find viewport at normalized coordinates (0..1), origin bottom-left (OpenGL convention)
 // For screen coordinates (origin top-left), use tc_display_viewport_at_screen
-// Returns viewport with highest depth if multiple overlap, NULL if none
-TC_API tc_viewport* tc_display_viewport_at(
+// Returns viewport with highest depth if multiple overlap, invalid handle if none
+TC_API tc_viewport_handle tc_display_viewport_at(
     const tc_display* display,
     float x,
     float y
 );
 
 // Find viewport at screen coordinates (pixels, origin top-left)
-TC_API tc_viewport* tc_display_viewport_at_screen(
+TC_API tc_viewport_handle tc_display_viewport_at_screen(
     const tc_display* display,
     float px,
     float py

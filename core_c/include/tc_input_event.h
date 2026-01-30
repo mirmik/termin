@@ -3,14 +3,12 @@
 #define TC_INPUT_EVENT_H
 
 #include "tc_types.h"
+#include "render/tc_viewport_pool.h"
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Forward declarations
-typedef struct tc_viewport tc_viewport;
 
 // ============================================================================
 // Input Event Structures
@@ -18,7 +16,7 @@ typedef struct tc_viewport tc_viewport;
 
 // Mouse button event
 typedef struct tc_mouse_button_event {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     double x;
     double y;
     int button;     // 0=left, 1=right, 2=middle
@@ -28,7 +26,7 @@ typedef struct tc_mouse_button_event {
 
 // Mouse move event
 typedef struct tc_mouse_move_event {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     double x;
     double y;
     double dx;
@@ -37,7 +35,7 @@ typedef struct tc_mouse_move_event {
 
 // Scroll event
 typedef struct tc_scroll_event {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     double x;
     double y;
     double xoffset;
@@ -47,7 +45,7 @@ typedef struct tc_scroll_event {
 
 // Key event
 typedef struct tc_key_event {
-    tc_viewport* viewport;
+    tc_viewport_handle viewport;
     int key;
     int scancode;
     int action;     // 0=release, 1=press, 2=repeat
@@ -60,7 +58,7 @@ typedef struct tc_key_event {
 
 static inline void tc_mouse_button_event_init(
     tc_mouse_button_event* e,
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     double x, double y,
     int button, int action, int mods
 ) {
@@ -74,7 +72,7 @@ static inline void tc_mouse_button_event_init(
 
 static inline void tc_mouse_move_event_init(
     tc_mouse_move_event* e,
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     double x, double y,
     double dx, double dy
 ) {
@@ -87,7 +85,7 @@ static inline void tc_mouse_move_event_init(
 
 static inline void tc_scroll_event_init(
     tc_scroll_event* e,
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     double x, double y,
     double xoffset, double yoffset,
     int mods
@@ -102,7 +100,7 @@ static inline void tc_scroll_event_init(
 
 static inline void tc_key_event_init(
     tc_key_event* e,
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     int key, int scancode,
     int action, int mods
 ) {

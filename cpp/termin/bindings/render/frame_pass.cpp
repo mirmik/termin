@@ -291,9 +291,10 @@ void bind_frame_pass(nb::module_& m) {
             }
             if (kwargs.contains("viewport")) {
                 nb::object v = nb::borrow<nb::object>(kwargs["viewport"]);
-                if (!v.is_none() && nb::hasattr(v, "_tc_viewport")) {
-                    uintptr_t ptr = nb::cast<uintptr_t>(v.attr("_tc_viewport"));
-                    self->viewport = reinterpret_cast<tc_viewport*>(ptr);
+                if (!v.is_none() && nb::hasattr(v, "_viewport_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(v.attr("_viewport_handle")());
+                    self->viewport.index = std::get<0>(h);
+                    self->viewport.generation = std::get<1>(h);
                 }
             }
             if (kwargs.contains("lights")) {
@@ -351,7 +352,7 @@ void bind_frame_pass(nb::module_& m) {
                 return TcViewportRef(ctx.viewport);
             },
             [](ExecuteContext& ctx, TcViewportRef& vp) {
-                ctx.viewport = vp.ptr();
+                ctx.viewport = vp.handle();
             })
         .def_rw("lights", &ExecuteContext::lights)
         .def_rw("layer_mask", &ExecuteContext::layer_mask);

@@ -13,6 +13,7 @@
 extern "C" {
 #include "tc_input_event.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 }
 
 namespace termin {
@@ -23,12 +24,12 @@ namespace termin {
  */
 struct MouseButtonEvent : public tc_mouse_button_event {
     MouseButtonEvent() {
-        viewport = nullptr;
+        viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
         button = 0; action = 0; mods = 0;
     }
 
-    MouseButtonEvent(tc_viewport* vp, double x_, double y_, int btn, int act, int m = 0) {
+    MouseButtonEvent(tc_viewport_handle vp, double x_, double y_, int btn, int act, int m = 0) {
         viewport = vp;
         x = x_; y = y_;
         button = btn; action = act; mods = m;
@@ -48,12 +49,12 @@ struct MouseButtonEvent : public tc_mouse_button_event {
  */
 struct MouseMoveEvent : public tc_mouse_move_event {
     MouseMoveEvent() {
-        viewport = nullptr;
+        viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
         dx = 0; dy = 0;
     }
 
-    MouseMoveEvent(tc_viewport* vp, double x_, double y_, double dx_, double dy_) {
+    MouseMoveEvent(tc_viewport_handle vp, double x_, double y_, double dx_, double dy_) {
         viewport = vp;
         x = x_; y = y_;
         dx = dx_; dy = dy_;
@@ -73,12 +74,12 @@ struct MouseMoveEvent : public tc_mouse_move_event {
  */
 struct ScrollEvent : public tc_scroll_event {
     ScrollEvent() {
-        viewport = nullptr;
+        viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
         xoffset = 0; yoffset = 0; mods = 0;
     }
 
-    ScrollEvent(tc_viewport* vp, double x_, double y_, double xoff, double yoff, int m = 0) {
+    ScrollEvent(tc_viewport_handle vp, double x_, double y_, double xoff, double yoff, int m = 0) {
         viewport = vp;
         x = x_; y = y_;
         xoffset = xoff; yoffset = yoff; mods = m;
@@ -98,12 +99,12 @@ struct ScrollEvent : public tc_scroll_event {
  */
 struct KeyEvent : public tc_key_event {
     KeyEvent() {
-        viewport = nullptr;
+        viewport = TC_VIEWPORT_HANDLE_INVALID;
         key = 0; scancode = 0;
         action = 0; mods = 0;
     }
 
-    KeyEvent(tc_viewport* vp, int k, int sc, int act, int m = 0) {
+    KeyEvent(tc_viewport_handle vp, int k, int sc, int act, int m = 0) {
         viewport = vp;
         key = k; scancode = sc;
         action = act; mods = m;

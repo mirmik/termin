@@ -36,8 +36,8 @@ tc_display* tc_display_new(const char* name, tc_render_surface* surface) {
     display->uuid = NULL;
     display->editor_only = false;
     display->surface = surface;
-    display->first_viewport = NULL;
-    display->last_viewport = NULL;
+    display->first_viewport = TC_VIEWPORT_HANDLE_INVALID;
+    display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
     display->viewport_count = 0;
 
     // Subscribe to surface resize
@@ -56,13 +56,13 @@ void tc_display_free(tc_display* display) {
         tc_render_surface_set_on_resize(display->surface, NULL, NULL);
     }
 
-    // Release all viewports
-    tc_viewport* vp = display->first_viewport;
-    while (vp) {
-        tc_viewport* next = vp->display_next;
-        vp->display_prev = NULL;
-        vp->display_next = NULL;
-        tc_viewport_release(vp);
+    // Free all viewports in the linked list
+    tc_viewport_handle vp = display->first_viewport;
+    while (tc_viewport_handle_valid(vp)) {
+        tc_viewport_handle next = tc_viewport_get_display_next(vp);
+        tc_viewport_set_display_prev(vp, TC_VIEWPORT_HANDLE_INVALID);
+        tc_viewport_set_display_next(vp, TC_VIEWPORT_HANDLE_INVALID);
+        tc_viewport_free(vp);
         vp = next;
     }
 
@@ -150,30 +150,34 @@ void tc_display_swap_buffers(tc_display* display) {
 // Viewport Management
 // ============================================================================
 
-void tc_display_add_viewport(tc_display* display, tc_viewport* viewport) {
-    if (!display || !viewport) return;
+void tc_display_add_viewport(tc_display* display, tc_viewport_handle viewport) {
+    if (!display || !tc_viewport_handle_valid(viewport)) return;
 
-    // Check if already in this display
-    if (viewport->display_prev || viewport->display_next || display->first_viewport == viewport) {
+    // Check if already in a display (has prev or next links)
+    tc_viewport_handle prev = tc_viewport_get_display_prev(viewport);
+    tc_viewport_handle next = tc_viewport_get_display_next(viewport);
+    if (tc_viewport_handle_valid(prev) || tc_viewport_handle_valid(next)) {
         tc_log(TC_LOG_WARN, "[tc_display_add_viewport] viewport '%s' already in a display",
-               viewport->name ? viewport->name : "(null)");
+               tc_viewport_get_name(viewport) ? tc_viewport_get_name(viewport) : "(null)");
+        return;
+    }
+
+    // Check if it's already the first viewport
+    if (tc_viewport_handle_eq(display->first_viewport, viewport)) {
         return;
     }
 
     // Add to end of linked list
-    viewport->display_prev = display->last_viewport;
-    viewport->display_next = NULL;
+    tc_viewport_set_display_prev(viewport, display->last_viewport);
+    tc_viewport_set_display_next(viewport, TC_VIEWPORT_HANDLE_INVALID);
 
-    if (display->last_viewport) {
-        display->last_viewport->display_next = viewport;
+    if (tc_viewport_handle_valid(display->last_viewport)) {
+        tc_viewport_set_display_next(display->last_viewport, viewport);
     } else {
         display->first_viewport = viewport;
     }
     display->last_viewport = viewport;
     display->viewport_count++;
-
-    // Increment refcount
-    tc_viewport_add_ref(viewport);
 
     // Update pixel rect
     int width, height;
@@ -181,16 +185,18 @@ void tc_display_add_viewport(tc_display* display, tc_viewport* viewport) {
     tc_viewport_update_pixel_rect(viewport, width, height);
 }
 
-void tc_display_remove_viewport(tc_display* display, tc_viewport* viewport) {
-    if (!display || !viewport) return;
+void tc_display_remove_viewport(tc_display* display, tc_viewport_handle viewport) {
+    if (!display || !tc_viewport_handle_valid(viewport)) return;
 
     // Check if viewport is in this display
     bool found = false;
-    for (tc_viewport* vp = display->first_viewport; vp; vp = vp->display_next) {
-        if (vp == viewport) {
+    tc_viewport_handle vp = display->first_viewport;
+    while (tc_viewport_handle_valid(vp)) {
+        if (tc_viewport_handle_eq(vp, viewport)) {
             found = true;
             break;
         }
+        vp = tc_viewport_get_display_next(vp);
     }
 
     if (!found) {
@@ -198,40 +204,40 @@ void tc_display_remove_viewport(tc_display* display, tc_viewport* viewport) {
     }
 
     // Unlink from list
-    if (viewport->display_prev) {
-        viewport->display_prev->display_next = viewport->display_next;
+    tc_viewport_handle prev = tc_viewport_get_display_prev(viewport);
+    tc_viewport_handle next = tc_viewport_get_display_next(viewport);
+
+    if (tc_viewport_handle_valid(prev)) {
+        tc_viewport_set_display_next(prev, next);
     } else {
-        display->first_viewport = viewport->display_next;
+        display->first_viewport = next;
     }
 
-    if (viewport->display_next) {
-        viewport->display_next->display_prev = viewport->display_prev;
+    if (tc_viewport_handle_valid(next)) {
+        tc_viewport_set_display_prev(next, prev);
     } else {
-        display->last_viewport = viewport->display_prev;
+        display->last_viewport = prev;
     }
 
-    viewport->display_prev = NULL;
-    viewport->display_next = NULL;
+    tc_viewport_set_display_prev(viewport, TC_VIEWPORT_HANDLE_INVALID);
+    tc_viewport_set_display_next(viewport, TC_VIEWPORT_HANDLE_INVALID);
     display->viewport_count--;
-
-    // Decrement refcount
-    tc_viewport_release(viewport);
 }
 
 size_t tc_display_get_viewport_count(const tc_display* display) {
     return display ? display->viewport_count : 0;
 }
 
-tc_viewport* tc_display_get_first_viewport(const tc_display* display) {
-    return display ? display->first_viewport : NULL;
+tc_viewport_handle tc_display_get_first_viewport(const tc_display* display) {
+    return display ? display->first_viewport : TC_VIEWPORT_HANDLE_INVALID;
 }
 
-tc_viewport* tc_display_get_viewport_at_index(const tc_display* display, size_t index) {
-    if (!display || index >= display->viewport_count) return NULL;
+tc_viewport_handle tc_display_get_viewport_at_index(const tc_display* display, size_t index) {
+    if (!display || index >= display->viewport_count) return TC_VIEWPORT_HANDLE_INVALID;
 
-    tc_viewport* vp = display->first_viewport;
-    for (size_t i = 0; i < index && vp; i++) {
-        vp = vp->display_next;
+    tc_viewport_handle vp = display->first_viewport;
+    for (size_t i = 0; i < index && tc_viewport_handle_valid(vp); i++) {
+        vp = tc_viewport_get_display_next(vp);
     }
     return vp;
 }
@@ -240,38 +246,43 @@ tc_viewport* tc_display_get_viewport_at_index(const tc_display* display, size_t 
 // Viewport Lookup by Coordinates
 // ============================================================================
 
-tc_viewport* tc_display_viewport_at(const tc_display* display, float x, float y) {
-    if (!display) return NULL;
+tc_viewport_handle tc_display_viewport_at(const tc_display* display, float x, float y) {
+    if (!display) return TC_VIEWPORT_HANDLE_INVALID;
 
-    tc_viewport* best = NULL;
+    tc_viewport_handle best = TC_VIEWPORT_HANDLE_INVALID;
     int best_depth = -1;
 
-    for (tc_viewport* vp = display->first_viewport; vp; vp = vp->display_next) {
-        if (!vp->enabled) continue;
+    tc_viewport_handle vp = display->first_viewport;
+    while (tc_viewport_handle_valid(vp)) {
+        if (!tc_viewport_get_enabled(vp)) {
+            vp = tc_viewport_get_display_next(vp);
+            continue;
+        }
 
-        float vx = vp->rect[0];
-        float vy = vp->rect[1];
-        float vw = vp->rect[2];
-        float vh = vp->rect[3];
+        float vx, vy, vw, vh;
+        tc_viewport_get_rect(vp, &vx, &vy, &vw, &vh);
 
         if (x >= vx && x <= vx + vw && y >= vy && y <= vy + vh) {
-            if (vp->depth > best_depth) {
+            int depth = tc_viewport_get_depth(vp);
+            if (depth > best_depth) {
                 best = vp;
-                best_depth = vp->depth;
+                best_depth = depth;
             }
         }
+
+        vp = tc_viewport_get_display_next(vp);
     }
 
     return best;
 }
 
-tc_viewport* tc_display_viewport_at_screen(const tc_display* display, float px, float py) {
-    if (!display) return NULL;
+tc_viewport_handle tc_display_viewport_at_screen(const tc_display* display, float px, float py) {
+    if (!display) return TC_VIEWPORT_HANDLE_INVALID;
 
     int width, height;
     tc_display_get_size(display, &width, &height);
 
-    if (width <= 0 || height <= 0) return NULL;
+    if (width <= 0 || height <= 0) return TC_VIEWPORT_HANDLE_INVALID;
 
     // Convert screen coordinates (origin top-left) to normalized (origin bottom-left)
     float nx = px / (float)width;
@@ -290,8 +301,10 @@ void tc_display_update_all_pixel_rects(tc_display* display) {
     int width, height;
     tc_display_get_size(display, &width, &height);
 
-    for (tc_viewport* vp = display->first_viewport; vp; vp = vp->display_next) {
+    tc_viewport_handle vp = display->first_viewport;
+    while (tc_viewport_handle_valid(vp)) {
         tc_viewport_update_pixel_rect(vp, width, height);
+        vp = tc_viewport_get_display_next(vp);
     }
 }
 

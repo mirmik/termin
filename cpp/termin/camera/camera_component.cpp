@@ -128,7 +128,7 @@ Vec3 CameraComponent::get_position() const {
 void CameraComponent::add_viewport(const TcViewport& vp) {
     if (!vp.is_valid()) return;
     for (auto& v : viewports_) {
-        if (v.ptr_ == vp.ptr_) return;
+        if (tc_viewport_handle_eq(v.handle_, vp.handle_)) return;
     }
     viewports_.push_back(vp);
 }
@@ -136,14 +136,14 @@ void CameraComponent::add_viewport(const TcViewport& vp) {
 void CameraComponent::remove_viewport(const TcViewport& vp) {
     viewports_.erase(
         std::remove_if(viewports_.begin(), viewports_.end(),
-            [&vp](const TcViewport& v) { return v.ptr_ == vp.ptr_; }),
+            [&vp](const TcViewport& v) { return tc_viewport_handle_eq(v.handle_, vp.handle_); }),
         viewports_.end()
     );
 }
 
 bool CameraComponent::has_viewport(const TcViewport& vp) const {
     for (const auto& v : viewports_) {
-        if (v.ptr_ == vp.ptr_) return true;
+        if (tc_viewport_handle_eq(v.handle_, vp.handle_)) return true;
     }
     return false;
 }

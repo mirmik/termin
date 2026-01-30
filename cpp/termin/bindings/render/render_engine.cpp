@@ -27,8 +27,15 @@ void bind_render_engine(nb::module_& m) {
                                    int height,
                                    TcSceneRef scene_ref,
                                    CameraComponent* camera,
-                                   TcViewport* viewport,
+                                   nb::object viewport_obj,
                                    uint64_t layer_mask) {
+            // Convert viewport from Python object to handle
+            tc_viewport_handle vh = TC_VIEWPORT_HANDLE_INVALID;
+            if (!viewport_obj.is_none()) {
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(viewport_obj.attr("_viewport_handle")());
+                vh.index = std::get<0>(h);
+                vh.generation = std::get<1>(h);
+            }
             // Use overload that builds lights from scene automatically
             self.render_view_to_fbo(
                 &pipeline,
@@ -37,7 +44,7 @@ void bind_render_engine(nb::module_& m) {
                 height,
                 scene_ref.handle(),
                 camera,
-                viewport ? viewport->ptr_ : nullptr,
+                vh,
                 layer_mask
             );
         },

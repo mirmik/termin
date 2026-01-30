@@ -6,6 +6,7 @@
 #include "tc_types.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_display.h"
+#include "render/tc_viewport_pool.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -28,7 +29,7 @@ struct tc_simple_input_manager {
     tc_display* display;
 
     // Active viewport for drag operations
-    tc_viewport* active_viewport;
+    tc_viewport_handle active_viewport;
 
     // Cursor tracking
     double last_cursor_x;

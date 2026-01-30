@@ -8,6 +8,7 @@
 extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 #include "render/tc_render_surface.h"
 }
 
@@ -27,7 +28,7 @@ public:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
     std::vector<tc_display*> displays_;
-    std::unordered_map<uintptr_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
+    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
 
     static PullRenderingManager* s_instance;
 
@@ -49,9 +50,9 @@ public:
     const std::vector<tc_display*>& displays() const { return displays_; }
 
     // Viewport state management
-    ViewportRenderState* get_viewport_state(tc_viewport* viewport);
-    ViewportRenderState* get_or_create_viewport_state(tc_viewport* viewport);
-    void remove_viewport_state(tc_viewport* viewport);
+    ViewportRenderState* get_viewport_state(tc_viewport_handle viewport);
+    ViewportRenderState* get_or_create_viewport_state(tc_viewport_handle viewport);
+    void remove_viewport_state(tc_viewport_handle viewport);
 
     // Pull-rendering API
     // Renders all viewports of this display to offscreen FBOs and blits to display.
@@ -62,7 +63,7 @@ public:
     void shutdown();
 
 private:
-    void render_viewport_offscreen(tc_viewport* viewport);
+    void render_viewport_offscreen(tc_viewport_handle viewport);
     std::vector<Light> collect_lights(tc_scene_handle scene);
 };
 

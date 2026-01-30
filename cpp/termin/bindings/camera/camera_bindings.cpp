@@ -69,28 +69,27 @@ void bind_camera_component(nb::module_& m) {
         .def("get_position", &CameraComponent::get_position)
 
         // Viewport management - use nb::object to avoid cross-module type issues
+        // Expects viewport._viewport_handle() which returns (index, generation) tuple
         .def("add_viewport", [](CameraComponent& c, nb::object viewport) {
-            // Get TcViewport from Python object
-            uintptr_t ptr = nb::cast<uintptr_t>(viewport.attr("_tc_viewport_ptr")());
-            tc_viewport* vp = reinterpret_cast<tc_viewport*>(ptr);
-            if (vp) {
-                c.add_viewport(TcViewport(vp));
-            }
+            auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(viewport.attr("_viewport_handle")());
+            tc_viewport_handle handle;
+            handle.index = std::get<0>(h);
+            handle.generation = std::get<1>(h);
+            c.add_viewport(TcViewport(handle));
         }, nb::arg("viewport"))
         .def("remove_viewport", [](CameraComponent& c, nb::object viewport) {
-            uintptr_t ptr = nb::cast<uintptr_t>(viewport.attr("_tc_viewport_ptr")());
-            tc_viewport* vp = reinterpret_cast<tc_viewport*>(ptr);
-            if (vp) {
-                c.remove_viewport(TcViewport(vp));
-            }
+            auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(viewport.attr("_viewport_handle")());
+            tc_viewport_handle handle;
+            handle.index = std::get<0>(h);
+            handle.generation = std::get<1>(h);
+            c.remove_viewport(TcViewport(handle));
         }, nb::arg("viewport"))
         .def("has_viewport", [](CameraComponent& c, nb::object viewport) {
-            uintptr_t ptr = nb::cast<uintptr_t>(viewport.attr("_tc_viewport_ptr")());
-            tc_viewport* vp = reinterpret_cast<tc_viewport*>(ptr);
-            if (vp) {
-                return c.has_viewport(TcViewport(vp));
-            }
-            return false;
+            auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(viewport.attr("_viewport_handle")());
+            tc_viewport_handle handle;
+            handle.index = std::get<0>(h);
+            handle.generation = std::get<1>(h);
+            return c.has_viewport(TcViewport(handle));
         }, nb::arg("viewport"))
         .def_prop_ro("viewport_count", &CameraComponent::viewport_count)
         .def("clear_viewports", &CameraComponent::clear_viewports)
@@ -101,14 +100,14 @@ void bind_camera_component(nb::module_& m) {
                 return nb::none();
             }
             TcViewport vp = c.viewport_at(0);
-            if (!vp.is_valid() || !vp.ptr_) {
+            if (!vp.is_valid()) {
                 return nb::none();
             }
-            // Create Viewport via _from_ptr to avoid cross-module type issues
+            // Create Viewport via _from_handle to avoid cross-module type issues
             nb::module_ vp_native = nb::module_::import_("termin.viewport._viewport_native");
             nb::object VpClass = vp_native.attr("Viewport");
-            uintptr_t ptr = reinterpret_cast<uintptr_t>(vp.ptr_);
-            return VpClass.attr("_from_ptr")(ptr);
+            auto h = std::make_tuple(vp.handle_.index, vp.handle_.generation);
+            return VpClass.attr("_from_handle")(h);
         })
 
         // Screen point to ray

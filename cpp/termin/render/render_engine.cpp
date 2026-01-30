@@ -7,6 +7,7 @@
 extern "C" {
 #include "render/tc_frame_graph.h"
 #include "render/tc_pass.h"
+#include "render/tc_viewport_pool.h"
 #include "tc_scene.h"
 #include "tc_component.h"
 #include "tc_project_settings.h"
@@ -80,7 +81,7 @@ void RenderEngine::render_to_screen(
         height,
         scene,
         camera,
-        nullptr,  // no viewport
+        TC_VIEWPORT_HANDLE_INVALID,  // no viewport
         empty_lights,
         0xFFFFFFFFFFFFFFFFULL
     );
@@ -93,7 +94,7 @@ void RenderEngine::render_view_to_fbo(
     int height,
     tc_scene_handle scene,
     CameraComponent* camera,
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     uint64_t layer_mask
 ) {
     // Build lights from scene and delegate to full version
@@ -143,7 +144,7 @@ void RenderEngine::render_view_to_fbo(
     int height,
     tc_scene_handle scene,
     CameraComponent* camera,
-    tc_viewport* viewport,
+    tc_viewport_handle viewport,
     const std::vector<Light>& lights,
     uint64_t layer_mask
 ) {
@@ -714,7 +715,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
         ctx.writes_fbos = std::move(pass_writes);
         ctx.rect = vp_ctx.rect;
         ctx.scene = TcSceneRef(scene);
-        ctx.viewport = nullptr;  // TODO: add tc_viewport to ViewportContext if needed
+        ctx.viewport = TC_VIEWPORT_HANDLE_INVALID;  // TODO: add tc_viewport to ViewportContext if needed
         ctx.camera = vp_ctx.camera;
         ctx.lights = lights;
         ctx.layer_mask = vp_ctx.layer_mask;

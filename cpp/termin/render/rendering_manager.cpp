@@ -4,11 +4,17 @@
 
 extern "C" {
 #include "tc_log.h"
+#include "render/tc_viewport_pool.h"
 }
 
 #include <algorithm>
 
 namespace termin {
+
+// Helper to make a unique key from viewport handle
+static inline uint64_t viewport_key(tc_viewport_handle h) {
+    return (static_cast<uint64_t>(h.index) << 32) | h.generation;
+}
 
 // ============================================================================
 // Singleton
@@ -84,10 +90,10 @@ void RenderingManager::remove_display(tc_display* display) {
     if (it == displays_.end()) return;
 
     // Clean up viewport states for viewports on this display
-    tc_viewport* vp = tc_display_get_first_viewport(display);
-    while (vp) {
+    tc_viewport_handle vp = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(vp)) {
         remove_viewport_state(vp);
-        vp = vp->display_next;
+        vp = tc_viewport_get_display_next(vp);
     }
 
     displays_.erase(it);
@@ -109,16 +115,16 @@ tc_display* RenderingManager::get_display_by_name(const std::string& name) const
 // Viewport State Management
 // ============================================================================
 
-ViewportRenderState* RenderingManager::get_viewport_state(tc_viewport* viewport) {
-    if (!viewport) return nullptr;
-    uintptr_t key = reinterpret_cast<uintptr_t>(viewport);
+ViewportRenderState* RenderingManager::get_viewport_state(tc_viewport_handle viewport) {
+    if (!tc_viewport_handle_valid(viewport)) return nullptr;
+    uint64_t key = viewport_key(viewport);
     auto it = viewport_states_.find(key);
     return (it != viewport_states_.end()) ? it->second.get() : nullptr;
 }
 
-ViewportRenderState* RenderingManager::get_or_create_viewport_state(tc_viewport* viewport) {
-    if (!viewport) return nullptr;
-    uintptr_t key = reinterpret_cast<uintptr_t>(viewport);
+ViewportRenderState* RenderingManager::get_or_create_viewport_state(tc_viewport_handle viewport) {
+    if (!tc_viewport_handle_valid(viewport)) return nullptr;
+    uint64_t key = viewport_key(viewport);
     auto& state = viewport_states_[key];
     if (!state) {
         state = std::make_unique<ViewportRenderState>();
@@ -126,9 +132,9 @@ ViewportRenderState* RenderingManager::get_or_create_viewport_state(tc_viewport*
     return state.get();
 }
 
-void RenderingManager::remove_viewport_state(tc_viewport* viewport) {
-    if (!viewport) return;
-    uintptr_t key = reinterpret_cast<uintptr_t>(viewport);
+void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
+    if (!tc_viewport_handle_valid(viewport)) return;
+    uint64_t key = viewport_key(viewport);
     auto it = viewport_states_.find(key);
     if (it != viewport_states_.end()) {
         it->second->clear_all();
@@ -167,8 +173,8 @@ void RenderingManager::render_all_offscreen() {
             tc_render_surface_make_current(surface);
         }
 
-        tc_viewport* vp = tc_display_get_first_viewport(display);
-        while (vp) {
+        tc_viewport_handle vp = tc_display_get_first_viewport(display);
+        while (tc_viewport_handle_valid(vp)) {
             if (tc_viewport_get_enabled(vp)) {
                 // Skip viewports managed by scene pipeline
                 const char* managed_by = tc_viewport_get_managed_by(vp);
@@ -176,13 +182,13 @@ void RenderingManager::render_all_offscreen() {
                     render_viewport_offscreen(vp);
                 }
             }
-            vp = vp->display_next;
+            vp = tc_viewport_get_display_next(vp);
         }
     }
 }
 
-void RenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
-    if (!viewport || !graphics_) return;
+void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
+    if (!tc_viewport_handle_valid(viewport) || !graphics_) return;
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
@@ -255,20 +261,20 @@ void RenderingManager::present_display(tc_display* display) {
     graphics_->clear_color_depth({0.1f, 0.1f, 0.1f, 1.0f});
 
     // Collect viewports sorted by depth
-    std::vector<tc_viewport*> viewports;
-    tc_viewport* vp = tc_display_get_first_viewport(display);
-    while (vp) {
+    std::vector<tc_viewport_handle> viewports;
+    tc_viewport_handle vp = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(vp)) {
         if (tc_viewport_get_enabled(vp)) {
             viewports.push_back(vp);
         }
-        vp = vp->display_next;
+        vp = tc_viewport_get_display_next(vp);
     }
-    std::sort(viewports.begin(), viewports.end(), [](tc_viewport* a, tc_viewport* b) {
+    std::sort(viewports.begin(), viewports.end(), [](tc_viewport_handle a, tc_viewport_handle b) {
         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
     });
 
     // Blit viewports
-    for (tc_viewport* viewport : viewports) {
+    for (tc_viewport_handle viewport : viewports) {
         ViewportRenderState* state = get_viewport_state(viewport);
         if (!state || !state->has_output_fbo()) continue;
 

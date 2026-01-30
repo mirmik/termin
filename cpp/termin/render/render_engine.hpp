@@ -14,6 +14,7 @@
 
 extern "C" {
 #include "render/tc_frame_graph.h"
+#include "render/tc_viewport_pool.h"
 #include "tc_scene.h"
 }
 
@@ -55,7 +56,7 @@ public:
         int height,
         tc_scene_handle scene,
         CameraComponent* camera,
-        tc_viewport* viewport,
+        tc_viewport_handle viewport,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
@@ -67,7 +68,7 @@ public:
         int height,
         tc_scene_handle scene,
         CameraComponent* camera,
-        tc_viewport* viewport,
+        tc_viewport_handle viewport,
         const std::vector<Light>& lights,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
     );

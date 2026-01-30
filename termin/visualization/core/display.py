@@ -155,9 +155,10 @@ class Display:
         count = _display_get_viewport_count(self._tc_display_ptr)
         result = []
         for i in range(count):
-            vp_ptr = _display_get_viewport_at_index(self._tc_display_ptr, i)
-            if vp_ptr:
-                result.append(Viewport._from_ptr(vp_ptr))
+            vh = _display_get_viewport_at_index(self._tc_display_ptr, i)
+            # vh is (index, generation) tuple, invalid if index == 0xFFFFFFFF
+            if vh[0] != 0xFFFFFFFF:
+                result.append(Viewport._from_handle(vh))
         return result
 
     def get_size(self) -> tuple[int, int]:
@@ -174,8 +175,8 @@ class Display:
         Returns:
             Added viewport.
         """
-        vp_ptr = viewport._tc_viewport_ptr()
-        _display_add_viewport(self._tc_display_ptr, vp_ptr)
+        vh = viewport._viewport_handle()
+        _display_add_viewport(self._tc_display_ptr, vh)
         self._update_viewport_pixel_rect(viewport)
         return viewport
 
@@ -186,8 +187,8 @@ class Display:
         Args:
             viewport: Viewport to remove.
         """
-        vp_ptr = viewport._tc_viewport_ptr()
-        _display_remove_viewport(self._tc_display_ptr, vp_ptr)
+        vh = viewport._viewport_handle()
+        _display_remove_viewport(self._tc_display_ptr, vh)
         # Remove viewport from camera's list
         if viewport.camera is not None:
             viewport.camera.remove_viewport(viewport)
@@ -258,12 +259,13 @@ class Display:
         # Transform y: screen coordinates (top-down) -> OpenGL (bottom-up)
         ny = 1.0 - y
 
-        vp_ptr = _display_viewport_at(self._tc_display_ptr, x, ny)
-        if vp_ptr == 0:
+        vh = _display_viewport_at(self._tc_display_ptr, x, ny)
+        # vh is (index, generation) tuple, invalid if index == 0xFFFFFFFF
+        if vh[0] == 0xFFFFFFFF:
             return None
 
         from termin.viewport import Viewport
-        return Viewport._from_ptr(vp_ptr)
+        return Viewport._from_handle(vh)
 
     def viewport_at_pixels(self, px: float, py: float) -> "Viewport | None":
         """
@@ -275,12 +277,13 @@ class Display:
         Returns:
             Viewport under cursor or None.
         """
-        vp_ptr = _display_viewport_at_screen(self._tc_display_ptr, px, py)
-        if vp_ptr == 0:
+        vh = _display_viewport_at_screen(self._tc_display_ptr, px, py)
+        # vh is (index, generation) tuple, invalid if index == 0xFFFFFFFF
+        if vh[0] == 0xFFFFFFFF:
             return None
 
         from termin.viewport import Viewport
-        return Viewport._from_ptr(vp_ptr)
+        return Viewport._from_handle(vh)
 
     def viewport_rect_to_pixels(self, viewport: "Viewport") -> tuple[int, int, int, int]:
         """

@@ -3,6 +3,8 @@
 
 #include "input_events.hpp"
 #include "render/tc_display.h"
+#include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "tc_scene.h"
@@ -18,7 +20,7 @@ class SimpleDisplayInputManager {
 public:
     tc_input_manager tc_im;
     tc_display* display_ = nullptr;
-    tc_viewport* active_viewport_ = nullptr;
+    tc_viewport_handle active_viewport_ = TC_VIEWPORT_HANDLE_INVALID;
     double last_cursor_x_ = 0.0;
     double last_cursor_y_ = 0.0;
     bool has_cursor_ = false;
@@ -51,8 +53,8 @@ public:
     }
 
     // Find viewport at screen coordinates
-    tc_viewport* viewport_at_screen(double x, double y) const {
-        if (!display_) return nullptr;
+    tc_viewport_handle viewport_at_screen(double x, double y) const {
+        if (!display_) return TC_VIEWPORT_HANDLE_INVALID;
         return tc_display_viewport_at_screen(display_, (float)x, (float)y);
     }
 
@@ -61,7 +63,7 @@ public:
         double x, y;
         get_cursor_pos(&x, &y);
 
-        tc_viewport* viewport = viewport_at_screen(x, y);
+        tc_viewport_handle viewport = viewport_at_screen(x, y);
 
         // Track active viewport for drag operations
         if (action == TC_INPUT_PRESS) {
@@ -69,14 +71,14 @@ public:
         }
         if (action == TC_INPUT_RELEASE) {
             has_cursor_ = false;
-            if (viewport == nullptr) {
+            if (!tc_viewport_handle_valid(viewport)) {
                 viewport = active_viewport_;
             }
-            active_viewport_ = nullptr;
+            active_viewport_ = TC_VIEWPORT_HANDLE_INVALID;
         }
 
         // Dispatch to scene
-        if (viewport != nullptr) {
+        if (tc_viewport_handle_valid(viewport)) {
             tc_scene_handle scene = tc_viewport_get_scene(viewport);
             if (tc_scene_handle_valid(scene)) {
                 MouseButtonEvent event(viewport, x, y, button, action, mods);
@@ -95,13 +97,13 @@ public:
         last_cursor_y_ = y;
         has_cursor_ = true;
 
-        tc_viewport* viewport = active_viewport_;
-        if (viewport == nullptr) {
+        tc_viewport_handle viewport = active_viewport_;
+        if (!tc_viewport_handle_valid(viewport)) {
             viewport = viewport_at_screen(x, y);
         }
 
         // Dispatch to scene
-        if (viewport != nullptr) {
+        if (tc_viewport_handle_valid(viewport)) {
             tc_scene_handle scene = tc_viewport_get_scene(viewport);
             if (tc_scene_handle_valid(scene)) {
                 MouseMoveEvent event(viewport, x, y, dx, dy);
@@ -114,13 +116,13 @@ public:
         double x = last_cursor_x_;
         double y = last_cursor_y_;
 
-        tc_viewport* viewport = viewport_at_screen(x, y);
-        if (viewport == nullptr) {
+        tc_viewport_handle viewport = viewport_at_screen(x, y);
+        if (!tc_viewport_handle_valid(viewport)) {
             viewport = active_viewport_;
         }
 
         // Dispatch to scene
-        if (viewport != nullptr) {
+        if (tc_viewport_handle_valid(viewport)) {
             tc_scene_handle scene = tc_viewport_get_scene(viewport);
             if (tc_scene_handle_valid(scene)) {
                 ScrollEvent event(viewport, x, y, xoffset, yoffset, mods);
@@ -137,13 +139,13 @@ public:
             }
         }
 
-        tc_viewport* viewport = active_viewport_;
-        if (viewport == nullptr && display_) {
+        tc_viewport_handle viewport = active_viewport_;
+        if (!tc_viewport_handle_valid(viewport) && display_) {
             viewport = tc_display_get_first_viewport(display_);
         }
 
         // Dispatch to scene
-        if (viewport != nullptr) {
+        if (tc_viewport_handle_valid(viewport)) {
             tc_scene_handle scene = tc_viewport_get_scene(viewport);
             if (tc_scene_handle_valid(scene)) {
                 KeyEvent event(viewport, key, scancode, action, mods);

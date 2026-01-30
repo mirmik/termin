@@ -24,21 +24,21 @@ void bind_input_events(nb::module_& m) {
         .def(nb::init<>())
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
                            int button, int action, int mods) {
-            new (self) MouseButtonEvent(viewport.get(), x, y, button, action, mods);
+            new (self) MouseButtonEvent(viewport.handle(), x, y, button, action, mods);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0)
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
                            MouseButton button_enum, Action action_enum, int mods) {
-            new (self) MouseButtonEvent(viewport.get(), x, y,
+            new (self) MouseButtonEvent(viewport.handle(), x, y,
                 static_cast<int>(button_enum), static_cast<int>(action_enum), mods);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0)
         .def_prop_rw("viewport",
             [](const MouseButtonEvent& self) {
-                return TcViewport::from_ptr(self.viewport);
+                return TcViewport::from_handle(self.viewport);
             },
             [](MouseButtonEvent& self, const TcViewport& vp) {
-                self.viewport = vp.get();
+                self.viewport = vp.handle();
             })
         .def_rw("x", &MouseButtonEvent::x)
         .def_rw("y", &MouseButtonEvent::y)
@@ -58,8 +58,9 @@ void bind_input_events(nb::module_& m) {
             })
         .def_rw("mods", &MouseButtonEvent::mods)
         .def("__repr__", [](const MouseButtonEvent& e) {
-            return "MouseButtonEvent(viewport=" + 
-                   (e.viewport ? std::string(tc_viewport_get_name(e.viewport)) : "None") +
+            const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
+            return "MouseButtonEvent(viewport=" +
+                   (name ? std::string(name) : "None") +
                    ", x=" + std::to_string(e.x) + ", y=" + std::to_string(e.y) +
                    ", button=" + std::to_string(e.button) +
                    ", action=" + std::to_string(e.action) +
@@ -76,23 +77,24 @@ void bind_input_events(nb::module_& m) {
         .def(nb::init<>())
         .def("__init__", [](MouseMoveEvent* self, const TcViewport& viewport, double x, double y,
                            double dx, double dy) {
-            new (self) MouseMoveEvent(viewport.get(), x, y, dx, dy);
+            new (self) MouseMoveEvent(viewport.handle(), x, y, dx, dy);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("dx"), nb::arg("dy"))
         .def_prop_rw("viewport",
             [](const MouseMoveEvent& self) {
-                return TcViewport::from_ptr(self.viewport);
+                return TcViewport::from_handle(self.viewport);
             },
             [](MouseMoveEvent& self, const TcViewport& vp) {
-                self.viewport = vp.get();
+                self.viewport = vp.handle();
             })
         .def_rw("x", &MouseMoveEvent::x)
         .def_rw("y", &MouseMoveEvent::y)
         .def_rw("dx", &MouseMoveEvent::dx)
         .def_rw("dy", &MouseMoveEvent::dy)
         .def("__repr__", [](const MouseMoveEvent& e) {
-            return "MouseMoveEvent(viewport=" + 
-                   (e.viewport ? std::string(tc_viewport_get_name(e.viewport)) : "None") +
+            const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
+            return "MouseMoveEvent(viewport=" +
+                   (name ? std::string(name) : "None") +
                    ", x=" + std::to_string(e.x) + ", y=" + std::to_string(e.y) +
                    ", dx=" + std::to_string(e.dx) + ", dy=" + std::to_string(e.dy) + ")";
         });
@@ -108,15 +110,15 @@ void bind_input_events(nb::module_& m) {
         .def(nb::init<>())
         .def("__init__", [](ScrollEvent* self, const TcViewport& viewport, double x, double y,
                            double xoffset, double yoffset, int mods) {
-            new (self) ScrollEvent(viewport.get(), x, y, xoffset, yoffset, mods);
+            new (self) ScrollEvent(viewport.handle(), x, y, xoffset, yoffset, mods);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("xoffset"), nb::arg("yoffset"), nb::arg("mods") = 0)
         .def_prop_rw("viewport",
             [](const ScrollEvent& self) {
-                return TcViewport::from_ptr(self.viewport);
+                return TcViewport::from_handle(self.viewport);
             },
             [](ScrollEvent& self, const TcViewport& vp) {
-                self.viewport = vp.get();
+                self.viewport = vp.handle();
             })
         .def_rw("x", &ScrollEvent::x)
         .def_rw("y", &ScrollEvent::y)
@@ -124,8 +126,9 @@ void bind_input_events(nb::module_& m) {
         .def_rw("yoffset", &ScrollEvent::yoffset)
         .def_rw("mods", &ScrollEvent::mods)
         .def("__repr__", [](const ScrollEvent& e) {
-            return "ScrollEvent(viewport=" + 
-                   (e.viewport ? std::string(tc_viewport_get_name(e.viewport)) : "None") +
+            const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
+            return "ScrollEvent(viewport=" +
+                   (name ? std::string(name) : "None") +
                    ", x=" + std::to_string(e.x) + ", y=" + std::to_string(e.y) +
                    ", xoffset=" + std::to_string(e.xoffset) +
                    ", yoffset=" + std::to_string(e.yoffset) +
@@ -144,20 +147,20 @@ void bind_input_events(nb::module_& m) {
         .def(nb::init<>())
         .def("__init__", [](KeyEvent* self, const TcViewport& viewport, int key, int scancode,
                            int action, int mods) {
-            new (self) KeyEvent(viewport.get(), key, scancode, action, mods);
+            new (self) KeyEvent(viewport.handle(), key, scancode, action, mods);
         }, nb::arg("viewport"), nb::arg("key"), nb::arg("scancode"),
            nb::arg("action"), nb::arg("mods") = 0)
         .def("__init__", [](KeyEvent* self, const TcViewport& viewport, int key, int scancode,
                            Action action, int mods) {
-            new (self) KeyEvent(viewport.get(), key, scancode, static_cast<int>(action), mods);
+            new (self) KeyEvent(viewport.handle(), key, scancode, static_cast<int>(action), mods);
         }, nb::arg("viewport"), nb::arg("key"), nb::arg("scancode"),
            nb::arg("action"), nb::arg("mods") = 0)
         .def_prop_rw("viewport",
             [](const KeyEvent& self) {
-                return TcViewport::from_ptr(self.viewport);
+                return TcViewport::from_handle(self.viewport);
             },
             [](KeyEvent& self, const TcViewport& vp) {
-                self.viewport = vp.get();
+                self.viewport = vp.handle();
             })
         .def_rw("key", &KeyEvent::key)
         .def_rw("scancode", &KeyEvent::scancode)
@@ -170,8 +173,9 @@ void bind_input_events(nb::module_& m) {
             })
         .def_rw("mods", &KeyEvent::mods)
         .def("__repr__", [](const KeyEvent& e) {
-            return "KeyEvent(viewport=" + 
-                   (e.viewport ? std::string(tc_viewport_get_name(e.viewport)) : "None") +
+            const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
+            return "KeyEvent(viewport=" +
+                   (name ? std::string(name) : "None") +
                    ", key=" + std::to_string(e.key) +
                    ", scancode=" + std::to_string(e.scancode) +
                    ", action=" + std::to_string(e.action) +

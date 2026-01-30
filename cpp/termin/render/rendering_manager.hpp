@@ -21,6 +21,7 @@
 extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 #include "render/tc_render_surface.h"
 }
 
@@ -86,13 +87,13 @@ public:
     // ========================================================================
 
     // Get render state for viewport (returns nullptr if not found)
-    ViewportRenderState* get_viewport_state(tc_viewport* viewport);
+    ViewportRenderState* get_viewport_state(tc_viewport_handle viewport);
 
     // Get or create render state for viewport
-    ViewportRenderState* get_or_create_viewport_state(tc_viewport* viewport);
+    ViewportRenderState* get_or_create_viewport_state(tc_viewport_handle viewport);
 
     // Remove viewport state (call when viewport is destroyed)
-    void remove_viewport_state(tc_viewport* viewport);
+    void remove_viewport_state(tc_viewport_handle viewport);
 
     // ========================================================================
     // Rendering - Single Display (Simple Path)
@@ -128,7 +129,7 @@ public:
 
 private:
     // Render single viewport to its output FBO
-    void render_viewport_offscreen(tc_viewport* viewport);
+    void render_viewport_offscreen(tc_viewport_handle viewport);
 
     // Blit viewports to single display
     void present_display(tc_display* display);
@@ -140,8 +141,8 @@ private:
     // Managed displays
     std::vector<tc_display*> displays_;
 
-    // Viewport render states (key = viewport pointer)
-    std::unordered_map<uintptr_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
+    // Viewport render states (key = viewport handle as uint64)
+    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
 
     // Graphics backend (not owned)
     GraphicsBackend* graphics_ = nullptr;
