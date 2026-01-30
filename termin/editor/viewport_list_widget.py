@@ -179,25 +179,23 @@ class ViewportListWidget(QWidget):
         sys.stdout.flush()
         sys.stderr.flush()
 
-        # Clear references in items before Qt deletes them
-        # This prevents accessing stale viewport/display objects during destruction
+        # Clear references in items before discarding the model
+        # This prevents accessing stale viewport/display objects during garbage collection
         log.info(f"[ViewportListWidget] clearing {self._model.rowCount()} rows")
-        for row in range(self._model.rowCount()):
-            display_item = self._model.item(row)
-            if isinstance(display_item, DisplayItem):
-                for child_row in range(display_item.rowCount()):
-                    child_item = display_item.child(child_row)
-                    if isinstance(child_item, ViewportItem):
-                        child_item.viewport = None  # type: ignore
-                    elif isinstance(child_item, EntityItem):
-                        child_item.entity = None  # type: ignore
-                display_item.display = None  # type: ignore
-        log.info("[ViewportListWidget] refs cleared, calling model.clear()")
+        self._clear_item_refs_recursive(self._model.invisibleRootItem())
+        log.info("[ViewportListWidget] refs cleared, creating new model")
         sys.stdout.flush()
         sys.stderr.flush()
 
-        self._model.clear()
-        log.info("[ViewportListWidget] model cleared")
+        # Create a fresh model instead of clearing - avoids Qt's internal cleanup issues
+        old_model = self._model
+        self._model = QStandardItemModel()
+        self._tree.setModel(self._model)
+        # Reconnect selection signal to new model's selection model
+        self._tree.selectionModel().currentChanged.connect(self._on_current_changed)
+        # Let old model be garbage collected
+        del old_model
+        log.info("[ViewportListWidget] new model set")
 
         for display in self._displays:
             log.info(f"[ViewportListWidget] processing display {display}")
@@ -244,16 +242,32 @@ class ViewportListWidget(QWidget):
         self._tree.expandAll()
         log.info("[ViewportListWidget] _rebuild_tree done")
 
+    def _clear_item_refs_recursive(self, item: QStandardItem) -> None:
+        """Recursively clear native object references in all items."""
+        for row in range(item.rowCount()):
+            child = item.child(row)
+            if child is not None:
+                self._clear_item_refs_recursive(child)
+                if isinstance(child, DisplayItem):
+                    child.display = None  # type: ignore
+                elif isinstance(child, ViewportItem):
+                    child.viewport = None  # type: ignore
+                elif isinstance(child, EntityItem):
+                    child.entity = None  # type: ignore
+
     def _add_entity_hierarchy(self, parent_item: QStandardItem, entity: "Entity") -> None:
         """Recursively add entity and its children to the tree."""
+        if not entity.valid():
+            return
         entity_name = entity.name or f"Entity ({entity.uuid[:8]})"
         entity_item = EntityItem(entity, entity_name)
         parent_item.appendRow(entity_item)
 
         # Add children
         for child_tf in entity.transform.children:
-            if child_tf.entity is not None:
-                self._add_entity_hierarchy(entity_item, child_tf.entity)
+            child_entity = child_tf.entity
+            if child_entity is not None and child_entity.valid():
+                self._add_entity_hierarchy(entity_item, child_entity)
 
     def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
         """Handle selection change in tree."""
@@ -268,7 +282,12 @@ class ViewportListWidget(QWidget):
 
         if isinstance(item, EntityItem):
             self._add_viewport_btn.setEnabled(False)
-            self.entity_selected.emit(item.entity)
+            # Check if entity is still valid before emitting
+            entity = item.entity
+            if entity is not None and entity.valid():
+                self.entity_selected.emit(entity)
+            else:
+                self.entity_selected.emit(None)
             # Don't emit other signals - entity takes priority
         elif isinstance(item, ViewportItem):
             self._add_viewport_btn.setEnabled(True)
