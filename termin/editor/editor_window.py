@@ -1073,8 +1073,11 @@ class EditorWindow(QMainWindow):
                 surface.request_update()
 
     def _after_render(self) -> None:
-        for editor_features in self._editor_features.values():
-            editor_features.after_render()
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+        for display_id, editor_features in self._editor_features.items():
+            with profiler.section(f"EditorFeatures[{display_id}].after_render"):
+                editor_features.after_render()
 
     def _on_before_scene_close(self, scene) -> None:
         """Called before a scene is destroyed. Removes viewports referencing this scene."""

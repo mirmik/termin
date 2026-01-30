@@ -269,19 +269,29 @@ class EditorViewportFeatures:
 
         Should be called by EditorWindow after RenderingController.render_all_displays().
         """
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         if self._pending_pick_press is not None:
-            self._process_pending_pick_press(self._pending_pick_press)
+            with profiler.section("pick_press"):
+                self._process_pending_pick_press(self._pending_pick_press)
         if self._pending_pick_release is not None:
-            self._process_pending_pick_release(self._pending_pick_release)
+            with profiler.section("pick_release"):
+                self._process_pending_pick_release(self._pending_pick_release)
         if self._pending_hover is not None:
-            self._process_pending_hover(self._pending_hover)
+            with profiler.section("hover"):
+                self._process_pending_hover(self._pending_hover)
 
         if self._framegraph_debugger is not None and self._framegraph_debugger.isVisible():
-            self._framegraph_debugger.debugger_request_update()
+            with profiler.section("framegraph_debugger"):
+                self._framegraph_debugger.debugger_request_update()
 
     # ---------- Hover / Selection / Gizmo ----------
 
     def _process_pending_hover(self, pending_hover) -> None:
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         x, y, viewport = pending_hover
         self._pending_hover = None
 
@@ -291,11 +301,13 @@ class EditorViewportFeatures:
 
         # Update gizmo hover state (raycast-based)
         if not self._gizmo_manager.is_dragging and viewport is not None:
-            ray = viewport.screen_point_to_ray(x, y)
-            if ray is not None:
-                self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
+            with profiler.section("gizmo_raycast"):
+                ray = viewport.screen_point_to_ray(x, y)
+                if ray is not None:
+                    self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
 
-        ent = self.pick_entity_at(x, y, viewport)
+        with profiler.section("pick_entity_at"):
+            ent = self.pick_entity_at(x, y, viewport)
         if ent is not None and not ent.selectable:
             ent = None
 

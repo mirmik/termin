@@ -287,7 +287,10 @@ class EditorDisplayInputManager:
         if fb is None:
             return None
 
-        r, g, b, a = self._graphics.read_pixel(fb, read_x, read_y)
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+        with profiler.section("read_pixel"):
+            r, g, b, a = self._graphics.read_pixel(fb, read_x, read_y)
         # Return framebuffer back to window
         window_fb = surface.get_framebuffer()
         self._graphics.bind_framebuffer(window_fb)
