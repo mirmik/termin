@@ -35,12 +35,10 @@ class ActionServerComponent(PythonComponent):
 
     def start(self) -> None:
         ActionServerComponent._instance = self
-        log.info("[ActionServerComponent] Started")
 
     def on_destroy(self) -> None:
         if ActionServerComponent._instance is self:
             ActionServerComponent._instance = None
-        log.info("[ActionServerComponent] Destroyed")
 
     @property
     def current_action(self) -> ActionComponent | None:

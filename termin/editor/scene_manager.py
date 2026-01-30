@@ -166,12 +166,12 @@ class SceneManager:
 
     # --- Scene Factory ---
 
-    def _create_new_scene(self) -> "Scene":
+    def _create_new_scene(self, name: str = "") -> "Scene":
         """Create a new empty scene."""
         if self._scene_factory is not None:
             return self._scene_factory()
         from termin.visualization.core.scene import Scene
-        return Scene()
+        return Scene(name=name)
 
     # --- Scene Lifecycle ---
 
@@ -191,7 +191,7 @@ class SceneManager:
         if name in self._scenes:
             raise ValueError(f"Scene '{name}' already exists")
 
-        scene = self._create_new_scene()
+        scene = self._create_new_scene(name)
         self._scenes[name] = scene
         self._modes[name] = SceneMode.INACTIVE
         self._paths[name] = None
@@ -222,7 +222,7 @@ class SceneManager:
 
         # Serialize and deserialize to create deep copy
         scene_data = source.serialize()
-        dest = self._create_new_scene()
+        dest = self._create_new_scene(dest_name)
         dest.load_from_data(scene_data, context=None, update_settings=True)
 
         # Copy runtime state (not serialized)
@@ -257,10 +257,9 @@ class SceneManager:
             json_str = f.read()
         data = json.loads(json_str)
 
-        scene = self._create_new_scene()
-
         # Set scene name BEFORE loading data (components need it for cache)
-        scene.name = os.path.splitext(os.path.basename(path))[0]
+        scene_file_name = os.path.splitext(os.path.basename(path))[0]
+        scene = self._create_new_scene(scene_file_name)
 
         # Support both new format "scene" and old "scenes"
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])

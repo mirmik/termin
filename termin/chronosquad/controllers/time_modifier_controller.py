@@ -47,13 +47,11 @@ class TimeModifierController(PythonComponent):
 
         if self._time_effect_pass is not None:
             self._time_effect_pass.before_draw = self._before_draw
-            log.info("[TimeModifierController] Found MaterialPass for TimeModifier effect")
         else:
             log.warning("[TimeModifierController] MaterialPass for TimeModifier effect not found")
 
         if self._nav_mesh_pass is not None:
             self._nav_mesh_pass.before_draw = self._before_draw_nav_mesh
-            log.info("[TimeModifierController] Found MaterialPass for NavMeshPost effect")
         else:
             log.warning("[TimeModifierController] MaterialPass for NavMeshPost effect not found")
 
@@ -80,8 +78,6 @@ class TimeModifierController(PythonComponent):
         self._fov_camera = fov_camera_entity.get_component_by_type("CameraComponent")
         if self._fov_camera is None:
             log.warning("[TimeModifierController] CameraComponent not found on FOVCamera")
-        else:
-            log.info("[TimeModifierController] Found FOVCamera")
 
     def _find_chronosphere_controller(self) -> None:
         """Find ChronosphereController in scene."""
@@ -94,7 +90,6 @@ class TimeModifierController(PythonComponent):
             comp = entity.get_component(ChronosphereController)
             if comp is not None:
                 self._chronosphere_controller = comp
-                log.info(f"[TimeModifierController] Found ChronosphereController on '{entity.name}'")
                 return
 
         log.warning("[TimeModifierController] ChronosphereController not found in scene")

@@ -40,18 +40,12 @@ class TimelineInitializer(PythonComponent):
         """
         from .object_controller import ObjectController
 
-        log.info(f"[TimelineInitializer] Creating timeline '{self._timeline_name}'...")
         timeline = Timeline(self._timeline_name)
 
-        object_count = 0
         for entity in scene.entities:
             objctr = entity.get_component(ObjectController)
             if objctr is not None:
-                log.info(f"[TimelineInitializer] Found ObjectController on '{entity.name}', creating object...")
                 obj = objctr.create_object()
                 timeline.add_object(obj)
-                log.info(f"[TimelineInitializer] Added object '{obj.name}' to timeline (pos={obj.local_position})")
-                object_count += 1
 
-        log.info(f"[TimelineInitializer] Timeline '{self._timeline_name}' created with {object_count} objects")
         return timeline

@@ -103,7 +103,6 @@ class ObjectController(PythonComponent):
                 ability = component.init_ability()
                 if ability is not None:
                     obj.add_ability(ability)
-                    log.info(f"[ObjectController] Added {type(ability).__name__} to '{obj.name}'")
 
     # =========================================================================
     # Phase 2: Runtime - bind to Timeline and sync
@@ -118,15 +117,11 @@ class ObjectController(PythonComponent):
         self._timeline = timeline
         if self.entity:
             self._object_name = self.entity.name
-            chrono_obj = self.chrono_object
-            if chrono_obj:
-                log.info(f"[ObjectController] '{self._object_name}' bound to chrono object (pos={chrono_obj.local_position})")
-            else:
+            if not self.chrono_object:
                 log.warning(f"[ObjectController] '{self._object_name}' bound but chrono object not found in timeline")
 
     def unbind(self) -> None:
         """Unbind from current Timeline."""
-        log.info(f"[ObjectController] '{self._object_name}' unbound")
         self._timeline = None
 
     @property

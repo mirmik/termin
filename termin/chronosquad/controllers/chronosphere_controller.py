@@ -60,10 +60,8 @@ class ChronosphereController(PythonComponent):
         if self._initialized:
             return
 
-        log.info("[ChronosphereController] Starting initialization...")
         self._initialize()
         self._initialized = True
-        log.info("[ChronosphereController] Initialization complete")
 
     def _initialize(self) -> None:
         """Find components and create original timeline."""
@@ -75,40 +73,29 @@ class ChronosphereController(PythonComponent):
             return
 
         # Find TimelineInitializer
-        log.info("[ChronosphereController] Looking for TimelineInitializer...")
         initializer = self._find_component(TimelineInitializer)
         if initializer is None:
             log.warning("[ChronosphereController] TimelineInitializer not found")
             return
-        log.info(f"[ChronosphereController] Found TimelineInitializer on entity '{initializer.entity.name}'")
 
         # Find TimelineController
-        log.info("[ChronosphereController] Looking for TimelineController...")
         self._timeline_controller = self._find_component(TimelineController)
-        if self._timeline_controller is not None:
-            log.info(f"[ChronosphereController] Found TimelineController on entity '{self._timeline_controller.entity.name}'")
-        else:
+        if self._timeline_controller is None:
             log.warning("[ChronosphereController] TimelineController not found")
 
         # Create timeline from scene
-        log.info("[ChronosphereController] Creating timeline from scene...")
         timeline = initializer.create_timeline(self.scene)
-        log.info(f"[ChronosphereController] Created timeline '{timeline.name}' with {len(timeline.objects)} objects")
 
         # Register in chronosphere
-        log.info("[ChronosphereController] Registering timeline in ChronoSphere...")
         self._chronosphere.add_timeline(timeline)
         self._chronosphere.set_current_timeline(timeline)
-        log.info(f"[ChronosphereController] Timeline '{timeline.name}' set as current")
 
         # Bind callbacks
         self._chronosphere.on_current_changed(self._on_current_timeline_changed)
 
         # Bind timeline controller
         if self._timeline_controller is not None:
-            log.info("[ChronosphereController] Binding TimelineController to timeline...")
             self._timeline_controller.bind(timeline)
-            log.info("[ChronosphereController] TimelineController bound")
 
     def _find_component(self, component_type: type):
         """Find component of given type in scene."""

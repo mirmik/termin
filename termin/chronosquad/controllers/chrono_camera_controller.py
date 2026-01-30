@@ -71,8 +71,6 @@ class ChronoCameraController(PythonComponent):
             return
         self.camera_component = self.entity.get_component(CameraComponent)
         if self.camera_component is not None:
-            from termin._native import log
-            log.info("[ChronoCameraController] Found CameraComponent")
             self._sync_from_transform()
 
     def update(self, dt: float) -> None:

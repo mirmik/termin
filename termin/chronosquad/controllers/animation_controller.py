@@ -55,8 +55,6 @@ class AnimationController(PythonComponent):
         from .object_controller import ObjectController
 
         self._object_controller = self.entity.get_component(ObjectController)
-        if self._object_controller is not None:
-            log.info(f"[AnimationController] Found ObjectController on '{self.entity.name}'")
 
     def _find_animation_player(self) -> None:
         """Find AnimationPlayer on Model child entity."""
@@ -73,7 +71,6 @@ class AnimationController(PythonComponent):
         # Get AnimationPlayer component
         self._animation_player = model.get_component(AnimationPlayer)
         if self._animation_player is not None:
-            log.info(f"[AnimationController] Found AnimationPlayer on '{self.entity.name}/Model'")
             # Disable automatic time update - we control time externally
             self._animation_player.playing = False
 
@@ -142,7 +139,6 @@ class AnimationController(PythonComponent):
         if task.animation_type != self._current_animation_type:
             self._current_animation_type = task.animation_type
             self._animation_player.set_current(anim_name)
-            log.info(f"[AnimationController] Switched to '{anim_name}'")
 
         # Set animation time directly
         # Handle looping

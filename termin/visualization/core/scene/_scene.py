@@ -62,6 +62,9 @@ class Scene:
         # Identifiable fields
         self.uuid = uuid or ""
         self.name = name
+
+        from termin._native import log
+        log.info(f"[Scene] Created name='{name}', self={id(self):#x}, tc_scene={self._tc_scene}")
         self.runtime_id = 0
 
         # Background color with alpha
@@ -978,6 +981,7 @@ class Scene:
             return
         self._destroyed = True
 
+        log.info(f"[Scene] destroy() name='{self.name}', self={id(self):#x}, tc_scene={self._tc_scene}")
 
         # Call on_destroy on all components via tc_ref (works for both C++ and Python)
         for entity in self.entities:

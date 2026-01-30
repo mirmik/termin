@@ -40,18 +40,14 @@ class TimelineController(PythonComponent):
 
         Finds all ObjectControllers in scene and binds them to this timeline.
         """
-        log.info(f"[TimelineController] Binding to timeline '{timeline.name}'...")
         self._timeline = timeline
         self._bind_all_controllers()
-        log.info(f"[TimelineController] Bound {len(self._object_controllers)} ObjectControllers")
 
     def unbind(self) -> None:
         """Unbind from current Timeline."""
-        log.info("[TimelineController] Unbinding from timeline...")
         for objctr in self._object_controllers:
             objctr.unbind()
         self._timeline = None
-        log.info("[TimelineController] Unbound")
 
     def rebind(self, new_timeline: Timeline) -> None:
         """
@@ -59,11 +55,9 @@ class TimelineController(PythonComponent):
 
         All ObjectControllers will rebind to objects in the new timeline.
         """
-        log.info(f"[TimelineController] Rebinding to timeline '{new_timeline.name}'...")
         self._timeline = new_timeline
         for objctr in self._object_controllers:
             objctr.bind(new_timeline)
-        log.info(f"[TimelineController] Rebound {len(self._object_controllers)} ObjectControllers")
 
     def _bind_all_controllers(self) -> None:
         """Find and bind all ObjectControllers in scene."""
@@ -78,7 +72,6 @@ class TimelineController(PythonComponent):
         for entity in self.scene.entities:
             objctr = entity.get_component(ObjectController)
             if objctr is not None:
-                log.info(f"[TimelineController] Binding ObjectController on '{entity.name}'...")
                 objctr.bind(self._timeline)
                 self._object_controllers.append(objctr)
 

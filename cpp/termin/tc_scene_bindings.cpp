@@ -35,14 +35,18 @@ public:
         _s = tc_scene_new();
         _collision_world = std::make_unique<collision::CollisionWorld>();
         tc_scene_set_collision_world(_s, _collision_world.get());
+        tc::Log::info("[TcScene] Created tc_scene=%p, this=%p", (void*)_s, (void*)this);
     }
 
     ~TcScene() {
+        tc::Log::info("[TcScene] ~TcScene tc_scene=%p, this=%p", (void*)_s, (void*)this);
         destroy();
     }
 
     void destroy() {
         if (_s) {
+            tc::Log::info("[TcScene] destroy() tc_scene=%p, py_wrapper=%p",
+                (void*)_s, tc_scene_get_py_wrapper(_s));
             // Clear pointer in tc_scene before destroying
             tc_scene_set_collision_world(_s, nullptr);
             _collision_world.reset();
@@ -172,6 +176,7 @@ public:
     // Set Python wrapper for callbacks from C to Python
     void set_py_wrapper(nb::object wrapper) {
         // Store raw PyObject* - Python Scene must outlive TcScene
+        tc::Log::info("[TcScene] set_py_wrapper tc_scene=%p, py_wrapper=%p", (void*)_s, (void*)wrapper.ptr());
         tc_scene_set_py_wrapper(_s, wrapper.ptr());
     }
 
