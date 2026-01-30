@@ -437,11 +437,21 @@ void bind_entity_class(nb::module_& m) {
         })
         .def_prop_ro("scene", [](const Entity& e) -> nb::object {
             tc_entity_pool* pool = e.pool();
-            if (!pool) return nb::none();
+            if (!pool) {
+                tc::Log::warn("[Entity.scene] pool is null for entity_id=%u", e.id().index);
+                return nb::none();
+            }
             tc_scene* s = tc_entity_pool_get_scene(pool);
-            if (!s) return nb::none();
+            if (!s) {
+                tc::Log::warn("[Entity.scene] tc_scene is null for pool=%p", (void*)pool);
+                return nb::none();
+            }
             void* py_wrapper = tc_scene_get_py_wrapper(s);
-            if (!py_wrapper) return nb::none();
+            if (!py_wrapper) {
+                tc::Log::warn("[Entity.scene] py_wrapper is null for tc_scene=%p", (void*)s);
+                return nb::none();
+            }
+            //tc::Log::info("[Entity.scene] returning py_wrapper=%p for tc_scene=%p", py_wrapper, (void*)s);
             return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(py_wrapper));
         })
 

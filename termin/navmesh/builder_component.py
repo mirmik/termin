@@ -322,6 +322,8 @@ class NavMeshBuilderComponent(PythonComponent):
         # Cached NavMesh (loaded from cache or built)
         self._navmesh: Optional["NavMesh"] = None
 
+        print ("NavMeshBuilderComponent: " + str(self))
+
     # --- Lifecycle ---
 
     def on_added(self) -> None:
@@ -348,6 +350,8 @@ class NavMeshBuilderComponent(PythonComponent):
             return False
 
         # Scene must have name or uuid for cache
+
+        print("NavMeshBuilderComponent::_try_load_from_cache " + "ptr:" + str(self) + " scene:" + str(self.scene))
         if not self.scene.name and not self.scene.uuid:
             return False
 

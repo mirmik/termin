@@ -87,11 +87,15 @@ class SceneTreeController:
 
     def set_scene(self, scene) -> None:
         """Set scene, clearing old model to avoid invalid entity access."""
+        from termin._native import log
+        log.info(f"[SceneTreeController] set_scene: old={self._scene}, new={scene}")
         if self._scene is not scene:
             # Clear old model before switching - old entities may be invalid
+            log.info(f"[SceneTreeController] clearing model, tree={self._tree}")
             self._tree.setModel(None)
             self._model = None
         self._scene = scene
+        log.info(f"[SceneTreeController] set_scene done")
 
     def rebuild(self, select_obj: object | None = None) -> None:
         """

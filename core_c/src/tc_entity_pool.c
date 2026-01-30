@@ -287,12 +287,15 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
 
 void tc_entity_pool_set_scene(tc_entity_pool* pool, tc_scene* scene) {
     if (pool) {
+        tc_log(TC_LOG_INFO, "[tc_entity_pool] set_scene: pool=%p, old=%p, new=%p", (void*)pool, (void*)pool->scene, (void*)scene);
         pool->scene = scene;
     }
 }
 
 tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool) {
-    return pool ? pool->scene : NULL;
+    tc_scene* s = pool ? pool->scene : NULL;
+    //tc_log(TC_LOG_INFO, "[tc_entity_pool] get_scene: pool=%p, scene=%p", (void*)pool, (void*)s);
+    return s;
 }
 
 void tc_entity_pool_destroy(tc_entity_pool* pool) {

@@ -190,6 +190,11 @@ class EditorSceneAttachment:
 
         # Remove viewport
         if self._viewport is not None:
+            # Clear viewport references to scene entities BEFORE removing
+            # (prevents crash when viewport_list.refresh() accesses stale pointers)
+            self._viewport.camera = None
+            self._viewport.internal_entities = None
+
             # Remove from camera
             if self._camera_manager is not None and self._camera_manager.camera is not None:
                 self._camera_manager.camera.remove_viewport(self._viewport)

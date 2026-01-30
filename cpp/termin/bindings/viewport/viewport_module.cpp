@@ -188,7 +188,8 @@ void bind_tc_viewport_class(nb::module_& m) {
                     uintptr_t ptr = nb::cast<uintptr_t>(camera_obj.attr("c_component_ptr")());
                     tc_viewport_set_camera(self.ptr_, reinterpret_cast<tc_component*>(ptr));
                 }
-            })
+            },
+            nb::arg().none())
 
         // Rect (normalized 0-1)
         .def_prop_rw("rect",
@@ -318,7 +319,8 @@ void bind_tc_viewport_class(nb::module_& m) {
                     termin::Entity ent = nb::cast<termin::Entity>(entity_obj);
                     tc_viewport_set_internal_entities(self.ptr_, ent.pool(), ent.id());
                 }
-            })
+            },
+            nb::arg().none())
 
         // Effective layer mask (checks ViewportHintComponent on camera)
         .def_prop_ro("effective_layer_mask", [](TcViewport& self) -> uint64_t {

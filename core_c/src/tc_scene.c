@@ -474,10 +474,16 @@ size_t tc_scene_fixed_update_list_count(const tc_scene* s) {
 // ============================================================================
 
 void tc_scene_set_py_wrapper(tc_scene* s, void* py_wrapper) {
-    if (s) s->py_wrapper = py_wrapper;
+    if (s) {
+        tc_log(TC_LOG_INFO, "[tc_scene] set_py_wrapper: scene=%p, old=%p, new=%p", (void*)s, s->py_wrapper, py_wrapper);
+        s->py_wrapper = py_wrapper;
+    }
 }
 
 void* tc_scene_get_py_wrapper(tc_scene* s) {
+    if (s) {
+        //tc_log(TC_LOG_INFO, "[tc_scene] get_py_wrapper: scene=%p, py_wrapper=%p", (void*)s, s->py_wrapper);
+    }
     return s ? s->py_wrapper : NULL;
 }
 
