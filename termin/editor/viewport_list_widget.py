@@ -166,20 +166,62 @@ class ViewportListWidget(QWidget):
 
     def _rebuild_tree(self) -> None:
         """Rebuild the tree model from current displays."""
+        from termin._native import log
+        import sys
+        log.info("[ViewportListWidget] _rebuild_tree start")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        # Check displays validity
+        log.info(f"[ViewportListWidget] displays count: {len(self._displays)}")
+        for i, d in enumerate(self._displays):
+            log.info(f"[ViewportListWidget] display {i}: {d}, ptr={d._tc_display_ptr if d else 'None'}")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        # Clear references in items before Qt deletes them
+        # This prevents accessing stale viewport/display objects during destruction
+        log.info(f"[ViewportListWidget] clearing {self._model.rowCount()} rows")
+        for row in range(self._model.rowCount()):
+            display_item = self._model.item(row)
+            if isinstance(display_item, DisplayItem):
+                for child_row in range(display_item.rowCount()):
+                    child_item = display_item.child(child_row)
+                    if isinstance(child_item, ViewportItem):
+                        child_item.viewport = None  # type: ignore
+                    elif isinstance(child_item, EntityItem):
+                        child_item.entity = None  # type: ignore
+                display_item.display = None  # type: ignore
+        log.info("[ViewportListWidget] refs cleared, calling model.clear()")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
         self._model.clear()
+        log.info("[ViewportListWidget] model cleared")
 
         for display in self._displays:
+            log.info(f"[ViewportListWidget] processing display {display}")
             display_name = self.get_display_name(display)
             display_item = DisplayItem(display, display_name)
 
             # Add viewports as children
-            for i, viewport in enumerate(display.viewports):
+            log.info(f"[ViewportListWidget] getting viewports")
+            viewports = display.viewports
+            log.info(f"[ViewportListWidget] got {len(viewports)} viewports")
+            for i, viewport in enumerate(viewports):
+                log.info(f"[ViewportListWidget] viewport {i}: {viewport}, valid={viewport.is_valid()}")
                 # Build viewport label: "name (camera)" or "Viewport i (camera)"
                 vp_name = viewport.name if viewport.name else f"Viewport {i}"
+                log.info(f"[ViewportListWidget] vp_name={vp_name}")
 
                 camera_name = "No Camera"
-                if viewport.camera is not None:
-                    entity = viewport.camera.entity
+                log.info(f"[ViewportListWidget] getting camera")
+                camera = viewport.camera
+                log.info(f"[ViewportListWidget] camera={camera}")
+                if camera is not None:
+                    log.info(f"[ViewportListWidget] getting camera.entity")
+                    entity = camera.entity
+                    log.info(f"[ViewportListWidget] entity={entity}")
                     if entity is not None:
                         camera_name = entity.name or f"Camera {i}"
                     else:
@@ -188,14 +230,19 @@ class ViewportListWidget(QWidget):
                 viewport_item = ViewportItem(viewport, f"{vp_name} ({camera_name})")
 
                 # Add internal_entities hierarchy as children of viewport
-                if viewport.internal_entities is not None:
-                    self._add_entity_hierarchy(viewport_item, viewport.internal_entities)
+                log.info(f"[ViewportListWidget] getting internal_entities")
+                internal_entities = viewport.internal_entities
+                log.info(f"[ViewportListWidget] internal_entities={internal_entities}")
+                if internal_entities is not None:
+                    self._add_entity_hierarchy(viewport_item, internal_entities)
 
                 display_item.appendRow(viewport_item)
 
             self._model.appendRow(display_item)
 
+        log.info("[ViewportListWidget] expanding all")
         self._tree.expandAll()
+        log.info("[ViewportListWidget] _rebuild_tree done")
 
     def _add_entity_hierarchy(self, parent_item: QStandardItem, entity: "Entity") -> None:
         """Recursively add entity and its children to the tree."""
