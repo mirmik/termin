@@ -5,8 +5,13 @@
 
 namespace termin {
 
-// Global standalone pool for entities created outside of Scene
-static tc_entity_pool* g_standalone_pool = nullptr;
+// Global standalone pool handle
+static tc_entity_pool_handle g_standalone_pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
+
+// Legacy constructor from raw pointer
+Entity::Entity(tc_entity_pool* pool, tc_entity_id id) : _id(id) {
+    _pool_handle = tc_entity_pool_registry_find(pool);
+}
 
 void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
     // Get UUID from tc_value
@@ -21,71 +26,103 @@ void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
     }
 
     if (uuid_str.empty()) {
-        _pool = nullptr;
+        _pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
         _id = TC_ENTITY_ID_INVALID;
         return;
     }
 
-    // Get pool from scene
-    tc_entity_pool* pool = tc_scene_handle_valid(scene) ? tc_scene_entity_pool(scene) : g_standalone_pool;
+    // Get pool handle from scene or use standalone
+    tc_entity_pool_handle pool_handle;
+    if (tc_scene_handle_valid(scene)) {
+        tc_entity_pool* pool = tc_scene_entity_pool(scene);
+        pool_handle = tc_entity_pool_registry_find(pool);
+    } else {
+        pool_handle = standalone_pool_handle();
+    }
 
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_handle);
     if (pool) {
         // Find entity by UUID in pool
         tc_entity_id id = tc_entity_pool_find_by_uuid(pool, uuid_str.c_str());
         if (tc_entity_id_valid(id)) {
-            _pool = pool;
+            _pool_handle = pool_handle;
             _id = id;
             return;
         }
     }
 
     // Entity not found
-    _pool = nullptr;
+    _pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
     _id = TC_ENTITY_ID_INVALID;
 }
 
-tc_entity_pool* Entity::standalone_pool() {
-    if (!g_standalone_pool) {
-        g_standalone_pool = tc_entity_pool_create(1024);
+tc_entity_pool_handle Entity::standalone_pool_handle() {
+    if (!tc_entity_pool_handle_valid(g_standalone_pool_handle)) {
+        g_standalone_pool_handle = tc_entity_pool_standalone_handle();
     }
-    return g_standalone_pool;
+    return g_standalone_pool_handle;
+}
+
+tc_entity_pool* Entity::standalone_pool() {
+    return tc_entity_pool_registry_get(standalone_pool_handle());
+}
+
+Entity Entity::create(tc_entity_pool_handle pool_handle, const std::string& name) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_handle);
+    if (!pool) return Entity();
+    tc_entity_id id = tc_entity_pool_alloc(pool, name.c_str());
+    return Entity(pool_handle, id);
+}
+
+Entity Entity::create_with_uuid(tc_entity_pool_handle pool_handle, const std::string& name, const std::string& uuid) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_handle);
+    if (!pool) return Entity();
+    tc_entity_id id = tc_entity_pool_alloc_with_uuid(pool, name.c_str(), uuid.c_str());
+    return Entity(pool_handle, id);
 }
 
 Entity Entity::create(tc_entity_pool* pool, const std::string& name) {
     if (!pool) return Entity();
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
+    if (!tc_entity_pool_handle_valid(pool_handle)) return Entity();
     tc_entity_id id = tc_entity_pool_alloc(pool, name.c_str());
-    return Entity(pool, id);
+    return Entity(pool_handle, id);
 }
 
 Entity Entity::create_with_uuid(tc_entity_pool* pool, const std::string& name, const std::string& uuid) {
     if (!pool) return Entity();
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
+    if (!tc_entity_pool_handle_valid(pool_handle)) return Entity();
     tc_entity_id id = tc_entity_pool_alloc_with_uuid(pool, name.c_str(), uuid.c_str());
-    return Entity(pool, id);
+    return Entity(pool_handle, id);
 }
 
 void Entity::add_component(Component* component) {
     if (!component || !valid()) return;
-    // entity() reads from tc_component owner fields, set by tc_entity_pool_add_component
-    tc_entity_pool_add_component(_pool, _id, component->c_component());
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return;
+    tc_entity_pool_add_component(pool, _id, component->c_component());
 }
 
 void Entity::add_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
-    // entity() reads from tc_component owner fields, set by tc_entity_pool_add_component
-    tc_entity_pool_add_component(_pool, _id, c);
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return;
+    tc_entity_pool_add_component(pool, _id, c);
 }
 
 void Entity::remove_component(Component* component) {
     if (!component || !valid()) return;
-    // entity() will return invalid after owner fields are cleared
-    tc_entity_pool_remove_component(_pool, _id, component->c_component());
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return;
+    tc_entity_pool_remove_component(pool, _id, component->c_component());
 }
 
 void Entity::remove_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
-
-    tc_entity_pool_remove_component(_pool, _id, c);
-    // on_removed_from_entity is called inside tc_entity_pool_remove_component
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return;
+    tc_entity_pool_remove_component(pool, _id, c);
 }
 
 CxxComponent* Entity::get_component_by_type(const std::string& type_name) {
@@ -108,7 +145,6 @@ tc_component* Entity::get_component_by_type_name(const std::string& type_name) {
         tc_component* tc = component_at(i);
         if (!tc) continue;
 
-        // Get type name from tc_component via type_entry
         const char* comp_type = tc_component_type_name(tc);
         if (comp_type && type_name == comp_type) {
             return tc;
@@ -119,34 +155,40 @@ tc_component* Entity::get_component_by_type_name(const std::string& type_name) {
 
 void Entity::set_parent(const Entity& parent_entity) {
     if (!valid()) return;
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return;
 
     // Check that parent is in the same pool
-    if (parent_entity.valid() && parent_entity._pool != _pool) {
+    if (parent_entity.valid() && !tc_entity_pool_handle_eq(parent_entity._pool_handle, _pool_handle)) {
         throw std::runtime_error("Cannot set parent: entities must be in the same pool");
     }
 
     tc_entity_id parent_id = parent_entity.valid() ? parent_entity._id : TC_ENTITY_ID_INVALID;
-    tc_entity_pool_set_parent(_pool, _id, parent_id);
+    tc_entity_pool_set_parent(pool, _id, parent_id);
 }
 
 Entity Entity::parent() const {
     if (!valid()) return Entity();
-    tc_entity_id parent_id = tc_entity_pool_parent(_pool, _id);
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return Entity();
+    tc_entity_id parent_id = tc_entity_pool_parent(pool, _id);
     if (!tc_entity_id_valid(parent_id)) return Entity();
-    return Entity(_pool, parent_id);
+    return Entity(_pool_handle, parent_id);
 }
 
 std::vector<Entity> Entity::children() const {
     std::vector<Entity> result;
     if (!valid()) return result;
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return result;
 
-    size_t count = tc_entity_pool_children_count(_pool, _id);
+    size_t count = tc_entity_pool_children_count(pool, _id);
     result.reserve(count);
 
     for (size_t i = 0; i < count; i++) {
-        tc_entity_id child_id = tc_entity_pool_child_at(_pool, _id, i);
+        tc_entity_id child_id = tc_entity_pool_child_at(pool, _id, i);
         if (tc_entity_id_valid(child_id)) {
-            result.push_back(Entity(_pool, child_id));
+            result.push_back(Entity(_pool_handle, child_id));
         }
     }
     return result;
@@ -154,14 +196,16 @@ std::vector<Entity> Entity::children() const {
 
 Entity Entity::find_child(const std::string& name) const {
     if (!valid()) return Entity();
+    tc_entity_pool* pool = pool_ptr();
+    if (!pool) return Entity();
 
-    size_t count = tc_entity_pool_children_count(_pool, _id);
+    size_t count = tc_entity_pool_children_count(pool, _id);
     for (size_t i = 0; i < count; i++) {
-        tc_entity_id child_id = tc_entity_pool_child_at(_pool, _id, i);
+        tc_entity_id child_id = tc_entity_pool_child_at(pool, _id, i);
         if (tc_entity_id_valid(child_id)) {
-            const char* child_name = tc_entity_pool_name(_pool, child_id);
+            const char* child_name = tc_entity_pool_name(pool, child_id);
             if (child_name && name == child_name) {
-                return Entity(_pool, child_id);
+                return Entity(_pool_handle, child_id);
             }
         }
     }
@@ -171,7 +215,6 @@ Entity Entity::find_child(const std::string& name) const {
 void Entity::update(float dt) {
     if (!valid() || !enabled()) return;
 
-    // Update components
     size_t count = component_count();
     for (size_t i = 0; i < count; i++) {
         tc_component* tc = component_at(i);
@@ -182,11 +225,10 @@ void Entity::update(float dt) {
 }
 
 void Entity::on_added_to_scene(tc_scene_handle scene) {
-    (void)scene;  // Pool manages lifetime
+    (void)scene;
 }
 
 void Entity::on_removed_from_scene() {
-    // Nothing needed - pool manages lifetime
 }
 
 tc_value Entity::serialize_base() const {
@@ -206,7 +248,6 @@ tc_value Entity::serialize_base() const {
     tc_value_dict_set(&data, "layer", tc_value_int(static_cast<int64_t>(layer())));
     tc_value_dict_set(&data, "flags", tc_value_int(static_cast<int64_t>(flags())));
 
-    // Pose - get from pool
     double pos[3], rot[4], scl[3];
     get_local_position(pos);
     get_local_rotation(rot);
@@ -219,7 +260,6 @@ tc_value Entity::serialize_base() const {
     tc_value_list_push(&position, tc_value_double(pos[1]));
     tc_value_list_push(&position, tc_value_double(pos[2]));
     tc_value_dict_set(&pose_data, "position", position);
-    // Note: dict_set takes ownership, don't free position
 
     tc_value rotation = tc_value_list_new();
     tc_value_list_push(&rotation, tc_value_double(rot[0]));
@@ -227,17 +267,14 @@ tc_value Entity::serialize_base() const {
     tc_value_list_push(&rotation, tc_value_double(rot[2]));
     tc_value_list_push(&rotation, tc_value_double(rot[3]));
     tc_value_dict_set(&pose_data, "rotation", rotation);
-    // Note: dict_set takes ownership, don't free rotation
 
     tc_value_dict_set(&data, "pose", pose_data);
-    // Note: dict_set takes ownership, don't free pose_data
 
     tc_value scale_v = tc_value_list_new();
     tc_value_list_push(&scale_v, tc_value_double(scl[0]));
     tc_value_list_push(&scale_v, tc_value_double(scl[1]));
     tc_value_list_push(&scale_v, tc_value_double(scl[2]));
     tc_value_dict_set(&data, "scale", scale_v);
-    // Note: dict_set takes ownership, don't free scale_v
 
     return data;
 }
@@ -262,26 +299,22 @@ bool Entity::validate_components() const {
             return false;
         }
 
-        // Check kind is valid
         if (tc->kind != TC_CXX_COMPONENT && tc->kind != TC_PYTHON_COMPONENT) {
             fprintf(stderr, "[validate_components] Entity '%s' component %zu has invalid kind: %d\n", name(), i, (int)tc->kind);
             return false;
         }
 
-        // Check vtable
         if (!tc->vtable) {
             fprintf(stderr, "[validate_components] Entity '%s' component %zu has NULL vtable\n", name(), i);
             return false;
         }
 
-        // Try to get type name
         const char* tname = tc_component_type_name(tc);
         if (!tname) {
             fprintf(stderr, "[validate_components] Entity '%s' component %zu has NULL type_name\n", name(), i);
             return false;
         }
 
-        // Check type_name looks valid (first char is printable)
         if (tname[0] < 32 || tname[0] > 126) {
             fprintf(stderr, "[validate_components] Entity '%s' component %zu type_name starts with non-printable: 0x%02x\n",
                     name(), i, (unsigned char)tname[0]);
@@ -318,25 +351,23 @@ static std::string tc_value_dict_string(const tc_value* dict, const char* key, c
     return def;
 }
 
-Entity Entity::deserialize(tc_entity_pool* pool, const tc_value* data) {
+Entity Entity::deserialize(tc_entity_pool_handle pool_handle, const tc_value* data) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_handle);
     if (!pool || !data || data->type != TC_VALUE_DICT) {
         return Entity();
     }
 
     std::string entity_name = tc_value_dict_string(data, "name", "entity");
 
-    // Create entity in pool
-    Entity ent = Entity::create(pool, entity_name);
+    Entity ent = Entity::create(pool_handle, entity_name);
     if (!ent.valid()) return Entity();
 
-    // Restore flags
     tc_value* priority_v = tc_value_dict_get(const_cast<tc_value*>(data), "priority");
     ent.set_priority(static_cast<int>(tc_value_as_double(priority_v, 0)));
 
     tc_value* visible_v = tc_value_dict_get(const_cast<tc_value*>(data), "visible");
     ent.set_visible(tc_value_as_bool(visible_v, true));
 
-    // Support both "enabled" (new) and "active" (legacy) keys
     tc_value* enabled_v = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
     if (enabled_v) {
         ent.set_enabled(tc_value_as_bool(enabled_v, true));
@@ -357,7 +388,6 @@ Entity Entity::deserialize(tc_entity_pool* pool, const tc_value* data) {
     tc_value* flags_v = tc_value_dict_get(const_cast<tc_value*>(data), "flags");
     ent.set_flags(static_cast<uint64_t>(tc_value_as_double(flags_v, 0)));
 
-    // Restore pose
     tc_value* pose_v = tc_value_dict_get(const_cast<tc_value*>(data), "pose");
     if (pose_v && pose_v->type == TC_VALUE_DICT) {
         tc_value* pos = tc_value_dict_get(pose_v, "position");
@@ -392,9 +422,12 @@ Entity Entity::deserialize(tc_entity_pool* pool, const tc_value* data) {
         ent.set_local_scale(xyz);
     }
 
-    // TODO: Deserialize components - need to adapt to new architecture
-
     return ent;
+}
+
+Entity Entity::deserialize(tc_entity_pool* pool, const tc_value* data) {
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
+    return deserialize(pool_handle, data);
 }
 
 } // namespace termin

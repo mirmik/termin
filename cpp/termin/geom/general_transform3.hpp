@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include "general_pose3.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
+#include "../../../core_c/include/tc_entity_pool_registry.h"
 
 #include "../export.hpp"
 #include "tc_log.hpp"
@@ -13,31 +14,44 @@ namespace termin {
 class Entity;
 
 // Transform view into entity pool data.
-// Same pool + id as Entity, but provides transform-specific methods.
+// Uses pool handle for safe access - pool may be destroyed.
 // Entity.transform() and GeneralTransform3.entity() create each other on the fly.
 struct GeneralTransform3 {
-    tc_entity_pool* _pool = nullptr;
+    tc_entity_pool_handle _pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
     tc_entity_id _id = TC_ENTITY_ID_INVALID;
 
     // Default constructor - invalid transform
     GeneralTransform3() = default;
 
-    // Construct from pool + id
-    GeneralTransform3(tc_entity_pool* pool, tc_entity_id id) : _pool(pool), _id(id) {}
+    // Construct from pool handle + id
+    GeneralTransform3(tc_entity_pool_handle pool_handle, tc_entity_id id)
+        : _pool_handle(pool_handle), _id(id) {}
+
+    // Legacy: Construct from pool pointer + id
+    GeneralTransform3(tc_entity_pool* pool, tc_entity_id id) : _id(id) {
+        _pool_handle = tc_entity_pool_registry_find(pool);
+    }
+
+    // Get pool pointer (may be NULL if pool destroyed)
+    tc_entity_pool* pool_ptr() const {
+        return tc_entity_pool_registry_get(_pool_handle);
+    }
 
     // Check if valid
-    bool valid() const { return _pool && tc_entity_pool_alive(_pool, _id); }
+    bool valid() const {
+        tc_entity_pool* pool = pool_ptr();
+        return pool && tc_entity_pool_alive(pool, _id);
+    }
     explicit operator bool() const { return valid(); }
 
     // --- Pose accessors ---
 
     GeneralPose3 local_pose() const {
         GeneralPose3 pose;
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return pose;
         double pos[3], rot[4], scale[3];
-        // tc_entity_pool_get_local_position(_pool, _id, pos);
-        // tc_entity_pool_get_local_rotation(_pool, _id, rot);
-        // tc_entity_pool_get_local_scale(_pool, _id, scale);
-        tc_entity_pool_get_local_pose(_pool, _id, pos, rot, scale);
+        tc_entity_pool_get_local_pose(pool, _id, pos, rot, scale);
         pose.lin = Vec3{pos[0], pos[1], pos[2]};
         pose.ang = Quat{rot[0], rot[1], rot[2], rot[3]};
         pose.scale = Vec3{scale[0], scale[1], scale[2]};
@@ -45,66 +59,82 @@ struct GeneralTransform3 {
     }
 
     void set_local_pose(const GeneralPose3& pose) {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
         double pos[3] = {pose.lin.x, pose.lin.y, pose.lin.z};
         double rot[4] = {pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w};
         double scale[3] = {pose.scale.x, pose.scale.y, pose.scale.z};
-        
-        // tc_entity_pool_set_local_position(_pool, _id, pos);
-        // tc_entity_pool_set_local_rotation(_pool, _id, rot);
-        // tc_entity_pool_set_local_scale(_pool, _id, scale);
-        tc_entity_pool_set_local_pose(_pool, _id, pos, rot, scale);
+        tc_entity_pool_set_local_pose(pool, _id, pos, rot, scale);
     }
 
     // Individual component accessors
     Vec3 local_position() const {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return Vec3{0, 0, 0};
         double pos[3];
-        tc_entity_pool_get_local_position(_pool, _id, pos);
+        tc_entity_pool_get_local_position(pool, _id, pos);
         return Vec3{pos[0], pos[1], pos[2]};
     }
 
     void set_local_position(const Vec3& p) {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
         double pos[3] = {p.x, p.y, p.z};
-        tc_entity_pool_set_local_position(_pool, _id, pos);
+        tc_entity_pool_set_local_position(pool, _id, pos);
     }
 
     Quat local_rotation() const {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return Quat{0, 0, 0, 1};
         double rot[4];
-        tc_entity_pool_get_local_rotation(_pool, _id, rot);
+        tc_entity_pool_get_local_rotation(pool, _id, rot);
         return Quat{rot[0], rot[1], rot[2], rot[3]};
     }
 
     void set_local_rotation(const Quat& q) {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
         double rot[4] = {q.x, q.y, q.z, q.w};
-        tc_entity_pool_set_local_rotation(_pool, _id, rot);
+        tc_entity_pool_set_local_rotation(pool, _id, rot);
     }
 
     Vec3 local_scale() const {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return Vec3{1, 1, 1};
         double scale[3];
-        tc_entity_pool_get_local_scale(_pool, _id, scale);
+        tc_entity_pool_get_local_scale(pool, _id, scale);
         return Vec3{scale[0], scale[1], scale[2]};
     }
 
     void set_local_scale(const Vec3& s) {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
         double scale[3] = {s.x, s.y, s.z};
-        tc_entity_pool_set_local_scale(_pool, _id, scale);
+        tc_entity_pool_set_local_scale(pool, _id, scale);
     }
 
     // Global (world) component accessors
     Vec3 global_position() const {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return Vec3{0, 0, 0};
         double pos[3];
-        tc_entity_pool_get_global_position(_pool, _id, pos);
+        tc_entity_pool_get_global_position(pool, _id, pos);
         return Vec3{pos[0], pos[1], pos[2]};
     }
 
     Quat global_rotation() const {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return Quat{0, 0, 0, 1};
         double rot[4];
-        tc_entity_pool_get_global_rotation(_pool, _id, rot);
+        tc_entity_pool_get_global_rotation(pool, _id, rot);
         return Quat{rot[0], rot[1], rot[2], rot[3]};
     }
 
     Vec3 global_scale() const {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return Vec3{1, 1, 1};
         double scale[3];
-        tc_entity_pool_get_global_scale(_pool, _id, scale);
+        tc_entity_pool_get_global_scale(pool, _id, scale);
         return Vec3{scale[0], scale[1], scale[2]};
     }
 
@@ -121,11 +151,10 @@ struct GeneralTransform3 {
 
     GeneralPose3 global_pose() const {
         GeneralPose3 pose;
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return pose;
         double pos[3], rot[4], scale[3];
-        // tc_entity_pool_get_global_position(_pool, _id, pos);
-        // tc_entity_pool_get_global_rotation(_pool, _id, rot);
-        // tc_entity_pool_get_global_scale(_pool, _id, scale);
-        tc_entity_pool_get_global_pose(_pool, _id, pos, rot, scale);
+        tc_entity_pool_get_global_pose(pool, _id, pos, rot, scale);
         pose.lin = Vec3{pos[0], pos[1], pos[2]};
         pose.ang = Quat{rot[0], rot[1], rot[2], rot[3]};
         pose.scale = Vec3{scale[0], scale[1], scale[2]};
@@ -133,28 +162,21 @@ struct GeneralTransform3 {
     }
 
     void set_global_pose(const GeneralPose3& gpose) {
-        tc_entity_id parent_id = tc_entity_pool_parent(_pool, _id);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
+        tc_entity_id parent_id = tc_entity_pool_parent(pool, _id);
         if (!tc_entity_id_valid(parent_id)) {
-            // No parent - global == local
             set_local_pose(gpose);
             return;
         }
 
-        // Get parent's world transform
         double ppos[3], prot[4], pscale[3];
-        // tc_entity_pool_get_global_position(_pool, parent_id, ppos);
-        // tc_entity_pool_get_global_rotation(_pool, parent_id, prot);
-        // tc_entity_pool_get_global_scale(_pool, parent_id, pscale);
-        tc_entity_pool_get_global_pose(_pool, parent_id, ppos, prot, pscale);
+        tc_entity_pool_get_global_pose(pool, parent_id, ppos, prot, pscale);
 
         Quat parent_rot{prot[0], prot[1], prot[2], prot[3]};
         Vec3 parent_pos{ppos[0], ppos[1], ppos[2]};
         Vec3 parent_scale{pscale[0], pscale[1], pscale[2]};
 
-        // Convert global to local:
-        // local_pos = inverse_parent_rot * (global_pos - parent_pos) / parent_scale
-        // local_rot = inverse(parent_rot) * global_rot
-        // local_scale = global_scale / parent_scale
         Quat inv_parent_rot = parent_rot.inverse();
 
         Vec3 delta = gpose.lin - parent_pos;
@@ -187,31 +209,40 @@ struct GeneralTransform3 {
     // --- Hierarchy ---
 
     GeneralTransform3 parent() const {
-        tc_entity_id parent_id = tc_entity_pool_parent(_pool, _id);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return GeneralTransform3();
+        tc_entity_id parent_id = tc_entity_pool_parent(pool, _id);
         if (!tc_entity_id_valid(parent_id)) return GeneralTransform3();
-        return GeneralTransform3(_pool, parent_id);
+        return GeneralTransform3(_pool_handle, parent_id);
     }
 
     void set_parent(GeneralTransform3 new_parent) {
-        // Check that parent is in the same pool
-        if (new_parent.valid() && new_parent._pool != _pool) {
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
+        if (new_parent.valid() && !tc_entity_pool_handle_eq(new_parent._pool_handle, _pool_handle)) {
             throw std::runtime_error("Cannot set parent: transforms must be in the same pool");
         }
-        tc_entity_pool_set_parent(_pool, _id, new_parent._id);
+        tc_entity_pool_set_parent(pool, _id, new_parent._id);
     }
 
     void unparent() {
-        tc_entity_pool_set_parent(_pool, _id, TC_ENTITY_ID_INVALID);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
+        tc_entity_pool_set_parent(pool, _id, TC_ENTITY_ID_INVALID);
     }
 
     size_t children_count() const {
-        return tc_entity_pool_children_count(_pool, _id);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return 0;
+        return tc_entity_pool_children_count(pool, _id);
     }
 
     GeneralTransform3 child_at(size_t index) const {
-        tc_entity_id child_id = tc_entity_pool_child_at(_pool, _id, index);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return GeneralTransform3();
+        tc_entity_id child_id = tc_entity_pool_child_at(pool, _id, index);
         if (!tc_entity_id_valid(child_id)) return GeneralTransform3();
-        return GeneralTransform3(_pool, child_id);
+        return GeneralTransform3(_pool_handle, child_id);
     }
 
     // --- Entity (creates Entity view on same data) ---
@@ -221,13 +252,17 @@ struct GeneralTransform3 {
     // --- Name (from entity) ---
 
     const char* name() const {
-        return tc_entity_pool_name(_pool, _id);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return "";
+        return tc_entity_pool_name(pool, _id);
     }
 
     // --- Dirty tracking ---
 
     void mark_dirty() {
-        tc_entity_pool_mark_dirty(_pool, _id);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
+        tc_entity_pool_mark_dirty(pool, _id);
     }
 
     // --- Transformations ---
@@ -277,12 +312,15 @@ struct GeneralTransform3 {
     // --- Matrix ---
 
     void world_matrix(double* m) const {
-        tc_entity_pool_get_world_matrix(_pool, _id, m);
+        tc_entity_pool* pool = pool_ptr();
+        if (!pool) return;
+        tc_entity_pool_get_world_matrix(pool, _id, m);
     }
 
     // --- Pool/ID access ---
 
-    tc_entity_pool* pool() const { return _pool; }
+    tc_entity_pool* pool() const { return pool_ptr(); }
+    tc_entity_pool_handle pool_handle() const { return _pool_handle; }
     tc_entity_id id() const { return _id; }
 };
 

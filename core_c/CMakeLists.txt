@@ -17,6 +17,7 @@ set(TC_SOURCES
     src/tc_core.c
     src/tc_display.c
     src/tc_entity_pool.c
+    src/tc_entity_pool_registry.c
     src/tc_input_manager.c
     src/tc_simple_input_manager.c
     src/tc_frame_graph.c
@@ -52,6 +53,7 @@ set(TC_HEADERS
     include/tc_animation_registry.h
     include/tc_component.h
     include/tc_entity_pool.h
+    include/tc_entity_pool_registry.h
     include/tc_gpu.h
     include/tc_handle.h
     include/tc_hash_map.h

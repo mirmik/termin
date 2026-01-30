@@ -27,6 +27,7 @@
 #include "tc_pose.h"
 #include "tc_component.h"
 #include "tc_entity_pool.h"
+#include "tc_entity_pool_registry.h"
 #include "tc_scene.h"
 #include "tc_inspect.h"
 #include "tc_mesh.h"

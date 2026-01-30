@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "termin/entity/entity.hpp"
+#include "../../../../core_c/include/tc_entity_pool_registry.h"
 
 namespace termin {
 
@@ -57,15 +58,17 @@ void bind_transform(nb::module_& m) {
     nb::class_<GeneralTransform3>(m, "GeneralTransform3")
         // Default constructor - allocate entity in standalone pool (like Entity())
         .def("__init__", [](GeneralTransform3* self) {
-            tc_entity_pool* pool = Entity::standalone_pool();
+            tc_entity_pool_handle pool_handle = Entity::standalone_pool_handle();
+            tc_entity_pool* pool = tc_entity_pool_registry_get(pool_handle);
             tc_entity_id id = tc_entity_pool_alloc(pool, "transform");
-            new (self) GeneralTransform3(pool, id);
+            new (self) GeneralTransform3(pool_handle, id);
         })
         // Constructor with pose
         .def("__init__", [](GeneralTransform3* self, nb::object pose) {
-            tc_entity_pool* pool = Entity::standalone_pool();
+            tc_entity_pool_handle pool_handle = Entity::standalone_pool_handle();
+            tc_entity_pool* pool = tc_entity_pool_registry_get(pool_handle);
             tc_entity_id id = tc_entity_pool_alloc(pool, "transform");
-            new (self) GeneralTransform3(pool, id);
+            new (self) GeneralTransform3(pool_handle, id);
             self->set_local_pose(nb_pose_to_cpp(pose));
         }, nb::arg("pose"))
 

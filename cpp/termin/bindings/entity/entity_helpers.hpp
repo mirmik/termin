@@ -13,6 +13,7 @@
 #include "termin/geom/quat.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
 #include "tc_log.hpp"
+#include "../../../../core_c/include/tc_entity_pool_registry.h"
 
 namespace nb = nanobind;
 
@@ -84,6 +85,11 @@ inline nb::object tc_component_to_python(tc_component* c) {
 // Pool helpers
 // ============================================================================
 
+inline tc_entity_pool_handle get_standalone_pool_handle() {
+    return Entity::standalone_pool_handle();
+}
+
+// Legacy: get raw pointer (prefer get_standalone_pool_handle())
 inline tc_entity_pool* get_standalone_pool() {
     return Entity::standalone_pool();
 }
@@ -103,7 +109,9 @@ inline Entity migrate_entity_to_pool(Entity& entity, tc_entity_pool* dst_pool) {
         return Entity();
     }
 
-    return Entity(dst_pool, new_id);
+    // Use handle-based constructor
+    tc_entity_pool_handle dst_handle = tc_entity_pool_registry_find(dst_pool);
+    return Entity(dst_handle, new_id);
 }
 
 // ============================================================================

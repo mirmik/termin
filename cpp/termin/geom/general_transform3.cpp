@@ -4,7 +4,7 @@
 namespace termin {
 
 Entity GeneralTransform3::entity() const {
-    return Entity(_pool, _id);
+    return Entity(_pool_handle, _id);
 }
 
 } // namespace termin

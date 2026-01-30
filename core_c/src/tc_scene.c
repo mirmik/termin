@@ -8,6 +8,7 @@
 #include "../include/tc_mesh.h"
 #include "../include/tc_material.h"
 #include "../include/tc_log.h"
+#include "../include/tc_entity_pool_registry.h"
 #include "../include/termin_core.h"
 #include <stdlib.h>
 #include <string.h>
@@ -292,7 +293,9 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
 
     // Initialize slot
     g_pool->alive[idx] = true;
+    // Create pool and register it in the entity pool registry for safe handle-based access
     g_pool->pools[idx] = tc_entity_pool_create(512);
+    tc_entity_pool_registry_register(g_pool->pools[idx]);
     g_pool->modes[idx] = TC_SCENE_MODE_INACTIVE;
     list_init(&g_pool->pending_starts[idx]);
     list_init(&g_pool->update_lists[idx]);
@@ -347,8 +350,14 @@ void tc_scene_free(tc_scene_handle h) {
     tc_resource_map_free(g_pool->type_heads[idx]);
     g_pool->type_heads[idx] = NULL;
 
-    // Destroy entity pool
-    tc_entity_pool_destroy(g_pool->pools[idx]);
+    // Destroy entity pool via registry to invalidate handles
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->pools[idx]);
+    if (tc_entity_pool_handle_valid(pool_handle)) {
+        tc_entity_pool_registry_destroy(pool_handle);
+    } else {
+        // Fallback: pool not in registry, destroy directly
+        tc_entity_pool_destroy(g_pool->pools[idx]);
+    }
     g_pool->pools[idx] = NULL;
 
     // Mark as dead
