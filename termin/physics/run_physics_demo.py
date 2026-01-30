@@ -30,7 +30,7 @@ from termin.physics import RigidBodyComponent, PhysicsWorldComponent
 
 def build_physics_scene(world):
     """Build a scene with physics objects."""
-    scene = Scene()
+    scene = Scene(name="physics_demo")
 
     # Materials
     red_material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
