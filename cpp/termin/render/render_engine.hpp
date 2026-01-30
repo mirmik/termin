@@ -14,12 +14,17 @@
 
 extern "C" {
 #include "render/tc_frame_graph.h"
+#include "tc_scene.h"
 }
 
 namespace termin {
 
 // Forward declarations
 class CameraComponent;
+
+// Build lights from scene's LightComponents
+// Iterates all LightComponent in scene and calls to_light()
+std::vector<Light> build_lights_from_scene(tc_scene* scene);
 
 // Viewport context for multi-viewport rendering
 struct ViewportContext {
@@ -42,15 +47,19 @@ public:
     RenderEngine() = default;
     explicit RenderEngine(GraphicsBackend* graphics);
 
-    // Render single view to target FBO
-    // Parameters:
-    //   pipeline: RenderPipeline containing passes, specs, and FBO pool
-    //   target_fbo: target framebuffer (OUTPUT/DISPLAY)
-    //   width, height: viewport size
-    //   scene: scene to render
-    //   camera: camera for view/projection
-    //   lights: pre-built lights array
-    //   layer_mask: layer mask for filtering entities
+    // Render single view to target FBO (builds lights from scene automatically)
+    void render_view_to_fbo(
+        RenderPipeline* pipeline,
+        FramebufferHandle* target_fbo,
+        int width,
+        int height,
+        tc_scene* scene,
+        CameraComponent* camera,
+        tc_viewport* viewport,
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
+    );
+
+    // Render single view to target FBO (with explicit lights array)
     void render_view_to_fbo(
         RenderPipeline* pipeline,
         FramebufferHandle* target_fbo,
@@ -82,8 +91,15 @@ public:
         const std::string& resource_name = "color"
     );
 
-    // Render pipeline with multiple viewports
-    // Each pass selects viewport by viewport_name, writes to that viewport's output_fbo
+    // Render pipeline with multiple viewports (builds lights from scene automatically)
+    void render_scene_pipeline_offscreen(
+        RenderPipeline* pipeline,
+        tc_scene* scene,
+        const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
+        const std::string& default_viewport = ""
+    );
+
+    // Render pipeline with multiple viewports (with explicit lights array)
     void render_scene_pipeline_offscreen(
         RenderPipeline* pipeline,
         tc_scene* scene,

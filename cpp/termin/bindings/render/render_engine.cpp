@@ -28,8 +28,8 @@ void bind_render_engine(nb::module_& m) {
                                    TcSceneRef scene_ref,
                                    CameraComponent* camera,
                                    TcViewport* viewport,
-                                   const std::vector<Light>& lights,
                                    uint64_t layer_mask) {
+            // Use overload that builds lights from scene automatically
             self.render_view_to_fbo(
                 &pipeline,
                 target_fbo,
@@ -38,7 +38,6 @@ void bind_render_engine(nb::module_& m) {
                 scene_ref.ptr(),
                 camera,
                 viewport ? viewport->ptr_ : nullptr,
-                lights,
                 layer_mask
             );
         },
@@ -49,28 +48,25 @@ void bind_render_engine(nb::module_& m) {
              nb::arg("scene"),
              nb::arg("camera"),
              nb::arg("viewport").none(),
-             nb::arg("lights"),
              nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("render_scene_pipeline_offscreen", [](
             RenderEngine& self,
             RenderPipeline& pipeline,
             TcSceneRef scene_ref,
             const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
-            const std::vector<Light>& lights,
             const std::string& default_viewport
         ) {
+            // Use overload that builds lights from scene automatically
             self.render_scene_pipeline_offscreen(
                 &pipeline,
                 scene_ref.ptr(),
                 viewport_contexts,
-                lights,
                 default_viewport
             );
         },
              nb::arg("pipeline"),
              nb::arg("scene"),
              nb::arg("viewport_contexts"),
-             nb::arg("lights"),
              nb::arg("default_viewport") = "");
 
     // ViewportContext for multi-viewport rendering

@@ -9,7 +9,6 @@ import numpy as np
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
 from termin._native.scene import TcScene
-from termin.lighting import Light
 from termin.visualization.render.components.light_component import LightComponent
 from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit
@@ -210,30 +209,6 @@ class Scene:
     # --- Lighting delegation (backward compatibility) ---
 
     @property
-    def lights(self) -> List[Light]:
-        return self._lighting.lights
-
-    @lights.setter
-    def lights(self, value: List[Light]):
-        self._lighting.lights = value
-
-    @property
-    def light_direction(self) -> np.ndarray:
-        return self._lighting.light_direction
-
-    @light_direction.setter
-    def light_direction(self, value):
-        self._lighting.light_direction = np.asarray(value, dtype=np.float32)
-
-    @property
-    def light_color(self) -> np.ndarray:
-        return self._lighting.light_color
-
-    @light_color.setter
-    def light_color(self, value):
-        self._lighting.light_color = np.asarray(value, dtype=np.float32)
-
-    @property
     def ambient_color(self) -> np.ndarray:
         return self._lighting.ambient_color
 
@@ -259,12 +234,6 @@ class Scene:
         """Shadow rendering settings."""
         from .lighting import ShadowSettings
         return self._lighting.shadow_settings
-
-    def build_lights(self) -> List[Light]:
-        """Build world-space light parameters from all light components."""
-        # Ensure skybox resources are ready before render
-        self._ensure_skybox_resources()
-        return self._lighting.build_lights()
 
     # --- Collision World ---
 
@@ -756,6 +725,7 @@ class Scene:
         Should be called once per frame, before rendering begins.
         Used by SkeletonController to update bone matrices.
         """
+        self._ensure_skybox_resources()
         self._tc_scene.before_render()
 
     def notify_editor_start(self):

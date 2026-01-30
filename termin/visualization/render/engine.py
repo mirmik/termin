@@ -426,11 +426,7 @@ class RenderEngine:
         # Обновляем aspect ratio камеры
         view.camera.set_aspect(pw / float(max(1, ph)))
 
-        # Строим lights
-        with profiler.section("Build Lights"):
-            lights = scene.build_lights()
-
-        # Вызываем C++ RenderEngine
+        # Вызываем C++ RenderEngine (lights собираются в C++)
         with profiler.section("C++ Render Pipeline"):
             self._cpp_engine.render_view_to_fbo(
                 pipeline,
@@ -440,7 +436,6 @@ class RenderEngine:
                 scene._tc_scene.scene_ref(),
                 view.camera,
                 view.viewport,
-                lights,
                 view.layer_mask,
             )
 
@@ -491,10 +486,6 @@ class RenderEngine:
             if isinstance(render_pass, RenderFramePass):
                 render_pass.required_resources()
 
-        # Build lights
-        with profiler.section("Build Lights"):
-            lights = scene.build_lights()
-
         # Convert Python ViewportContext to C++ ViewportContext
         with profiler.section("Build Contexts"):
             cpp_viewport_contexts: Dict[str, CppViewportContext] = {}
@@ -508,12 +499,11 @@ class RenderEngine:
                 cpp_ctx.output_fbo = ctx.output_fbo
                 cpp_viewport_contexts[name] = cpp_ctx
 
-        # Execute via C++ RenderEngine
+        # Execute via C++ RenderEngine (lights собираются в C++)
         with profiler.section("C++ Execute"):
             self._cpp_engine.render_scene_pipeline_offscreen(
                 pipeline,
                 scene._tc_scene.scene_ref(),
                 cpp_viewport_contexts,
-                lights,
                 default_viewport,
             )
