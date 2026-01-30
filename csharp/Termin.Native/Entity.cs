@@ -232,6 +232,30 @@ public readonly struct Entity
     }
 
     /// <summary>
+    /// Add a SWIG-wrapped component (ColliderComponent).
+    /// </summary>
+    public void AddComponent(ColliderComponent component)
+    {
+        AddComponent(component.tc_component_ptr());
+    }
+
+    /// <summary>
+    /// Add a SWIG-wrapped component (RotatorComponent).
+    /// </summary>
+    public void AddComponent(RotatorComponent component)
+    {
+        AddComponent(component.tc_component_ptr());
+    }
+
+    /// <summary>
+    /// Add a SWIG-wrapped component (ActuatorComponent).
+    /// </summary>
+    public void AddComponent(ActuatorComponent component)
+    {
+        AddComponent(component.tc_component_ptr());
+    }
+
+    /// <summary>
     /// Add a component by type name. Creates the component from registry.
     /// Returns a ComponentRef to the created component.
     /// </summary>

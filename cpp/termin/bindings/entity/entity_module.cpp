@@ -55,7 +55,6 @@ inline bool check_heap_entity() { return true; }
 #include "termin/entity/vtable_utils.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/entity_registry.hpp"
-#include "termin/entity/components/rotator_component.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/pose3.hpp"
 #include "termin/inspect/tc_kind.hpp"
@@ -254,10 +253,6 @@ NB_MODULE(_entity_native, m) {
 
             return nb::make_tuple(py_old_by_uuid, py_old_by_pick_id);
         }, nb::arg("new_by_uuid"), nb::arg("new_by_pick_id"));
-
-    // --- Native Components ---
-    BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
-        .def_rw("speed", &CXXRotatorComponent::speed);
 
     // Register CxxComponent::enabled in InspectRegistry
     tc::InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(

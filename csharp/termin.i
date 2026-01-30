@@ -16,9 +16,13 @@
 #include "termin/render/color_pass.hpp"
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
+#include "termin/render/collider_gizmo_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/entity/component.hpp"
+#include "termin/colliders/collider_component.hpp"
+#include "termin/kinematic/rotator_component.hpp"
+#include "termin/kinematic/actuator_component.hpp"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "tc_opengl.h"
@@ -99,11 +103,15 @@
 CSHARP_COMPONENT_EXTERNAL_BODY(termin::CameraComponent)
 CSHARP_COMPONENT_EXTERNAL_BODY(termin::OrbitCameraController)
 CSHARP_COMPONENT_EXTERNAL_BODY(termin::MeshRenderer)
+CSHARP_COMPONENT_EXTERNAL_BODY(termin::ColliderComponent)
+CSHARP_COMPONENT_EXTERNAL_BODY(termin::RotatorComponent)
+CSHARP_COMPONENT_EXTERNAL_BODY(termin::ActuatorComponent)
 
 // Apply macros to pass classes
 CSHARP_PASS_EXTERNAL_BODY(termin::ColorPass)
 CSHARP_PASS_EXTERNAL_BODY(termin::PresentToScreenPass)
 CSHARP_PASS_EXTERNAL_BODY(termin::DepthPass)
+CSHARP_PASS_EXTERNAL_BODY(termin::ColliderGizmoPass)
 
 // Opaque type for tc_component
 typedef struct tc_component tc_component;
@@ -763,6 +771,83 @@ public:
 };
 
 // ============================================================================
+// ColliderComponent - collider primitive attached to entity
+// ============================================================================
+
+class ColliderComponent {
+public:
+    // Fields are hidden - use get/set methods instead (they call rebuild_collider)
+
+    ColliderComponent();
+
+    // Set collider type: "Box", "Sphere", "Capsule" (calls rebuild_collider)
+    void set_collider_type(const std::string& type);
+
+    // Set box size (calls rebuild_collider)
+    void set_box_size(double x, double y, double z);
+    Vec3 get_box_size() const;
+
+    // Rebuild collider after type/size change
+    void rebuild_collider();
+
+    // Component pointer for C API interop
+    tc_component* tc_component_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
+};
+
+// ============================================================================
+// RotatorComponent - rotates entity around an axis
+// ============================================================================
+
+class RotatorComponent {
+public:
+    // Fields hidden - use get/set methods
+
+    RotatorComponent();
+
+    // Set rotation axis (normalized internally)
+    void set_axis(double x, double y, double z);
+    Vec3 get_axis() const;
+
+    // Set coordinate (rotation angle in radians)
+    void set_coordinate(double value);
+    double get_coordinate() const;
+
+    // Component pointer for C API interop
+    tc_component* tc_component_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
+};
+
+// ============================================================================
+// ActuatorComponent - moves entity along an axis
+// ============================================================================
+
+class ActuatorComponent {
+public:
+    // Fields hidden - use get/set methods
+
+    ActuatorComponent();
+
+    // Set movement axis (normalized internally)
+    void set_axis(double x, double y, double z);
+    Vec3 get_axis() const;
+
+    // Set coordinate (displacement along axis)
+    void set_coordinate(double value);
+    double get_coordinate() const;
+
+    // Component pointer for C API interop
+    tc_component* tc_component_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
+};
+
+// ============================================================================
 // ColorPass - main color rendering pass
 // ============================================================================
 
@@ -833,6 +918,30 @@ public:
         const std::string& output_res = "OUTPUT"
     );
     virtual ~PresentToScreenPass();
+
+    tc_pass* tc_pass_ptr();
+
+    // External body management (for C# prevent-GC mechanism)
+    void set_external_body(void* body);
+};
+
+// ============================================================================
+// ColliderGizmoPass - renders collider wireframes for debugging
+// ============================================================================
+
+class ColliderGizmoPass {
+public:
+    std::string input_res;
+    std::string output_res;
+    bool depth_test;
+
+    ColliderGizmoPass(
+        const std::string& input_res = "color",
+        const std::string& output_res = "color",
+        const std::string& pass_name = "ColliderGizmo",
+        bool depth_test = false
+    );
+    virtual ~ColliderGizmoPass();
 
     tc_pass* tc_pass_ptr();
 
