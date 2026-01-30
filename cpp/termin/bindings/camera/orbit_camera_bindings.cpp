@@ -6,6 +6,7 @@
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/geom/vec3.hpp"
 #include "termin/input/input_events.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -14,7 +15,9 @@ namespace termin {
 
 void bind_orbit_camera_controller(nb::module_& m) {
     nb::class_<OrbitCameraController, CxxComponent>(m, "OrbitCameraController")
-        .def(nb::init<double, double, double, bool>(),
+        .def("__init__", [](nb::handle self, double radius, double min_radius, double max_radius, bool prevent_moving) {
+            cxx_component_init<OrbitCameraController>(self, radius, min_radius, max_radius, prevent_moving);
+        },
             nb::arg("radius") = 5.0,
             nb::arg("min_radius") = 1.0,
             nb::arg("max_radius") = 100.0,

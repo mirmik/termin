@@ -12,6 +12,7 @@
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/inspect/tc_kind.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 #include "../../../trent/trent.h"
 #include "tc_log.hpp"
 
@@ -418,14 +419,17 @@ void bind_skeleton_instance(nb::module_& m) {
 
 void bind_skeleton_controller(nb::module_& m) {
     nb::class_<termin::SkeletonController, termin::Component>(m, "SkeletonController")
-        .def(nb::init<>())
-        .def("__init__", [](termin::SkeletonController* self, nb::object skeleton_arg, nb::list bone_entities_list) {
-            new (self) termin::SkeletonController();
+        .def("__init__", [](nb::handle self) {
+            termin::cxx_component_init<termin::SkeletonController>(self);
+        })
+        .def("__init__", [](nb::handle self, nb::object skeleton_arg, nb::list bone_entities_list) {
+            termin::cxx_component_init<termin::SkeletonController>(self);
+            auto* cpp = nb::inst_ptr<termin::SkeletonController>(self);
 
             // Handle skeleton argument: TcSkeleton
             if (!skeleton_arg.is_none()) {
                 if (nb::isinstance<termin::TcSkeleton>(skeleton_arg)) {
-                    self->skeleton = nb::cast<termin::TcSkeleton>(skeleton_arg);
+                    cpp->skeleton = nb::cast<termin::TcSkeleton>(skeleton_arg);
                 }
             }
 
@@ -435,7 +439,7 @@ void bind_skeleton_controller(nb::module_& m) {
                     entities.push_back(nb::cast<termin::Entity>(item));
                 }
             }
-            self->set_bone_entities(std::move(entities));
+            cpp->set_bone_entities(std::move(entities));
         },
             nb::arg("skeleton") = nb::none(),
             nb::arg("bone_entities") = nb::list())

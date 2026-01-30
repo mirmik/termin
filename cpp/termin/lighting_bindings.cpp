@@ -8,16 +8,11 @@
 #include "termin/lighting/light_component.hpp"
 #include "termin/entity/component.hpp"
 #include "termin/geom/vec3.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
 
-// Helper: Vec3 to numpy array
-static nb::object vec3_to_numpy(const Vec3& v) {
-    double* data = new double[3]{v.x, v.y, v.z};
-    nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner));
-}
 
 // Helper: numpy array to Vec3
 static Vec3 numpy_to_vec3(nb::object obj) {
@@ -269,7 +264,9 @@ NB_MODULE(_lighting_native, m) {
 
     // LightComponent - component that provides a light source
     nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
-        .def(nb::init<>())
+        .def("__init__", [](nb::handle self) {
+            termin::cxx_component_init<LightComponent>(self);
+        })
 
         // Light type
         .def_prop_rw("light_type",

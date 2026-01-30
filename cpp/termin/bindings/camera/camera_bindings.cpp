@@ -6,6 +6,7 @@
 #include <nanobind/stl/tuple.h>
 
 #include "termin/camera/camera_component.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace nb = nanobind;
 
@@ -13,7 +14,9 @@ namespace termin {
 
 void bind_camera_component(nb::module_& m) {
     nb::class_<CameraComponent, CxxComponent>(m, "CameraComponent")
-        .def(nb::init<>())
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<CameraComponent>(self);
+        })
 
         // Projection type
         .def_prop_rw("projection_type",

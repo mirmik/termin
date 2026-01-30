@@ -162,7 +162,7 @@ public:
         return result;
     }
 
-protected:
+public:
     CxxComponent();
 
 private:

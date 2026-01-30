@@ -179,7 +179,6 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             # Find existing tc_shader (don't create - it's created by MaterialPhase)
             tc = TcShader.from_uuid(phase_uuid)
             if not tc.is_valid:
-                log.info(f"[ShaderAsset] _update_tc_shaders: tc_shader not found for {phase_uuid}, skipping")
                 continue
 
             # Get sources from phase
@@ -192,8 +191,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             geometry_src = gs.source if gs else ""
 
             # Update sources in tc_shader (bumps version if changed)
-            changed = tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
-            log.info(f"[ShaderAsset] _update_tc_shaders uuid={phase_uuid} changed={changed} ver={tc.version}")
+            tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
 
     def _on_loaded(self) -> None:
         """After loading/reloading, update tc_shader registry for hot-reload."""

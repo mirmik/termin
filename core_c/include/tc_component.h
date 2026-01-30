@@ -40,7 +40,6 @@ typedef enum tc_component_kind {
 // ============================================================================
 
 #include "tc_binding.h"
-typedef int tc_binding_type;
 
 // ============================================================================
 // Drawable VTable - for components that can render geometry
@@ -154,20 +153,22 @@ struct tc_component {
     // Component kind (native or external)
     tc_component_kind kind;
 
-    // Native language - which language the component type is defined in
-    // TC_LANGUAGE_CXX for C++ components
-    // TC_LANGUAGE_PYTHON for Python components
+    // Native language - which language owns this component instance
+    // TC_LANGUAGE_CXX: component created from C++ code
+    // TC_LANGUAGE_PYTHON: component created from Python code
     tc_language native_language;
 
-    // Body pointer - points to the actual component implementation
-    // For TC_LANGUAGE_PYTHON: PyObject* of the PythonComponent
-    // For TC_LANGUAGE_CXX: NULL (body is the CxxComponent containing this tc_component)
+    // Body pointer - points to the object that owns this tc_component
+    // MUST NOT be NULL after component is fully constructed
+    // For CxxComponent created from C++: CxxComponent* (this)
+    // For CxxComponent created from Python: PyObject* (Python wrapper)
+    // For PythonComponent: PyObject* (the PythonComponent object)
     void* body;
 
     // Language bindings - wrappers for accessing this component from other languages
-    // bindings[TC_BINDING_PYTHON] = PyObject* wrapper for accessing CxxComponent from Python
+    // bindings[TC_LANGUAGE_PYTHON] = PyObject* wrapper for accessing CxxComponent from Python
     // Each binding holds a reference (via retain) to keep the component alive
-    void* bindings[TC_BINDING_MAX];
+    void* bindings[TC_LANGUAGE_MAX];
 
     // Flags
     bool enabled;
@@ -218,7 +219,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->kind = TC_NATIVE_COMPONENT;
     c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
-    for (int i = 0; i < TC_BINDING_MAX; i++) {
+    for (int i = 0; i < TC_LANGUAGE_MAX; i++) {
         c->bindings[i] = NULL;
     }
     c->enabled = true;
@@ -490,18 +491,18 @@ TC_API void tc_component_unlink_from_registry(tc_component* c);
 // Binding management helpers
 // ============================================================================
 
-static inline void* tc_component_get_binding(tc_component* c, tc_binding_type lang) {
-    if (!c || lang <= TC_BINDING_NONE || lang >= TC_BINDING_MAX) return NULL;
+static inline void* tc_component_get_binding(tc_component* c, tc_language lang) {
+    if (!c || lang < 0 || lang >= TC_LANGUAGE_MAX) return NULL;
     return c->bindings[lang];
 }
 
-static inline void tc_component_set_binding(tc_component* c, tc_binding_type lang, void* binding) {
-    if (!c || lang <= TC_BINDING_NONE || lang >= TC_BINDING_MAX) return;
+static inline void tc_component_set_binding(tc_component* c, tc_language lang, void* binding) {
+    if (!c || lang < 0 || lang >= TC_LANGUAGE_MAX) return;
     c->bindings[lang] = binding;
 }
 
-static inline void tc_component_clear_binding(tc_component* c, tc_binding_type lang) {
-    if (!c || lang <= TC_BINDING_NONE || lang >= TC_BINDING_MAX) return;
+static inline void tc_component_clear_binding(tc_component* c, tc_language lang) {
+    if (!c || lang < 0 || lang >= TC_LANGUAGE_MAX) return;
     c->bindings[lang] = NULL;
 }
 
@@ -538,6 +539,20 @@ static inline void tc_component_set_external_body(tc_component* c, void* body) {
     c->body = body;
     c->externally_managed = true;
 }
+
+// ============================================================================
+// Binding destruction callback - for notifying language bindings when C++ dies
+// ============================================================================
+
+// Callback type: called when a C++ component is being destroyed
+// Implementation should mark the binding as destroyed and DECREF it
+typedef void (*tc_component_on_destroy_binding_fn)(tc_component* c, int binding_type);
+
+// Set the callback (called once at Python bindings init)
+TC_API void tc_component_set_on_destroy_binding(tc_component_on_destroy_binding_fn callback);
+
+// Called from C++ destructor to notify bindings
+TC_API void tc_component_notify_binding_destroyed(tc_component* c);
 
 // ============================================================================
 // Component property accessors (for FFI bindings)

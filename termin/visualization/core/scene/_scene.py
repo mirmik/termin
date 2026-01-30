@@ -440,7 +440,6 @@ class Scene:
 
             self._compiled_pipelines[asset.name] = pipeline
             self._pipeline_targets[asset.name] = list(asset.target_viewports)
-            log.info(f"[Scene] Compiled scene pipeline '{asset.name}'")
 
     def get_compiled_pipeline(self, name: str):
         """

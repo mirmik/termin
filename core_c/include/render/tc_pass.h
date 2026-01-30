@@ -113,8 +113,8 @@ struct tc_pass {
     void* body;                  // External object (PyObject*, etc.) for TC_EXTERNAL_PASS
 
     // Language bindings - wrappers for accessing this pass from other languages
-    // bindings[TC_BINDING_PYTHON] = PyObject* wrapper for accessing native pass from Python
-    void* bindings[TC_BINDING_MAX];
+    // bindings[TC_LANGUAGE_PYTHON] = PyObject* wrapper for accessing native pass from Python
+    void* bindings[TC_LANGUAGE_MAX];
 
     // Owner pipeline (set when added to pipeline)
     struct tc_pipeline* owner_pipeline;
@@ -143,7 +143,7 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->native_language = TC_LANGUAGE_CXX;
     p->externally_managed = false;
     p->body = NULL;
-    for (int i = 0; i < TC_BINDING_MAX; i++) {
+    for (int i = 0; i < TC_LANGUAGE_MAX; i++) {
         p->bindings[i] = NULL;
     }
     p->owner_pipeline = NULL;
@@ -157,18 +157,18 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
 // Binding Helpers
 // ============================================================================
 
-static inline void* tc_pass_get_binding(tc_pass* p, int lang) {
-    if (!p || lang <= 0 || lang >= TC_BINDING_MAX) return NULL;
+static inline void* tc_pass_get_binding(tc_pass* p, tc_language lang) {
+    if (!p || lang < 0 || lang >= TC_LANGUAGE_MAX) return NULL;
     return p->bindings[lang];
 }
 
-static inline void tc_pass_set_binding(tc_pass* p, int lang, void* binding) {
-    if (!p || lang <= 0 || lang >= TC_BINDING_MAX) return;
+static inline void tc_pass_set_binding(tc_pass* p, tc_language lang, void* binding) {
+    if (!p || lang < 0 || lang >= TC_LANGUAGE_MAX) return;
     p->bindings[lang] = binding;
 }
 
-static inline void tc_pass_clear_binding(tc_pass* p, int lang) {
-    if (!p || lang <= 0 || lang >= TC_BINDING_MAX) return;
+static inline void tc_pass_clear_binding(tc_pass* p, tc_language lang) {
+    if (!p || lang < 0 || lang >= TC_LANGUAGE_MAX) return;
     p->bindings[lang] = NULL;
 }
 

@@ -15,13 +15,8 @@ AnimationPlayer::AnimationPlayer()
 void AnimationPlayer::start() {
     CxxComponent::start();
 
-    tc::Log::info("[AnimationPlayer::start] clips.size()=%zu", clips.size());
-
     _rebuild_clips_map();
     _acquire_skeleton();
-
-    tc::Log::info("[AnimationPlayer::start] _clips_map.size()=%zu, _current_clip_name='%s'",
-        _clips_map.size(), _current_clip_name.c_str());
 
     // Restore current clip from name
     if (!_current_clip_name.empty()) {
@@ -29,7 +24,6 @@ void AnimationPlayer::start() {
         if (it != _clips_map.end()) {
             _current_index = (int)it->second;
             _build_channel_mapping();
-            tc::Log::info("[AnimationPlayer::start] Restored clip '%s'", _current_clip_name.c_str());
         }
     }
 }
@@ -53,10 +47,6 @@ void AnimationPlayer::_acquire_skeleton() {
     SkeletonController* sc = entity().get_component<SkeletonController>();
     if (sc != nullptr) {
         _target_skeleton = sc->skeleton_instance();
-        tc::Log::info("[AnimationPlayer::_acquire_skeleton] SkeletonController found, skeleton=%p",
-            (void*)_target_skeleton);
-    } else {
-        tc::Log::warn("[AnimationPlayer::_acquire_skeleton] SkeletonController not found on entity");
     }
 }
 
@@ -74,13 +64,9 @@ void AnimationPlayer::set_current(const std::string& name) {
     if (it != _clips_map.end()) {
         _current_index = (int)it->second;
         _build_channel_mapping();
-        tc::Log::info("[AnimationPlayer::set_current] '%s' found at index %d, skeleton=%p, mapping=%zu",
-            name.c_str(), _current_index, (void*)_target_skeleton, _channel_to_bone.size());
     } else {
         _current_index = -1;
         _channel_to_bone.clear();
-        tc::Log::warn("[AnimationPlayer::set_current] '%s' not found in clips_map (size=%zu)",
-            name.c_str(), _clips_map.size());
     }
 }
 

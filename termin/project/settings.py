@@ -136,7 +136,6 @@ class ProjectSettingsManager:
                 data = json.load(f)
             self._settings = ProjectSettings.from_dict(data)
             self._sync_to_c()
-            log.info(f"[ProjectSettings] Loaded from {path}")
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to load settings: {e}")
             self._settings = ProjectSettings()
@@ -159,7 +158,6 @@ class ProjectSettingsManager:
 
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self._settings.to_dict(), f, indent=2)
-            log.info(f"[ProjectSettings] Saved to {path}")
             return True
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to save settings: {e}")

@@ -175,7 +175,7 @@ public:
                 try {
                     static_cast<C*>(obj)->*member = std::any_cast<T>(val);
                 } catch (const std::bad_any_cast& e) {
-                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                    tc_log(TC_LOG_ERROR, "[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
                                    "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
                                    type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
                 }
@@ -223,7 +223,7 @@ public:
                 try {
                     setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
                 } catch (const std::bad_any_cast& e) {
-                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                    tc_log(TC_LOG_ERROR, "[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
                                    "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
                                    type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
                 }
@@ -264,7 +264,7 @@ public:
                 try {
                     setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
                 } catch (const std::bad_any_cast& e) {
-                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                    tc_log(TC_LOG_ERROR, "[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
                                    "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
                                    type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
                 }
@@ -301,7 +301,7 @@ public:
                 try {
                     static_cast<C*>(obj)->*member = std::any_cast<H>(val);
                 } catch (const std::bad_any_cast& e) {
-                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                    tc_log(TC_LOG_ERROR, "[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
                                    "Check that field type matches kind",
                                    type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
                 }
@@ -425,11 +425,11 @@ public:
     void set_tc_value(void* obj, const std::string& type_name, const std::string& field_path, tc_value value, tc_scene* scene) {
         const InspectFieldInfo* f = find_field(type_name, field_path);
         if (!f) {
-            tc::Log::warn("[Inspect] Field '%s.%s' not found", type_name.c_str(), field_path.c_str());
+            tc_log(TC_LOG_WARN, "[Inspect] Field '%s.%s' not found", type_name.c_str(), field_path.c_str());
             return;
         }
         if (!f->setter) {
-            tc::Log::warn("[Inspect] Field '%s.%s' has no setter", type_name.c_str(), field_path.c_str());
+            tc_log(TC_LOG_WARN, "[Inspect] Field '%s.%s' has no setter", type_name.c_str(), field_path.c_str());
             return;
         }
         f->setter(obj, value, scene);
@@ -489,7 +489,6 @@ struct InspectFieldRegistrar {
     InspectFieldRegistrar(T C::*member, const char* type_name,
                           const char* path, const char* label, const char* kind,
                           double min = 0.0, double max = 1.0, double step = 0.01) {
-        printf("[InspectFieldRegistrar] Registering field: %s.%s (kind=%s)\n", type_name, path, kind);
         InspectRegistry::instance().add<C, T>(type_name, member, path, label, kind, min, max, step);
     }
 };
@@ -551,7 +550,7 @@ struct InspectFieldChoicesRegistrar {
                 try {
                     static_cast<C*>(obj)->*member = std::any_cast<T>(val);
                 } catch (const std::bad_any_cast& e) {
-                    tc::Log::error("[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
+                    tc_log(TC_LOG_ERROR, "[Inspect] Field '%s.%s': kind '%s' returned incompatible type. "
                                    "Check that field type matches kind (e.g., 'double' field needs 'double' kind, not 'float')",
                                    type_copy.c_str(), path_copy.c_str(), kind_copy.c_str());
                 }

@@ -177,7 +177,6 @@ bool ModuleLoader::write_module_version(const std::string& path, int version) {
     out << "}\n";
     out.close();
 
-    tc::Log::info("Module '%s' built_version updated to %d", path.c_str(), version);
     return true;
 }
 
@@ -487,8 +486,6 @@ bool ModuleLoader::load_module(const std::string& module_path) {
 
     // Check if module was built with different engine version
     if (!needs_compile && desc.built_version != TC_VERSION) {
-        tc::Log::info("Module '%s' built_version=%d, engine TC_VERSION=%d, recompiling...",
-                      desc.name.c_str(), desc.built_version, TC_VERSION);
         needs_compile = true;
     }
 
@@ -498,7 +495,6 @@ bool ModuleLoader::load_module(const std::string& module_path) {
         for (const auto& src : desc.sources) {
             fs::path src_path = module_dir / src;
             if (fs::exists(src_path) && fs::last_write_time(src_path) > dll_time) {
-                tc::Log::info("Source file '%s' is newer than DLL, recompiling...", src.c_str());
                 needs_compile = true;
                 break;
             }
@@ -553,7 +549,6 @@ bool ModuleLoader::load_module(const std::string& module_path) {
     _modules[desc.name] = mod;
 
     emit_event(desc.name, "loaded");
-    tc::Log::info("Module loaded: %s", desc.name.c_str());
 
     return true;
 }
@@ -593,7 +588,6 @@ bool ModuleLoader::unload_module(const std::string& name) {
     _modules.erase(it);
 
     emit_event(name, "unloaded");
-    tc::Log::info("Module unloaded: %s", name.c_str());
 
     return true;
 }
@@ -643,7 +637,6 @@ bool ModuleLoader::reload_module(const std::string& name) {
     restore_module_components(name);
 
     emit_event(name, "reloaded");
-    tc::Log::info("Module reloaded: %s", name.c_str());
 
     return true;
 }

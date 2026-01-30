@@ -138,6 +138,10 @@ class LightingManager:
             lights.append(light)
             return True
 
+        # Ensure LightComponent bindings are loaded before iterating
+        # (nanobind needs the module loaded to resolve types correctly)
+        from termin.lighting import LightComponent as _  # noqa: F401
+
         self.tc_scene.foreach_component_of_type("LightComponent", process_light)
         self.lights = lights
         return lights

@@ -119,8 +119,6 @@ class LayerMaskKind:
     @staticmethod
     def serialize(obj):
         # Serialize as hex string to handle values > int64_t max
-        from termin._native import log
-        log.warn(f"LayerMaskKind.serialize: obj={obj!r}, type={type(obj).__name__}")
         if isinstance(obj, str):
             return obj  # Already serialized
         return hex(obj)

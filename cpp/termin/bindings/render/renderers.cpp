@@ -6,6 +6,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/material/tc_material_handle.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace termin {
 
@@ -18,37 +19,40 @@ void bind_renderers(nb::module_& m) {
 
     // MeshRenderer - inherits from Component
     nb::class_<MeshRenderer, Component>(m, "MeshRenderer")
-        .def(nb::init<>())
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<MeshRenderer>(self);
+        })
         // Constructor with mesh and material (for Python compatibility)
-        .def("__init__", [](MeshRenderer* self, nb::object mesh_arg, nb::object material_arg, bool cast_shadow) {
-            new (self) MeshRenderer();
-            self->cast_shadow = cast_shadow;
+        .def("__init__", [](nb::handle self, nb::object mesh_arg, nb::object material_arg, bool cast_shadow) {
+            cxx_component_init<MeshRenderer>(self);
+            auto* cpp = nb::inst_ptr<MeshRenderer>(self);
+            cpp->cast_shadow = cast_shadow;
 
             if (!mesh_arg.is_none()) {
                 // Try TcMesh first
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
-                    self->mesh = nb::cast<TcMesh>(mesh_arg);
+                    cpp->mesh = nb::cast<TcMesh>(mesh_arg);
                 } else if (nb::hasattr(mesh_arg, "mesh_data")) {
                     // MeshAsset - get mesh_data (TcMesh)
                     nb::object res = mesh_arg.attr("mesh_data");
                     if (nb::isinstance<TcMesh>(res)) {
-                        self->mesh = nb::cast<TcMesh>(res);
+                        cpp->mesh = nb::cast<TcMesh>(res);
                     }
                 } else if (nb::isinstance<nb::str>(mesh_arg)) {
                     // String - lookup by name
                     std::string name = nb::cast<std::string>(mesh_arg);
-                    self->set_mesh_by_name(name);
+                    cpp->set_mesh_by_name(name);
                 }
             }
 
             if (!material_arg.is_none()) {
                 // Try TcMaterial first
                 if (nb::isinstance<TcMaterial>(material_arg)) {
-                    self->material = nb::cast<TcMaterial>(material_arg);
+                    cpp->material = nb::cast<TcMaterial>(material_arg);
                 } else if (nb::isinstance<nb::str>(material_arg)) {
                     // String - lookup by name
                     std::string name = nb::cast<std::string>(material_arg);
-                    self->set_material_by_name(name);
+                    cpp->set_material_by_name(name);
                 }
             }
         }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
@@ -107,42 +111,45 @@ void bind_renderers(nb::module_& m) {
 
     // SkinnedMeshRenderer - inherits from MeshRenderer
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
-        .def(nb::init<>())
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<SkinnedMeshRenderer>(self);
+        })
         // Constructor with mesh, material, skeleton_controller
-        .def("__init__", [](SkinnedMeshRenderer* self, nb::object mesh_arg, nb::object material_arg, SkeletonController* skeleton_controller, bool cast_shadow) {
-            new (self) SkinnedMeshRenderer();
-            self->cast_shadow = cast_shadow;
+        .def("__init__", [](nb::handle self, nb::object mesh_arg, nb::object material_arg, SkeletonController* skeleton_controller, bool cast_shadow) {
+            cxx_component_init<SkinnedMeshRenderer>(self);
+            auto* cpp = nb::inst_ptr<SkinnedMeshRenderer>(self);
+            cpp->cast_shadow = cast_shadow;
 
             if (!mesh_arg.is_none()) {
                 // Try TcMesh first
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
-                    self->mesh = nb::cast<TcMesh>(mesh_arg);
+                    cpp->mesh = nb::cast<TcMesh>(mesh_arg);
                 } else if (nb::hasattr(mesh_arg, "mesh_data")) {
                     // MeshAsset - get mesh_data (TcMesh)
                     nb::object res = mesh_arg.attr("mesh_data");
                     if (nb::isinstance<TcMesh>(res)) {
-                        self->mesh = nb::cast<TcMesh>(res);
+                        cpp->mesh = nb::cast<TcMesh>(res);
                     }
                 } else if (nb::isinstance<nb::str>(mesh_arg)) {
                     // String - lookup by name
                     std::string name = nb::cast<std::string>(mesh_arg);
-                    self->set_mesh_by_name(name);
+                    cpp->set_mesh_by_name(name);
                 }
             }
 
             if (!material_arg.is_none()) {
                 // Try TcMaterial first
                 if (nb::isinstance<TcMaterial>(material_arg)) {
-                    self->material = nb::cast<TcMaterial>(material_arg);
+                    cpp->material = nb::cast<TcMaterial>(material_arg);
                 } else if (nb::isinstance<nb::str>(material_arg)) {
                     // String - lookup by name
                     std::string name = nb::cast<std::string>(material_arg);
-                    self->set_material_by_name(name);
+                    cpp->set_material_by_name(name);
                 }
             }
 
             if (skeleton_controller != nullptr) {
-                self->set_skeleton_controller(skeleton_controller);
+                cpp->set_skeleton_controller(skeleton_controller);
             }
         },
             nb::arg("mesh") = nb::none(),

@@ -208,8 +208,6 @@ void bind_render_pipeline(nb::module_& m) {
             nb::dict result;
             result["name"] = self.name();
 
-            std::cout << "RenderPipeline::serialize: serializing pipeline: " << self.name() << std::endl;
-
             // Serialize passes via TcPassRef
             nb::list passes_list;
             for (size_t i = 0; i < self.pass_count(); i++) {
@@ -271,8 +269,6 @@ void bind_render_pipeline(nb::module_& m) {
             if (data.contains("name")) {
                 name = nb::cast<std::string>(data["name"]);
             }
-
-            std::cout << "RenderPipeline::deserialize: deserializing pipeline: " << name << std::endl;
 
             RenderPipeline* pipeline = new RenderPipeline(name);
 
@@ -343,8 +339,6 @@ void bind_render_pipeline(nb::module_& m) {
 
         // Deep copy pipeline via serialization/deserialization
         .def("copy", [](RenderPipeline& self, nb::object resource_manager) -> nb::object {
-            std::cout << "RenderPipeline::copy called for pipeline: " << self.name() << std::endl;
-
             nb::dict data = nb::cast<nb::dict>(nb::cast(&self).attr("serialize")());
 
             nb::module_ render_module = nb::module_::import_("termin._native.render");

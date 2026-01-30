@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdio>
 #include "component.hpp"
 
 namespace termin {
@@ -49,7 +48,6 @@ private:
 template<typename T>
 bool component_overrides_update() {
     int slot = VTableSlots::instance().update_slot;
-    printf("[component_overrides_update] update_slot=%d\n", slot);
     if (slot < 0) return false;
 
     ComponentVTableProbe base;
@@ -58,10 +56,7 @@ bool component_overrides_update() {
     void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
     void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
 
-    bool result = base_vtable[slot] != derived_vtable[slot];
-    printf("[component_overrides_update] base[%d]=%p derived[%d]=%p result=%d\n",
-        slot, base_vtable[slot], slot, derived_vtable[slot], result ? 1 : 0);
-    return result;
+    return base_vtable[slot] != derived_vtable[slot];
 }
 
 // Check if type T overrides CxxComponent::fixed_update().

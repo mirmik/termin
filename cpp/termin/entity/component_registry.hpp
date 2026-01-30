@@ -67,7 +67,6 @@ namespace detail {
 template<typename T>
 void mark_drawable_if_base(const char* name) {
     if constexpr (detail::is_base_of_safe<Drawable, T>::value) {
-        tc::Log::info("[ComponentRegistrar] Marking '%s' as drawable", name);
         ComponentRegistry::set_drawable(name, true);
     }
 }

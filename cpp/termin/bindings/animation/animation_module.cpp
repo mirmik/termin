@@ -6,6 +6,7 @@
 #include "termin/animation/animation_player.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
 #include "termin/inspect/tc_kind.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -185,7 +186,9 @@ void bind_tc_animation_clip(nb::module_& m) {
 
 void bind_animation_player(nb::module_& m) {
     nb::class_<AnimationPlayer, Component>(m, "AnimationPlayer")
-        .def(nb::init<>())
+        .def("__init__", [](nb::handle self) {
+            termin::cxx_component_init<AnimationPlayer>(self);
+        })
         .def_rw("clips", &AnimationPlayer::clips)
         .def_rw("_current_clip_name", &AnimationPlayer::_current_clip_name)
         .def_rw("time", &AnimationPlayer::time)

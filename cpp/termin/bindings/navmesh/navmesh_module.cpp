@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/entity/component.hpp"
+#include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace termin {
 
@@ -34,7 +35,9 @@ void bind_recast_navmesh_builder(nb::module_& m) {
 
     // RecastNavMeshBuilderComponent
     nb::class_<RecastNavMeshBuilderComponent, CxxComponent>(m, "RecastNavMeshBuilderComponent")
-        .def(nb::init<>())
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<RecastNavMeshBuilderComponent>(self);
+        })
         // Agent type selection
         .def_rw("agent_type_name", &RecastNavMeshBuilderComponent::agent_type_name)
         // Rasterization parameters

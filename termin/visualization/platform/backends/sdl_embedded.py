@@ -106,7 +106,6 @@ class QtKeyEventFilter:
     def handle_key_event(self, event) -> bool:
         """Handle Qt key event, forward to SDL callback."""
         from PyQt6.QtCore import QEvent, Qt
-        from termin._native import log
 
         is_press = event.type() == QEvent.Type.KeyPress
         is_release = event.type() == QEvent.Type.KeyRelease
@@ -131,10 +130,8 @@ class QtKeyEventFilter:
 
         if is_press:
             action = Action.REPEAT if event.isAutoRepeat() else Action.PRESS
-            log.info(f"[Qt->SDL] KEYDOWN: key={key}, mods={mods}")
         else:
             action = Action.RELEASE
-            log.info(f"[Qt->SDL] KEYUP: key={key}, mods={mods}")
 
         if self._backend_window._key_callback is not None:
             self._backend_window._key_callback(
@@ -330,15 +327,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_GetAttribute(video.SDL_GL_RED_SIZE, ctypes.byref(r_size))
         video.SDL_GL_GetAttribute(video.SDL_GL_GREEN_SIZE, ctypes.byref(g_size))
         video.SDL_GL_GetAttribute(video.SDL_GL_BLUE_SIZE, ctypes.byref(b_size))
-        from termin._native import log
-        log.info(f"[SDL] Window color depth: R={r_size.value} G={g_size.value} B={b_size.value}")
-
         # Disable VSync (note: 10-bit mode may force vsync due to driver/DWM behavior)
         swap_result = video.SDL_GL_SetSwapInterval(0)
-        actual_swap = video.SDL_GL_GetSwapInterval()
         if swap_result != 0:
+            from termin._native import log
             log.warn(f"[SDL] Failed to set SwapInterval=0: {sdl2.SDL_GetError()}")
-        log.info(f"[SDL] SwapInterval: requested=0, result={swap_result}, actual={actual_swap}")
 
         # Get native handle for Qt embedding
         self._native_handle = _get_native_window_handle(self._window)
@@ -783,11 +776,9 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 self._mouse_button_callback(self, button, Action.RELEASE, mods)
 
         elif event_type == sdl2.SDL_KEYDOWN:
-            from termin._native import log
             key = _translate_key(event.key.keysym.scancode)
             action = Action.REPEAT if event.key.repeat else Action.PRESS
             mods = _translate_sdl_mods(event.key.keysym.mod)
-            log.info(f"[SDL] KEYDOWN: key={key}, mods={mods}")
             # Route through tc_input_manager if set
             if self._input_manager_ptr:
                 from termin._native.render import _input_manager_on_key
@@ -796,10 +787,8 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 self._key_callback(self, key, event.key.keysym.scancode, action, mods)
 
         elif event_type == sdl2.SDL_KEYUP:
-            from termin._native import log
             key = _translate_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
-            log.info(f"[SDL] KEYUP: key={key}, mods={mods}")
             # Route through tc_input_manager if set
             if self._input_manager_ptr:
                 from termin._native.render import _input_manager_on_key

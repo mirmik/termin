@@ -107,7 +107,6 @@ class FramePass:
             return
 
         # Register pass type in C registry with class for factory
-        print(f"[FramePass.__init_subclass__] Registering pass type: {cls.__name__}")
         if not tc_pass_registry_has(cls.__name__):
             tc_pass_registry_register_python(cls.__name__, cls)
 

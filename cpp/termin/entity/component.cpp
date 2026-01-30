@@ -37,6 +37,10 @@ CxxComponent::CxxComponent() {
     // Initialize the C component structure
     tc_component_init(&_c, &_cxx_vtable);
     _c.kind = TC_CXX_COMPONENT;
+    // Default: C++ owns this component, body points to self
+    // If created from Python, Python bindings will override body and native_language
+    _c.body = this;
+    _c.native_language = TC_LANGUAGE_CXX;
     // Note: type_entry is set by the registry when component is created via factory
     // Set default flags
     _c.enabled = true;
@@ -48,6 +52,8 @@ CxxComponent::CxxComponent() {
 }
 
 CxxComponent::~CxxComponent() {
+    // Notify any language bindings that this component is being destroyed
+    tc_component_notify_binding_destroyed(&_c);
 }
 
 void CxxComponent::release() {

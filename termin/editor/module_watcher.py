@@ -158,9 +158,6 @@ class ModuleWatcher:
         for pattern in module_info.get("sources", []):
             self._watch_source_pattern(module_name, module_dir, pattern)
 
-        log.info(
-            f"[ModuleWatcher] Watching module '{module_name}' with {len(self._module_files[module_name])} files"
-        )
         return True
 
     def unwatch_module(self, module_name: str) -> None:
@@ -178,8 +175,6 @@ class ModuleWatcher:
         del self._module_files[module_name]
         if module_name in self._module_paths:
             del self._module_paths[module_name]
-
-        log.info(f"[ModuleWatcher] Stopped watching module '{module_name}'")
 
     def get_watched_modules(self) -> list[str]:
         """Get list of watched module names."""
@@ -216,7 +211,6 @@ class ModuleWatcher:
                     self._on_reload_complete(module_name, False, "Module path not found")
                 return False
 
-            log.info(f"[ModuleWatcher] Initial load for module: {module_name}")
             success = loader.load_module(module_path)
         else:
             success = loader.reload_module(module_name)
@@ -239,9 +233,7 @@ class ModuleWatcher:
 
             scene = get_current_scene()
             if scene:
-                upgraded = upgrade_unknown_components(scene)
-                if upgraded > 0:
-                    log.info(f"[ModuleWatcher] Upgraded {upgraded} component(s)")
+                upgrade_unknown_components(scene)
         except Exception as e:
             log.error(f"[ModuleWatcher] Failed to upgrade components: {e}")
 

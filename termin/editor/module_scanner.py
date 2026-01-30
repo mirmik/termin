@@ -102,13 +102,10 @@ class ModuleScanner:
         Returns:
             Tuple of (loaded_count, failed_count)
         """
-        log.info(f"[ModuleScanner] Scanning for modules in: {project_path}")
-
         if not self._engine_paths_configured:
             self.configure_engine_paths()
 
         module_files = self._find_module_files(project_path)
-        log.info(f"[ModuleScanner] Found {len(module_files)} .module file(s): {module_files}")
 
         if not module_files:
             if self._on_scan_complete:
@@ -175,11 +172,8 @@ class ModuleScanner:
         """
         from termin.entity._entity_native import ModuleLoader
 
-        log.info(f"[ModuleScanner] Loading module: {module_path}")
-
         loader = ModuleLoader.instance()
         success = loader.load_module(module_path)
-        log.info(f"[ModuleScanner] load_module returned: {success}")
 
         module_name = self._get_module_name(module_path)
 
@@ -197,8 +191,6 @@ class ModuleScanner:
         if success:
             if self._on_module_loaded:
                 self._on_module_loaded(module_name, True, "")
-
-            log.info(f"[ModuleScanner] Loaded module: {module_name}")
         else:
             error = loader.last_error
 

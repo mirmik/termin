@@ -3,6 +3,7 @@
 ## Debugging
 
 Debug prints are allowed for investigating issues.
+Когда удаляешь логи - удаляй DEBUG и INFO. WARN и ERROR трогать не надо. Чем их больше, тем лучше. 
 
 ## Code Style
 

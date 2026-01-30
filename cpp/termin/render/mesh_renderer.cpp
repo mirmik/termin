@@ -105,8 +105,6 @@ void MeshRenderer::try_create_override_material() {
     // Create override material from base
     _overridden_material = TcMaterial::copy(material);
     if (_overridden_material.is_valid()) {
-        tc::Log::debug("[MeshRenderer] created override material '%s' from '%s'",
-            _overridden_material.name(), material.name());
         std::string override_name = std::string(material.name()) + "_override";
         _overridden_material.set_name(override_name.c_str());
 

@@ -129,6 +129,8 @@ class SceneTreeController:
 
         for child in node.children:
             if isinstance(child, NodeWrapper) and isinstance(child.obj, Entity):
+                if not child.obj.valid():
+                    continue
                 index = self._model.index_for_object(child.obj)
                 if index.isValid() and self._tree.isExpanded(index):
                     if child.obj.uuid:
@@ -145,6 +147,8 @@ class SceneTreeController:
 
         for child in node.children:
             if isinstance(child, NodeWrapper) and isinstance(child.obj, Entity):
+                if not child.obj.valid():
+                    continue
                 if child.obj.uuid and child.obj.uuid in expanded_uuids:
                     index = self._model.index_for_object(child.obj)
                     if index.isValid():

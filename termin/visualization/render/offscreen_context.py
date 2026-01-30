@@ -97,15 +97,11 @@ class OffscreenContext:
         # Make current and initialize graphics backend
         self.make_current()
 
-        from termin._native import log
-        log.info(f"[OffscreenContext] Created GL context: {self._gl_context}")
-
         from termin.graphics import OpenGLGraphicsBackend
         self._graphics = OpenGLGraphicsBackend()
 
         # Ensure OpenGL functions are loaded
         self._graphics.ensure_ready()
-        log.info("[OffscreenContext] Graphics backend initialized and ready")
 
     @property
     def graphics(self) -> "GraphicsBackend":

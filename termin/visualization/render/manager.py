@@ -508,7 +508,6 @@ class RenderingManager:
                 if vp.name and vp.name not in viewport_by_name:
                     viewport_by_name[vp.name] = vp
 
-        log.info(f"[_apply_scene_pipelines] Available viewports: {list(viewport_by_name.keys())}")
 
         # Mark viewports as managed by their scene pipeline
         for handle in scene.scene_pipelines:
@@ -526,7 +525,6 @@ class RenderingManager:
                     continue
 
                 viewport.managed_by_scene_pipeline = asset.name
-                log.info(f"[attach_scene] Viewport '{viewport_name}' managed by '{asset.name}'")
 
     def detach_scene(self, scene: "Scene") -> None:
         """

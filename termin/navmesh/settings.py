@@ -137,7 +137,6 @@ class NavigationSettingsManager:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._settings = NavigationSettings.from_dict(data)
-            log.info(f"[NavigationSettings] Loaded {len(self._settings.agent_types)} agent types from {path}")
         except Exception as e:
             log.error(f"[NavigationSettings] Failed to load settings: {e}")
             self._settings = NavigationSettings()
@@ -155,7 +154,6 @@ class NavigationSettingsManager:
 
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self._settings.to_dict(), f, indent=2)
-            log.info(f"[NavigationSettings] Saved to {path}")
             return True
         except Exception as e:
             log.error(f"[NavigationSettings] Failed to save settings: {e}")

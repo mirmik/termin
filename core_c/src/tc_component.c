@@ -303,6 +303,27 @@ void tc_component_body_decref(void* body) {
 }
 
 // ============================================================================
+// Binding destruction notification
+// ============================================================================
+
+static tc_component_on_destroy_binding_fn g_on_destroy_binding = NULL;
+
+void tc_component_set_on_destroy_binding(tc_component_on_destroy_binding_fn callback) {
+    g_on_destroy_binding = callback;
+}
+
+void tc_component_notify_binding_destroyed(tc_component* c) {
+    if (!c || !g_on_destroy_binding) return;
+
+    // Notify all bindings that this component is being destroyed
+    for (int i = 0; i < TC_LANGUAGE_MAX; i++) {
+        if (c->bindings[i]) {
+            g_on_destroy_binding(c, i);
+        }
+    }
+}
+
+// ============================================================================
 // Component property accessors (for FFI bindings)
 // ============================================================================
 

@@ -190,10 +190,7 @@ class EditorProjectController:
 
     def _load_project_modules(self, project_root: Path) -> None:
         """Load all C++ modules from the project directory."""
-        from termin._native import log
         from termin.editor.module_scanner import ModuleScanner
-
-        log.info(f"[ProjectController] Loading modules from: {project_root}")
 
         scanner = ModuleScanner(
             on_module_loaded=self._on_module_loaded,

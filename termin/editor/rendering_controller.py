@@ -273,21 +273,14 @@ class RenderingController:
         # Group viewports by display
         display_viewports: dict[int, list[tuple["Viewport", ViewportConfig]]] = {}
 
-        print(f"[RenderingController.attach_scene] viewports count: {len(viewports)}")
-        print(f"[RenderingController.attach_scene] scene.viewport_configs count: {len(scene.viewport_configs)}")
-        for cfg in scene.viewport_configs:
-            print(f"[RenderingController.attach_scene]   config: display_name={cfg.display_name}, camera_uuid={cfg.camera_uuid}, input_mode={cfg.input_mode}")
-
         for viewport in viewports:
             display = self._manager.get_display_for_viewport(viewport)
-            print(f"[RenderingController.attach_scene] viewport camera={viewport.camera}, display={display.name if display else None}")
             if display is None:
                 continue
             display_id = id(display)
 
             # Find matching ViewportConfig
             config = self._find_viewport_config(scene, viewport, display)
-            print(f"[RenderingController.attach_scene] config for viewport: {config}")
             if config is None:
                 continue
 
@@ -322,7 +315,6 @@ class RenderingController:
         if display is None:
             display = self._manager.get_display_for_viewport(viewport)
         if display is None or viewport.camera is None:
-            print(f"[_find_viewport_config] returning None: display={display}, camera={viewport.camera}")
             return None
 
         display_name = display.name
@@ -330,14 +322,10 @@ class RenderingController:
         if viewport.camera.entity is not None:
             camera_uuid = viewport.camera.entity.uuid
 
-        print(f"[_find_viewport_config] looking for display_name={display_name}, camera_uuid={camera_uuid}")
-
         for config in scene.viewport_configs:
             if config.display_name == display_name and config.camera_uuid == camera_uuid:
-                print(f"[_find_viewport_config] FOUND match: {config}")
                 return config
 
-        print(f"[_find_viewport_config] NO match found")
         return None
 
     def _setup_display_input(self, display: "Display", input_mode: str) -> None:
@@ -348,7 +336,6 @@ class RenderingController:
             display: Display to set up input for.
             input_mode: Input mode ("none", "simple", "basic", "editor").
         """
-        print(f"[RenderingController] _setup_display_input: display={display.name}, input_mode={input_mode}")
         display_id = id(display)
 
         # Get surface from display
@@ -370,7 +357,6 @@ class RenderingController:
             self._display_input_managers[display_id] = input_manager
 
             # Connect input manager to surface
-            print(f"[RenderingController] _setup_display_input: setting ptr={input_manager.tc_input_manager_ptr}")
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif input_mode == "basic":
             # Basic C input manager (no raycast, cross-language compatible)
@@ -379,7 +365,6 @@ class RenderingController:
             input_manager = BasicDisplayInputManager(display.tc_display_ptr)
             self._display_input_managers[display_id] = input_manager
 
-            print(f"[RenderingController] _setup_display_input: setting basic ptr={input_manager.tc_input_manager_ptr}")
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif input_mode == "editor":
             # Editor mode is handled by EditorWindow via callback
@@ -990,8 +975,6 @@ class RenderingController:
         """Apply input mode to a display."""
         display_id = id(display)
 
-        print(f"[RenderingController] _update_display_input_mode: display={display.name}, mode={mode}")
-
         # Get surface from display
         surface = display.surface
 
@@ -1018,7 +1001,6 @@ class RenderingController:
             self._display_input_managers[display_id] = input_manager
 
             # Connect input manager to surface
-            print(f"[RenderingController] Setting SimpleDisplayInputManager on surface, ptr={input_manager.tc_input_manager_ptr}")
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif mode == "basic":
             from termin.visualization.platform.input_manager import BasicDisplayInputManager
@@ -1026,7 +1008,6 @@ class RenderingController:
             input_manager = BasicDisplayInputManager(display.tc_display_ptr)
             self._display_input_managers[display_id] = input_manager
 
-            print(f"[RenderingController] Setting BasicDisplayInputManager on surface, ptr={input_manager.tc_input_manager_ptr}")
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif mode == "editor":
             # Editor mode is handled by EditorWindow via callback
