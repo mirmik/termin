@@ -394,6 +394,9 @@ void RenderEngine::render_view_to_fbo(
         // Execute pass via vtable
         tc_pass_execute(pass, &ctx);
 
+        
+        tc_profiler_begin_section("Sync Operations");
+
         // Apply render sync between passes (for debugging)
         tc_render_sync_mode sync_mode = tc_project_settings_get_render_sync_mode();
         if (sync_mode == TC_RENDER_SYNC_FLUSH) {
@@ -401,6 +404,7 @@ void RenderEngine::render_view_to_fbo(
         } else if (sync_mode == TC_RENDER_SYNC_FINISH) {
             graphics->finish();
         }
+        tc_profiler_end_section(); // Sync Operations
 
         tc_profiler_end_section(); // pass_name
     }

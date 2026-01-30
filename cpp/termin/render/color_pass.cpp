@@ -594,11 +594,15 @@ void ColorPass::execute_with_data(
 }
 
 void ColorPass::execute(ExecuteContext& ctx) {
+    bool profile = tc_profiler_enabled();
+    if (profile) tc_profiler_begin_section(("ColorPass:" + get_pass_name()).c_str());
+
     // Use camera from context, or find by name if camera_name is set
     CameraComponent* camera = ctx.camera;
     tc_scene_handle scene = ctx.scene.handle();
     if (!tc_scene_handle_valid(scene)) {
         tc::Log::error("[ColorPass] scene is invalid");
+        if (profile) tc_profiler_end_section();
         return;
     }
     if (!camera_name.empty()) {
@@ -607,11 +611,13 @@ void ColorPass::execute(ExecuteContext& ctx) {
             camera = named_camera;
         } else {
             // Camera not found, skip pass
+            if (profile) tc_profiler_end_section();
             return;
         }
     }
 
     if (!camera) {
+        if (profile) tc_profiler_end_section();
         return;
     }
 
@@ -691,6 +697,8 @@ void ColorPass::execute(ExecuteContext& ctx) {
         shadow_settings,
         ctx.layer_mask
     );
+
+    if (profile) tc_profiler_end_section();
 }
 
 void ColorPass::maybe_blit_to_debugger(

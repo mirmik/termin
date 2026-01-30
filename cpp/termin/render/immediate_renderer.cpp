@@ -2,6 +2,10 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/render_state.hpp"
 
+extern "C" {
+#include "tc_profiler.h"
+}
+
 #include <cmath>
 #include <algorithm>
 
@@ -516,10 +520,13 @@ void ImmediateRenderer::_flush_buffers(
 ) {
     if (lines.empty() && tris.empty()) return;
 
+    bool detailed = tc_profiler_detailed_rendering();
+
     _ensure_shader(graphics);
     if (!_shader.is_valid()) return;
 
     // Setup render state
+    if (detailed) tc_profiler_begin_section("Setup");
     RenderState state;
     state.depth_test = depth_test;
     state.depth_write = depth_test;
@@ -540,19 +547,24 @@ void ImmediateRenderer::_flush_buffers(
     }
     _shader.set_uniform_mat4("u_view", view_f, false);
     _shader.set_uniform_mat4("u_projection", proj_f, false);
+    if (detailed) tc_profiler_end_section();
 
     // Draw lines
     if (!lines.empty()) {
+        if (detailed) tc_profiler_begin_section("Lines");
         int vertex_count = static_cast<int>(lines.size() / 7);
         graphics->draw_immediate_lines(lines.data(), vertex_count);
         lines.clear();
+        if (detailed) tc_profiler_end_section();
     }
 
     // Draw triangles
     if (!tris.empty()) {
+        if (detailed) tc_profiler_begin_section("Triangles");
         int vertex_count = static_cast<int>(tris.size() / 7);
         graphics->draw_immediate_triangles(tris.data(), vertex_count);
         tris.clear();
+        if (detailed) tc_profiler_end_section();
     }
 }
 
@@ -563,7 +575,12 @@ void ImmediateRenderer::flush(
     bool depth_test,
     bool blend
 ) {
+    if (line_vertices.empty() && tri_vertices.empty()) return;
+
+    bool profile = tc_profiler_enabled();
+    if (profile) tc_profiler_begin_section("Immediate:Flush");
     _flush_buffers(graphics, line_vertices, tri_vertices, view_matrix, proj_matrix, depth_test, blend);
+    if (profile) tc_profiler_end_section();
 }
 
 void ImmediateRenderer::flush_depth(
@@ -572,7 +589,12 @@ void ImmediateRenderer::flush_depth(
     const Mat44& proj_matrix,
     bool blend
 ) {
+    if (line_vertices_depth.empty() && tri_vertices_depth.empty()) return;
+
+    bool profile = tc_profiler_enabled();
+    if (profile) tc_profiler_begin_section("Immediate:FlushDepth");
     _flush_buffers(graphics, line_vertices_depth, tri_vertices_depth, view_matrix, proj_matrix, true, blend);
+    if (profile) tc_profiler_end_section();
 }
 
 } // namespace termin

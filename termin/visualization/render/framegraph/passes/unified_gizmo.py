@@ -12,6 +12,7 @@ from typing import Callable, List, Set, Tuple, TYPE_CHECKING
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.immediate import ImmediateRenderer
 from termin.editor.inspect_field import InspectField
+from termin.core.profiler import Profiler
 
 if TYPE_CHECKING:
     from termin.editor.gizmo import GizmoManager
@@ -68,52 +69,57 @@ class UnifiedGizmoPass(RenderFramePass):
         return [(self.input_res, self.output_res)]
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        manager = self._get_gizmo_manager()
-        renderer = ImmediateRenderer.instance()
+        profiler = Profiler.instance()
 
-        px, py, pw, ph = ctx.rect
+        with profiler.section("UnifiedGizmoPass"):
+            manager = self._get_gizmo_manager()
+            renderer = ImmediateRenderer.instance()
 
-        fb = ctx.writes_fbos.get(self.output_res)
-        if fb is None:
-            from termin._native import log
-            log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is None, skipping")
-            return
+            px, py, pw, ph = ctx.rect
 
-        # Check type - must be FramebufferHandle
-        from termin.graphics import FramebufferHandle
-        if not isinstance(fb, FramebufferHandle):
-            from termin._native import log
-            log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle, skipping")
-            return
+            fb = ctx.writes_fbos.get(self.output_res)
+            if fb is None:
+                from termin._native import log
+                log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is None, skipping")
+                return
 
-        ctx.graphics.bind_framebuffer(fb)
-        ctx.graphics.set_viewport(0, 0, pw, ph)
+            # Check type - must be FramebufferHandle
+            from termin.graphics import FramebufferHandle
+            if not isinstance(fb, FramebufferHandle):
+                from termin._native import log
+                log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle, skipping")
+                return
 
-        # Clear depth so gizmo renders on top of scene
-        ctx.graphics.clear_depth()
+            with profiler.section("Setup"):
+                ctx.graphics.bind_framebuffer(fb)
+                ctx.graphics.set_viewport(0, 0, pw, ph)
 
-        view = ctx.camera.get_view_matrix()
-        proj = ctx.camera.get_projection_matrix()
+                # Clear depth so gizmo renders on top of scene
+                ctx.graphics.clear_depth()
 
-        # Render all gizmos
-        if manager is not None and renderer is not None:
-            manager.render(renderer, ctx.graphics, view, proj)
+                view = ctx.camera.get_view_matrix()
+                proj = ctx.camera.get_projection_matrix()
 
-        # Flush debug primitives added by components via ImmediateRenderer.instance()
-        if renderer is not None:
-            # First flush depth-tested primitives (with depth test enabled)
-            renderer.flush_depth(
-                graphics=ctx.graphics,
-                view_matrix=view,
-                proj_matrix=proj,
-                blend=True,
-            )
-            # Then flush non-depth-tested primitives (overlay)
-            renderer.flush(
-                graphics=ctx.graphics,
-                view_matrix=view,
-                proj_matrix=proj,
-                depth_test=False,
-                blend=True,
-            )
-            renderer.begin()  # Clear for next frame
+            # Render all gizmos
+            if manager is not None and renderer is not None:
+                with profiler.section("GizmoRender"):
+                    manager.render(renderer, ctx.graphics, view, proj)
+
+            # Flush debug primitives added by components via ImmediateRenderer.instance()
+            if renderer is not None:
+                # First flush depth-tested primitives (with depth test enabled)
+                renderer.flush_depth(
+                    graphics=ctx.graphics,
+                    view_matrix=view,
+                    proj_matrix=proj,
+                    blend=True,
+                )
+                # Then flush non-depth-tested primitives (overlay)
+                renderer.flush(
+                    graphics=ctx.graphics,
+                    view_matrix=view,
+                    proj_matrix=proj,
+                    depth_test=False,
+                    blend=True,
+                )
+                renderer.begin()  # Clear for next frame

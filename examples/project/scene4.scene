@@ -1738,13 +1738,6 @@
               "capsule_height": 1.0,
               "capsule_radius": 0.25
             }
-          },
-          {
-            "type": "CXXRotatorComponent",
-            "data": {
-              "enabled": true,
-              "speed": 0.10000000149011612
-            }
           }
         ],
         "children": []
@@ -3325,13 +3318,6 @@
               },
               "cast_shadow": true,
               "_override_material": false
-            }
-          },
-          {
-            "type": "CXXRotatorComponent",
-            "data": {
-              "enabled": true,
-              "speed": 1
             }
           },
           {

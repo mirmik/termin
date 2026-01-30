@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "tc_shader_registry.h"
+#include "tc_profiler.h"
 }
 
 #include <cmath>
@@ -177,6 +178,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
         return results;
     }
 
+    bool detailed = tc_profiler_detailed_rendering();
+
     // Find lights with shadows enabled (only directional for now)
     std::vector<std::pair<int, const Light*>> shadow_lights;
     for (size_t i = 0; i < lights.size(); ++i) {
@@ -191,7 +194,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     }
 
     // Collect shadow casters
+    if (detailed) tc_profiler_begin_section("CollectCasters");
     std::vector<ShadowDrawCall> draw_calls = collect_shadow_casters(scene);
+    if (detailed) tc_profiler_end_section();
 
     // Update entity names cache
     entity_names.clear();
@@ -248,6 +253,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
         // Render each cascade
         for (int c = 0; c < cascade_count; ++c) {
+            if (detailed) tc_profiler_begin_section(("Cascade" + std::to_string(c)).c_str());
+
             float cascade_near = splits[c];
             float cascade_far = splits[c + 1];
 
@@ -257,10 +264,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
             if (!fbo) {
                 tc::Log::error("ShadowPass: FBO is null for cascade %d", c);
+                if (detailed) tc_profiler_end_section();
                 continue;
             }
 
             // Compute shadow camera params for this cascade
+            if (detailed) tc_profiler_begin_section("FrustumFit");
             ShadowCameraParams params = fit_shadow_frustum_for_cascade(
                 camera_view, camera_projection, light_dir,
                 cascade_near, cascade_far, resolution, caster_offset
@@ -268,6 +277,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             Mat44f view_matrix = build_shadow_view_matrix(params);
             Mat44f proj_matrix = build_shadow_projection_matrix(params);
             Mat44f light_space_matrix = compute_light_space_matrix(params);
+            if (detailed) tc_profiler_end_section();
 
             // Handle empty draw calls case
             if (draw_calls.empty()) {
@@ -275,10 +285,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
                 graphics->set_viewport(0, 0, resolution, resolution);
                 graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
                 results.emplace_back(fbo, light_space_matrix, light_index, c, cascade_near, cascade_far);
+                if (detailed) tc_profiler_end_section();
                 continue;
             }
 
             // Bind and clear FBO
+            if (detailed) tc_profiler_begin_section("Setup");
             graphics->bind_framebuffer(fbo);
             graphics->set_viewport(0, 0, resolution, resolution);
             graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
@@ -292,8 +304,10 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             context.view = view_matrix;
             context.projection = proj_matrix;
             context.current_tc_shader = *shadow_shader;
+            if (detailed) tc_profiler_end_section();
 
             // Render all shadow casters
+            if (detailed) tc_profiler_begin_section("DrawCalls");
             for (const auto& dc : draw_calls) {
                 Mat44f model = get_model_matrix(dc.entity);
                 context.model = model;
@@ -317,9 +331,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
                 tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
             }
+            if (detailed) tc_profiler_end_section();
 
             // Add result with cascade info
             results.emplace_back(fbo, light_space_matrix, light_index, c, cascade_near, cascade_far);
+
+            if (detailed) tc_profiler_end_section();
         }
     }
 
@@ -332,9 +349,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
 
 void ShadowPass::execute(ExecuteContext& ctx) {
+    bool profile = tc_profiler_enabled();
+    if (profile) tc_profiler_begin_section("ShadowPass");
+
     // Get shadow array from writes_fbos
     auto it = ctx.writes_fbos.find(output_res);
     if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+        if (profile) tc_profiler_end_section();
         return;
     }
 
@@ -342,6 +363,7 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(it->second);
     if (!shadow_array) {
         tc::Log::error("ShadowPass: writes_fbos[%s] is not a ShadowMapArrayResource", output_res.c_str());
+        if (profile) tc_profiler_end_section();
         return;
     }
 
@@ -349,6 +371,7 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     shadow_array->clear();
 
     if (ctx.lights.empty()) {
+        if (profile) tc_profiler_end_section();
         return;
     }
 
@@ -419,6 +442,8 @@ void main() {
             result.cascade_split_far
         );
     }
+
+    if (profile) tc_profiler_end_section();
 }
 
 // Register ShadowPass in tc_pass_registry for C#/standalone C++ usage
