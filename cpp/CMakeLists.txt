@@ -215,6 +215,7 @@ set(ENTITY_LIB_SOURCES
     termin/entity/components/rotator_component.cpp
     termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
+    termin/colliders/collider_component.cpp
     termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp
@@ -346,6 +347,7 @@ nanobind_add_module(_entity_native
     termin/bindings/entity/entity_bindings.cpp
     termin/bindings/camera/camera_bindings.cpp
     termin/bindings/camera/orbit_camera_bindings.cpp
+    termin/bindings/colliders/collider_bindings.cpp
     termin/bindings/input/input_events_bindings.cpp
 )
 target_link_libraries(_entity_native PRIVATE entity_lib trent)

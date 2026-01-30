@@ -11,6 +11,7 @@ extern "C" {
 #include "tc_value.h"
 }
 
+#include <algorithm>
 #include <cstring>
 #include <cmath>
 
@@ -37,76 +38,95 @@ Mat44f get_entity_world_matrix(tc_component* c) {
     return result;
 }
 
+// Extract scale from world matrix (length of each column)
+void extract_scale_from_matrix(const Mat44f& m, float& sx, float& sy, float& sz) {
+    // Column 0: X axis
+    sx = std::sqrt(m.data[0]*m.data[0] + m.data[1]*m.data[1] + m.data[2]*m.data[2]);
+    // Column 1: Y axis
+    sy = std::sqrt(m.data[4]*m.data[4] + m.data[5]*m.data[5] + m.data[6]*m.data[6]);
+    // Column 2: Z axis
+    sz = std::sqrt(m.data[8]*m.data[8] + m.data[9]*m.data[9] + m.data[10]*m.data[10]);
+}
+
 // Callback data for collider iteration
 struct ColliderDrawData {
     ColliderGizmoPass* pass;
     WireframeRenderer* renderer;
 };
 
+// Helper to read box_size from component
+bool read_box_size(tc_component* c, float* out_size) {
+    tc_value size_val = tc_component_inspect_get(c, "box_size");
+
+    if (size_val.type == TC_VALUE_VEC3) {
+        out_size[0] = static_cast<float>(size_val.data.v3.x);
+        out_size[1] = static_cast<float>(size_val.data.v3.y);
+        out_size[2] = static_cast<float>(size_val.data.v3.z);
+        return true;
+    }
+    else if (size_val.type == TC_VALUE_LIST && size_val.data.list.count >= 3) {
+        for (int i = 0; i < 3; ++i) {
+            tc_value& item = size_val.data.list.items[i];
+            if (item.type == TC_VALUE_FLOAT) {
+                out_size[i] = item.data.f;
+            } else if (item.type == TC_VALUE_DOUBLE) {
+                out_size[i] = static_cast<float>(item.data.d);
+            } else if (item.type == TC_VALUE_INT) {
+                out_size[i] = static_cast<float>(item.data.i);
+            }
+        }
+        return true;
+    }
+
+    out_size[0] = out_size[1] = out_size[2] = 1.0f;
+    return false;
+}
+
 // Callback for tc_scene_foreach_component_of_type
 bool draw_collider_callback(tc_component* c, void* user_data) {
     auto* data = static_cast<ColliderDrawData*>(user_data);
 
-    // Check if enabled
     if (!c->enabled) {
-        return true;  // continue iteration
+        return true;
     }
 
-    // Get collider type
     const char* collider_type = tc_component_get_field_string(c, "collider_type");
     if (!collider_type) {
         return true;
     }
 
-    // Get entity world matrix
     Mat44f world = get_entity_world_matrix(c);
 
+    // Read size (used by all collider types)
+    float size[3];
+    read_box_size(c, size);
+
+    // Extract entity scale from world matrix
+    float sx, sy, sz;
+    extract_scale_from_matrix(world, sx, sy, sz);
+
     if (strcmp(collider_type, "Box") == 0) {
-        // Get box_size - can be Vec3 or tuple (list)
-        tc_value size_val = tc_component_inspect_get(c, "box_size");
-        float box_size[3] = {1.0f, 1.0f, 1.0f};  // default
-        bool got_size = false;
-
-        if (size_val.type == TC_VALUE_VEC3) {
-            box_size[0] = static_cast<float>(size_val.data.v3.x);
-            box_size[1] = static_cast<float>(size_val.data.v3.y);
-            box_size[2] = static_cast<float>(size_val.data.v3.z);
-            got_size = true;
-        }
-        else if (size_val.type == TC_VALUE_LIST && size_val.data.list.count >= 3) {
-            // tuple in Python becomes list
-            for (int i = 0; i < 3; ++i) {
-                tc_value& item = size_val.data.list.items[i];
-                if (item.type == TC_VALUE_FLOAT) {
-                    box_size[i] = item.data.f;
-                } else if (item.type == TC_VALUE_DOUBLE) {
-                    box_size[i] = static_cast<float>(item.data.d);
-                } else if (item.type == TC_VALUE_INT) {
-                    box_size[i] = static_cast<float>(item.data.i);
-                }
-            }
-            got_size = true;
-        }
-
-        if (got_size) {
-            data->pass->_draw_box_internal(data->renderer, world, box_size);
-        }
+        data->pass->_draw_box_internal(data->renderer, world, size);
     }
     else if (strcmp(collider_type, "Sphere") == 0) {
-        float radius = tc_component_get_field_float(c, "sphere_radius");
+        // Sphere: radius = min(size) / 2 * uniform_scale
+        float uniform_size = std::min({size[0], size[1], size[2]});
+        float uniform_scale = std::min({sx, sy, sz});
+        float radius = (uniform_size / 2.0f) * uniform_scale;
         if (radius > 0) {
             data->pass->_draw_sphere_internal(data->renderer, world, radius);
         }
     }
     else if (strcmp(collider_type, "Capsule") == 0) {
-        float height = tc_component_get_field_float(c, "capsule_height");
-        float radius = tc_component_get_field_float(c, "capsule_radius");
+        // Capsule: height = size.z * scale.z, radius = min(size.x, size.y) / 2 * min(scale.x, scale.y)
+        float height = size[2] * sz;
+        float radius = (std::min(size[0], size[1]) / 2.0f) * std::min(sx, sy);
         if (radius > 0) {
             data->pass->_draw_capsule_internal(data->renderer, world, height, radius);
         }
     }
 
-    return true;  // continue iteration
+    return true;
 }
 
 } // anonymous namespace
@@ -231,68 +251,63 @@ void ColliderGizmoPass::_draw_capsule(const Mat44f& entity_world, float height, 
 }
 
 void ColliderGizmoPass::_draw_capsule_internal(WireframeRenderer* renderer, const Mat44f& entity_world, float height, float radius) {
-    // Extract position and axis from entity world matrix
+    // Extract position from entity world matrix
     float cx = entity_world.data[12];
     float cy = entity_world.data[13];
     float cz = entity_world.data[14];
 
-    // Capsule axis is Z in local space
-    // Extract Z axis from entity rotation (column 2 of 3x3 rotation part)
-    float ax = entity_world.data[8];
-    float ay = entity_world.data[9];
-    float az = entity_world.data[10];
+    // Extract entity's local axes from world matrix (columns 0, 1, 2)
+    // Column 0 = X axis
+    float xx = entity_world.data[0];
+    float xy = entity_world.data[1];
+    float xz = entity_world.data[2];
+    // Column 1 = Y axis
+    float yx = entity_world.data[4];
+    float yy = entity_world.data[5];
+    float yz = entity_world.data[6];
+    // Column 2 = Z axis (capsule axis)
+    float zx = entity_world.data[8];
+    float zy = entity_world.data[9];
+    float zz = entity_world.data[10];
 
-    // Normalize axis
-    float len = std::sqrt(ax*ax + ay*ay + az*az);
-    if (len > 1e-6f) {
-        ax /= len;
-        ay /= len;
-        az /= len;
-    } else {
-        ax = 0; ay = 0; az = 1;
-    }
+    // Normalize axes (remove scale)
+    float x_len = std::sqrt(xx*xx + xy*xy + xz*xz);
+    float y_len = std::sqrt(yx*yx + yy*yy + yz*yz);
+    float z_len = std::sqrt(zx*zx + zy*zy + zz*zz);
+
+    if (x_len > 1e-6f) { xx /= x_len; xy /= x_len; xz /= x_len; }
+    if (y_len > 1e-6f) { yx /= y_len; yy /= y_len; yz /= y_len; }
+    if (z_len > 1e-6f) { zx /= z_len; zy /= z_len; zz /= z_len; }
 
     float half_height = height * 0.5f;
 
-    // Endpoints
-    float a_x = cx - ax * half_height;
-    float a_y = cy - ay * half_height;
-    float a_z = cz - az * half_height;
+    // Endpoints along capsule axis (Z)
+    float a_x = cx - zx * half_height;
+    float a_y = cy - zy * half_height;
+    float a_z = cz - zz * half_height;
 
-    float b_x = cx + ax * half_height;
-    float b_y = cy + ay * half_height;
-    float b_z = cz + az * half_height;
+    float b_x = cx + zx * half_height;
+    float b_y = cy + zy * half_height;
+    float b_z = cz + zz * half_height;
 
-    // Build rotation matrix that aligns Z to capsule axis
-    float rot[9];
-    rotation_matrix_align_z_to_axis(&ax, rot);
+    // Build rotation matrix from entity's actual axes (row-major for mat4_from_rotation_matrix)
+    // Rows are: (x component of each axis), (y component), (z component)
+    float rot[9] = {
+        xx, yx, zx,
+        xy, yy, zy,
+        xz, yz, zz
+    };
 
-    // Draw circles at endpoints
+    // Draw circles at endpoints in entity's local XY plane
     Mat44f model_a = mat4_translate(a_x, a_y, a_z) * mat4_from_rotation_matrix(rot) * mat4_scale_uniform(radius);
     Mat44f model_b = mat4_translate(b_x, b_y, b_z) * mat4_from_rotation_matrix(rot) * mat4_scale_uniform(radius);
 
     renderer->draw_circle(model_a, COLLIDER_GIZMO_COLOR);
     renderer->draw_circle(model_b, COLLIDER_GIZMO_COLOR);
 
-    // Build tangent and bitangent for connecting lines
-    float up[3] = {0, 0, 1};
-    if (std::abs(ax*up[0] + ay*up[1] + az*up[2]) > 0.99f) {
-        up[0] = 0; up[1] = 1; up[2] = 0;
-    }
-
-    // tangent = cross(axis, up)
-    float tx = ay * up[2] - az * up[1];
-    float ty = az * up[0] - ax * up[2];
-    float tz = ax * up[1] - ay * up[0];
-    float tlen = std::sqrt(tx*tx + ty*ty + tz*tz);
-    if (tlen > 1e-6f) {
-        tx /= tlen; ty /= tlen; tz /= tlen;
-    }
-
-    // bitangent = cross(axis, tangent)
-    float bx = ay * tz - az * ty;
-    float by = az * tx - ax * tz;
-    float bz = ax * ty - ay * tx;
+    // Use entity's X and Y axes as tangent and bitangent
+    float tx = xx, ty = xy, tz = xz;
+    float bx = yx, by = yy, bz = yz;
 
     // Draw 4 connecting lines
     for (int i = 0; i < 4; ++i) {
@@ -340,9 +355,9 @@ void ColliderGizmoPass::_draw_capsule_internal(WireframeRenderer* renderer, cons
 
         // Arc at start (pointing away from end)
         float arc_rot_a[9] = {
-            basis_vec[0], -ax, other_vec[0],
-            basis_vec[1], -ay, other_vec[1],
-            basis_vec[2], -az, other_vec[2]
+            basis_vec[0], -zx, other_vec[0],
+            basis_vec[1], -zy, other_vec[1],
+            basis_vec[2], -zz, other_vec[2]
         };
         Mat44f model_arc_a = mat4_translate(a_x, a_y, a_z)
                            * mat4_from_rotation_matrix(arc_rot_a)
@@ -351,9 +366,9 @@ void ColliderGizmoPass::_draw_capsule_internal(WireframeRenderer* renderer, cons
 
         // Arc at end (pointing away from start)
         float arc_rot_b[9] = {
-            basis_vec[0], ax, -other_vec[0],
-            basis_vec[1], ay, -other_vec[1],
-            basis_vec[2], az, -other_vec[2]
+            basis_vec[0], zx, -other_vec[0],
+            basis_vec[1], zy, -other_vec[1],
+            basis_vec[2], zz, -other_vec[2]
         };
         Mat44f model_arc_b = mat4_translate(b_x, b_y, b_z)
                            * mat4_from_rotation_matrix(arc_rot_b)

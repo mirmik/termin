@@ -542,7 +542,8 @@ void rotation_matrix_align_z_to_axis(const float* axis, float* out_rot3x3) {
         z_new[0]*x_new[1] - z_new[1]*x_new[0]
     };
 
-    // Store as row-major: row i = basis vector i
+    // Store for mat4_from_rotation_matrix: columns are basis vectors
+    // Row i contains component i of each basis vector (x_new, y_new, z_new)
     out_rot3x3[0] = x_new[0]; out_rot3x3[1] = y_new[0]; out_rot3x3[2] = z_new[0];
     out_rot3x3[3] = x_new[1]; out_rot3x3[4] = y_new[1]; out_rot3x3[5] = z_new[1];
     out_rot3x3[6] = x_new[2]; out_rot3x3[7] = y_new[2]; out_rot3x3[8] = z_new[2];
