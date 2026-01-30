@@ -58,15 +58,16 @@ class SceneTreeModel(QAbstractItemModel):
     # Args: (entity: Entity, enabled: bool)
     entity_enabled_changed = pyqtSignal(Entity, bool)
 
-    def __init__(self, scene: Scene):
+    def __init__(self, scene: Scene | None = None):
         super().__init__()
-        self.scene = scene
+        self.scene: Scene | None = scene
         self.root = NodeWrapper(None)
 
         # карта Entity -> NodeWrapper, для быстрого поиска индекса
         self._obj_to_node: dict[Entity, NodeWrapper] = {}
 
-        self._build_hierarchy()
+        if scene is not None:
+            self._build_hierarchy()
 
     # ------------------------------------------------------
     # Build Tree from scene
@@ -105,15 +106,39 @@ class SceneTreeModel(QAbstractItemModel):
 
     def clear_refs(self) -> None:
         """Clear all entity references to prevent access to destroyed objects."""
+        self.beginResetModel()
         self._clear_node_refs(self.root)
+        self.root.children.clear()
         self._obj_to_node.clear()
-        self.scene = None  # type: ignore
+        self.scene = None
+        self.endResetModel()
 
     def _clear_node_refs(self, node: NodeWrapper) -> None:
         """Recursively clear entity references in nodes."""
-        node.obj = None
         for child in node.children:
             self._clear_node_refs(child)
+        node.obj = None
+        node.parent = None
+        node.children.clear()
+
+    def rebuild_for_scene(self, scene: Scene | None) -> None:
+        """
+        Rebuild model for a new scene, reusing the same model instance.
+        Properly notifies Qt about structure changes.
+        """
+        self.beginResetModel()
+
+        # Clear old references (children first, then parents)
+        self._clear_node_refs(self.root)
+        self.root.children.clear()
+        self._obj_to_node.clear()
+
+        # Set new scene and rebuild
+        self.scene = scene
+        if scene is not None:
+            self._build_hierarchy()
+
+        self.endResetModel()
 
     # ==============================================================
     # Qt model interface

@@ -43,15 +43,12 @@ class SceneTreeController:
         self._on_object_selected = on_object_selected
         self._request_viewport_update = request_viewport_update
 
-        self._model: SceneTreeModel | None = None
+        self._model: SceneTreeModel = SceneTreeModel(self._scene)
         self._setup_tree_once()
-
-        if self._scene is not None:
-            self._model = SceneTreeModel(self._scene)
-            self._apply_model(expand_all=True)
+        self._apply_model(expand_all=True)
 
     @property
-    def model(self) -> SceneTreeModel | None:
+    def model(self) -> SceneTreeModel:
         return self._model
 
     def _setup_tree_once(self) -> None:
@@ -86,19 +83,10 @@ class SceneTreeController:
     # ---------- публичный API для EditorWindow ----------
 
     def set_scene(self, scene) -> None:
-        """Set scene, clearing old model to avoid invalid entity access."""
-        from termin._native import log
-        log.info(f"[SceneTreeController] set_scene: old={self._scene}, new={scene}")
+        """Set scene, rebuilding model to avoid invalid entity access."""
         if self._scene is not scene:
-            # Clear entity references in model before Qt cleanup to prevent access violations
-            if self._model is not None:
-                log.info(f"[SceneTreeController] clearing model refs")
-                self._model.clear_refs()
-            log.info(f"[SceneTreeController] clearing model, tree={self._tree}")
-            self._tree.setModel(None)
-            self._model = None
+            self._model.rebuild_for_scene(None)
         self._scene = scene
-        log.info(f"[SceneTreeController] set_scene done")
 
     def rebuild(self, select_obj: object | None = None) -> None:
         """
@@ -106,18 +94,14 @@ class SceneTreeController:
         Вызывается, когда структура сцены поменялась (Add/Delete/Rename, undo/redo).
         """
         if self._scene is None:
-            # No scene - clear tree
-            if self._model is not None:
-                self._model.clear_refs()
-            self._tree.setModel(None)
-            self._model = None
+            self._model.rebuild_for_scene(None)
             return
 
         # Save expanded state before rebuilding
         expanded_uuids = self._get_expanded_entity_uuids()
 
-        self._model = SceneTreeModel(self._scene)
-        self._apply_model(expand_all=False)
+        # Rebuild model in place
+        self._model.rebuild_for_scene(self._scene)
 
         # Restore expanded state
         self._restore_expanded_state(expanded_uuids)
@@ -128,8 +112,7 @@ class SceneTreeController:
     def _get_expanded_entity_uuids(self) -> set[str]:
         """Collect UUIDs of expanded entities."""
         expanded = set()
-        if self._model is not None:
-            self._collect_expanded_recursive(self._model.root, expanded)
+        self._collect_expanded_recursive(self._model.root, expanded)
         return expanded
 
     def _collect_expanded_recursive(self, node, expanded: set[str]) -> None:

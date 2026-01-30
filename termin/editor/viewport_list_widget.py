@@ -8,7 +8,7 @@ Shows a two-level hierarchy:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from PyQt6.QtCore import Qt, QModelIndex, pyqtSignal
 from PyQt6.QtGui import QStandardItem, QStandardItemModel
@@ -166,60 +166,24 @@ class ViewportListWidget(QWidget):
 
     def _rebuild_tree(self) -> None:
         """Rebuild the tree model from current displays."""
-        from termin._native import log
-        import sys
-        log.info("[ViewportListWidget] _rebuild_tree start")
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        # Check displays validity
-        log.info(f"[ViewportListWidget] displays count: {len(self._displays)}")
-        for i, d in enumerate(self._displays):
-            log.info(f"[ViewportListWidget] display {i}: {d}, ptr={d._tc_display_ptr if d else 'None'}")
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        # Clear references in items before discarding the model
-        # This prevents accessing stale viewport/display objects during garbage collection
-        log.info(f"[ViewportListWidget] clearing {self._model.rowCount()} rows")
+        # Clear references in items before removing rows
         self._clear_item_refs_recursive(self._model.invisibleRootItem())
-        log.info("[ViewportListWidget] refs cleared, creating new model")
-        sys.stdout.flush()
-        sys.stderr.flush()
 
-        # Create a fresh model instead of clearing - avoids Qt's internal cleanup issues
-        old_model = self._model
-        self._model = QStandardItemModel()
-        self._tree.setModel(self._model)
-        # Reconnect selection signal to new model's selection model
-        self._tree.selectionModel().currentChanged.connect(self._on_current_changed)
-        # Let old model be garbage collected
-        del old_model
-        log.info("[ViewportListWidget] new model set")
+        # Clear the model (reuse same instance)
+        self._model.removeRows(0, self._model.rowCount())
 
         for display in self._displays:
-            log.info(f"[ViewportListWidget] processing display {display}")
             display_name = self.get_display_name(display)
             display_item = DisplayItem(display, display_name)
 
-            # Add viewports as children
-            log.info(f"[ViewportListWidget] getting viewports")
             viewports = display.viewports
-            log.info(f"[ViewportListWidget] got {len(viewports)} viewports")
             for i, viewport in enumerate(viewports):
-                log.info(f"[ViewportListWidget] viewport {i}: {viewport}, valid={viewport.is_valid()}")
-                # Build viewport label: "name (camera)" or "Viewport i (camera)"
                 vp_name = viewport.name if viewport.name else f"Viewport {i}"
-                log.info(f"[ViewportListWidget] vp_name={vp_name}")
 
                 camera_name = "No Camera"
-                log.info(f"[ViewportListWidget] getting camera")
                 camera = viewport.camera
-                log.info(f"[ViewportListWidget] camera={camera}")
                 if camera is not None:
-                    log.info(f"[ViewportListWidget] getting camera.entity")
                     entity = camera.entity
-                    log.info(f"[ViewportListWidget] entity={entity}")
                     if entity is not None:
                         camera_name = entity.name or f"Camera {i}"
                     else:
@@ -227,10 +191,7 @@ class ViewportListWidget(QWidget):
 
                 viewport_item = ViewportItem(viewport, f"{vp_name} ({camera_name})")
 
-                # Add internal_entities hierarchy as children of viewport
-                log.info(f"[ViewportListWidget] getting internal_entities")
                 internal_entities = viewport.internal_entities
-                log.info(f"[ViewportListWidget] internal_entities={internal_entities}")
                 if internal_entities is not None:
                     self._add_entity_hierarchy(viewport_item, internal_entities)
 
@@ -238,9 +199,7 @@ class ViewportListWidget(QWidget):
 
             self._model.appendRow(display_item)
 
-        log.info("[ViewportListWidget] expanding all")
         self._tree.expandAll()
-        log.info("[ViewportListWidget] _rebuild_tree done")
 
     def _clear_item_refs_recursive(self, item: QStandardItem) -> None:
         """Recursively clear native object references in all items."""
