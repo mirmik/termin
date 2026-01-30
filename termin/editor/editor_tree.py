@@ -26,6 +26,8 @@ class NodeWrapper:
     @property
     def name(self) -> str:
         if isinstance(self.obj, Entity):
+            if not self.obj.valid():
+                return "<invalid>"
             return f"{self.obj.name}"
         return "Scene"
 
@@ -101,6 +103,18 @@ class SceneTreeModel(QAbstractItemModel):
             self._obj_to_node[ent] = node
         return node
 
+    def clear_refs(self) -> None:
+        """Clear all entity references to prevent access to destroyed objects."""
+        self._clear_node_refs(self.root)
+        self._obj_to_node.clear()
+        self.scene = None  # type: ignore
+
+    def _clear_node_refs(self, node: NodeWrapper) -> None:
+        """Recursively clear entity references in nodes."""
+        node.obj = None
+        for child in node.children:
+            self._clear_node_refs(child)
+
     # ==============================================================
     # Qt model interface
     # ==============================================================
@@ -161,6 +175,9 @@ class SceneTreeModel(QAbstractItemModel):
             return False
         node: NodeWrapper = index.internalPointer()
         if role == Qt.ItemDataRole.CheckStateRole and isinstance(node.obj, Entity):
+            # Check validity before accessing entity
+            if not node.obj.valid():
+                return False
             # PyQt6: value can be int or Qt.CheckState
             if isinstance(value, int):
                 enabled = (value == Qt.CheckState.Checked.value)
@@ -405,7 +422,7 @@ class SceneTreeModel(QAbstractItemModel):
             if not index.isValid():
                 continue
             node: NodeWrapper = index.internalPointer()
-            if isinstance(node.obj, Entity):
+            if isinstance(node.obj, Entity) and node.obj.valid():
                 return create_entity_mime_data(node.obj)
 
         return None
@@ -453,17 +470,19 @@ class SceneTreeModel(QAbstractItemModel):
         target_entity = None
         if parent.isValid():
             node: NodeWrapper = parent.internalPointer()
-            target_entity = node.obj if isinstance(node.obj, Entity) else None
+            if isinstance(node.obj, Entity) and node.obj.valid():
+                target_entity = node.obj
 
         # Can't drop on self
         if target_entity is dragged_entity:
             return False
 
         # Can't drop on a descendant
-        if target_entity is not None:
+        if target_entity is not None and target_entity.valid():
             check = target_entity.transform.parent
             while check is not None:
-                if check.entity is dragged_entity:
+                check_entity = check.entity
+                if check_entity is not None and check_entity.valid() and check_entity is dragged_entity:
                     return False
                 check = check.parent
 
@@ -485,7 +504,8 @@ class SceneTreeModel(QAbstractItemModel):
         target_entity = None
         if parent.isValid():
             node: NodeWrapper = parent.internalPointer()
-            target_entity = node.obj if isinstance(node.obj, Entity) else None
+            if isinstance(node.obj, Entity) and node.obj.valid():
+                target_entity = node.obj
 
         # Handle prefab/fbx asset drop
         if data.hasFormat(EditorMimeTypes.ASSET_PATH):

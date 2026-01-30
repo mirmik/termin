@@ -90,7 +90,10 @@ class SceneTreeController:
         from termin._native import log
         log.info(f"[SceneTreeController] set_scene: old={self._scene}, new={scene}")
         if self._scene is not scene:
-            # Clear old model before switching - old entities may be invalid
+            # Clear entity references in model before Qt cleanup to prevent access violations
+            if self._model is not None:
+                log.info(f"[SceneTreeController] clearing model refs")
+                self._model.clear_refs()
             log.info(f"[SceneTreeController] clearing model, tree={self._tree}")
             self._tree.setModel(None)
             self._model = None
@@ -104,6 +107,8 @@ class SceneTreeController:
         """
         if self._scene is None:
             # No scene - clear tree
+            if self._model is not None:
+                self._model.clear_refs()
             self._tree.setModel(None)
             self._model = None
             return
