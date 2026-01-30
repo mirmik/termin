@@ -443,6 +443,9 @@ nanobind_add_module(_native
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/bindings/render/render_engine.cpp
+    termin/bindings/editor/gizmo_bindings.cpp
+    termin/editor/gizmo_manager.cpp
+    termin/editor/transform_gizmo.cpp
     termin/sdl_bindings.cpp
     termin/platform/sdl_render_surface.cpp
     termin/tc_scene_bindings.cpp

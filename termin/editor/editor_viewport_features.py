@@ -18,7 +18,14 @@ from __future__ import annotations
 
 from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
+import numpy as np
+
 from termin.visualization.core.entity import Entity
+
+
+def _vec3_to_array(v) -> np.ndarray:
+    """Convert Vec3 to numpy array for C++ gizmo bindings."""
+    return np.array([v.x, v.y, v.z], dtype=np.float32)
 from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
 from termin.visualization.render.framegraph import RenderPipeline
@@ -75,10 +82,9 @@ class EditorViewportFeatures:
         self._request_update = request_update
 
         # Transform gizmo (main gizmo for entity manipulation)
-        self._transform_gizmo = TransformGizmo(
-            size=1.5,
-            on_transform_changed=self._request_update,
-        )
+        self._transform_gizmo = TransformGizmo()
+        self._transform_gizmo.size = 1.5
+        self._transform_gizmo.on_transform_changed = self._request_update
         self._gizmo_manager.add_gizmo(self._transform_gizmo)
         self._on_transform_dragging = None
 
@@ -261,7 +267,7 @@ class EditorViewportFeatures:
         if self._gizmo_manager.is_dragging and viewport is not None:
             ray = viewport.screen_point_to_ray(x, y)
             if ray is not None:
-                self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
+                self._gizmo_manager.on_mouse_move(_vec3_to_array(ray.origin), _vec3_to_array(ray.direction))
 
     def after_render(self) -> None:
         """
@@ -304,7 +310,7 @@ class EditorViewportFeatures:
             with profiler.section("gizmo_raycast"):
                 ray = viewport.screen_point_to_ray(x, y)
                 if ray is not None:
-                    self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
+                    self._gizmo_manager.on_mouse_move(_vec3_to_array(ray.origin), _vec3_to_array(ray.direction))
 
         with profiler.section("pick_entity_at"):
             ent = self.pick_entity_at(x, y, viewport)
@@ -367,7 +373,7 @@ class EditorViewportFeatures:
             return
 
         # Try gizmo picking first (raycast-based)
-        handled = self._gizmo_manager.on_mouse_down(ray.origin, ray.direction)
+        handled = self._gizmo_manager.on_mouse_down(_vec3_to_array(ray.origin), _vec3_to_array(ray.direction))
         if handled:
             self._gizmo_handled_press = True
 
@@ -400,7 +406,7 @@ class EditorViewportFeatures:
 
     def set_gizmo_target(self, entity: Entity | None) -> None:
         """Set target entity for transform gizmo."""
-        self._transform_gizmo.target = entity
+        self._transform_gizmo.set_target(entity)
         self._transform_gizmo.visible = entity is not None
 
     def update_gizmo_screen_scale(self, viewport: Viewport) -> None:
@@ -434,7 +440,7 @@ class EditorViewportFeatures:
             self._request_update()
             if self._on_transform_dragging is not None:
                 self._on_transform_dragging()
-        self._transform_gizmo._on_transform_changed = combined_callback
+        self._transform_gizmo.on_transform_changed = combined_callback
 
     @property
     def gizmo_manager(self) -> GizmoManager:
