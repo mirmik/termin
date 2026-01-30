@@ -3,6 +3,14 @@
 #include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
+// Cross-platform strdup
+#ifdef _WIN32
+#define tc_strdup _strdup
+#else
+#define tc_strdup strdup
+#endif
 
 // ============================================================================
 // Internal Data Structures
@@ -72,8 +80,8 @@ static tc_fg_resource* get_or_create_resource(tc_frame_graph* fg, const char* na
     }
 
     res = &fg->resources[fg->resource_count++];
-    res->name = strdup(name);
-    res->canonical = strdup(name);
+    res->name = tc_strdup(name);
+    res->canonical = tc_strdup(name);
     res->writer_index = -1;
     return res;
 }
@@ -179,7 +187,7 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline* pipeline) {
                     // Write resource gets canonical name from read resource
                     if (strcmp(write_res->canonical, read_res->canonical) != 0) {
                         free(write_res->canonical);
-                        write_res->canonical = strdup(read_res->canonical);
+                        write_res->canonical = tc_strdup(read_res->canonical);
                         changed = true;
                     }
                 }

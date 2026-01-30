@@ -7,6 +7,13 @@
 #include <string.h>
 #include <stdio.h>
 
+// Cross-platform strdup
+#ifdef _WIN32
+#define tc_strdup _strdup
+#else
+#define tc_strdup strdup
+#endif
+
 // ============================================================================
 // Value constructors
 // ============================================================================
@@ -41,7 +48,7 @@ tc_value tc_value_double(double v) {
 
 tc_value tc_value_string(const char* s) {
     tc_value val = {.type = TC_VALUE_STRING};
-    val.data.s = s ? strdup(s) : NULL;
+    val.data.s = s ? tc_strdup(s) : NULL;
     return val;
 }
 
@@ -122,7 +129,7 @@ tc_value tc_value_copy(const tc_value* v) {
 
     switch (v->type) {
     case TC_VALUE_STRING:
-        copy.data.s = v->data.s ? strdup(v->data.s) : NULL;
+        copy.data.s = v->data.s ? tc_strdup(v->data.s) : NULL;
         break;
 
     case TC_VALUE_LIST:
@@ -140,7 +147,7 @@ tc_value tc_value_copy(const tc_value* v) {
             copy.data.dict.entries = malloc(v->data.dict.count * sizeof(tc_value_dict_entry));
             copy.data.dict.capacity = v->data.dict.count;
             for (size_t i = 0; i < v->data.dict.count; i++) {
-                copy.data.dict.entries[i].key = strdup(v->data.dict.entries[i].key);
+                copy.data.dict.entries[i].key = tc_strdup(v->data.dict.entries[i].key);
                 copy.data.dict.entries[i].value = malloc(sizeof(tc_value));
                 *copy.data.dict.entries[i].value = tc_value_copy(v->data.dict.entries[i].value);
             }
@@ -221,7 +228,7 @@ void tc_value_dict_set(tc_value* dict, const char* key, tc_value item) {
     // Add new entry
     dict_ensure_capacity(&dict->data.dict, dict->data.dict.count + 1);
     tc_value_dict_entry* e = &dict->data.dict.entries[dict->data.dict.count++];
-    e->key = strdup(key);
+    e->key = tc_strdup(key);
     e->value = malloc(sizeof(tc_value));
     *e->value = item;
 }

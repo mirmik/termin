@@ -1075,7 +1075,7 @@ void tc_entity_pool_update_transforms(tc_entity_pool* pool) {
     if (!pool) return;
 
     // Use lazy update for each dirty entity
-    for (size_t i = 0; i < pool->capacity; i++) {
+    for (uint32_t i = 0; i < pool->capacity; i++) {
         if (!pool->alive[i] || !pool->transform_dirty[i]) continue;
         update_entity_transform(pool, i);
     }

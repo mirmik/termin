@@ -1,8 +1,9 @@
 #ifndef TC_LOG_H
 #define TC_LOG_H
 
+// TC_LOG_API is dllexport when building termin_core (TC_EXPORTS) or entity_lib (ENTITY_LIB_EXPORTS)
 #ifdef _WIN32
-    #ifdef ENTITY_LIB_EXPORTS
+    #if defined(TC_EXPORTS) || defined(ENTITY_LIB_EXPORTS)
         #define TC_LOG_API __declspec(dllexport)
     #else
         #define TC_LOG_API __declspec(dllimport)

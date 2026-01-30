@@ -9,6 +9,13 @@
 #include <string.h>
 #include <stddef.h>
 
+// Cross-platform strdup
+#ifdef _WIN32
+#define tc_strdup _strdup
+#else
+#define tc_strdup strdup
+#endif
+
 // ============================================================================
 // Pass Property Setters
 // ============================================================================
@@ -16,7 +23,7 @@
 void tc_pass_set_name(tc_pass* p, const char* name) {
     if (!p) return;
     if (p->pass_name) free(p->pass_name);
-    p->pass_name = name ? strdup(name) : NULL;
+    p->pass_name = name ? tc_strdup(name) : NULL;
 }
 
 void tc_pass_set_enabled(tc_pass* p, bool enabled) {
@@ -332,7 +339,7 @@ tc_pipeline* tc_pipeline_create(const char* name) {
     tc_pipeline* p = (tc_pipeline*)calloc(1, sizeof(tc_pipeline));
     if (!p) return NULL;
 
-    p->name = name ? strdup(name) : strdup("default");
+    p->name = name ? tc_strdup(name) : tc_strdup("default");
     p->passes = NULL;
     p->pass_count = 0;
     p->pass_capacity = 0;

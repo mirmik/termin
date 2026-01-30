@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Cross-platform strdup
+#ifdef _WIN32
+#define tc_strdup _strdup
+#else
+#define tc_strdup strdup
+#endif
+
 // ============================================================================
 // Internal structures
 // ============================================================================
@@ -180,7 +187,7 @@ bool tc_resource_map_add(tc_resource_map* map, const char* uuid, void* resource)
                 e = &map->entries[probe];
                 map->deleted--;
             }
-            e->key = strdup(uuid);
+            e->key = tc_strdup(uuid);
             e->value = resource;
             e->state = ENTRY_OCCUPIED;
             map->count++;

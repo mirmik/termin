@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Cross-platform strdup
+#ifdef _WIN32
+#define tc_strdup _strdup
+#else
+#define tc_strdup strdup
+#endif
+
 // ============================================================================
 // Hash functions
 // ============================================================================
@@ -126,7 +133,7 @@ void tc_str_map_set(tc_str_map* map, const char* key, uint64_t value) {
                 e = &map->entries[probe];
                 map->deleted--;
             }
-            e->key = strdup(key);
+            e->key = tc_strdup(key);
             e->value = value;
             e->state = STR_MAP_OCCUPIED;
             map->count++;
