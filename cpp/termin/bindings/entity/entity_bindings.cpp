@@ -74,6 +74,11 @@ public:
     bool is_drawable() const { return tc_component_is_drawable(_c); }
     bool is_input_handler() const { return tc_component_is_input_handler(_c); }
 
+    // Call on_destroy via vtable
+    void on_destroy() {
+        tc_component_on_destroy(_c);
+    }
+
     tc_component_kind kind() const {
         return _c ? _c->kind : TC_NATIVE_COMPONENT;
     }
@@ -326,6 +331,7 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
         .def_prop_ro("is_drawable", &TcComponentRef::is_drawable)
         .def_prop_ro("is_input_handler", &TcComponentRef::is_input_handler)
+        .def("on_destroy", &TcComponentRef::on_destroy, "Call on_destroy lifecycle method")
         .def_prop_ro("kind", &TcComponentRef::kind)
         .def_prop_ro("entity", &TcComponentRef::entity)
         .def("to_python", &TcComponentRef::to_python,
@@ -606,32 +612,41 @@ void bind_entity_class(nb::module_& m) {
             if (!e.valid()) {
                 return nb::none();
             }
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
 
-                nb::object py_comp = tc_component_to_python(tc);
-
-                if (nb::isinstance(py_comp, type_class)) {
-                    return py_comp;
-                }
+            // Get type name from class
+            std::string target_type;
+            if (nb::hasattr(type_class, "__name__")) {
+                target_type = nb::cast<std::string>(type_class.attr("__name__"));
             }
-            return nb::none();
+            if (target_type.empty()) {
+                return nb::none();
+            }
+
+            // Use C++ method to find by type name
+            tc_component* tc = e.get_component_by_type_name(target_type);
+            if (!tc) {
+                return nb::none();
+            }
+
+            return tc_component_to_python(tc);
         }, nb::arg("component_type"))
         .def("find_component", [](Entity& e, nb::object type_class) -> nb::object {
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
-
-                nb::object py_comp = tc_component_to_python(tc);
-
-                if (nb::isinstance(py_comp, type_class)) {
-                    return py_comp;
-                }
+            // Get type name from class
+            std::string target_type;
+            if (nb::hasattr(type_class, "__name__")) {
+                target_type = nb::cast<std::string>(type_class.attr("__name__"));
             }
-            throw std::runtime_error("Component not found");
+            if (target_type.empty()) {
+                throw std::runtime_error("Component class has no __name__");
+            }
+
+            // Use C++ method to find by type name
+            tc_component* tc = e.get_component_by_type_name(target_type);
+            if (!tc) {
+                throw std::runtime_error("Component not found: " + target_type);
+            }
+
+            return tc_component_to_python(tc);
         }, nb::arg("component_type"))
         .def_prop_ro("components", [](Entity& e) {
             nb::list result;

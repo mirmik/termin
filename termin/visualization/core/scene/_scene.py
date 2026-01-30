@@ -979,11 +979,13 @@ class Scene:
         self._destroyed = True
 
 
-        # Destroy all components in all entities
+        # Call on_destroy on all components via tc_ref (works for both C++ and Python)
         for entity in self.entities:
-            for component in entity.components:
-                if hasattr(component, 'destroy'):
-                    component.destroy()
+            for tc_ref in entity.tc_components:
+                try:
+                    tc_ref.on_destroy()
+                except Exception as ex:
+                    print(f"Error in destroy handler of component '{tc_ref}': {e}")
 
         # Destroy managers
         if self._lighting is not None:

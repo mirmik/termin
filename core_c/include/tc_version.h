@@ -8,7 +8,7 @@
 
 #define TC_VERSION_MAJOR 0
 #define TC_VERSION_MINOR 1
-#define TC_VERSION_PATCH 6
+#define TC_VERSION_PATCH 7
 
 // stringifyd version
 #define TC_VERSION_XSTRING(s) TC_VERSION_STRINGIFY(s)

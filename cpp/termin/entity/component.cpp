@@ -52,8 +52,6 @@ CxxComponent::CxxComponent() {
 }
 
 CxxComponent::~CxxComponent() {
-    // Notify any language bindings that this component is being destroyed
-    tc_component_notify_binding_destroyed(&_c);
 }
 
 void CxxComponent::release() {

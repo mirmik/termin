@@ -65,31 +65,8 @@ inline bool check_heap_entity() { return true; }
 namespace nb = nanobind;
 using namespace termin;
 
-// Callback for when C++ component is destroyed - marks Python binding as destroyed
-static void on_component_binding_destroyed(tc_component* c, int binding_type) {
-    if (binding_type != TC_LANGUAGE_PYTHON) return;
-
-    PyObject* binding = static_cast<PyObject*>(tc_component_get_binding(c, TC_LANGUAGE_PYTHON));
-    if (!binding) return;
-
-    // Mark binding as destroyed
-    PyObject* py_true = Py_True;
-    Py_INCREF(py_true);
-    PyObject_SetAttrString(binding, "_is_destroyed", py_true);
-    Py_DECREF(py_true);
-
-    // Release our reference to the binding
-    Py_DECREF(binding);
-
-    // Clear binding from component
-    tc_component_clear_binding(c, TC_LANGUAGE_PYTHON);
-}
-
 NB_MODULE(_entity_native, m) {
     m.doc() = "Entity native module (Component, Entity, registries)";
-
-    // Register callback for binding destruction notification
-    tc_component_set_on_destroy_binding(on_component_binding_destroyed);
 
     // Import _viewport_native for TcViewport type (used by input events)
     nb::module_::import_("termin.viewport._viewport_native");
@@ -146,31 +123,13 @@ NB_MODULE(_entity_native, m) {
             c.deserialize_data(&v);
             tc_value_free(&v);
         }, nb::arg("data"))
-        // Check for use-after-free on garbage collection
-        .def("__del__", [](nb::object self) {
-            bool is_binding = false;
-            bool is_destroyed = false;
-            try {
-                if (nb::hasattr(self, "_is_binding")) {
-                    is_binding = nb::cast<bool>(self.attr("_is_binding"));
-                }
-                if (nb::hasattr(self, "_is_destroyed")) {
-                    is_destroyed = nb::cast<bool>(self.attr("_is_destroyed"));
-                }
-            } catch (...) {
-                return;  // Ignore errors during shutdown
-            }
-
-            if (is_binding && !is_destroyed) {
-                // This is a bug: Python GC is collecting a binding that C++ didn't destroy
-                const char* type_name = "unknown";
-                try {
-                    CxxComponent& c = nb::cast<CxxComponent&>(self);
-                    type_name = c.type_name();
-                } catch (...) {}
-                tc::Log::error("[USE-AFTER-FREE] Component binding '%s' collected by GC but C++ not destroyed! "
-                               "This indicates a leaked reference.", type_name);
-            }
+        .def("__eq__", [](CxxComponent& self, nb::object other) -> bool {
+            if (!nb::isinstance<CxxComponent>(other)) return false;
+            CxxComponent& other_c = nb::cast<CxxComponent&>(other);
+            return self.c_component() == other_c.c_component();
+        })
+        .def("__hash__", [](CxxComponent& self) -> size_t {
+            return reinterpret_cast<size_t>(self.c_component());
         });
 
     // --- ComponentRegistry ---
