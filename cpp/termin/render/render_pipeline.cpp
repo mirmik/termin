@@ -2,7 +2,6 @@
 #include "termin/render/render_pipeline.hpp"
 #include "tc_log.hpp"
 #include <cstring>
-#include <iostream>
 
 extern "C" {
 #include "render/tc_pass.h"
@@ -11,202 +10,95 @@ extern "C" {
 namespace termin {
 
 RenderPipeline::RenderPipeline(const std::string& name)
-    : name_(name)
+    : handle_(TC_PIPELINE_HANDLE_INVALID),
+      name_(name)
 {
-    // Initialize tc_pipeline fields directly (don't use tc_pipeline_create)
-    pipeline_.name = strdup(name.c_str());
-    pipeline_.passes = nullptr;
-    pipeline_.pass_count = 0;
-    pipeline_.pass_capacity = 0;
-    pipeline_.cpp_owner = this;     // Point back for casting
-    pipeline_.py_wrapper = nullptr; // Set by Python bindings if needed
+    // Create pipeline in pool
+    handle_ = tc_pipeline_create(name.c_str());
+    if (tc_pipeline_pool_alive(handle_)) {
+        // Set cpp_owner for casting back
+        tc_pipeline_set_cpp_owner(handle_, this);
+    }
 }
 
 RenderPipeline::~RenderPipeline() {
-    // Release all passes (release handles cleanup when ref_count reaches 0)
-    for (size_t i = 0; i < pipeline_.pass_count; i++) {
-        tc_pass* pass = pipeline_.passes[i];
-        if (pass) {
-            pass->owner_pipeline = nullptr;
-            tc_pass_release(pass);
-        }
+    if (tc_pipeline_pool_alive(handle_)) {
+        // Clear cpp_owner before destroying
+        tc_pipeline_set_cpp_owner(handle_, nullptr);
+        tc_pipeline_destroy(handle_);
     }
-
-    free(pipeline_.passes);
-    free(pipeline_.name);
+    handle_ = TC_PIPELINE_HANDLE_INVALID;
 }
 
 RenderPipeline::RenderPipeline(RenderPipeline&& other) noexcept
-    : pipeline_(other.pipeline_),
+    : handle_(other.handle_),
       specs_(std::move(other.specs_)),
       name_(std::move(other.name_)),
       fbo_pool_(std::move(other.fbo_pool_)),
       shadow_arrays_(std::move(other.shadow_arrays_))
 {
     // Update cpp_owner to point to this
-    pipeline_.cpp_owner = this;
+    if (tc_pipeline_pool_alive(handle_)) {
+        tc_pipeline_set_cpp_owner(handle_, this);
+    }
 
     // Clear other
-    other.pipeline_.name = nullptr;
-    other.pipeline_.passes = nullptr;
-    other.pipeline_.pass_count = 0;
-    other.pipeline_.pass_capacity = 0;
-    other.pipeline_.cpp_owner = nullptr;
+    other.handle_ = TC_PIPELINE_HANDLE_INVALID;
 }
 
 RenderPipeline& RenderPipeline::operator=(RenderPipeline&& other) noexcept {
     if (this != &other) {
-        // Release current passes
-        for (size_t i = 0; i < pipeline_.pass_count; i++) {
-            tc_pass* pass = pipeline_.passes[i];
-            if (pass) {
-                pass->owner_pipeline = nullptr;
-                tc_pass_release(pass);
-            }
+        // Destroy current
+        if (tc_pipeline_pool_alive(handle_)) {
+            tc_pipeline_set_cpp_owner(handle_, nullptr);
+            tc_pipeline_destroy(handle_);
         }
-        free(pipeline_.passes);
-        free(pipeline_.name);
 
         // Move from other
-        pipeline_ = other.pipeline_;
+        handle_ = other.handle_;
         specs_ = std::move(other.specs_);
         name_ = std::move(other.name_);
         fbo_pool_ = std::move(other.fbo_pool_);
         shadow_arrays_ = std::move(other.shadow_arrays_);
-        pipeline_.cpp_owner = this;
+
+        // Update cpp_owner
+        if (tc_pipeline_pool_alive(handle_)) {
+            tc_pipeline_set_cpp_owner(handle_, this);
+        }
 
         // Clear other
-        other.pipeline_.name = nullptr;
-        other.pipeline_.passes = nullptr;
-        other.pipeline_.pass_count = 0;
-        other.pipeline_.pass_capacity = 0;
-        other.pipeline_.cpp_owner = nullptr;
+        other.handle_ = TC_PIPELINE_HANDLE_INVALID;
     }
     return *this;
 }
 
+void RenderPipeline::set_name(const std::string& name) {
+    name_ = name;
+    tc_pipeline_set_name(handle_, name.c_str());
+}
+
 void RenderPipeline::add_pass(tc_pass* pass) {
-    if (!pass) return;
-
-    // Check if pass is already in a pipeline
-    if (pass->owner_pipeline) {
-        if (pass->owner_pipeline == &pipeline_) {
-            tc::Log::warn("RenderPipeline::add_pass: pass '%s' is already in this pipeline '%s'",
-                          pass->pass_name ? pass->pass_name : "(unnamed)",
-                          name_.c_str());
-        } else {
-            tc::Log::warn("RenderPipeline::add_pass: pass '%s' is already in another pipeline, removing first",
-                          pass->pass_name ? pass->pass_name : "(unnamed)");
-            // Remove from old pipeline
-            RenderPipeline* old_owner = from_tc_pipeline(pass->owner_pipeline);
-            if (old_owner) {
-                old_owner->remove_pass(pass);
-            }
-        }
-    }
-
-    // Ensure capacity
-    if (pipeline_.pass_count >= pipeline_.pass_capacity) {
-        size_t new_capacity = pipeline_.pass_capacity == 0 ? 8 : pipeline_.pass_capacity * 2;
-        tc_pass** new_passes = static_cast<tc_pass**>(
-            realloc(pipeline_.passes, new_capacity * sizeof(tc_pass*))
-        );
-        if (!new_passes) return;
-        pipeline_.passes = new_passes;
-        pipeline_.pass_capacity = new_capacity;
-    }
-
-    tc_pass_retain(pass);
-    pass->owner_pipeline = &pipeline_;
-    pipeline_.passes[pipeline_.pass_count++] = pass;
+    tc_pipeline_add_pass(handle_, pass);
 }
 
 void RenderPipeline::remove_pass(tc_pass* pass) {
-    if (!pass) return;
-
-    // Find pass index
-    size_t idx = pipeline_.pass_count;
-    for (size_t i = 0; i < pipeline_.pass_count; i++) {
-        if (pipeline_.passes[i] == pass) {
-            idx = i;
-            break;
-        }
-    }
-    if (idx >= pipeline_.pass_count) return;
-
-    // Shift elements
-    memmove(&pipeline_.passes[idx], &pipeline_.passes[idx + 1],
-            (pipeline_.pass_count - idx - 1) * sizeof(tc_pass*));
-    pipeline_.pass_count--;
-
-    pass->owner_pipeline = nullptr;
-    tc_pass_release(pass);
+    tc_pipeline_remove_pass(handle_, pass);
 }
 
 void RenderPipeline::insert_pass_before(tc_pass* pass, tc_pass* before) {
-    if (!pass) return;
-
-    // Ensure capacity
-    if (pipeline_.pass_count >= pipeline_.pass_capacity) {
-        size_t new_capacity = pipeline_.pass_capacity == 0 ? 8 : pipeline_.pass_capacity * 2;
-        tc_pass** new_passes = static_cast<tc_pass**>(
-            realloc(pipeline_.passes, new_capacity * sizeof(tc_pass*))
-        );
-        if (!new_passes) return;
-        pipeline_.passes = new_passes;
-        pipeline_.pass_capacity = new_capacity;
-    }
-
-    tc_pass_retain(pass);
-    pass->owner_pipeline = &pipeline_;
-
-    if (!before) {
-        // Insert at beginning
-        memmove(&pipeline_.passes[1], &pipeline_.passes[0],
-                pipeline_.pass_count * sizeof(tc_pass*));
-        pipeline_.passes[0] = pass;
-        pipeline_.pass_count++;
-        return;
-    }
-
-    // Find before index
-    size_t idx = pipeline_.pass_count;
-    for (size_t i = 0; i < pipeline_.pass_count; i++) {
-        if (pipeline_.passes[i] == before) {
-            idx = i;
-            break;
-        }
-    }
-
-    if (idx >= pipeline_.pass_count) {
-        // Not found, append
-        pipeline_.passes[pipeline_.pass_count++] = pass;
-    } else {
-        // Insert before idx
-        memmove(&pipeline_.passes[idx + 1], &pipeline_.passes[idx],
-                (pipeline_.pass_count - idx) * sizeof(tc_pass*));
-        pipeline_.passes[idx] = pass;
-        pipeline_.pass_count++;
-    }
+    tc_pipeline_insert_pass_before(handle_, pass, before);
 }
 
 tc_pass* RenderPipeline::get_pass(const std::string& name) {
-    for (size_t i = 0; i < pipeline_.pass_count; i++) {
-        tc_pass* pass = pipeline_.passes[i];
-        if (pass && pass->pass_name && name == pass->pass_name) {
-            return pass;
-        }
-    }
-    return nullptr;
+    return tc_pipeline_get_pass(handle_, name.c_str());
 }
 
 tc_pass* RenderPipeline::get_pass_at(size_t index) {
-    if (index >= pipeline_.pass_count) return nullptr;
-    return pipeline_.passes[index];
+    return tc_pipeline_get_pass_at(handle_, index);
 }
 
 size_t RenderPipeline::pass_count() const {
-    return pipeline_.pass_count;
+    return tc_pipeline_pass_count(handle_);
 }
 
 void RenderPipeline::add_spec(const ResourceSpec& spec) {
@@ -229,8 +121,9 @@ std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
     result.insert(result.end(), specs_.begin(), specs_.end());
 
     // Pass specs
-    for (size_t i = 0; i < pipeline_.pass_count; i++) {
-        tc_pass* pass = pipeline_.passes[i];
+    size_t count = tc_pipeline_pass_count(handle_);
+    for (size_t i = 0; i < count; i++) {
+        tc_pass* pass = tc_pipeline_get_pass_at(handle_, i);
         if (pass && pass->enabled) {
             ResourceSpec pass_specs[16];
             size_t pass_spec_count = tc_pass_get_resource_specs(pass, pass_specs, 16);
@@ -243,9 +136,10 @@ std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
     return result;
 }
 
-RenderPipeline* RenderPipeline::from_tc_pipeline(tc_pipeline* p) {
-    if (!p || !p->cpp_owner) return nullptr;
-    return static_cast<RenderPipeline*>(p->cpp_owner);
+RenderPipeline* RenderPipeline::from_handle(tc_pipeline_handle h) {
+    void* owner = tc_pipeline_get_cpp_owner(h);
+    if (!owner) return nullptr;
+    return static_cast<RenderPipeline*>(owner);
 }
 
 } // namespace termin

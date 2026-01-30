@@ -6,6 +6,7 @@
 #include "tc_entity_pool.h"
 #include "tc_scene_pool.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_pipeline_pool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,8 +38,8 @@ TC_API void tc_viewport_get_pixel_rect(tc_viewport_handle h, int* px, int* py, i
 TC_API void tc_viewport_set_depth(tc_viewport_handle h, int depth);
 TC_API int tc_viewport_get_depth(tc_viewport_handle h);
 
-TC_API void tc_viewport_set_pipeline(tc_viewport_handle h, tc_pipeline* pipeline);
-TC_API tc_pipeline* tc_viewport_get_pipeline(tc_viewport_handle h);
+TC_API void tc_viewport_set_pipeline(tc_viewport_handle h, tc_pipeline_handle pipeline);
+TC_API tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h);
 
 TC_API void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask);
 TC_API uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h);

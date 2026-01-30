@@ -152,9 +152,8 @@ void RenderEngine::render_view_to_fbo(
         tc::Log::error("RenderEngine::render_view_to_fbo: pipeline is null");
         return;
     }
-    tc_pipeline* pp = pipeline->ptr();
-    if (!pp) {
-        tc::Log::error("RenderEngine::render_view_to_fbo: pipeline->ptr() is null");
+    if (!pipeline->is_valid()) {
+        tc::Log::error("RenderEngine::render_view_to_fbo: pipeline is invalid");
         return;
     }
     if (!graphics) {
@@ -163,7 +162,7 @@ void RenderEngine::render_view_to_fbo(
     }
 
     // Build frame graph
-    tc_frame_graph* fg = tc_frame_graph_build(pipeline->ptr());
+    tc_frame_graph* fg = tc_frame_graph_build(pipeline->handle());
     if (!fg) {
         tc::Log::error("RenderEngine::render_view_to_fbo: failed to build frame graph");
         return;
@@ -458,7 +457,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
 
     // Build frame graph
     tc_profiler_begin_section("Build Frame Graph");
-    tc_frame_graph* fg = tc_frame_graph_build(pipeline->ptr());
+    tc_frame_graph* fg = tc_frame_graph_build(pipeline->handle());
     if (!fg) {
         tc_profiler_end_section();
         tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: failed to build frame graph");

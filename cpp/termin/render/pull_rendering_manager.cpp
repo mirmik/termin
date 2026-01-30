@@ -214,14 +214,14 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
-    tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
+    tc_pipeline_handle pipeline = tc_viewport_get_pipeline(viewport);
 
-    if (!tc_scene_handle_valid(scene) || !camera_comp || !pipeline) {
+    if (!tc_scene_handle_valid(scene) || !camera_comp || !tc_pipeline_handle_valid(pipeline)) {
         tc_log(TC_LOG_WARN, "[PullRM] viewport missing scene/camera/pipeline");
         return;
     }
 
-    RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
+    RenderPipeline* render_pipeline = RenderPipeline::from_handle(pipeline);
     if (!render_pipeline) return;
 
     CxxComponent* cxx = CxxComponent::from_tc(camera_comp);

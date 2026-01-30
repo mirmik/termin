@@ -57,8 +57,8 @@ public:
         return is_valid() ? tc_viewport_get_camera(handle_) : nullptr;
     }
 
-    tc_pipeline* pipeline() const {
-        return is_valid() ? tc_viewport_get_pipeline(handle_) : nullptr;
+    tc_pipeline_handle pipeline() const {
+        return is_valid() ? tc_viewport_get_pipeline(handle_) : TC_PIPELINE_HANDLE_INVALID;
     }
 
     // Modify properties
@@ -82,7 +82,7 @@ public:
         if (is_valid()) tc_viewport_set_camera(handle_, camera);
     }
 
-    void set_pipeline(tc_pipeline* pipeline) {
+    void set_pipeline(tc_pipeline_handle pipeline) {
         if (is_valid()) tc_viewport_set_pipeline(handle_, pipeline);
     }
 

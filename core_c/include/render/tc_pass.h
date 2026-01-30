@@ -8,6 +8,7 @@
 #include "tc_type_registry.h"
 #include "tc_scene_pool.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_pipeline_pool.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -20,7 +21,6 @@ extern "C" {
 typedef struct tc_pass tc_pass;
 typedef struct tc_pass_vtable tc_pass_vtable;
 typedef struct tc_execute_context tc_execute_context;
-typedef struct tc_pipeline tc_pipeline;
 
 // ============================================================================
 // Pass Kind - distinguishes native vs external passes
@@ -117,7 +117,7 @@ struct tc_pass {
     void* bindings[TC_LANGUAGE_MAX];
 
     // Owner pipeline (set when added to pipeline)
-    struct tc_pipeline* owner_pipeline;
+    tc_pipeline_handle owner_pipeline;
 
     // Type registry link (for global instance tracking and hot reload)
     tc_type_entry* type_entry;
@@ -146,7 +146,7 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     for (int i = 0; i < TC_LANGUAGE_MAX; i++) {
         p->bindings[i] = NULL;
     }
-    p->owner_pipeline = NULL;
+    p->owner_pipeline = TC_PIPELINE_HANDLE_INVALID;
     p->type_entry = NULL;
     p->type_version = 0;
     p->registry_prev = NULL;

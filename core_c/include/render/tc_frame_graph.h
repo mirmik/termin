@@ -28,7 +28,7 @@ typedef enum tc_frame_graph_error {
 
 // Build frame graph from pipeline passes
 // Analyzes dependencies and prepares execution schedule
-TC_API tc_frame_graph* tc_frame_graph_build(tc_pipeline* pipeline);
+TC_API tc_frame_graph* tc_frame_graph_build(tc_pipeline_handle pipeline);
 
 // Destroy frame graph (does not destroy passes)
 TC_API void tc_frame_graph_destroy(tc_frame_graph* fg);

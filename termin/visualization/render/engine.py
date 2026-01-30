@@ -71,18 +71,19 @@ def _build_schedule_from_pipeline(pipeline: "RenderPipeline", frame_passes):
     """
     from termin._native import log
 
-    tc_pipeline = pipeline._tc_pipeline
+    pipeline_handle = pipeline._pipeline_handle
+    pass_count = pipeline.pass_count
 
-    if tc_pipeline.pass_count != len(frame_passes):
+    if pass_count != len(frame_passes):
         py_names = [p.pass_name for p in frame_passes]
         for p in frame_passes:
             has_tc = p._tc_pass is not None
             log.error(f"[engine]   '{p.pass_name}' ({type(p).__name__}): _tc_pass={'set' if has_tc else 'None'}")
         raise RuntimeError(
-            f"tc_pipeline.pass_count={tc_pipeline.pass_count} != len(frame_passes)={len(frame_passes)}"
+            f"pipeline.pass_count={pass_count} != len(frame_passes)={len(frame_passes)}"
         )
 
-    fg = tc_frame_graph_build(tc_pipeline)
+    fg = tc_frame_graph_build(pipeline_handle)
     try:
         error = tc_frame_graph_get_error(fg)
         if error != TcFrameGraphError.OK:

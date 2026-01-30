@@ -24,7 +24,7 @@ typedef struct {
     float* rects;           // 4 floats per viewport (x, y, w, h)
     int* pixel_rects;       // 4 ints per viewport (px, py, pw, ph)
     int* depths;
-    tc_pipeline** pipelines;
+    tc_pipeline_handle* pipelines;
     uint64_t* layer_masks;
     bool* enabled;
     char** input_modes;
@@ -91,7 +91,7 @@ void tc_viewport_pool_init(void) {
     g_pool->rects = (float*)calloc(cap * 4, sizeof(float));
     g_pool->pixel_rects = (int*)calloc(cap * 4, sizeof(int));
     g_pool->depths = (int*)calloc(cap, sizeof(int));
-    g_pool->pipelines = (tc_pipeline**)calloc(cap, sizeof(tc_pipeline*));
+    g_pool->pipelines = (tc_pipeline_handle*)calloc(cap, sizeof(tc_pipeline_handle));
     g_pool->layer_masks = (uint64_t*)calloc(cap, sizeof(uint64_t));
     g_pool->enabled = (bool*)calloc(cap, sizeof(bool));
     g_pool->input_modes = (char**)calloc(cap, sizeof(char*));
@@ -174,7 +174,7 @@ static void pool_grow(void) {
     g_pool->rects = realloc(g_pool->rects, new_cap * 4 * sizeof(float));
     g_pool->pixel_rects = realloc(g_pool->pixel_rects, new_cap * 4 * sizeof(int));
     g_pool->depths = realloc(g_pool->depths, new_cap * sizeof(int));
-    g_pool->pipelines = realloc(g_pool->pipelines, new_cap * sizeof(tc_pipeline*));
+    g_pool->pipelines = realloc(g_pool->pipelines, new_cap * sizeof(tc_pipeline_handle));
     g_pool->layer_masks = realloc(g_pool->layer_masks, new_cap * sizeof(uint64_t));
     g_pool->enabled = realloc(g_pool->enabled, new_cap * sizeof(bool));
     g_pool->input_modes = realloc(g_pool->input_modes, new_cap * sizeof(char*));
@@ -194,7 +194,9 @@ static void pool_grow(void) {
     memset(g_pool->rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
     memset(g_pool->pixel_rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(int));
     memset(g_pool->depths + old_cap, 0, (new_cap - old_cap) * sizeof(int));
-    memset(g_pool->pipelines + old_cap, 0, (new_cap - old_cap) * sizeof(tc_pipeline*));
+    for (size_t i = old_cap; i < new_cap; i++) {
+        g_pool->pipelines[i] = TC_PIPELINE_HANDLE_INVALID;
+    }
     memset(g_pool->layer_masks + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
     memset(g_pool->enabled + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->input_modes + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
@@ -275,7 +277,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->pixel_rects[idx * 4 + 3] = 1;
 
     g_pool->depths[idx] = 0;
-    g_pool->pipelines[idx] = NULL;
+    g_pool->pipelines[idx] = TC_PIPELINE_HANDLE_INVALID;
     g_pool->layer_masks[idx] = 0xFFFFFFFFFFFFFFFFULL;
     g_pool->enabled[idx] = true;
     g_pool->input_modes[idx] = tc_strdup("simple");
@@ -404,13 +406,13 @@ int tc_viewport_get_depth(tc_viewport_handle h) {
     return g_pool->depths[h.index];
 }
 
-void tc_viewport_set_pipeline(tc_viewport_handle h, tc_pipeline* pipeline) {
+void tc_viewport_set_pipeline(tc_viewport_handle h, tc_pipeline_handle pipeline) {
     if (!handle_alive(h)) return;
     g_pool->pipelines[h.index] = pipeline;
 }
 
-tc_pipeline* tc_viewport_get_pipeline(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
+tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
+    if (!handle_alive(h)) return TC_PIPELINE_HANDLE_INVALID;
     return g_pool->pipelines[h.index];
 }
 

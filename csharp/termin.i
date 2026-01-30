@@ -263,6 +263,12 @@ struct tc_viewport_handle {
     unsigned int generation;
 };
 
+// Pipeline handle - generational index for safe pipeline references
+struct tc_pipeline_handle {
+    unsigned int index;
+    unsigned int generation;
+};
+
 /**
  * Mouse button press/release event.
  *
@@ -532,6 +538,12 @@ public:
 
     // Access tc_pipeline pointer (for viewport binding)
     tc_pipeline* ptr();
+
+    // Access handle
+    tc_pipeline_handle handle() const;
+
+    // Check if valid
+    bool is_valid() const;
 };
 
 // Forward declaration for CameraComponent (used in RenderEngine)

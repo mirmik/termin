@@ -192,12 +192,12 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
-    tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
+    tc_pipeline_handle pipeline = tc_viewport_get_pipeline(viewport);
 
-    if (!tc_scene_handle_valid(scene) || !camera_comp || !pipeline) return;
+    if (!tc_scene_handle_valid(scene) || !camera_comp || !tc_pipeline_handle_valid(pipeline)) return;
 
-    // Get RenderPipeline from tc_pipeline
-    RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
+    // Get RenderPipeline from pipeline handle
+    RenderPipeline* render_pipeline = RenderPipeline::from_handle(pipeline);
     if (!render_pipeline) return;
 
     // Get CameraComponent from tc_component using container_of pattern

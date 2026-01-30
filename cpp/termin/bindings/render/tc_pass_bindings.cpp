@@ -587,68 +587,86 @@ void bind_tc_pass(nb::module_& m) {
         .def_prop_rw("passthrough", &TcPass::passthrough, &TcPass::set_passthrough)
         .def("is_inplace", &TcPass::is_inplace);
 
-    // tc_pipeline - struct is fully defined in header
-    nb::class_<tc_pipeline>(m, "TcPipeline")
-        .def_prop_ro("name", [](tc_pipeline* p) {
-            return p->name ? std::string(p->name) : std::string();
-        })
-        .def_prop_ro("pass_count", [](tc_pipeline* p) {
-            return p->pass_count;
-        });
-
+    // tc_pipeline_handle as tuple (index, generation)
     // Factory functions for tc_pipeline
-    m.def("tc_pipeline_create", [](const std::string& name) {
-        return tc_pipeline_create(name.c_str());
-    }, nb::arg("name") = "default", nb::rv_policy::reference);
+    m.def("tc_pipeline_create", [](const std::string& name) -> std::tuple<uint32_t, uint32_t> {
+        tc_pipeline_handle h = tc_pipeline_create(name.c_str());
+        return std::make_tuple(h.index, h.generation);
+    }, nb::arg("name") = "default");
 
-    m.def("tc_pipeline_destroy", [](tc_pipeline* p) {
-        tc_pipeline_destroy(p);
+    m.def("tc_pipeline_destroy", [](std::tuple<uint32_t, uint32_t> h) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        tc_pipeline_destroy(handle);
+    });
+
+    m.def("tc_pipeline_get_name", [](std::tuple<uint32_t, uint32_t> h) -> std::string {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        const char* n = tc_pipeline_get_name(handle);
+        return n ? std::string(n) : std::string();
+    });
+
+    m.def("tc_pipeline_pass_count", [](std::tuple<uint32_t, uint32_t> h) -> size_t {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return tc_pipeline_pass_count(handle);
+    });
+
+    m.def("tc_pipeline_pool_alive", [](std::tuple<uint32_t, uint32_t> h) -> bool {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return tc_pipeline_pool_alive(handle);
     });
 
     // Pipeline functions work with TcPassRef
-    m.def("tc_pipeline_add_pass", [](tc_pipeline* p, TcPassRef pass_ref) {
+    m.def("tc_pipeline_add_pass", [](std::tuple<uint32_t, uint32_t> h, TcPassRef pass_ref) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass_ref.valid()) {
-            tc_pipeline_add_pass(p, pass_ref.ptr());
+            tc_pipeline_add_pass(handle, pass_ref.ptr());
         }
     });
 
     // Overload for TcPass (owning)
-    m.def("tc_pipeline_add_pass", [](tc_pipeline* p, TcPass* pass) {
+    m.def("tc_pipeline_add_pass", [](std::tuple<uint32_t, uint32_t> h, TcPass* pass) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass && pass->ptr()) {
-            tc_pipeline_add_pass(p, pass->ptr());
+            tc_pipeline_add_pass(handle, pass->ptr());
         }
     });
 
-    m.def("tc_pipeline_remove_pass", [](tc_pipeline* p, TcPassRef pass_ref) {
+    m.def("tc_pipeline_remove_pass", [](std::tuple<uint32_t, uint32_t> h, TcPassRef pass_ref) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass_ref.valid()) {
-            tc_pipeline_remove_pass(p, pass_ref.ptr());
+            tc_pipeline_remove_pass(handle, pass_ref.ptr());
         }
     });
 
-    m.def("tc_pipeline_remove_pass", [](tc_pipeline* p, TcPass* pass) {
+    m.def("tc_pipeline_remove_pass", [](std::tuple<uint32_t, uint32_t> h, TcPass* pass) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass && pass->ptr()) {
-            tc_pipeline_remove_pass(p, pass->ptr());
+            tc_pipeline_remove_pass(handle, pass->ptr());
         }
     });
 
-    m.def("tc_pipeline_insert_pass_before", [](tc_pipeline* p, TcPassRef pass_ref, TcPassRef before_ref) {
+    m.def("tc_pipeline_insert_pass_before", [](std::tuple<uint32_t, uint32_t> h, TcPassRef pass_ref, TcPassRef before_ref) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass_ref.valid()) {
-            tc_pipeline_insert_pass_before(p, pass_ref.ptr(), before_ref.ptr());
+            tc_pipeline_insert_pass_before(handle, pass_ref.ptr(), before_ref.ptr());
         }
     });
 
-    m.def("tc_pipeline_insert_pass_before", [](tc_pipeline* p, TcPass* pass, TcPassRef before_ref) {
+    m.def("tc_pipeline_insert_pass_before", [](std::tuple<uint32_t, uint32_t> h, TcPass* pass, TcPassRef before_ref) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass && pass->ptr()) {
-            tc_pipeline_insert_pass_before(p, pass->ptr(), before_ref.ptr());
+            tc_pipeline_insert_pass_before(handle, pass->ptr(), before_ref.ptr());
         }
     });
 
-    m.def("tc_pipeline_get_pass", [](tc_pipeline* p, const std::string& name) {
-        return TcPassRef(tc_pipeline_get_pass(p, name.c_str()));
+    m.def("tc_pipeline_get_pass", [](std::tuple<uint32_t, uint32_t> h, const std::string& name) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return TcPassRef(tc_pipeline_get_pass(handle, name.c_str()));
     });
 
-    m.def("tc_pipeline_get_pass_at", [](tc_pipeline* p, size_t index) {
-        return TcPassRef(tc_pipeline_get_pass_at(p, index));
+    m.def("tc_pipeline_get_pass_at", [](std::tuple<uint32_t, uint32_t> h, size_t index) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return TcPassRef(tc_pipeline_get_pass_at(handle, index));
     });
 
     // Note: Pipeline resource specs are now managed via C++ RenderPipeline class.
@@ -656,8 +674,9 @@ void bind_tc_pass(nb::module_& m) {
 
     // Frame graph - opaque handle via intptr_t
     // tc_frame_graph is defined only in .c file, so we use intptr_t
-    m.def("tc_frame_graph_build", [](tc_pipeline* p) -> intptr_t {
-        return reinterpret_cast<intptr_t>(tc_frame_graph_build(p));
+    m.def("tc_frame_graph_build", [](std::tuple<uint32_t, uint32_t> h) -> intptr_t {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return reinterpret_cast<intptr_t>(tc_frame_graph_build(handle));
     });
 
     m.def("tc_frame_graph_destroy", [](intptr_t fg_ptr) {
@@ -833,11 +852,12 @@ void bind_tc_pass(nb::module_& m) {
     });
 
     // Collect resource specs from pipeline passes
-    m.def("tc_pipeline_collect_specs", [](tc_pipeline* pipeline) -> nb::dict {
+    m.def("tc_pipeline_collect_specs", [](std::tuple<uint32_t, uint32_t> h) -> nb::dict {
         nb::dict result;
 
-        // Get RenderPipeline from tc_pipeline
-        RenderPipeline* rp = RenderPipeline::from_tc_pipeline(pipeline);
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        // Get RenderPipeline from pipeline handle
+        RenderPipeline* rp = RenderPipeline::from_handle(handle);
         if (!rp) return result;
 
         auto specs = rp->collect_specs();
@@ -883,7 +903,7 @@ void bind_tc_pass(nb::module_& m) {
         if (infos) {
             for (size_t i = 0; i < count; i++) {
                 nb::dict info;
-                info["ptr"] = reinterpret_cast<uintptr_t>(infos[i].ptr);
+                info["handle"] = nb::make_tuple(infos[i].handle.index, infos[i].handle.generation);
                 info["name"] = infos[i].name ? nb::str(infos[i].name) : nb::none();
                 info["pass_count"] = infos[i].pass_count;
                 result.append(info);
@@ -904,7 +924,7 @@ void bind_tc_pass(nb::module_& m) {
                 nb::dict info;
                 info["pass_name"] = infos[i].pass_name ? nb::str(infos[i].pass_name) : nb::none();
                 info["type_name"] = infos[i].type_name ? nb::str(infos[i].type_name) : nb::none();
-                info["pipeline_ptr"] = reinterpret_cast<uintptr_t>(infos[i].pipeline_ptr);
+                info["pipeline_handle"] = nb::make_tuple(infos[i].pipeline_handle.index, infos[i].pipeline_handle.generation);
                 info["pipeline_name"] = infos[i].pipeline_name ? nb::str(infos[i].pipeline_name) : nb::none();
                 info["enabled"] = infos[i].enabled;
                 info["passthrough"] = infos[i].passthrough;

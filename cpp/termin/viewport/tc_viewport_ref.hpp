@@ -45,8 +45,8 @@ public:
         return is_valid() ? tc_viewport_get_camera(handle_) : nullptr;
     }
 
-    tc_pipeline* pipeline() const {
-        return is_valid() ? tc_viewport_get_pipeline(handle_) : nullptr;
+    tc_pipeline_handle pipeline() const {
+        return is_valid() ? tc_viewport_get_pipeline(handle_) : TC_PIPELINE_HANDLE_INVALID;
     }
 
     bool has_internal_entities() const {

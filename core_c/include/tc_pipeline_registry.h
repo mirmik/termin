@@ -16,26 +16,19 @@ TC_API void tc_pipeline_registry_init(void);
 TC_API void tc_pipeline_registry_shutdown(void);
 
 // ============================================================================
-// Registration (called automatically by tc_pipeline_create/destroy)
-// ============================================================================
-
-TC_API void tc_pipeline_registry_add(tc_pipeline* p);
-TC_API void tc_pipeline_registry_remove(tc_pipeline* p);
-
-// ============================================================================
 // Query
 // ============================================================================
 
 TC_API size_t tc_pipeline_registry_count(void);
-TC_API tc_pipeline* tc_pipeline_registry_get_at(size_t index);
-TC_API tc_pipeline* tc_pipeline_registry_find_by_name(const char* name);
+TC_API tc_pipeline_handle tc_pipeline_registry_get_at(size_t index);
+TC_API tc_pipeline_handle tc_pipeline_registry_find_by_name(const char* name);
 
 // ============================================================================
 // Info for debugging/inspection
 // ============================================================================
 
 typedef struct tc_pipeline_info {
-    tc_pipeline* ptr;
+    tc_pipeline_handle handle;
     const char* name;
     size_t pass_count;
 } tc_pipeline_info;
@@ -52,7 +45,7 @@ typedef struct tc_pass_info {
     tc_pass* ptr;
     const char* pass_name;
     const char* type_name;
-    tc_pipeline* pipeline_ptr;
+    tc_pipeline_handle pipeline_handle;
     const char* pipeline_name;
     bool enabled;
     bool passthrough;

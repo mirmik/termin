@@ -10,6 +10,7 @@
 #include "termin/entity/component.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include "termin_core.h"
 #include "render/tc_pipeline.h"
 
@@ -72,13 +73,14 @@ void bind_tc_viewport_class(nb::module_& m) {
                 tc_viewport_set_managed_by(vh, managed_by_scene_pipeline.c_str());
             }
 
-            // Pipeline - get tc_pipeline* and set py_wrapper
+            // Pipeline - get handle and set py_wrapper
             if (!pipeline.is_none()) {
-                nb::object tc_pl = pipeline.attr("_tc_pipeline");
-                tc_pipeline* tc_p = nb::cast<tc_pipeline*>(tc_pl);
+                // Get RenderPipeline C++ object and its handle
+                RenderPipeline* rp = nb::cast<RenderPipeline*>(pipeline);
+                tc_pipeline_handle ph = rp->handle();
                 Py_INCREF(pipeline.ptr());
-                tc_p->py_wrapper = pipeline.ptr();
-                tc_viewport_set_pipeline(vh, tc_p);
+                tc_pipeline_set_py_wrapper(ph, pipeline.ptr());
+                tc_viewport_set_pipeline(vh, ph);
             }
 
             // Internal entities - store pool + entity_id
@@ -211,9 +213,12 @@ void bind_tc_viewport_class(nb::module_& m) {
         // Pipeline
         .def_prop_rw("pipeline",
             [](TcViewport& self) -> nb::object {
-                tc_pipeline* p = self.pipeline();
-                if (p && p->py_wrapper) {
-                    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->py_wrapper));
+                tc_pipeline_handle ph = self.pipeline();
+                if (tc_pipeline_handle_valid(ph)) {
+                    void* wrapper = tc_pipeline_get_py_wrapper(ph);
+                    if (wrapper) {
+                        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
+                    }
                 }
                 return nb::none();
             },
@@ -221,20 +226,23 @@ void bind_tc_viewport_class(nb::module_& m) {
                 if (!self.is_valid()) return;
 
                 // Decref old pipeline's py_wrapper if present
-                tc_pipeline* old_pl = tc_viewport_get_pipeline(self.handle_);
-                if (old_pl && old_pl->py_wrapper) {
-                    Py_DECREF(reinterpret_cast<PyObject*>(old_pl->py_wrapper));
-                    old_pl->py_wrapper = nullptr;
+                tc_pipeline_handle old_ph = tc_viewport_get_pipeline(self.handle_);
+                if (tc_pipeline_handle_valid(old_ph)) {
+                    void* old_wrapper = tc_pipeline_get_py_wrapper(old_ph);
+                    if (old_wrapper) {
+                        Py_DECREF(reinterpret_cast<PyObject*>(old_wrapper));
+                        tc_pipeline_set_py_wrapper(old_ph, nullptr);
+                    }
                 }
 
                 if (pipeline_obj.is_none()) {
-                    tc_viewport_set_pipeline(self.handle_, nullptr);
+                    tc_viewport_set_pipeline(self.handle_, TC_PIPELINE_HANDLE_INVALID);
                 } else {
-                    nb::object tc_pl = pipeline_obj.attr("_tc_pipeline");
-                    tc_pipeline* tc_p = nb::cast<tc_pipeline*>(tc_pl);
+                    RenderPipeline* rp = nb::cast<RenderPipeline*>(pipeline_obj);
+                    tc_pipeline_handle ph = rp->handle();
                     Py_INCREF(pipeline_obj.ptr());
-                    tc_p->py_wrapper = pipeline_obj.ptr();
-                    tc_viewport_set_pipeline(self.handle_, tc_p);
+                    tc_pipeline_set_py_wrapper(ph, pipeline_obj.ptr());
+                    tc_viewport_set_pipeline(self.handle_, ph);
                 }
             })
 
@@ -374,12 +382,15 @@ void bind_tc_viewport_class(nb::module_& m) {
             result["depth"] = self.depth();
 
             // Pipeline name
-            tc_pipeline* pl = self.pipeline();
-            if (pl && pl->py_wrapper) {
-                try {
-                    nb::object pl_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(pl->py_wrapper));
-                    result["pipeline"] = pl_obj.attr("name");
-                } catch (...) {}
+            tc_pipeline_handle ph = self.pipeline();
+            if (tc_pipeline_handle_valid(ph)) {
+                void* wrapper = tc_pipeline_get_py_wrapper(ph);
+                if (wrapper) {
+                    try {
+                        nb::object pl_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
+                        result["pipeline"] = pl_obj.attr("name");
+                    } catch (...) {}
+                }
             }
 
             if (self.is_valid()) {

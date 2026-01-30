@@ -106,12 +106,13 @@ static bool add_dependent(tc_fg_node* node, int dep_index) {
 // Frame Graph Building
 // ============================================================================
 
-static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline* pipeline) {
+static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeline) {
     // First pass: collect all resources and their writers
     int pass_index = 0;
 
-    for (size_t pi = 0; pi < pipeline->pass_count; pi++) {
-        tc_pass* pass = pipeline->passes[pi];
+    size_t pipeline_pass_count = tc_pipeline_pass_count(pipeline);
+    for (size_t pi = 0; pi < pipeline_pass_count; pi++) {
+        tc_pass* pass = tc_pipeline_get_pass_at(pipeline, pi);
         if (!pass || !pass->enabled) {
             continue;
         }
@@ -325,8 +326,8 @@ static bool topological_sort(tc_frame_graph* fg) {
 // Public API
 // ============================================================================
 
-tc_frame_graph* tc_frame_graph_build(tc_pipeline* pipeline) {
-    if (!pipeline) return NULL;
+tc_frame_graph* tc_frame_graph_build(tc_pipeline_handle pipeline) {
+    if (!tc_pipeline_pool_alive(pipeline)) return NULL;
 
     tc_frame_graph* fg = (tc_frame_graph*)calloc(1, sizeof(tc_frame_graph));
     if (!fg) return NULL;

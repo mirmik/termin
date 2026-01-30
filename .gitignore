@@ -174,3 +174,7 @@ build_csharp/
 
 # Allow C# solution file
 !csharp/Termin.sln
+
+build_cpp/
+
+build_core/

@@ -30,6 +30,7 @@ set(TC_SOURCES
     src/tc_mesh_registry.c
     src/tc_primitive_mesh.c
     src/tc_pass.c
+    src/tc_pipeline.c
     src/tc_picking.c
     src/tc_pool.c
     src/tc_profiler.c
@@ -88,6 +89,7 @@ set(TC_HEADERS
     include/render/tc_simple_input_manager.h
     include/render/tc_pass.h
     include/render/tc_pipeline.h
+    include/render/tc_pipeline_pool.h
     include/render/tc_render_surface.h
     include/render/tc_viewport.h
     include/render/tc_frame_graph.h

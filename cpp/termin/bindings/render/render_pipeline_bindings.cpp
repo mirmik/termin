@@ -65,6 +65,12 @@ void bind_render_pipeline(nb::module_& m) {
             return self.ptr();
         }, nb::rv_policy::reference)
 
+        // Access handle as tuple (for new handle-based API)
+        .def_prop_ro("_pipeline_handle", [](RenderPipeline& self) -> std::tuple<uint32_t, uint32_t> {
+            tc_pipeline_handle h = self.handle();
+            return std::make_tuple(h.index, h.generation);
+        })
+
         // Pass count
         .def_prop_ro("pass_count", &RenderPipeline::pass_count)
 

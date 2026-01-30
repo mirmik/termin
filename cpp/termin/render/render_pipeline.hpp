@@ -17,12 +17,12 @@ namespace termin {
 /**
  * C++ render pipeline wrapper.
  *
- * Owns a tc_pipeline, stores ResourceSpecs, and manages FBO pool.
- * tc_pipeline->py_wrapper points back to this object for casting.
+ * Uses tc_pipeline_handle from the pipeline pool.
+ * Stores ResourceSpecs and manages FBO pool.
  */
 class RenderPipeline {
 public:
-    tc_pipeline pipeline_;
+    tc_pipeline_handle handle_;
     std::vector<ResourceSpec> specs_;
     std::string name_;
     FBOPool fbo_pool_;
@@ -40,12 +40,18 @@ public:
     RenderPipeline& operator=(RenderPipeline&& other) noexcept;
 
     // Access tc_pipeline
-    tc_pipeline* ptr() { return &pipeline_; }
-    const tc_pipeline* ptr() const { return &pipeline_; }
+    tc_pipeline* ptr() { return tc_pipeline_get_ptr(handle_); }
+    const tc_pipeline* ptr() const { return tc_pipeline_get_ptr(handle_); }
+
+    // Access handle
+    tc_pipeline_handle handle() const { return handle_; }
+
+    // Check if valid
+    bool is_valid() const { return tc_pipeline_pool_alive(handle_); }
 
     // Name
     const std::string& name() const { return name_; }
-    void set_name(const std::string& name) { name_ = name; }
+    void set_name(const std::string& name);
 
     // Pass management (delegates to tc_pipeline)
     void add_pass(tc_pass* pass);
@@ -79,8 +85,8 @@ public:
         return shadow_arrays_;
     }
 
-    // Cast from tc_pipeline* (uses cpp_owner field)
-    static RenderPipeline* from_tc_pipeline(tc_pipeline* p);
+    // Cast from handle (uses cpp_owner field)
+    static RenderPipeline* from_handle(tc_pipeline_handle h);
 };
 
 } // namespace termin
