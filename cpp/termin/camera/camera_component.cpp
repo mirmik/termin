@@ -160,6 +160,26 @@ void CameraComponent::clear_viewports() {
     viewports_.clear();
 }
 
+void CameraComponent::on_destroy() {
+    // Clear camera reference in all viewports that point to this camera
+    for (auto& vp : viewports_) {
+        if (vp.is_valid() && vp.camera() == &_c) {
+            tc_viewport_set_camera(vp.handle_, nullptr);
+        }
+    }
+    viewports_.clear();
+}
+
+void CameraComponent::on_removed() {
+    // Clear camera reference in all viewports that point to this camera
+    for (auto& vp : viewports_) {
+        if (vp.is_valid() && vp.camera() == &_c) {
+            tc_viewport_set_camera(vp.handle_, nullptr);
+        }
+    }
+    viewports_.clear();
+}
+
 void CameraComponent::on_scene_inactive() {
     clear_viewports();
 }

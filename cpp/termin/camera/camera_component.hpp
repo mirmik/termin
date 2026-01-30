@@ -95,6 +95,8 @@ public:
     void clear_viewports();
 
     // Lifecycle
+    void on_destroy() override;
+    void on_removed() override;
     void on_scene_inactive() override;
 
     // Screen point to ray (returns origin, direction pair)
