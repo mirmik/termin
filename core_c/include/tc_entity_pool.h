@@ -6,8 +6,9 @@
 #include <stddef.h>
 
 // DLL export/import macros for Windows
+// TC_POOL_API is dllexport when building termin_core (TC_EXPORTS) or entity_lib (ENTITY_LIB_EXPORTS)
 #ifdef _WIN32
-    #ifdef ENTITY_LIB_EXPORTS
+    #if defined(TC_EXPORTS) || defined(ENTITY_LIB_EXPORTS)
         #define TC_POOL_API __declspec(dllexport)
     #else
         #define TC_POOL_API __declspec(dllimport)

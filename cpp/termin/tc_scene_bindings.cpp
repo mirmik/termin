@@ -419,6 +419,12 @@ void bind_tc_scene(nb::module_& m) {
         .def("set_skybox_material", [](TcScene& self, const TcMaterial& material) {
             tc_scene_set_skybox_material(self._s, material.get());
         })
+        .def("ensure_skybox_material", [](TcScene& self, int type) -> TcMaterial {
+            tc_scene_skybox* skybox = tc_scene_get_skybox(self._s);
+            tc_material* raw = tc_scene_skybox_ensure_material(skybox, type);
+            if (!raw) return TcMaterial();
+            return TcMaterial(raw);
+        }, nb::arg("type"), "Ensure skybox material for type (0=none, 1=gradient, 2=solid)")
 
         // Lighting (returns pointer to internal tc_scene_lighting)
         .def("lighting_ptr", [](TcScene& self) {

@@ -25,7 +25,9 @@ typedef struct tc_scene_skybox {
     float top_color[3];          // Gradient top RGB
     float bottom_color[3];       // Gradient bottom RGB
     struct tc_mesh* mesh;        // Skybox cube mesh (refcounted)
-    struct tc_material* material; // Skybox material (refcounted)
+    struct tc_material* material; // Current skybox material (refcounted, alias to one of below)
+    struct tc_material* gradient_material;  // Gradient skybox material (refcounted)
+    struct tc_material* solid_material;     // Solid skybox material (refcounted)
 } tc_scene_skybox;
 
 // Initialize with defaults
@@ -36,6 +38,10 @@ TC_API void tc_scene_skybox_free(tc_scene_skybox* skybox);
 
 // Ensure skybox mesh exists (creates lazily if needed)
 TC_API struct tc_mesh* tc_scene_skybox_ensure_mesh(tc_scene_skybox* skybox);
+
+// Ensure skybox material exists for given type (creates lazily if needed)
+// type: 0=none, 1=gradient, 2=solid
+TC_API struct tc_material* tc_scene_skybox_ensure_material(tc_scene_skybox* skybox, int type);
 
 // ============================================================================
 // Scene Skybox API

@@ -16,7 +16,6 @@ from termin.collision._collision_native import CollisionWorld
 from termin.core import Event
 
 from .lighting import LightingManager
-from .skybox import SkyboxManager
 from termin.visualization.core.viewport_config import ViewportConfig
 
 
@@ -69,9 +68,6 @@ class Scene:
 
         # Background color with alpha
         self._background_color = np.array(background_color, dtype=np.float32)
-
-        # Skybox manager
-        self._skybox = SkyboxManager()
 
         # Lighting manager
         self._lighting = LightingManager()
@@ -178,21 +174,14 @@ class Scene:
 
     def skybox_mesh(self):
         """Get skybox cube mesh (TcMesh). Creates lazily if needed."""
-        mesh = self._tc_scene.get_skybox_mesh()
-        if not mesh.is_valid:
-            mesh = self._skybox.ensure_mesh()
-            self._tc_scene.set_skybox_mesh(mesh)
-        return mesh
+        return self._tc_scene.get_skybox_mesh()
 
     def skybox_material(self) -> "Material | None":
         """Get skybox material based on current skybox_type. Creates lazily if needed."""
-        skybox_type = self.skybox_type
-        if skybox_type == "none":
+        type_int = self._tc_scene.get_skybox_type()
+        if type_int == self._SKYBOX_TYPE_NONE:
             return None
-        material = self._skybox.get_material(skybox_type)
-        if material is not None:
-            self._tc_scene.set_skybox_material(material)
-        return material
+        return self._tc_scene.ensure_skybox_material(type_int)
 
     def set_skybox_type(self, skybox_type: str) -> None:
         """Set skybox type."""
@@ -200,11 +189,12 @@ class Scene:
 
     def _ensure_skybox_resources(self) -> None:
         """Ensure skybox mesh and material are created and set in tc_scene."""
-        if self.skybox_type == "none":
+        type_int = self._tc_scene.get_skybox_type()
+        if type_int == self._SKYBOX_TYPE_NONE:
             return
-        # This triggers lazy creation and sets resources in tc_scene
-        self.skybox_mesh()
-        self.skybox_material()
+        # This triggers lazy creation in C
+        self._tc_scene.get_skybox_mesh()
+        self._tc_scene.ensure_skybox_material(type_int)
 
     # --- Lighting delegation (backward compatibility) ---
 
