@@ -32,7 +32,7 @@ from termin.lighting import LightType, LightShadowParams
 def build_scene(world):
     from termin.voxels.voxel_mesh import create_voxel_mesh
 
-    scene = Scene()
+    scene = Scene(name="default")
     world.add_scene(scene)
 
     return scene

@@ -98,7 +98,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         from termin.lighting import LightType
         from termin.geombase import Pose3
 
-        self._scene = Scene()
+        self._scene = Scene(name="mesh_preview")
 
         # Camera entity
         self._camera_entity = Entity(pose=Pose3.identity(), name="preview_camera")
