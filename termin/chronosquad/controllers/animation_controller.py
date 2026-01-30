@@ -65,7 +65,7 @@ class AnimationController(PythonComponent):
 
         # Look for "Model" child
         model = self.entity.find_child("Model")
-        if not model.valid:
+        if not model.valid():
             return
 
         # Get AnimationPlayer component

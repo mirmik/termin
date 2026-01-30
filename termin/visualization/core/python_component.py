@@ -167,7 +167,7 @@ class PythonComponent:
     def entity(self) -> Optional[Entity]:
         """Get owner entity from C-level tc_component."""
         ent = self._tc.entity
-        if ent is not None and ent.valid:
+        if ent is not None and ent.valid():
             return ent
         return None
 
