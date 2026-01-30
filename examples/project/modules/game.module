@@ -3,5 +3,5 @@
     "sources": ["components/spin_component.cpp"],
     "include_dirs": ["."],
     "components": ["SpinComponent"],
-    "built_version": 263
+    "built_version": 264
 }
