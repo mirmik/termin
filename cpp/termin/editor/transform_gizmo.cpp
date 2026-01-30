@@ -363,6 +363,11 @@ void TransformGizmo::on_click(int collider_id, const Vec3f* hit_position) {
     TransformElement element = static_cast<TransformElement>(collider_id);
     _active_element = element;
 
+    // Save start pose for undo
+    if (_target != nullptr) {
+        _drag_start_pose = _target->transform().global_pose();
+    }
+
     Vec3f origin = _get_position();
     _drag_center = origin;
 
@@ -433,6 +438,12 @@ void TransformGizmo::on_drag(int collider_id, const Vec3f& position, const Vec3f
 }
 
 void TransformGizmo::on_release(int collider_id) {
+    // Call drag end handler for undo support
+    if (on_drag_end && _target != nullptr) {
+        GeneralPose3 end_pose = _target->transform().global_pose();
+        on_drag_end(_drag_start_pose, end_pose);
+    }
+
     _active_element = std::nullopt;
     _has_grab_offset = false;
     _has_rot_vec0 = false;

@@ -3,6 +3,7 @@
 #include "termin/editor/gizmo.hpp"
 #include "termin/editor/gizmo_types.hpp"
 #include "termin/geom/mat44.hpp"
+#include "termin/geom/general_pose3.hpp"
 #include "termin/render/types.hpp"
 
 #include <functional>
@@ -39,7 +40,8 @@ class TransformGizmo : public Gizmo {
 public:
     // Callbacks
     std::function<void()> on_transform_changed;
-    std::function<void()> on_undo_handler;
+    // Called when drag ends with (old_pose, new_pose) for undo support
+    std::function<void(const GeneralPose3&, const GeneralPose3&)> on_drag_end;
 
     // Configuration
     float size = 1.5f;
@@ -49,6 +51,9 @@ private:
     // Target entity
     Entity* _target = nullptr;
     Vec3f _target_position{0.0f, 0.0f, 0.0f};
+
+    // Undo support - pose at drag start
+    GeneralPose3 _drag_start_pose;
 
     // Screen scale (adjusted based on camera distance)
     float _screen_scale = 1.0f;
@@ -91,7 +96,7 @@ public:
 
     void set_screen_scale(float scale) { _screen_scale = scale; }
     void set_orientation_mode(const std::string& mode) { orientation_mode = mode; }
-    void set_undo_handler(std::function<void()> handler) { on_undo_handler = handler; }
+    void set_drag_end_handler(std::function<void(const GeneralPose3&, const GeneralPose3&)> handler) { on_drag_end = handler; }
 
     // Gizmo interface
     bool uses_solid_renderer() const override { return true; }

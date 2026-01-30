@@ -430,7 +430,19 @@ class EditorViewportFeatures:
 
     def set_gizmo_undo_handler(self, handler) -> None:
         """Set undo handler for gizmo operations."""
-        self._transform_gizmo.set_undo_handler(handler)
+        # Wrap the handler to create TransformEditCommand from poses
+        def drag_end_handler(old_pose, new_pose):
+            from termin.editor.editor_commands import TransformEditCommand
+            target = self._transform_gizmo.target
+            if target is None:
+                return
+            cmd = TransformEditCommand(
+                transform=target.transform,
+                old_pose=old_pose,
+                new_pose=new_pose,
+            )
+            handler(cmd, False)
+        self._transform_gizmo.set_drag_end_handler(drag_end_handler)
 
     def set_on_transform_dragging(self, callback) -> None:
         """Set callback for when transform is being dragged."""

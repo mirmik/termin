@@ -220,7 +220,7 @@ void bind_gizmo(nb::module_& m) {
         .def("clear_target", [](TransformGizmo& self) { self.set_target(nullptr); })
         .def("set_screen_scale", &TransformGizmo::set_screen_scale)
         .def("set_orientation_mode", &TransformGizmo::set_orientation_mode)
-        .def("set_undo_handler", &TransformGizmo::set_undo_handler);
+        .def("set_drag_end_handler", &TransformGizmo::set_drag_end_handler);
 }
 
 } // namespace termin
