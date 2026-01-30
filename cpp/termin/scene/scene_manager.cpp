@@ -8,9 +8,9 @@ extern "C" {
 
 namespace termin {
 
-void SceneManager::register_scene(const std::string& name, tc_scene* scene) {
-    if (!scene) {
-        tc_log(TC_LOG_ERROR, "[SceneManager] register_scene: scene is null for name '%s'", name.c_str());
+void SceneManager::register_scene(const std::string& name, tc_scene_handle scene) {
+    if (!tc_scene_handle_valid(scene)) {
+        tc_log(TC_LOG_ERROR, "[SceneManager] register_scene: invalid handle for name '%s'", name.c_str());
         return;
     }
     _scenes[name] = scene;
@@ -37,9 +37,9 @@ void SceneManager::set_mode(const std::string& name, tc_scene_mode mode) {
     tc_scene_set_mode(it->second, mode);
 }
 
-tc_scene* SceneManager::get_scene(const std::string& name) const {
+tc_scene_handle SceneManager::get_scene(const std::string& name) const {
     auto it = _scenes.find(name);
-    return (it != _scenes.end()) ? it->second : nullptr;
+    return (it != _scenes.end()) ? it->second : TC_SCENE_HANDLE_INVALID;
 }
 
 bool SceneManager::has_scene(const std::string& name) const {

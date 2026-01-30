@@ -24,7 +24,7 @@ class CameraComponent;
 
 // Build lights from scene's LightComponents
 // Iterates all LightComponent in scene and calls to_light()
-std::vector<Light> build_lights_from_scene(tc_scene* scene);
+std::vector<Light> build_lights_from_scene(tc_scene_handle scene);
 
 // Viewport context for multi-viewport rendering
 struct ViewportContext {
@@ -53,7 +53,7 @@ public:
         FramebufferHandle* target_fbo,
         int width,
         int height,
-        tc_scene* scene,
+        tc_scene_handle scene,
         CameraComponent* camera,
         tc_viewport* viewport,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
@@ -65,7 +65,7 @@ public:
         FramebufferHandle* target_fbo,
         int width,
         int height,
-        tc_scene* scene,
+        tc_scene_handle scene,
         CameraComponent* camera,
         tc_viewport* viewport,
         const std::vector<Light>& lights,
@@ -73,12 +73,11 @@ public:
     );
 
     // Render to screen (default framebuffer, null target_fbo)
-    // Simplified interface for C# bindings
     void render_to_screen(
         RenderPipeline* pipeline,
         int width,
         int height,
-        void* scene,  // tc_scene* as void* for SWIG
+        tc_scene_handle scene,
         CameraComponent* camera
     );
 
@@ -94,7 +93,7 @@ public:
     // Render pipeline with multiple viewports (builds lights from scene automatically)
     void render_scene_pipeline_offscreen(
         RenderPipeline* pipeline,
-        tc_scene* scene,
+        tc_scene_handle scene,
         const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
         const std::string& default_viewport = ""
     );
@@ -102,7 +101,7 @@ public:
     // Render pipeline with multiple viewports (with explicit lights array)
     void render_scene_pipeline_offscreen(
         RenderPipeline* pipeline,
-        tc_scene* scene,
+        tc_scene_handle scene,
         const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
         const std::vector<Light>& lights,
         const std::string& default_viewport = ""

@@ -191,7 +191,7 @@ class SceneManager(CxxSceneManager):
         self._paths[name] = None
 
         # Register in C++ SceneManager
-        self.register_scene(name, scene._tc_scene.scene_ptr())
+        self.register_scene(name, scene._tc_scene.scene_handle())
 
         return scene
 
@@ -213,7 +213,7 @@ class SceneManager(CxxSceneManager):
         self._paths[name] = None
 
         # Register in C++ SceneManager
-        self.register_scene(name, scene._tc_scene.scene_ptr())
+        self.register_scene(name, scene._tc_scene.scene_handle())
 
     def copy_scene(self, source_name: str, dest_name: str) -> "Scene":
         """
@@ -250,7 +250,7 @@ class SceneManager(CxxSceneManager):
         self._paths[dest_name] = None  # Copy has no file path
 
         # Register in C++ SceneManager
-        self.register_scene(dest_name, dest._tc_scene.scene_ptr())
+        self.register_scene(dest_name, dest._tc_scene.scene_handle())
 
         return dest
 
@@ -289,7 +289,7 @@ class SceneManager(CxxSceneManager):
         self._paths[name] = path
 
         # Register in C++ SceneManager
-        self.register_scene(name, scene._tc_scene.scene_ptr())
+        self.register_scene(name, scene._tc_scene.scene_handle())
 
         # Store editor data for later application (after editor entities are created)
         self._editor_data[name] = self._extract_editor_data(data)

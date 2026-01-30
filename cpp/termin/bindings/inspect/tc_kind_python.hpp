@@ -157,7 +157,7 @@ public:
     void register_cpp(
         const std::string& name,
         std::function<tc_value(const std::any&)> serialize,
-        std::function<std::any(const tc_value*, tc_scene*)> deserialize
+        std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
     ) {
         KindRegistryCpp::instance().register_kind(name, serialize, deserialize);
     }
@@ -177,7 +177,7 @@ public:
     }
 
     // Deserialize using C++ handler
-    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene* scene = nullptr) const {
+    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const {
         return KindRegistryCpp::instance().deserialize(kind_name, data, scene);
     }
 

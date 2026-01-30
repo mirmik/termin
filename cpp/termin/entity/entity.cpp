@@ -8,7 +8,7 @@ namespace termin {
 // Global standalone pool for entities created outside of Scene
 static tc_entity_pool* g_standalone_pool = nullptr;
 
-void Entity::deserialize_from(const tc_value* data, tc_scene* scene) {
+void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
     // Get UUID from tc_value
     std::string uuid_str;
     if (data && data->type == TC_VALUE_STRING && data->data.s) {
@@ -27,7 +27,7 @@ void Entity::deserialize_from(const tc_value* data, tc_scene* scene) {
     }
 
     // Get pool from scene
-    tc_entity_pool* pool = scene ? tc_scene_entity_pool(scene) : g_standalone_pool;
+    tc_entity_pool* pool = tc_scene_handle_valid(scene) ? tc_scene_entity_pool(scene) : g_standalone_pool;
 
     if (pool) {
         // Find entity by UUID in pool
@@ -181,7 +181,7 @@ void Entity::update(float dt) {
     }
 }
 
-void Entity::on_added_to_scene(tc_scene* scene) {
+void Entity::on_added_to_scene(tc_scene_handle scene) {
     (void)scene;  // Pool manages lifetime
 }
 

@@ -25,7 +25,7 @@ static void tc_strset(char** dest, const char* src) {
 // Viewport Lifecycle
 // ============================================================================
 
-tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* camera) {
+tc_viewport* tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera) {
     tc_viewport* vp = (tc_viewport*)calloc(1, sizeof(tc_viewport));
     if (!vp) return NULL;
 
@@ -190,12 +190,12 @@ bool tc_viewport_get_enabled(const tc_viewport* vp) {
     return vp ? vp->enabled : false;
 }
 
-void tc_viewport_set_scene(tc_viewport* vp, tc_scene* scene) {
+void tc_viewport_set_scene(tc_viewport* vp, tc_scene_handle scene) {
     if (vp) vp->scene = scene;
 }
 
-tc_scene* tc_viewport_get_scene(const tc_viewport* vp) {
-    return vp ? vp->scene : NULL;
+tc_scene_handle tc_viewport_get_scene(const tc_viewport* vp) {
+    return vp ? vp->scene : TC_SCENE_HANDLE_INVALID;
 }
 
 void tc_viewport_set_camera(tc_viewport* vp, tc_component* camera) {

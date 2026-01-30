@@ -87,8 +87,8 @@ public:
         return ptr_ ? tc_viewport_get_layer_mask(ptr_) : 0xFFFFFFFFFFFFFFFFULL;
     }
 
-    tc_scene* scene() const {
-        return ptr_ ? tc_viewport_get_scene(ptr_) : nullptr;
+    tc_scene_handle scene() const {
+        return ptr_ ? tc_viewport_get_scene(ptr_) : TC_SCENE_HANDLE_INVALID;
     }
 
     tc_component* camera() const {
@@ -112,7 +112,7 @@ public:
         if (ptr_) tc_viewport_set_layer_mask(ptr_, mask);
     }
 
-    void set_scene(tc_scene* scene) {
+    void set_scene(tc_scene_handle scene) {
         if (ptr_) tc_viewport_set_scene(ptr_, scene);
     }
 
@@ -161,7 +161,7 @@ public:
     }
 
     // Create new viewport (takes ownership, ref_count starts at 1)
-    static TcViewport create(const std::string& name, tc_scene* scene = nullptr, tc_component* camera = nullptr) {
+    static TcViewport create(const std::string& name, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID, tc_component* camera = nullptr) {
         tc_viewport* vp = tc_viewport_new(name.c_str(), scene, camera);
         if (!vp) {
             return TcViewport();

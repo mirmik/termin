@@ -109,7 +109,7 @@ struct tc_entity_pool {
     tc_u32_map* by_pick_id;   // pick_id -> packed entity_id
 
     // Owner scene (for component registration)
-    tc_scene* scene;
+    tc_scene_handle scene;
 };
 
 // ============================================================================
@@ -279,23 +279,20 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->by_uuid = tc_str_map_new(initial_capacity);
     pool->by_pick_id = tc_u32_map_new(initial_capacity);
 
-    // Scene starts as NULL (set by tc_scene when pool is created)
-    pool->scene = NULL;
+    // Scene starts as invalid handle (set by tc_scene when pool is created)
+    pool->scene = TC_SCENE_HANDLE_INVALID;
 
     return pool;
 }
 
-void tc_entity_pool_set_scene(tc_entity_pool* pool, tc_scene* scene) {
+void tc_entity_pool_set_scene(tc_entity_pool* pool, tc_scene_handle scene) {
     if (pool) {
-        tc_log(TC_LOG_INFO, "[tc_entity_pool] set_scene: pool=%p, old=%p, new=%p", (void*)pool, (void*)pool->scene, (void*)scene);
         pool->scene = scene;
     }
 }
 
-tc_scene* tc_entity_pool_get_scene(tc_entity_pool* pool) {
-    tc_scene* s = pool ? pool->scene : NULL;
-    //tc_log(TC_LOG_INFO, "[tc_entity_pool] get_scene: pool=%p, scene=%p", (void*)pool, (void*)s);
-    return s;
+tc_scene_handle tc_entity_pool_get_scene(tc_entity_pool* pool) {
+    return pool ? pool->scene : TC_SCENE_HANDLE_INVALID;
 }
 
 void tc_entity_pool_destroy(tc_entity_pool* pool) {
@@ -526,7 +523,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     if (!pool || !tc_entity_pool_alive(pool, id)) return;
 
     uint32_t idx = id.index;
-    tc_scene* scene = tc_entity_pool_get_scene(pool);
+    tc_scene_handle scene = tc_entity_pool_get_scene(pool);
 
     // Remove all components properly
     ComponentArray* comps = &pool->components[idx];
@@ -542,7 +539,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
         tc_component_on_removed(c);
 
         // Unregister from scene's type lists and scheduler
-        if (scene) {
+        if (tc_scene_handle_valid(scene)) {
             tc_scene_unregister_component(scene, c);
         }
 
@@ -1155,9 +1152,8 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     component_array_push(&pool->components[id.index], c);
 
     // Register with scene if pool belongs to one
-    tc_scene* scene = tc_entity_pool_get_scene(pool);
-    const char* type_name = tc_component_type_name(c);
-    if (scene) {
+    tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+    if (tc_scene_handle_valid(scene)) {
         tc_scene_register_component(scene, c);
     }
 
@@ -1173,9 +1169,8 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
     tc_component_on_removed(c);
 
     // Unregister from scene's type lists
-    tc_scene* scene = pool->scene;
-    if (scene) {
-        tc_scene_unregister_component(scene, c);
+    if (tc_scene_handle_valid(pool->scene)) {
+        tc_scene_unregister_component(pool->scene, c);
     }
 
     // Notify component it's being removed from entity

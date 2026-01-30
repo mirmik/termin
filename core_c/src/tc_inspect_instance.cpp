@@ -166,7 +166,7 @@ void InspectRegistryPythonExt::register_python_fields(InspectRegistry& reg, cons
             return nb_to_tc_value(result);
         };
 
-        info.setter = [path_copy, kind_copy, py_setter](void* obj, tc_value value, tc_scene*) {
+        info.setter = [path_copy, kind_copy, py_setter](void* obj, tc_value value, tc_scene_handle) {
             try {
                 // obj is PyObject* for Python types
                 nb::object py_obj = nb::borrow<nb::object>(
@@ -229,7 +229,7 @@ nb::object InspectRegistryPythonExt::get(InspectRegistry& reg, void* obj,
 }
 
 void InspectRegistryPythonExt::set(InspectRegistry& reg, void* obj, const std::string& type_name,
-                                   const std::string& field_path, nb::object value, tc_scene* scene) {
+                                   const std::string& field_path, nb::object value, tc_scene_handle scene) {
     const InspectFieldInfo* f = reg.find_field(type_name, field_path);
     if (!f) {
         throw nb::attribute_error(("Field not found: " + field_path).c_str());
@@ -244,7 +244,7 @@ void InspectRegistryPythonExt::set(InspectRegistry& reg, void* obj, const std::s
 
 void InspectRegistryPythonExt::deserialize_all_py(InspectRegistry& reg, void* obj,
                                                    const std::string& type_name,
-                                                   const nb::dict& data, tc_scene* scene) {
+                                                   const nb::dict& data, tc_scene_handle scene) {
     for (const auto& f : reg.all_fields(type_name)) {
         if (!f.is_serializable) continue;
         if (!f.setter) continue;
@@ -263,7 +263,7 @@ void InspectRegistryPythonExt::deserialize_all_py(InspectRegistry& reg, void* ob
 
 void InspectRegistryPythonExt::deserialize_component_fields_over_python(
     InspectRegistry& reg, void* ptr, nb::object obj, const std::string& type_name,
-    const nb::dict& data, tc_scene* scene) {
+    const nb::dict& data, tc_scene_handle scene) {
     // For C++ components ptr is the object, for Python components obj.ptr() is used
     void* target = (reg.get_type_backend(type_name) == TypeBackend::Cpp) ? ptr : obj.ptr();
     deserialize_all_py(reg, target, type_name, data, scene);
@@ -312,7 +312,7 @@ static tc_value cpp_get(void* obj, const char* type_name, const char* path, void
     return InspectRegistry::instance().get_tc_value(obj, type_name, path);
 }
 
-static void cpp_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene, void* ctx) {
+static void cpp_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx) {
     (void)ctx;
     InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
 }
@@ -373,7 +373,7 @@ tc_value tc_component_inspect_get(tc_component* c, const char* path) {
     return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
 }
 
-void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene* scene) {
+void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene_handle scene) {
     if (!c || !path) return;
 
     const char* type_name = tc_component_type_name(c);
@@ -397,7 +397,7 @@ tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
     return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
 }
 
-void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene* scene) {
+void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_handle scene) {
     if (!p || !path) return;
 
     const char* type_name = tc_pass_type_name(p);
@@ -413,37 +413,37 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene*
 // Simplified field setters for FFI
 // ============================================================================
 
-void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, tc_scene* scene) {
+void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, tc_scene_handle scene) {
     tc_value v = tc_value_int(value);
     tc_component_inspect_set(c, path, v, scene);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_float(tc_component* c, const char* path, float value, tc_scene* scene) {
+void tc_component_set_field_float(tc_component* c, const char* path, float value, tc_scene_handle scene) {
     tc_value v = tc_value_float(value);
     tc_component_inspect_set(c, path, v, scene);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_double(tc_component* c, const char* path, double value, tc_scene* scene) {
+void tc_component_set_field_double(tc_component* c, const char* path, double value, tc_scene_handle scene) {
     tc_value v = tc_value_double(value);
     tc_component_inspect_set(c, path, v, scene);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_bool(tc_component* c, const char* path, bool value, tc_scene* scene) {
+void tc_component_set_field_bool(tc_component* c, const char* path, bool value, tc_scene_handle scene) {
     tc_value v = tc_value_bool(value);
     tc_component_inspect_set(c, path, v, scene);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_string(tc_component* c, const char* path, const char* value, tc_scene* scene) {
+void tc_component_set_field_string(tc_component* c, const char* path, const char* value, tc_scene_handle scene) {
     tc_value v = tc_value_string(value ? value : "");
     tc_component_inspect_set(c, path, v, scene);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene* scene) {
+void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene_handle scene) {
     // Mesh is serialized as dict with uuid
     const char* uuid = tc_mesh_uuid(handle);
     if (!uuid) return;
@@ -457,7 +457,7 @@ void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_hand
     tc_value_free(&v);
 }
 
-void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene* scene) {
+void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene_handle scene) {
     // Material is serialized as dict with uuid
     const char* uuid = tc_material_uuid(handle);
     if (!uuid) return;

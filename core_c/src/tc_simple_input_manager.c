@@ -105,8 +105,8 @@ static void simple_on_mouse_button(tc_input_manager* m, int button, int action, 
         dispatch_to_internal_entities(viewport, dispatch_mouse_button_cb, &event);
 
         // Then dispatch to scene
-        tc_scene* scene = tc_viewport_get_scene(viewport);
-        if (scene != NULL) {
+        tc_scene_handle scene = tc_viewport_get_scene(viewport);
+        if (tc_scene_handle_valid(scene)) {
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_mouse_button_cb,
@@ -150,8 +150,8 @@ static void simple_on_mouse_move(tc_input_manager* m, double x, double y) {
         dispatch_to_internal_entities(viewport, dispatch_mouse_move_cb, &event);
 
         // Then dispatch to scene
-        tc_scene* scene = tc_viewport_get_scene(viewport);
-        if (scene != NULL) {
+        tc_scene_handle scene = tc_viewport_get_scene(viewport);
+        if (tc_scene_handle_valid(scene)) {
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_mouse_move_cb,
@@ -192,8 +192,8 @@ static void simple_on_scroll(tc_input_manager* m, double xoffset, double yoffset
         dispatch_to_internal_entities(viewport, dispatch_scroll_cb, &event);
 
         // Then dispatch to scene
-        tc_scene* scene = tc_viewport_get_scene(viewport);
-        if (scene != NULL) {
+        tc_scene_handle scene = tc_viewport_get_scene(viewport);
+        if (tc_scene_handle_valid(scene)) {
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_scroll_cb,
@@ -237,8 +237,8 @@ static void simple_on_key(tc_input_manager* m, int key, int scancode, int action
         dispatch_to_internal_entities(viewport, dispatch_key_cb, &event);
 
         // Then dispatch to scene
-        tc_scene* scene = tc_viewport_get_scene(viewport);
-        if (scene != NULL) {
+        tc_scene_handle scene = tc_viewport_get_scene(viewport);
+        if (tc_scene_handle_valid(scene)) {
             tc_scene_foreach_input_handler(
                 scene,
                 dispatch_key_cb,

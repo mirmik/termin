@@ -142,7 +142,7 @@ public:
         );
     }
 
-    virtual void deserialize_data(const tc_value* data, tc_scene* scene = nullptr) {
+    virtual void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
         if (!data) return;
         tc_inspect_deserialize(
             static_cast<void*>(this),

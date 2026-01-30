@@ -163,7 +163,7 @@ public:
     }
 
     // Deserialize from tc_value data
-    void deserialize_from(const tc_value* data, tc_scene* = nullptr) {
+    void deserialize_from(const tc_value* data, tc_scene_handle = TC_SCENE_HANDLE_INVALID) {
         // Release current handle
         if (tc_mesh* m = tc_mesh_get(handle)) {
             tc_mesh_release(m);

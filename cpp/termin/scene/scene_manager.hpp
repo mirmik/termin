@@ -8,6 +8,7 @@
 
 extern "C" {
 #include "../../../core_c/include/tc_scene.h"
+#include "../../../core_c/include/tc_scene_pool.h"
 }
 
 namespace termin {
@@ -27,7 +28,7 @@ public:
     SceneManager& operator=(const SceneManager&) = delete;
 
     // Scene registration (called by Python SceneManager)
-    void register_scene(const std::string& name, tc_scene* scene);
+    void register_scene(const std::string& name, tc_scene_handle scene);
     void unregister_scene(const std::string& name);
 
     // Scene mode management
@@ -35,7 +36,7 @@ public:
     void set_mode(const std::string& name, tc_scene_mode mode);
 
     // Scene access
-    tc_scene* get_scene(const std::string& name) const;
+    tc_scene_handle get_scene(const std::string& name) const;
     bool has_scene(const std::string& name) const;
     std::vector<std::string> scene_names() const;
 
@@ -54,9 +55,9 @@ public:
     bool consume_render_request();
 
 protected:
-    // Registered scenes: name -> tc_scene*
-    // Note: TcScene objects are owned by Python, we just store raw pointers
-    std::unordered_map<std::string, tc_scene*> _scenes;
+    // Registered scenes: name -> tc_scene_handle
+    // Note: TcScene objects are owned by Python, we just store handles
+    std::unordered_map<std::string, tc_scene_handle> _scenes;
 
     // Render request flag
     bool _render_requested = false;

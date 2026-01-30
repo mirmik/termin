@@ -6,6 +6,7 @@
 #include "tc_types.h"
 #include "tc_binding.h"
 #include "tc_type_registry.h"
+#include "tc_scene_pool.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -19,7 +20,6 @@ typedef struct tc_pass tc_pass;
 typedef struct tc_pass_vtable tc_pass_vtable;
 typedef struct tc_execute_context tc_execute_context;
 typedef struct tc_pipeline tc_pipeline;
-typedef struct tc_scene tc_scene;
 typedef struct tc_viewport tc_viewport;
 
 // ============================================================================
@@ -43,7 +43,7 @@ struct tc_execute_context {
     int rect_y;
     int rect_width;
     int rect_height;
-    tc_scene* scene;             // Scene
+    tc_scene_handle scene;       // Scene handle
     tc_viewport* viewport;       // Viewport (resolution, camera context)
     void* camera;                // CameraComponent* (C++)
     void* lights;                // Light array (C++)

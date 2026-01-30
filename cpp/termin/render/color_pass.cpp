@@ -167,8 +167,8 @@ void ColorPass::bind_extra_textures(const FBOMap& reads_fbos) {
     }
 }
 
-CameraComponent* ColorPass::find_camera_by_name(tc_scene* scene, const std::string& name) {
-    if (name.empty() || !scene) {
+CameraComponent* ColorPass::find_camera_by_name(tc_scene_handle scene, const std::string& name) {
+    if (name.empty() || !tc_scene_handle_valid(scene)) {
         return nullptr;
     }
 
@@ -242,15 +242,15 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
 } // anonymous namespace
 
 void ColorPass::collect_draw_calls(
-    tc_scene* scene,
+    tc_scene_handle scene,
     const std::string& phase_mark,
     uint64_t layer_mask
 ) {
     // Clear but keep capacity
     cached_draw_calls_.clear();
 
-    if (!scene) {
-        tc::Log::warn("[ColorPass] collect_draw_calls: scene is null!");
+    if (!tc_scene_handle_valid(scene)) {
+        tc::Log::warn("[ColorPass] collect_draw_calls: scene is invalid!");
         return;
     }
 
@@ -326,7 +326,7 @@ void ColorPass::execute_with_data(
     const FBOMap& reads_fbos,
     const FBOMap& writes_fbos,
     const Rect4i& rect,
-    tc_scene* scene,
+    tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
     const Vec3& camera_position,
@@ -596,9 +596,9 @@ void ColorPass::execute_with_data(
 void ColorPass::execute(ExecuteContext& ctx) {
     // Use camera from context, or find by name if camera_name is set
     CameraComponent* camera = ctx.camera;
-    tc_scene* scene = ctx.scene.ptr();
-    if (!scene) {
-        tc::Log::error("[ColorPass] scene is NULL");
+    tc_scene_handle scene = ctx.scene.handle();
+    if (!tc_scene_handle_valid(scene)) {
+        tc::Log::error("[ColorPass] scene is invalid");
         return;
     }
     if (!camera_name.empty()) {
@@ -648,7 +648,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
     float ambient_intensity = 0.1f;
     ShadowSettings shadow_settings;
 
-    if (scene) {
+    if (tc_scene_handle_valid(scene)) {
         tc_scene_lighting* lighting = tc_scene_get_lighting(scene);
         if (lighting) {
             ambient_color = Vec3{

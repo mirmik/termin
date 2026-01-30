@@ -30,7 +30,7 @@ typedef bool (*tc_kind_has_fn)(const char* kind_name, void* ctx);
 typedef tc_value (*tc_kind_serialize_fn)(const char* kind_name, const tc_value* input, void* ctx);
 
 // Deserialize a value (language-specific logic)
-typedef tc_value (*tc_kind_deserialize_fn)(const char* kind_name, const tc_value* input, tc_scene* scene, void* ctx);
+typedef tc_value (*tc_kind_deserialize_fn)(const char* kind_name, const tc_value* input, tc_scene_handle scene, void* ctx);
 
 // Get list of all kinds in this language's registry
 typedef size_t (*tc_kind_list_fn)(const char** out_names, size_t max_count, void* ctx);
@@ -68,13 +68,13 @@ TC_API bool tc_kind_has_lang(const char* name, tc_kind_lang lang);
 TC_API tc_value tc_kind_serialize(const char* name, tc_kind_lang lang, const tc_value* input);
 
 // Deserialize using specified language's handler
-TC_API tc_value tc_kind_deserialize(const char* name, tc_kind_lang lang, const tc_value* input, tc_scene* scene);
+TC_API tc_value tc_kind_deserialize(const char* name, tc_kind_lang lang, const tc_value* input, tc_scene_handle scene);
 
 // Find first available language handler and serialize
 TC_API tc_value tc_kind_serialize_any(const char* name, const tc_value* input);
 
 // Find first available language handler and deserialize
-TC_API tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_scene* scene);
+TC_API tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_scene_handle scene);
 
 // Get all registered kind names (from all languages, deduplicated)
 TC_API size_t tc_kind_list_all(const char** out_names, size_t max_count);

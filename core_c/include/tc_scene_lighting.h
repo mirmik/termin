@@ -30,16 +30,8 @@ typedef struct tc_scene_lighting {
 // Initialize with defaults
 TC_API void tc_scene_lighting_init(tc_scene_lighting* lighting);
 
-// ============================================================================
-// Scene Lighting API
-// ============================================================================
-
-// Get lighting properties from scene (returns internal pointer, do not free)
-TC_API tc_scene_lighting* tc_scene_get_lighting(tc_scene* s);
-
-// Convenience setters
-TC_API void tc_scene_set_ambient(tc_scene* s, float r, float g, float b, float intensity);
-TC_API void tc_scene_set_shadow_settings(tc_scene* s, int method, float softness, float bias);
+// Note: Scene lighting API functions (tc_scene_get_lighting, tc_scene_set_ambient, etc.)
+// are declared in tc_scene.h with tc_scene_handle parameter
 
 #ifdef __cplusplus
 }

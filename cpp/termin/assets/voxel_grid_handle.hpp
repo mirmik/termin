@@ -104,7 +104,7 @@ public:
     static VoxelGridHandle deserialize(const nb::dict& data);
 
     // Deserialize inplace from scene data.
-    void deserialize_from(const tc_value* data, tc_scene* scene = nullptr);
+    void deserialize_from(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
 };
 
 } // namespace termin

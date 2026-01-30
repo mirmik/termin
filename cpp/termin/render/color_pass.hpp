@@ -28,6 +28,7 @@
 #include "tc_inspect_cpp.hpp"
 #endif
 #include "tc_scene.h"
+#include "tc_scene_pool.h"
 
 namespace termin {
 
@@ -118,7 +119,7 @@ public:
         const FBOMap& reads_fbos,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        tc_scene* scene,
+        tc_scene_handle scene,
         const Mat44f& view,
         const Mat44f& projection,
         const Vec3& camera_position,
@@ -170,7 +171,7 @@ private:
      * Find camera component by entity name in scene.
      * Returns nullptr if not found.
      */
-    CameraComponent* find_camera_by_name(tc_scene* scene, const std::string& name);
+    CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name);
 
     // Cached camera lookup
     std::string cached_camera_name_;
@@ -195,7 +196,7 @@ private:
 
     // Collect draw calls from scene entities into cached_draw_calls_.
     void collect_draw_calls(
-        tc_scene* scene,
+        tc_scene_handle scene,
         const std::string& phase_mark,
         uint64_t layer_mask
     );

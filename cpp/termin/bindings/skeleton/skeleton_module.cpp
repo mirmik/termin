@@ -212,7 +212,7 @@ void register_tc_skeleton_kind() {
             return result;
         },
         // deserialize: tc_value, scene → std::any(TcSkeleton)
-        [](const tc_value* v, tc_scene*) -> std::any {
+        [](const tc_value* v, tc_scene_handle) -> std::any {
             if (!v || v->type != TC_VALUE_DICT) return termin::TcSkeleton();
             tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(v), "uuid");
             if (!uuid_val || uuid_val->type != TC_VALUE_STRING || !uuid_val->data.s) {

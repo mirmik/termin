@@ -63,7 +63,7 @@ public:
 
 private:
     void render_viewport_offscreen(tc_viewport* viewport);
-    std::vector<Light> collect_lights(tc_scene* scene);
+    std::vector<Light> collect_lights(tc_scene_handle scene);
 };
 
 } // namespace termin

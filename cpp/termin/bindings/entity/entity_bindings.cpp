@@ -160,7 +160,7 @@ public:
         }
 
         tc_value v = py_to_tc_value(data);
-        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene_ref.ptr());
+        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene_ref.handle());
         tc_value_free(&v);
     }
 
@@ -198,7 +198,7 @@ public:
 
         try {
             tc::InspectRegistry_set(tc::InspectRegistry::instance(),
-                obj_ptr, tc_component_type_name(_c), field_name, value, scene_ref.ptr());
+                obj_ptr, tc_component_type_name(_c), field_name, value, scene_ref.handle());
         } catch (...) {
             // Field not found or setter failed
         }
@@ -225,19 +225,19 @@ void bind_entity_class(nb::module_& m) {
         })
         .def("skybox_mesh", [](TcSceneRef& self) -> TcMesh {
             if (!self.valid()) return TcMesh();
-            tc_mesh* mesh = tc_scene_get_skybox_mesh(self.ptr());
+            tc_mesh* mesh = tc_scene_get_skybox_mesh(self.handle());
             if (!mesh) return TcMesh();
             return TcMesh(mesh);
         })
         .def("skybox_material", [](TcSceneRef& self) -> TcMaterial {
             if (!self.valid()) return TcMaterial();
-            tc_material* material = tc_scene_get_skybox_material(self.ptr());
+            tc_material* material = tc_scene_get_skybox_material(self.handle());
             if (!material) return TcMaterial();
             return TcMaterial(material);
         })
         .def_prop_ro("skybox_type", [](TcSceneRef& self) -> std::string {
             if (!self.valid()) return "gradient";
-            int type = tc_scene_get_skybox_type(self.ptr());
+            int type = tc_scene_get_skybox_type(self.handle());
             switch (type) {
                 case TC_SKYBOX_NONE: return "none";
                 case TC_SKYBOX_SOLID: return "solid";
@@ -247,25 +247,25 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_ro("skybox_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
             if (!self.valid()) return {0.5f, 0.7f, 0.9f};
             float r, g, b;
-            tc_scene_get_skybox_color(self.ptr(), &r, &g, &b);
+            tc_scene_get_skybox_color(self.handle(), &r, &g, &b);
             return {r, g, b};
         })
         .def_prop_ro("skybox_top_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
             if (!self.valid()) return {0.4f, 0.6f, 0.9f};
             float r, g, b;
-            tc_scene_get_skybox_top_color(self.ptr(), &r, &g, &b);
+            tc_scene_get_skybox_top_color(self.handle(), &r, &g, &b);
             return {r, g, b};
         })
         .def_prop_ro("skybox_bottom_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
             if (!self.valid()) return {0.6f, 0.5f, 0.4f};
             float r, g, b;
-            tc_scene_get_skybox_bottom_color(self.ptr(), &r, &g, &b);
+            tc_scene_get_skybox_bottom_color(self.handle(), &r, &g, &b);
             return {r, g, b};
         })
         .def("get_components_of_type", [](TcSceneRef& self, const std::string& type_name) {
             nb::list result;
             if (!self.valid()) return result;
-            tc_component* c = tc_scene_first_component_of_type(self.ptr(), type_name.c_str());
+            tc_component* c = tc_scene_first_component_of_type(self.handle(), type_name.c_str());
             while (c != NULL) {
                 nb::object py_comp = tc_component_to_python(c);
                 if (!py_comp.is_none()) {
@@ -277,14 +277,14 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("type_name"), "Get all components of given type")
         .def_prop_ro("collision_world", [](TcSceneRef& self) -> collision::CollisionWorld* {
             if (!self.valid()) return nullptr;
-            void* cw = tc_scene_get_collision_world(self.ptr());
+            void* cw = tc_scene_get_collision_world(self.handle());
             return static_cast<collision::CollisionWorld*>(cw);
         }, nb::rv_policy::reference, "Get collision world for this scene")
         .def_prop_ro("colliders", [](TcSceneRef& self) {
             // Return ColliderComponent instances (not raw Collider*)
             nb::list result;
             if (!self.valid()) return result;
-            tc_component* c = tc_scene_first_component_of_type(self.ptr(), "ColliderComponent");
+            tc_component* c = tc_scene_first_component_of_type(self.handle(), "ColliderComponent");
             while (c != NULL) {
                 nb::object py_comp = tc_component_to_python(c);
                 if (!py_comp.is_none()) {
@@ -441,17 +441,16 @@ void bind_entity_class(nb::module_& m) {
                 tc::Log::warn("[Entity.scene] pool is null for entity_id=%u", e.id().index);
                 return nb::none();
             }
-            tc_scene* s = tc_entity_pool_get_scene(pool);
-            if (!s) {
-                tc::Log::warn("[Entity.scene] tc_scene is null for pool=%p", (void*)pool);
+            tc_scene_handle s = tc_entity_pool_get_scene(pool);
+            if (!tc_scene_handle_valid(s)) {
+                tc::Log::warn("[Entity.scene] tc_scene is invalid for pool=%p", (void*)pool);
                 return nb::none();
             }
             void* py_wrapper = tc_scene_get_py_wrapper(s);
             if (!py_wrapper) {
-                tc::Log::warn("[Entity.scene] py_wrapper is null for tc_scene=%p", (void*)s);
+                tc::Log::warn("[Entity.scene] py_wrapper is null for tc_scene handle");
                 return nb::none();
             }
-            //tc::Log::info("[Entity.scene] returning py_wrapper=%p for tc_scene=%p", py_wrapper, (void*)s);
             return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(py_wrapper));
         })
 
@@ -739,11 +738,11 @@ void bind_entity_class(nb::module_& m) {
         // Lifecycle
         .def("update", &Entity::update, nb::arg("dt"))
         .def("on_added_to_scene", [](Entity& e, TcSceneRef scene_ref) {
-            e.on_added_to_scene(scene_ref.ptr());
+            e.on_added_to_scene(scene_ref.handle());
         }, nb::arg("scene"))
         .def("on_removed_from_scene", &Entity::on_removed_from_scene)
         .def("on_added", [](Entity& e, TcSceneRef scene_ref) {
-            e.on_added_to_scene(scene_ref.ptr());
+            e.on_added_to_scene(scene_ref.handle());
         }, nb::arg("scene"))
         .def("on_removed", [](Entity& e) {
             e.on_removed_from_scene();
@@ -809,16 +808,17 @@ void bind_entity_class(nb::module_& m) {
 
                 // Get pool and scene from scene object or use standalone pool
                 tc_entity_pool* pool = nullptr;
-                tc_scene* c_scene = nullptr;
+                tc_scene_handle c_scene = TC_SCENE_HANDLE_INVALID;
                 if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
                     nb::object tc_scene_obj = scene.attr("_tc_scene");
                     if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
                         uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
                         pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
                     }
-                    if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                        uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                        c_scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                    if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                        c_scene.index = std::get<0>(h);
+                        c_scene.generation = std::get<1>(h);
                     }
                 }
                 if (!pool) {
@@ -1123,9 +1123,12 @@ void bind_entity_class(nb::module_& m) {
                 TcSceneRef scene_ref;
                 if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
                     nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                        uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                        scene_ref = TcSceneRef(reinterpret_cast<tc_scene*>(scene_ptr));
+                    if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                        tc_scene_handle handle;
+                        handle.index = std::get<0>(h);
+                        handle.generation = std::get<1>(h);
+                        scene_ref = TcSceneRef(handle);
                     }
                 }
 

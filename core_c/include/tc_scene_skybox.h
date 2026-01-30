@@ -43,33 +43,8 @@ TC_API struct tc_mesh* tc_scene_skybox_ensure_mesh(tc_scene_skybox* skybox);
 // type: 0=none, 1=gradient, 2=solid
 TC_API struct tc_material* tc_scene_skybox_ensure_material(tc_scene_skybox* skybox, int type);
 
-// ============================================================================
-// Scene Skybox API
-// ============================================================================
-
-// Get skybox properties from scene (returns internal pointer, do not free)
-TC_API tc_scene_skybox* tc_scene_get_skybox(tc_scene* s);
-
-// Type
-TC_API void tc_scene_set_skybox_type(tc_scene* s, int type);
-TC_API int tc_scene_get_skybox_type(tc_scene* s);
-
-// Colors
-TC_API void tc_scene_set_skybox_color(tc_scene* s, float r, float g, float b);
-TC_API void tc_scene_get_skybox_color(tc_scene* s, float* r, float* g, float* b);
-
-TC_API void tc_scene_set_skybox_top_color(tc_scene* s, float r, float g, float b);
-TC_API void tc_scene_get_skybox_top_color(tc_scene* s, float* r, float* g, float* b);
-
-TC_API void tc_scene_set_skybox_bottom_color(tc_scene* s, float r, float g, float b);
-TC_API void tc_scene_get_skybox_bottom_color(tc_scene* s, float* r, float* g, float* b);
-
-// Mesh and material (with refcounting)
-TC_API void tc_scene_set_skybox_mesh(tc_scene* s, struct tc_mesh* mesh);
-TC_API struct tc_mesh* tc_scene_get_skybox_mesh(tc_scene* s);
-
-TC_API void tc_scene_set_skybox_material(tc_scene* s, struct tc_material* material);
-TC_API struct tc_material* tc_scene_get_skybox_material(tc_scene* s);
+// Note: Scene skybox API functions (tc_scene_get_skybox, tc_scene_set_skybox_*, etc.)
+// are declared in tc_scene.h with tc_scene_handle parameter
 
 #ifdef __cplusplus
 }

@@ -71,7 +71,7 @@ class CoreRegistryViewer(QDialog):
             | Qt.WindowType.WindowMinimizeButtonHint
         )
 
-        self._selected_scene_id: int | None = None
+        self._selected_scene_handle: tuple | None = None
 
         self._init_ui()
         self.refresh()
@@ -238,7 +238,7 @@ class CoreRegistryViewer(QDialog):
         self._update_status()
         self._details_text.clear()
         self._entities_list.clear()
-        self._selected_scene_id = None
+        self._selected_scene_handle = None
         self._entities_label.setText("Entities")
 
     # =========================================================================
@@ -709,8 +709,9 @@ class CoreRegistryViewer(QDialog):
         self._scenes_list.clear()
 
         infos = tc_scene_registry_get_all_info()
-        for info in sorted(infos, key=lambda x: x["id"]):
-            name = info["name"] or f"Scene #{info['id']}"
+        for info in sorted(infos, key=lambda x: x["handle"][0]):
+            handle = info["handle"]
+            name = info["name"] or f"Scene #{handle[0]}"
             text = f"{name} ({info['entity_count']} entities)"
 
             item = QListWidgetItem(text)
@@ -723,16 +724,17 @@ class CoreRegistryViewer(QDialog):
         if info is None:
             return
 
-        self._selected_scene_id = info["id"]
+        self._selected_scene_handle = info["handle"]
         self._show_scene_details(info)
-        self._load_entities(info["id"])
+        self._load_entities(info["handle"])
 
     def _show_scene_details(self, info: dict) -> None:
         """Display scene details in the details panel."""
+        handle = info["handle"]
         lines = [
             "=== SCENE ===",
             "",
-            f"ID:             {info['id']}",
+            f"Handle:         ({handle[0]}, {handle[1]})",
             f"Name:           {info['name'] or '(unnamed)'}",
             "",
             "--- Entities ---",
@@ -745,7 +747,7 @@ class CoreRegistryViewer(QDialog):
         ]
 
         # Get component type counts
-        comp_types = tc_scene_get_component_types(info["id"])
+        comp_types = tc_scene_get_component_types(handle)
         if comp_types:
             lines.extend([
                 "",
@@ -756,11 +758,11 @@ class CoreRegistryViewer(QDialog):
 
         self._details_text.setText("\n".join(lines))
 
-    def _load_entities(self, scene_id: int) -> None:
+    def _load_entities(self, scene_handle: tuple) -> None:
         """Load entities for the selected scene."""
         self._entities_list.clear()
 
-        entities = tc_scene_get_entities(scene_id)
+        entities = tc_scene_get_entities(scene_handle)
         self._entities_label.setText(f"Entities ({len(entities)})")
 
         for entity in sorted(entities, key=lambda x: x["name"] or x["uuid"]):

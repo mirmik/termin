@@ -140,10 +140,7 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    tc_scene* scene = ctx.scene.ptr();
-    if (!scene) {
-        return;
-    }
+    tc_scene_handle scene = ctx.scene.handle();
 
     // Get output FBO
     auto it = ctx.writes_fbos.find(output_res);

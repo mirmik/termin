@@ -45,7 +45,7 @@ void IdPass::execute_with_data(
     const FBOMap& reads_fbos,
     const FBOMap& writes_fbos,
     const Rect4i& rect,
-    tc_scene* scene,
+    tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
     uint64_t layer_mask

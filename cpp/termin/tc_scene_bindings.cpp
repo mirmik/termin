@@ -16,7 +16,7 @@
 #include <memory>
 #include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_skybox.h"
-#include "../../core_c/include/tc_scene_registry.h"
+#include "../../core_c/include/tc_scene_pool.h"
 #include "../../core_c/include/tc_entity_pool.h"
 #include "../../core_c/include/tc_log.h"
 #include "scene_bindings.hpp"
@@ -25,39 +25,42 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Opaque wrapper for tc_scene*
+// Opaque wrapper for tc_scene_handle
 class TcScene {
 public:
-    tc_scene* _s = nullptr;
+    tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
     std::unique_ptr<collision::CollisionWorld> _collision_world;
 
     TcScene() {
-        _s = tc_scene_new();
+        _h = tc_scene_new();
         _collision_world = std::make_unique<collision::CollisionWorld>();
-        tc_scene_set_collision_world(_s, _collision_world.get());
-        tc::Log::info("[TcScene] Created tc_scene=%p, this=%p", (void*)_s, (void*)this);
+        tc_scene_set_collision_world(_h, _collision_world.get());
+        tc::Log::info("[TcScene] Created handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
     }
 
     ~TcScene() {
-        tc::Log::info("[TcScene] ~TcScene tc_scene=%p, this=%p", (void*)_s, (void*)this);
+        tc::Log::info("[TcScene] ~TcScene handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
         destroy();
     }
 
     void destroy() {
-        if (_s) {
-            tc::Log::info("[TcScene] destroy() tc_scene=%p, py_wrapper=%p",
-                (void*)_s, tc_scene_get_py_wrapper(_s));
-            // Clear pointer in tc_scene before destroying
-            tc_scene_set_collision_world(_s, nullptr);
+        if (tc_scene_handle_valid(_h)) {
+            tc::Log::info("[TcScene] destroy() handle=(%u,%u)", _h.index, _h.generation);
+            tc_scene_set_collision_world(_h, nullptr);
             _collision_world.reset();
-            tc_scene_free(_s);
-            _s = nullptr;
+            tc_scene_free(_h);
+            _h = TC_SCENE_HANDLE_INVALID;
         }
+    }
+
+    // Get scene handle
+    tc_scene_handle handle() const {
+        return _h;
     }
 
     // Get non-owning reference to this scene
     TcSceneRef scene_ref() const {
-        return TcSceneRef(_s);
+        return TcSceneRef(_h);
     }
 
     // Disable copy
@@ -66,118 +69,112 @@ public:
 
     // Move
     TcScene(TcScene&& other) noexcept
-        : _s(other._s), _collision_world(std::move(other._collision_world)) {
-        other._s = nullptr;
+        : _h(other._h), _collision_world(std::move(other._collision_world)) {
+        other._h = TC_SCENE_HANDLE_INVALID;
     }
 
     TcScene& operator=(TcScene&& other) noexcept {
         if (this != &other) {
             destroy();
-            _s = other._s;
+            _h = other._h;
             _collision_world = std::move(other._collision_world);
-            other._s = nullptr;
+            other._h = TC_SCENE_HANDLE_INVALID;
         }
         return *this;
     }
 
     // Entity management
-    // Entities live in pool, scene just references them
     void add_entity(const Entity& e) {
         (void)e;
     }
 
     void remove_entity(const Entity& e) {
         if (!e.valid()) return;
-
-        // Just free entity from pool
-        // Components should be unregistered by Python Scene.remove() first
         tc_entity_pool_free(e.pool(), e.id());
     }
 
     size_t entity_count() const {
-        return tc_scene_entity_count(_s);
+        return tc_scene_entity_count(_h);
     }
 
     // Component registration (C++ Component)
     void register_component(Component* c) {
         if (!c) return;
-        tc_scene_register_component(_s, c->c_component());
+        tc_scene_register_component(_h, c->c_component());
     }
 
     void unregister_component(Component* c) {
         if (!c) return;
-        tc_scene_unregister_component(_s, c->c_component());
+        tc_scene_unregister_component(_h, c->c_component());
     }
 
     // Component registration by pointer (for TcComponent/pure Python components)
     void register_component_ptr(uintptr_t ptr) {
         tc_component* c = reinterpret_cast<tc_component*>(ptr);
         if (c) {
-            tc_scene_register_component(_s, c);
+            tc_scene_register_component(_h, c);
         }
     }
 
     void unregister_component_ptr(uintptr_t ptr) {
         tc_component* c = reinterpret_cast<tc_component*>(ptr);
         if (c) {
-            tc_scene_unregister_component(_s, c);
+            tc_scene_unregister_component(_h, c);
         }
     }
 
     // Update loop
     void update(double dt) {
-        // GIL is held by Python caller, callbacks will re-acquire if needed
-        tc_scene_update(_s, dt);
+        tc_scene_update(_h, dt);
     }
 
     void editor_update(double dt) {
-        tc_scene_editor_update(_s, dt);
+        tc_scene_editor_update(_h, dt);
     }
 
     void before_render() {
-        tc_scene_before_render(_s);
+        tc_scene_before_render(_h);
     }
 
     // Fixed timestep
     double fixed_timestep() const {
-        return tc_scene_fixed_timestep(_s);
+        return tc_scene_fixed_timestep(_h);
     }
 
     void set_fixed_timestep(double dt) {
-        tc_scene_set_fixed_timestep(_s, dt);
+        tc_scene_set_fixed_timestep(_h, dt);
     }
 
     double accumulated_time() const {
-        return tc_scene_accumulated_time(_s);
+        return tc_scene_accumulated_time(_h);
     }
 
     void reset_accumulated_time() {
-        tc_scene_reset_accumulated_time(_s);
+        tc_scene_reset_accumulated_time(_h);
     }
 
     // Component queries
     size_t pending_start_count() const {
-        return tc_scene_pending_start_count(_s);
+        return tc_scene_pending_start_count(_h);
     }
 
     size_t update_list_count() const {
-        return tc_scene_update_list_count(_s);
+        return tc_scene_update_list_count(_h);
     }
 
     size_t fixed_update_list_count() const {
-        return tc_scene_fixed_update_list_count(_s);
+        return tc_scene_fixed_update_list_count(_h);
     }
 
     // Get entity pool owned by this scene
     tc_entity_pool* entity_pool() const {
-        return tc_scene_entity_pool(_s);
+        return tc_scene_entity_pool(_h);
     }
 
     // Set Python wrapper for callbacks from C to Python
     void set_py_wrapper(nb::object wrapper) {
-        // Store raw PyObject* - Python Scene must outlive TcScene
-        tc::Log::info("[TcScene] set_py_wrapper tc_scene=%p, py_wrapper=%p", (void*)_s, (void*)wrapper.ptr());
-        tc_scene_set_py_wrapper(_s, wrapper.ptr());
+        tc::Log::info("[TcScene] set_py_wrapper handle=(%u,%u), py_wrapper=%p", _h.index, _h.generation, (void*)wrapper.ptr());
+        tc_scene_set_py_wrapper(_h, wrapper.ptr());
     }
 
 public:
@@ -214,25 +211,25 @@ public:
     Entity find_entity_by_name(const std::string& name) const {
         if (name.empty()) return Entity();
 
-        tc_entity_id id = tc_scene_find_entity_by_name(_s, name.c_str());
+        tc_entity_id id = tc_scene_find_entity_by_name(_h, name.c_str());
         if (!tc_entity_id_valid(id)) return Entity();
 
         return Entity(entity_pool(), id);
     }
 
-    // Scene name (from registry)
+    // Scene name
     std::string name() const {
-        const char* n = tc_scene_registry_get_name(_s);
+        const char* n = tc_scene_get_name(_h);
         return n ? std::string(n) : "";
     }
 
     void set_name(const std::string& n) {
-        tc_scene_registry_set_name(_s, n.c_str());
+        tc_scene_set_name(_h, n.c_str());
     }
 
     // Lighting properties
     tc_scene_lighting* lighting() {
-        return tc_scene_get_lighting(_s);
+        return tc_scene_get_lighting(_h);
     }
 
     // Get all entities in scene's pool
@@ -251,7 +248,6 @@ public:
     }
 
     // Migrate entity to this scene's pool
-    // Returns new Entity in scene's pool, old entity becomes invalid
     Entity migrate_entity(Entity& entity) {
         tc_entity_pool* dst_pool = entity_pool();
         if (!entity.valid() || !dst_pool) {
@@ -260,7 +256,6 @@ public:
 
         tc_entity_pool* src_pool = entity.pool();
         if (src_pool == dst_pool) {
-            // Already in scene's pool
             return entity;
         }
 
@@ -317,10 +312,10 @@ void bind_tc_scene(nb::module_& m) {
             return reinterpret_cast<uintptr_t>(self.entity_pool());
         }, "Get scene's entity pool as uintptr_t")
 
-        // Scene pointer access
-        .def("scene_ptr", [](TcScene& self) {
-            return reinterpret_cast<uintptr_t>(self._s);
-        }, "Get tc_scene* as uintptr_t")
+        // Scene handle access (for debugging)
+        .def("scene_handle", [](TcScene& self) {
+            return std::make_tuple(self._h.index, self._h.generation);
+        }, "Get scene handle as (index, generation) tuple")
 
         // Entity creation in pool
         .def("create_entity", &TcScene::create_entity, nb::arg("name") = "",
@@ -358,10 +353,10 @@ void bind_tc_scene(nb::module_& m) {
 
         // Scene mode
         .def("get_mode", [](TcScene& self) {
-            return tc_scene_get_mode(self._s);
+            return tc_scene_get_mode(self._h);
         }, "Get scene mode (INACTIVE, STOP, PLAY)")
         .def("set_mode", [](TcScene& self, tc_scene_mode mode) {
-            tc_scene_set_mode(self._s, mode);
+            tc_scene_set_mode(self._h, mode);
         }, nb::arg("mode"), "Set scene mode")
 
         // Python wrapper for callbacks
@@ -370,57 +365,57 @@ void bind_tc_scene(nb::module_& m) {
 
         // Skybox type
         .def("get_skybox_type", [](TcScene& self) -> int {
-            return tc_scene_get_skybox_type(self._s);
+            return tc_scene_get_skybox_type(self._h);
         })
         .def("set_skybox_type", [](TcScene& self, int type) {
-            tc_scene_set_skybox_type(self._s, type);
+            tc_scene_set_skybox_type(self._h, type);
         })
 
         // Skybox colors (as tuples)
         .def("get_skybox_color", [](TcScene& self) -> std::tuple<float, float, float> {
             float r, g, b;
-            tc_scene_get_skybox_color(self._s, &r, &g, &b);
+            tc_scene_get_skybox_color(self._h, &r, &g, &b);
             return {r, g, b};
         })
         .def("set_skybox_color", [](TcScene& self, float r, float g, float b) {
-            tc_scene_set_skybox_color(self._s, r, g, b);
+            tc_scene_set_skybox_color(self._h, r, g, b);
         })
         .def("get_skybox_top_color", [](TcScene& self) -> std::tuple<float, float, float> {
             float r, g, b;
-            tc_scene_get_skybox_top_color(self._s, &r, &g, &b);
+            tc_scene_get_skybox_top_color(self._h, &r, &g, &b);
             return {r, g, b};
         })
         .def("set_skybox_top_color", [](TcScene& self, float r, float g, float b) {
-            tc_scene_set_skybox_top_color(self._s, r, g, b);
+            tc_scene_set_skybox_top_color(self._h, r, g, b);
         })
         .def("get_skybox_bottom_color", [](TcScene& self) -> std::tuple<float, float, float> {
             float r, g, b;
-            tc_scene_get_skybox_bottom_color(self._s, &r, &g, &b);
+            tc_scene_get_skybox_bottom_color(self._h, &r, &g, &b);
             return {r, g, b};
         })
         .def("set_skybox_bottom_color", [](TcScene& self, float r, float g, float b) {
-            tc_scene_set_skybox_bottom_color(self._s, r, g, b);
+            tc_scene_set_skybox_bottom_color(self._h, r, g, b);
         })
 
         // Skybox mesh and material (ownership in tc_scene via refcount)
         .def("get_skybox_mesh", [](TcScene& self) -> TcMesh {
-            tc_mesh* raw = tc_scene_get_skybox_mesh(self._s);
+            tc_mesh* raw = tc_scene_get_skybox_mesh(self._h);
             if (!raw) return TcMesh();
             return TcMesh(raw);
         })
         .def("set_skybox_mesh", [](TcScene& self, const TcMesh& mesh) {
-            tc_scene_set_skybox_mesh(self._s, mesh.get());
+            tc_scene_set_skybox_mesh(self._h, mesh.get());
         })
         .def("get_skybox_material", [](TcScene& self) -> TcMaterial {
-            tc_material* raw = tc_scene_get_skybox_material(self._s);
+            tc_material* raw = tc_scene_get_skybox_material(self._h);
             if (!raw) return TcMaterial();
             return TcMaterial(raw);
         })
         .def("set_skybox_material", [](TcScene& self, const TcMaterial& material) {
-            tc_scene_set_skybox_material(self._s, material.get());
+            tc_scene_set_skybox_material(self._h, material.get());
         })
         .def("ensure_skybox_material", [](TcScene& self, int type) -> TcMaterial {
-            tc_scene_skybox* skybox = tc_scene_get_skybox(self._s);
+            tc_scene_skybox* skybox = tc_scene_get_skybox(self._h);
             tc_material* raw = tc_scene_skybox_ensure_material(skybox, type);
             if (!raw) return TcMaterial();
             return TcMaterial(raw);
@@ -434,9 +429,8 @@ void bind_tc_scene(nb::module_& m) {
         // Component type queries
         .def("get_components_of_type", [](TcScene& self, const std::string& type_name) {
             nb::list result;
-            tc_component* c = tc_scene_first_component_of_type(self._s, type_name.c_str());
+            tc_component* c = tc_scene_first_component_of_type(self._h, type_name.c_str());
             while (c != NULL) {
-                // Return Python object via tc_component_to_python
                 nb::object py_comp = tc_component_to_python(c);
                 if (!py_comp.is_none()) {
                     result.append(py_comp);
@@ -447,15 +441,14 @@ void bind_tc_scene(nb::module_& m) {
         }, nb::arg("type_name"), "Get all components of given type")
 
         .def("count_components_of_type", [](TcScene& self, const std::string& type_name) {
-            return tc_scene_count_components_of_type(self._s, type_name.c_str());
+            return tc_scene_count_components_of_type(self._h, type_name.c_str());
         }, nb::arg("type_name"), "Count components of given type")
 
         .def("get_component_type_counts", [](TcScene& self) {
-            // Get all component types directly from scene's type_heads
             nb::dict result;
 
             size_t type_count = 0;
-            tc_scene_component_type* types = tc_scene_get_all_component_types(self._s, &type_count);
+            tc_scene_component_type* types = tc_scene_get_all_component_types(self._h, &type_count);
             if (types) {
                 for (size_t i = 0; i < type_count; i++) {
                     if (types[i].type_name) {
@@ -468,7 +461,6 @@ void bind_tc_scene(nb::module_& m) {
         }, "Get dict of component type -> count for all types in scene")
 
         .def("foreach_component_of_type", [](TcScene& self, const std::string& type_name, nb::callable callback) {
-            // Wrap Python callback
             struct CallbackData {
                 nb::callable py_callback;
                 bool had_exception = false;
@@ -476,7 +468,7 @@ void bind_tc_scene(nb::module_& m) {
             CallbackData data{callback};
 
             tc_scene_foreach_component_of_type(
-                self._s,
+                self._h,
                 type_name.c_str(),
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<CallbackData*>(user_data);
@@ -486,7 +478,6 @@ void bind_tc_scene(nb::module_& m) {
                         nb::object py_comp = tc_component_to_python(c);
                         if (!py_comp.is_none()) {
                             nb::object result = data->py_callback(py_comp);
-                            // If callback returns False, stop iteration
                             if (nb::isinstance<nb::bool_>(result) && !nb::cast<bool>(result)) {
                                 return false;
                             }
@@ -506,8 +497,7 @@ void bind_tc_scene(nb::module_& m) {
         }, nb::arg("type_name"), nb::arg("callback"),
            "Iterate components of type with callback(component) -> bool. Return False to stop.")
 
-        // Input dispatch methods - dispatch to all input handler components via vtable
-        // Events are C++ structs inheriting from C structs, passed as pointers
+        // Input dispatch methods
         .def("dispatch_mouse_button", [](TcScene& self, MouseButtonEvent& event) {
             struct DispatchData {
                 tc_mouse_button_event* event_ptr;
@@ -516,7 +506,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -548,7 +538,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -580,7 +570,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -612,7 +602,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -645,7 +635,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -677,7 +667,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -709,7 +699,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -741,7 +731,7 @@ void bind_tc_scene(nb::module_& m) {
             DispatchData data{&event};
 
             tc_scene_foreach_input_handler(
-                self._s,
+                self._h,
                 [](tc_component* c, void* user_data) -> bool {
                     auto* data = static_cast<DispatchData*>(user_data);
                     if (data->had_exception) return false;
@@ -765,15 +755,15 @@ void bind_tc_scene(nb::module_& m) {
             }
         }, nb::arg("event"), "Dispatch key event to editor input handlers")
 
-        // Notification methods - call lifecycle hooks on all components via C API
+        // Notification methods
         .def("notify_editor_start", [](TcScene& self) {
-            tc_scene_notify_editor_start(self._s);
+            tc_scene_notify_editor_start(self._h);
         }, "Notify all components that editor has started")
         .def("notify_scene_inactive", [](TcScene& self) {
-            tc_scene_notify_scene_inactive(self._s);
+            tc_scene_notify_scene_inactive(self._h);
         }, "Notify all components that scene became inactive")
         .def("notify_scene_active", [](TcScene& self) {
-            tc_scene_notify_scene_active(self._s);
+            tc_scene_notify_scene_active(self._h);
         }, "Notify all components that scene became active")
 
         // Collision world
@@ -783,20 +773,20 @@ void bind_tc_scene(nb::module_& m) {
         ;
 
     // =========================================================================
-    // Scene registry module-level functions
+    // Scene pool module-level functions
     // =========================================================================
-    m.def("tc_scene_registry_count", []() {
-        return tc_scene_registry_count();
-    }, "Get number of scenes in registry");
+    m.def("tc_scene_pool_count", []() {
+        return tc_scene_pool_count();
+    }, "Get number of scenes in pool");
 
-    m.def("tc_scene_registry_get_all_info", []() {
+    m.def("tc_scene_pool_get_all_info", []() {
         nb::list result;
         size_t count = 0;
-        tc_scene_info* infos = tc_scene_registry_get_all_info(&count);
+        tc_scene_info* infos = tc_scene_pool_get_all_info(&count);
         if (infos) {
             for (size_t i = 0; i < count; ++i) {
                 nb::dict d;
-                d["id"] = infos[i].id;
+                d["handle"] = std::make_tuple(infos[i].handle.index, infos[i].handle.generation);
                 d["name"] = infos[i].name ? std::string(infos[i].name) : "";
                 d["entity_count"] = infos[i].entity_count;
                 d["pending_count"] = infos[i].pending_count;
@@ -807,42 +797,83 @@ void bind_tc_scene(nb::module_& m) {
             free(infos);
         }
         return result;
-    }, "Get info for all scenes in registry");
+    }, "Get info for all scenes in pool");
 
-    m.def("tc_scene_get_entities", [](int scene_id) {
+    // Legacy aliases for compatibility
+    m.def("tc_scene_registry_count", []() {
+        return tc_scene_pool_count();
+    }, "Get number of scenes (legacy, use tc_scene_pool_count)");
+
+    m.def("tc_scene_registry_get_all_info", []() {
         nb::list result;
         size_t count = 0;
-        tc_scene_entity_info* infos = tc_scene_get_entities(scene_id, &count);
+        tc_scene_info* infos = tc_scene_pool_get_all_info(&count);
         if (infos) {
             for (size_t i = 0; i < count; ++i) {
                 nb::dict d;
+                d["handle"] = std::make_tuple(infos[i].handle.index, infos[i].handle.generation);
                 d["name"] = infos[i].name ? std::string(infos[i].name) : "";
-                d["uuid"] = infos[i].uuid ? std::string(infos[i].uuid) : "";
-                d["component_count"] = infos[i].component_count;
-                d["visible"] = infos[i].visible;
-                d["enabled"] = infos[i].enabled;
+                d["entity_count"] = infos[i].entity_count;
+                d["pending_count"] = infos[i].pending_count;
+                d["update_count"] = infos[i].update_count;
+                d["fixed_update_count"] = infos[i].fixed_update_count;
                 result.append(d);
             }
             free(infos);
         }
         return result;
-    }, nb::arg("scene_id"), "Get entities for a scene by ID");
+    }, "Get info for all scenes (legacy, use tc_scene_pool_get_all_info)");
 
-    m.def("tc_scene_get_component_types", [](int scene_id) {
+    // =========================================================================
+    // Entity and component enumeration for registry viewer
+    // =========================================================================
+    m.def("tc_scene_get_entities", [](std::tuple<uint32_t, uint32_t> handle_tuple) {
         nb::list result;
-        size_t count = 0;
-        tc_scene_component_type_info* infos = tc_scene_get_component_types(scene_id, &count);
-        if (infos) {
-            for (size_t i = 0; i < count; ++i) {
+        tc_scene_handle h;
+        h.index = std::get<0>(handle_tuple);
+        h.generation = std::get<1>(handle_tuple);
+
+        if (!tc_scene_alive(h)) return result;
+
+        tc_entity_pool* pool = tc_scene_entity_pool(h);
+        if (!pool) return result;
+
+        tc_entity_pool_foreach(pool, [](tc_entity_pool* p, tc_entity_id id, void* user_data) -> bool {
+            auto* list = static_cast<nb::list*>(user_data);
+            nb::dict d;
+            d["name"] = tc_entity_pool_name(p, id) ? std::string(tc_entity_pool_name(p, id)) : "";
+            d["uuid"] = tc_entity_pool_uuid(p, id) ? std::string(tc_entity_pool_uuid(p, id)) : "";
+            d["component_count"] = tc_entity_pool_component_count(p, id);
+            d["visible"] = tc_entity_pool_visible(p, id);
+            d["enabled"] = tc_entity_pool_enabled(p, id);
+            list->append(d);
+            return true;
+        }, &result);
+
+        return result;
+    }, nb::arg("handle"), "Get entities for scene handle");
+
+    m.def("tc_scene_get_component_types", [](std::tuple<uint32_t, uint32_t> handle_tuple) {
+        nb::list result;
+        tc_scene_handle h;
+        h.index = std::get<0>(handle_tuple);
+        h.generation = std::get<1>(handle_tuple);
+
+        if (!tc_scene_alive(h)) return result;
+
+        size_t type_count = 0;
+        tc_scene_component_type* types = tc_scene_get_all_component_types(h, &type_count);
+        if (types) {
+            for (size_t i = 0; i < type_count; i++) {
                 nb::dict d;
-                d["type_name"] = infos[i].type_name ? std::string(infos[i].type_name) : "";
-                d["count"] = infos[i].count;
+                d["type_name"] = types[i].type_name ? std::string(types[i].type_name) : "";
+                d["count"] = types[i].count;
                 result.append(d);
             }
-            free(infos);
+            free(types);
         }
         return result;
-    }, nb::arg("scene_id"), "Get component type counts for a scene by ID");
+    }, nb::arg("handle"), "Get component types for scene handle");
 }
 
 } // namespace termin

@@ -4,6 +4,7 @@
 
 #include "tc_types.h"
 #include "tc_entity_pool.h"
+#include "tc_scene_pool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,7 +22,7 @@ struct tc_viewport {
     uint32_t ref_count;
 
     char* name;
-    tc_scene* scene;
+    tc_scene_handle scene;          // Scene handle
     tc_component* camera;           // CameraComponent
 
     // Normalized rect (0.0 - 1.0)
@@ -56,7 +57,7 @@ struct tc_viewport {
 // Viewport Lifecycle
 // ============================================================================
 
-TC_API tc_viewport* tc_viewport_new(const char* name, tc_scene* scene, tc_component* camera);
+TC_API tc_viewport* tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera);
 TC_API void tc_viewport_free(tc_viewport* vp);
 
 // ============================================================================
@@ -97,8 +98,8 @@ TC_API uint64_t tc_viewport_get_layer_mask(const tc_viewport* vp);
 TC_API void tc_viewport_set_enabled(tc_viewport* vp, bool enabled);
 TC_API bool tc_viewport_get_enabled(const tc_viewport* vp);
 
-TC_API void tc_viewport_set_scene(tc_viewport* vp, tc_scene* scene);
-TC_API tc_scene* tc_viewport_get_scene(const tc_viewport* vp);
+TC_API void tc_viewport_set_scene(tc_viewport* vp, tc_scene_handle scene);
+TC_API tc_scene_handle tc_viewport_get_scene(const tc_viewport* vp);
 
 TC_API void tc_viewport_set_camera(tc_viewport* vp, tc_component* camera);
 TC_API tc_component* tc_viewport_get_camera(const tc_viewport* vp);

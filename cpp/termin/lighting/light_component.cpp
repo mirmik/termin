@@ -60,7 +60,7 @@ static struct _LightTypeFieldRegistrar {
             return tc_value_string(c->get_light_type_str().c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene*) {
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
             auto* c = static_cast<LightComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_light_type_str(value.data.s);
@@ -89,7 +89,7 @@ static struct _LightColorFieldRegistrar {
             return tc_value_vec3(v);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene*) {
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
             auto* c = static_cast<LightComponent*>(obj);
             if (value.type == TC_VALUE_VEC3) {
                 c->color = Vec3(value.data.v3.x, value.data.v3.y, value.data.v3.z);
@@ -132,7 +132,7 @@ static struct _LightShadowFieldsRegistrar {
                 return tc_value_bool(c->shadows.enabled);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene*) {
+            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_BOOL) {
                     c->shadows.enabled = value.data.b;
@@ -160,7 +160,7 @@ static struct _LightShadowFieldsRegistrar {
                 return tc_value_int(c->shadows.map_resolution);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene*) {
+            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_INT) {
                     c->shadows.map_resolution = static_cast<int>(value.data.i);
@@ -190,7 +190,7 @@ static struct _LightShadowFieldsRegistrar {
                 return tc_value_int(c->shadows.cascade_count);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene*) {
+            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_INT) {
                     c->shadows.cascade_count = static_cast<int>(value.data.i);
@@ -220,7 +220,7 @@ static struct _LightShadowFieldsRegistrar {
                 return tc_value_float(c->shadows.max_distance);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene*) {
+            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_FLOAT) {
                     c->shadows.max_distance = value.data.f;
@@ -250,7 +250,7 @@ static struct _LightShadowFieldsRegistrar {
                 return tc_value_float(c->shadows.split_lambda);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene*) {
+            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_FLOAT) {
                     c->shadows.split_lambda = value.data.f;
@@ -277,7 +277,7 @@ static struct _LightShadowFieldsRegistrar {
                 return tc_value_bool(c->shadows.cascade_blend);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene*) {
+            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_BOOL) {
                     c->shadows.cascade_blend = value.data.b;

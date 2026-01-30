@@ -36,8 +36,8 @@ public:
         return _v ? tc_viewport_get_layer_mask(_v) : 0xFFFFFFFFFFFFFFFFULL;
     }
 
-    tc_scene* scene() const {
-        return _v ? tc_viewport_get_scene(_v) : nullptr;
+    tc_scene_handle scene() const {
+        return _v ? tc_viewport_get_scene(_v) : TC_SCENE_HANDLE_INVALID;
     }
 
     tc_component* camera() const {

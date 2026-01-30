@@ -20,6 +20,7 @@
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
 #include "tc_scene.h"
+#include "tc_scene_pool.h"
 #ifdef TERMIN_HAS_NANOBIND
 #include "tc_inspect.hpp"
 #else
@@ -71,8 +72,8 @@ public:
 
     // Find camera by entity name in scene
     // Returns nullptr if not found
-    CameraComponent* find_camera_by_name(tc_scene* scene, const std::string& name) {
-        if (name.empty() || !scene) return nullptr;
+    CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) {
+        if (name.empty() || !tc_scene_handle_valid(scene)) return nullptr;
 
         // Check cache
         if (_cached_camera_name == name && _cached_camera != nullptr) {
@@ -223,12 +224,12 @@ protected:
     }
 
     std::vector<DrawCall> collect_draw_calls(
-        tc_scene* scene,
+        tc_scene_handle scene,
         uint64_t layer_mask
     ) const {
         std::vector<DrawCall> draw_calls;
 
-        if (!scene) {
+        if (!tc_scene_handle_valid(scene)) {
             return draw_calls;
         }
 
@@ -269,7 +270,7 @@ protected:
         GraphicsBackend* graphics,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        tc_scene* scene,
+        tc_scene_handle scene,
         const Mat44f& view,
         const Mat44f& projection,
         uint64_t layer_mask

@@ -35,7 +35,7 @@ void bind_render_engine(nb::module_& m) {
                 target_fbo,
                 width,
                 height,
-                scene_ref.ptr(),
+                scene_ref.handle(),
                 camera,
                 viewport ? viewport->ptr_ : nullptr,
                 layer_mask
@@ -59,7 +59,7 @@ void bind_render_engine(nb::module_& m) {
             // Use overload that builds lights from scene automatically
             self.render_scene_pipeline_offscreen(
                 &pipeline,
-                scene_ref.ptr(),
+                scene_ref.handle(),
                 viewport_contexts,
                 default_viewport
             );

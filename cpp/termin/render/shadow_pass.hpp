@@ -23,6 +23,7 @@ namespace nb = nanobind;
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "tc_scene.h"
+#include "tc_scene_pool.h"
 #ifdef TERMIN_HAS_NANOBIND
 #include "tc_inspect.hpp"
 #else
@@ -116,7 +117,7 @@ public:
     // Execute shadow pass, rendering shadow maps for all lights
     std::vector<ShadowMapResult> execute_shadow_pass(
         GraphicsBackend* graphics,
-        tc_scene* scene,
+        tc_scene_handle scene,
         const std::vector<Light>& lights,
         const Mat44f& camera_view,
         const Mat44f& camera_projection
@@ -139,7 +140,7 @@ private:
     FramebufferHandle* get_or_create_fbo(GraphicsBackend* graphics, int resolution, int index);
 
     // Collect shadow caster draw calls
-    std::vector<ShadowDrawCall> collect_shadow_casters(tc_scene* scene);
+    std::vector<ShadowDrawCall> collect_shadow_casters(tc_scene_handle scene);
 
     // Build shadow camera params for a light
     ShadowCameraParams build_shadow_params(

@@ -48,12 +48,13 @@ void bind_tc_viewport_class(nb::module_& m) {
                            bool enabled,
                            nb::object internal_entities,
                            std::tuple<int, int, int, int> pixel_rect) {
-            // Get tc_scene* from Scene
-            tc_scene* tc_s = nullptr;
+            // Get tc_scene_handle from Scene
+            tc_scene_handle tc_s = TC_SCENE_HANDLE_INVALID;
             if (!scene.is_none()) {
                 nb::object tc_scene_obj = scene.attr("_tc_scene");
-                uintptr_t ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                tc_s = reinterpret_cast<tc_scene*>(ptr);
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                tc_s.index = std::get<0>(h);
+                tc_s.generation = std::get<1>(h);
             }
 
             // Get tc_component* from CameraComponent
@@ -138,8 +139,8 @@ void bind_tc_viewport_class(nb::module_& m) {
         // Scene - returns Python wrapper via tc_scene's py_wrapper
         .def_prop_rw("scene",
             [](TcViewport& self) -> nb::object {
-                tc_scene* s = self.scene();
-                if (s) {
+                tc_scene_handle s = self.scene();
+                if (tc_scene_handle_valid(s)) {
                     void* wrapper = tc_scene_get_py_wrapper(s);
                     if (wrapper) {
                         return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
@@ -150,11 +151,14 @@ void bind_tc_viewport_class(nb::module_& m) {
             [](TcViewport& self, nb::object scene_obj) {
                 if (!self.ptr_) return;
                 if (scene_obj.is_none()) {
-                    tc_viewport_set_scene(self.ptr_, nullptr);
+                    tc_viewport_set_scene(self.ptr_, TC_SCENE_HANDLE_INVALID);
                 } else {
                     nb::object tc_scene_obj = scene_obj.attr("_tc_scene");
-                    uintptr_t ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    tc_viewport_set_scene(self.ptr_, reinterpret_cast<tc_scene*>(ptr));
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    tc_scene_handle handle;
+                    handle.index = std::get<0>(h);
+                    handle.generation = std::get<1>(h);
+                    tc_viewport_set_scene(self.ptr_, handle);
                 }
             })
 

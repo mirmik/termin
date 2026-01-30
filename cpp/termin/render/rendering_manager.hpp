@@ -134,7 +134,7 @@ private:
     void present_display(tc_display* display);
 
     // Collect lights from scene (simplified - returns empty for now)
-    std::vector<Light> collect_lights(tc_scene* scene);
+    std::vector<Light> collect_lights(tc_scene_handle scene);
 
 private:
     // Managed displays

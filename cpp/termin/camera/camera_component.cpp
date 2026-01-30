@@ -205,7 +205,7 @@ static struct _FovModeFieldRegistrar {
             return tc_value_string(c->get_fov_mode_str().c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene*) {
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
             auto* c = static_cast<CameraComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_fov_mode_str(value.data.s);

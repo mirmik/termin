@@ -56,7 +56,7 @@ tc_value tc_kind_serialize(const char* name, tc_kind_lang lang, const tc_value* 
     return g_registries[lang].serialize(name, input, g_registries[lang].ctx);
 }
 
-tc_value tc_kind_deserialize(const char* name, tc_kind_lang lang, const tc_value* input, tc_scene* scene) {
+tc_value tc_kind_deserialize(const char* name, tc_kind_lang lang, const tc_value* input, tc_scene_handle scene) {
     if (!name || !input || lang < 0 || lang >= TC_KIND_LANG_COUNT) {
         return tc_value_nil();
     }
@@ -82,7 +82,7 @@ tc_value tc_kind_serialize_any(const char* name, const tc_value* input) {
     return tc_value_nil();
 }
 
-tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_scene* scene) {
+tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_scene_handle scene) {
     if (!name || !input) {
         return tc_value_nil();
     }

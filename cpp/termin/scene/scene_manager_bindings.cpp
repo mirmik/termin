@@ -2,12 +2,14 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/trampoline.h>
 
 #include "scene_manager.hpp"
 
 extern "C" {
 #include "../../../core_c/include/tc_scene.h"
+#include "../../../core_c/include/tc_scene_pool.h"
 }
 
 namespace nb = nanobind;
@@ -36,12 +38,14 @@ void bind_scene_manager(nb::module_& m) {
     nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
         .def(nb::init<>())
 
-        // Scene registration
-        .def("register_scene", [](SceneManager& self, const std::string& name, uintptr_t scene_ptr) {
-            tc_scene* scene = reinterpret_cast<tc_scene*>(scene_ptr);
-            self.register_scene(name, scene);
-        }, nb::arg("name"), nb::arg("scene_ptr"),
-           "Register a scene by name. scene_ptr is tc_scene* as uintptr_t.")
+        // Scene registration - takes handle as tuple (index, generation)
+        .def("register_scene", [](SceneManager& self, const std::string& name, std::tuple<uint32_t, uint32_t> handle_tuple) {
+            tc_scene_handle h;
+            h.index = std::get<0>(handle_tuple);
+            h.generation = std::get<1>(handle_tuple);
+            self.register_scene(name, h);
+        }, nb::arg("name"), nb::arg("handle"),
+           "Register a scene by name. handle is (index, generation) tuple.")
 
         .def("unregister_scene", &SceneManager::unregister_scene, nb::arg("name"),
              "Unregister a scene by name.")

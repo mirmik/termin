@@ -141,7 +141,7 @@ public:
     // --- Lifecycle ---
 
     void update(float dt);
-    void on_added_to_scene(tc_scene* scene);
+    void on_added_to_scene(tc_scene_handle scene);
     void on_removed_from_scene();
 
     // --- Serialization ---
@@ -160,7 +160,7 @@ public:
     static Entity deserialize(tc_entity_pool* pool, const tc_value* data);
 
     // Deserialize from tc_value with scene context for entity resolution
-    void deserialize_from(const tc_value* data, tc_scene* scene = nullptr);
+    void deserialize_from(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
 
     // --- Pool/ID access ---
 

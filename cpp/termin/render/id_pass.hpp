@@ -27,7 +27,7 @@ public:
         const FBOMap& reads_fbos,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        tc_scene* scene,
+        tc_scene_handle scene,
         const Mat44f& view,
         const Mat44f& projection,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
@@ -35,7 +35,7 @@ public:
 
     // Override from CxxFramePass
     void execute(ExecuteContext& ctx) override {
-        tc_scene* scene = ctx.scene.ptr();
+        tc_scene_handle scene = ctx.scene.handle();
         CameraComponent* camera = ctx.camera;
         Rect4i rect = ctx.rect;
 

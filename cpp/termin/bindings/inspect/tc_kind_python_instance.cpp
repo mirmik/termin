@@ -31,7 +31,7 @@ static tc_value python_serialize(const char* kind_name, const tc_value* input, v
     return tc_value_copy(input);
 }
 
-static tc_value python_deserialize(const char* kind_name, const tc_value* input, tc_scene* scene, void* ctx) {
+static tc_value python_deserialize(const char* kind_name, const tc_value* input, tc_scene_handle scene, void* ctx) {
     (void)ctx;
     (void)kind_name;
     (void)scene;

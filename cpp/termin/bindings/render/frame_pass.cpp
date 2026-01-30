@@ -679,13 +679,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene* from Python Scene object
-            tc_scene* scene = nullptr;
+            // Get tc_scene_handle from Python Scene object
+            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
             if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
                 nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    scene.index = std::get<0>(h);
+                    scene.generation = std::get<1>(h);
                 }
             }
 
@@ -878,13 +879,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene* from Python Scene object
-            tc_scene* scene = nullptr;
+            // Get tc_scene_handle from Python Scene object
+            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
             if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
                 nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    scene.index = std::get<0>(h);
+                    scene.generation = std::get<1>(h);
                 }
             }
 
@@ -1034,13 +1036,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene* from Python Scene object
-            tc_scene* scene = nullptr;
+            // Get tc_scene_handle from Python Scene object
+            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
             if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
                 nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    scene.index = std::get<0>(h);
+                    scene.generation = std::get<1>(h);
                 }
             }
 
@@ -1187,13 +1190,14 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene* from Python Scene object
-            tc_scene* scene = nullptr;
+            // Get tc_scene_handle from Python Scene object
+            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
             if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
                 nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    scene.index = std::get<0>(h);
+                    scene.generation = std::get<1>(h);
                 }
             }
 
@@ -1336,13 +1340,14 @@ void bind_frame_pass(nb::module_& m) {
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_projection_py
         ) {
-            // Get tc_scene* from Python Scene object
-            tc_scene* scene = nullptr;
+            // Get tc_scene_handle from Python Scene object
+            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
             if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
                 nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_ptr")) {
-                    uintptr_t scene_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("scene_ptr")());
-                    scene = reinterpret_cast<tc_scene*>(scene_ptr);
+                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    scene.index = std::get<0>(h);
+                    scene.generation = std::get<1>(h);
                 }
             }
 

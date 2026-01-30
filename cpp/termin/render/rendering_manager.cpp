@@ -137,105 +137,6 @@ void RenderingManager::remove_viewport_state(tc_viewport* viewport) {
 }
 
 // ============================================================================
-// Rendering - Single Display
-// ============================================================================
-
-// void RenderingManager::render_display(tc_display* display, bool present) {
-//     if (!display) return;
-//     if (!graphics_) {
-//         tc_log(TC_LOG_WARN, "[RenderingManager] render_display: graphics not set");
-//         return;
-//     }
-
-//     RenderEngine* engine = render_engine();
-//     if (!engine) return;
-
-//     tc_render_surface* surface = tc_display_get_surface(display);
-//     if (!surface) {
-//         tc_log(TC_LOG_WARN, "[RenderingManager] render_display: surface is null");
-//         return;
-//     }
-
-//     int width, height;
-//     tc_render_surface_get_size(surface, &width, &height);
-//     if (width <= 0 || height <= 0) return;
-
-//     // Collect viewports sorted by depth
-//     std::vector<tc_viewport*> viewports;
-//     tc_viewport* vp = tc_display_get_first_viewport(display);
-//     while (vp) {
-//         if (tc_viewport_get_enabled(vp)) {
-//             viewports.push_back(vp);
-//         }
-//         vp = vp->display_next;
-//     }
-//     std::sort(viewports.begin(), viewports.end(), [](tc_viewport* a, tc_viewport* b) {
-//         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
-//     });
-
-//     // Get display framebuffer
-//     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
-
-//     // Clear display
-//     graphics_->bind_framebuffer_id(display_fbo);
-//     graphics_->set_viewport(0, 0, width, height);
-//     graphics_->clear_color_depth({0.1f, 0.1f, 0.1f, 1.0f});
-
-//     // Render each viewport
-//     for (tc_viewport* viewport : viewports) {
-//         tc_scene* scene = tc_viewport_get_scene(viewport);
-//         tc_component* camera_comp = tc_viewport_get_camera(viewport);
-//         tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
-
-//         if (!scene || !camera_comp || !pipeline) continue;
-
-//         // Get RenderPipeline from tc_pipeline
-//         RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
-//         if (!render_pipeline) continue;
-
-//         // Get CameraComponent
-//         CameraComponent* camera = static_cast<CameraComponent*>(camera_comp->body);
-//         if (!camera) continue;
-
-//         // Get pixel rect
-//         int px, py, pw, ph;
-//         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-//         if (pw <= 0 || ph <= 0) continue;
-
-//         // Collect lights (simplified)
-//         std::vector<Light> lights = collect_lights(scene);
-
-//         // Render viewport
-//         engine->render_view_to_fbo(
-//             render_pipeline,
-//             nullptr,  // target_fbo = nullptr means use pipeline's color FBO
-//             pw, ph,
-//             scene,
-//             camera,
-//             viewport,
-//             lights,
-//             tc_viewport_get_layer_mask(viewport)
-//         );
-
-//         // Blit pipeline's color FBO to display at viewport position
-//         FramebufferHandle* color_fbo = render_pipeline->get_fbo("color");
-//         if (color_fbo && color_fbo->get_fbo_id() != 0) {
-//             graphics_->blit_framebuffer_to_id(
-//                 *color_fbo,
-//                 display_fbo,
-//                 {0, 0, pw, ph},
-//                 {px, py, px + pw, py + ph}
-//             );
-//         }
-//     }
-
-//     // Swap buffers
-//     if (present) {
-//         tc_render_surface_swap_buffers(surface);
-//     }
-// }
-
-// ============================================================================
 // Rendering - Offscreen-First Model
 // ============================================================================
 
@@ -283,11 +184,11 @@ void RenderingManager::render_all_offscreen() {
 void RenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
     if (!viewport || !graphics_) return;
 
-    tc_scene* scene = tc_viewport_get_scene(viewport);
+    tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
     tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
 
-    if (!scene || !camera_comp || !pipeline) return;
+    if (!tc_scene_handle_valid(scene) || !camera_comp || !pipeline) return;
 
     // Get RenderPipeline from tc_pipeline
     RenderPipeline* render_pipeline = RenderPipeline::from_tc_pipeline(pipeline);
@@ -417,7 +318,7 @@ void RenderingManager::shutdown() {
 // Helpers
 // ============================================================================
 
-std::vector<Light> RenderingManager::collect_lights(tc_scene* scene) {
+std::vector<Light> RenderingManager::collect_lights(tc_scene_handle scene) {
     // TODO: Implement proper light collection from scene
     // For now, return empty - ambient lighting only
     return {};

@@ -14,9 +14,9 @@ extern "C" {
 
 namespace termin {
 
-std::vector<Light> build_lights_from_scene(tc_scene* scene) {
+std::vector<Light> build_lights_from_scene(tc_scene_handle scene) {
     std::vector<Light> lights;
-    if (!scene) return lights;
+    if (!tc_scene_handle_valid(scene)) return lights;
 
     // Iterate all LightComponent in scene
     tc_component* c = tc_scene_first_component_of_type(scene, "LightComponent");
@@ -50,7 +50,7 @@ void RenderEngine::render_to_screen(
     RenderPipeline* pipeline,
     int width,
     int height,
-    void* scene,
+    tc_scene_handle scene,
     CameraComponent* camera
 ) {
     // Validate inputs before passing to render_view_to_fbo
@@ -58,8 +58,8 @@ void RenderEngine::render_to_screen(
         tc::Log::error("[render_to_screen] pipeline is NULL");
         return;
     }
-    if (!scene) {
-        tc::Log::error("[render_to_screen] scene is NULL");
+    if (!tc_scene_handle_valid(scene)) {
+        tc::Log::error("[render_to_screen] scene is invalid");
         return;
     }
     if (!camera) {
@@ -78,7 +78,7 @@ void RenderEngine::render_to_screen(
         nullptr,  // null = default framebuffer
         width,
         height,
-        static_cast<tc_scene*>(scene),
+        scene,
         camera,
         nullptr,  // no viewport
         empty_lights,
@@ -91,7 +91,7 @@ void RenderEngine::render_view_to_fbo(
     FramebufferHandle* target_fbo,
     int width,
     int height,
-    tc_scene* scene,
+    tc_scene_handle scene,
     CameraComponent* camera,
     tc_viewport* viewport,
     uint64_t layer_mask
@@ -141,7 +141,7 @@ void RenderEngine::render_view_to_fbo(
     FramebufferHandle* target_fbo,
     int width,
     int height,
-    tc_scene* scene,
+    tc_scene_handle scene,
     CameraComponent* camera,
     tc_viewport* viewport,
     const std::vector<Light>& lights,
@@ -411,7 +411,7 @@ void RenderEngine::render_view_to_fbo(
 
 void RenderEngine::render_scene_pipeline_offscreen(
     RenderPipeline* pipeline,
-    tc_scene* scene,
+    tc_scene_handle scene,
     const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
     const std::string& default_viewport
 ) {
@@ -422,7 +422,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
 
 void RenderEngine::render_scene_pipeline_offscreen(
     RenderPipeline* pipeline,
-    tc_scene* scene,
+    tc_scene_handle scene,
     const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
     const std::vector<Light>& lights,
     const std::string& default_viewport

@@ -1,7 +1,9 @@
-// tc_scene_registry.h - Global scene registry
+// tc_scene_registry.h - Legacy API, now delegates to tc_scene_pool
+// This header is deprecated, use tc_scene_pool.h directly
 #pragma once
 
 #include "tc_types.h"
+#include "tc_scene_pool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,92 +11,40 @@ extern "C" {
 
 // ============================================================================
 // Lifecycle (called from tc_init/tc_shutdown)
+// Now delegates to tc_scene_pool
 // ============================================================================
 
-TC_API void tc_scene_registry_init(void);
-TC_API void tc_scene_registry_shutdown(void);
+static inline void tc_scene_registry_init(void) {
+    tc_scene_pool_init();
+}
+
+static inline void tc_scene_registry_shutdown(void) {
+    tc_scene_pool_shutdown();
+}
 
 // ============================================================================
-// Scene registration (called automatically by tc_scene_new/tc_scene_free)
+// Queries - delegate to pool
 // ============================================================================
 
-// Register scene in registry, assigns unique ID
-// Returns scene ID (>= 0) or -1 on error
-TC_API int tc_scene_registry_add(tc_scene* scene, const char* name);
-
-// Unregister scene from registry
-TC_API void tc_scene_registry_remove(tc_scene* scene);
-
-// Get scene name
-TC_API const char* tc_scene_registry_get_name(const tc_scene* scene);
-
-// Set scene name
-TC_API void tc_scene_registry_set_name(tc_scene* scene, const char* name);
+static inline size_t tc_scene_registry_count(void) {
+    return tc_scene_pool_count();
+}
 
 // ============================================================================
-// Queries
+// Scene info - uses tc_scene_info from tc_scene_pool.h
 // ============================================================================
 
-// Get number of registered scenes
-TC_API size_t tc_scene_registry_count(void);
+static inline tc_scene_info* tc_scene_registry_get_all_info(size_t* count) {
+    return tc_scene_pool_get_all_info(count);
+}
 
 // ============================================================================
-// Scene info for debugging
+// Iteration - delegate to pool
 // ============================================================================
 
-typedef struct tc_scene_info {
-    int id;                    // Scene ID in registry
-    const char* name;          // Scene name
-    size_t entity_count;       // Number of entities
-    size_t pending_count;      // Pending start components
-    size_t update_count;       // Update list count
-    size_t fixed_update_count; // Fixed update list count
-} tc_scene_info;
-
-// Get info for all scenes (caller must free() returned array)
-// Returns NULL if no scenes, sets *count to number of entries
-TC_API tc_scene_info* tc_scene_registry_get_all_info(size_t* count);
-
-// ============================================================================
-// Iteration
-// ============================================================================
-
-// Iterator callback: return true to continue, false to stop
-typedef bool (*tc_scene_iter_fn)(tc_scene* scene, int id, void* user_data);
-
-// Iterate over all scenes
-TC_API void tc_scene_registry_foreach(tc_scene_iter_fn callback, void* user_data);
-
-// ============================================================================
-// Entity enumeration for a scene
-// ============================================================================
-
-typedef struct tc_scene_entity_info {
-    const char* name;
-    const char* uuid;
-    size_t component_count;
-    bool visible;
-    bool enabled;
-} tc_scene_entity_info;
-
-// Get entity info for a scene by scene ID
-// Returns array of tc_scene_entity_info (caller must free)
-// Sets *count to number of entities
-TC_API tc_scene_entity_info* tc_scene_get_entities(int scene_id, size_t* count);
-
-// ============================================================================
-// Component type enumeration for a scene
-// ============================================================================
-
-typedef struct tc_scene_component_type_info {
-    const char* type_name;
-    size_t count;
-} tc_scene_component_type_info;
-
-// Get component type counts for a scene by scene ID
-// Returns array of tc_scene_component_type_info (caller must free)
-// Sets *count to number of types with count > 0
-TC_API tc_scene_component_type_info* tc_scene_get_component_types(int scene_id, size_t* count);
+static inline void tc_scene_registry_foreach(tc_scene_pool_iter_fn callback, void* user_data) {
+    tc_scene_pool_foreach(callback, user_data);
+}
 
 #ifdef __cplusplus
 }

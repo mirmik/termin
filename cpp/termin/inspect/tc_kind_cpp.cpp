@@ -29,7 +29,7 @@ static tc_value cpp_serialize(const char* kind_name, const tc_value* input, void
     return tc_value_copy(input);
 }
 
-static tc_value cpp_deserialize(const char* kind_name, const tc_value* input, tc_scene* scene, void* ctx) {
+static tc_value cpp_deserialize(const char* kind_name, const tc_value* input, tc_scene_handle scene, void* ctx) {
     (void)ctx;
     (void)scene;
     // For C++ kinds, actual deserialization is done via KindRegistryCpp::deserialize()
@@ -84,7 +84,7 @@ static void register_handle_kinds() {
             const termin::TcMesh& m = std::any_cast<const termin::TcMesh&>(value);
             return m.serialize_to_value();
         },
-        [](const tc_value* v, tc_scene* scene) -> std::any {
+        [](const tc_value* v, tc_scene_handle scene) -> std::any {
             termin::TcMesh m;
             m.deserialize_from(v, scene);
             return m;
@@ -97,7 +97,7 @@ static void register_handle_kinds() {
             const termin::TcMaterial& m = std::any_cast<const termin::TcMaterial&>(value);
             return m.serialize_to_value();
         },
-        [](const tc_value* v, tc_scene* scene) -> std::any {
+        [](const tc_value* v, tc_scene_handle scene) -> std::any {
             termin::TcMaterial m;
             m.deserialize_from(v, scene);
             return m;

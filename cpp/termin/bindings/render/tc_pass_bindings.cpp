@@ -16,6 +16,7 @@ extern "C" {
 #include "tc_log.h"
 #include "termin_core.h"
 #include "tc_inspect.h"
+#include "tc_scene_pool.h"
 }
 
 #include "../../../../core_c/include/tc_inspect.hpp"
@@ -568,7 +569,7 @@ void bind_tc_pass(nb::module_& m) {
             if (!obj_ptr) return;
 
             tc_value v = py_to_tc_value(data);
-            tc_inspect_deserialize(obj_ptr, tc_pass_type_name(p), &v, nullptr);
+            tc_inspect_deserialize(obj_ptr, tc_pass_type_name(p), &v, TC_SCENE_HANDLE_INVALID);
             tc_value_free(&v);
         }, nb::arg("data"));
 

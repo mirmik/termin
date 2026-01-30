@@ -6,6 +6,7 @@
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "tc_scene.h"
+#include "tc_scene_pool.h"
 #include "tc_component.h"
 
 namespace termin {
@@ -76,8 +77,8 @@ public:
 
         // Dispatch to scene
         if (viewport != nullptr) {
-            tc_scene* scene = tc_viewport_get_scene(viewport);
-            if (scene != nullptr) {
+            tc_scene_handle scene = tc_viewport_get_scene(viewport);
+            if (tc_scene_handle_valid(scene)) {
                 MouseButtonEvent event(viewport, x, y, button, action, mods);
                 dispatch_mouse_button(scene, &event);
             }
@@ -101,8 +102,8 @@ public:
 
         // Dispatch to scene
         if (viewport != nullptr) {
-            tc_scene* scene = tc_viewport_get_scene(viewport);
-            if (scene != nullptr) {
+            tc_scene_handle scene = tc_viewport_get_scene(viewport);
+            if (tc_scene_handle_valid(scene)) {
                 MouseMoveEvent event(viewport, x, y, dx, dy);
                 dispatch_mouse_move(scene, &event);
             }
@@ -120,8 +121,8 @@ public:
 
         // Dispatch to scene
         if (viewport != nullptr) {
-            tc_scene* scene = tc_viewport_get_scene(viewport);
-            if (scene != nullptr) {
+            tc_scene_handle scene = tc_viewport_get_scene(viewport);
+            if (tc_scene_handle_valid(scene)) {
                 ScrollEvent event(viewport, x, y, xoffset, yoffset, mods);
                 dispatch_scroll(scene, &event);
             }
@@ -143,8 +144,8 @@ public:
 
         // Dispatch to scene
         if (viewport != nullptr) {
-            tc_scene* scene = tc_viewport_get_scene(viewport);
-            if (scene != nullptr) {
+            tc_scene_handle scene = tc_viewport_get_scene(viewport);
+            if (tc_scene_handle_valid(scene)) {
                 KeyEvent event(viewport, key, scancode, action, mods);
                 dispatch_key(scene, &event);
             }
@@ -158,7 +159,7 @@ public:
 
 private:
     // Dispatch functions with explicit types
-    void dispatch_mouse_button(tc_scene* scene, tc_mouse_button_event* event) {
+    void dispatch_mouse_button(tc_scene_handle scene, tc_mouse_button_event* event) {
         tc_scene_foreach_input_handler(scene,
             [](tc_component* c, void* user_data) -> bool {
                 tc_mouse_button_event* ev = static_cast<tc_mouse_button_event*>(user_data);
@@ -169,7 +170,7 @@ private:
             TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED);
     }
 
-    void dispatch_mouse_move(tc_scene* scene, tc_mouse_move_event* event) {
+    void dispatch_mouse_move(tc_scene_handle scene, tc_mouse_move_event* event) {
         tc_scene_foreach_input_handler(scene,
             [](tc_component* c, void* user_data) -> bool {
                 tc_mouse_move_event* ev = static_cast<tc_mouse_move_event*>(user_data);
@@ -180,7 +181,7 @@ private:
             TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED);
     }
 
-    void dispatch_scroll(tc_scene* scene, tc_scroll_event* event) {
+    void dispatch_scroll(tc_scene_handle scene, tc_scroll_event* event) {
         tc_scene_foreach_input_handler(scene,
             [](tc_component* c, void* user_data) -> bool {
                 tc_scroll_event* ev = static_cast<tc_scroll_event*>(user_data);
@@ -191,7 +192,7 @@ private:
             TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED);
     }
 
-    void dispatch_key(tc_scene* scene, tc_key_event* event) {
+    void dispatch_key(tc_scene_handle scene, tc_key_event* event) {
         tc_scene_foreach_input_handler(scene,
             [](tc_component* c, void* user_data) -> bool {
                 tc_key_event* ev = static_cast<tc_key_event*>(user_data);

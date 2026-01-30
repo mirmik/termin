@@ -206,11 +206,11 @@ void PullRenderingManager::render_display(tc_display* display) {
 void PullRenderingManager::render_viewport_offscreen(tc_viewport* viewport) {
     if (!viewport || !graphics_) return;
 
-    tc_scene* scene = tc_viewport_get_scene(viewport);
+    tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
     tc_pipeline* pipeline = tc_viewport_get_pipeline(viewport);
 
-    if (!scene || !camera_comp || !pipeline) {
+    if (!tc_scene_handle_valid(scene) || !camera_comp || !pipeline) {
         tc_log(TC_LOG_WARN, "[PullRM] viewport missing scene/camera/pipeline");
         return;
     }
@@ -258,7 +258,7 @@ void PullRenderingManager::shutdown() {
 }
 
 // Helpers
-std::vector<Light> PullRenderingManager::collect_lights(tc_scene* scene) {
+std::vector<Light> PullRenderingManager::collect_lights(tc_scene_handle scene) {
     return {};
 }
 

@@ -118,10 +118,10 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
 
 } // anonymous namespace
 
-std::vector<ShadowDrawCall> ShadowPass::collect_shadow_casters(tc_scene* scene) {
+std::vector<ShadowDrawCall> ShadowPass::collect_shadow_casters(tc_scene_handle scene) {
     std::vector<ShadowDrawCall> draw_calls;
 
-    if (!scene) {
+    if (!tc_scene_handle_valid(scene)) {
         return draw_calls;
     }
 
@@ -159,7 +159,7 @@ ShadowCameraParams ShadowPass::build_shadow_params(
 
 std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     GraphicsBackend* graphics,
-    tc_scene* scene,
+    tc_scene_handle scene,
     const std::vector<Light>& lights,
     const Mat44f& camera_view,
     const Mat44f& camera_projection
@@ -402,7 +402,7 @@ void main() {
     // Execute shadow pass
     std::vector<ShadowMapResult> results = execute_shadow_pass(
         ctx.graphics,
-        ctx.scene.ptr(),
+        ctx.scene.handle(),
         ctx.lights,
         camera_view,
         camera_projection

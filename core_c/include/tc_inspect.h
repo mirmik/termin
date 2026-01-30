@@ -58,9 +58,8 @@ typedef struct tc_field_info {
 // Language vtable - each language registers its implementation
 // ============================================================================
 
-// Forward declaration for scene (needed for deserialization)
-struct tc_scene;
-typedef struct tc_scene tc_scene;
+// Include scene pool for tc_scene_handle
+#include "tc_scene_pool.h"
 
 // Callback types
 typedef bool (*tc_inspect_has_type_fn)(const char* type_name, void* ctx);
@@ -69,7 +68,7 @@ typedef size_t (*tc_inspect_field_count_fn)(const char* type_name, void* ctx);
 typedef bool (*tc_inspect_get_field_fn)(const char* type_name, size_t index, tc_field_info* out, void* ctx);
 typedef bool (*tc_inspect_find_field_fn)(const char* type_name, const char* path, tc_field_info* out, void* ctx);
 typedef tc_value (*tc_inspect_getter_fn)(void* obj, const char* type_name, const char* path, void* ctx);
-typedef void (*tc_inspect_setter_fn)(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene, void* ctx);
+typedef void (*tc_inspect_setter_fn)(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx);
 typedef void (*tc_inspect_action_fn)(void* obj, const char* type_name, const char* path, void* ctx);
 
 typedef struct tc_inspect_lang_vtable {
@@ -125,7 +124,7 @@ TC_API bool tc_inspect_find_field_info(const char* type_name, const char* path, 
 // ============================================================================
 
 TC_API tc_value tc_inspect_get(void* obj, const char* type_name, const char* path);
-TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene* scene);
+TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene);
 TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path);
 
 // ============================================================================
@@ -136,7 +135,7 @@ TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path
 TC_API tc_value tc_inspect_serialize(void* obj, const char* type_name);
 
 // Deserialize from dict with scene context
-TC_API void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, tc_scene* scene);
+TC_API void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, tc_scene_handle scene);
 
 // ============================================================================
 // Parameterized kinds (e.g., "list[entity_handle]")
@@ -159,21 +158,21 @@ TC_API tc_value tc_value_from_json(const char* json);
 // ============================================================================
 
 TC_API tc_value tc_component_inspect_get(tc_component* c, const char* path);
-TC_API void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene* scene);
+TC_API void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene_handle scene);
 
 // ============================================================================
 // Simplified field setters for FFI (no tc_value marshalling needed)
 // ============================================================================
 
-TC_API void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, tc_scene* scene);
-TC_API void tc_component_set_field_float(tc_component* c, const char* path, float value, tc_scene* scene);
-TC_API void tc_component_set_field_double(tc_component* c, const char* path, double value, tc_scene* scene);
-TC_API void tc_component_set_field_bool(tc_component* c, const char* path, bool value, tc_scene* scene);
-TC_API void tc_component_set_field_string(tc_component* c, const char* path, const char* value, tc_scene* scene);
+TC_API void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, tc_scene_handle scene);
+TC_API void tc_component_set_field_float(tc_component* c, const char* path, float value, tc_scene_handle scene);
+TC_API void tc_component_set_field_double(tc_component* c, const char* path, double value, tc_scene_handle scene);
+TC_API void tc_component_set_field_bool(tc_component* c, const char* path, bool value, tc_scene_handle scene);
+TC_API void tc_component_set_field_string(tc_component* c, const char* path, const char* value, tc_scene_handle scene);
 
 // Handle types (mesh, material) - set by uuid lookup
-TC_API void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene* scene);
-TC_API void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene* scene);
+TC_API void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene_handle scene);
+TC_API void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene_handle scene);
 
 // Simplified field getters
 TC_API int64_t tc_component_get_field_int(tc_component* c, const char* path);
@@ -190,7 +189,7 @@ TC_API const char* tc_component_get_field_string(tc_component* c, const char* pa
 struct tc_pass;
 
 TC_API tc_value tc_pass_inspect_get(struct tc_pass* p, const char* path);
-TC_API void tc_pass_inspect_set(struct tc_pass* p, const char* path, tc_value value, tc_scene* scene);
+TC_API void tc_pass_inspect_set(struct tc_pass* p, const char* path, tc_value value, tc_scene_handle scene);
 
 // ============================================================================
 // Cleanup
