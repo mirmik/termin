@@ -29,6 +29,15 @@ public class EntityPool : IDisposable
         var handle = TerminCore.EntityPoolCreate((nuint)initialCapacity);
         if (handle == IntPtr.Zero)
             throw new InvalidOperationException("Failed to create EntityPool");
+
+        // Register pool in global registry so C++ Entity can find it
+        var poolHandle = TerminCore.EntityPoolRegistryRegister(handle);
+        if (!poolHandle.IsValid)
+        {
+            TerminCore.EntityPoolDestroy(handle);
+            throw new InvalidOperationException("Failed to register EntityPool");
+        }
+
         return new EntityPool(handle, ownsHandle: true);
     }
 

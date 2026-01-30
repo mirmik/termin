@@ -10,26 +10,46 @@ public static partial class TerminCore
     const string DLL = "termin_core";
 
     // ========================================================================
-    // Scene
+    // Library Initialization
+    // ========================================================================
+
+    [LibraryImport(DLL, EntryPoint = "tc_init")]
+    public static partial void Init();
+
+    [LibraryImport(DLL, EntryPoint = "tc_shutdown")]
+    public static partial void Shutdown();
+
+    // ========================================================================
+    // Scene (handle-based API)
     // ========================================================================
 
     [LibraryImport(DLL, EntryPoint = "tc_scene_new")]
-    public static partial IntPtr SceneNew();
+    public static partial TcSceneHandle SceneNew();
+
+    [LibraryImport(DLL, EntryPoint = "tc_scene_new_named", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial TcSceneHandle SceneNewNamed(string name);
 
     [LibraryImport(DLL, EntryPoint = "tc_scene_free")]
-    public static partial void SceneFree(IntPtr scene);
+    public static partial void SceneFree(TcSceneHandle scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_scene_alive")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool SceneAlive(TcSceneHandle scene);
 
     [LibraryImport(DLL, EntryPoint = "tc_scene_update")]
-    public static partial void SceneUpdate(IntPtr scene, double dt);
+    public static partial void SceneUpdate(TcSceneHandle scene, double dt);
 
     [LibraryImport(DLL, EntryPoint = "tc_scene_editor_update")]
-    public static partial void SceneEditorUpdate(IntPtr scene, double dt);
+    public static partial void SceneEditorUpdate(TcSceneHandle scene, double dt);
 
     [LibraryImport(DLL, EntryPoint = "tc_scene_before_render")]
-    public static partial void SceneBeforeRender(IntPtr scene);
+    public static partial void SceneBeforeRender(TcSceneHandle scene);
 
     [LibraryImport(DLL, EntryPoint = "tc_scene_entity_pool")]
-    public static partial IntPtr SceneEntityPool(IntPtr scene);
+    public static partial IntPtr SceneEntityPool(TcSceneHandle scene);
+
+    [LibraryImport(DLL, EntryPoint = "tc_scene_entity_count")]
+    public static partial nuint SceneEntityCount(TcSceneHandle scene);
 
     // EntityPool lifecycle (for standalone pools)
     [LibraryImport(DLL, EntryPoint = "tc_entity_pool_create")]
@@ -38,8 +58,9 @@ public static partial class TerminCore
     [LibraryImport(DLL, EntryPoint = "tc_entity_pool_destroy")]
     public static partial void EntityPoolDestroy(IntPtr pool);
 
-    [LibraryImport(DLL, EntryPoint = "tc_scene_entity_count")]
-    public static partial nuint SceneEntityCount(IntPtr scene);
+    // EntityPool registry (for C++ components to find Entity)
+    [LibraryImport(DLL, EntryPoint = "tc_entity_pool_registry_register")]
+    public static partial TcEntityPoolHandle EntityPoolRegistryRegister(IntPtr pool);
 
     // ========================================================================
     // Entity Pool
@@ -618,19 +639,19 @@ public static partial class TerminCore
     public static partial void DisplayGetSize(IntPtr display, out int width, out int height);
 
     [LibraryImport(DLL, EntryPoint = "tc_display_add_viewport")]
-    public static partial void DisplayAddViewport(IntPtr display, IntPtr viewport);
+    public static partial void DisplayAddViewport(IntPtr display, TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_display_remove_viewport")]
-    public static partial void DisplayRemoveViewport(IntPtr display, IntPtr viewport);
+    public static partial void DisplayRemoveViewport(IntPtr display, TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_display_get_viewport_count")]
     public static partial nuint DisplayGetViewportCount(IntPtr display);
 
     [LibraryImport(DLL, EntryPoint = "tc_display_get_first_viewport")]
-    public static partial IntPtr DisplayGetFirstViewport(IntPtr display);
+    public static partial TcViewportHandle DisplayGetFirstViewport(IntPtr display);
 
     [LibraryImport(DLL, EntryPoint = "tc_display_viewport_at_screen")]
-    public static partial IntPtr DisplayViewportAtScreen(IntPtr display, float px, float py);
+    public static partial TcViewportHandle DisplayViewportAtScreen(IntPtr display, float px, float py);
 
     // ========================================================================
     // Input Manager (tc_input_manager)
@@ -665,46 +686,66 @@ public static partial class TerminCore
     public static partial IntPtr SimpleInputManagerBase(IntPtr manager);
 
     // ========================================================================
-    // Viewport (tc_viewport)
+    // Viewport (tc_viewport) - handle-based API
     // ========================================================================
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_new", StringMarshalling = StringMarshalling.Utf8)]
-    public static partial IntPtr ViewportNew(string? name, IntPtr scene, IntPtr camera);
+    public static partial TcViewportHandle ViewportNew(string? name, TcSceneHandle scene, IntPtr camera);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_free")]
-    public static partial void ViewportFree(IntPtr viewport);
+    public static partial void ViewportFree(TcViewportHandle viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_alive")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ViewportAlive(TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_scene")]
-    public static partial void ViewportSetScene(IntPtr viewport, IntPtr scene);
+    public static partial void ViewportSetScene(TcViewportHandle viewport, TcSceneHandle scene);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_get_scene")]
-    public static partial IntPtr ViewportGetScene(IntPtr viewport);
+    public static partial TcSceneHandle ViewportGetScene(TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_camera")]
-    public static partial void ViewportSetCamera(IntPtr viewport, IntPtr camera);
+    public static partial void ViewportSetCamera(TcViewportHandle viewport, IntPtr camera);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_camera")]
+    public static partial IntPtr ViewportGetCamera(TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_rect")]
-    public static partial void ViewportSetRect(IntPtr viewport, float x, float y, float w, float h);
+    public static partial void ViewportSetRect(TcViewportHandle viewport, float x, float y, float w, float h);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_pipeline")]
-    public static partial void ViewportSetPipeline(IntPtr viewport, IntPtr pipeline);
+    public static partial void ViewportSetPipeline(TcViewportHandle viewport, TcPipelineHandle pipeline);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_get_pipeline")]
-    public static partial IntPtr ViewportGetPipeline(IntPtr viewport);
+    public static partial TcPipelineHandle ViewportGetPipeline(TcViewportHandle viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_enabled")]
+    public static partial void ViewportSetEnabled(TcViewportHandle viewport, [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_enabled")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool ViewportGetEnabled(TcViewportHandle viewport);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_set_depth")]
+    public static partial void ViewportSetDepth(TcViewportHandle viewport, int depth);
+
+    [LibraryImport(DLL, EntryPoint = "tc_viewport_get_depth")]
+    public static partial int ViewportGetDepth(TcViewportHandle viewport);
 
     // Internal entities (for viewport-specific components like camera controllers)
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_internal_entities")]
-    public static partial void ViewportSetInternalEntities(IntPtr viewport, IntPtr pool, TcEntityId entityId);
+    public static partial void ViewportSetInternalEntities(TcViewportHandle viewport, IntPtr pool, TcEntityId entityId);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_has_internal_entities")]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static partial bool ViewportHasInternalEntities(IntPtr viewport);
+    public static partial bool ViewportHasInternalEntities(TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_pool")]
-    public static partial IntPtr ViewportGetInternalEntitiesPool(IntPtr viewport);
+    public static partial IntPtr ViewportGetInternalEntitiesPool(TcViewportHandle viewport);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_id")]
-    public static partial TcEntityId ViewportGetInternalEntitiesId(IntPtr viewport);
+    public static partial TcEntityId ViewportGetInternalEntitiesId(TcViewportHandle viewport);
 
     // ========================================================================
     // Primitive Mesh Generation (tc_primitive_mesh)

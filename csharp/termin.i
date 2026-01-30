@@ -257,17 +257,26 @@ struct Camera {
 // Input Events - cross-platform event structures
 // ============================================================================
 
-// Viewport handle - generational index for safe viewport references
+} // close namespace termin temporarily
+
+// Handle types - generational indices for safe references (global namespace, matches C API)
+
 struct tc_viewport_handle {
     unsigned int index;
     unsigned int generation;
 };
 
-// Pipeline handle - generational index for safe pipeline references
 struct tc_pipeline_handle {
     unsigned int index;
     unsigned int generation;
 };
+
+struct tc_scene_handle {
+    unsigned int index;
+    unsigned int generation;
+};
+
+namespace termin {
 
 /**
  * Mouse button press/release event.
@@ -565,7 +574,7 @@ public:
         RenderPipeline* pipeline,
         int width,
         int height,
-        void* scene,
+        tc_scene_handle scene,
         CameraComponent* camera
     );
 

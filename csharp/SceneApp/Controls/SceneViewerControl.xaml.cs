@@ -19,7 +19,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
     private RenderEngine? _renderEngine;
 
     // Viewport
-    private IntPtr _viewportPtr;
+    private TcViewportHandle _viewportHandle;
     private RenderPipeline? _pipeline;
     private ColorPass? _colorPass;
     private PresentToScreenPass? _presentPass;
@@ -64,7 +64,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
             {
                 _scene = value;
                 // Only update if viewport exists (will be set again after init)
-                if (_viewportPtr != IntPtr.Zero)
+                if (_viewportHandle.IsValid)
                 {
                     UpdateViewportScene();
                 }
@@ -91,6 +91,10 @@ public partial class SceneViewerControl : UserControl, IDisposable
     private void InitializeTermin()
     {
         Console.WriteLine("[SceneViewer] InitializeTermin starting...");
+
+        // Initialize core library (scene pool, viewport pool, etc.)
+        TerminCore.Init();
+        Console.WriteLine("[SceneViewer] tc_init OK");
 
         // Initialize termin OpenGL backend
         if (!termin.tc_opengl_init())
@@ -198,25 +202,25 @@ public partial class SceneViewerControl : UserControl, IDisposable
         }
 
         // Create viewport (scene can be null initially)
-        _viewportPtr = TerminCore.ViewportNew("Main", _scene?.Handle ?? IntPtr.Zero, _camera.tc_component_ptr());
+        _viewportHandle = TerminCore.ViewportNew("Main", _scene?.Handle ?? TcSceneHandle.Invalid, _camera.tc_component_ptr());
 
-        if (_viewportPtr == IntPtr.Zero)
+        if (!_viewportHandle.IsValid)
         {
             throw new InvalidOperationException("Failed to create viewport");
         }
 
         // Full size viewport (relative coords 0-1)
-        TerminCore.ViewportSetRect(_viewportPtr, 0.0f, 0.0f, 1.0f, 1.0f);
+        TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
         // Set pipeline
-        TerminCore.ViewportSetPipeline(_viewportPtr, SwigHelpers.GetPtr(_pipeline.ptr()));
+        TerminCore.ViewportSetPipeline(_viewportHandle, _pipeline.handle());
 
         // Set internal entities
-        TerminCore.ViewportSetInternalEntities(_viewportPtr, _internalPool.Handle, _internalRootId);
+        TerminCore.ViewportSetInternalEntities(_viewportHandle, _internalPool.Handle, _internalRootId);
 
         // Add viewport to display
-        _displayManager.AddViewport(_viewportPtr);
-        Console.WriteLine($"[SceneViewer] Viewport created: 0x{_viewportPtr:X}");
+        _displayManager.AddViewport(_viewportHandle);
+        Console.WriteLine($"[SceneViewer] Viewport created: {_viewportHandle}");
 
         // Now that viewport exists, update scene if it was already set
         if (_scene != null)
@@ -228,16 +232,16 @@ public partial class SceneViewerControl : UserControl, IDisposable
 
     private void UpdateViewportScene()
     {
-        if (_viewportPtr == IntPtr.Zero) return;
+        if (!_viewportHandle.IsValid) return;
 
         if (_scene != null)
         {
-            TerminCore.ViewportSetScene(_viewportPtr, _scene.Handle);
-            Console.WriteLine($"[SceneViewer] Scene set: handle=0x{_scene.Handle:X}");
+            TerminCore.ViewportSetScene(_viewportHandle, _scene.Handle);
+            Console.WriteLine($"[SceneViewer] Scene set: {_scene.Handle}");
         }
         else
         {
-            TerminCore.ViewportSetScene(_viewportPtr, IntPtr.Zero);
+            TerminCore.ViewportSetScene(_viewportHandle, TcSceneHandle.Invalid);
             Console.WriteLine("[SceneViewer] Scene cleared");
         }
     }
@@ -318,16 +322,16 @@ public partial class SceneViewerControl : UserControl, IDisposable
         _disposed = true;
 
         // Remove viewport from display
-        if (_displayManager != null && _viewportPtr != IntPtr.Zero)
+        if (_displayManager != null && _viewportHandle.IsValid)
         {
-            _displayManager.RemoveViewport(_viewportPtr);
+            _displayManager.RemoveViewport(_viewportHandle);
         }
 
         // Free viewport
-        if (_viewportPtr != IntPtr.Zero)
+        if (_viewportHandle.IsValid)
         {
-            TerminCore.ViewportFree(_viewportPtr);
-            _viewportPtr = IntPtr.Zero;
+            TerminCore.ViewportFree(_viewportHandle);
+            _viewportHandle = TcViewportHandle.Invalid;
         }
 
         // Dispose managers

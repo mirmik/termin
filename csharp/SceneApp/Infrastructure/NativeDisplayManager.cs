@@ -40,16 +40,16 @@ public class NativeDisplayManager : IDisposable
         _backend.OnKey += OnKey;
     }
 
-    public void AddViewport(IntPtr viewportPtr)
+    public void AddViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewportPtr != IntPtr.Zero)
-            TerminCore.DisplayAddViewport(_displayPtr, viewportPtr);
+        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
+            TerminCore.DisplayAddViewport(_displayPtr, viewport);
     }
 
-    public void RemoveViewport(IntPtr viewportPtr)
+    public void RemoveViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewportPtr != IntPtr.Zero)
-            TerminCore.DisplayRemoveViewport(_displayPtr, viewportPtr);
+        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
+            TerminCore.DisplayRemoveViewport(_displayPtr, viewport);
     }
 
     private void OnMouseButton(WpfInput.MouseButtonEvent evt)

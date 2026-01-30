@@ -22,7 +22,7 @@ namespace Termin.WpfTest.Controls
         private RenderEngine? _renderEngine;
 
         // Viewport
-        private IntPtr _viewportPtr;
+        private TcViewportHandle _viewportHandle;
         private RenderPipeline? _pipeline;
         private ColorPass? _colorPass;
         private PresentToScreenPass? _presentPass;
@@ -220,37 +220,37 @@ namespace Termin.WpfTest.Controls
             }
 
             // Create viewport (scene can be null initially)
-            _viewportPtr = TerminCore.ViewportNew("Main", _scene?.Handle ?? IntPtr.Zero, _camera.tc_component_ptr());
+            _viewportHandle = TerminCore.ViewportNew("Main", _scene?.Handle ?? TcSceneHandle.Invalid, _camera.tc_component_ptr());
 
-            if (_viewportPtr == IntPtr.Zero)
+            if (!_viewportHandle.IsValid)
             {
                 throw new InvalidOperationException("Failed to create viewport");
             }
 
             // Full size viewport (relative coords 0-1)
-            TerminCore.ViewportSetRect(_viewportPtr, 0.0f, 0.0f, 1.0f, 1.0f);
+            TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
             // Set pipeline
-            TerminCore.ViewportSetPipeline(_viewportPtr, SwigHelpers.GetPtr(_pipeline.ptr()));
+            TerminCore.ViewportSetPipeline(_viewportHandle, _pipeline.handle());
 
             // Set internal entities
-            TerminCore.ViewportSetInternalEntities(_viewportPtr, _internalPool.Handle, _internalRootId);
+            TerminCore.ViewportSetInternalEntities(_viewportHandle, _internalPool.Handle, _internalRootId);
 
             // Add viewport to display
-            _displayManager.AddViewport(_viewportPtr);
+            _displayManager.AddViewport(_viewportHandle);
         }
 
         private void UpdateViewportScene()
         {
-            if (_viewportPtr == IntPtr.Zero) return;
+            if (!_viewportHandle.IsValid) return;
 
             if (_scene != null)
             {
-                TerminCore.ViewportSetScene(_viewportPtr, _scene.Handle);
+                TerminCore.ViewportSetScene(_viewportHandle, _scene.Handle);
             }
             else
             {
-                TerminCore.ViewportSetScene(_viewportPtr, IntPtr.Zero);
+                TerminCore.ViewportSetScene(_viewportHandle, TcSceneHandle.Invalid);
             }
         }
 
@@ -322,16 +322,16 @@ namespace Termin.WpfTest.Controls
             _disposed = true;
 
             // Remove viewport from display
-            if (_displayManager != null && _viewportPtr != IntPtr.Zero)
+            if (_displayManager != null && _viewportHandle.IsValid)
             {
-                _displayManager.RemoveViewport(_viewportPtr);
+                _displayManager.RemoveViewport(_viewportHandle);
             }
 
             // Free viewport
-            if (_viewportPtr != IntPtr.Zero)
+            if (_viewportHandle.IsValid)
             {
-                TerminCore.ViewportFree(_viewportPtr);
-                _viewportPtr = IntPtr.Zero;
+                TerminCore.ViewportFree(_viewportHandle);
+                _viewportHandle = TcViewportHandle.Invalid;
             }
 
             // Dispose managers

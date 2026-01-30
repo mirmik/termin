@@ -67,22 +67,22 @@ public class NativeDisplayManager : IDisposable
     /// <summary>
     /// Add a viewport to the display.
     /// </summary>
-    public void AddViewport(IntPtr viewportPtr)
+    public void AddViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewportPtr != IntPtr.Zero)
+        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
         {
-            TerminCore.DisplayAddViewport(_displayPtr, viewportPtr);
+            TerminCore.DisplayAddViewport(_displayPtr, viewport);
         }
     }
 
     /// <summary>
     /// Remove a viewport from the display.
     /// </summary>
-    public void RemoveViewport(IntPtr viewportPtr)
+    public void RemoveViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewportPtr != IntPtr.Zero)
+        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
         {
-            TerminCore.DisplayRemoveViewport(_displayPtr, viewportPtr);
+            TerminCore.DisplayRemoveViewport(_displayPtr, viewport);
         }
     }
 

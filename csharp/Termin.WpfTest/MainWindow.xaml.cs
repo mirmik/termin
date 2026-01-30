@@ -261,13 +261,13 @@ public partial class MainWindow : Window
     private GlWpfBackend? _backend;
     private WpfRenderSurface? _renderSurface;
     private NativeDisplayManager? _nativeDisplayManager;
-    private IntPtr _viewportPtr;
+    private TcViewportHandle _viewportHandle;
 
     // Backend и Native Display (второй контрол)
     private GlWpfBackend? _backend2;
     private WpfRenderSurface? _renderSurface2;
     private NativeDisplayManager? _nativeDisplayManager2;
-    private IntPtr _viewportPtr2;
+    private TcViewportHandle _viewportHandle2;
 
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
@@ -465,21 +465,21 @@ public partial class MainWindow : Window
         Console.WriteLine("[Init] Display added to RenderingManager");
 
         // Create viewport with scene and camera
-        _viewportPtr = TerminCore.ViewportNew("Main", _scene.Handle, _cameraComponent.tc_component_ptr());
-        if (_viewportPtr != IntPtr.Zero)
+        _viewportHandle = TerminCore.ViewportNew("Main", _scene.Handle, _cameraComponent.tc_component_ptr());
+        if (_viewportHandle.IsValid)
         {
             // Full screen viewport
-            TerminCore.ViewportSetRect(_viewportPtr, 0.0f, 0.0f, 1.0f, 1.0f);
+            TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
             // Set pipeline on viewport (for RenderingManager)
-            TerminCore.ViewportSetPipeline(_viewportPtr, SwigHelpers.GetPtr(_renderPipeline.ptr()));
+            TerminCore.ViewportSetPipeline(_viewportHandle, _renderPipeline.handle());
 
             // Set internal entities (camera lives here)
-            TerminCore.ViewportSetInternalEntities(_viewportPtr, _internalEntitiesPool!.Handle, _internalRootId);
+            TerminCore.ViewportSetInternalEntities(_viewportHandle, _internalEntitiesPool!.Handle, _internalRootId);
             Console.WriteLine("[Init] Set internal entities for viewport");
 
             // Add to display
-            _nativeDisplayManager.AddViewport(_viewportPtr);
+            _nativeDisplayManager.AddViewport(_viewportHandle);
 
             Console.WriteLine($"[Init] Created viewport with pipeline and added to display");
         }
@@ -501,21 +501,21 @@ public partial class MainWindow : Window
         Console.WriteLine("[Init] Display2 added to RenderingManager");
 
         // Create viewport with scene and second camera
-        _viewportPtr2 = TerminCore.ViewportNew("Secondary", _scene.Handle, _cameraComponent2.tc_component_ptr());
-        if (_viewportPtr2 != IntPtr.Zero)
+        _viewportHandle2 = TerminCore.ViewportNew("Secondary", _scene.Handle, _cameraComponent2.tc_component_ptr());
+        if (_viewportHandle2.IsValid)
         {
             // Full screen viewport
-            TerminCore.ViewportSetRect(_viewportPtr2, 0.0f, 0.0f, 1.0f, 1.0f);
+            TerminCore.ViewportSetRect(_viewportHandle2, 0.0f, 0.0f, 1.0f, 1.0f);
 
             // Set pipeline on viewport
-            TerminCore.ViewportSetPipeline(_viewportPtr2, SwigHelpers.GetPtr(_renderPipeline2.ptr()));
+            TerminCore.ViewportSetPipeline(_viewportHandle2, _renderPipeline2.handle());
 
             // Set internal entities (camera lives here)
-            TerminCore.ViewportSetInternalEntities(_viewportPtr2, _internalEntitiesPool2!.Handle, _internalRootId2);
+            TerminCore.ViewportSetInternalEntities(_viewportHandle2, _internalEntitiesPool2!.Handle, _internalRootId2);
             Console.WriteLine("[Init] Set internal entities for viewport2");
 
             // Add to second display
-            _nativeDisplayManager2.AddViewport(_viewportPtr2);
+            _nativeDisplayManager2.AddViewport(_viewportHandle2);
 
             Console.WriteLine($"[Init] Created viewport2 with pipeline2 and added to display2");
         }
@@ -830,15 +830,15 @@ void main() {
         _nativeDisplayManager2 = null;
 
         // Free viewports
-        if (_viewportPtr != IntPtr.Zero)
+        if (_viewportHandle.IsValid)
         {
-            TerminCore.ViewportFree(_viewportPtr);
-            _viewportPtr = IntPtr.Zero;
+            TerminCore.ViewportFree(_viewportHandle);
+            _viewportHandle = TcViewportHandle.Invalid;
         }
-        if (_viewportPtr2 != IntPtr.Zero)
+        if (_viewportHandle2.IsValid)
         {
-            TerminCore.ViewportFree(_viewportPtr2);
-            _viewportPtr2 = IntPtr.Zero;
+            TerminCore.ViewportFree(_viewportHandle2);
+            _viewportHandle2 = TcViewportHandle.Invalid;
         }
 
         // Free render surfaces

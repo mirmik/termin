@@ -130,11 +130,13 @@ public readonly struct ComponentRef
     /// <summary>
     /// Set a field by path. Supports int, long, float, double, bool, string.
     /// For mesh/material handles, use SetFieldMesh/SetFieldMaterial.
+    /// Note: scene parameter is currently unused, pass null.
     /// </summary>
     public void SetField(string path, object value, Scene? scene = null)
     {
         if (_ptr == IntPtr.Zero || path == null) return;
-        var scenePtr = scene?.Handle ?? IntPtr.Zero;
+        // Entity_lib functions still use IntPtr for scene, pass zero for now
+        var scenePtr = IntPtr.Zero;
 
         switch (value)
         {
@@ -173,7 +175,8 @@ public readonly struct ComponentRef
     public void SetFieldMesh(string path, TcMeshHandle handle, Scene? scene = null)
     {
         if (_ptr == IntPtr.Zero) return;
-        TerminCore.ComponentSetFieldMesh(_ptr, path, handle, scene?.Handle ?? IntPtr.Zero);
+        // Entity_lib functions still use IntPtr for scene, pass zero for now
+        TerminCore.ComponentSetFieldMesh(_ptr, path, handle, IntPtr.Zero);
     }
 
     /// <summary>
@@ -182,7 +185,8 @@ public readonly struct ComponentRef
     public void SetFieldMaterial(string path, TcMaterialHandle handle, Scene? scene = null)
     {
         if (_ptr == IntPtr.Zero) return;
-        TerminCore.ComponentSetFieldMaterial(_ptr, path, handle, scene?.Handle ?? IntPtr.Zero);
+        // Entity_lib functions still use IntPtr for scene, pass zero for now
+        TerminCore.ComponentSetFieldMaterial(_ptr, path, handle, IntPtr.Zero);
     }
 
     /// <summary>
