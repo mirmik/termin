@@ -10,10 +10,11 @@ extern "C" {
 
 #include <string>
 #include <vector>
+#ifdef TERMIN_HAS_NANOBIND
 #include <nanobind/nanobind.h>
-#include "../../core_c/include/tc_scene.h"
-
 namespace nb = nanobind;
+#endif
+#include "../../core_c/include/tc_scene.h"
 
 namespace termin {
 namespace animation {
@@ -206,6 +207,7 @@ public:
         return d;
     }
 
+#ifdef TERMIN_HAS_NANOBIND
     // Serialize for scene saving (returns nanobind dict) - for Python bindings
     nb::dict serialize() const {
         nb::dict d;
@@ -218,6 +220,7 @@ public:
         d["type"] = "uuid";
         return d;
     }
+#endif
 
     // Deserialize from tc_value data
     void deserialize_from(const tc_value* data, tc_scene_handle = TC_SCENE_HANDLE_INVALID) {

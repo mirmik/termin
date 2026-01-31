@@ -54,61 +54,22 @@ public:
         const std::string& name,
         std::function<tc_value(const std::any&)> serialize,
         std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
-    ) {
-        KindCpp kind;
-        kind.name = name;
-        kind.serialize = std::move(serialize);
-        kind.deserialize = std::move(deserialize);
-        _kinds[name] = std::move(kind);
-    }
+    );
 
     // Get handler (returns nullptr if not found)
-    KindCpp* get(const std::string& name) {
-        auto it = _kinds.find(name);
-        return it != _kinds.end() ? &it->second : nullptr;
-    }
+    KindCpp* get(const std::string& name);
+    const KindCpp* get(const std::string& name) const;
 
-    const KindCpp* get(const std::string& name) const {
-        auto it = _kinds.find(name);
-        return it != _kinds.end() ? &it->second : nullptr;
-    }
-
-    bool has(const std::string& name) const {
-        return _kinds.find(name) != _kinds.end();
-    }
+    bool has(const std::string& name) const;
 
     // Get all registered kind names
-    std::vector<std::string> kinds() const {
-        std::vector<std::string> result;
-        result.reserve(_kinds.size());
-        for (const auto& [name, _] : _kinds) {
-            result.push_back(name);
-        }
-        return result;
-    }
+    std::vector<std::string> kinds() const;
 
     // Serialize value (caller owns returned tc_value)
-    tc_value serialize(const std::string& kind_name, const std::any& value) const {
-        auto* kind = get(kind_name);
-        if (kind && kind->serialize) {
-            return kind->serialize(value);
-        }
-        return tc_value_nil();
-    }
+    tc_value serialize(const std::string& kind_name, const std::any& value) const;
 
     // Deserialize value
-    std::any deserialize(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const {
-        auto* kind = get(kind_name);
-        if (!kind) {
-            tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' not registered in KindRegistryCpp", kind_name.c_str());
-            return std::any{};
-        }
-        if (!kind->deserialize) {
-            tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' has no deserialize handler", kind_name.c_str());
-            return std::any{};
-        }
-        return kind->deserialize(data, scene);
-    }
+    std::any deserialize(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const;
 };
 
 // Helper to get int from tc_value (handles both INT and DOUBLE)

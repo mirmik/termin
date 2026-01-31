@@ -126,4 +126,64 @@ KindRegistryCpp& KindRegistryCpp::instance() {
     return inst;
 }
 
+// ============================================================================
+// KindRegistryCpp methods (exported from DLL)
+// ============================================================================
+
+void KindRegistryCpp::register_kind(
+    const std::string& name,
+    std::function<tc_value(const std::any&)> serialize,
+    std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
+) {
+    KindCpp kind;
+    kind.name = name;
+    kind.serialize = std::move(serialize);
+    kind.deserialize = std::move(deserialize);
+    _kinds[name] = std::move(kind);
+}
+
+KindCpp* KindRegistryCpp::get(const std::string& name) {
+    auto it = _kinds.find(name);
+    return it != _kinds.end() ? &it->second : nullptr;
+}
+
+const KindCpp* KindRegistryCpp::get(const std::string& name) const {
+    auto it = _kinds.find(name);
+    return it != _kinds.end() ? &it->second : nullptr;
+}
+
+bool KindRegistryCpp::has(const std::string& name) const {
+    return _kinds.find(name) != _kinds.end();
+}
+
+std::vector<std::string> KindRegistryCpp::kinds() const {
+    std::vector<std::string> result;
+    result.reserve(_kinds.size());
+    for (const auto& [name, _] : _kinds) {
+        result.push_back(name);
+    }
+    return result;
+}
+
+tc_value KindRegistryCpp::serialize(const std::string& kind_name, const std::any& value) const {
+    auto* kind = get(kind_name);
+    if (kind && kind->serialize) {
+        return kind->serialize(value);
+    }
+    return tc_value_nil();
+}
+
+std::any KindRegistryCpp::deserialize(const std::string& kind_name, const tc_value* data, tc_scene_handle scene) const {
+    auto* kind = get(kind_name);
+    if (!kind) {
+        tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' not registered in KindRegistryCpp", kind_name.c_str());
+        return std::any{};
+    }
+    if (!kind->deserialize) {
+        tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' has no deserialize handler", kind_name.c_str());
+        return std::any{};
+    }
+    return kind->deserialize(data, scene);
+}
+
 } // namespace tc
