@@ -146,20 +146,32 @@ class PlayerRuntime:
         rm.register_builtin_post_effects()
 
     def _load_modules(self) -> None:
-        """Load all C++ modules from the project directory."""
+        """Load all C++ and Python modules from the project directory."""
         from termin._native import log
         from termin.editor.module_scanner import ModuleScanner
+        from termin.editor.pymodule_scanner import PyModuleScanner
 
-        def on_loaded(name: str, success: bool, error: str) -> None:
+        def on_cpp_loaded(name: str, success: bool, error: str) -> None:
             if success:
-                log.info(f"[PlayerRuntime] Loaded module: {name}")
+                log.info(f"[PlayerRuntime] Loaded C++ module: {name}")
             else:
-                log.error(f"[PlayerRuntime] Failed to load module {name}: {error}")
+                log.error(f"[PlayerRuntime] Failed to load C++ module {name}: {error}")
 
-        scanner = ModuleScanner(on_module_loaded=on_loaded)
-        loaded, failed = scanner.scan_and_load(str(self.project_path))
+        def on_py_loaded(name: str, success: bool, error: str) -> None:
+            if success:
+                log.info(f"[PlayerRuntime] Loaded Python module: {name}")
+            else:
+                log.error(f"[PlayerRuntime] Failed to load Python module {name}: {error}")
 
-        log.info(f"[PlayerRuntime] Modules: {loaded} loaded, {failed} failed")
+        # Load C++ modules
+        cpp_scanner = ModuleScanner(on_module_loaded=on_cpp_loaded)
+        cpp_loaded, cpp_failed = cpp_scanner.scan_and_load(str(self.project_path))
+        log.info(f"[PlayerRuntime] C++ modules: {cpp_loaded} loaded, {cpp_failed} failed")
+
+        # Load Python modules
+        py_scanner = PyModuleScanner(on_module_loaded=on_py_loaded)
+        py_loaded, py_failed = py_scanner.scan_and_load(str(self.project_path))
+        log.info(f"[PlayerRuntime] Python modules: {py_loaded} loaded, {py_failed} failed")
 
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""

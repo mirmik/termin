@@ -9,6 +9,23 @@ from termin._native import log
 from termin.editor.project_file_watcher import FileTypeProcessor
 
 
+def _is_inside_package(path: str) -> bool:
+    """Check if file is inside a Python package (directory with __init__.py).
+
+    Files inside packages should be imported via the package, not loaded individually.
+    """
+    directory = os.path.dirname(path)
+    while directory:
+        init_file = os.path.join(directory, "__init__.py")
+        if os.path.exists(init_file):
+            return True
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            break
+        directory = parent
+    return False
+
+
 class ComponentFileProcessor(FileTypeProcessor):
     """Handles .py files containing Component subclasses."""
 
@@ -25,6 +42,10 @@ class ComponentFileProcessor(FileTypeProcessor):
         # Skip private files
         filename = os.path.basename(path)
         if filename.startswith("_"):
+            return
+
+        # Skip files inside packages (they should be imported via .pymodule)
+        if _is_inside_package(path):
             return
 
         try:
@@ -45,6 +66,10 @@ class ComponentFileProcessor(FileTypeProcessor):
         """Reload components from modified Python file."""
         filename = os.path.basename(path)
         if filename.startswith("_"):
+            return
+
+        # Skip files inside packages (they should be imported via .pymodule)
+        if _is_inside_package(path):
             return
 
         # Get previously loaded components from this file
