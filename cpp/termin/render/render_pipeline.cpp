@@ -85,6 +85,10 @@ void RenderPipeline::remove_pass(tc_pass* pass) {
     tc_pipeline_remove_pass(handle_, pass);
 }
 
+size_t RenderPipeline::remove_passes_by_name(const std::string& name) {
+    return tc_pipeline_remove_passes_by_name(handle_, name.c_str());
+}
+
 void RenderPipeline::insert_pass_before(tc_pass* pass, tc_pass* before) {
     tc_pipeline_insert_pass_before(handle_, pass, before);
 }

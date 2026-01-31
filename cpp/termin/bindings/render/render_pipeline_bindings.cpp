@@ -121,6 +121,9 @@ void bind_render_pipeline(nb::module_& m) {
                 }
             }
         })
+        .def("remove_passes_by_name", &RenderPipeline::remove_passes_by_name,
+             nb::arg("name"),
+             "Remove all passes with the given name, returns count of removed passes")
         .def("insert_pass_before", [](RenderPipeline& self, TcPassRef pass_ref, TcPassRef before_ref) {
             if (pass_ref.valid()) {
                 self.insert_pass_before(pass_ref.ptr(), before_ref.valid() ? before_ref.ptr() : nullptr);

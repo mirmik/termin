@@ -656,6 +656,11 @@ void bind_tc_pass(nb::module_& m) {
         }
     });
 
+    m.def("tc_pipeline_remove_passes_by_name", [](std::tuple<uint32_t, uint32_t> h, const std::string& name) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return tc_pipeline_remove_passes_by_name(handle, name.c_str());
+    });
+
     m.def("tc_pipeline_insert_pass_before", [](std::tuple<uint32_t, uint32_t> h, TcPassRef pass_ref, TcPassRef before_ref) {
         tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
         if (pass_ref.valid()) {

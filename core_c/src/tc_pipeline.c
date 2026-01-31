@@ -398,6 +398,31 @@ void tc_pipeline_remove_pass(tc_pipeline_handle h, tc_pass* pass) {
     tc_pass_release(pass);
 }
 
+size_t tc_pipeline_remove_passes_by_name(tc_pipeline_handle h, const char* name) {
+    if (!handle_alive(h) || !name) return 0;
+    tc_pipeline* p = &g_pool->pipelines[h.index];
+
+    size_t removed_count = 0;
+
+    // Iterate backwards to safely remove multiple items
+    for (size_t i = p->pass_count; i > 0; i--) {
+        tc_pass* pass = p->passes[i - 1];
+        if (pass && pass->pass_name && strcmp(pass->pass_name, name) == 0) {
+            // Shift elements down
+            size_t idx = i - 1;
+            memmove(&p->passes[idx], &p->passes[idx + 1],
+                    (p->pass_count - idx - 1) * sizeof(tc_pass*));
+            p->pass_count--;
+
+            pass->owner_pipeline = TC_PIPELINE_HANDLE_INVALID;
+            tc_pass_release(pass);
+            removed_count++;
+        }
+    }
+
+    return removed_count;
+}
+
 tc_pass* tc_pipeline_get_pass(tc_pipeline_handle h, const char* name) {
     if (!handle_alive(h) || !name) return NULL;
     tc_pipeline* p = &g_pool->pipelines[h.index];

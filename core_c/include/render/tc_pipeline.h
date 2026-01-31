@@ -53,6 +53,9 @@ TC_API void tc_pipeline_insert_pass_before(tc_pipeline_handle h, tc_pass* pass, 
 // Remove pass from pipeline (does not destroy pass)
 TC_API void tc_pipeline_remove_pass(tc_pipeline_handle h, tc_pass* pass);
 
+// Remove all passes with given name, returns count of removed passes
+TC_API size_t tc_pipeline_remove_passes_by_name(tc_pipeline_handle h, const char* name);
+
 // Find pass by name (returns NULL if not found)
 TC_API tc_pass* tc_pipeline_get_pass(tc_pipeline_handle h, const char* name);
 
