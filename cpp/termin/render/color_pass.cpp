@@ -16,6 +16,7 @@ extern "C" {
 #include <cstring>
 #include <algorithm>
 #include <numeric>
+#include <chrono>
 
 namespace termin {
 
@@ -399,6 +400,11 @@ void ColorPass::execute_with_data(
     // Get debug symbol
     const std::string& debug_symbol = get_debug_internal_point();
 
+    // Clear timing if no debug symbol selected
+    if (debug_symbol.empty()) {
+        selected_symbol_timing = {};
+    }
+
     // Check if any shader needs UBO (has lighting_ubo feature)
     bool any_shader_needs_ubo = false;
     for (const auto& dc : cached_draw_calls_) {
@@ -564,19 +570,44 @@ void ColorPass::execute_with_data(
             tc_profiler_begin_section("DrawGeometry");
         }
 
+        // Check if we should measure timing for this entity
+        bool measure_timing = !debug_symbol.empty() && ename && debug_symbol == ename;
+
+        // Start timing if this is the selected debug symbol
+        std::chrono::high_resolution_clock::time_point cpu_start;
+        if (measure_timing) {
+            // Read GPU result from PREVIOUS frame before starting new query
+            // (GPU query results are not available until the next frame)
+            double prev_gpu_ms = graphics->get_gpu_query_ms("ColorPass_DebugSymbol");
+            if (prev_gpu_ms >= 0) {
+                selected_symbol_timing.gpu_time_ms = prev_gpu_ms;
+            }
+
+            cpu_start = std::chrono::high_resolution_clock::now();
+            graphics->begin_gpu_query("ColorPass_DebugSymbol");
+        }
+
         // Draw geometry via vtable
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
         if (graphics->check_gl_error("after draw_geometry")) {
             tc::Log::error("  entity: %s, shader: %s", ename ? ename : "(null)", shader_to_use.name());
         }
 
-        if (detailed) {
-            tc_profiler_end_section(); // DrawGeometry
+        // End timing and store results
+        if (measure_timing) {
+            graphics->end_gpu_query();
+            auto cpu_end = std::chrono::high_resolution_clock::now();
+            double cpu_ms = std::chrono::duration<double, std::milli>(cpu_end - cpu_start).count();
+
+            selected_symbol_timing.name = ename;
+            selected_symbol_timing.cpu_time_ms = cpu_ms;
+            // GPU time is read at the start of the NEXT frame (see above)
+
+            maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
         }
 
-        // Check for debug blit (use std::string comparison to avoid pointer issues)
-        if (!debug_symbol.empty() && ename && debug_symbol == ename) {
-            maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
+        if (detailed) {
+            tc_profiler_end_section(); // DrawGeometry
         }
     }
 

@@ -31,6 +31,7 @@ extern "C" {
 #include "tc_scene.h"
 #include "tc_log.hpp"
 #include <cstdint>
+#include <cstdio>
 #include <unordered_map>
 
 namespace termin {
@@ -139,6 +140,19 @@ static nb::object get_py_debugger_window(CxxFramePass* pass) {
 }
 
 void bind_frame_pass(nb::module_& m) {
+    // InternalSymbolTiming - timing info for debug symbols
+    nb::class_<InternalSymbolTiming>(m, "InternalSymbolTiming")
+        .def(nb::init<>())
+        .def_rw("name", &InternalSymbolTiming::name)
+        .def_rw("cpu_time_ms", &InternalSymbolTiming::cpu_time_ms)
+        .def_rw("gpu_time_ms", &InternalSymbolTiming::gpu_time_ms)
+        .def("__repr__", [](const InternalSymbolTiming& t) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "<InternalSymbolTiming '%s' cpu=%.3fms gpu=%.3fms>",
+                     t.name.c_str(), t.cpu_time_ms, t.gpu_time_ms);
+            return std::string(buf);
+        });
+
     // Rect4i - viewport rectangle
     nb::class_<Rect4i>(m, "Rect4i")
         .def(nb::init<>())
@@ -392,6 +406,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("is_inplace", &CxxFramePass::is_inplace)
         .def_prop_ro("inplace", &CxxFramePass::is_inplace)
         .def("get_internal_symbols", &CxxFramePass::get_internal_symbols)
+        .def("get_internal_symbols_with_timing", &CxxFramePass::get_internal_symbols_with_timing)
         .def("get_resource_specs", &CxxFramePass::get_resource_specs)
         .def("set_debug_internal_point", &CxxFramePass::set_debug_internal_point)
         .def("clear_debug_internal_point", &CxxFramePass::clear_debug_internal_point)
@@ -629,6 +644,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_inplace_aliases", &ColorPass::get_inplace_aliases)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
+        .def("get_internal_symbols_with_timing", &ColorPass::get_internal_symbols_with_timing)
         .def_prop_ro("reads", &ColorPass::compute_reads)
         .def_prop_ro("writes", &ColorPass::compute_writes)
         .def("execute_with_data", [](

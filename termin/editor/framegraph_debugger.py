@@ -809,6 +809,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         self._build_ui()
 
+        # Timer for updating timing info (GPU results may arrive with delay)
+        self._timing_timer = QtCore.QTimer(self)
+        self._timing_timer.timeout.connect(self._update_timing_label)
+        self._timing_timer.start(100)  # Update every 100ms
+
     def _build_ui(self) -> None:
         self.setWindowTitle("Framegraph Debugger")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
@@ -925,6 +930,15 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         symbol_row.addWidget(self._symbol_label)
         symbol_row.addWidget(self._symbol_combo, 1)
         inside_layout.addLayout(symbol_row)
+
+        # Timing info label
+        self._timing_label = QtWidgets.QLabel()
+        self._timing_label.setStyleSheet(
+            "QLabel { background-color: #2a3a2a; padding: 4px; border-radius: 3px; "
+            "font-family: monospace; font-size: 11px; }"
+        )
+        self._timing_label.hide()
+        inside_layout.addWidget(self._timing_label)
 
         # Pass serialization view
         self._pass_serialization = QtWidgets.QTextEdit()
@@ -1532,14 +1546,54 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         # Специальный случай: "(Output)" - показываем выходную текстуру пасса
         if name == "(Output)":
+            self._timing_label.hide()
             self._show_pass_output()
         else:
             # Обычный внутренний символ
             self._detach_frame_debugger_pass()  # Убираем debugger pass если был
             self._set_pass_internal_symbol(self._selected_pass, name)
+            # Показываем timing label
+            self._timing_label.show()
+            self._update_timing_label()
 
         # Запрашиваем обновление depth для новой текстуры
         self._request_depth_refresh()
+
+    def _update_timing_label(self) -> None:
+        """Обновляет метку с информацией о времени выполнения символа."""
+        if self._timing_label is None:
+            return
+
+        if self._selected_pass is None or self._selected_symbol is None:
+            self._timing_label.hide()
+            return
+
+        if self._selected_symbol == "(Output)":
+            self._timing_label.hide()
+            return
+
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            self._timing_label.hide()
+            return
+
+        # Находим пасс и получаем timing
+        for p in pipeline.passes:
+            if p.pass_name == self._selected_pass:
+                timings = p.get_internal_symbols_with_timing()
+                for t in timings:
+                    if t.name == self._selected_symbol:
+                        gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
+                        self._timing_label.setText(
+                            f"CPU: {t.cpu_time_ms:.3f}ms | GPU: {gpu_str}"
+                        )
+                        self._timing_label.show()
+                        return
+                break
+
+        # Нет данных timing
+        self._timing_label.setText("Timing: no data")
+        self._timing_label.show()
 
     def _show_pass_output(self) -> None:
         """Показывает выходную текстуру выбранного пасса."""
@@ -1556,11 +1610,16 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         output_res = None
         for p in pipeline.passes:
             if p.pass_name == self._selected_pass:
-                # Пробуем получить output_res напрямую
-                if hasattr(p, 'output_res') and p.output_res:
-                    output_res = p.output_res
+                # Пробуем получить output_res из Python объекта пасса
+                py_obj = p.to_python()
+                try:
+                    res = py_obj.output_res
+                    if res:
+                        output_res = res
+                except AttributeError:
+                    pass
                 # Или берём первый из writes (кроме DISPLAY)
-                elif hasattr(p, 'writes') and p.writes:
+                if output_res is None and p.writes:
                     for w in p.writes:
                         if w != "DISPLAY":
                             output_res = w

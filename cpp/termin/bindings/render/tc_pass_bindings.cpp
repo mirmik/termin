@@ -452,6 +452,17 @@ void bind_tc_pass(nb::module_& m) {
             }
             return result;
         })
+        .def("get_internal_symbols_with_timing", [](TcPassRef& self) {
+            std::vector<InternalSymbolTiming> result;
+            tc_pass* p = self.ptr();
+            if (p && p->kind == TC_NATIVE_PASS) {
+                CxxFramePass* fp = CxxFramePass::from_tc(p);
+                if (fp) {
+                    return fp->get_internal_symbols_with_timing();
+                }
+            }
+            return result;
+        })
         .def("set_debug_internal_point", [](TcPassRef& self, const std::string& symbol) {
             tc_pass* p = self.ptr();
             if (p) {

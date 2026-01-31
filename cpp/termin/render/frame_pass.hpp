@@ -25,6 +25,13 @@ extern "C" {
 
 namespace termin {
 
+// Timing information for internal debug symbols
+struct InternalSymbolTiming {
+    std::string name;
+    double cpu_time_ms = 0.0;
+    double gpu_time_ms = 0.0;  // -1.0 if not available yet
+};
+
 // Forward declarations
 class GraphicsBackend;
 class Scene;
@@ -237,6 +244,10 @@ public:
     }
 
     virtual std::vector<std::string> get_internal_symbols() const {
+        return {};
+    }
+
+    virtual std::vector<InternalSymbolTiming> get_internal_symbols_with_timing() const {
         return {};
     }
 
