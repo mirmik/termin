@@ -313,8 +313,8 @@ NB_MODULE(_entity_native, m) {
     nb::class_<ModuleDescriptor>(m, "ModuleDescriptor")
         .def_ro("name", &ModuleDescriptor::name)
         .def_ro("path", &ModuleDescriptor::path)
-        .def_ro("sources", &ModuleDescriptor::sources)
-        .def_ro("include_dirs", &ModuleDescriptor::include_dirs)
+        .def_ro("build_command", &ModuleDescriptor::build_command)
+        .def_ro("output_pattern", &ModuleDescriptor::output_pattern)
         .def_ro("components", &ModuleDescriptor::components);
 
     nb::class_<LoadedModule>(m, "LoadedModule")
