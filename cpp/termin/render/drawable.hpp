@@ -140,6 +140,7 @@ struct PhaseDrawCall {
     Entity entity;
     tc_component* component = nullptr;  // Component with drawable_vtable
     tc_material_phase* phase = nullptr;
+    tc_shader_handle final_shader;      // Shader after override (skinning, etc.)
     int priority = 0;
     int geometry_id = 0;
 };

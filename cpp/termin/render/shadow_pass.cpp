@@ -93,6 +93,7 @@ namespace {
 
 struct CollectShadowDrawCallsData {
     std::vector<ShadowDrawCall>* draw_calls;
+    tc_shader_handle base_shader;
 };
 
 bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
@@ -111,7 +112,11 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
 
     auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {
-        data->draw_calls->push_back(ShadowDrawCall{ent, tc, gd.geometry_id});
+        // Get final shader with overrides (skinning, alpha-test, etc.)
+        tc_shader_handle final_shader = tc_component_override_shader(
+            tc, "shadow", gd.geometry_id, data->base_shader
+        );
+        data->draw_calls->push_back(ShadowDrawCall{ent, tc, final_shader, gd.geometry_id});
     }
 
     return true;
@@ -119,22 +124,30 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
 
 } // anonymous namespace
 
-std::vector<ShadowDrawCall> ShadowPass::collect_shadow_casters(tc_scene_handle scene) {
-    std::vector<ShadowDrawCall> draw_calls;
+void ShadowPass::collect_shadow_casters(tc_scene_handle scene) {
+    cached_draw_calls_.clear();
 
     if (!tc_scene_handle_valid(scene)) {
-        return draw_calls;
+        return;
     }
 
     CollectShadowDrawCallsData data;
-    data.draw_calls = &draw_calls;
+    data.draw_calls = &cached_draw_calls_;
+    data.base_shader = shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid();
 
     int filter_flags = TC_DRAWABLE_FILTER_ENABLED
                      | TC_DRAWABLE_FILTER_VISIBLE
                      | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
     tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, 0);
+}
 
-    return draw_calls;
+void ShadowPass::sort_draw_calls_by_shader() {
+    if (cached_draw_calls_.size() <= 1) return;
+
+    std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
+        [](const ShadowDrawCall& a, const ShadowDrawCall& b) {
+            return a.final_shader.index < b.final_shader.index;
+        });
 }
 
 
@@ -195,13 +208,18 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
     // Collect shadow casters
     if (detailed) tc_profiler_begin_section("CollectCasters");
-    std::vector<ShadowDrawCall> draw_calls = collect_shadow_casters(scene);
+    collect_shadow_casters(scene);
+    if (detailed) tc_profiler_end_section();
+
+    // Sort by shader to minimize state changes
+    if (detailed) tc_profiler_begin_section("Sort");
+    sort_draw_calls_by_shader();
     if (detailed) tc_profiler_end_section();
 
     // Update entity names cache
     entity_names.clear();
     std::set<std::string> seen;
-    for (const auto& dc : draw_calls) {
+    for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
         if (name && seen.find(name) == seen.end()) {
             seen.insert(name);
@@ -280,7 +298,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             if (detailed) tc_profiler_end_section();
 
             // Handle empty draw calls case
-            if (draw_calls.empty()) {
+            if (cached_draw_calls_.empty()) {
                 graphics->bind_framebuffer(fbo);
                 graphics->set_viewport(0, 0, resolution, resolution);
                 graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
@@ -296,38 +314,34 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             graphics->clear_color_depth(1.0f, 1.0f, 1.0f, 1.0f);
             graphics->apply_render_state(render_state);
 
-            // Setup shader
-            shadow_shader->use();
-            shadow_shader->set_uniform_mat4("u_view", view_matrix.data, false);
-            shadow_shader->set_uniform_mat4("u_projection", proj_matrix.data, false);
-
             context.view = view_matrix;
             context.projection = proj_matrix;
-            context.current_tc_shader = *shadow_shader;
             if (detailed) tc_profiler_end_section();
 
-            // Render all shadow casters
+            // Render all shadow casters with shader caching
             if (detailed) tc_profiler_begin_section("DrawCalls");
-            for (const auto& dc : draw_calls) {
+            tc_shader_handle last_shader = tc_shader_handle_invalid();
+
+            for (const auto& dc : cached_draw_calls_) {
                 Mat44f model = get_model_matrix(dc.entity);
                 context.model = model;
 
-                // Get shader handle and apply override
-                tc_shader_handle base_handle = shadow_shader->handle;
-                tc_shader_handle shader_handle = tc_component_override_shader(
-                    dc.component, "shadow", dc.geometry_id, base_handle
-                );
+                // Use final shader (override already applied during collect)
+                tc_shader_handle shader_handle = dc.final_shader;
+                bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader);
 
-                // Use TcShader
-                TcShader shader_to_use(shader_handle);
-                shader_to_use.use();
+                if (shader_changed) {
+                    TcShader shader_to_use(shader_handle);
+                    shader_to_use.use();
+                    // View/projection only need to be set once per shader change
+                    shader_to_use.set_uniform_mat4("u_view", view_matrix.data, false);
+                    shader_to_use.set_uniform_mat4("u_projection", proj_matrix.data, false);
+                    context.current_tc_shader = shader_to_use;
+                    last_shader = shader_handle;
+                }
 
-                // Apply uniforms via TcShader
-                shader_to_use.set_uniform_mat4("u_model", model.data, false);
-                shader_to_use.set_uniform_mat4("u_view", view_matrix.data, false);
-                shader_to_use.set_uniform_mat4("u_projection", proj_matrix.data, false);
-
-                context.current_tc_shader = shader_to_use;
+                // Model matrix changes per object
+                context.current_tc_shader.set_uniform_mat4("u_model", model.data, false);
 
                 tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
             }

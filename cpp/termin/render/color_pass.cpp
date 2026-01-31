@@ -227,10 +227,17 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
     auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {
         if (gd.phase) {
+            // Get final shader with overrides (skinning, etc.) applied
+            tc_shader_handle base_shader = gd.phase->shader;
+            tc_shader_handle final_shader = tc_component_override_shader(
+                tc, data->phase_mark, gd.geometry_id, base_shader
+            );
+
             data->draw_calls->push_back(PhaseDrawCall{
                 ent,
                 tc,
                 gd.phase,
+                final_shader,
                 gd.phase->priority,
                 gd.geometry_id
             });
@@ -272,7 +279,9 @@ void ColorPass::compute_sort_keys(const Vec3& camera_position) {
     sort_keys_.resize(n);
 
     // Determine sort direction from sort_mode
-    // sort_key format: [priority:32][distance:32]
+    // sort_key format: [priority:16][shader_id:16][distance:32]
+    // This groups objects by shader to minimize state changes,
+    // while preserving priority ordering and distance-based sorting within groups.
     // For near_to_far: lower distance = lower key
     // For far_to_near: lower distance = higher key (invert distance bits)
     bool invert_distance = (sort_mode == "far_to_near");
@@ -280,8 +289,14 @@ void ColorPass::compute_sort_keys(const Vec3& camera_position) {
     for (size_t i = 0; i < n; ++i) {
         const PhaseDrawCall& dc = cached_draw_calls_[i];
 
-        // Priority in upper 32 bits
-        uint64_t priority_bits = static_cast<uint32_t>(dc.priority + 0x80000000); // offset to handle negative
+        // Priority in upper 16 bits (offset to handle negative)
+        uint64_t priority_bits = static_cast<uint16_t>((dc.priority + 0x8000) & 0xFFFF);
+
+        // Shader ID in next 16 bits (from final shader after overrides)
+        uint64_t shader_bits = 0;
+        if (!tc_shader_handle_is_invalid(dc.final_shader)) {
+            shader_bits = dc.final_shader.index & 0xFFFF;
+        }
 
         // Distance in lower 32 bits
         Vec3 pos = get_global_position(dc.entity);
@@ -295,7 +310,7 @@ void ColorPass::compute_sort_keys(const Vec3& camera_position) {
             dist_bits = ~dist_bits;  // Invert for far-to-near
         }
 
-        sort_keys_[i] = (priority_bits << 32) | dist_bits;
+        sort_keys_[i] = (priority_bits << 48) | (shader_bits << 32) | dist_bits;
     }
 }
 
@@ -445,8 +460,10 @@ void ColorPass::execute_with_data(
     // Clear any accumulated GL errors before rendering
     graphics->clear_gl_errors();
 
-    // Track last shader to avoid redundant shadow map uploads
+    // Track last shader/material to avoid redundant state changes
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
+    tc_material_phase* last_material_phase = nullptr;
+    RenderState last_render_state;
 
     size_t draw_idx = 0;
     for (const auto& dc : cached_draw_calls_)
@@ -474,21 +491,19 @@ void ColorPass::execute_with_data(
         if (wireframe) {
             state.polygon_mode = PolygonMode::Line;
         }
-        graphics->apply_render_state(state);
+        // Only apply if state changed
+        if (state != last_render_state) {
+            graphics->apply_render_state(state);
+            last_render_state = state;
+        }
 
         if (detailed) {
             tc_profiler_end_section();
-            tc_profiler_begin_section("Prep.OverrideShader");
+            tc_profiler_begin_section("Prep.Shader");
         }
 
-        // Get shader handle and apply override
-        tc_shader_handle base_handle = dc.phase->shader;
-
-        tc_shader_handle shader_handle = tc_component_override_shader(
-            dc.component, phase_mark.c_str(), dc.geometry_id, base_handle
-        );
-
-        // Use TcShader for everything
+        // Use final shader (override already applied during collect)
+        tc_shader_handle shader_handle = dc.final_shader;
         TcShader shader_to_use(shader_handle);
 
         if (detailed) {
@@ -496,25 +511,38 @@ void ColorPass::execute_with_data(
             tc_profiler_begin_section("Prep.ApplyMaterial");
         }
 
-        // Compile and use shader
-        shader_to_use.use();
-        if (graphics->check_gl_error("after shader.use()")) {
-            tc::Log::error("  shader: %s, program=%u", shader_to_use.name(), shader_to_use.gpu_program());
+        // Check if shader changed
+        bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader_handle);
+
+        // Compile and use shader (only if changed)
+        if (shader_changed) {
+            shader_to_use.use();
+            if (graphics->check_gl_error("after shader.use()")) {
+                tc::Log::error("  shader: %s, program=%u", shader_to_use.name(), shader_to_use.gpu_program());
+            }
         }
 
-        // Apply material uniforms (textures, uniforms, MVP matrices)
+        // Apply material uniforms
         tc_shader* raw_shader = tc_shader_get(shader_handle);
         if (raw_shader) {
             // Clear any pending GL errors before apply
             graphics->clear_gl_errors();
 
-            tc_material_phase_apply_with_mvp(
-                dc.phase,
-                raw_shader,
-                model.data,
-                view.data,
-                projection.data
-            );
+            // If same material phase, only update MVP matrices (textures/uniforms already set)
+            if (dc.phase == last_material_phase && !shader_changed) {
+                // Just update model matrix (view/projection unchanged within frame)
+                tc_shader_set_mat4(raw_shader, "u_model", model.data, false);
+            } else {
+                // Full material apply (textures, uniforms, MVP)
+                tc_material_phase_apply_with_mvp(
+                    dc.phase,
+                    raw_shader,
+                    model.data,
+                    view.data,
+                    projection.data
+                );
+                last_material_phase = dc.phase;
+            }
         }
         if (graphics->check_gl_error("after tc_material_phase_apply_with_mvp")) {
             tc::Log::error("  shader: %s, phase->uniform_count=%zu, phase->texture_count=%zu",

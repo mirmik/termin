@@ -37,6 +37,7 @@ namespace termin {
 struct ShadowDrawCall {
     Entity entity;
     tc_component* component = nullptr;
+    tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
     int geometry_id = 0;
 };
 
@@ -136,11 +137,17 @@ private:
     // FBO pool: index -> FBO
     std::unordered_map<int, FramebufferHandlePtr> fbo_pool_;
 
+    // Cached draw calls (reused between frames)
+    std::vector<ShadowDrawCall> cached_draw_calls_;
+
     // Get or create FBO for shadow map
     FramebufferHandle* get_or_create_fbo(GraphicsBackend* graphics, int resolution, int index);
 
     // Collect shadow caster draw calls
-    std::vector<ShadowDrawCall> collect_shadow_casters(tc_scene_handle scene);
+    void collect_shadow_casters(tc_scene_handle scene);
+
+    // Sort draw calls by shader
+    void sort_draw_calls_by_shader();
 
     // Build shadow camera params for a light
     ShadowCameraParams build_shadow_params(
