@@ -167,6 +167,11 @@ void RenderingManager::render_all_offscreen() {
 
     // Render all viewports from all displays
     for (tc_display* display : displays_) {
+        // Skip disabled displays
+        if (!tc_display_get_enabled(display)) {
+            continue;
+        }
+
         // Make display context current before rendering its viewports
         tc_render_surface* surface = tc_display_get_surface(display);
         if (surface) {
@@ -233,7 +238,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
 void RenderingManager::present_all() {
     for (tc_display* display : displays_) {
-        present_display(display);
+        if (tc_display_get_enabled(display)) {
+            present_display(display);
+        }
     }
 }
 

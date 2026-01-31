@@ -732,7 +732,7 @@ class RenderingManager:
             from termin.visualization.render.engine import RenderEngine
             self._render_engine = RenderEngine(self._graphics)
 
-        # Collect ALL viewports from all displays
+        # Collect ALL viewports from all displays (scene pipelines can span displays)
         all_viewports_by_name: Dict[str, "Viewport"] = {}
         for display in self._displays:
             for vp in display.viewports:
@@ -754,6 +754,8 @@ class RenderingManager:
         # 2. Render unmanaged viewports
         with profiler.section("Unmanaged Viewports"):
             for display in self._displays:
+                if not display.enabled:
+                    continue
                 for viewport in display.viewports:
                     if not viewport.enabled:
                         continue
@@ -880,7 +882,8 @@ class RenderingManager:
 
         with profiler.section("Present All"):
             for display in self._displays:
-                self._present_display(display)
+                if display.enabled:
+                    self._present_display(display)
 
     def _present_display(self, display: "Display") -> None:
         """Blit viewport output_fbos to a single display."""

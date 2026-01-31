@@ -245,7 +245,10 @@ class RenderingController:
         self._display_tabs[display_id] = (tab_container, surface, qwindow)
 
         # Add tab to center widget
-        self._center_tabs.addTab(tab_container, name)
+        tab_index = self._center_tabs.addTab(tab_container, name)
+
+        # Disable display if its tab is not active
+        display.enabled = (self._center_tabs.currentIndex() == tab_index)
 
         # Update viewport list
         self._viewport_list.add_display(display, name)
@@ -1146,6 +1149,19 @@ class RenderingController:
 
     def _on_center_tab_changed(self, index: int) -> None:
         """Handle center tab widget tab change."""
+        # Enable only the display for the active tab, disable others
+        if self._center_tabs is not None:
+            active_widget = self._center_tabs.widget(index)
+
+            for display in self._manager.displays:
+                display_id = id(display)
+                if display_id not in self._display_tabs:
+                    continue
+
+                tab_container, _surface, _qwindow = self._display_tabs[display_id]
+                # Enable display if its tab is active
+                display.enabled = (tab_container is active_widget)
+
         # Request redraw when switching tabs
         self._request_update()
 
@@ -1205,6 +1221,8 @@ class RenderingController:
         if self._center_tabs is None:
             return
 
+        current_index = self._center_tabs.currentIndex()
+
         # Keep first tab (Editor view), remove others
         while self._center_tabs.count() > 1:
             self._center_tabs.removeTab(1)
@@ -1223,7 +1241,17 @@ class RenderingController:
 
             name = self._manager.get_display_name(display)
             tab_container, _sfc, _qwindow = self._display_tabs[display_id]
-            self._center_tabs.addTab(tab_container, name)
+            tab_index = self._center_tabs.addTab(tab_container, name)
+
+            # Enable display only if its tab is active
+            display.enabled = (tab_index == current_index)
+
+        # Enable editor display if first tab is active
+        if self._editor_display_id is not None:
+            for display in self._manager.displays:
+                if id(display) == self._editor_display_id:
+                    display.enabled = (current_index == 0)
+                    break
 
     def _request_update(self) -> None:
         """Request viewport update."""
