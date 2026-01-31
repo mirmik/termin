@@ -121,7 +121,8 @@ public:
         tc_scene_handle scene,
         const std::vector<Light>& lights,
         const Mat44f& camera_view,
-        const Mat44f& camera_projection
+        const Mat44f& camera_projection,
+        uint64_t layer_mask = 0
     );
 
     std::vector<ResourceSpec> get_resource_specs() const override;
@@ -144,7 +145,7 @@ private:
     FramebufferHandle* get_or_create_fbo(GraphicsBackend* graphics, int resolution, int index);
 
     // Collect shadow caster draw calls
-    void collect_shadow_casters(tc_scene_handle scene);
+    void collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask);
 
     // Sort draw calls by shader
     void sort_draw_calls_by_shader();

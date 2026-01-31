@@ -124,7 +124,7 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
 
 } // anonymous namespace
 
-void ShadowPass::collect_shadow_casters(tc_scene_handle scene) {
+void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask) {
     cached_draw_calls_.clear();
 
     if (!tc_scene_handle_valid(scene)) {
@@ -138,7 +138,7 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene) {
     int filter_flags = TC_DRAWABLE_FILTER_ENABLED
                      | TC_DRAWABLE_FILTER_VISIBLE
                      | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
-    tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, 0);
+    tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, layer_mask);
 }
 
 void ShadowPass::sort_draw_calls_by_shader() {
@@ -176,7 +176,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
     tc_scene_handle scene,
     const std::vector<Light>& lights,
     const Mat44f& camera_view,
-    const Mat44f& camera_projection
+    const Mat44f& camera_projection,
+    uint64_t layer_mask
 ) {
     std::vector<ShadowMapResult> results;
 
@@ -208,7 +209,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 
     // Collect shadow casters
     if (detailed) tc_profiler_begin_section("CollectCasters");
-    collect_shadow_casters(scene);
+    collect_shadow_casters(scene, layer_mask);
     if (detailed) tc_profiler_end_section();
 
     // Sort by shader to minimize state changes
@@ -442,7 +443,8 @@ void main() {
         ctx.scene.handle(),
         ctx.lights,
         camera_view,
-        camera_projection
+        camera_projection,
+        ctx.layer_mask
     );
 
     // Add results to shadow array

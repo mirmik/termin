@@ -137,6 +137,10 @@ struct tc_component {
     // Drawable vtable (NULL if component is not drawable)
     const tc_drawable_vtable* drawable_vtable;
 
+    // Drawable pointer for C++ components (avoids dynamic_cast in callbacks)
+    // Set by install_drawable_vtable(), NULL if not drawable
+    void* drawable_ptr;
+
     // Input vtable (NULL if component doesn't handle input)
     const tc_input_vtable* input_vtable;
 
@@ -200,6 +204,7 @@ struct tc_component {
 static inline void tc_component_init(tc_component* c, const tc_component_vtable* vtable) {
     c->vtable = vtable;
     c->drawable_vtable = NULL;
+    c->drawable_ptr = NULL;
     c->input_vtable = NULL;
     c->entity = NULL;
 #ifdef __cplusplus

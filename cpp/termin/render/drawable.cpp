@@ -8,40 +8,26 @@ namespace termin {
 // Static callback implementations for drawable vtable
 
 bool Drawable::_cb_has_phase(tc_component* c, const char* phase_mark) {
-    if (!c || c->kind != TC_CXX_COMPONENT) return false;
+    if (!c || !c->drawable_ptr) return false;
 
-    CxxComponent* comp = CxxComponent::from_tc(c);
-    if (!comp) return false;
-
-    Drawable* drawable = dynamic_cast<Drawable*>(comp);
-    if (!drawable) return false;
-
+    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
     return drawable->has_phase(phase_mark ? phase_mark : "");
 }
 
 void Drawable::_cb_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
-    if (!c || c->kind != TC_CXX_COMPONENT) return;
-
-    CxxComponent* comp = CxxComponent::from_tc(c);
-    if (!comp) return;
-
-    Drawable* drawable = dynamic_cast<Drawable*>(comp);
-    if (!drawable) return;
+    if (!c || !c->drawable_ptr) return;
 
     RenderContext* ctx = static_cast<RenderContext*>(render_context);
     if (!ctx) return;
 
+    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
     drawable->draw_geometry(*ctx, geometry_id);
 }
 
 void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) {
-    if (!c || c->kind != TC_CXX_COMPONENT) return nullptr;
+    if (!c || !c->drawable_ptr) return nullptr;
 
-    CxxComponent* comp = CxxComponent::from_tc(c);
-    if (!comp) return nullptr;
-
-    Drawable* drawable = dynamic_cast<Drawable*>(comp);
-    if (!drawable) return nullptr;
+    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
 
     // Get draws and cache them
     std::string pm = phase_mark ? phase_mark : "";
@@ -52,14 +38,9 @@ void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) 
 }
 
 tc_shader_handle Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader) {
-    if (!c || c->kind != TC_CXX_COMPONENT) return original_shader;
+    if (!c || !c->drawable_ptr) return original_shader;
 
-    CxxComponent* comp = CxxComponent::from_tc(c);
-    if (!comp) return original_shader;
-
-    Drawable* drawable = dynamic_cast<Drawable*>(comp);
-    if (!drawable) return original_shader;
-
+    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
     TcShader result = drawable->override_shader(
         phase_mark ? phase_mark : "",
         geometry_id,

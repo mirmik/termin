@@ -94,15 +94,13 @@ protected:
     const char* phase_name() const override { return "depth"; }
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 
-    void setup_draw_uniforms(
+    void setup_extra_uniforms(
         const DrawCall& dc,
         TcShader& shader,
-        const Mat44f& model,
-        const Mat44f& view,
-        const Mat44f& projection,
         RenderContext& context
     ) override {
-        GeometryPassBase::setup_draw_uniforms(dc, shader, model, view, projection, context);
+        (void)dc;
+        (void)context;
         shader.set_uniform_float("u_near", _near_plane);
         shader.set_uniform_float("u_far", _far_plane);
     }
