@@ -19,6 +19,7 @@
 #include "termin/render/graphics_backend.hpp"
 
 extern "C" {
+#include "tc_scene.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -121,6 +122,28 @@ public:
     void present_all();
 
     // ========================================================================
+    // Scene Pipeline Management
+    // ========================================================================
+
+    // Register a compiled scene pipeline for a scene
+    void add_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline);
+
+    // Unregister a scene pipeline
+    void remove_scene_pipeline(tc_scene_handle scene, const std::string& name);
+
+    // Get scene pipeline by name (searches in specific scene)
+    RenderPipeline* get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
+
+    // Get scene pipeline by name (searches all scenes)
+    RenderPipeline* get_scene_pipeline(const std::string& name) const;
+
+    // Clear all pipelines for a scene
+    void clear_scene_pipelines(tc_scene_handle scene);
+
+    // Clear all scene pipelines
+    void clear_all_scene_pipelines();
+
+    // ========================================================================
     // Shutdown
     // ========================================================================
 
@@ -150,6 +173,15 @@ private:
     // Render engine (owned if created internally)
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
+
+    // Scene pipelines: scene_handle -> (pipeline_name -> pipeline)
+    // Key is (scene.index << 32 | scene.generation)
+    std::unordered_map<uint64_t, std::unordered_map<std::string, RenderPipeline*>> scene_pipelines_;
+
+    // Helper to make key from scene handle
+    static uint64_t scene_key(tc_scene_handle h) {
+        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
+    }
 };
 
 } // namespace termin

@@ -376,14 +376,20 @@ class Scene:
         Compile all scene pipeline assets into RenderPipelines.
 
         Clears existing compiled pipelines and recompiles from scene_pipelines handles.
+        Also registers pipelines in C++ RenderingManager for access from C++ components.
         """
         from termin._native import log
+        from termin._native.render import RenderingManager
 
-        # Destroy old pipelines
+        # Get C++ RenderingManager
+        cpp_rm = RenderingManager.instance()
+
+        # Destroy old pipelines and clear from C++ RenderingManager
         for pipeline in self._compiled_pipelines.values():
             pipeline.destroy()
         self._compiled_pipelines.clear()
         self._pipeline_targets.clear()
+        cpp_rm.clear_scene_pipelines(self)
 
         # Compile from handles
         for handle in self._scene_pipelines:
@@ -399,6 +405,9 @@ class Scene:
 
             self._compiled_pipelines[asset.name] = pipeline
             self._pipeline_targets[asset.name] = list(asset.target_viewports)
+
+            # Register in C++ RenderingManager
+            cpp_rm.add_scene_pipeline(self, asset.name, pipeline)
 
     def get_compiled_pipeline(self, name: str):
         """
@@ -426,10 +435,16 @@ class Scene:
 
     def destroy_compiled_pipelines(self) -> None:
         """Destroy all compiled pipelines and clear the dicts."""
+        from termin._native.render import RenderingManager
+
         for pipeline in self._compiled_pipelines.values():
             pipeline.destroy()
         self._compiled_pipelines.clear()
         self._pipeline_targets.clear()
+
+        # Clear from C++ RenderingManager
+        cpp_rm = RenderingManager.instance()
+        cpp_rm.clear_scene_pipelines(self)
 
     # --- Editor entities data (runtime only) ---
 

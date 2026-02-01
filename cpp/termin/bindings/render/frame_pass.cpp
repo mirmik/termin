@@ -21,6 +21,8 @@ extern "C" {
 #include "termin/render/normal_pass.hpp"
 #include "termin/render/id_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
+#include "termin/render/material_pass.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"
@@ -1489,6 +1491,135 @@ void bind_frame_pass(nb::module_& m) {
         m.attr("ColliderGizmoPass").attr("node_inplace_pairs") = nb::make_tuple(
             nb::make_tuple("input_res", "output_res")
         );
+    }
+
+    // MaterialPass - post-processing pass using a Material
+    nb::class_<MaterialPass, CxxFramePass>(m, "MaterialPass")
+        .def("__init__", [](MaterialPass* self,
+                            const std::string& material_name,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) MaterialPass();
+            self->set_pass_name(pass_name);
+            self->set_output_res(output_res);
+            if (!material_name.empty() && material_name != "(None)") {
+                self->set_material_name(material_name);
+            }
+            init_pass_from_python(self, "MaterialPass");
+        },
+             nb::arg("material_name") = "",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Material")
+        .def_prop_rw("material_name",
+            [](MaterialPass& p) { return p.material_name(); },
+            [](MaterialPass& p, const std::string& name) { p.set_material_name(name); })
+        .def_prop_rw("output_res",
+            [](MaterialPass& p) { return p.output_res(); },
+            [](MaterialPass& p, const std::string& res) { p.set_output_res(res); })
+        .def("set_texture_resource", &MaterialPass::set_texture_resource,
+             nb::arg("uniform_name"), nb::arg("resource_name"))
+        .def("add_resource", &MaterialPass::add_resource,
+             nb::arg("resource_name"), nb::arg("uniform_name") = "")
+        .def("remove_resource", &MaterialPass::remove_resource,
+             nb::arg("resource_name"))
+        .def("add_extra_texture", [](MaterialPass& self,
+                                     const std::string& socket_name,
+                                     const std::string& resource_name) {
+            if (resource_name.empty() || resource_name.rfind("empty_", 0) == 0) {
+                return;
+            }
+            std::string uniform_name = (socket_name.rfind("u_", 0) == 0)
+                ? socket_name
+                : "u_" + socket_name;
+            self.set_texture_resource(uniform_name, resource_name);
+        }, nb::arg("socket_name"), nb::arg("resource_name"))
+        .def_prop_rw("before_draw",
+            [](MaterialPass& p) {
+                // Return None if no callback is set
+                if (!p.before_draw()) {
+                    return nb::none();
+                }
+                // Can't return C++ lambda to Python
+                return nb::none();
+            },
+            [](MaterialPass& p, nb::object callback) {
+                if (callback.is_none()) {
+                    p.set_before_draw(nullptr);
+                } else {
+                    // Wrap Python callback
+                    nb::object cb_ref = callback;
+                    p.set_before_draw([cb_ref](TcShader* shader) {
+                        nb::gil_scoped_acquire gil;
+                        try {
+                            cb_ref(nb::cast(shader, nb::rv_policy::reference));
+                        } catch (const std::exception& e) {
+                            tc::Log::error("[MaterialPass] before_draw callback error: %s", e.what());
+                        }
+                    });
+                }
+            })
+        .def("compute_reads", &MaterialPass::compute_reads)
+        .def("compute_writes", &MaterialPass::compute_writes)
+        .def_prop_ro("reads", &MaterialPass::compute_reads)
+        .def_prop_ro("writes", &MaterialPass::compute_writes)
+        .def("destroy", &MaterialPass::destroy)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Material";
+            std::string output_res = data.contains("output_res") ? nb::cast<std::string>(data["output_res"]) : "color";
+            std::string material_name = "";
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("material_name")) {
+                    material_name = nb::cast<std::string>(d["material_name"]);
+                }
+                if (d.contains("texture_resources")) {
+                    // Will be restored below
+                }
+            }
+            auto* p = new MaterialPass();
+            p->set_pass_name(pass_name);
+            p->set_output_res(output_res);
+            if (!material_name.empty() && material_name != "(None)") {
+                p->set_material_name(material_name);
+            }
+            // Restore texture_resources
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("texture_resources")) {
+                    nb::dict tex_res = nb::cast<nb::dict>(d["texture_resources"]);
+                    for (auto item : tex_res) {
+                        std::string uniform_name = nb::cast<std::string>(item.first);
+                        std::string resource_name = nb::cast<std::string>(item.second);
+                        p->set_texture_resource(uniform_name, resource_name);
+                    }
+                }
+                if (d.contains("extra_resources")) {
+                    nb::dict extra_res = nb::cast<nb::dict>(d["extra_resources"]);
+                    for (auto item : extra_res) {
+                        std::string resource_name = nb::cast<std::string>(item.first);
+                        std::string uniform_name = nb::cast<std::string>(item.second);
+                        p->add_resource(resource_name, uniform_name);
+                    }
+                }
+            }
+            return init_pass_from_deserialize(p, "MaterialPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("__repr__", [](const MaterialPass& p) {
+            return "<MaterialPass '" + p.get_pass_name() + "' material='" + p.material_name() + "'>";
+        });
+
+    // Node graph attributes for MaterialPass
+    {
+        m.attr("MaterialPass").attr("category") = "Effects";
+        m.attr("MaterialPass").attr("has_dynamic_inputs") = true;
+        m.attr("MaterialPass").attr("node_inputs") = nb::make_tuple();
+        m.attr("MaterialPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("MaterialPass").attr("node_inplace_pairs") = nb::make_tuple();
+
+        // inspect_fields for editor - uses Python InspectField class
+        // Will be set from Python side after import
     }
 }
 

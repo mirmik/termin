@@ -4,6 +4,7 @@
 
 extern "C" {
 #include "tc_log.h"
+#include "tc_scene.h"
 #include "render/tc_viewport_pool.h"
 }
 
@@ -307,6 +308,55 @@ void RenderingManager::present_display(tc_display* display) {
 }
 
 // ============================================================================
+// Scene Pipeline Management
+// ============================================================================
+
+void RenderingManager::add_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline) {
+    if (!tc_scene_handle_valid(scene) || name.empty() || !pipeline) return;
+    uint64_t key = scene_key(scene);
+    scene_pipelines_[key][name] = pipeline;
+}
+
+void RenderingManager::remove_scene_pipeline(tc_scene_handle scene, const std::string& name) {
+    if (!tc_scene_handle_valid(scene)) return;
+    uint64_t key = scene_key(scene);
+    auto it = scene_pipelines_.find(key);
+    if (it != scene_pipelines_.end()) {
+        it->second.erase(name);
+    }
+}
+
+RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
+    if (!tc_scene_handle_valid(scene)) return nullptr;
+    uint64_t key = scene_key(scene);
+    auto scene_it = scene_pipelines_.find(key);
+    if (scene_it == scene_pipelines_.end()) return nullptr;
+    auto pipe_it = scene_it->second.find(name);
+    return (pipe_it != scene_it->second.end()) ? pipe_it->second : nullptr;
+}
+
+RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) const {
+    // Search all scenes
+    for (const auto& [scene_key, pipelines] : scene_pipelines_) {
+        auto it = pipelines.find(name);
+        if (it != pipelines.end()) {
+            return it->second;
+        }
+    }
+    return nullptr;
+}
+
+void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
+    if (!tc_scene_handle_valid(scene)) return;
+    uint64_t key = scene_key(scene);
+    scene_pipelines_.erase(key);
+}
+
+void RenderingManager::clear_all_scene_pipelines() {
+    scene_pipelines_.clear();
+}
+
+// ============================================================================
 // Shutdown
 // ============================================================================
 
@@ -316,6 +366,9 @@ void RenderingManager::shutdown() {
         pair.second->clear_all();
     }
     viewport_states_.clear();
+
+    // Clear scene pipelines (we don't own them)
+    clear_all_scene_pipelines();
 
     // Clear displays (don't free them - we don't own them)
     displays_.clear();

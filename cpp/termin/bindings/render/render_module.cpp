@@ -67,6 +67,9 @@ void bind_render(nb::module_& m) {
 
     // RenderEngine
     bind_render_engine(m);
+
+    // RenderingManager (scene pipeline methods)
+    bind_rendering_manager(m);
 }
 
 } // namespace termin

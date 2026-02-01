@@ -249,6 +249,20 @@ set_target_properties(entity_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# Animation library (AnimationPlayer component)
+add_library(animation_lib STATIC
+    termin/animation/animation_player.cpp
+)
+target_include_directories(animation_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(animation_lib PUBLIC skeleton_lib)
+target_compile_options(animation_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(animation_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 # Render library (Drawable vtable, shared by components that need rendering)
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
 add_library(render_lib STATIC
@@ -268,6 +282,7 @@ add_library(render_lib STATIC
     termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
+    termin/render/material_pass.cpp
     termin/render/shader_parser.cpp
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
@@ -445,6 +460,7 @@ nanobind_add_module(_native
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/bindings/render/render_engine.cpp
+    termin/bindings/render/rendering_manager_bindings.cpp
     termin/bindings/editor/gizmo_bindings.cpp
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
@@ -481,6 +497,7 @@ nanobind_add_module(_native
     termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
+    termin/render/material_pass.cpp
     termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
@@ -560,6 +577,11 @@ install(TARGETS trent entity_lib termin_core
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows
+)
+
+# Install static libraries for external module compilation
+install(TARGETS skeleton_lib animation_lib
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
 )
 
 # Install header files for external module compilation
