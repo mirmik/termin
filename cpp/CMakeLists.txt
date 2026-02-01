@@ -286,6 +286,7 @@ add_library(render_lib STATIC
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
     termin/render/material_pass.cpp
+    termin/render/bloom_pass.cpp
     termin/render/shader_parser.cpp
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
@@ -504,6 +505,7 @@ nanobind_add_module(_native
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
     termin/render/material_pass.cpp
+    termin/render/bloom_pass.cpp
     termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE

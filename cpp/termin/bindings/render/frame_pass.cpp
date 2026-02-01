@@ -23,6 +23,7 @@ extern "C" {
 #include "termin/render/shadow_pass.hpp"
 #include "termin/render/material_pass.hpp"
 #include "termin/render/present_pass.hpp"
+#include "termin/render/bloom_pass.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/camera/camera_component.hpp"
@@ -1683,6 +1684,90 @@ void bind_frame_pass(nb::module_& m) {
             nb::make_tuple("input_res", "fbo")
         );
         m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
+    }
+
+    // BloomPass - HDR bloom post-processing pass
+    nb::class_<BloomPass, CxxFramePass>(m, "BloomPass")
+        .def("__init__", [](BloomPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float threshold,
+                            float soft_threshold,
+                            float intensity,
+                            int mip_levels) {
+            new (self) BloomPass(input_res, output_res, threshold, soft_threshold, intensity, mip_levels);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "BloomPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Bloom",
+             nb::arg("threshold") = 1.0f,
+             nb::arg("soft_threshold") = 0.5f,
+             nb::arg("intensity") = 1.0f,
+             nb::arg("mip_levels") = 5)
+        .def_rw("input_res", &BloomPass::input_res)
+        .def_rw("output_res", &BloomPass::output_res)
+        .def_rw("threshold", &BloomPass::threshold)
+        .def_rw("soft_threshold", &BloomPass::soft_threshold)
+        .def_rw("intensity", &BloomPass::intensity)
+        .def_rw("mip_levels", &BloomPass::mip_levels)
+        .def("compute_reads", &BloomPass::compute_reads)
+        .def("compute_writes", &BloomPass::compute_writes)
+        .def("get_inplace_aliases", &BloomPass::get_inplace_aliases)
+        .def_prop_ro("reads", &BloomPass::compute_reads)
+        .def_prop_ro("writes", &BloomPass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Bloom";
+            std::string input_res = "color";
+            std::string output_res = "color";
+            float threshold = 1.0f;
+            float soft_threshold = 0.5f;
+            float intensity = 1.0f;
+            int mip_levels = 5;
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("threshold")) {
+                    threshold = nb::cast<float>(d["threshold"]);
+                }
+                if (d.contains("soft_threshold")) {
+                    soft_threshold = nb::cast<float>(d["soft_threshold"]);
+                }
+                if (d.contains("intensity")) {
+                    intensity = nb::cast<float>(d["intensity"]);
+                }
+                if (d.contains("mip_levels")) {
+                    mip_levels = nb::cast<int>(d["mip_levels"]);
+                }
+            }
+            auto* p = new BloomPass(input_res, output_res, threshold, soft_threshold, intensity, mip_levels);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "BloomPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &BloomPass::destroy)
+        .def("__repr__", [](const BloomPass& p) {
+            return "<BloomPass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for BloomPass
+    {
+        m.attr("BloomPass").attr("category") = "Effects";
+        m.attr("BloomPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("BloomPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("BloomPass").attr("node_inplace_pairs") = nb::make_tuple();
     }
 }
 
