@@ -137,6 +137,8 @@ if __name__ == "__main__":
                 "core/*",
                 "editor/*",
                 "tests/__init__.py",
+                # Standard library (shaders, materials, etc.)
+                "resources/**/*",
             ]
         },
         include_package_data=True,

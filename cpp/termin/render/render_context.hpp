@@ -4,11 +4,13 @@
 
 #include "termin/geom/mat44.hpp"
 #include "termin/render/tc_shader_handle.hpp"
+#include "termin/tc_scene_ref.hpp"
 
 namespace termin {
 
 // Forward declarations
 class GraphicsBackend;
+class CameraComponent;
 
 /**
  * Render context passed to components during rendering.
@@ -35,6 +37,12 @@ struct RenderContext {
 
     // Layer mask for filtering entities (which layers to render)
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFF;
+
+    // Scene reference for entity lookups
+    TcSceneRef scene;
+
+    // Camera component (for skybox and other effects)
+    CameraComponent* camera = nullptr;
 
     // Helper to set model matrix
     void set_model(const Mat44f& m) { model = m; }
