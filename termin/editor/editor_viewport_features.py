@@ -480,13 +480,14 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
-        from termin.visualization.render.posteffects.bloom import BloomEffect
+        #from termin.visualization.render.posteffects.bloom import BloomEffect
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
         from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
         from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
         from termin.visualization.render.framegraph.passes.grayscale import GrayscalePass
+        from termin.visualization.render.framegraph.passes.bloom_pass import BloomPass
 
         def get_gizmo_manager():
             return self._gizmo_manager
@@ -564,9 +565,15 @@ class EditorViewportFeatures:
         )
 
         tonemap_pass = TonemapPass(
-            input_res="color_pp",
+            input_res="color_bloom",
             output_res="color_tonemapped",
             pass_name="Tonemap",
+            method=2,  # TONEMAP_NONE - passthrough
+        )
+
+        bloom_pass = BloomPass(
+            input_res="color_pp",
+            output_res="color_bloom",
         )
 
         passes: list = [
@@ -582,6 +589,7 @@ class EditorViewportFeatures:
             IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
             resolve_pass,  # MSAA → обычный FBO
             postprocess,
+            bloom_pass,
             tonemap_pass,  # HDR → LDR (after bloom)
             UIWidgetPass(
                 input_res="color_tonemapped",
@@ -594,7 +602,7 @@ class EditorViewportFeatures:
             ),
         ]
 
-        postprocess.add_effect(BloomEffect())
+        # postprocess.add_effect(BloomEffect())
         postprocess.add_effect(
             HighlightEffect(
                 lambda: self.hover_entity_id,

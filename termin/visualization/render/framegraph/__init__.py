@@ -23,10 +23,10 @@ from termin.visualization.render.framegraph.passes.id_pass import IdPass
 from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, ResolvePass, blit_fbo_to_fbo
 from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
 from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
-from termin.visualization.render.framegraph.passes.post_effect_base import PostEffectPass
 from termin.visualization.render.framegraph.passes.grayscale import GrayscalePass
 from termin.visualization.render.framegraph.passes.material_pass import MaterialPass
 from termin.visualization.render.framegraph.passes.bloom_pass import BloomPass
+from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
 
 __all__ = [
     "FrameGraph",
@@ -53,8 +53,8 @@ __all__ = [
     "ResolvePass",
     "UIWidgetPass",
     "blit_fbo_to_fbo",
-    "PostEffectPass",
     "GrayscalePass",
     "MaterialPass",
     "BloomPass",
+    "TonemapPass",
 ]

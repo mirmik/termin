@@ -24,6 +24,8 @@ extern "C" {
 #include "termin/render/material_pass.hpp"
 #include "termin/render/present_pass.hpp"
 #include "termin/render/bloom_pass.hpp"
+#include "termin/render/grayscale_pass.hpp"
+#include "termin/render/tonemap_pass.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/camera/camera_component.hpp"
@@ -1769,6 +1771,144 @@ void bind_frame_pass(nb::module_& m) {
         );
         m.attr("BloomPass").attr("node_inplace_pairs") = nb::make_tuple();
     }
+
+    // GrayscalePass - simple grayscale post-processing pass
+    nb::class_<GrayscalePass, CxxFramePass>(m, "GrayscalePass")
+        .def("__init__", [](GrayscalePass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float strength) {
+            new (self) GrayscalePass(input_res, output_res, strength);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "GrayscalePass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Grayscale",
+             nb::arg("strength") = 1.0f)
+        .def_rw("input_res", &GrayscalePass::input_res)
+        .def_rw("output_res", &GrayscalePass::output_res)
+        .def_rw("strength", &GrayscalePass::strength)
+        .def("compute_reads", &GrayscalePass::compute_reads)
+        .def("compute_writes", &GrayscalePass::compute_writes)
+        .def("get_inplace_aliases", &GrayscalePass::get_inplace_aliases)
+        .def_prop_ro("reads", &GrayscalePass::compute_reads)
+        .def_prop_ro("writes", &GrayscalePass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Grayscale";
+            std::string input_res = "color";
+            std::string output_res = "color";
+            float strength = 1.0f;
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("strength")) {
+                    strength = nb::cast<float>(d["strength"]);
+                }
+            }
+            auto* p = new GrayscalePass(input_res, output_res, strength);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "GrayscalePass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &GrayscalePass::destroy)
+        .def("__repr__", [](const GrayscalePass& p) {
+            return "<GrayscalePass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for GrayscalePass
+    {
+        m.attr("GrayscalePass").attr("category") = "Effects";
+        m.attr("GrayscalePass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("GrayscalePass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("GrayscalePass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    // TonemapPass - HDR to LDR tonemapping pass
+    nb::class_<TonemapPass, CxxFramePass>(m, "TonemapPass")
+        .def("__init__", [](TonemapPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float exposure,
+                            int method) {
+            new (self) TonemapPass(input_res, output_res, exposure, method);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "TonemapPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Tonemap",
+             nb::arg("exposure") = 1.0f,
+             nb::arg("method") = 0)
+        .def_rw("input_res", &TonemapPass::input_res)
+        .def_rw("output_res", &TonemapPass::output_res)
+        .def_rw("exposure", &TonemapPass::exposure)
+        .def_rw("method", &TonemapPass::method)
+        .def("compute_reads", &TonemapPass::compute_reads)
+        .def("compute_writes", &TonemapPass::compute_writes)
+        .def("get_inplace_aliases", &TonemapPass::get_inplace_aliases)
+        .def_prop_ro("reads", &TonemapPass::compute_reads)
+        .def_prop_ro("writes", &TonemapPass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Tonemap";
+            std::string input_res = "color";
+            std::string output_res = "color";
+            float exposure = 1.0f;
+            int method = 0;
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("exposure")) {
+                    exposure = nb::cast<float>(d["exposure"]);
+                }
+                if (d.contains("method")) {
+                    method = nb::cast<int>(d["method"]);
+                }
+            }
+            auto* p = new TonemapPass(input_res, output_res, exposure, method);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "TonemapPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &TonemapPass::destroy)
+        .def("__repr__", [](const TonemapPass& p) {
+            return "<TonemapPass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for TonemapPass
+    {
+        m.attr("TonemapPass").attr("category") = "Effects";
+        m.attr("TonemapPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("TonemapPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("TonemapPass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    // TonemapMethod enum constants
+    m.attr("TONEMAP_ACES") = 0;
+    m.attr("TONEMAP_REINHARD") = 1;
+    m.attr("TONEMAP_NONE") = 2;
 }
 
 } // namespace termin
