@@ -114,6 +114,9 @@ if __name__ == "__main__":
                 "*.dylib",
                 # Import libraries for external modules (Windows)
                 "lib/*.lib",
+                # Header files for external C++ module compilation
+                "include/**/*.h",
+                "include/**/*.hpp",
                 # Subpackages
                 "ga201/*",
                 "physics/*",

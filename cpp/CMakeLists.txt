@@ -562,6 +562,20 @@ install(TARGETS trent entity_lib termin_core
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows
 )
 
+# Install header files for external module compilation
+# core_c headers -> include/core_c/
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../core_c/include/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/core_c
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+# C++ headers -> include/cpp/
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/cpp
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    PATTERN "bindings" EXCLUDE
+    PATTERN "render/glad" EXCLUDE
+)
+
 # Set RPATH for shared libraries to find each other in the same directory
 set_target_properties(entity_lib PROPERTIES
     INSTALL_RPATH "$ORIGIN"
