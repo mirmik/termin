@@ -446,12 +446,20 @@ void bind_frame_pass(nb::module_& m) {
             return init_pass_from_deserialize(pass, "CxxFramePass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none());
 
-    // RenderContext
-    nb::class_<RenderContext>(m, "RenderContext")
+    // PyRenderContext - Python wrapper with extra Python-only fields
+    struct PyRenderContext : RenderContext {
+        nb::object camera = nb::none();
+        nb::object scene = nb::none();
+        nb::object shadow_data = nb::none();
+        nb::object extra_uniforms = nb::none();
+    };
+
+    // RenderContext (exposed as PyRenderContext for Python compatibility)
+    nb::class_<PyRenderContext>(m, "RenderContext")
         .def(nb::init<>())
         // Constructor with keyword arguments for Python compatibility
-        .def("__init__", [](RenderContext* self, nb::kwargs kwargs) {
-            new (self) RenderContext();
+        .def("__init__", [](PyRenderContext* self, nb::kwargs kwargs) {
+            new (self) PyRenderContext();
 
             if (kwargs.contains("phase")) {
                 self->phase = nb::cast<std::string>(kwargs["phase"]);
@@ -518,22 +526,22 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
         })
-        .def_rw("phase", &RenderContext::phase)
-        .def_rw("scene", &RenderContext::scene)
-        .def_rw("shadow_data", &RenderContext::shadow_data)
-        .def_rw("extra_uniforms", &RenderContext::extra_uniforms)
-        .def_rw("layer_mask", &RenderContext::layer_mask)
-        .def_rw("camera", &RenderContext::camera)
+        .def_rw("phase", &PyRenderContext::phase)
+        .def_rw("scene", &PyRenderContext::scene)
+        .def_rw("shadow_data", &PyRenderContext::shadow_data)
+        .def_rw("extra_uniforms", &PyRenderContext::extra_uniforms)
+        .def_rw("layer_mask", &PyRenderContext::layer_mask)
+        .def_rw("camera", &PyRenderContext::camera)
         // graphics
         .def_prop_rw("graphics",
-            [](const RenderContext& self) -> GraphicsBackend* { return self.graphics; },
-            [](RenderContext& self, GraphicsBackend* g) { self.graphics = g; },
+            [](const PyRenderContext& self) -> GraphicsBackend* { return self.graphics; },
+            [](PyRenderContext& self, GraphicsBackend* g) { self.graphics = g; },
             nb::rv_policy::reference)
         // current_shader removed - use current_tc_shader instead
         // view matrix
         .def_prop_rw("view",
-            [](const RenderContext& self) { return self.view; },
-            [](RenderContext& self, nb::object v) {
+            [](const PyRenderContext& self) { return self.view; },
+            [](PyRenderContext& self, nb::object v) {
                 if (nb::isinstance<Mat44>(v)) {
                     self.view = nb::cast<Mat44>(v).to_float();
                 } else if (nb::isinstance<Mat44f>(v)) {
@@ -550,8 +558,8 @@ void bind_frame_pass(nb::module_& m) {
         )
         // projection matrix
         .def_prop_rw("projection",
-            [](const RenderContext& self) { return self.projection; },
-            [](RenderContext& self, nb::object p) {
+            [](const PyRenderContext& self) { return self.projection; },
+            [](PyRenderContext& self, nb::object p) {
                 if (nb::isinstance<Mat44>(p)) {
                     self.projection = nb::cast<Mat44>(p).to_float();
                 } else if (nb::isinstance<Mat44f>(p)) {
@@ -568,8 +576,8 @@ void bind_frame_pass(nb::module_& m) {
         )
         // model matrix
         .def_prop_rw("model",
-            [](const RenderContext& self) { return self.model; },
-            [](RenderContext& self, nb::object m) {
+            [](const PyRenderContext& self) { return self.model; },
+            [](PyRenderContext& self, nb::object m) {
                 if (nb::isinstance<Mat44>(m)) {
                     self.model = nb::cast<Mat44>(m).to_float();
                 } else if (nb::isinstance<Mat44f>(m)) {
@@ -584,14 +592,14 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
         )
-        .def("set_model", [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
+        .def("set_model", [](PyRenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
             for (int row = 0; row < 4; ++row) {
                 for (int col = 0; col < 4; ++col) {
                     self.model.data[col * 4 + row] = arr(row, col);
                 }
             }
         })
-        .def("mvp", [](const RenderContext& self) {
+        .def("mvp", [](const PyRenderContext& self) {
             Mat44f mvp = self.mvp();
             float* data = new float[16];
             for (int row = 0; row < 4; ++row) {

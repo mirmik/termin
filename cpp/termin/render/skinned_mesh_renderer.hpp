@@ -1,13 +1,9 @@
 #pragma once
 
 #include <vector>
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
 
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
-
-namespace nb = nanobind;
 
 namespace termin {
 

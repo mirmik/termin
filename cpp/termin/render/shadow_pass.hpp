@@ -4,11 +4,6 @@
 #include <string>
 #include <unordered_map>
 
-#ifdef TERMIN_HAS_NANOBIND
-#include <nanobind/nanobind.h>
-namespace nb = nanobind;
-#endif
-
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -24,11 +19,7 @@ namespace nb = nanobind;
 #include "termin/entity/entity.hpp"
 #include "tc_scene.h"
 #include "tc_scene_pool.h"
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 #include "tc_shader_handle.hpp"
 
 namespace termin {

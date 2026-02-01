@@ -14,11 +14,7 @@ extern "C" {
 #include "render/tc_pass.h"
 }
 
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 
 #include "termin/render/handles.hpp"
 #include "termin/render/resource_spec.hpp"

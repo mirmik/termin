@@ -22,11 +22,7 @@
 #include "tc_log.hpp"
 #include "tc_scene.h"
 #include "tc_scene_pool.h"
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 
 namespace termin {
 

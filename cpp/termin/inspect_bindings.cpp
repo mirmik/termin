@@ -2,7 +2,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "../../core_c/include/tc_inspect.hpp"
+#include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
 #include "render/frame_pass.hpp"

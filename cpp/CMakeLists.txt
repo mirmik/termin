@@ -227,6 +227,7 @@ set(ENTITY_LIB_SOURCES
 if(NOT BUILD_CSHARP_BINDINGS)
     list(APPEND ENTITY_LIB_SOURCES
         termin/bindings/inspect/tc_kind_python_instance.cpp
+        termin/bindings/inspect/tc_inspect_python.cpp
     )
 endif()
 add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
@@ -270,6 +271,7 @@ add_library(render_lib STATIC
     termin/render/shader_parser.cpp
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
+    termin/render/shader_skinning.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
 )

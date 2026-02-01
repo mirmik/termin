@@ -12,10 +12,6 @@ extern "C" {
 #include <vector>
 #include <optional>
 #include <algorithm>
-#ifdef TERMIN_HAS_NANOBIND
-#include <nanobind/nanobind.h>
-namespace nb = nanobind;
-#endif
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/vec4.hpp"
 #include "termin/geom/mat44.hpp"
@@ -411,21 +407,6 @@ public:
         tc_value_dict_set(&d, "type", tc_value_string("uuid"));
         return d;
     }
-
-#ifdef TERMIN_HAS_NANOBIND
-    // Serialize for scene saving (returns nanobind dict) - for Python bindings
-    nb::dict serialize() const {
-        nb::dict d;
-        if (!is_valid()) {
-            d["type"] = "none";
-            return d;
-        }
-        d["uuid"] = uuid();
-        d["name"] = name();
-        d["type"] = "uuid";
-        return d;
-    }
-#endif
 
     // Deserialize from tc_value data
     void deserialize_from(const tc_value* data, tc_scene_handle = TC_SCENE_HANDLE_INVALID) {

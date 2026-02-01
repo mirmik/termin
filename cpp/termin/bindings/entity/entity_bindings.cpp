@@ -19,7 +19,7 @@
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
 #include "../../../../core_c/include/tc_scene.h"
-#include "../../../../core_c/include/tc_inspect.hpp"
+#include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "../tc_value_helpers.hpp"
 #include "../../tc_scene_ref.hpp"
 #include "../../viewport/tc_viewport_ref.hpp"

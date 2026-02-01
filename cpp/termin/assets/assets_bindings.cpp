@@ -9,6 +9,7 @@
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/inspect/tc_kind.hpp"
+#include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "../skeleton/tc_skeleton_handle.hpp"
 #include "tc_log.hpp"
 
@@ -70,7 +71,10 @@ void register_kind_handlers() {
         // serialize
         nb::cpp_function([](nb::object obj) -> nb::object {
             TcMaterial mat = nb::cast<TcMaterial>(obj);
-            return mat.serialize();
+            tc_value val = mat.serialize_to_value();
+            nb::object result = tc::tc_value_to_nb(&val);
+            tc_value_free(&val);
+            return result;
         }),
         // deserialize
         nb::cpp_function([](nb::object data) -> nb::object {

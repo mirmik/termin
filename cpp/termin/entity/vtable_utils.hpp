@@ -75,27 +75,3 @@ bool component_overrides_fixed_update() {
 }
 
 } // namespace termin
-
-// Macro for binding native C++ components to nanobind.
-// Automatically sets up the factory with proper flag detection.
-//
-// Usage:
-//   BIND_NATIVE_COMPONENT(m, MyComponent)
-//       .def_rw("speed", &MyComponent::speed);
-#ifdef TERMIN_HAS_NANOBIND
-#include <nanobind/nanobind.h>
-namespace nb = nanobind;
-
-#define BIND_NATIVE_COMPONENT(module, ClassName) \
-    nb::class_<ClassName, termin::CxxComponent>(module, #ClassName) \
-        .def("__init__", [](ClassName* self) { \
-            new (self) ClassName(); \
-            tc_type_entry* entry = tc_component_registry_get_entry(#ClassName); \
-            if (entry) { \
-                self->c_component()->type_entry = entry; \
-                self->c_component()->type_version = entry->version; \
-            } \
-            self->set_has_update(termin::component_overrides_update<ClassName>()); \
-            self->set_has_fixed_update(termin::component_overrides_fixed_update<ClassName>()); \
-        })
-#endif // TERMIN_HAS_NANOBIND

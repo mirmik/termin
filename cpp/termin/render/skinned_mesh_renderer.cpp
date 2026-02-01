@@ -1,10 +1,10 @@
 #include "skinned_mesh_renderer.hpp"
 #include "skeleton_controller.hpp"
 #include "graphics_backend.hpp"
+#include "shader_skinning.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "tc_log.hpp"
-#include <iostream>
 #include <algorithm>
 #include <unordered_map>
 #include <cstring>
@@ -108,19 +108,11 @@ TcShader SkinnedMeshRenderer::override_shader(
         s_skinned_shader_cache.erase(it);
     }
 
-    // Inject skinning via Python (only on cache miss)
-    try {
-        nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
-        nb::object skinned_obj = skinning_module.attr("get_skinned_shader_handle")(original_shader.handle);
-        if (!skinned_obj.is_none()) {
-            TcShader skinned = nb::cast<TcShader>(skinned_obj);
-            // Cache the result
-            s_skinned_shader_cache[original_shader] = skinned;
-            return skinned;
-        }
-    } catch (const nb::python_error& e) {
-        tc::Log::warn(e, "SkinnedMeshRenderer::override_shader");
-        PyErr_Clear();
+    // Use C++ skinning injection
+    TcShader skinned = get_skinned_shader(original_shader);
+    if (skinned.is_valid()) {
+        s_skinned_shader_cache[original_shader] = skinned;
+        return skinned;
     }
 
     return original_shader;

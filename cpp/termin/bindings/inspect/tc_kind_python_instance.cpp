@@ -67,7 +67,7 @@ void init_python_lang_vtable() {
 }
 
 // ============================================================================
-// Singletons
+// KindRegistryPython methods
 // ============================================================================
 
 KindRegistryPython& KindRegistryPython::instance() {
@@ -75,9 +75,139 @@ KindRegistryPython& KindRegistryPython::instance() {
     return inst;
 }
 
+void KindRegistryPython::register_kind(const std::string& name, nb::object serialize, nb::object deserialize) {
+    KindPython kind;
+    kind.name = name;
+    kind.serialize = std::move(serialize);
+    kind.deserialize = std::move(deserialize);
+    _kinds[name] = std::move(kind);
+}
+
+KindPython* KindRegistryPython::get(const std::string& name) {
+    auto it = _kinds.find(name);
+    return it != _kinds.end() ? &it->second : nullptr;
+}
+
+const KindPython* KindRegistryPython::get(const std::string& name) const {
+    auto it = _kinds.find(name);
+    return it != _kinds.end() ? &it->second : nullptr;
+}
+
+bool KindRegistryPython::has(const std::string& name) const {
+    return _kinds.find(name) != _kinds.end();
+}
+
+std::vector<std::string> KindRegistryPython::kinds() const {
+    std::vector<std::string> result;
+    result.reserve(_kinds.size());
+    for (const auto& [name, _] : _kinds) {
+        result.push_back(name);
+    }
+    return result;
+}
+
+nb::object KindRegistryPython::serialize(const std::string& kind_name, nb::object obj) const {
+    auto* kind = get(kind_name);
+    if (kind && kind->serialize.ptr()) {
+        return kind->serialize(obj);
+    }
+    return nb::none();
+}
+
+nb::object KindRegistryPython::deserialize(const std::string& kind_name, nb::object data) const {
+    auto* kind = get(kind_name);
+    if (kind && kind->deserialize.ptr()) {
+        return kind->deserialize(data);
+    }
+    return nb::none();
+}
+
+void KindRegistryPython::clear() {
+    for (auto& [name, kind] : _kinds) {
+        kind.serialize = nb::object();
+        kind.deserialize = nb::object();
+    }
+    _kinds.clear();
+}
+
+// ============================================================================
+// KindRegistry methods
+// ============================================================================
+
 KindRegistry& KindRegistry::instance() {
     static KindRegistry inst;
     return inst;
 }
+
+bool KindRegistry::has_cpp(const std::string& name) const {
+    return KindRegistryCpp::instance().has(name);
+}
+
+bool KindRegistry::has_python(const std::string& name) const {
+    return KindRegistryPython::instance().has(name);
+}
+
+std::vector<std::string> KindRegistry::kinds() const {
+    std::vector<std::string> result;
+
+    // Add C++ kinds
+    for (const auto& name : KindRegistryCpp::instance().kinds()) {
+        result.push_back(name);
+    }
+
+    // Add Python kinds (if not already present)
+    for (const auto& name : KindRegistryPython::instance().kinds()) {
+        bool found = false;
+        for (const auto& existing : result) {
+            if (existing == name) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            result.push_back(name);
+        }
+    }
+
+    return result;
+}
+
+void KindRegistry::register_cpp(
+    const std::string& name,
+    std::function<tc_value(const std::any&)> serialize,
+    std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
+) {
+    KindRegistryCpp::instance().register_kind(name, serialize, deserialize);
+}
+
+void KindRegistry::register_python(const std::string& name, nb::object serialize, nb::object deserialize) {
+    KindRegistryPython::instance().register_kind(name, serialize, deserialize);
+}
+
+tc_value KindRegistry::serialize_cpp(const std::string& kind_name, const std::any& value) const {
+    return KindRegistryCpp::instance().serialize(kind_name, value);
+}
+
+std::any KindRegistry::deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene_handle scene) const {
+    return KindRegistryCpp::instance().deserialize(kind_name, data, scene);
+}
+
+nb::object KindRegistry::serialize_python(const std::string& kind_name, nb::object obj) const {
+    return KindRegistryPython::instance().serialize(kind_name, obj);
+}
+
+nb::object KindRegistry::deserialize_python(const std::string& kind_name, nb::object data) const {
+    return KindRegistryPython::instance().deserialize(kind_name, data);
+}
+
+void KindRegistry::clear_python() {
+    KindRegistryPython::instance().clear();
+}
+
+KindRegistryCpp& KindRegistry::cpp() { return KindRegistryCpp::instance(); }
+const KindRegistryCpp& KindRegistry::cpp() const { return KindRegistryCpp::instance(); }
+
+KindRegistryPython& KindRegistry::python() { return KindRegistryPython::instance(); }
+const KindRegistryPython& KindRegistry::python() const { return KindRegistryPython::instance(); }
 
 } // namespace tc

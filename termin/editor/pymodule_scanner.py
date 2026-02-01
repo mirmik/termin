@@ -122,6 +122,12 @@ class PyModuleScanner:
             return False
 
         name = data.get("name", os.path.basename(pymodule_path))
+
+        # Check if module is ignored
+        if data.get("ignore", False):
+            log.info(f"[PyModuleScanner] Skipping ignored module: {name}")
+            return True  # Treat as success (intentionally skipped)
+
         root = data.get("root", ".")
         packages = data.get("packages", [])
 

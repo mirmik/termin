@@ -1,5 +1,5 @@
-// tc_inspect.hpp - C++ wrapper for tc_inspect with nanobind support
-// For C++-only code (external modules), use tc_inspect_cpp.hpp instead.
+// tc_inspect_python.hpp - Python/nanobind extensions for tc_inspect
+// For C++-only code, use tc_inspect_cpp.hpp from core_c/include instead.
 #pragma once
 
 #include "tc_inspect_cpp.hpp"
@@ -7,7 +7,18 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "../../cpp/termin/inspect/tc_kind.hpp"
+#include "termin/inspect/tc_kind.hpp"
+
+// DLL export/import macros - InspectRegistryPythonExt is in entity_lib
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define TC_INSPECT_PYTHON_API __declspec(dllexport)
+    #else
+        #define TC_INSPECT_PYTHON_API __declspec(dllimport)
+    #endif
+#else
+    #define TC_INSPECT_PYTHON_API __attribute__((visibility("default")))
+#endif
 
 namespace nb = nanobind;
 
@@ -148,8 +159,8 @@ inline nb::object tc_value_to_nb(const tc_value* v) {
 // ============================================================================
 
 // Extend InspectRegistry with Python-specific methods
-// Implemented in tc_inspect_instance.cpp
-class TC_INSPECT_API InspectRegistryPythonExt {
+// Implemented in tc_inspect_python.cpp (entity_lib)
+class TC_INSPECT_PYTHON_API InspectRegistryPythonExt {
 public:
     // Add a button field with Python action
     static void add_button(InspectRegistry& reg, const std::string& type_name,

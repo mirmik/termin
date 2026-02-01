@@ -45,69 +45,25 @@ public:
     static KindRegistryPython& instance();
 
     // Register Python handler
-    void register_kind(
-        const std::string& name,
-        nb::object serialize,
-        nb::object deserialize
-    ) {
-        KindPython kind;
-        kind.name = name;
-        kind.serialize = std::move(serialize);
-        kind.deserialize = std::move(deserialize);
-        _kinds[name] = std::move(kind);
-    }
+    void register_kind(const std::string& name, nb::object serialize, nb::object deserialize);
 
     // Get handler (returns nullptr if not found)
-    KindPython* get(const std::string& name) {
-        auto it = _kinds.find(name);
-        return it != _kinds.end() ? &it->second : nullptr;
-    }
+    KindPython* get(const std::string& name);
+    const KindPython* get(const std::string& name) const;
 
-    const KindPython* get(const std::string& name) const {
-        auto it = _kinds.find(name);
-        return it != _kinds.end() ? &it->second : nullptr;
-    }
-
-    bool has(const std::string& name) const {
-        return _kinds.find(name) != _kinds.end();
-    }
+    bool has(const std::string& name) const;
 
     // Get all registered kind names
-    std::vector<std::string> kinds() const {
-        std::vector<std::string> result;
-        result.reserve(_kinds.size());
-        for (const auto& [name, _] : _kinds) {
-            result.push_back(name);
-        }
-        return result;
-    }
+    std::vector<std::string> kinds() const;
 
     // Serialize value using Python handler
-    nb::object serialize(const std::string& kind_name, nb::object obj) const {
-        auto* kind = get(kind_name);
-        if (kind && kind->serialize.ptr()) {
-            return kind->serialize(obj);
-        }
-        return nb::none();
-    }
+    nb::object serialize(const std::string& kind_name, nb::object obj) const;
 
     // Deserialize value using Python handler
-    nb::object deserialize(const std::string& kind_name, nb::object data) const {
-        auto* kind = get(kind_name);
-        if (kind && kind->deserialize.ptr()) {
-            return kind->deserialize(data);
-        }
-        return nb::none();
-    }
+    nb::object deserialize(const std::string& kind_name, nb::object data) const;
 
     // Clear all Python references (call before Python finalization)
-    void clear() {
-        for (auto& [name, kind] : _kinds) {
-            kind.serialize = nb::object();
-            kind.deserialize = nb::object();
-        }
-        _kinds.clear();
-    }
+    void clear();
 };
 
 // Unified Kind Registry - facade for C++ and Python registries
@@ -118,90 +74,45 @@ public:
     static KindRegistry& instance();
 
     // Check if kind has C++ handler
-    bool has_cpp(const std::string& name) const {
-        return KindRegistryCpp::instance().has(name);
-    }
+    bool has_cpp(const std::string& name) const;
 
     // Check if kind has Python handler
-    bool has_python(const std::string& name) const {
-        return KindRegistryPython::instance().has(name);
-    }
+    bool has_python(const std::string& name) const;
 
     // Get all kinds (combined from both registries)
-    std::vector<std::string> kinds() const {
-        std::vector<std::string> result;
-
-        // Add C++ kinds
-        for (const auto& name : KindRegistryCpp::instance().kinds()) {
-            result.push_back(name);
-        }
-
-        // Add Python kinds (if not already present)
-        for (const auto& name : KindRegistryPython::instance().kinds()) {
-            bool found = false;
-            for (const auto& existing : result) {
-                if (existing == name) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                result.push_back(name);
-            }
-        }
-
-        return result;
-    }
+    std::vector<std::string> kinds() const;
 
     // Register C++ handler (delegates to KindRegistryCpp)
     void register_cpp(
         const std::string& name,
         std::function<tc_value(const std::any&)> serialize,
         std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
-    ) {
-        KindRegistryCpp::instance().register_kind(name, serialize, deserialize);
-    }
+    );
 
     // Register Python handler (delegates to KindRegistryPython)
-    void register_python(
-        const std::string& name,
-        nb::object serialize,
-        nb::object deserialize
-    ) {
-        KindRegistryPython::instance().register_kind(name, serialize, deserialize);
-    }
+    void register_python(const std::string& name, nb::object serialize, nb::object deserialize);
 
     // Serialize using C++ handler (caller owns returned tc_value)
-    tc_value serialize_cpp(const std::string& kind_name, const std::any& value) const {
-        return KindRegistryCpp::instance().serialize(kind_name, value);
-    }
+    tc_value serialize_cpp(const std::string& kind_name, const std::any& value) const;
 
     // Deserialize using C++ handler
-    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const {
-        return KindRegistryCpp::instance().deserialize(kind_name, data, scene);
-    }
+    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const;
 
     // Serialize using Python handler
-    nb::object serialize_python(const std::string& kind_name, nb::object obj) const {
-        return KindRegistryPython::instance().serialize(kind_name, obj);
-    }
+    nb::object serialize_python(const std::string& kind_name, nb::object obj) const;
 
     // Deserialize using Python handler
-    nb::object deserialize_python(const std::string& kind_name, nb::object data) const {
-        return KindRegistryPython::instance().deserialize(kind_name, data);
-    }
+    nb::object deserialize_python(const std::string& kind_name, nb::object data) const;
 
     // Clear Python references
-    void clear_python() {
-        KindRegistryPython::instance().clear();
-    }
+    void clear_python();
 
     // Access to underlying registries
-    KindRegistryCpp& cpp() { return KindRegistryCpp::instance(); }
-    const KindRegistryCpp& cpp() const { return KindRegistryCpp::instance(); }
+    KindRegistryCpp& cpp();
+    const KindRegistryCpp& cpp() const;
 
-    KindRegistryPython& python() { return KindRegistryPython::instance(); }
-    const KindRegistryPython& python() const { return KindRegistryPython::instance(); }
+    KindRegistryPython& python();
+    const KindRegistryPython& python() const;
 };
 
 // Bind KindRegistry to Python
