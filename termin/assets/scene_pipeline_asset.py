@@ -123,18 +123,13 @@ class ScenePipelineAsset(DataAsset[dict]):
             return self._deserialize_pipeline(data)
 
     def _compile_graph(self, data: dict) -> "RenderPipeline | None":
-        """Compile graph format data into RenderPipeline."""
+        """Compile graph format data into RenderPipeline using C++ compiler."""
         try:
-            from termin.nodegraph.scene import NodeGraphScene
-            from termin.nodegraph.serialization import deserialize_graph
-            from termin.nodegraph.compiler import compile_graph
+            from termin._native.render import compile_graph_from_json
 
-            # Create temporary scene and deserialize graph into it
-            scene = NodeGraphScene()
-            deserialize_graph(data, scene)
-
-            # Compile to RenderPipeline
-            pipeline = compile_graph(scene)
+            # Convert to JSON and compile via C++
+            json_str = json.dumps(data)
+            pipeline = compile_graph_from_json(json_str)
             pipeline.name = self._name
 
             return pipeline

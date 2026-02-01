@@ -3,7 +3,6 @@
 #include "material_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/graphics_backend.hpp"
-#include "termin/material/tc_material_handle.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "tc_log.hpp"
 
@@ -26,52 +25,41 @@ MaterialPass::~MaterialPass() {
     destroy();
 }
 
-void MaterialPass::set_material_name(const std::string& name) {
-    material_name_ = name;
-    if (!name.empty() && name != "(None)") {
-        // Try to load now, but mark for retry if not found
-        load_material();
-        if (tc_material_handle_is_invalid(material_handle_)) {
-            material_needs_reload_ = true;
-        }
-    } else {
-        material_handle_ = tc_material_handle_invalid();
-        material_needs_reload_ = false;
-    }
-}
-
 void MaterialPass::set_texture_resource(const std::string& uniform_name, const std::string& resource_name) {
-    texture_resources_[uniform_name] = resource_name;
+    texture_resources[uniform_name] = resource_name;
 }
 
 void MaterialPass::add_resource(const std::string& resource_name, const std::string& uniform_name) {
-    std::string uname = uniform_name.empty() ? ("u_" + resource_name) : uniform_name;
-    extra_resources_[resource_name] = uname;
+    std::string uname;
+    if (uniform_name.empty()) {
+        uname = "u_" + resource_name;
+    } else if (uniform_name.rfind("u_", 0) != 0) {
+        // Add u_ prefix if not already present
+        uname = "u_" + uniform_name;
+    } else {
+        uname = uniform_name;
+    }
+    extra_resources[resource_name] = uname;
 }
 
 void MaterialPass::remove_resource(const std::string& resource_name) {
-    extra_resources_.erase(resource_name);
+    extra_resources.erase(resource_name);
 }
 
 void MaterialPass::set_before_draw(BeforeDrawCallback callback) {
     before_draw_callback_ = std::move(callback);
 }
 
-void MaterialPass::load_material() {
-    material_handle_ = tc_material_find_by_name(material_name_.c_str());
-    // Don't warn here - material might be loaded later
-}
-
 std::set<const char*> MaterialPass::compute_reads() const {
     std::set<const char*> reads;
 
     // Add extra resources
-    for (const auto& [res_name, uniform_name] : extra_resources_) {
+    for (const auto& [res_name, uniform_name] : extra_resources) {
         reads.insert(res_name.c_str());
     }
 
     // Add texture resources
-    for (const auto& [uniform_name, res_name] : texture_resources_) {
+    for (const auto& [uniform_name, res_name] : texture_resources) {
         if (!res_name.empty()) {
             reads.insert(res_name.c_str());
         }
@@ -81,7 +69,7 @@ std::set<const char*> MaterialPass::compute_reads() const {
 }
 
 std::set<const char*> MaterialPass::compute_writes() const {
-    return {output_res_.c_str()};
+    return {output_res.c_str()};
 }
 
 void MaterialPass::execute(ExecuteContext& ctx) {
@@ -89,17 +77,9 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Retry loading material if it wasn't found during setup
-    if (material_needs_reload_ && !material_name_.empty()) {
-        load_material();
-        if (!tc_material_handle_is_invalid(material_handle_)) {
-            material_needs_reload_ = false;
-        }
-    }
-
     // Get output FBO
     FramebufferHandle* output_fbo = nullptr;
-    auto it = ctx.writes_fbos.find(output_res_);
+    auto it = ctx.writes_fbos.find(output_res);
     if (it != ctx.writes_fbos.end()) {
         output_fbo = dynamic_cast<FramebufferHandle*>(it->second);
     }
@@ -123,12 +103,11 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx.graphics->set_depth_mask(false);
     ctx.graphics->set_blend(false);
 
-    // Get material
-    tc_material* mat = tc_material_get(material_handle_);
+    // Get material from handle
+    tc_material* mat = material.get();
     if (!mat || mat->phase_count == 0) {
-        // No material - log error and skip
-        tc::Log::error("[MaterialPass] '%s': material '%s' not found or has no phases",
-            get_pass_name().c_str(), material_name_.c_str());
+        tc::Log::error("[MaterialPass] '%s': material not set or has no phases",
+            get_pass_name().c_str());
         ctx.graphics->set_depth_test(true);
         ctx.graphics->set_depth_mask(true);
         return;
@@ -138,7 +117,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     tc_material_phase* phase = &mat->phases[0];
     tc_shader* shader = tc_shader_get(phase->shader);
     if (!shader) {
-        tc::Log::warn("[MaterialPass] Material '%s' has no valid shader", material_name_.c_str());
+        tc::Log::warn("[MaterialPass] '%s': material has no valid shader", get_pass_name().c_str());
         ctx.graphics->set_depth_test(true);
         ctx.graphics->set_depth_mask(true);
         return;
@@ -146,7 +125,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
 
     // Compile and use shader
     if (tc_shader_compile_gpu(shader) == 0) {
-        tc::Log::error("[MaterialPass] Failed to compile shader for material '%s'", material_name_.c_str());
+        tc::Log::error("[MaterialPass] '%s': failed to compile shader", get_pass_name().c_str());
         ctx.graphics->set_depth_test(true);
         ctx.graphics->set_depth_mask(true);
         return;
@@ -157,7 +136,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     std::set<std::string> bound_uniforms;
 
     // Bind extra resources
-    for (const auto& [res_name, uniform_name] : extra_resources_) {
+    for (const auto& [res_name, uniform_name] : extra_resources) {
         auto res_it = ctx.reads_fbos.find(res_name);
         if (res_it == ctx.reads_fbos.end()) continue;
 
@@ -174,7 +153,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     }
 
     // Bind texture resources (uniform_name -> resource_name)
-    for (const auto& [uniform_name, res_name] : texture_resources_) {
+    for (const auto& [uniform_name, res_name] : texture_resources) {
         if (res_name.empty()) continue;
 
         auto res_it = ctx.reads_fbos.find(res_name);
@@ -257,9 +236,9 @@ void MaterialPass::draw_fullscreen_quad(GraphicsBackend* graphics) {
 
 void MaterialPass::destroy() {
     before_draw_callback_ = nullptr;
-    material_handle_ = tc_material_handle_invalid();
-    texture_resources_.clear();
-    extra_resources_.clear();
+    material = TcMaterial();  // Release material handle
+    texture_resources.clear();
+    extra_resources.clear();
 }
 
 TC_REGISTER_FRAME_PASS(MaterialPass);

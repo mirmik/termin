@@ -16,8 +16,8 @@ __all__ = ["MaterialPass", "get_texture_inputs_for_material"]
 # Add inspect_fields to C++ class for editor integration
 # Key must match the property name for JSON param serialization
 MaterialPass.inspect_fields = {
-    "material_name": InspectField(
-        path="material_name",
+    "material": InspectField(
+        path="material",
         label="Material",
         kind="tc_material",
     ),

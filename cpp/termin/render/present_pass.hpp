@@ -1,6 +1,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "tc_inspect_cpp.hpp"
 
 namespace termin {
 
@@ -11,6 +12,9 @@ class PresentToScreenPass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "OUTPUT";
+
+    INSPECT_FIELD(PresentToScreenPass, input_res, "Input Resource", "string")
+    INSPECT_FIELD(PresentToScreenPass, output_res, "Output Resource", "string")
 
     PresentToScreenPass(
         const std::string& input = "color",

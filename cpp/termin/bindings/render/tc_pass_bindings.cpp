@@ -55,13 +55,13 @@ static tc_pass* python_pass_factory(void* userdata) {
         // Call Python class constructor: cls()
         nb::object py_obj = (*(it->second))();
 
-        // Get tc_pass* from the Python object via _tc_pass_handle
-        if (nb::hasattr(py_obj, "_tc_pass_handle")) {
-            nb::object handle = py_obj.attr("_tc_pass_handle");
-            // TcPass has ptr() method that returns tc_pass*
-            if (nb::hasattr(handle, "ptr")) {
-                // Get the raw pointer
-                tc_pass* p = nb::cast<tc_pass*>(handle.attr("ptr")());
+        // Get tc_pass* from the Python object via _tc_pass (returns TcPassRef)
+        if (nb::hasattr(py_obj, "_tc_pass")) {
+            nb::object tc_pass_ref_obj = py_obj.attr("_tc_pass");
+            // Cast to TcPassRef and get raw pointer
+            if (nb::isinstance<TcPassRef>(tc_pass_ref_obj)) {
+                TcPassRef ref = nb::cast<TcPassRef>(tc_pass_ref_obj);
+                tc_pass* p = ref.ptr();
                 if (p) {
                     // Keep Python object alive
                     Py_INCREF(py_obj.ptr());
@@ -69,7 +69,7 @@ static tc_pass* python_pass_factory(void* userdata) {
                 }
             }
         }
-        tc_log(TC_LOG_ERROR, "python_pass_factory: %s has no valid _tc_pass_handle", type_name);
+        tc_log(TC_LOG_ERROR, "python_pass_factory: %s has no valid _tc_pass", type_name);
     } catch (const nb::python_error& e) {
         tc_log(TC_LOG_ERROR, "python_pass_factory: failed to create %s: %s", type_name, e.what());
         PyErr_Clear();
@@ -582,7 +582,53 @@ void bind_tc_pass(nb::module_& m) {
             tc_value v = py_to_tc_value(data);
             tc_inspect_deserialize(obj_ptr, tc_pass_type_name(p), &v, TC_SCENE_HANDLE_INVALID);
             tc_value_free(&v);
-        }, nb::arg("data"));
+        }, nb::arg("data"))
+        .def("get_field", [](TcPassRef& self, const std::string& field_name) -> nb::object {
+            tc_pass* p = self.ptr();
+            if (!p) return nb::none();
+
+            void* obj_ptr = nullptr;
+            if (p->kind == TC_NATIVE_PASS) {
+                obj_ptr = CxxFramePass::from_tc(p);
+            } else {
+                obj_ptr = p->body;
+            }
+            if (!obj_ptr) return nb::none();
+
+            try {
+                return tc::InspectRegistry_get(tc::InspectRegistry::instance(),
+                    obj_ptr, tc_pass_type_name(p), field_name);
+            } catch (...) {
+                return nb::none();
+            }
+        }, nb::arg("field_name"), "Get field value by name. Returns None if field not found.")
+        .def("set_field", [](TcPassRef& self, const std::string& field_name, nb::object value) {
+            tc_pass* p = self.ptr();
+            if (!p || value.is_none()) return;
+
+            void* obj_ptr = nullptr;
+            if (p->kind == TC_NATIVE_PASS) {
+                obj_ptr = CxxFramePass::from_tc(p);
+            } else {
+                obj_ptr = p->body;
+            }
+            if (!obj_ptr) return;
+
+            try {
+                tc::InspectRegistry_set(tc::InspectRegistry::instance(),
+                    obj_ptr, tc_pass_type_name(p), field_name, value, TC_SCENE_HANDLE_INVALID);
+            } catch (...) {
+                // Field not found or setter failed - silently ignore
+            }
+        }, nb::arg("field_name"), nb::arg("value"), "Set field value by name.")
+        .def("set_viewport_name", [](TcPassRef& self, const std::string& name) {
+            tc_pass* p = self.ptr();
+            if (!p) return;
+            if (p->viewport_name) {
+                free((void*)p->viewport_name);
+            }
+            p->viewport_name = name.empty() ? nullptr : strdup(name.c_str());
+        }, nb::arg("name"), "Set viewport name for this pass.");
 
     // TcPass - owning wrapper for Python passes
     nb::class_<TcPass>(m, "TcPass")

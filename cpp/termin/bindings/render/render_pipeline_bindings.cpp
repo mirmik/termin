@@ -14,6 +14,7 @@ extern "C" {
 
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/tc_pass.hpp"
+#include "termin/render/graph_compiler.hpp"
 
 namespace termin {
 
@@ -356,6 +357,13 @@ void bind_render_pipeline(nb::module_& m) {
 
             return result;
         }, nb::arg("resource_manager"));
+
+    // compile_graph_from_json - compile render pipeline from JSON string
+    m.def("compile_graph_from_json", [](const std::string& json_str) {
+        return tc::compile_graph(json_str);
+    }, nb::arg("json_str"),
+       nb::rv_policy::take_ownership,
+       "Compile a render pipeline from JSON graph representation");
 }
 
 } // namespace termin

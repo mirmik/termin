@@ -22,6 +22,7 @@ extern "C" {
 #include "termin/render/id_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
 #include "termin/render/material_pass.hpp"
+#include "termin/render/present_pass.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/camera/camera_component.hpp"
@@ -1501,21 +1502,30 @@ void bind_frame_pass(nb::module_& m) {
                             const std::string& pass_name) {
             new (self) MaterialPass();
             self->set_pass_name(pass_name);
-            self->set_output_res(output_res);
+            self->output_res = output_res;
             if (!material_name.empty() && material_name != "(None)") {
-                self->set_material_name(material_name);
+                self->material = TcMaterial::from_name(material_name);
             }
             init_pass_from_python(self, "MaterialPass");
         },
              nb::arg("material_name") = "",
              nb::arg("output_res") = "color",
              nb::arg("pass_name") = "Material")
+        .def_prop_rw("material",
+            [](MaterialPass& p) { return p.material; },
+            [](MaterialPass& p, const TcMaterial& mat) { p.material = mat; })
         .def_prop_rw("material_name",
-            [](MaterialPass& p) { return p.material_name(); },
-            [](MaterialPass& p, const std::string& name) { p.set_material_name(name); })
+            [](MaterialPass& p) { return std::string(p.material.name()); },
+            [](MaterialPass& p, const std::string& name) {
+                if (!name.empty() && name != "(None)") {
+                    p.material = TcMaterial::from_name(name);
+                } else {
+                    p.material = TcMaterial();
+                }
+            })
         .def_prop_rw("output_res",
-            [](MaterialPass& p) { return p.output_res(); },
-            [](MaterialPass& p, const std::string& res) { p.set_output_res(res); })
+            [](MaterialPass& p) { return p.output_res; },
+            [](MaterialPass& p, const std::string& res) { p.output_res = res; })
         .def("set_texture_resource", &MaterialPass::set_texture_resource,
              nb::arg("uniform_name"), nb::arg("resource_name"))
         .def("add_resource", &MaterialPass::add_resource,
@@ -1569,18 +1579,18 @@ void bind_frame_pass(nb::module_& m) {
             std::string material_name = "";
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
-                if (d.contains("material_name")) {
+                // Support both "material" and legacy "material_name"
+                if (d.contains("material")) {
+                    material_name = nb::cast<std::string>(d["material"]);
+                } else if (d.contains("material_name")) {
                     material_name = nb::cast<std::string>(d["material_name"]);
-                }
-                if (d.contains("texture_resources")) {
-                    // Will be restored below
                 }
             }
             auto* p = new MaterialPass();
             p->set_pass_name(pass_name);
-            p->set_output_res(output_res);
+            p->output_res = output_res;
             if (!material_name.empty() && material_name != "(None)") {
-                p->set_material_name(material_name);
+                p->material = TcMaterial::from_name(material_name);
             }
             // Restore texture_resources
             if (data.contains("data")) {
@@ -1605,7 +1615,7 @@ void bind_frame_pass(nb::module_& m) {
             return init_pass_from_deserialize(p, "MaterialPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("__repr__", [](const MaterialPass& p) {
-            return "<MaterialPass '" + p.get_pass_name() + "' material='" + p.material_name() + "'>";
+            return "<MaterialPass '" + p.get_pass_name() + "' material='" + std::string(p.material.name()) + "'>";
         });
 
     // Node graph attributes for MaterialPass
@@ -1620,6 +1630,59 @@ void bind_frame_pass(nb::module_& m) {
 
         // inspect_fields for editor - uses Python InspectField class
         // Will be set from Python side after import
+    }
+
+    // PresentToScreenPass - blit input FBO to output (typically screen)
+    nb::class_<PresentToScreenPass, CxxFramePass>(m, "PresentToScreenPass")
+        .def("__init__", [](PresentToScreenPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) PresentToScreenPass(input_res, output_res);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "PresentToScreenPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "OUTPUT",
+             nb::arg("pass_name") = "PresentToScreen")
+        .def_rw("input_res", &PresentToScreenPass::input_res)
+        .def_rw("output_res", &PresentToScreenPass::output_res)
+        .def("compute_reads", &PresentToScreenPass::compute_reads)
+        .def("compute_writes", &PresentToScreenPass::compute_writes)
+        .def("get_inplace_aliases", &PresentToScreenPass::get_inplace_aliases)
+        .def_prop_ro("reads", &PresentToScreenPass::compute_reads)
+        .def_prop_ro("writes", &PresentToScreenPass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "PresentToScreen";
+            std::string input_res = "color";
+            std::string output_res = "OUTPUT";
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+            }
+            auto* p = new PresentToScreenPass(input_res, output_res);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "PresentToScreenPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &PresentToScreenPass::destroy)
+        .def("__repr__", [](const PresentToScreenPass& p) {
+            return "<PresentToScreenPass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for PresentToScreenPass
+    {
+        m.attr("PresentToScreenPass").attr("category") = "Output";
+        m.attr("PresentToScreenPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
     }
 }
 

@@ -12,6 +12,7 @@ extern "C" {
 #include <vector>
 #include <optional>
 #include <algorithm>
+#include <cstring>
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/vec4.hpp"
 #include "termin/geom/mat44.hpp"
@@ -409,6 +410,7 @@ public:
     }
 
     // Deserialize from tc_value data
+    // Accepts: string (material name), or dict with "uuid" or "name"
     void deserialize_from(const tc_value* data, tc_scene_handle = TC_SCENE_HANDLE_INVALID) {
         // Release current handle
         if (tc_material* m = tc_material_get(handle)) {
@@ -416,9 +418,26 @@ public:
         }
         handle = tc_material_handle_invalid();
 
-        if (!data || data->type != TC_VALUE_DICT) {
+        if (!data) return;
+
+        // Handle plain string as material name
+        if (data->type == TC_VALUE_STRING && data->data.s && data->data.s[0]) {
+            const char* mat_name = data->data.s;
+            if (strcmp(mat_name, "(None)") == 0) return;
+
+            tc_material_handle h = tc_material_find_by_name(mat_name);
+            if (!tc_material_handle_is_invalid(h)) {
+                handle = h;
+                if (tc_material* m = tc_material_get(handle)) {
+                    tc_material_add_ref(m);
+                }
+            } else {
+                tc_log_error("[TcMaterial] Material '%s' not found", mat_name);
+            }
             return;
         }
+
+        if (data->type != TC_VALUE_DICT) return;
 
         // Try UUID first
         tc_value* uuid_val = tc_value_dict_get(const_cast<tc_value*>(data), "uuid");
@@ -436,12 +455,15 @@ public:
         // Try name lookup
         tc_value* name_val = tc_value_dict_get(const_cast<tc_value*>(data), "name");
         if (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s) {
-            tc_material_handle h = tc_material_find_by_name(name_val->data.s);
+            const char* mat_name = name_val->data.s;
+            tc_material_handle h = tc_material_find_by_name(mat_name);
             if (!tc_material_handle_is_invalid(h)) {
                 handle = h;
                 if (tc_material* m = tc_material_get(handle)) {
                     tc_material_add_ref(m);
                 }
+            } else {
+                tc_log_error("[TcMaterial] Material '%s' not found", mat_name);
             }
         }
     }

@@ -13,6 +13,9 @@
 #include "../include/tc_material_registry.h"
 #include "tc_log.hpp"
 
+// For CxxFramePass::from_tc in pass inspect functions
+#include "../../cpp/termin/render/frame_pass.hpp"
+
 #include <string>
 
 namespace tc {
@@ -147,7 +150,13 @@ tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
     const char* type_name = tc_pass_type_name(p);
     if (!type_name) return tc_value_nil();
 
-    void* obj = p->body;
+    // Get object pointer based on pass kind
+    void* obj = nullptr;
+    if (p->kind == TC_NATIVE_PASS) {
+        obj = termin::CxxFramePass::from_tc(p);
+    } else {
+        obj = p->body;
+    }
     if (!obj) return tc_value_nil();
 
     return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
@@ -159,9 +168,16 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_
     const char* type_name = tc_pass_type_name(p);
     if (!type_name) return;
 
-    void* obj = p->body;
+    // Get object pointer based on pass kind
+    void* obj = nullptr;
+    if (p->kind == TC_NATIVE_PASS) {
+        obj = termin::CxxFramePass::from_tc(p);
+    } else {
+        obj = p->body;
+    }
     if (!obj) return;
 
+    // Use set_tc_value which properly handles both C++ and Python fields
     tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
 }
 

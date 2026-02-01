@@ -84,7 +84,8 @@ class Scene:
         from termin.assets.scene_pipeline_handle import ScenePipelineHandle
         self._scene_pipelines: List[ScenePipelineHandle] = []
 
-        # Note: Compiled pipelines are stored in C++ RenderingManager, not here
+        # Compiled pipelines - Python refs to prevent GC, also registered in C++ RenderingManager
+        self._compiled_pipelines: dict[str, "RenderPipeline"] = {}
 
         # Editor viewport state (runtime only, not serialized)
         # Stores camera name used in editor viewport for restore after game mode
@@ -366,7 +367,8 @@ class Scene:
         Compile all scene pipeline assets into RenderPipelines.
 
         Clears existing compiled pipelines and recompiles from scene_pipelines handles.
-        Pipelines are stored in C++ RenderingManager.
+        Python refs are stored in _compiled_pipelines to prevent GC.
+        Also registered in C++ RenderingManager for C++ component access.
         """
         from termin._native import log
         from termin._native.render import RenderingManager
@@ -374,7 +376,10 @@ class Scene:
         # Get C++ RenderingManager
         cpp_rm = RenderingManager.instance()
 
-        # Clear old pipelines from C++ RenderingManager
+        log.info(f"[Scene] compile_scene_pipelines: {len(self._scene_pipelines)} handles, scene={self.name}")
+
+        # Clear old pipelines
+        self._compiled_pipelines.clear()
         cpp_rm.clear_scene_pipelines(self)
 
         # Compile from handles
@@ -389,7 +394,12 @@ class Scene:
                 log.warn(f"[Scene] Failed to compile scene pipeline '{asset.name}'")
                 continue
 
-            # Register in C++ RenderingManager
+            log.info(f"[Scene] Registered pipeline '{asset.name}' for scene '{self.name}'")
+
+            # Store Python ref to prevent GC
+            self._compiled_pipelines[asset.name] = pipeline
+
+            # Register in C++ RenderingManager for C++ component access
             cpp_rm.add_scene_pipeline(self, asset.name, pipeline)
             cpp_rm.set_pipeline_targets(asset.name, list(asset.target_viewports))
 
@@ -877,6 +887,11 @@ class Scene:
                 ScenePipelineHandle.deserialize(sp_data)
                 for sp_data in data.get("scene_pipelines", [])
             ]
+
+            # Compile scene pipelines immediately after loading
+            # (so components can find them in start())
+            if self._scene_pipelines:
+                self.compile_scene_pipelines()
 
         entities_data = data.get("entities", [])
 

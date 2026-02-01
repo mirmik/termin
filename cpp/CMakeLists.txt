@@ -116,6 +116,7 @@ if(WIN32)
         trent/trent_path.cpp
         trent/string_ext.cpp
         trent/yaml.cpp
+        trent/json.cpp
     )
 else()
     add_library(trent SHARED
@@ -123,6 +124,7 @@ else()
         trent/trent_path.cpp
         trent/string_ext.cpp
         trent/yaml.cpp
+        trent/json.cpp
     )
 endif()
 target_compile_options(trent PRIVATE
@@ -287,6 +289,9 @@ add_library(render_lib STATIC
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
     termin/render/shader_skinning.cpp
+    termin/render/graph_data.cpp
+    termin/render/graph_compiler.cpp
+    termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
 )

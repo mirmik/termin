@@ -8,15 +8,12 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/handles.hpp"
+#include "termin/material/tc_material_handle.hpp"
 
 #include <string>
 #include <unordered_map>
 #include <functional>
 #include <set>
-
-extern "C" {
-#include "tc_material.h"
-}
 
 namespace termin {
 
@@ -35,23 +32,20 @@ using BeforeDrawCallback = std::function<void(TcShader*)>;
 // - Material uniforms and textures
 class MaterialPass : public CxxFramePass {
 public:
-    // Fields stored directly (no duplication with base)
-    std::string material_name_;
-    std::string output_res_ = "color";
+    // Material to use for rendering (looked up from tc_material registry)
+    TcMaterial material;
+    std::string output_res = "color";
+
+    INSPECT_FIELD(MaterialPass, material, "Material", "tc_material")
+    INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
 
     // Texture resources: uniform_name -> resource_name
-    std::unordered_map<std::string, std::string> texture_resources_;
+    std::unordered_map<std::string, std::string> texture_resources;
 
     // Extra resources: resource_name -> uniform_name
-    std::unordered_map<std::string, std::string> extra_resources_;
+    std::unordered_map<std::string, std::string> extra_resources;
 
 private:
-    // Material handle
-    tc_material_handle material_handle_ = tc_material_handle_invalid();
-
-    // Flag to track if we need to reload material
-    bool material_needs_reload_ = false;
-
     // Callback invoked before drawing
     BeforeDrawCallback before_draw_callback_;
 
@@ -62,14 +56,6 @@ private:
 public:
     MaterialPass();
     ~MaterialPass() override;
-
-    // Material name
-    const std::string& material_name() const { return material_name_; }
-    void set_material_name(const std::string& name);
-
-    // Output resource name
-    const std::string& output_res() const { return output_res_; }
-    void set_output_res(const std::string& res) { output_res_ = res; }
 
     // Texture resource bindings
     void set_texture_resource(const std::string& uniform_name, const std::string& resource_name);
@@ -87,14 +73,8 @@ public:
     void destroy() override;
 
 private:
-    // Load material by name
-    void load_material();
-
     // Draw fullscreen quad
     void draw_fullscreen_quad(GraphicsBackend* graphics);
-
-    // Ensure quad VAO exists
-    static void ensure_quad_vao();
 };
 
 } // namespace termin
