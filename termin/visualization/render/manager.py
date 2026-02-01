@@ -481,7 +481,7 @@ class RenderingManager:
         """
         Compile scene pipelines and mark managed viewports.
 
-        1. Compile scene pipeline assets into scene._compiled_pipelines
+        1. Compile scene pipeline assets (stored in C++ RenderingManager)
         2. Mark viewports as managed by scene pipeline (by name)
 
         Managed viewports are rendered by executing scene pipelines in render loop,
@@ -493,7 +493,7 @@ class RenderingManager:
         """
         from termin._native import log
 
-        # Compile scene pipelines into scene
+        # Compile scene pipelines (stored in C++ RenderingManager)
         scene.compile_scene_pipelines()
 
         # Build viewport lookup by name
@@ -549,7 +549,7 @@ class RenderingManager:
         """
         Get compiled scene pipeline by name.
 
-        Searches through attached scenes for a compiled pipeline with the given name.
+        Delegates to C++ RenderingManager.
 
         Args:
             name: Scene pipeline asset name.
@@ -557,11 +557,9 @@ class RenderingManager:
         Returns:
             Compiled RenderPipeline or None if not found.
         """
-        for scene in self._attached_scenes:
-            pipeline = scene.get_compiled_pipeline(name)
-            if pipeline is not None:
-                return pipeline
-        return None
+        from termin._native.render import RenderingManager as CppRenderingManager
+        cpp_rm = CppRenderingManager.instance()
+        return cpp_rm.get_scene_pipeline(name)
 
     def get_render_stats(self) -> dict:
         """
@@ -575,6 +573,9 @@ class RenderingManager:
             - scene_names: list of attached scene names
             - pipeline_names: list of scene pipeline names
         """
+        from termin._native.render import RenderingManager as CppRenderingManager
+        cpp_rm = CppRenderingManager.instance()
+
         stats = {
             "attached_scenes": len(self._attached_scenes),
             "scene_pipelines": 0,
@@ -583,10 +584,11 @@ class RenderingManager:
             "pipeline_names": [],
         }
 
-        # Count scene pipelines
+        # Count scene pipelines from C++ RenderingManager
         for scene in self._attached_scenes:
             stats["scene_names"].append(scene.name or "<unnamed>")
-            for pipeline_name in scene.compiled_pipelines.keys():
+            pipeline_names = cpp_rm.get_pipeline_names(scene)
+            for pipeline_name in pipeline_names:
                 stats["scene_pipelines"] += 1
                 stats["pipeline_names"].append(pipeline_name)
 
@@ -740,9 +742,16 @@ class RenderingManager:
                     all_viewports_by_name[vp.name] = vp
 
         # 1. Execute scene pipelines (can span multiple displays)
+        from termin._native.render import RenderingManager as CppRenderingManager
+        cpp_rm = CppRenderingManager.instance()
+
         with profiler.section("Scene Pipelines"):
             for scene in self._attached_scenes:
-                for pipeline_name, pipeline in scene.compiled_pipelines.items():
+                pipeline_names = cpp_rm.get_pipeline_names(scene)
+                for pipeline_name in pipeline_names:
+                    pipeline = cpp_rm.get_scene_pipeline(scene, pipeline_name)
+                    if pipeline is None:
+                        continue
                     with profiler.section(f"Pipeline: {pipeline_name}"):
                         self._render_scene_pipeline_offscreen(
                             scene=scene,
@@ -776,12 +785,14 @@ class RenderingManager:
     ) -> None:
         """Render a scene pipeline to viewport output_fbos."""
         from termin._native import log
+        from termin._native.render import RenderingManager as CppRenderingManager
         from termin.visualization.render.engine import ViewportContext
 
         if scene.is_destroyed:
             return
 
-        target_names = scene.get_pipeline_targets(pipeline_name)
+        cpp_rm = CppRenderingManager.instance()
+        target_names = cpp_rm.get_pipeline_targets(pipeline_name)
         if not target_names:
             return
 

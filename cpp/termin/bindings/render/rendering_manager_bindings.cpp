@@ -4,6 +4,7 @@
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
 
 extern "C" {
 #include "tc_scene.h"
@@ -65,6 +66,18 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("scene"))
 
         .def("clear_all_scene_pipelines", &RenderingManager::clear_all_scene_pipelines)
+
+        // Pipeline targets
+        .def("set_pipeline_targets", &RenderingManager::set_pipeline_targets,
+             nb::arg("pipeline_name"), nb::arg("targets"))
+        .def("get_pipeline_targets", &RenderingManager::get_pipeline_targets,
+             nb::arg("pipeline_name"), nb::rv_policy::reference)
+
+        // Get pipeline names for scene
+        .def("get_pipeline_names", [](RenderingManager& self, nb::object scene_py) {
+            tc_scene_handle scene = get_scene_handle(scene_py);
+            return self.get_pipeline_names(scene);
+        }, nb::arg("scene"))
     ;
 }
 

@@ -84,12 +84,7 @@ class Scene:
         from termin.assets.scene_pipeline_handle import ScenePipelineHandle
         self._scene_pipelines: List[ScenePipelineHandle] = []
 
-        # Compiled scene pipelines (name -> RenderPipeline)
-        # Populated by compile_scene_pipelines(), runtime only
-        from termin.visualization.render.framegraph.pipeline import RenderPipeline
-        self._compiled_pipelines: dict[str, RenderPipeline] = {}
-        # Target viewports for each compiled pipeline (name -> list of viewport names)
-        self._pipeline_targets: dict[str, list[str]] = {}
+        # Note: Compiled pipelines are stored in C++ RenderingManager, not here
 
         # Editor viewport state (runtime only, not serialized)
         # Stores camera name used in editor viewport for restore after game mode
@@ -364,19 +359,14 @@ class Scene:
         """Clear all scene pipeline handles."""
         self._scene_pipelines.clear()
 
-    # --- Compiled pipelines (runtime) ---
-
-    @property
-    def compiled_pipelines(self) -> dict:
-        """Get compiled scene pipelines (name -> RenderPipeline)."""
-        return self._compiled_pipelines
+    # --- Compiled pipelines (stored in C++ RenderingManager) ---
 
     def compile_scene_pipelines(self) -> None:
         """
         Compile all scene pipeline assets into RenderPipelines.
 
         Clears existing compiled pipelines and recompiles from scene_pipelines handles.
-        Also registers pipelines in C++ RenderingManager for access from C++ components.
+        Pipelines are stored in C++ RenderingManager.
         """
         from termin._native import log
         from termin._native.render import RenderingManager
@@ -384,11 +374,7 @@ class Scene:
         # Get C++ RenderingManager
         cpp_rm = RenderingManager.instance()
 
-        # Destroy old pipelines and clear from C++ RenderingManager
-        for pipeline in self._compiled_pipelines.values():
-            pipeline.destroy()
-        self._compiled_pipelines.clear()
-        self._pipeline_targets.clear()
+        # Clear old pipelines from C++ RenderingManager
         cpp_rm.clear_scene_pipelines(self)
 
         # Compile from handles
@@ -403,46 +389,14 @@ class Scene:
                 log.warn(f"[Scene] Failed to compile scene pipeline '{asset.name}'")
                 continue
 
-            self._compiled_pipelines[asset.name] = pipeline
-            self._pipeline_targets[asset.name] = list(asset.target_viewports)
-
             # Register in C++ RenderingManager
             cpp_rm.add_scene_pipeline(self, asset.name, pipeline)
-
-    def get_compiled_pipeline(self, name: str):
-        """
-        Get compiled scene pipeline by name.
-
-        Args:
-            name: Pipeline asset name.
-
-        Returns:
-            RenderPipeline or None if not found.
-        """
-        return self._compiled_pipelines.get(name)
-
-    def get_pipeline_targets(self, name: str) -> list[str]:
-        """
-        Get target viewport names for a compiled pipeline.
-
-        Args:
-            name: Pipeline name.
-
-        Returns:
-            List of viewport names or empty list.
-        """
-        return self._pipeline_targets.get(name, [])
+            cpp_rm.set_pipeline_targets(asset.name, list(asset.target_viewports))
 
     def destroy_compiled_pipelines(self) -> None:
-        """Destroy all compiled pipelines and clear the dicts."""
+        """Destroy all compiled pipelines."""
         from termin._native.render import RenderingManager
 
-        for pipeline in self._compiled_pipelines.values():
-            pipeline.destroy()
-        self._compiled_pipelines.clear()
-        self._pipeline_targets.clear()
-
-        # Clear from C++ RenderingManager
         cpp_rm = RenderingManager.instance()
         cpp_rm.clear_scene_pipelines(self)
 

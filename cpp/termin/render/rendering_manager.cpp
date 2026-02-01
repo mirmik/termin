@@ -346,9 +346,43 @@ RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) co
     return nullptr;
 }
 
+void RenderingManager::set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets) {
+    pipeline_targets_[pipeline_name] = targets;
+}
+
+static const std::vector<std::string> empty_targets;
+
+const std::vector<std::string>& RenderingManager::get_pipeline_targets(const std::string& pipeline_name) const {
+    auto it = pipeline_targets_.find(pipeline_name);
+    return (it != pipeline_targets_.end()) ? it->second : empty_targets;
+}
+
+std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle scene) const {
+    std::vector<std::string> names;
+    if (!tc_scene_handle_valid(scene)) return names;
+
+    uint64_t key = scene_key(scene);
+    auto scene_it = scene_pipelines_.find(key);
+    if (scene_it != scene_pipelines_.end()) {
+        for (const auto& [name, _] : scene_it->second) {
+            names.push_back(name);
+        }
+    }
+    return names;
+}
+
 void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
     uint64_t key = scene_key(scene);
+
+    // Remove pipeline targets for this scene's pipelines
+    auto scene_it = scene_pipelines_.find(key);
+    if (scene_it != scene_pipelines_.end()) {
+        for (const auto& [name, _] : scene_it->second) {
+            pipeline_targets_.erase(name);
+        }
+    }
+
     scene_pipelines_.erase(key);
 }
 

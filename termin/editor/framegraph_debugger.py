@@ -1211,8 +1211,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # Check if viewport is managed by a scene pipeline
         managed_by = self._current_viewport.managed_by_scene_pipeline
         if managed_by and self._current_viewport.scene is not None:
-            # Get compiled pipeline from scene
-            return self._current_viewport.scene.get_compiled_pipeline(managed_by)
+            # Get compiled pipeline from C++ RenderingManager
+            from termin._native.render import RenderingManager as CppRenderingManager
+            cpp_rm = CppRenderingManager.instance()
+            return cpp_rm.get_scene_pipeline(managed_by)
 
         # Regular viewport - use viewport's own pipeline
         return self._current_viewport.pipeline

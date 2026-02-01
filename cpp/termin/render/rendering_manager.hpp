@@ -137,6 +137,13 @@ public:
     // Get scene pipeline by name (searches all scenes)
     RenderPipeline* get_scene_pipeline(const std::string& name) const;
 
+    // Pipeline targets (viewport names for each pipeline)
+    void set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets);
+    const std::vector<std::string>& get_pipeline_targets(const std::string& pipeline_name) const;
+
+    // Get all pipeline names for a scene
+    std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
+
     // Clear all pipelines for a scene
     void clear_scene_pipelines(tc_scene_handle scene);
 
@@ -177,6 +184,9 @@ private:
     // Scene pipelines: scene_handle -> (pipeline_name -> pipeline)
     // Key is (scene.index << 32 | scene.generation)
     std::unordered_map<uint64_t, std::unordered_map<std::string, RenderPipeline*>> scene_pipelines_;
+
+    // Pipeline targets: pipeline_name -> list of viewport names
+    std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
 
     // Helper to make key from scene handle
     static uint64_t scene_key(tc_scene_handle h) {
