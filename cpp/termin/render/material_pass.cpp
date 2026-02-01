@@ -29,9 +29,14 @@ MaterialPass::~MaterialPass() {
 void MaterialPass::set_material_name(const std::string& name) {
     material_name_ = name;
     if (!name.empty() && name != "(None)") {
+        // Try to load now, but mark for retry if not found
         load_material();
+        if (tc_material_handle_is_invalid(material_handle_)) {
+            material_needs_reload_ = true;
+        }
     } else {
         material_handle_ = tc_material_handle_invalid();
+        material_needs_reload_ = false;
     }
 }
 
@@ -54,9 +59,7 @@ void MaterialPass::set_before_draw(BeforeDrawCallback callback) {
 
 void MaterialPass::load_material() {
     material_handle_ = tc_material_find_by_name(material_name_.c_str());
-    if (tc_material_handle_is_invalid(material_handle_)) {
-        tc::Log::warn("[MaterialPass] Material '%s' not found", material_name_.c_str());
-    }
+    // Don't warn here - material might be loaded later
 }
 
 std::set<const char*> MaterialPass::compute_reads() const {
@@ -84,6 +87,14 @@ std::set<const char*> MaterialPass::compute_writes() const {
 void MaterialPass::execute(ExecuteContext& ctx) {
     if (!enabled_get()) {
         return;
+    }
+
+    // Retry loading material if it wasn't found during setup
+    if (material_needs_reload_ && !material_name_.empty()) {
+        load_material();
+        if (!tc_material_handle_is_invalid(material_handle_)) {
+            material_needs_reload_ = false;
+        }
     }
 
     // Get output FBO
@@ -115,7 +126,9 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     // Get material
     tc_material* mat = tc_material_get(material_handle_);
     if (!mat || mat->phase_count == 0) {
-        // No material - just clear or skip
+        // No material - log error and skip
+        tc::Log::error("[MaterialPass] '%s': material '%s' not found or has no phases",
+            get_pass_name().c_str(), material_name_.c_str());
         ctx.graphics->set_depth_test(true);
         ctx.graphics->set_depth_mask(true);
         return;

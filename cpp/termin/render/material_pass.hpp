@@ -47,7 +47,10 @@ public:
 
 private:
     // Material handle
-    tc_material_handle material_handle_;
+    tc_material_handle material_handle_ = tc_material_handle_invalid();
+
+    // Flag to track if we need to reload material
+    bool material_needs_reload_ = false;
 
     // Callback invoked before drawing
     BeforeDrawCallback before_draw_callback_;

@@ -14,8 +14,9 @@ from termin._native import log
 __all__ = ["MaterialPass", "get_texture_inputs_for_material"]
 
 # Add inspect_fields to C++ class for editor integration
+# Key must match the property name for JSON param serialization
 MaterialPass.inspect_fields = {
-    "material": InspectField(
+    "material_name": InspectField(
         path="material_name",
         label="Material",
         kind="tc_material",
