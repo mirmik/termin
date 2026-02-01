@@ -210,6 +210,12 @@ void bind_render_pipeline(nb::module_& m) {
             self.fbo_pool().clear();
         })
 
+        // Dirty flag management
+        .def_prop_ro("is_dirty", &RenderPipeline::is_dirty,
+            "Returns True if pipeline needs frame graph rebuild")
+        .def("mark_dirty", &RenderPipeline::mark_dirty,
+            "Mark pipeline for frame graph rebuild on next render")
+
         // Iteration support
         .def("__len__", &RenderPipeline::pass_count)
 

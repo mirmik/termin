@@ -7,6 +7,7 @@
 extern "C" {
 #include "render/tc_frame_graph.h"
 #include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
 #include "render/tc_viewport_pool.h"
 #include "tc_scene.h"
 #include "tc_component.h"
@@ -161,17 +162,16 @@ void RenderEngine::render_view_to_fbo(
         return;
     }
 
-    // Build frame graph
-    tc_frame_graph* fg = tc_frame_graph_build(pipeline->handle());
+    // Get cached frame graph (rebuilds only if pipeline is dirty)
+    tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline->handle());
     if (!fg) {
-        tc::Log::error("RenderEngine::render_view_to_fbo: failed to build frame graph");
+        tc::Log::error("RenderEngine::render_view_to_fbo: failed to get frame graph");
         return;
     }
 
     if (tc_frame_graph_get_error(fg) != TC_FG_OK) {
         tc::Log::error("RenderEngine::render_view_to_fbo: frame graph error: %s",
                        tc_frame_graph_get_error_message(fg));
-        tc_frame_graph_destroy(fg);
         return;
     }
 
@@ -410,7 +410,7 @@ void RenderEngine::render_view_to_fbo(
     }
     tc_profiler_end_section(); // Execute Passes
 
-    tc_frame_graph_destroy(fg);
+    // Frame graph is cached by pipeline, do not destroy
 }
 
 void RenderEngine::render_scene_pipeline_offscreen(
@@ -459,19 +459,18 @@ void RenderEngine::render_scene_pipeline_offscreen(
     int default_width = default_ctx.rect.width;
     int default_height = default_ctx.rect.height;
 
-    // Build frame graph
-    tc_profiler_begin_section("Build Frame Graph");
-    tc_frame_graph* fg = tc_frame_graph_build(pipeline->handle());
+    // Get cached frame graph (rebuilds only if pipeline is dirty)
+    tc_profiler_begin_section("Get Frame Graph");
+    tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline->handle());
     if (!fg) {
         tc_profiler_end_section();
-        tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: failed to build frame graph");
+        tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: failed to get frame graph");
         return;
     }
 
     if (tc_frame_graph_get_error(fg) != TC_FG_OK) {
         tc::Log::error("RenderEngine::render_scene_pipeline_offscreen: frame graph error: %s",
                        tc_frame_graph_get_error_message(fg));
-        tc_frame_graph_destroy(fg);
         tc_profiler_end_section();
         return;
     }
@@ -738,7 +737,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
     }
     tc_profiler_end_section(); // Execute Passes
 
-    tc_frame_graph_destroy(fg);
+    // Frame graph is cached by pipeline, do not destroy
 }
 
 } // namespace termin

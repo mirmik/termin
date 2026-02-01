@@ -731,6 +731,22 @@ void bind_tc_pass(nb::module_& m) {
         return TcPassRef(tc_pipeline_get_pass_at(handle, index));
     });
 
+    // Dirty flag management
+    m.def("tc_pipeline_is_dirty", [](std::tuple<uint32_t, uint32_t> h) -> bool {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        return tc_pipeline_is_dirty(handle);
+    });
+
+    m.def("tc_pipeline_mark_dirty", [](std::tuple<uint32_t, uint32_t> h) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        tc_pipeline_mark_dirty(handle);
+    });
+
+    m.def("tc_pipeline_clear_dirty", [](std::tuple<uint32_t, uint32_t> h) {
+        tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
+        tc_pipeline_clear_dirty(handle);
+    });
+
     // Note: Pipeline resource specs are now managed via C++ RenderPipeline class.
     // Use RenderPipeline.add_spec(), .clear_specs(), .pipeline_specs instead.
 

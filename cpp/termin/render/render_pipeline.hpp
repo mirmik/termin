@@ -69,6 +69,10 @@ public:
     const ResourceSpec* get_spec_at(size_t index) const;
     const std::vector<ResourceSpec>& specs() const { return specs_; }
 
+    // Dirty flag - marks pipeline for frame graph rebuild
+    bool is_dirty() const;
+    void mark_dirty();
+
     // Collect all specs (pipeline + pass specs)
     std::vector<ResourceSpec> collect_specs() const;
 

@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
 }
 
 namespace termin {
@@ -116,6 +117,14 @@ void RenderPipeline::clear_specs() {
 const ResourceSpec* RenderPipeline::get_spec_at(size_t index) const {
     if (index >= specs_.size()) return nullptr;
     return &specs_[index];
+}
+
+bool RenderPipeline::is_dirty() const {
+    return tc_pipeline_is_dirty(handle_);
+}
+
+void RenderPipeline::mark_dirty() {
+    tc_pipeline_mark_dirty(handle_);
 }
 
 std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
