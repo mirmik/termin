@@ -312,9 +312,17 @@ void RenderingManager::present_display(tc_display* display) {
 // ============================================================================
 
 void RenderingManager::add_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline) {
-    if (!tc_scene_handle_valid(scene) || name.empty() || !pipeline) return;
+    tc_log(TC_LOG_INFO, "[RenderingManager] add_scene_pipeline: name='%s', scene=(%u,%u), valid=%d, pipeline=%p",
+           name.c_str(), scene.index, scene.generation, tc_scene_handle_valid(scene), (void*)pipeline);
+    if (!tc_scene_handle_valid(scene) || name.empty() || !pipeline) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] add_scene_pipeline skipped: valid=%d, name_empty=%d, pipeline=%p",
+               tc_scene_handle_valid(scene), name.empty(), (void*)pipeline);
+        return;
+    }
     uint64_t key = scene_key(scene);
     scene_pipelines_[key][name] = pipeline;
+    tc_log(TC_LOG_INFO, "[RenderingManager] add_scene_pipeline OK: key=%llu, total_scenes=%zu",
+           key, scene_pipelines_.size());
 }
 
 void RenderingManager::remove_scene_pipeline(tc_scene_handle scene, const std::string& name) {
@@ -336,13 +344,21 @@ RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, cons
 }
 
 RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) const {
+    tc_log(TC_LOG_INFO, "[RenderingManager] get_scene_pipeline: name='%s', total_scenes=%zu",
+           name.c_str(), scene_pipelines_.size());
     // Search all scenes
-    for (const auto& [scene_key, pipelines] : scene_pipelines_) {
+    for (const auto& [key, pipelines] : scene_pipelines_) {
+        tc_log(TC_LOG_INFO, "[RenderingManager]   scene key=%llu, pipeline_count=%zu", key, pipelines.size());
+        for (const auto& [pname, pipe] : pipelines) {
+            tc_log(TC_LOG_INFO, "[RenderingManager]     pipeline: '%s' -> %p", pname.c_str(), (void*)pipe);
+        }
         auto it = pipelines.find(name);
         if (it != pipelines.end()) {
+            tc_log(TC_LOG_INFO, "[RenderingManager] get_scene_pipeline FOUND: %p", (void*)it->second);
             return it->second;
         }
     }
+    tc_log(TC_LOG_WARN, "[RenderingManager] get_scene_pipeline NOT FOUND: '%s'", name.c_str());
     return nullptr;
 }
 
