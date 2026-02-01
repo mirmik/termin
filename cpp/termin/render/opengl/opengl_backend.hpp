@@ -1018,6 +1018,16 @@ public:
         while (glGetError() != GL_NO_ERROR) {}
     }
 
+    uint32_t get_bound_texture(int unit) override {
+        GLint current_unit;
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &current_unit);
+        glActiveTexture(GL_TEXTURE0 + unit);
+        GLint tex_id;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &tex_id);
+        glActiveTexture(current_unit);
+        return static_cast<uint32_t>(tex_id);
+    }
+
     // --- Synchronization ---
 
     void flush() override {

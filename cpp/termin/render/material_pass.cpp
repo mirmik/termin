@@ -138,10 +138,18 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     // Bind extra resources
     for (const auto& [res_name, uniform_name] : extra_resources) {
         auto res_it = ctx.reads_fbos.find(res_name);
-        if (res_it == ctx.reads_fbos.end()) continue;
+        if (res_it == ctx.reads_fbos.end()) {
+            tc::Log::warn("[MaterialPass] '%s': resource '%s' not found in reads_fbos",
+                get_pass_name().c_str(), res_name.c_str());
+            continue;
+        }
 
         FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(res_it->second);
-        if (!fbo) continue;
+        if (!fbo) {
+            tc::Log::warn("[MaterialPass] '%s': resource '%s' is not a FramebufferHandle",
+                get_pass_name().c_str(), res_name.c_str());
+            continue;
+        }
 
         GPUTextureHandle* tex = fbo->color_texture();
         if (tex) {
@@ -177,7 +185,9 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     // Bind material textures (skip those already bound from framegraph)
     for (size_t i = 0; i < phase->texture_count; i++) {
         const tc_material_texture* mat_tex = &phase->textures[i];
-        if (bound_uniforms.count(mat_tex->name) > 0) continue;
+        if (bound_uniforms.count(mat_tex->name) > 0) {
+            continue;
+        }
 
         tc_texture* tex = tc_texture_get(mat_tex->texture);
         if (tex) {
@@ -188,9 +198,12 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Set material uniforms
+    // Set material uniforms (skip those that match bound texture uniforms)
     for (size_t i = 0; i < phase->uniform_count; i++) {
         const tc_uniform_value* uniform = &phase->uniforms[i];
+        if (bound_uniforms.count(uniform->name) > 0) {
+            continue;
+        }
         switch (uniform->type) {
             case TC_UNIFORM_BOOL:
             case TC_UNIFORM_INT:

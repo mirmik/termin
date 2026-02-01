@@ -6,6 +6,7 @@ extern "C" {
 #include "tc_log.h"
 #include "tc_scene.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_rendering_manager.h"
 }
 
 #include <algorithm>
@@ -18,14 +19,23 @@ static inline uint64_t viewport_key(tc_viewport_handle h) {
 }
 
 // ============================================================================
-// Singleton
+// Singleton - uses C API to ensure single instance across all DLLs
 // ============================================================================
 
 RenderingManager* RenderingManager::s_instance = nullptr;
 
 RenderingManager& RenderingManager::instance() {
+    // Check global storage in entity_lib first
+    RenderingManager* global = reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
+    if (global) {
+        s_instance = global;  // Cache locally
+        return *global;
+    }
+
+    // Create new instance and store globally
     if (!s_instance) {
         s_instance = new RenderingManager();
+        tc_rendering_manager_set_instance(reinterpret_cast<tc_rendering_manager*>(s_instance));
     }
     return *s_instance;
 }
@@ -34,6 +44,7 @@ void RenderingManager::reset_for_testing() {
     if (s_instance) {
         delete s_instance;
         s_instance = nullptr;
+        tc_rendering_manager_set_instance(nullptr);
     }
 }
 
@@ -312,17 +323,17 @@ void RenderingManager::present_display(tc_display* display) {
 // ============================================================================
 
 void RenderingManager::add_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline) {
-    tc_log(TC_LOG_INFO, "[RenderingManager] add_scene_pipeline: name='%s', scene=(%u,%u), valid=%d, pipeline=%p",
-           name.c_str(), scene.index, scene.generation, tc_scene_handle_valid(scene), (void*)pipeline);
+    tc_log(TC_LOG_INFO, "[RenderingManager:%p] add_scene_pipeline: name='%s', scene=(%u,%u), valid=%d, pipeline=%p",
+           (void*)this, name.c_str(), scene.index, scene.generation, tc_scene_handle_valid(scene), (void*)pipeline);
     if (!tc_scene_handle_valid(scene) || name.empty() || !pipeline) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] add_scene_pipeline skipped: valid=%d, name_empty=%d, pipeline=%p",
-               tc_scene_handle_valid(scene), name.empty(), (void*)pipeline);
+        tc_log(TC_LOG_WARN, "[RenderingManager:%p] add_scene_pipeline skipped: valid=%d, name_empty=%d, pipeline=%p",
+               (void*)this, tc_scene_handle_valid(scene), name.empty(), (void*)pipeline);
         return;
     }
     uint64_t key = scene_key(scene);
     scene_pipelines_[key][name] = pipeline;
-    tc_log(TC_LOG_INFO, "[RenderingManager] add_scene_pipeline OK: key=%llu, total_scenes=%zu",
-           key, scene_pipelines_.size());
+    tc_log(TC_LOG_INFO, "[RenderingManager:%p] add_scene_pipeline OK: key=%llu, total_scenes=%zu",
+           (void*)this, key, scene_pipelines_.size());
 }
 
 void RenderingManager::remove_scene_pipeline(tc_scene_handle scene, const std::string& name) {
@@ -344,17 +355,10 @@ RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, cons
 }
 
 RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) const {
-    tc_log(TC_LOG_INFO, "[RenderingManager] get_scene_pipeline: name='%s', total_scenes=%zu",
-           name.c_str(), scene_pipelines_.size());
     // Search all scenes
     for (const auto& [key, pipelines] : scene_pipelines_) {
-        tc_log(TC_LOG_INFO, "[RenderingManager]   scene key=%llu, pipeline_count=%zu", key, pipelines.size());
-        for (const auto& [pname, pipe] : pipelines) {
-            tc_log(TC_LOG_INFO, "[RenderingManager]     pipeline: '%s' -> %p", pname.c_str(), (void*)pipe);
-        }
         auto it = pipelines.find(name);
         if (it != pipelines.end()) {
-            tc_log(TC_LOG_INFO, "[RenderingManager] get_scene_pipeline FOUND: %p", (void*)it->second);
             return it->second;
         }
     }
@@ -388,6 +392,8 @@ std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle sc
 }
 
 void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
+    tc_log(TC_LOG_INFO, "[RenderingManager:%p] clear_scene_pipelines: scene=(%u,%u), valid=%d, total_before=%zu",
+           (void*)this, scene.index, scene.generation, tc_scene_handle_valid(scene), scene_pipelines_.size());
     if (!tc_scene_handle_valid(scene)) return;
     uint64_t key = scene_key(scene);
 
@@ -400,9 +406,12 @@ void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
     }
 
     scene_pipelines_.erase(key);
+    tc_log(TC_LOG_INFO, "[RenderingManager:%p] clear_scene_pipelines: key=%llu erased, total_after=%zu",
+           (void*)this, key, scene_pipelines_.size());
 }
 
 void RenderingManager::clear_all_scene_pipelines() {
+    tc_log(TC_LOG_WARN, "[RenderingManager] clear_all_scene_pipelines called! total=%zu", scene_pipelines_.size());
     scene_pipelines_.clear();
 }
 

@@ -292,10 +292,14 @@ protected:
         // Find output FBO
         auto it = writes_fbos.find(output_res);
         if (it == writes_fbos.end() || it->second == nullptr) {
+            tc::Log::error("[GeometryPassBase] '%s': output FBO '%s' not found!",
+                get_pass_name().c_str(), output_res.c_str());
             return;
         }
         FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
         if (!fb) {
+            tc::Log::error("[GeometryPassBase] '%s': output '%s' is not FramebufferHandle!",
+                get_pass_name().c_str(), output_res.c_str());
             return;
         }
 

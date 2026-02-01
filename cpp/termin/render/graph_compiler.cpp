@@ -338,8 +338,7 @@ static std::unordered_map<std::string, const NodeData*> collect_fbo_nodes(const 
 
 static ResourceSpec infer_resource_spec(
     const std::string& resource_name,
-    const std::unordered_map<std::string, const NodeData*>& fbo_nodes,
-    const std::vector<std::string>& connected_passes
+    const std::unordered_map<std::string, const NodeData*>& fbo_nodes
 ) {
     ResourceSpec spec;
     spec.resource = resource_name;
@@ -422,29 +421,7 @@ static ResourceSpec infer_resource_spec(
         return spec;
     }
 
-    // Heuristics based on pass types
-    static const std::unordered_set<std::string> hdr_passes = {
-        "PostProcessPass", "BloomPass", "TonemapPass", "ColorPass"
-    };
-    static const std::unordered_set<std::string> msaa_passes = {
-        "ColorPass", "DepthPass", "SkyBoxPass"
-    };
-
-    bool needs_hdr = false;
-    bool needs_msaa = false;
-
-    for (const auto& pass_name : connected_passes) {
-        if (hdr_passes.count(pass_name)) needs_hdr = true;
-        if (msaa_passes.count(pass_name)) needs_msaa = true;
-    }
-
-    if (needs_hdr) {
-        spec.format = "rgba16f";
-    }
-    if (needs_msaa) {
-        spec.samples = 4;
-    }
-
+    // No FBO node found - return empty spec (no automatic heuristics)
     return spec;
 }
 
@@ -465,22 +442,10 @@ RenderPipeline* compile_graph(GraphData& graph) {
     // 4. Collect FBO nodes for ResourceSpec inference
     auto fbo_nodes = collect_fbo_nodes(graph);
 
-    // 5. Track which passes use each resource
-    std::unordered_map<std::string, std::vector<std::string>> resource_users;
-    for (const auto* node : sorted_nodes) {
-        if (!is_pass_node(*node)) continue;
-        for (const auto& inp : node->inputs) {
-            auto socket_it = naming.socket_names[node->id].find(inp.name);
-            if (socket_it != naming.socket_names[node->id].end()) {
-                resource_users[socket_it->second].push_back(node->pass_class);
-            }
-        }
-    }
-
-    // 6. Create pipeline
+    // 5. Create pipeline
     auto* pipeline = new RenderPipeline();
 
-    // 7. Add passes
+    // 6. Add passes
     for (const auto* node : sorted_nodes) {
         if (!is_pass_node(*node)) continue;
 
@@ -504,6 +469,11 @@ RenderPipeline* compile_graph(GraphData& graph) {
             tc::Log::error("compile_graph: Failed to get object pointer for '%s'", node->pass_class.c_str());
             tc_pass_drop(pass_ptr);
             continue;
+        }
+
+        // Set pass name from node name
+        if (!node->name.empty()) {
+            pass_ref.set_pass_name(node->name);
         }
 
         // Set viewport name via TcPassRef
@@ -553,7 +523,7 @@ RenderPipeline* compile_graph(GraphData& graph) {
         pipeline->add_pass(pass_ptr);
     }
 
-    // 8. Add ResourceSpecs (only for FBO resources, not shadow maps)
+    // 7. Add ResourceSpecs (only for FBO resources, not shadow maps)
     std::unordered_set<std::string> seen_resources;
     for (const auto* node : sorted_nodes) {
         if (!is_pass_node(*node)) continue;
@@ -572,11 +542,7 @@ RenderPipeline* compile_graph(GraphData& graph) {
                 continue;
             }
 
-            auto spec = infer_resource_spec(
-                res_name,
-                fbo_nodes,
-                resource_users[res_name]
-            );
+            auto spec = infer_resource_spec(res_name, fbo_nodes);
 
             if (!spec.resource.empty()) {
                 pipeline->add_spec(spec);

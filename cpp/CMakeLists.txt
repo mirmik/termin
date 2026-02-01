@@ -222,6 +222,7 @@ set(ENTITY_LIB_SOURCES
     termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp
+    ../core_c/src/tc_rendering_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/modules/module_loader.cpp
 )
