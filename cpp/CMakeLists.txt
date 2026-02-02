@@ -5,11 +5,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Default CTest config for multi-config generators so plain `ctest .` works
+# Default to Release build
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# For multi-config generators (Visual Studio), use only Release
 if(CMAKE_CONFIGURATION_TYPES)
-    if(NOT CTEST_CONFIGURATION_TYPE)
-        set(CTEST_CONFIGURATION_TYPE "Debug" CACHE STRING "Default CTest config" FORCE)
-    endif()
+    set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
 endif()
 
 # Put all binaries into a flat bin/ directory so tests don't depend on config subdirs
