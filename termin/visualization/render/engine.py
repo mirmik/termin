@@ -442,7 +442,9 @@ class RenderEngine:
                     view.layer_mask,
                 )
             except Exception as ex:
+                import traceback
                 log.error(f"[render_view_to_fbo] {ex}")
+                log.error(f"[render_view_to_fbo] Traceback:\n{traceback.format_exc()}")
 
 
     def render_scene_pipeline_offscreen(

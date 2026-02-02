@@ -127,6 +127,26 @@ public struct TcEntityPoolHandle
 }
 
 /// <summary>
+/// Entity handle matching tc_entity_handle in C (pool + entity id).
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TcEntityHandle
+{
+    public TcEntityPoolHandle Pool;
+    public TcEntityId Id;
+
+    public static readonly TcEntityHandle Invalid = new()
+    {
+        Pool = TcEntityPoolHandle.Invalid,
+        Id = TcEntityId.Invalid
+    };
+
+    public bool IsValid => Pool.IsValid && Id.IsValid;
+
+    public override string ToString() => $"EntityHandle({Pool}, {Id})";
+}
+
+/// <summary>
 /// Attribute type matching tc_attrib_type in C.
 /// </summary>
 public enum TcAttribType : byte

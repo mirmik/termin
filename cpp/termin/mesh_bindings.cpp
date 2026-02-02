@@ -23,6 +23,12 @@ namespace termin {
 static std::mutex g_callback_mutex;
 static std::unordered_map<std::string, nb::callable> g_python_callbacks;
 
+// Cleanup function to clear callbacks before Python shutdown
+void cleanup_mesh_callbacks() {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+    g_python_callbacks.clear();
+}
+
 // C callback wrapper that calls the stored Python callable
 static bool python_load_callback_wrapper(tc_mesh* mesh, void* user_data) {
     (void)user_data;
@@ -549,6 +555,10 @@ void bind_mesh(nb::module_& m) {
 
         tc_mesh_set_load_callback(handle.handle, nullptr, nullptr);
     }, nb::arg("handle"), "Clear load callback for mesh");
+
+    // Register cleanup with Python's atexit module
+    nb::module_ atexit = nb::module_::import_("atexit");
+    atexit.attr("register")(nb::cpp_function(&cleanup_mesh_callbacks));
 }
 
 } // namespace termin

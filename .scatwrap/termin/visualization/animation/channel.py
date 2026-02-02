@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/visualization/animation/channel.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+#&nbsp;Animation&nbsp;channel&nbsp;helpers&nbsp;for&nbsp;creating&nbsp;TcAnimationClip&nbsp;from&nbsp;FBX/GLB&nbsp;data<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+<br>
+<br>
+def&nbsp;channel_data_from_fbx(ch)&nbsp;-&gt;&nbsp;dict:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Create&nbsp;channel&nbsp;data&nbsp;dict&nbsp;from&nbsp;FBXAnimationChannel.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ch:&nbsp;FBXAnimationChannel&nbsp;with&nbsp;pos_keys,&nbsp;rot_keys,&nbsp;scale_keys&nbsp;in&nbsp;ticks<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rot_keys&nbsp;contain&nbsp;Euler&nbsp;angles&nbsp;(in&nbsp;degrees)&nbsp;which&nbsp;are&nbsp;converted&nbsp;to&nbsp;quaternions<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict&nbsp;with&nbsp;target_name,&nbsp;translation_keys,&nbsp;rotation_keys,&nbsp;scale_keys<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tr_keys&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;(t,&nbsp;v)&nbsp;in&nbsp;ch.pos_keys:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tr_keys.append((t,&nbsp;np.array(v,&nbsp;dtype=np.float64)))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rot_keys&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;(t,&nbsp;v)&nbsp;in&nbsp;ch.rot_keys:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rad&nbsp;=&nbsp;np.radians(v)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;Pose3.from_euler(rad[0],&nbsp;rad[1],&nbsp;rad[2],&nbsp;order='xyz')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rot_keys.append((t,&nbsp;pose.ang))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sc_keys&nbsp;=&nbsp;[(t,&nbsp;float(np.mean(v)))&nbsp;for&nbsp;(t,&nbsp;v)&nbsp;in&nbsp;ch.scale_keys]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;target_name&quot;:&nbsp;ch.node_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;translation_keys&quot;:&nbsp;tr_keys,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;rotation_keys&quot;:&nbsp;rot_keys,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;scale_keys&quot;:&nbsp;sc_keys,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+<br>
+def&nbsp;channel_data_from_glb(ch)&nbsp;-&gt;&nbsp;dict:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Create&nbsp;channel&nbsp;data&nbsp;dict&nbsp;from&nbsp;GLBAnimationChannel.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ch:&nbsp;GLBAnimationChannel&nbsp;with&nbsp;pos_keys,&nbsp;rot_keys,&nbsp;scale_keys<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Time&nbsp;is&nbsp;in&nbsp;seconds,&nbsp;quaternions&nbsp;in&nbsp;XYZW&nbsp;format<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict&nbsp;with&nbsp;target_name,&nbsp;translation_keys,&nbsp;rotation_keys,&nbsp;scale_keys<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tr_keys&nbsp;=&nbsp;[(t,&nbsp;np.array(v,&nbsp;dtype=np.float64))&nbsp;for&nbsp;(t,&nbsp;v)&nbsp;in&nbsp;ch.pos_keys]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rot_keys&nbsp;=&nbsp;[(t,&nbsp;np.array(v,&nbsp;dtype=np.float64))&nbsp;for&nbsp;(t,&nbsp;v)&nbsp;in&nbsp;ch.rot_keys]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sc_keys&nbsp;=&nbsp;[(t,&nbsp;float(np.mean(v)))&nbsp;for&nbsp;(t,&nbsp;v)&nbsp;in&nbsp;ch.scale_keys]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;target_name&quot;:&nbsp;ch.node_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;translation_keys&quot;:&nbsp;tr_keys,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;rotation_keys&quot;:&nbsp;rot_keys,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;scale_keys&quot;:&nbsp;sc_keys,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+<br>
+__all__&nbsp;=&nbsp;[&quot;channel_data_from_fbx&quot;,&nbsp;&quot;channel_data_from_glb&quot;]<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

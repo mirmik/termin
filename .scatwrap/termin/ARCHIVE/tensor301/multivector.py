@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/ARCHIVE/tensor301/multivector.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+import&nbsp;torch<br>
+<br>
+geomproduct_left_operator_indexes&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+]<br>
+<br>
+<br>
+def&nbsp;multivector(e=0,&nbsp;e1=0,&nbsp;e2=0,&nbsp;e3=0,&nbsp;e4=0,&nbsp;e23=0,&nbsp;e31=0,&nbsp;e12=0,&nbsp;e43=0,&nbsp;e42=0,&nbsp;e41=0,&nbsp;e321=0,&nbsp;e412=0,&nbsp;e431=0,&nbsp;e423=0,&nbsp;e1234=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;torch.tensor([e,&nbsp;e1,&nbsp;e2,&nbsp;e3,&nbsp;e4,&nbsp;e23,&nbsp;e31,&nbsp;e12,&nbsp;e43,&nbsp;e42,&nbsp;e41,&nbsp;e321,&nbsp;e412,&nbsp;e431,&nbsp;e423,&nbsp;e1234])<br>
+<br>
+<br>
+def&nbsp;vector(x,&nbsp;y,&nbsp;z,&nbsp;w=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e1=x,&nbsp;e2=y,&nbsp;e3=z,&nbsp;e4=w)<br>
+<br>
+<br>
+def&nbsp;realbivector(x,&nbsp;y,&nbsp;z):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e23=x,&nbsp;e31=y,&nbsp;e12=z)<br>
+<br>
+<br>
+def&nbsp;dualbivector(x,&nbsp;y,&nbsp;z):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e41=x,&nbsp;e42=y,&nbsp;e43=z)<br>
+<br>
+<br>
+def&nbsp;bivector(rx,&nbsp;ry,&nbsp;rz,&nbsp;dx,&nbsp;dy,&nbsp;dz):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;realbivector(rx,&nbsp;ry,&nbsp;rz)&nbsp;+&nbsp;dualbivector(dx,&nbsp;dy,&nbsp;dz)<br>
+<br>
+<br>
+def&nbsp;scalar(s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e=s)<br>
+<br>
+<br>
+def&nbsp;pseudoscalar(p):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e1234=p)<br>
+<br>
+<br>
+def&nbsp;geomproduct_left_operator(m):<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

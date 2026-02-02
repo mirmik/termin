@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/visual/cube.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Minimal&nbsp;demo&nbsp;that&nbsp;renders&nbsp;a&nbsp;cube&nbsp;and&nbsp;allows&nbsp;orbiting&nbsp;camera&nbsp;controls.&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+<br>
+from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
+)<br>
+from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer,&nbsp;LightComponent<br>
+<br>
+<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube_mesh&nbsp;=&nbsp;CubeMesh()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable&nbsp;=&nbsp;MeshDrawable(cube_mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(color=np.array([0.8,&nbsp;0.3,&nbsp;0.3,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity.add_component(MeshRenderer(drawable,&nbsp;material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Light<br>
+&nbsp;&nbsp;&nbsp;&nbsp;light_entity&nbsp;=&nbsp;Entity(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose=Pose3.from_euler(np.deg2rad(-45),&nbsp;np.deg2rad(-45),&nbsp;0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name=&quot;light&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;light_entity.add_component(LightComponent())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(light_entity)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
+<br>
+<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;cube&nbsp;demo&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

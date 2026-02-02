@@ -318,10 +318,20 @@ void bind_graphics_backend(nb::module_& m) {
                 return;
             }
             try {
+                tc::Log::info("[bind_framebuffer] Attempting nb::cast to FramebufferHandle*");
                 auto* handle = nb::cast<FramebufferHandle*>(fbo);
+                tc::Log::info("[bind_framebuffer] Cast successful, handle=%p", handle);
                 self.bind_framebuffer(handle);
                 return;
-            } catch (nb::cast_error&) {}
+            } catch (const nb::cast_error& e) {
+                tc::Log::warn("[bind_framebuffer] nb::cast_error: %s", e.what());
+            } catch (const std::bad_cast& e) {
+                tc::Log::error("[bind_framebuffer] std::bad_cast caught: %s", e.what());
+                throw;
+            } catch (const std::exception& e) {
+                tc::Log::error("[bind_framebuffer] Exception: %s", e.what());
+                throw;
+            }
 
             // Check for _fbo attribute (Python FBO)
             if (nb::hasattr(fbo, "_fbo")) {
@@ -371,9 +381,11 @@ void bind_graphics_backend(nb::module_& m) {
             return nb::cast(nb::ndarray<nb::numpy, float>(buf, 3, shape, owner));
         });
 
-    // OpenGLGraphicsBackend
+    // OpenGLGraphicsBackend (singleton)
     nb::class_<OpenGLGraphicsBackend, GraphicsBackend>(m, "OpenGLGraphicsBackend")
-        .def(nb::init<>())
+        .def_static("get_instance", &OpenGLGraphicsBackend::get_instance, nb::rv_policy::reference)
+        .def("ensure_ready", &OpenGLGraphicsBackend::ensure_ready)
+        .def("test_method", &OpenGLGraphicsBackend::test_method)
         .def("create_shader", [](OpenGLGraphicsBackend& self, const std::string& vert, const std::string& frag, nb::object geom) {
             const char* geom_ptr = nullptr;
             std::string geom_str;

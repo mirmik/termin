@@ -317,8 +317,20 @@ void RenderEngine::render_view_to_fbo(
             continue;
         }
 
-        FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(it->second);
+        FrameGraphResource* resource = it->second;
+        
+
+        FramebufferHandle* fbo = nullptr;
+        try {
+            fbo = dynamic_cast<FramebufferHandle*>(resource);
+        } catch (const std::exception& e) {
+            tc::Log::error("[render_view_to_fbo] dynamic_cast failed: %s", e.what());
+            continue;
+        }
+
         if (!fbo) {
+            tc::Log::warn("[render_view_to_fbo] dynamic_cast returned nullptr for resource='%s'",
+                          spec.resource.c_str());
             continue;
         }
 
@@ -394,7 +406,7 @@ void RenderEngine::render_view_to_fbo(
         // Execute pass via vtable
         tc_pass_execute(pass, &ctx);
 
-        
+
         tc_profiler_begin_section("Sync Operations");
 
         // Apply render sync between passes (for debugging)
@@ -628,8 +640,22 @@ void RenderEngine::render_scene_pipeline_offscreen(
             continue;
         }
 
-        FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(it->second);
-        if (!fbo) continue;
+        FrameGraphResource* resource = it->second;
+                     
+
+        FramebufferHandle* fbo = nullptr;
+        try {
+            fbo = dynamic_cast<FramebufferHandle*>(resource);
+        } catch (const std::exception& e) {
+            tc::Log::error("[render_scene_pipeline_offscreen] dynamic_cast failed: %s", e.what());
+            continue;
+        }
+
+        if (!fbo) {
+            tc::Log::warn("[render_scene_pipeline_offscreen] dynamic_cast returned nullptr for resource='%s'",
+                          spec.resource.c_str());
+            continue;
+        }
 
         graphics->bind_framebuffer(fbo);
 

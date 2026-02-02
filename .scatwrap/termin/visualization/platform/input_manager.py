@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/visualization/platform/input_manager.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+DisplayInputManager&nbsp;—&nbsp;input&nbsp;handling&nbsp;for&nbsp;Display.<br>
+<br>
+SimpleDisplayInputManager&nbsp;—&nbsp;C++&nbsp;handler&nbsp;with&nbsp;raycast/click&nbsp;support.<br>
+BasicDisplayInputManager&nbsp;—&nbsp;C&nbsp;handler&nbsp;for&nbsp;cross-language&nbsp;use&nbsp;(no&nbsp;raycast).<br>
+<br>
+Both&nbsp;route&nbsp;mouse/keyboard&nbsp;events&nbsp;to&nbsp;scene&nbsp;via&nbsp;InputComponents.<br>
+&quot;&quot;&quot;<br>
+<br>
+from&nbsp;termin._native.render&nbsp;import&nbsp;SimpleDisplayInputManager<br>
+from&nbsp;termin._native.render&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_simple_input_manager_new,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_simple_input_manager_free,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_simple_input_manager_get_input_manager,<br>
+)<br>
+<br>
+<br>
+class&nbsp;BasicDisplayInputManager:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Basic&nbsp;input&nbsp;manager&nbsp;implemented&nbsp;in&nbsp;C&nbsp;(tc_simple_input_manager).<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Routes&nbsp;input&nbsp;events&nbsp;to&nbsp;scene&nbsp;InputComponents&nbsp;via&nbsp;vtable.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;No&nbsp;raycast/click&nbsp;handling&nbsp;-&nbsp;just&nbsp;dispatches&nbsp;raw&nbsp;events.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Use&nbsp;this&nbsp;for&nbsp;cross-language&nbsp;scenarios&nbsp;(C#,&nbsp;Rust)&nbsp;or&nbsp;when<br>
+&nbsp;&nbsp;&nbsp;&nbsp;raycast&nbsp;is&nbsp;not&nbsp;needed.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;display_ptr:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Create&nbsp;basic&nbsp;input&nbsp;manager&nbsp;for&nbsp;display.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;display_ptr:&nbsp;Pointer&nbsp;to&nbsp;tc_display&nbsp;(from&nbsp;Display.tc_display_ptr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ptr&nbsp;=&nbsp;_simple_input_manager_new(display_ptr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._ptr&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Failed&nbsp;to&nbsp;create&nbsp;BasicDisplayInputManager&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__del__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(self,&nbsp;'_ptr')&nbsp;and&nbsp;self._ptr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_simple_input_manager_free(self._ptr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ptr&nbsp;=&nbsp;0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;tc_input_manager_ptr(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;tc_input_manager&nbsp;pointer&nbsp;for&nbsp;attaching&nbsp;to&nbsp;surface.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;_simple_input_manager_get_input_manager(self._ptr)<br>
+<br>
+<br>
+__all__&nbsp;=&nbsp;[&quot;SimpleDisplayInputManager&quot;,&nbsp;&quot;BasicDisplayInputManager&quot;]<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

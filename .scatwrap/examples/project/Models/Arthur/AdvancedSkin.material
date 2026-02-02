@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Models/Arthur/AdvancedSkin.material</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;7c9ef652-5e5b-48c9-b28a-194dd1deba1b&quot;,<br>
+&nbsp;&nbsp;&quot;shader&quot;:&nbsp;&quot;CookTorrancePBR&quot;,<br>
+&nbsp;&nbsp;&quot;shader_uuid&quot;:&nbsp;&quot;09e2dae3-6096-4fb1-9cd2-2e07c87706b4&quot;,<br>
+&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_diffuse_mul&quot;:&nbsp;3.140000104904175,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_color&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&quot;textures&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_albedo_texture&quot;:&nbsp;&quot;61d0f4f4-bb5a-458e-9de0-135ef62c1a29&quot;<br>
+&nbsp;&nbsp;}<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

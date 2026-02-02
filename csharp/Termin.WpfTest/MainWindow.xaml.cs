@@ -475,7 +475,12 @@ public partial class MainWindow : Window
             TerminCore.ViewportSetPipeline(_viewportHandle, _renderPipeline.handle());
 
             // Set internal entities (camera lives here)
-            TerminCore.ViewportSetInternalEntities(_viewportHandle, _internalEntitiesPool!.Handle, _internalRootId);
+            var internalEntityHandle = new TcEntityHandle
+            {
+                Pool = _internalEntitiesPool!.PoolHandle,
+                Id = _internalRootId
+            };
+            TerminCore.ViewportSetInternalEntities(_viewportHandle, internalEntityHandle);
             Console.WriteLine("[Init] Set internal entities for viewport");
 
             // Add to display
@@ -511,7 +516,12 @@ public partial class MainWindow : Window
             TerminCore.ViewportSetPipeline(_viewportHandle2, _renderPipeline2.handle());
 
             // Set internal entities (camera lives here)
-            TerminCore.ViewportSetInternalEntities(_viewportHandle2, _internalEntitiesPool2!.Handle, _internalRootId2);
+            var internalEntityHandle2 = new TcEntityHandle
+            {
+                Pool = _internalEntitiesPool2!.PoolHandle,
+                Id = _internalRootId2
+            };
+            TerminCore.ViewportSetInternalEntities(_viewportHandle2, internalEntityHandle2);
             Console.WriteLine("[Init] Set internal entities for viewport2");
 
             // Add to second display

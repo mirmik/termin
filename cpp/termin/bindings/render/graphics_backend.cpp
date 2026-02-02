@@ -143,10 +143,17 @@ void bind_graphics_backend(nb::module_& m) {
             }
             // Try C++ FramebufferHandle first
             try {
+                tc::Log::info("[graphics_backend.cpp bind_framebuffer] Attempting nb::cast to FramebufferHandle*");
                 auto* handle = nb::cast<FramebufferHandle*>(fbo);
+                tc::Log::info("[graphics_backend.cpp bind_framebuffer] Cast successful, handle=%p", handle);
                 self.bind_framebuffer(handle);
                 return;
-            } catch (nb::cast_error&) {}
+            } catch (const nb::cast_error& e) {
+                tc::Log::warn("[graphics_backend.cpp bind_framebuffer] nb::cast_error: %s", e.what());
+            } catch (const std::bad_cast& e) {
+                tc::Log::error("[graphics_backend.cpp bind_framebuffer] std::bad_cast: %s", e.what());
+                throw;
+            }
 
             // Check if it's a ShadowMapArrayResource (not a framebuffer)
             try {

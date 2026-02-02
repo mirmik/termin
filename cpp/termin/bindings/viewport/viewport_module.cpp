@@ -410,8 +410,9 @@ void bind_tc_viewport_class(nb::module_& m) {
         })
 
         // Handle access (as tuple for Python hashability)
-        .def("_viewport_handle", [](TcViewport& self) -> std::tuple<uint32_t, uint32_t> {
-            return std::make_tuple(self.handle_.index, self.handle_.generation);
+        .def("_viewport_handle", [](TcViewport& self) {
+            // Return Python tuple instead of C++ std::tuple to avoid RTTI issues across modules
+            return nb::make_tuple(self.handle_.index, self.handle_.generation);
         })
 
         // Stable handle for use as dictionary key

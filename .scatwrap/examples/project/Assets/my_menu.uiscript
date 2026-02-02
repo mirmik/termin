@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Assets/my_menu.uiscript</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+#&nbsp;Demo&nbsp;menu&nbsp;layout&nbsp;for&nbsp;widget&nbsp;UI&nbsp;system<br>
+root:<br>
+&nbsp;&nbsp;type:&nbsp;Panel<br>
+&nbsp;&nbsp;name:&nbsp;main_panel<br>
+&nbsp;&nbsp;padding:&nbsp;15<br>
+&nbsp;&nbsp;background_color:&nbsp;[0.1,&nbsp;0.1,&nbsp;0.15,&nbsp;0.9]<br>
+&nbsp;&nbsp;border_radius:&nbsp;8<br>
+&nbsp;&nbsp;width:&nbsp;250px<br>
+&nbsp;&nbsp;anchor:&nbsp;absolute&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;position_x:&nbsp;0.1ndc<br>
+&nbsp;&nbsp;position_y:&nbsp;0.1ndc<br>
+&nbsp;&nbsp;width:&nbsp;0.3ndc<br>
+&nbsp;&nbsp;height:&nbsp;0.3ndc<br>
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;VStack<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spacing:&nbsp;10<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alignment:&nbsp;center<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;justify:&nbsp;center<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;Label<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text:&nbsp;&quot;Widget&nbsp;UI&nbsp;Demo&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;font_size:&nbsp;20<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color:&nbsp;[1,&nbsp;1,&nbsp;1,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width:&nbsp;100%<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alignment:&nbsp;center<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;Separator<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;orientation:&nbsp;horizontal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color:&nbsp;[0.5,&nbsp;0.5,&nbsp;0.5,&nbsp;0.5]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;Label<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;info_label<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text:&nbsp;&quot;Click&nbsp;count:&nbsp;0&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;font_size:&nbsp;14<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color:&nbsp;[0.8,&nbsp;0.8,&nbsp;0.8,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width:&nbsp;100%<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alignment:&nbsp;center<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;HStack<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spacing:&nbsp;10<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;Button<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;click_button<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text:&nbsp;&quot;Click&nbsp;me!&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;font_size:&nbsp;14<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;padding:&nbsp;12<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;background_color:&nbsp;[0.2,&nbsp;0.5,&nbsp;0.8,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hover_color:&nbsp;[0.3,&nbsp;0.6,&nbsp;0.9,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pressed_color:&nbsp;[0.1,&nbsp;0.4,&nbsp;0.7,&nbsp;1]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;type:&nbsp;Button<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;reset_button<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text:&nbsp;&quot;Reset&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;font_size:&nbsp;14<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;padding:&nbsp;12<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;background_color:&nbsp;[0.5,&nbsp;0.2,&nbsp;0.2,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hover_color:&nbsp;[0.6,&nbsp;0.3,&nbsp;0.3,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pressed_color:&nbsp;[0.4,&nbsp;0.1,&nbsp;0.1,&nbsp;1]<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

@@ -25,6 +25,17 @@ namespace nb = nanobind;
 
 namespace termin {
 void bind_gizmo(nb::module_& m);
+void cleanup_pass_classes();  // Cleanup function from tc_pass_bindings.cpp (in _native)
+}
+
+// Note: Other cleanup functions are in separate modules:
+// - cleanup_skeleton_callbacks is in _skeleton_native module
+// - cleanup_mesh_callbacks is in _mesh_native module
+// - cleanup_component_classes is in entity_lib
+
+// Cleanup function for _native module only
+static void cleanup_all_python_objects() {
+    termin::cleanup_pass_classes();
 }
 
 NB_MODULE(_native, m) {
@@ -103,4 +114,12 @@ NB_MODULE(_native, m) {
 
     m.def("tc_picking_cache_clear", &tc_picking_cache_clear,
         "Clear the picking cache");
+
+    // Register cleanup function to be called before Python shutdown
+    m.def("_cleanup_python_objects", &cleanup_all_python_objects,
+        "Internal: cleanup all Python objects stored in C++ before shutdown");
+
+    // Register cleanup with Python's atexit module
+    nb::module_ atexit = nb::module_::import_("atexit");
+    atexit.attr("register")(nb::cpp_function(&cleanup_all_python_objects));
 }

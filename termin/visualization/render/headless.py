@@ -10,7 +10,7 @@ HeadlessContext — невидимое окно для создания OpenGL �
     context.make_current()
     
     # Теперь можно использовать OpenGL
-    graphics = OpenGLGraphicsBackend()
+    graphics = OpenGLGraphicsBackend.get_instance()
     offscreen = OffscreenRenderSurface(graphics, 800, 600)
     ...
     

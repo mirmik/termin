@@ -30,7 +30,7 @@ class CMakeBuildExt(build_ext):
         install_prefix = (build_lib / "termin").resolve()
         install_prefix.mkdir(parents=True, exist_ok=True)
 
-        cfg = "Debug" if self.debug else "Release"
+        cfg = "Debug"  # Always build with debug symbols
         cmake_args = [
             str(source_dir),
             f"-DCMAKE_BUILD_TYPE={cfg}",
@@ -81,11 +81,18 @@ class CMakeBuildExt(build_ext):
             # Windows: copy .dll files from install_prefix (where CMake installs them)
             for dll in install_prefix.glob("*.dll"):
                 shutil.copy2(dll, source_termin_dir / dll.name)
+                print(f"Copied {dll.name} to {source_termin_dir}")
         else:
             # Linux/macOS: copy .so/.dylib from install_prefix
-            for pattern in ["*.so", "*.so.*", "*.dylib"]:
-                for lib in install_prefix.glob(pattern):
+            # Note: Don't use *.so.* pattern as it may match versioned libraries
+            for lib in install_prefix.glob("*.so"):
+                if lib.is_file() and not lib.is_symlink():
                     shutil.copy2(lib, source_termin_dir / lib.name)
+                    print(f"Copied {lib.name} to {source_termin_dir}")
+            for lib in install_prefix.glob("*.dylib"):
+                if lib.is_file():
+                    shutil.copy2(lib, source_termin_dir / lib.name)
+                    print(f"Copied {lib.name} to {source_termin_dir}")
 
 directory = os.path.dirname(os.path.realpath(__file__))
 

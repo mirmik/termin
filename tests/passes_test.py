@@ -54,7 +54,7 @@ class TestPasses(unittest.TestCase):
         context = self._create_headless_or_skip()
         
         try:
-            graphics = OpenGLGraphicsBackend()
+            graphics = OpenGLGraphicsBackend.get_instance()
             graphics.ensure_ready()
 
             # Создаём сцену с кубом
@@ -167,7 +167,7 @@ class TestPasses(unittest.TestCase):
         context = self._create_headless_or_skip(width, height)
 
         try:
-            graphics = OpenGLGraphicsBackend()
+            graphics = OpenGLGraphicsBackend.get_instance()
             graphics.ensure_ready()
 
             # Поверхность для offscreen-рендера
@@ -272,7 +272,7 @@ class TestPasses(unittest.TestCase):
         context = self._create_headless_or_skip()
 
         try:
-            graphics = OpenGLGraphicsBackend()
+            graphics = OpenGLGraphicsBackend.get_instance()
             graphics.ensure_ready()
 
             # Шейдер с двумя фазами: opaque (красный) и transparent (синий)
@@ -480,7 +480,7 @@ void main() {
         context = self._create_headless_or_skip()
 
         try:
-            graphics = OpenGLGraphicsBackend()
+            graphics = OpenGLGraphicsBackend.get_instance()
             graphics.ensure_ready()
 
             # Содержимое шейдер-файла — зелёный материал

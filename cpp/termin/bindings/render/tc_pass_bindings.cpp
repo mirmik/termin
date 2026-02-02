@@ -39,6 +39,11 @@ static std::unordered_map<std::string, std::shared_ptr<nb::object>>& python_pass
     return classes;
 }
 
+// Cleanup function to clear pass classes before Python shutdown
+void cleanup_pass_classes() {
+    python_pass_classes().clear();
+}
+
 // Python pass factory trampoline
 // userdata is the interned type_name string
 static tc_pass* python_pass_factory(void* userdata) {

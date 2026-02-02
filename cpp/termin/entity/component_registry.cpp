@@ -88,6 +88,11 @@ static std::unordered_map<std::string, std::shared_ptr<nb::object>>& python_clas
     return classes;
 }
 
+// Cleanup function to clear component classes before Python shutdown
+void cleanup_component_classes() {
+    python_classes().clear();
+}
+
 // Python component factory trampoline
 // userdata is the interned type_name string
 static tc_component* python_component_factory(void* userdata) {

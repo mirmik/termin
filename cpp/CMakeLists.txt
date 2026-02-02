@@ -27,9 +27,13 @@ endif()
 
 # Platform-specific optimization flags
 if(MSVC)
+    set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG")
+    set(CMAKE_C_FLAGS_DEBUG "/Zi /Od /DEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
     set(OPTIMIZE_FLAGS /O2 /fp:fast)
 else()
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
+    set(CMAKE_C_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
     set(OPTIMIZE_FLAGS -O3 -march=native -ffast-math)
 endif()
@@ -184,14 +188,17 @@ set_source_files_properties(
 # Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles) - nanobind
 nanobind_add_module(_graphics_native
     termin/bindings/graphics/graphics_module.cpp
-    termin/render/glad/src/glad.c
 )
 target_include_directories(_graphics_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
 )
-target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib)
+target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib render_lib)
 target_compile_options(_graphics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(_graphics_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 # Core C library
@@ -222,6 +229,8 @@ set(ENTITY_LIB_SOURCES
     termin/kinematic/actuator_component.cpp
     termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
+    termin/tc_collision_c_api.cpp
+    termin/collision/collision_world_c.cpp
     ../core_c/src/tc_inspect_instance.cpp
     ../core_c/src/tc_rendering_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
@@ -269,7 +278,8 @@ set_target_properties(animation_lib PROPERTIES
 
 # Render library (Drawable vtable, shared by components that need rendering)
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
-add_library(render_lib STATIC
+# SHARED to ensure consistent RTTI across all Python extension modules
+add_library(render_lib SHARED
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
     termin/render/frame_pass.cpp
@@ -301,6 +311,10 @@ add_library(render_lib STATIC
     termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
+    termin/render/opengl/opengl_backend.cpp
+    termin/render/opengl/opengl_backend_singleton.cpp
+    termin/render/opengl/opengl_framebuffer.cpp
+    termin/render/glad/src/glad.c
 )
 target_include_directories(render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -319,6 +333,8 @@ target_compile_options(render_lib PRIVATE
 )
 set_target_properties(render_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # NavMesh library (RecastNavMeshBuilderComponent)
@@ -515,7 +531,6 @@ nanobind_add_module(_native
     termin/render/bloom_pass.cpp
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp
-    termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
@@ -529,6 +544,10 @@ endif()
 target_compile_definitions(_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
 )
 # Exclude glad.c from precompiled headers (it's C, not C++)
 set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
@@ -590,7 +609,7 @@ endif()
 
 # Install to python packages
 # Install shared libraries to root termin directory
-install(TARGETS trent entity_lib termin_core
+install(TARGETS trent entity_lib termin_core render_lib
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows

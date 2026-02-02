@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/editor/__main__.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Запуск&nbsp;редактора&nbsp;через&nbsp;``python&nbsp;-m&nbsp;termin.editor``.&quot;&quot;&quot;<br>
+<br>
+import&nbsp;argparse<br>
+import&nbsp;warnings<br>
+import&nbsp;faulthandler<br>
+import&nbsp;gc<br>
+<br>
+faulthandler.enable()<br>
+<br>
+#&nbsp;GC&nbsp;debug&nbsp;callback&nbsp;to&nbsp;track&nbsp;what's&nbsp;being&nbsp;collected<br>
+#&nbsp;def&nbsp;gc_callback(phase,&nbsp;info):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;phase&nbsp;==&nbsp;&quot;start&quot;:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Count&nbsp;C++&nbsp;objects&nbsp;by&nbsp;type<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cpp_types&nbsp;=&nbsp;{}<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;obj&nbsp;in&nbsp;gc.get_objects():<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type_name&nbsp;=&nbsp;type(obj).__name__<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;=&nbsp;getattr(type(obj),&nbsp;&quot;__module__&quot;,&nbsp;None)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(module,&nbsp;str):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;=&nbsp;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;&quot;termin._native&quot;&nbsp;in&nbsp;module&nbsp;or&nbsp;&quot;nanobind&quot;&nbsp;in&nbsp;str(type(obj)):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;f&quot;{module}.{type_name}&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cpp_types[key]&nbsp;=&nbsp;cpp_types.get(key,&nbsp;0)&nbsp;+&nbsp;1<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;Exception:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cpp_types:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;[GC&nbsp;{phase}]&nbsp;gen={info.get('generation',&nbsp;'?')}&nbsp;C++&nbsp;objects:&nbsp;{dict(sorted(cpp_types.items(),&nbsp;key=lambda&nbsp;x:&nbsp;-x[1])[:10])}&quot;)<br>
+<br>
+#&nbsp;gc.callbacks.append(gc_callback)<br>
+<br>
+#&nbsp;Suppress&nbsp;SDL2&nbsp;informational&nbsp;warning&nbsp;about&nbsp;using&nbsp;pysdl2-dll&nbsp;binaries&nbsp;(Windows)<br>
+warnings.filterwarnings(&quot;ignore&quot;,&nbsp;message=&quot;Using&nbsp;SDL2&nbsp;binaries&nbsp;from&nbsp;pysdl2-dll&quot;)<br>
+<br>
+from&nbsp;.run_editor&nbsp;import&nbsp;run_editor<br>
+<br>
+<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;parser&nbsp;=&nbsp;argparse.ArgumentParser(description=&quot;Run&nbsp;termin&nbsp;editor&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;parser.add_argument(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;--debug-resource&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type=str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;help=&quot;Open&nbsp;framegraph&nbsp;debugger&nbsp;with&nbsp;this&nbsp;resource&nbsp;(e.g.,&nbsp;shadow_maps,&nbsp;color)&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;args&nbsp;=&nbsp;parser.parse_args()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;run_editor(debug_resource=args.debug_resource)<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

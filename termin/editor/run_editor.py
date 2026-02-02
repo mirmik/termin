@@ -90,8 +90,8 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
         raise RuntimeError(f"Failed to initialize SDL: {sdl2.SDL_GetError()}")
 
-    # Setup graphics backend
-    graphics = OpenGLGraphicsBackend()
+    # Setup graphics backend (singleton)
+    graphics = OpenGLGraphicsBackend.get_instance()
     set_default_graphics_backend(graphics)
 
     # Create SDL embedded backend for viewport rendering

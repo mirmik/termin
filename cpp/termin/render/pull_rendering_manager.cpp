@@ -169,9 +169,6 @@ void PullRenderingManager::render_display(tc_display* display) {
         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
     });
 
-    tc_log(TC_LOG_INFO, "[PullRM] render_display %s: %zu viewports, fbo=%u, size=%dx%d",
-           dname ? dname : "(null)", viewports.size(), display_fbo, width, height);
-
     // Render and blit each viewport
     for (tc_viewport_handle viewport : viewports) {
         // Skip viewports managed by scene pipeline
@@ -196,9 +193,6 @@ void PullRenderingManager::render_display(tc_display* display) {
 
         int src_w = state->output_width;
         int src_h = state->output_height;
-
-        tc_log(TC_LOG_INFO, "[PullRM] blit: src=%dx%d -> dst rect (%d,%d,%d,%d)",
-               src_w, src_h, px, py, px + pw, py + ph);
 
         graphics_->blit_framebuffer_to_id(
             *state->output_fbo,
@@ -230,7 +224,6 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
 
     int px, py, pw, ph;
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-    tc_log(TC_LOG_INFO, "[PullRM] viewport pixel_rect: (%d,%d) %dx%d", px, py, pw, ph);
     if (pw <= 0 || ph <= 0) return;
 
     ViewportRenderState* state = get_or_create_viewport_state(viewport);

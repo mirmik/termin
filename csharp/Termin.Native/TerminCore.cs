@@ -735,7 +735,7 @@ public static partial class TerminCore
 
     // Internal entities (for viewport-specific components like camera controllers)
     [LibraryImport(DLL, EntryPoint = "tc_viewport_set_internal_entities")]
-    public static partial void ViewportSetInternalEntities(TcViewportHandle viewport, IntPtr pool, TcEntityId entityId);
+    public static partial void ViewportSetInternalEntities(TcViewportHandle viewport, TcEntityHandle entityHandle);
 
     [LibraryImport(DLL, EntryPoint = "tc_viewport_has_internal_entities")]
     [return: MarshalAs(UnmanagedType.U1)]
@@ -784,6 +784,104 @@ public static partial class TerminCore
 
     [LibraryImport(DLL, EntryPoint = "tc_primitive_cleanup")]
     public static partial void PrimitiveCleanup();
+
+    // ========================================================================
+    // Collision Detection (tc_collision)
+    // Note: These functions are in entity_lib.dll because collision detection
+    // requires the C++ CollisionWorld class which is part of entity_lib.
+    // ========================================================================
+
+    private const string ENTITY_LIB_DLL = "entity_lib";
+
+    /// <summary>
+    /// Update all collider positions in the collision world.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_collision_update")]
+    public static partial void SceneCollisionUpdate(TcSceneHandle scene);
+
+    /// <summary>
+    /// Check if there are any collisions in the scene.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_has_collisions")]
+    public static partial int SceneHasCollisions(TcSceneHandle scene);
+
+    /// <summary>
+    /// Get the number of collision pairs detected.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_collision_count")]
+    public static partial nuint SceneCollisionCount(TcSceneHandle scene);
+
+    /// <summary>
+    /// Contact point data.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TcContactPoint
+    {
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
+        public double[] Position;
+        public double Penetration;
+    }
+
+    /// <summary>
+    /// Contact manifold data - information about a collision pair.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TcContactManifold
+    {
+        public TcEntityId EntityA;
+        public TcEntityId EntityB;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
+        public double[] Normal;
+        public int PointCount;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
+        public TcContactPoint[] Points;
+    }
+
+    /// <summary>
+    /// Detect all collisions and get manifolds.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_detect_collisions")]
+    public static partial IntPtr SceneDetectCollisions(TcSceneHandle scene, out nuint outCount);
+
+    /// <summary>
+    /// Get collision manifold at index.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_get_collision")]
+    public static partial IntPtr SceneGetCollision(TcSceneHandle scene, nuint index);
+
+    // ========================================================================
+    // Collision World Management
+    // ========================================================================
+
+    /// <summary>
+    /// Create a new CollisionWorld.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_collision_world_create")]
+    public static partial IntPtr CollisionWorldCreate();
+
+    /// <summary>
+    /// Destroy a CollisionWorld.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_collision_world_destroy")]
+    public static partial void CollisionWorldDestroy(IntPtr cw);
+
+    /// <summary>
+    /// Get number of colliders in the world.
+    /// </summary>
+    [LibraryImport(ENTITY_LIB_DLL, EntryPoint = "tc_collision_world_size")]
+    public static partial int CollisionWorldSize(IntPtr cw);
+
+    /// <summary>
+    /// Set the collision world for a scene.
+    /// </summary>
+    [LibraryImport(DLL, EntryPoint = "tc_scene_set_collision_world")]
+    public static partial void SceneSetCollisionWorld(TcSceneHandle scene, IntPtr cw);
+
+    /// <summary>
+    /// Get the collision world for a scene.
+    /// </summary>
+    [LibraryImport(DLL, EntryPoint = "tc_scene_get_collision_world")]
+    public static partial IntPtr SceneGetCollisionWorld(TcSceneHandle scene);
 }
 
 /// <summary>

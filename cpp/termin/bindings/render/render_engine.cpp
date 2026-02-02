@@ -32,9 +32,17 @@ void bind_render_engine(nb::module_& m) {
             // Convert viewport from Python object to handle
             tc_viewport_handle vh = TC_VIEWPORT_HANDLE_INVALID;
             if (!viewport_obj.is_none()) {
-                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(viewport_obj.attr("_viewport_handle")());
-                vh.index = std::get<0>(h);
-                vh.generation = std::get<1>(h);
+                try {
+                    auto attr = viewport_obj.attr("_viewport_handle");
+                    auto result = attr();
+                    // Extract values directly from Python tuple without casting to std::tuple
+                    // This avoids RTTI issues across modules
+                    vh.index = nb::cast<uint32_t>(result[nb::int_(0)]);
+                    vh.generation = nb::cast<uint32_t>(result[nb::int_(1)]);
+                } catch (const std::exception& e) {
+                    tc::Log::error("[TRACE BINDING] Exception during viewport conversion: %s", e.what());
+                    throw;
+                }
             }
             // Use overload that builds lights from scene automatically
             self.render_view_to_fbo(

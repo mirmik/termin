@@ -10,10 +10,10 @@ public class InputManager
 {
     private readonly GlWpfBackend _backend;
     
-    // Последняя известная позиция курсора (для вычисления delta)
-    private double _lastCursorX;
-    private double _lastCursorY;
-    private bool _hasCursorPos;
+    // TODO: Tracking for delta computation (currently unused)
+    // private double _lastCursorX;
+    // private double _lastCursorY;
+    // private bool _hasCursorPos;
 
     // Логирование
     public bool LogMouseButton { get; set; } = true;

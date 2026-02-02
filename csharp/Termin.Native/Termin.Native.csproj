@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Suppress CS8981 for SWIG-generated lowercase type 'termin' -->
+    <NoWarn>CS8981</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/assets/resources/_pipelines.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Pipelines&nbsp;mixin&nbsp;for&nbsp;ResourceManager.&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional,&nbsp;TYPE_CHECKING<br>
+<br>
+if&nbsp;TYPE_CHECKING:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.pipeline&nbsp;import&nbsp;RenderPipeline<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.assets.pipeline_asset&nbsp;import&nbsp;PipelineAsset<br>
+<br>
+<br>
+class&nbsp;PipelinesMixin:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Mixin&nbsp;for&nbsp;pipeline&nbsp;management.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;register_pipeline(self,&nbsp;name:&nbsp;str,&nbsp;pipeline:&nbsp;&quot;RenderPipeline&quot;,&nbsp;uuid:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Register&nbsp;a&nbsp;RenderPipeline&nbsp;by&nbsp;name.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.assets.pipeline_asset&nbsp;import&nbsp;PipelineAsset<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Check&nbsp;if&nbsp;already&nbsp;exists<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asset&nbsp;=&nbsp;self._pipeline_registry.get_asset(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;asset&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Update&nbsp;existing&nbsp;asset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asset._data&nbsp;=&nbsp;pipeline<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Create&nbsp;new&nbsp;asset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asset&nbsp;=&nbsp;PipelineAsset.from_pipeline(pipeline,&nbsp;name=name,&nbsp;uuid=uuid)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pipeline_registry.register(name,&nbsp;asset,&nbsp;uuid=uuid)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_pipeline(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;RenderPipeline&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;a&nbsp;copy&nbsp;of&nbsp;RenderPipeline&nbsp;by&nbsp;name&nbsp;(pipelines&nbsp;are&nbsp;mutable).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pipeline&nbsp;=&nbsp;self._pipeline_registry.get(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pipeline&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;pipeline.copy(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_pipeline_asset(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;PipelineAsset&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;PipelineAsset&nbsp;by&nbsp;name.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._pipeline_registry.get_asset(name)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_pipeline_by_uuid(self,&nbsp;uuid:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;RenderPipeline&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;a&nbsp;copy&nbsp;of&nbsp;RenderPipeline&nbsp;by&nbsp;UUID.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asset&nbsp;=&nbsp;self._pipeline_registry.get_asset_by_uuid(uuid)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;asset&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pipeline&nbsp;=&nbsp;asset.data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pipeline&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;pipeline.copy(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;list_pipeline_names(self)&nbsp;-&gt;&nbsp;list[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;List&nbsp;all&nbsp;registered&nbsp;pipeline&nbsp;names.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sorted(self._pipeline_registry.list_names())<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

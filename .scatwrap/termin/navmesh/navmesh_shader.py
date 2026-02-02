@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/navmesh/navmesh_shader.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;NavMesh&nbsp;display&nbsp;shader&nbsp;—&nbsp;простой&nbsp;шейдер&nbsp;с&nbsp;освещением.&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+from&nbsp;termin._native.render&nbsp;import&nbsp;TcShader<br>
+<br>
+<br>
+NAVMESH_VERTEX_SHADER&nbsp;=&nbsp;&quot;&quot;&quot;#version&nbsp;330&nbsp;core<br>
+<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
+<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
+<br>
+out&nbsp;vec3&nbsp;v_world_pos;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
+<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_world_pos&nbsp;=&nbsp;world.xyz;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+NAVMESH_FRAGMENT_SHADER&nbsp;=&nbsp;&quot;&quot;&quot;#version&nbsp;330&nbsp;core<br>
+<br>
+in&nbsp;vec3&nbsp;v_world_pos;<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+uniform&nbsp;vec3&nbsp;u_camera_position;<br>
+<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
+<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Simple&nbsp;Lambert&nbsp;diffuse&nbsp;lighting<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;light_dir&nbsp;=&nbsp;normalize(vec3(0.5,&nbsp;0.8,&nbsp;1.0));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;light_dir),&nbsp;0.0);<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Двухстороннее&nbsp;освещение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl_back&nbsp;=&nbsp;max(dot(-N,&nbsp;light_dir),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;lighting&nbsp;=&nbsp;max(ndotl,&nbsp;ndotl_back&nbsp;*&nbsp;0.5);<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;ambient&nbsp;=&nbsp;vec3(0.3);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;diffuse&nbsp;=&nbsp;u_color.rgb&nbsp;*&nbsp;(ambient&nbsp;+&nbsp;lighting&nbsp;*&nbsp;0.7);<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(diffuse,&nbsp;u_color.a);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+<br>
+def&nbsp;navmesh_display_shader()&nbsp;-&gt;&nbsp;TcShader:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Creates&nbsp;shader&nbsp;for&nbsp;NavMesh&nbsp;display.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;TcShader.from_sources(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NAVMESH_VERTEX_SHADER,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NAVMESH_FRAGMENT_SHADER,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;NavMeshDisplay&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<!-- END SCAT CODE -->
+</body>
+</html>
