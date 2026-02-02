@@ -478,6 +478,7 @@ nanobind_add_module(_native
     termin/editor/transform_gizmo.cpp
     termin/sdl_bindings.cpp
     termin/platform/sdl_render_surface.cpp
+    termin/tc_scene.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp
     termin/scene/scene_manager.cpp

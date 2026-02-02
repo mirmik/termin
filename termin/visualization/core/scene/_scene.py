@@ -64,12 +64,6 @@ class Scene(TcScene):
         bc = background_color
         self.set_background_color(float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]) if len(bc) > 3 else 1.0)
 
-        # Editor viewport state (runtime only, not serialized)
-        self.editor_viewport_camera_name: str | None = None
-
-        # Editor entities state (runtime only, not serialized to scene file)
-        self._editor_entities_data: dict | None = None
-
         # Entity lifecycle events
         self._on_entity_added: Event[Entity] = Event()
         self._on_entity_removed: Event[Entity] = Event()
@@ -349,17 +343,31 @@ class Scene(TcScene):
             result.append(self.pipeline_template_at(i))
         return result
 
-    # --- Editor entities data (runtime only) ---
+    # --- Editor state (stored in metadata) ---
+
+    _METADATA_EDITOR_PREFIX = "termin.editor"
+
+    @property
+    def editor_viewport_camera_name(self) -> str | None:
+        """Get editor viewport camera name from metadata."""
+        value = self.get_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.viewport_camera_name")
+        return value if isinstance(value, str) else None
+
+    @editor_viewport_camera_name.setter
+    def editor_viewport_camera_name(self, value: str | None) -> None:
+        """Set editor viewport camera name in metadata."""
+        self.set_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.viewport_camera_name", value)
 
     @property
     def editor_entities_data(self) -> dict | None:
-        """Get stored EditorEntities component data."""
-        return self._editor_entities_data
+        """Get stored EditorEntities component data from metadata."""
+        value = self.get_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.entities_data")
+        return value if isinstance(value, dict) else None
 
     @editor_entities_data.setter
     def editor_entities_data(self, value: dict | None) -> None:
-        """Store EditorEntities component data for later deserialization."""
-        self._editor_entities_data = value
+        """Store EditorEntities component data in metadata."""
+        self.set_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.entities_data", value)
 
     # --- Entity management ---
 
@@ -691,6 +699,12 @@ class Scene(TcScene):
         result["skybox_color"] = list(self.skybox_color)
         result["skybox_top_color"] = list(self.skybox_top_color)
         result["skybox_bottom_color"] = list(self.skybox_bottom_color)
+
+        # Metadata (extensible storage for tools)
+        metadata = self.get_metadata()
+        if metadata:
+            result["metadata"] = metadata
+
         return result
 
     @classmethod
@@ -768,6 +782,10 @@ class Scene(TcScene):
             # Note: Compiled pipelines are created by RenderingManager.attach_scene()
             # (not at deserialization time)
 
+            # Load metadata (extensible storage for tools)
+            if "metadata" in data:
+                self.set_metadata(data["metadata"])
+
         entities_data = data.get("entities", [])
 
         # Two-phase deserialization:
@@ -835,10 +853,6 @@ class Scene(TcScene):
                     tc_ref.on_destroy()
                 except Exception as ex:
                     print(f"Error in destroy handler of component '{tc_ref}': {ex}")
-
-        # Clear runtime editor state
-        self._editor_entities_data = None
-        self.editor_viewport_camera_name = None
 
         # Clear events (break subscriber references)
         self._on_entity_added.clear()

@@ -241,13 +241,10 @@ class SceneManager(CxxSceneManager):
         source = self._scenes[source_name]
 
         # Serialize and deserialize to create deep copy
+        # (includes metadata with editor state)
         scene_data = source.serialize()
         dest = self._create_new_scene(dest_name)
         dest.load_from_data(scene_data, context=None, update_settings=True)
-
-        # Copy runtime state (not serialized)
-        dest.editor_viewport_camera_name = source.editor_viewport_camera_name
-        dest.editor_entities_data = source.editor_entities_data
 
         self._scenes[dest_name] = dest
         self._paths[dest_name] = None  # Copy has no file path
