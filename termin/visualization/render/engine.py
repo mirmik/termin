@@ -434,7 +434,7 @@ class RenderEngine:
                 target_fbo,
                 pw,
                 ph,
-                scene._tc_scene.scene_ref(),
+                scene.scene_ref(),
                 view.camera,
                 view.viewport,
                 view.layer_mask,
@@ -504,7 +504,7 @@ class RenderEngine:
         with profiler.section("C++ Execute"):
             self._cpp_engine.render_scene_pipeline_offscreen(
                 pipeline,
-                scene._tc_scene.scene_ref(),
+                scene.scene_ref(),
                 cpp_viewport_contexts,
                 default_viewport,
             )

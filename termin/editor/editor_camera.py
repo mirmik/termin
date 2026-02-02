@@ -245,7 +245,7 @@ class EditorCameraManager:
         self._collect_hierarchy(self.editor_entities, entities)
 
         # Get scene ref for handle resolution during deserialization
-        scene_ref = self._scene._tc_scene.scene_ref() if self._scene else None
+        scene_ref = self._scene.scene_ref() if self._scene else None
 
         for ent in entities:
             components_data = data.get(ent.name)

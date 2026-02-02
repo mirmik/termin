@@ -798,19 +798,17 @@ void bind_entity_class(nb::module_& m) {
                 }
 
                 // Get pool and scene from scene object or use standalone pool
+                // Scene inherits from TcScene, so we check for scene_handle method directly
                 tc_entity_pool* pool = nullptr;
                 tc_scene_handle c_scene = TC_SCENE_HANDLE_INVALID;
-                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
-                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
+                if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
+                    if (nb::hasattr(scene, "entity_pool_ptr")) {
+                        uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
                         pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
                     }
-                    if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                        c_scene.index = std::get<0>(h);
-                        c_scene.generation = std::get<1>(h);
-                    }
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
+                    c_scene.index = std::get<0>(h);
+                    c_scene.generation = std::get<1>(h);
                 }
                 if (!pool) {
                     pool = get_standalone_pool();
@@ -994,13 +992,11 @@ void bind_entity_class(nb::module_& m) {
                 }
 
                 // Get pool from scene or use standalone
+                // Scene inherits from TcScene, so we check for entity_pool_ptr method directly
                 tc_entity_pool* pool = nullptr;
-                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
-                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
-                        pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
-                    }
+                if (!scene.is_none() && nb::hasattr(scene, "entity_pool_ptr")) {
+                    uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
+                    pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
                 }
                 if (!pool) {
                     pool = get_standalone_pool();
@@ -1111,16 +1107,14 @@ void bind_entity_class(nb::module_& m) {
                 nb::list components = nb::cast<nb::list>(comp_list_obj);
 
                 // Get scene ref for entity reference resolution
+                // Scene inherits from TcScene, so we check for scene_handle method directly
                 TcSceneRef scene_ref;
-                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                        tc_scene_handle handle;
-                        handle.index = std::get<0>(h);
-                        handle.generation = std::get<1>(h);
-                        scene_ref = TcSceneRef(handle);
-                    }
+                if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
+                    tc_scene_handle handle;
+                    handle.index = std::get<0>(h);
+                    handle.generation = std::get<1>(h);
+                    scene_ref = TcSceneRef(handle);
                 }
 
                 for (size_t i = 0; i < nb::len(components); ++i) {

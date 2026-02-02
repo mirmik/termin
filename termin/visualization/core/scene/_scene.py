@@ -41,8 +41,11 @@ def get_current_scene() -> "Scene | None":
     return _current_scene
 
 
-class Scene:
-    """Container for renderable entities and lighting data."""
+class Scene(TcScene):
+    """Container for renderable entities and lighting data.
+
+    Inherits from TcScene (C++ class) for optimized entity/component management.
+    """
 
     _destroyed: bool = False
 
@@ -52,18 +55,19 @@ class Scene:
         uuid: str | None = None,
         name: str = "",
     ):
+        # Initialize C++ TcScene base class
+        super().__init__()
         self._destroyed = False
 
-        # C core scene for optimized entity/component management
-        self._tc_scene = TcScene()
-        self._tc_scene.set_py_wrapper(self)
+        # Set Python wrapper for callbacks from C to Python
+        self.set_py_wrapper(self)
 
         # Identifiable fields
         self.uuid = uuid or ""
         self.name = name
 
         from termin._native import log
-        log.info(f"[Scene] Created name='{name}', self={id(self):#x}, tc_scene={self._tc_scene}")
+        log.info(f"[Scene] Created name='{name}', self={id(self):#x}")
         self.runtime_id = 0
 
         # Background color with alpha
@@ -71,7 +75,7 @@ class Scene:
 
         # Lighting manager
         self._lighting = LightingManager()
-        self._lighting.tc_scene = self._tc_scene
+        self._lighting.tc_scene = self
 
         # Layer and flag names (index -> name)
         self.layer_names: dict[int, str] = {}  # 0-63
@@ -130,67 +134,66 @@ class Scene:
 
     @property
     def skybox_type(self) -> str:
-        type_int = self._tc_scene.get_skybox_type()
+        type_int = self.get_skybox_type()
         return self._SKYBOX_TYPE_TO_STR.get(type_int, "gradient")
 
     @skybox_type.setter
     def skybox_type(self, value: str):
         type_int = self._SKYBOX_STR_TO_TYPE.get(value, self._SKYBOX_TYPE_GRADIENT)
-        self._tc_scene.set_skybox_type(type_int)
+        self.set_skybox_type(type_int)
 
     @property
     def skybox_color(self) -> np.ndarray:
-        r, g, b = self._tc_scene.get_skybox_color()
+        r, g, b = self.get_skybox_color()
         return np.array([r, g, b], dtype=np.float32)
 
     @skybox_color.setter
     def skybox_color(self, value):
         v = np.asarray(value, dtype=np.float32)
-        self._tc_scene.set_skybox_color(float(v[0]), float(v[1]), float(v[2]))
+        self.set_skybox_color(float(v[0]), float(v[1]), float(v[2]))
 
     @property
     def skybox_top_color(self) -> np.ndarray:
-        r, g, b = self._tc_scene.get_skybox_top_color()
+        r, g, b = self.get_skybox_top_color()
         return np.array([r, g, b], dtype=np.float32)
 
     @skybox_top_color.setter
     def skybox_top_color(self, value):
         v = np.asarray(value, dtype=np.float32)
-        self._tc_scene.set_skybox_top_color(float(v[0]), float(v[1]), float(v[2]))
+        self.set_skybox_top_color(float(v[0]), float(v[1]), float(v[2]))
 
     @property
     def skybox_bottom_color(self) -> np.ndarray:
-        r, g, b = self._tc_scene.get_skybox_bottom_color()
+        r, g, b = self.get_skybox_bottom_color()
         return np.array([r, g, b], dtype=np.float32)
 
     @skybox_bottom_color.setter
     def skybox_bottom_color(self, value):
         v = np.asarray(value, dtype=np.float32)
-        self._tc_scene.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
+        self.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
 
     def skybox_mesh(self):
         """Get skybox cube mesh (TcMesh). Creates lazily if needed."""
-        return self._tc_scene.get_skybox_mesh()
+        return self.get_skybox_mesh()
 
     def skybox_material(self) -> "Material | None":
         """Get skybox material based on current skybox_type. Creates lazily if needed."""
-        type_int = self._tc_scene.get_skybox_type()
+        type_int = self.get_skybox_type()
         if type_int == self._SKYBOX_TYPE_NONE:
             return None
-        return self._tc_scene.ensure_skybox_material(type_int)
+        return self.ensure_skybox_material(type_int)
 
-    def set_skybox_type(self, skybox_type: str) -> None:
-        """Set skybox type."""
-        self.skybox_type = skybox_type
+    # set_skybox_type(int) is inherited from TcScene
+    # Use self.skybox_type = "gradient" (string) for the property setter
 
     def _ensure_skybox_resources(self) -> None:
         """Ensure skybox mesh and material are created and set in tc_scene."""
-        type_int = self._tc_scene.get_skybox_type()
+        type_int = self.get_skybox_type()
         if type_int == self._SKYBOX_TYPE_NONE:
             return
         # This triggers lazy creation in C
-        self._tc_scene.get_skybox_mesh()
-        self._tc_scene.ensure_skybox_material(type_int)
+        self.get_skybox_mesh()
+        self.ensure_skybox_material(type_int)
 
     # --- Lighting delegation (backward compatibility) ---
 
@@ -213,7 +216,7 @@ class Scene:
     @property
     def light_components(self) -> List[LightComponent]:
         """Get all light components from tc_scene type list."""
-        return self._tc_scene.get_components_of_type("LightComponent")
+        return self.get_components_of_type("LightComponent")
 
     @property
     def shadow_settings(self):
@@ -226,17 +229,17 @@ class Scene:
     @property
     def collision_world(self) -> CollisionWorld:
         """Get the collision world for physics and raycasting."""
-        return self._tc_scene.collision_world()
+        return TcScene.collision_world(self)
 
     @property
     def colliders(self) -> List[Component]:
         """Get all collider components from tc_scene type list."""
-        return self._tc_scene.get_components_of_type("ColliderComponent")
+        return self.get_components_of_type("ColliderComponent")
 
     @property
     def input_components(self) -> List[InputComponent]:
         """Get all input components from tc_scene type list."""
-        return self._tc_scene.get_components_of_type("InputComponent")
+        return self.get_components_of_type("InputComponent")
 
     # --- Raycast ---
 
@@ -267,7 +270,7 @@ class Scene:
                 )
             return True
 
-        self._tc_scene.foreach_component_of_type("ColliderComponent", check_collider)
+        self.foreach_component_of_type("ColliderComponent", check_collider)
         return result["hit"]
 
     def closest_to_ray(self, ray: Ray3):
@@ -293,7 +296,7 @@ class Scene:
                 )
             return True
 
-        self._tc_scene.foreach_component_of_type("ColliderComponent", check_collider)
+        self.foreach_component_of_type("ColliderComponent", check_collider)
         return result["hit"]
 
     # --- Layer and flag names ---
@@ -431,22 +434,11 @@ class Scene:
     @property
     def entities(self) -> List[Entity]:
         """Get all entities in the scene (from pool)."""
-        return self._tc_scene.get_all_entities()
+        return self.get_all_entities()
 
-    def create_entity(self, name: str = "") -> Entity:
-        """Create a new entity directly in scene's pool.
-
-        Creates entity in pool but does NOT register components or emit events.
-        Call add() after setup to complete registration, or use this for
-        entities that need no component registration.
-
-        Args:
-            name: Entity name (optional)
-
-        Returns:
-            New Entity in scene's pool
-        """
-        return self._tc_scene.create_entity(name)
+    # create_entity(name) - inherited from TcScene
+    # Creates entity in pool but does NOT register components or emit events.
+    # Call add() after setup to complete registration.
 
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene.
@@ -459,7 +451,7 @@ class Scene:
         # Migrate entity to scene's pool (if not already there)
         # This copies all data (transform, flags, components) to scene's pool
         # and invalidates the old entity handle
-        entity = self._tc_scene.migrate_entity(entity)
+        entity = self.migrate_entity(entity)
         if not entity:
             raise RuntimeError("Failed to migrate entity to scene's pool")
 
@@ -515,7 +507,7 @@ class Scene:
         entity.on_removed()
 
         # Remove from C core (frees entity in pool, unregisters components)
-        self._tc_scene.remove_entity(entity)
+        self.remove_entity(entity)
 
     @property
     def on_entity_added(self) -> Event[Entity]:
@@ -533,13 +525,7 @@ class Scene:
     def on_entity_removed(self, value: Event[Entity]):
         pass  # __iadd__ modifies in place, setter is no-op
 
-    def get_entity(self, uuid: str) -> Entity | None:
-        """O(1) lookup of entity by UUID using hash map."""
-        return self._tc_scene.get_entity(uuid)
-
-    def get_entity_by_pick_id(self, pick_id: int) -> Entity | None:
-        """O(1) lookup of entity by pick_id using hash map."""
-        return self._tc_scene.get_entity_by_pick_id(pick_id)
+    # get_entity(uuid), get_entity_by_pick_id(pick_id) - inherited from TcScene
 
     def find_entity_by_uuid(self, uuid: str) -> Entity | None:
         """
@@ -647,9 +633,9 @@ class Scene:
         # on_added callback is called by C code in tc_scene_register_component
         if is_python:
             ptr = component.c_component_ptr()
-            self._tc_scene.register_component_ptr(ptr)
+            self.register_component_ptr(ptr)
         else:
-            self._tc_scene.register_component(component)
+            self.register_component(component)
 
     def unregister_component(self, component: Component):
         """Unregister component from tc_scene.
@@ -661,9 +647,9 @@ class Scene:
 
         # Unregister from TcScene (removes from type lists automatically)
         if isinstance(component, PythonComponent):
-            self._tc_scene.unregister_component_ptr(component.c_component_ptr())
+            self.unregister_component_ptr(component.c_component_ptr())
         else:
-            self._tc_scene.unregister_component(component)
+            self.unregister_component(component)
 
     # --- Update loop ---
 
@@ -672,7 +658,7 @@ class Scene:
         _current_scene = self
         try:
             # Delegate to C core (includes profiling via tc_profiler)
-            self._tc_scene.update(dt)
+            TcScene.update(self, dt)
         finally:
             _current_scene = None
 
@@ -687,7 +673,7 @@ class Scene:
         _current_scene = self
         try:
             # Delegate to C core
-            self._tc_scene.editor_update(dt)
+            TcScene.editor_update(self, dt)
         finally:
             _current_scene = None
 
@@ -699,63 +685,16 @@ class Scene:
         Used by SkeletonController to update bone matrices.
         """
         self._ensure_skybox_resources()
-        self._tc_scene.before_render()
+        TcScene.before_render(self)
 
-    def notify_editor_start(self):
-        """Notify all components that scene started in editor mode."""
-        self._tc_scene.notify_editor_start()
-
-    def notify_scene_inactive(self):
-        """Notify all components that scene is becoming inactive."""
-        self._tc_scene.notify_scene_inactive()
-
-    def notify_scene_active(self):
-        """Notify all components that scene is becoming active (from INACTIVE)."""
-        self._tc_scene.notify_scene_active()
+    # --- Notification methods (inherited from TcScene) ---
+    # notify_editor_start, notify_scene_inactive, notify_scene_active
+    # All inherited from TcScene base class
 
     # --- Input dispatch ---
-
-    def dispatch_mouse_button(self, event) -> None:
-        """Dispatch mouse button event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_button(event)
-
-    def dispatch_mouse_move(self, event) -> None:
-        """Dispatch mouse move event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_move(event)
-
-    def dispatch_scroll(self, event) -> None:
-        """Dispatch scroll event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_scroll(event)
-
-    def dispatch_key(self, event) -> None:
-        """Dispatch key event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_key(event)
-
-    # --- Editor dispatch methods (with active_in_editor filter) ---
-
-    def dispatch_mouse_button_editor(self, event) -> None:
-        """Dispatch mouse button event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_button_editor(event)
-
-    def dispatch_mouse_move_editor(self, event) -> None:
-        """Dispatch mouse move event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_move_editor(event)
-
-    def dispatch_scroll_editor(self, event) -> None:
-        """Dispatch scroll event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_scroll_editor(event)
-
-    def dispatch_key_editor(self, event) -> None:
-        """Dispatch key event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_key_editor(event)
+    # dispatch_mouse_button, dispatch_mouse_move, dispatch_scroll, dispatch_key
+    # dispatch_mouse_button_editor, dispatch_mouse_move_editor, dispatch_scroll_editor, dispatch_key_editor
+    # All inherited from TcScene base class
 
     def dispatch_input(self, event_name: str, event, filter_fn: Callable[[InputComponent], bool] | None = None):
         """Dispatch input event to InputComponents.
@@ -769,19 +708,16 @@ class Scene:
         Note: For best performance without filter_fn, use the specific dispatch methods
         (dispatch_mouse_button, dispatch_mouse_move, dispatch_scroll, dispatch_key).
         """
-        if self._tc_scene is None:
-            return
-
         # Fast path: use C-level dispatch when no filter is needed
         if filter_fn is None:
             if event_name == "on_mouse_button":
-                self._tc_scene.dispatch_mouse_button(event)
+                self.dispatch_mouse_button(event)
             elif event_name == "on_mouse_move":
-                self._tc_scene.dispatch_mouse_move(event)
+                self.dispatch_mouse_move(event)
             elif event_name == "on_scroll":
-                self._tc_scene.dispatch_scroll(event)
+                self.dispatch_scroll(event)
             elif event_name == "on_key":
-                self._tc_scene.dispatch_key(event)
+                self.dispatch_key(event)
             return
 
         # Slow path with filter: iterate components and call methods
@@ -796,7 +732,7 @@ class Scene:
                     print(f"Error in input handler '{event_name}' of component '{component}': {e}")
             return True
 
-        self._tc_scene.foreach_component_of_type("InputComponent", dispatch_to_component)
+        self.foreach_component_of_type("InputComponent", dispatch_to_component)
 
     # --- Serialization ---
 
@@ -959,7 +895,7 @@ class Scene:
             return
         self._destroyed = True
 
-        log.info(f"[Scene] destroy() name='{self.name}', self={id(self):#x}, tc_scene={self._tc_scene}")
+        log.info(f"[Scene] destroy() name='{self.name}', self={id(self):#x}")
 
         # Call on_destroy on all components via tc_ref (works for both C++ and Python)
         for entity in self.entities:
@@ -985,7 +921,5 @@ class Scene:
         self._on_entity_added.clear()
         self._on_entity_removed.clear()
 
-        # Release C core scene
-        if self._tc_scene is not None:
-            self._tc_scene.destroy()
-            self._tc_scene = None
+        # Release C core scene (call base class TcScene.destroy())
+        TcScene.destroy(self)

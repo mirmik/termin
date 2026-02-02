@@ -38,11 +38,11 @@ void bind_tc_viewport_class(nb::module_& m) {
                            bool enabled,
                            nb::object internal_entities,
                            std::tuple<int, int, int, int> pixel_rect) {
-            // Get tc_scene_handle from Scene
+            // Get tc_scene_handle from Scene (Scene inherits from TcScene)
             tc_scene_handle tc_s = TC_SCENE_HANDLE_INVALID;
             if (!scene.is_none()) {
-                nb::object tc_scene_obj = scene.attr("_tc_scene");
-                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                // scene_handle() is available directly (inherited from TcScene)
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
                 tc_s.index = std::get<0>(h);
                 tc_s.generation = std::get<1>(h);
             }
@@ -136,8 +136,8 @@ void bind_tc_viewport_class(nb::module_& m) {
                 if (scene_obj.is_none()) {
                     tc_viewport_set_scene(self.handle_, TC_SCENE_HANDLE_INVALID);
                 } else {
-                    nb::object tc_scene_obj = scene_obj.attr("_tc_scene");
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
+                    // scene_handle() is available directly (Scene inherits from TcScene)
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_obj.attr("scene_handle")());
                     tc_scene_handle handle;
                     handle.index = std::get<0>(h);
                     handle.generation = std::get<1>(h);

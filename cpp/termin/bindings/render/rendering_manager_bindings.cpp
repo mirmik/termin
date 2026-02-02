@@ -12,16 +12,13 @@ extern "C" {
 
 namespace termin {
 
-// Helper to extract tc_scene_handle from Python Scene object
+// Helper to extract tc_scene_handle from Python Scene object (Scene inherits TcScene)
 static tc_scene_handle get_scene_handle(nb::object scene_py) {
     tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-    if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
-        nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-        if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-            auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-            scene.index = std::get<0>(h);
-            scene.generation = std::get<1>(h);
-        }
+    if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
+        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
+        scene.index = std::get<0>(h);
+        scene.generation = std::get<1>(h);
     }
     return scene;
 }
