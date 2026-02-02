@@ -48,6 +48,7 @@ TcScene::TcScene(TcScene&& other) noexcept
     : _h(other._h)
     , _collision_world(std::move(other._collision_world))
     , _metadata(std::move(other._metadata))
+    , _viewport_configs(std::move(other._viewport_configs))
 {
     other._h = TC_SCENE_HANDLE_INVALID;
 }
@@ -58,6 +59,7 @@ TcScene& TcScene::operator=(TcScene&& other) noexcept {
         _h = other._h;
         _collision_world = std::move(other._collision_world);
         _metadata = std::move(other._metadata);
+        _viewport_configs = std::move(other._viewport_configs);
         other._h = TC_SCENE_HANDLE_INVALID;
     }
     return *this;
@@ -225,40 +227,32 @@ void TcScene::set_background_color(float r, float g, float b, float a) {
     tc_scene_set_background_color(_h, r, g, b, a);
 }
 
-void TcScene::add_viewport_config(const std::string& name, const std::string& display_name,
-                        const std::string& camera_uuid, float x, float y, float w, float h,
-                        const std::string& pipeline_uuid, const std::string& pipeline_name,
-                        int depth, const std::string& input_mode, bool block_input_in_editor,
-                        uint64_t layer_mask, bool enabled) {
-    tc_viewport_config config;
-    tc_viewport_config_init(&config);
-    config.name = name.empty() ? nullptr : name.c_str();
-    config.display_name = display_name.c_str();
-    config.camera_uuid = camera_uuid.empty() ? nullptr : camera_uuid.c_str();
-    config.region[0] = x;
-    config.region[1] = y;
-    config.region[2] = w;
-    config.region[3] = h;
-    config.pipeline_uuid = pipeline_uuid.empty() ? nullptr : pipeline_uuid.c_str();
-    config.pipeline_name = pipeline_name.empty() ? nullptr : pipeline_name.c_str();
-    config.depth = depth;
-    config.input_mode = input_mode.c_str();
-    config.block_input_in_editor = block_input_in_editor;
-    config.layer_mask = layer_mask;
-    config.enabled = enabled;
-    tc_scene_add_viewport_config(_h, &config);
+void TcScene::add_viewport_config(const ViewportConfig& config) {
+    _viewport_configs.push_back(config);
 }
 
 void TcScene::remove_viewport_config(size_t index) {
-    tc_scene_remove_viewport_config(_h, index);
+    if (index < _viewport_configs.size()) {
+        _viewport_configs.erase(_viewport_configs.begin() + index);
+    }
 }
 
 void TcScene::clear_viewport_configs() {
-    tc_scene_clear_viewport_configs(_h);
+    _viewport_configs.clear();
 }
 
 size_t TcScene::viewport_config_count() const {
-    return tc_scene_viewport_config_count(_h);
+    return _viewport_configs.size();
+}
+
+ViewportConfig* TcScene::viewport_config_at(size_t index) {
+    if (index >= _viewport_configs.size()) return nullptr;
+    return &_viewport_configs[index];
+}
+
+const ViewportConfig* TcScene::viewport_config_at(size_t index) const {
+    if (index >= _viewport_configs.size()) return nullptr;
+    return &_viewport_configs[index];
 }
 
 const nos::trent* TcScene::get_metadata_at_path(const std::string& path) const {

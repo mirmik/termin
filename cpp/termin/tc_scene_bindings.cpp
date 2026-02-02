@@ -111,6 +111,47 @@ void dispatch_input_to_scene(tc_scene_handle h, const char* method_name, const E
 // ============================================================================
 
 void bind_tc_scene(nb::module_& m) {
+    // ViewportConfig binding
+    nb::class_<ViewportConfig>(m, "ViewportConfig")
+        .def(nb::init<>())
+        .def(nb::init<const std::string&, const std::string&, const std::string&,
+                      float, float, float, float,
+                      const std::string&, const std::string&,
+                      int, const std::string&, bool, uint64_t, bool>(),
+             nb::arg("name") = "",
+             nb::arg("display_name") = "Main",
+             nb::arg("camera_uuid") = "",
+             nb::arg("region_x") = 0.0f,
+             nb::arg("region_y") = 0.0f,
+             nb::arg("region_w") = 1.0f,
+             nb::arg("region_h") = 1.0f,
+             nb::arg("pipeline_uuid") = "",
+             nb::arg("pipeline_name") = "",
+             nb::arg("depth") = 0,
+             nb::arg("input_mode") = "simple",
+             nb::arg("block_input_in_editor") = false,
+             nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL,
+             nb::arg("enabled") = true)
+        .def_rw("name", &ViewportConfig::name)
+        .def_rw("display_name", &ViewportConfig::display_name)
+        .def_rw("camera_uuid", &ViewportConfig::camera_uuid)
+        .def_rw("region_x", &ViewportConfig::region_x)
+        .def_rw("region_y", &ViewportConfig::region_y)
+        .def_rw("region_w", &ViewportConfig::region_w)
+        .def_rw("region_h", &ViewportConfig::region_h)
+        .def_rw("pipeline_uuid", &ViewportConfig::pipeline_uuid)
+        .def_rw("pipeline_name", &ViewportConfig::pipeline_name)
+        .def_rw("depth", &ViewportConfig::depth)
+        .def_rw("input_mode", &ViewportConfig::input_mode)
+        .def_rw("block_input_in_editor", &ViewportConfig::block_input_in_editor)
+        .def_rw("layer_mask", &ViewportConfig::layer_mask)
+        .def_rw("enabled", &ViewportConfig::enabled)
+        .def_prop_ro("region", &ViewportConfig::region,
+                     "Get region as (x, y, w, h) tuple")
+        .def("set_region", &ViewportConfig::set_region,
+             nb::arg("x"), nb::arg("y"), nb::arg("w"), nb::arg("h"),
+             "Set region (x, y, width, height)");
+
     // SceneRaycastHit binding
     nb::class_<SceneRaycastHit>(m, "SceneRaycastHit")
         .def_prop_ro("valid", &SceneRaycastHit::valid)
@@ -226,37 +267,23 @@ void bind_tc_scene(nb::module_& m) {
              nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("a"),
              "Set background color RGBA")
 
-        // Viewport configurations
+        // Viewport configurations (stored in C++ TcScene)
         .def("add_viewport_config", &TcScene::add_viewport_config,
-             nb::arg("name"), nb::arg("display_name"), nb::arg("camera_uuid"),
-             nb::arg("x"), nb::arg("y"), nb::arg("w"), nb::arg("h"),
-             nb::arg("pipeline_uuid"), nb::arg("pipeline_name"),
-             nb::arg("depth"), nb::arg("input_mode"), nb::arg("block_input_in_editor"),
-             nb::arg("layer_mask"), nb::arg("enabled"),
-             "Add a viewport configuration")
+             nb::arg("config"), "Add a viewport configuration")
         .def("remove_viewport_config", &TcScene::remove_viewport_config,
              nb::arg("index"), "Remove viewport configuration by index")
         .def("clear_viewport_configs", &TcScene::clear_viewport_configs,
              "Clear all viewport configurations")
         .def("viewport_config_count", &TcScene::viewport_config_count,
              "Get number of viewport configurations")
-        .def("get_viewport_config", [](TcScene& self, size_t index) -> nb::dict {
-            tc_viewport_config* config = tc_scene_viewport_config_at(self._h, index);
-            if (!config) return nb::dict();
-            nb::dict d;
-            d["name"] = config->name ? std::string(config->name) : "";
-            d["display_name"] = config->display_name ? std::string(config->display_name) : "Main";
-            d["camera_uuid"] = config->camera_uuid ? std::string(config->camera_uuid) : "";
-            d["region"] = std::make_tuple(config->region[0], config->region[1], config->region[2], config->region[3]);
-            d["pipeline_uuid"] = config->pipeline_uuid ? std::string(config->pipeline_uuid) : "";
-            d["pipeline_name"] = config->pipeline_name ? std::string(config->pipeline_name) : "";
-            d["depth"] = config->depth;
-            d["input_mode"] = config->input_mode ? std::string(config->input_mode) : "simple";
-            d["block_input_in_editor"] = config->block_input_in_editor;
-            d["layer_mask"] = config->layer_mask;
-            d["enabled"] = config->enabled;
-            return d;
-        }, nb::arg("index"), "Get viewport configuration as dict")
+        .def("viewport_config_at", [](TcScene& self, size_t index) -> nb::object {
+            ViewportConfig* config = self.viewport_config_at(index);
+            if (!config) return nb::none();
+            return nb::cast(config, nb::rv_policy::reference_internal);
+        }, nb::arg("index"), "Get viewport configuration by index")
+        .def_prop_ro("viewport_configs", [](TcScene& self) {
+            return self.viewport_configs();
+        }, nb::rv_policy::reference_internal, "Get all viewport configurations")
 
         // Metadata (trent stored in C++, converted to Python at boundary)
         .def("get_metadata", [](TcScene& self) -> nb::object {

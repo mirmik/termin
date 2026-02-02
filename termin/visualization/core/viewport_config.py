@@ -2,110 +2,74 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Tuple
 
+# Re-export C++ class
+from termin._native.scene import ViewportConfig
 
-@dataclass
-class ViewportConfig:
-    """
-    Configuration for mounting a scene viewport to a display.
+__all__ = ["ViewportConfig", "serialize_viewport_config", "deserialize_viewport_config"]
 
-    Stored in Scene.viewport_configs and used by RenderingManager.attach_scene()
-    to create viewports on appropriate displays.
-    """
 
-    # Viewport name (used for scene pipeline targeting)
-    name: str = ""
+def serialize_viewport_config(config: ViewportConfig) -> dict:
+    """Serialize ViewportConfig to dict."""
+    result = {
+        "name": config.name,
+        "display_name": config.display_name,
+        "camera_uuid": config.camera_uuid,
+        "region": [config.region_x, config.region_y, config.region_w, config.region_h],
+        "depth": config.depth,
+        "input_mode": config.input_mode,
+        "block_input_in_editor": config.block_input_in_editor,
+    }
+    if config.pipeline_uuid:
+        result["pipeline_uuid"] = config.pipeline_uuid
+    if config.pipeline_name:
+        result["pipeline_name"] = config.pipeline_name
+    # Only serialize layer_mask if not all layers
+    if config.layer_mask != 0xFFFFFFFFFFFFFFFF:
+        result["layer_mask"] = hex(config.layer_mask)
+    # Only serialize enabled if False (to keep files clean)
+    if not config.enabled:
+        result["enabled"] = config.enabled
+    return result
 
-    # Display name (RenderingManager will create/find display by this name)
-    display_name: str = "Main"
 
-    # Camera entity UUID (looked up in scene during attach)
-    camera_uuid: str = ""
+def deserialize_viewport_config(data: dict) -> ViewportConfig:
+    """Deserialize ViewportConfig from dict."""
+    region = data.get("region", [0.0, 0.0, 1.0, 1.0])
 
-    # Normalized region on display (x, y, width, height)
-    region: Tuple[float, float, float, float] = field(default=(0.0, 0.0, 1.0, 1.0))
+    pipeline_uuid = data.get("pipeline_uuid", "")
+    pipeline_name = data.get("pipeline_name", "")
 
-    # Pipeline UUID (None = use default or pipeline_name)
-    pipeline_uuid: str | None = None
+    # Backwards compatibility: convert old pipeline_name (asset name) to uuid
+    # But preserve special names like "(Editor)"
+    if not pipeline_uuid and pipeline_name and not pipeline_name.startswith("("):
+        pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name) or ""
+        pipeline_name = ""  # Clear old-style name after conversion
 
-    # Pipeline name for special pipelines (e.g., "(Editor)")
-    # Used when pipeline_uuid is None
-    pipeline_name: str | None = None
+    # Parse layer_mask (may be hex string or int)
+    layer_mask_raw = data.get("layer_mask", 0xFFFFFFFFFFFFFFFF)
+    if isinstance(layer_mask_raw, str):
+        layer_mask = int(layer_mask_raw, 16) if layer_mask_raw.startswith("0x") else int(layer_mask_raw)
+    else:
+        layer_mask = int(layer_mask_raw)
 
-    # Viewport depth (for ordering when multiple viewports on same display)
-    depth: int = 0
-
-    # Input mode for this viewport ("none", "simple", "editor")
-    input_mode: str = "simple"
-
-    # Block input when running in editor mode
-    block_input_in_editor: bool = False
-
-    # Layer mask (which entity layers to render)
-    layer_mask: int = 0xFFFFFFFFFFFFFFFF
-
-    # Whether this viewport is enabled for rendering
-    enabled: bool = True
-
-    def serialize(self) -> dict:
-        """Serialize to dict."""
-        result = {
-            "name": self.name,
-            "display_name": self.display_name,
-            "camera_uuid": self.camera_uuid,
-            "region": list(self.region),
-            "depth": self.depth,
-            "input_mode": self.input_mode,
-            "block_input_in_editor": self.block_input_in_editor,
-        }
-        if self.pipeline_uuid is not None:
-            result["pipeline_uuid"] = self.pipeline_uuid
-        if self.pipeline_name is not None:
-            result["pipeline_name"] = self.pipeline_name
-        # Only serialize layer_mask if not all layers
-        if self.layer_mask != 0xFFFFFFFFFFFFFFFF:
-            result["layer_mask"] = hex(self.layer_mask)
-        # Only serialize enabled if False (to keep files clean)
-        if not self.enabled:
-            result["enabled"] = self.enabled
-        return result
-
-    @classmethod
-    def deserialize(cls, data: dict) -> "ViewportConfig":
-        """Deserialize from dict."""
-        region = data.get("region", [0.0, 0.0, 1.0, 1.0])
-
-        pipeline_uuid = data.get("pipeline_uuid")
-        pipeline_name = data.get("pipeline_name")
-
-        # Backwards compatibility: convert old pipeline_name (asset name) to uuid
-        # But preserve special names like "(Editor)"
-        if pipeline_uuid is None and pipeline_name and not pipeline_name.startswith("("):
-            pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name)
-            pipeline_name = None  # Clear old-style name after conversion
-
-        # Parse layer_mask (may be hex string or int)
-        layer_mask_raw = data.get("layer_mask", 0xFFFFFFFFFFFFFFFF)
-        if isinstance(layer_mask_raw, str):
-            layer_mask = int(layer_mask_raw, 16) if layer_mask_raw.startswith("0x") else int(layer_mask_raw)
-        else:
-            layer_mask = int(layer_mask_raw)
-
-        return cls(
-            name=data.get("name", ""),
-            display_name=data.get("display_name", "Main"),
-            camera_uuid=data.get("camera_uuid", ""),
-            region=tuple(region),
-            pipeline_uuid=pipeline_uuid,
-            pipeline_name=pipeline_name,
-            depth=data.get("depth", 0),
-            input_mode=data.get("input_mode", "simple"),
-            block_input_in_editor=data.get("block_input_in_editor", False),
-            layer_mask=layer_mask,
-            enabled=data.get("enabled", True),
-        )
+    return ViewportConfig(
+        name=data.get("name", ""),
+        display_name=data.get("display_name", "Main"),
+        camera_uuid=data.get("camera_uuid", ""),
+        region_x=float(region[0]),
+        region_y=float(region[1]),
+        region_w=float(region[2]),
+        region_h=float(region[3]),
+        pipeline_uuid=pipeline_uuid,
+        pipeline_name=pipeline_name,
+        depth=data.get("depth", 0),
+        input_mode=data.get("input_mode", "simple"),
+        block_input_in_editor=data.get("block_input_in_editor", False),
+        layer_mask=layer_mask,
+        enabled=data.get("enabled", True),
+    )
 
 
 def _get_pipeline_uuid_by_name(name: str) -> str | None:

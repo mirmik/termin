@@ -12,7 +12,11 @@ from termin._native.scene import TcScene, TcSceneLighting
 # Ray3 and SceneRaycastHit are used via C++ TcScene.raycast/closest_to_ray
 from termin.core import Event
 
-from termin.visualization.core.viewport_config import ViewportConfig
+from termin.visualization.core.viewport_config import (
+    ViewportConfig,
+    serialize_viewport_config,
+    deserialize_viewport_config,
+)
 from termin.lighting import ShadowSettings
 
 
@@ -226,49 +230,10 @@ class Scene(TcScene):
 
     # set_layer_name(index, name), set_flag_name(index, name) -> inherited from TcScene
 
-    # --- Viewport configuration (stored in C++) ---
-
-    @property
-    def viewport_configs(self) -> List[ViewportConfig]:
-        """Get viewport configurations for this scene."""
-        result = []
-        count = self.viewport_config_count()
-        for i in range(count):
-            d = self.get_viewport_config(i)
-            if d:
-                region = d.get("region", (0.0, 0.0, 1.0, 1.0))
-                result.append(ViewportConfig(
-                    name=d.get("name", ""),
-                    display_name=d.get("display_name", "Main"),
-                    camera_uuid=d.get("camera_uuid", ""),
-                    region=tuple(region),
-                    pipeline_uuid=d.get("pipeline_uuid") or None,
-                    pipeline_name=d.get("pipeline_name") or None,
-                    depth=d.get("depth", 0),
-                    input_mode=d.get("input_mode", "simple"),
-                    block_input_in_editor=d.get("block_input_in_editor", False),
-                    layer_mask=d.get("layer_mask", 0xFFFFFFFFFFFFFFFF),
-                    enabled=d.get("enabled", True),
-                ))
-        return result
-
-    def add_viewport_config(self, config: ViewportConfig) -> None:
-        """Add a viewport configuration (stores in C++)."""
-        TcScene.add_viewport_config(
-            self,
-            config.name,
-            config.display_name,
-            config.camera_uuid,
-            config.region[0], config.region[1], config.region[2], config.region[3],
-            config.pipeline_uuid or "",
-            config.pipeline_name or "",
-            config.depth,
-            config.input_mode,
-            config.block_input_in_editor,
-            config.layer_mask,
-            config.enabled,
-        )
-
+    # --- Viewport configuration (stored in C++ TcScene) ---
+    # viewport_configs property -> inherited from TcScene
+    # add_viewport_config(config) -> inherited from TcScene
+    # viewport_config_at(index) -> inherited from TcScene
     # remove_viewport_config(index) -> inherited from TcScene
     # clear_viewport_configs() -> inherited from TcScene
 
@@ -628,7 +593,7 @@ class Scene(TcScene):
             "entities": serialized_entities,
             "layer_names": layer_names_dict,
             "flag_names": flag_names_dict,
-            "viewport_configs": [vc.serialize() for vc in self.viewport_configs],
+            "viewport_configs": [serialize_viewport_config(vc) for vc in self.viewport_configs],
             "scene_pipelines": pipeline_uuids,
             # Lighting
             "ambient_color": list(self.ambient_color),
@@ -708,7 +673,7 @@ class Scene(TcScene):
             # Load viewport configurations (stored in C++)
             self.clear_viewport_configs()
             for vc_data in data.get("viewport_configs", []):
-                vc = ViewportConfig.deserialize(vc_data)
+                vc = deserialize_viewport_config(vc_data)
                 self.add_viewport_config(vc)
             # Load scene pipelines from templates (stored in C++ tc_scene)
             from termin._native.render import TcScenePipelineTemplate

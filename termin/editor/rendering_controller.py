@@ -412,16 +412,20 @@ class RenderingController:
                         if viewport.pipeline.name == "editor":
                             pipeline_name = "(Editor)"
 
+                rect = viewport.rect
                 config = ViewportConfig(
                     name=viewport.name or "",
                     display_name=display.name,
                     camera_uuid=camera_uuid,
-                    region=viewport.rect,
+                    region_x=rect[0],
+                    region_y=rect[1],
+                    region_w=rect[2],
+                    region_h=rect[3],
                     depth=viewport.depth,
                     input_mode=viewport.input_mode,
                     block_input_in_editor=viewport.block_input_in_editor,
-                    pipeline_uuid=pipeline_uuid,
-                    pipeline_name=pipeline_name,
+                    pipeline_uuid=pipeline_uuid or "",
+                    pipeline_name=pipeline_name or "",
                     layer_mask=viewport.layer_mask,
                     enabled=viewport.enabled,
                 )
