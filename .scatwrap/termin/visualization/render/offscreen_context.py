@@ -79,9 +79,9 @@ class&nbsp;OffscreenContext:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE,&nbsp;24)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Use&nbsp;10-bit&nbsp;color&nbsp;(best&nbsp;balance:&nbsp;no&nbsp;banding,&nbsp;no&nbsp;Windows&nbsp;HDR&nbsp;issues)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE,&nbsp;10)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE,&nbsp;10)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE,&nbsp;10)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE,&nbsp;8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE,&nbsp;8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE,&nbsp;8)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Hidden&nbsp;window&nbsp;-&nbsp;minimal&nbsp;size,&nbsp;not&nbsp;visible<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flags&nbsp;=&nbsp;video.SDL_WINDOW_OPENGL&nbsp;|&nbsp;video.SDL_WINDOW_HIDDEN<br>
