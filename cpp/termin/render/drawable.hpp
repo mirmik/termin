@@ -9,6 +9,7 @@ extern "C" {
 #include "termin_core.h"
 }
 
+#include "termin/render/render_export.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
@@ -48,7 +49,7 @@ struct GeometryDrawCall {
  *   draw_geometry: Draw the geometry (shader already bound by pass)
  *   get_geometry_draws: Return MaterialPhases for ColorPass
  */
-class Drawable {
+class RENDER_API Drawable {
 public:
     // Cached geometry draws for get_geometry_draws vtable callback
     // (vtable returns pointer to this, caller must not free)

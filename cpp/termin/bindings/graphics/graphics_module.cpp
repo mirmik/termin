@@ -323,11 +323,8 @@ void bind_graphics_backend(nb::module_& m) {
                 tc::Log::info("[bind_framebuffer] Cast successful, handle=%p", handle);
                 self.bind_framebuffer(handle);
                 return;
-            } catch (const nb::cast_error& e) {
-                tc::Log::warn("[bind_framebuffer] nb::cast_error: %s", e.what());
             } catch (const std::bad_cast& e) {
-                tc::Log::error("[bind_framebuffer] std::bad_cast caught: %s", e.what());
-                throw;
+                tc::Log::warn("[bind_framebuffer] std::bad_cast: %s", e.what());
             } catch (const std::exception& e) {
                 tc::Log::error("[bind_framebuffer] Exception: %s", e.what());
                 throw;

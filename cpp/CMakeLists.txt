@@ -321,6 +321,14 @@ target_include_directories(render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
 )
 target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL)
+if(WIN32)
+    # GLAD export macros for Windows DLL
+    # RENDER_LIB_EXPORTS for dllexport/dllimport
+    target_compile_definitions(render_lib
+        PRIVATE GLAD_API_CALL_EXPORT GLAD_API_CALL_EXPORT_BUILD RENDER_LIB_EXPORTS
+        PUBLIC GLAD_API_CALL_EXPORT
+    )
+endif()
 if(NOT BUILD_CSHARP_BINDINGS)
     target_include_directories(render_lib PRIVATE
         $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
@@ -335,10 +343,12 @@ set_target_properties(render_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
 # NavMesh library (RecastNavMeshBuilderComponent)
-add_library(navmesh_lib STATIC
+add_library(navmesh_lib SHARED
     termin/navmesh/recast_navmesh_builder_component.cpp
 )
 target_include_directories(navmesh_lib PUBLIC
@@ -355,6 +365,10 @@ target_compile_options(navmesh_lib PRIVATE
 )
 set_target_properties(navmesh_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
 # Skeleton static library (linked into _skeleton_native, _animation_native, _native)
