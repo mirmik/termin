@@ -87,6 +87,9 @@ namespace nos
         nos::trent parse(const char *str);
         nos::trent parse(const std::string &str);
         nos::trent parse_file(const std::string &path);
+
+        // Serialize trent to JSON string
+        std::string dump(const nos::trent &t, int indent = -1);
     }
 }
 

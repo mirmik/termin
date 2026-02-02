@@ -510,21 +510,20 @@ class RenderingManager:
 
 
         # Mark viewports as managed by their scene pipeline
-        for handle in scene.scene_pipelines:
-            asset = handle.get_asset()
-            if asset is None:
+        for template in scene.scene_pipelines:
+            if not template.is_valid:
                 continue
 
-            for viewport_name in asset.target_viewports:
+            for viewport_name in template.target_viewports:
                 viewport = viewport_by_name.get(viewport_name)
                 if viewport is None:
                     log.error(
-                        f"[attach_scene] Scene pipeline '{asset.name}' targets viewport "
+                        f"[attach_scene] Scene pipeline '{template.name}' targets viewport "
                         f"'{viewport_name}' but no such viewport found"
                     )
                     continue
 
-                viewport.managed_by_scene_pipeline = asset.name
+                viewport.managed_by_scene_pipeline = template.name
 
     def detach_scene(self, scene: "Scene") -> None:
         """

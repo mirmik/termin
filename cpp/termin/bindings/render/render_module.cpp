@@ -47,6 +47,9 @@ void bind_render(nb::module_& m) {
     // RenderPipeline (C++ class)
     bind_render_pipeline(m);
 
+    // TcScenePipelineTemplate (graph source for scene pipelines)
+    bind_scene_pipeline_template(m);
+
     // MaterialPhase, Material
     bind_material(m);
 

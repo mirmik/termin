@@ -80,9 +80,9 @@ class Scene:
         # Viewport configuration (display_name -> camera/region mapping)
         self._viewport_configs: List[ViewportConfig] = []
 
-        # Scene pipelines (list of handles referencing ScenePipelineAsset)
-        from termin.assets.scene_pipeline_handle import ScenePipelineHandle
-        self._scene_pipelines: List[ScenePipelineHandle] = []
+        # Scene pipeline templates (list of TcScenePipelineTemplate handles)
+        from termin._native.render import TcScenePipelineTemplate
+        self._scene_pipelines: List[TcScenePipelineTemplate] = []
 
         # Compiled pipelines - Python refs to prevent GC, also registered in C++ RenderingManager
         self._compiled_pipelines: dict[str, "RenderPipeline"] = {}
@@ -364,9 +364,9 @@ class Scene:
 
     def compile_scene_pipelines(self) -> None:
         """
-        Compile all scene pipeline assets into RenderPipelines.
+        Compile all scene pipeline templates into RenderPipelines.
 
-        Clears existing compiled pipelines and recompiles from scene_pipelines handles.
+        Clears existing compiled pipelines and recompiles from scene_pipelines templates.
         Python refs are stored in _compiled_pipelines to prevent GC.
         Also registered in C++ RenderingManager for C++ component access.
         """
@@ -376,32 +376,36 @@ class Scene:
         # Get C++ RenderingManager
         cpp_rm = RenderingManager.instance()
 
-        log.info(f"[Scene] compile_scene_pipelines: {len(self._scene_pipelines)} handles, scene={self.name}")
+        log.info(f"[Scene] compile_scene_pipelines: {len(self._scene_pipelines)} templates, scene={self.name}")
 
         # Clear old pipelines
         self._compiled_pipelines.clear()
         cpp_rm.clear_scene_pipelines(self)
 
-        # Compile from handles
-        for handle in self._scene_pipelines:
-            asset = handle.get_asset()
-            if asset is None:
-                log.warn(f"[Scene] Scene pipeline asset not found for handle")
+        # Compile from templates
+        for template in self._scene_pipelines:
+            if not template.is_valid:
+                log.warn(f"[Scene] Invalid scene pipeline template")
                 continue
 
-            pipeline = asset.compile()
+            if not template.is_loaded:
+                log.warn(f"[Scene] Scene pipeline template not loaded")
+                continue
+
+            pipeline = template.compile()
             if pipeline is None:
-                log.warn(f"[Scene] Failed to compile scene pipeline '{asset.name}'")
+                log.warn(f"[Scene] Failed to compile scene pipeline '{template.name}'")
                 continue
 
-            log.info(f"[Scene] Registered pipeline '{asset.name}' for scene '{self.name}'")
+            pipeline.name = template.name
+            log.info(f"[Scene] Registered pipeline '{template.name}' for scene '{self.name}'")
 
             # Store Python ref to prevent GC
-            self._compiled_pipelines[asset.name] = pipeline
+            self._compiled_pipelines[template.name] = pipeline
 
             # Register in C++ RenderingManager for C++ component access
-            cpp_rm.add_scene_pipeline(self, asset.name, pipeline)
-            cpp_rm.set_pipeline_targets(asset.name, list(asset.target_viewports))
+            cpp_rm.add_scene_pipeline(self, template.name, pipeline)
+            cpp_rm.set_pipeline_targets(template.name, list(template.target_viewports))
 
     def destroy_compiled_pipelines(self) -> None:
         """Destroy all compiled pipelines."""
@@ -820,7 +824,7 @@ class Scene:
             "layer_names": {str(k): v for k, v in self.layer_names.items()},
             "flag_names": {str(k): v for k, v in self.flag_names.items()},
             "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
-            "scene_pipelines": [h.serialize() for h in self._scene_pipelines],
+            "scene_pipelines": [{"uuid": t.uuid} for t in self._scene_pipelines if t.is_valid],
         }
         result.update(self._lighting.serialize())
         # Skybox settings
@@ -881,12 +885,15 @@ class Scene:
                 ViewportConfig.deserialize(vc_data)
                 for vc_data in data.get("viewport_configs", [])
             ]
-            # Load scene pipelines
-            from termin.assets.scene_pipeline_handle import ScenePipelineHandle
-            self._scene_pipelines = [
-                ScenePipelineHandle.deserialize(sp_data)
-                for sp_data in data.get("scene_pipelines", [])
-            ]
+            # Load scene pipelines from templates
+            from termin._native.render import TcScenePipelineTemplate
+            self._scene_pipelines = []
+            for sp_data in data.get("scene_pipelines", []):
+                uuid = sp_data.get("uuid", "")
+                if uuid:
+                    template = TcScenePipelineTemplate.find_by_uuid(uuid)
+                    if template.is_valid:
+                        self._scene_pipelines.append(template)
 
             # Compile scene pipelines immediately after loading
             # (so components can find them in start())

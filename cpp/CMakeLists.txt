@@ -295,6 +295,8 @@ add_library(render_lib STATIC
     termin/render/shader_skinning.cpp
     termin/render/graph_data.cpp
     termin/render/graph_compiler.cpp
+    termin/render/scene_pipeline_template.cpp
+    termin/render/tc_value_trent.cpp
     termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
@@ -464,6 +466,7 @@ nanobind_add_module(_native
     termin/bindings/render/tc_display_bindings.cpp
     termin/bindings/input/simple_display_input_manager_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
+    termin/bindings/render/scene_pipeline_template_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp

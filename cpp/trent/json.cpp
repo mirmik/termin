@@ -449,3 +449,118 @@ nos::trent nos::json::parse_file(const std::string &str)
 
     return parse(buffer);
 }
+
+// Helper for escaping strings in JSON
+static std::string escape_json_string(const std::string& s) {
+    std::string result;
+    result.reserve(s.size() + 2);
+    for (char c : s) {
+        switch (c) {
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\b': result += "\\b"; break;
+            case '\f': result += "\\f"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\t': result += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 32) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    result += buf;
+                } else {
+                    result += c;
+                }
+                break;
+        }
+    }
+    return result;
+}
+
+static void dump_impl(const nos::trent& t, std::string& out, int indent, int current_indent) {
+    auto add_indent = [&]() {
+        if (indent >= 0) {
+            out += '\n';
+            out.append(current_indent, ' ');
+        }
+    };
+
+    switch (t.get_type()) {
+        case nos::trent_type::nil:
+            out += "null";
+            break;
+
+        case nos::trent_type::boolean:
+            out += t.as_bool() ? "true" : "false";
+            break;
+
+        case nos::trent_type::numer: {
+            double val = static_cast<double>(t.as_numer());
+            if (val == static_cast<double>(static_cast<int64_t>(val))) {
+                out += std::to_string(static_cast<int64_t>(val));
+            } else {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%.17g", val);
+                out += buf;
+            }
+            break;
+        }
+
+        case nos::trent_type::string:
+            out += '"';
+            out += escape_json_string(t.as_string());
+            out += '"';
+            break;
+
+        case nos::trent_type::list: {
+            out += '[';
+            const auto& list = t.as_list();
+            bool first = true;
+            for (const auto& item : list) {
+                if (!first) out += ',';
+                first = false;
+                if (indent >= 0) {
+                    out += '\n';
+                    out.append(current_indent + indent, ' ');
+                }
+                dump_impl(item, out, indent, current_indent + indent);
+            }
+            if (!list.empty()) {
+                add_indent();
+            }
+            out += ']';
+            break;
+        }
+
+        case nos::trent_type::dict: {
+            out += '{';
+            const auto& dict = t.as_dict();
+            bool first = true;
+            for (const auto& [key, val] : dict) {
+                if (!first) out += ',';
+                first = false;
+                if (indent >= 0) {
+                    out += '\n';
+                    out.append(current_indent + indent, ' ');
+                }
+                out += '"';
+                out += escape_json_string(key);
+                out += '"';
+                out += ':';
+                if (indent >= 0) out += ' ';
+                dump_impl(val, out, indent, current_indent + indent);
+            }
+            if (!dict.empty()) {
+                add_indent();
+            }
+            out += '}';
+            break;
+        }
+    }
+}
+
+std::string nos::json::dump(const nos::trent& t, int indent) {
+    std::string result;
+    dump_impl(t, result, indent, 0);
+    return result;
+}
