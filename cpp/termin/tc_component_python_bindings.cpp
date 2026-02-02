@@ -484,8 +484,8 @@ public:
 
     // Get owner entity (returns invalid Entity if not attached)
     Entity entity() const {
-        if (_c && _c->owner_pool) {
-            return Entity(_c->owner_pool, _c->owner_entity_id);
+        if (_c && tc_entity_handle_valid(_c->owner)) {
+            return Entity(_c->owner);
         }
         return Entity();
     }

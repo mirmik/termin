@@ -112,7 +112,7 @@ void CxxComponent::_cb_on_destroy(tc_component* c) {
 void CxxComponent::_cb_on_added_to_entity(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
-        // entity() now reads from c->owner_pool/owner_entity_id directly
+        // entity() reads from c->owner handle
         self->on_added_to_entity();
     }
 }
@@ -121,7 +121,7 @@ void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->on_removed_from_entity();
-        // entity() will return invalid after c->owner_pool is cleared
+        // entity() will return invalid after c->owner is cleared
     }
 }
 

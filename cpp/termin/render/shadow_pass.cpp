@@ -108,7 +108,7 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    Entity ent(tc->owner_pool, tc->owner_entity_id);
+    Entity ent(tc->owner);
 
     auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {

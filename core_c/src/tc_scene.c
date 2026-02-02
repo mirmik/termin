@@ -739,8 +739,10 @@ static void process_pending_start(uint32_t idx, bool editor_mode) {
 }
 
 static inline bool component_entity_enabled(tc_component* c) {
-    if (!c->owner_pool) return true;
-    return tc_entity_pool_enabled(c->owner_pool, c->owner_entity_id);
+    if (!tc_entity_handle_valid(c->owner)) return true;
+    tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+    if (!pool) return true;
+    return tc_entity_pool_enabled(pool, c->owner.id);
 }
 
 void tc_scene_update(tc_scene_handle h, double dt) {
@@ -1062,12 +1064,15 @@ void tc_scene_foreach_drawable(
         for (tc_component* c = first; c != NULL; c = c->type_next) {
             if (check_enabled && !c->enabled) continue;
 
-            if (c->owner_pool && (check_visible || check_entity_enabled || check_layer)) {
-                if (check_visible && !tc_entity_pool_visible(c->owner_pool, c->owner_entity_id)) continue;
-                if (check_entity_enabled && !tc_entity_pool_enabled(c->owner_pool, c->owner_entity_id)) continue;
-                if (check_layer) {
-                    uint64_t entity_layer = tc_entity_pool_layer(c->owner_pool, c->owner_entity_id);
-                    if (!(layer_mask & (1ULL << entity_layer))) continue;
+            if (tc_entity_handle_valid(c->owner) && (check_visible || check_entity_enabled || check_layer)) {
+                tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+                if (pool) {
+                    if (check_visible && !tc_entity_pool_visible(pool, c->owner.id)) continue;
+                    if (check_entity_enabled && !tc_entity_pool_enabled(pool, c->owner.id)) continue;
+                    if (check_layer) {
+                        uint64_t entity_layer = tc_entity_pool_layer(pool, c->owner.id);
+                        if (!(layer_mask & (1ULL << entity_layer))) continue;
+                    }
                 }
             }
 
@@ -1098,8 +1103,9 @@ void tc_scene_foreach_input_handler(
             if (check_enabled && !c->enabled) continue;
             if (check_active_in_editor && !c->active_in_editor) continue;
 
-            if (c->owner_pool && check_entity_enabled) {
-                if (!tc_entity_pool_enabled(c->owner_pool, c->owner_entity_id)) continue;
+            if (tc_entity_handle_valid(c->owner) && check_entity_enabled) {
+                tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+                if (pool && !tc_entity_pool_enabled(pool, c->owner.id)) continue;
             }
 
             if (!callback(c, user_data)) return;

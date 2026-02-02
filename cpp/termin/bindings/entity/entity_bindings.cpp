@@ -92,8 +92,8 @@ public:
 
     // Get owner entity
     Entity entity() const {
-        if (!_c || !_c->owner_pool) return Entity();
-        return Entity(_c->owner_pool, _c->owner_entity_id);
+        if (!_c || !tc_entity_handle_valid(_c->owner)) return Entity();
+        return Entity(_c->owner);
     }
 
     // Serialize component data using tc_inspect

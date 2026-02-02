@@ -26,9 +26,9 @@ public:
     // Embedded C component (MUST be first member for from_tc to work)
     tc_component _c;
 
-    // Owner entity - constructed from C-side owner_pool/owner_entity_id
+    // Owner entity - constructed from C-side owner handle
     Entity entity() const {
-        return Entity(_c.owner_pool, _c.owner_entity_id);
+        return Entity(_c.owner);
     }
 
 private:

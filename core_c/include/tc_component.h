@@ -5,21 +5,12 @@
 #include "tc_types.h"
 #include "tc_shader.h"
 #include "tc_type_registry.h"
+#include "tc_entity_pool.h"
 #include <stdint.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-// Forward declarations for entity pool types
-typedef struct tc_entity_pool tc_entity_pool;
-#ifndef TC_ENTITY_ID_DEFINED
-#define TC_ENTITY_ID_DEFINED
-typedef struct {
-    uint32_t index;
-    uint32_t generation;
-} tc_entity_id;
 #endif
 
 // ============================================================================
@@ -150,12 +141,8 @@ struct tc_component {
     // Input vtable (NULL if component doesn't handle input)
     const tc_input_vtable* input_vtable;
 
-    // Owner entity (set by entity_add_component) - DEPRECATED, use owner_entity_id
-    tc_entity* entity;
-
-    // Owner entity ID and pool (set when added to entity)
-    tc_entity_id owner_entity_id;
-    tc_entity_pool* owner_pool;
+    // Owner entity handle (set when added to entity, invalid when detached)
+    tc_entity_handle owner;
 
     // Component kind (native or external)
     tc_component_kind kind;
@@ -212,13 +199,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->drawable_vtable = NULL;
     c->drawable_ptr = NULL;
     c->input_vtable = NULL;
-    c->entity = NULL;
-#ifdef __cplusplus
-    c->owner_entity_id = tc_entity_id{0xFFFFFFFF, 0};  // invalid
-#else
-    c->owner_entity_id = (tc_entity_id){0xFFFFFFFF, 0};  // invalid
-#endif
-    c->owner_pool = NULL;
+    c->owner = TC_ENTITY_HANDLE_INVALID;
     c->kind = TC_NATIVE_COMPONENT;
     c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
@@ -545,8 +526,7 @@ TC_API void tc_component_set_active_in_editor(tc_component* c, bool active);
 TC_API bool tc_component_get_is_drawable(const tc_component* c);
 TC_API bool tc_component_get_is_input_handler(const tc_component* c);
 TC_API tc_component_kind tc_component_get_kind(const tc_component* c);
-TC_API tc_entity_id tc_component_get_owner_entity_id(const tc_component* c);
-TC_API tc_entity_pool* tc_component_get_owner_pool(const tc_component* c);
+TC_API tc_entity_handle tc_component_get_owner(const tc_component* c);
 
 #ifdef __cplusplus
 }

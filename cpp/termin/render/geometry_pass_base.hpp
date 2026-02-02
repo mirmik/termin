@@ -241,7 +241,7 @@ protected:
 
         auto callback = [](tc_component* c, void* user_data) -> bool {
             auto* ctx = static_cast<CollectContext*>(user_data);
-            Entity ent(c->owner_pool, c->owner_entity_id);
+            Entity ent(c->owner);
 
             if (!ctx->pass->entity_filter(ent)) {
                 return true;
