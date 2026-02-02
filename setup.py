@@ -14,7 +14,25 @@ class CMakeBuildExt(build_ext):
     """
     Build pybind11 extensions via CMake (cpp/CMakeLists.txt).
     CMake builds all native modules in one go, then installs them into build_lib/termin/*.
+
+    Use --debug flag to build with debug symbols: pip install -e . --config-settings="--build-option=--debug"
+    Or: python setup.py build_ext --debug
     """
+
+    user_options = build_ext.user_options + [
+        ("debug", None, "Build with debug symbols"),
+    ]
+
+    def initialize_options(self):
+        super().initialize_options()
+        self.debug = False
+
+    def finalize_options(self):
+        super().finalize_options()
+        # Also check sys.argv for --debug (for pip install -e . --debug workaround)
+        if "--debug" in sys.argv:
+            self.debug = True
+            sys.argv.remove("--debug")
 
     def run(self):
         try:
@@ -30,7 +48,7 @@ class CMakeBuildExt(build_ext):
         install_prefix = (build_lib / "termin").resolve()
         install_prefix.mkdir(parents=True, exist_ok=True)
 
-        cfg = "Debug"  # Always build with debug symbols
+        cfg = "Debug" if self.debug else "Release"
         cmake_args = [
             str(source_dir),
             f"-DCMAKE_BUILD_TYPE={cfg}",
