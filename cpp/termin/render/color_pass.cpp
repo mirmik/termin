@@ -145,8 +145,6 @@ void ColorPass::bind_extra_textures(const FBOMap& reads_fbos) {
 
         // Get FBO and its color texture
         FrameGraphResource* resource = it->second;
-        tc::Log::info("[ColorPass:%s] Attempting cast for resource='%s', resource_type='%s', ptr=%p",
-                      get_pass_name().c_str(), resource_name.c_str(), resource->resource_type(), resource);
 
         FramebufferHandle* fbo = nullptr;
         try {
@@ -374,8 +372,6 @@ void ColorPass::execute_with_data(
         return;
     }
     FrameGraphResource* resource = it->second;
-    tc::Log::info("[ColorPass] Attempting cast for output FBO='%s', resource_type='%s', ptr=%p",
-                  output_res.c_str(), resource->resource_type(), resource);
 
     FramebufferHandle* fb = nullptr;
     try {

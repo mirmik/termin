@@ -18,7 +18,7 @@ HeadlessContext&nbsp;—&nbsp;невидимое&nbsp;окно&nbsp;для&nbsp;
 &nbsp;&nbsp;&nbsp;&nbsp;context.make_current()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Теперь&nbsp;можно&nbsp;использовать&nbsp;OpenGL<br>
-&nbsp;&nbsp;&nbsp;&nbsp;graphics&nbsp;=&nbsp;OpenGLGraphicsBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;graphics&nbsp;=&nbsp;OpenGLGraphicsBackend.get_instance()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;offscreen&nbsp;=&nbsp;OffscreenRenderSurface(graphics,&nbsp;800,&nbsp;600)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;...<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<br>

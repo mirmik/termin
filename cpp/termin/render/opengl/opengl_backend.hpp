@@ -473,10 +473,25 @@ inline void register_gpu_ops() {
 
 /**
  * OpenGL 3.3+ graphics backend implementation.
+ * Singleton - only one instance can exist.
  */
 class OpenGLGraphicsBackend : public GraphicsBackend {
+private:
+    static OpenGLGraphicsBackend* instance_;
+
+    OpenGLGraphicsBackend() : initialized_(false) {
+        tc::Log::info("[OpenGLGraphicsBackend] Constructor, this=%p, glad_initialized_=%d",
+                      this, glad_initialized_);
+    }
+
+    // Delete copy and move constructors and operators
+    OpenGLGraphicsBackend(const OpenGLGraphicsBackend&) = delete;
+    OpenGLGraphicsBackend(OpenGLGraphicsBackend&&) = delete;
+    OpenGLGraphicsBackend& operator=(const OpenGLGraphicsBackend&) = delete;
+    OpenGLGraphicsBackend& operator=(OpenGLGraphicsBackend&&) = delete;
+
 public:
-    OpenGLGraphicsBackend() : initialized_(false) {}
+    static OpenGLGraphicsBackend& get_instance();
 
     ~OpenGLGraphicsBackend() override {
         if (ui_vao_ != 0) {
@@ -485,9 +500,13 @@ public:
         }
     }
 
-    void ensure_ready() override {
-        if (initialized_) return;
+    void test_method() {
+        printf("[CPP] test_method CALLED on %p\n", (void*)this);
+        fflush(stdout);
+        tc::Log::info("[test_method] called");
+    }
 
+    void ensure_ready() override {
         // Initialize GLAD if not already done
         if (!glad_initialized_) {
             if (!gladLoaderLoadGL()) {
@@ -1110,14 +1129,18 @@ private:
 
     void ensure_ui_buffers() {
         if (ui_vao_ != 0) {
-            if (glIsVertexArray(ui_vao_)) {
+            if (glIsVertexArray && glIsVertexArray(ui_vao_)) {
                 return;
             }
             tc::Log::warn("ensure_ui_buffers: VAO %u invalid, recreating", ui_vao_);
         }
 
-        glGenVertexArrays(1, &ui_vao_);
-        glGenBuffers(1, &ui_vbo_);
+        if (glGenVertexArrays) {
+            glGenVertexArrays(1, &ui_vao_);
+            glGenBuffers(1, &ui_vbo_);
+        } else {
+            tc::Log::error("[ensure_ui_buffers] glGenVertexArrays is NULL!");
+        }
     }
 
     void draw_immediate_impl(const float* vertices, int vertex_count, GLenum mode) {
@@ -1180,7 +1203,7 @@ private:
     std::string current_gpu_query_;
 
     // Static flag for GLAD initialization (shared across all backends)
-    static inline bool glad_initialized_ = false;
+    static bool glad_initialized_;
 };
 
 } // namespace termin

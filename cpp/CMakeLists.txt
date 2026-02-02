@@ -184,7 +184,6 @@ set_source_files_properties(
 # Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles) - nanobind
 nanobind_add_module(_graphics_native
     termin/bindings/graphics/graphics_module.cpp
-    termin/render/glad/src/glad.c
 )
 target_include_directories(_graphics_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
@@ -309,7 +308,9 @@ add_library(render_lib SHARED
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
     termin/render/opengl/opengl_backend.cpp
+    termin/render/opengl/opengl_backend_singleton.cpp
     termin/render/opengl/opengl_framebuffer.cpp
+    termin/render/glad/src/glad.c
 )
 target_include_directories(render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -526,7 +527,6 @@ nanobind_add_module(_native
     termin/render/bloom_pass.cpp
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp
-    termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
@@ -605,7 +605,7 @@ endif()
 
 # Install to python packages
 # Install shared libraries to root termin directory
-install(TARGETS trent entity_lib termin_core
+install(TARGETS trent entity_lib termin_core render_lib
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows

@@ -98,8 +98,8 @@ def&nbsp;run_editor(debug_resource:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None,&
 &nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)&nbsp;!=&nbsp;0:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(f&quot;Failed&nbsp;to&nbsp;initialize&nbsp;SDL:&nbsp;{sdl2.SDL_GetError()}&quot;)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Setup&nbsp;graphics&nbsp;backend<br>
-&nbsp;&nbsp;&nbsp;&nbsp;graphics&nbsp;=&nbsp;OpenGLGraphicsBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Setup&nbsp;graphics&nbsp;backend&nbsp;(singleton)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;graphics&nbsp;=&nbsp;OpenGLGraphicsBackend.get_instance()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(graphics)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Create&nbsp;SDL&nbsp;embedded&nbsp;backend&nbsp;for&nbsp;viewport&nbsp;rendering<br>

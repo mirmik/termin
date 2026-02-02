@@ -81,7 +81,7 @@ class PlayerRuntime:
 
         # Create graphics backend
         from termin.graphics import OpenGLGraphicsBackend
-        self.graphics = OpenGLGraphicsBackend()
+        self.graphics = OpenGLGraphicsBackend.get_instance()
         manager.set_graphics(self.graphics)
 
         # Create window

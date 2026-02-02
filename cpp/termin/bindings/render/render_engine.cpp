@@ -29,28 +29,21 @@ void bind_render_engine(nb::module_& m) {
                                    CameraComponent* camera,
                                    nb::object viewport_obj,
                                    uint64_t layer_mask) {
-            tc::Log::info("[TRACE BINDING] render_view_to_fbo binding entered, target_fbo=%p, camera=%p", target_fbo, camera);
             // Convert viewport from Python object to handle
-            tc::Log::info("[TRACE BINDING] About to convert viewport");
             tc_viewport_handle vh = TC_VIEWPORT_HANDLE_INVALID;
             if (!viewport_obj.is_none()) {
-                tc::Log::info("[TRACE BINDING] viewport_obj is not none, getting _viewport_handle attr");
                 try {
                     auto attr = viewport_obj.attr("_viewport_handle");
-                    tc::Log::info("[TRACE BINDING] Got _viewport_handle attr, calling it");
                     auto result = attr();
-                    tc::Log::info("[TRACE BINDING] Called _viewport_handle(), extracting values by index");
                     // Extract values directly from Python tuple without casting to std::tuple
                     // This avoids RTTI issues across modules
                     vh.index = nb::cast<uint32_t>(result[nb::int_(0)]);
                     vh.generation = nb::cast<uint32_t>(result[nb::int_(1)]);
-                    tc::Log::info("[TRACE BINDING] Viewport values extracted: index=%u, generation=%u", vh.index, vh.generation);
                 } catch (const std::exception& e) {
                     tc::Log::error("[TRACE BINDING] Exception during viewport conversion: %s", e.what());
                     throw;
                 }
             }
-            tc::Log::info("[TRACE BINDING] Viewport converted, about to call C++ render_view_to_fbo");
             // Use overload that builds lights from scene automatically
             self.render_view_to_fbo(
                 &pipeline,
@@ -62,7 +55,6 @@ void bind_render_engine(nb::module_& m) {
                 vh,
                 layer_mask
             );
-            tc::Log::info("[TRACE BINDING] C++ render_view_to_fbo returned successfully");
         },
              nb::arg("pipeline"),
              nb::arg("target_fbo"),

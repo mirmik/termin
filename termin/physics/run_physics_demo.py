@@ -149,7 +149,7 @@ def run_physics_demo():
     QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
 
-    set_default_graphics_backend(OpenGLGraphicsBackend())
+    set_default_graphics_backend(OpenGLGraphicsBackend.get_instance())
     set_default_window_backend(QtWindowBackend())
 
     world = VisualizationWorld()

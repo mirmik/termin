@@ -149,7 +149,6 @@ void RenderEngine::render_view_to_fbo(
     const std::vector<Light>& lights,
     uint64_t layer_mask
 ) {
-    tc::Log::info("[TRACE] render_view_to_fbo: ENTER");
     if (!pipeline) {
         tc::Log::error("RenderEngine::render_view_to_fbo: pipeline is null");
         return;
@@ -319,8 +318,7 @@ void RenderEngine::render_view_to_fbo(
         }
 
         FrameGraphResource* resource = it->second;
-        tc::Log::info("[render_view_to_fbo] Attempting cast for resource='%s', resource_type='%s', ptr=%p",
-                      spec.resource.c_str(), resource->resource_type(), resource);
+        
 
         FramebufferHandle* fbo = nullptr;
         try {
@@ -405,10 +403,8 @@ void RenderEngine::render_view_to_fbo(
         ctx.lights = lights;
         ctx.layer_mask = layer_mask;
 
-        tc::Log::info("[TRACE] render_view_to_fbo: About to execute pass '%s'", pass_name);
         // Execute pass via vtable
         tc_pass_execute(pass, &ctx);
-        tc::Log::info("[TRACE] render_view_to_fbo: Pass '%s' executed successfully", pass_name);
 
 
         tc_profiler_begin_section("Sync Operations");
@@ -426,7 +422,6 @@ void RenderEngine::render_view_to_fbo(
     }
     tc_profiler_end_section(); // Execute Passes
 
-    tc::Log::info("[TRACE] render_view_to_fbo: EXIT SUCCESS");
     // Frame graph is cached by pipeline, do not destroy
 }
 
@@ -646,8 +641,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
         }
 
         FrameGraphResource* resource = it->second;
-        tc::Log::info("[render_scene_pipeline_offscreen] Attempting cast for resource='%s', resource_type='%s', ptr=%p",
-                      spec.resource.c_str(), resource->resource_type(), resource);
+                     
 
         FramebufferHandle* fbo = nullptr;
         try {

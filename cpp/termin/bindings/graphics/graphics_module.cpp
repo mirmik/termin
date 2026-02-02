@@ -381,9 +381,11 @@ void bind_graphics_backend(nb::module_& m) {
             return nb::cast(nb::ndarray<nb::numpy, float>(buf, 3, shape, owner));
         });
 
-    // OpenGLGraphicsBackend
+    // OpenGLGraphicsBackend (singleton)
     nb::class_<OpenGLGraphicsBackend, GraphicsBackend>(m, "OpenGLGraphicsBackend")
-        .def(nb::init<>())
+        .def_static("get_instance", &OpenGLGraphicsBackend::get_instance, nb::rv_policy::reference)
+        .def("ensure_ready", &OpenGLGraphicsBackend::ensure_ready)
+        .def("test_method", &OpenGLGraphicsBackend::test_method)
         .def("create_shader", [](OpenGLGraphicsBackend& self, const std::string& vert, const std::string& frag, nb::object geom) {
             const char* geom_ptr = nullptr;
             std::string geom_str;

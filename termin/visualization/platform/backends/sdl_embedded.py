@@ -320,6 +320,29 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         video.SDL_GL_MakeCurrent(self._window, self._gl_context)
 
+        # Initialize OpenGL function pointers (GLAD) after context is created
+        if graphics is not None:
+            from termin._native import log
+            log.info(f"About to call ensure_ready() on graphics={graphics}, type={type(graphics)}, id={id(graphics)}")
+            log.info(f"graphics.__class__.__mro__ = {graphics.__class__.__mro__}")
+            log.info(f"hasattr(graphics, 'ensure_ready') = {hasattr(graphics, 'ensure_ready')}")
+            log.info(f"type(graphics.ensure_ready) = {type(graphics.ensure_ready)}")
+
+            # Test if C++ methods are callable
+            if hasattr(graphics, 'test_method'):
+                log.info("Calling test_method()...")
+                graphics.test_method()
+                log.info("test_method() completed")
+
+            try:
+                result = graphics.ensure_ready()
+                log.info(f"ensure_ready() completed successfully, result={result}")
+            except Exception as e:
+                log.error(f"ensure_ready() FAILED with exception: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+
         # Log actual color depth we got
         r_size = ctypes.c_int()
         g_size = ctypes.c_int()

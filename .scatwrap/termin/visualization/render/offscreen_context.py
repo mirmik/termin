@@ -106,7 +106,7 @@ class&nbsp;OffscreenContext:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.make_current()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.graphics&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics&nbsp;=&nbsp;OpenGLGraphicsBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics&nbsp;=&nbsp;OpenGLGraphicsBackend.get_instance()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ensure&nbsp;OpenGL&nbsp;functions&nbsp;are&nbsp;loaded<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics.ensure_ready()<br>

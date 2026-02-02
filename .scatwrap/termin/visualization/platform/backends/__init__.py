@@ -58,7 +58,10 @@ def&nbsp;set_default_graphics_backend(backend:&nbsp;GraphicsBackend):<br>
 def&nbsp;get_default_graphics_backend()&nbsp;-&gt;&nbsp;GraphicsBackend:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;global&nbsp;_default_graphics_backend<br>
 &nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;_default_graphics_backend&nbsp;is&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_default_graphics_backend&nbsp;=&nbsp;OpenGLGraphicsBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin._native&nbsp;import&nbsp;log<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log.info(f&quot;[get_default_graphics_backend]&nbsp;Creating&nbsp;default&nbsp;backend&nbsp;via&nbsp;get_instance()&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_default_graphics_backend&nbsp;=&nbsp;OpenGLGraphicsBackend.get_instance()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log.info(f&quot;[get_default_graphics_backend]&nbsp;Got&nbsp;backend:&nbsp;{_default_graphics_backend},&nbsp;id={id(_default_graphics_backend)}&quot;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;_default_graphics_backend<br>
 <br>
 <br>

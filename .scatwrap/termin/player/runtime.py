@@ -89,7 +89,7 @@ class&nbsp;PlayerRuntime:<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Create&nbsp;graphics&nbsp;backend<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.graphics&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;OpenGLGraphicsBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;OpenGLGraphicsBackend.get_instance()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;manager.set_graphics(self.graphics)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Create&nbsp;window<br>

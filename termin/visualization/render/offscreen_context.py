@@ -98,7 +98,7 @@ class OffscreenContext:
         self.make_current()
 
         from termin.graphics import OpenGLGraphicsBackend
-        self._graphics = OpenGLGraphicsBackend()
+        self._graphics = OpenGLGraphicsBackend.get_instance()
 
         # Ensure OpenGL functions are loaded
         self._graphics.ensure_ready()
