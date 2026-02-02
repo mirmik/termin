@@ -280,6 +280,8 @@ class Scene(TcScene):
     @property
     def entities(self) -> List[Entity]:
         """Get all entities in the scene (from pool)."""
+        if not self.is_alive():
+            return []
         return self.get_all_entities()
 
     # create_entity(name) -> inherited from TcScene

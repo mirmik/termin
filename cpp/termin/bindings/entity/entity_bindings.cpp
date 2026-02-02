@@ -120,18 +120,24 @@ public:
     nb::object serialize() const {
         if (!_c) return nb::none();
 
-        // For C++ components, use virtual serialize() method
-        // This allows UnknownComponent to return original_type instead of "UnknownComponent"
-        if (_c->kind == TC_CXX_COMPONENT) {
+        // Special case for UnknownComponent - return original type instead of "UnknownComponent"
+        const char* tname = type_name();
+        if (tname && strcmp(tname, "UnknownComponent") == 0 && _c->kind == TC_CXX_COMPONENT) {
             CxxComponent* cxx = CxxComponent::from_tc(_c);
             if (cxx) {
-                const char* tname = cxx->type_name();
-                tc::Log::info("[TcComponentRef::serialize] C++ component type='%s'", tname ? tname : "null");
-                tc_value v = cxx->serialize();
-                tc::Log::info("[TcComponentRef::serialize] serialize() returned, type=%d", v.type);
-                nb::object result = tc_value_to_py(&v);
-                tc::Log::info("[TcComponentRef::serialize] tc_value_to_py done");
-                tc_value_free(&v);
+                tc_value orig_type = tc_inspect_get(cxx, "UnknownComponent", "original_type");
+                tc_value orig_data = tc_inspect_get(cxx, "UnknownComponent", "original_data");
+
+                nb::dict result;
+                if (orig_type.type == TC_VALUE_STRING && orig_type.data.s && orig_type.data.s[0]) {
+                    result["type"] = orig_type.data.s;
+                } else {
+                    result["type"] = "UnknownComponent";
+                }
+                result["data"] = tc_value_to_py(&orig_data);
+
+                tc_value_free(&orig_type);
+                tc_value_free(&orig_data);
                 return result;
             }
         }
