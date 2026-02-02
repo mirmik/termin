@@ -248,6 +248,28 @@ TC_API tc_scene_lighting* tc_scene_get_lighting(tc_scene_handle h);
 TC_API void tc_scene_set_ambient(tc_scene_handle h, float r, float g, float b, float intensity);
 TC_API void tc_scene_set_shadow_settings(tc_scene_handle h, int method, float softness, float bias);
 
+// ============================================================================
+// Compiled Pipelines (stored as opaque pointers, owned externally)
+// ============================================================================
+
+// Set a compiled pipeline for this scene (non-owning, caller manages lifetime)
+TC_API void tc_scene_set_pipeline(tc_scene_handle h, const char* name, void* pipeline);
+
+// Get a compiled pipeline by name (returns NULL if not found)
+TC_API void* tc_scene_get_pipeline(tc_scene_handle h, const char* name);
+
+// Remove a pipeline by name
+TC_API void tc_scene_remove_pipeline(tc_scene_handle h, const char* name);
+
+// Clear all pipelines for this scene
+TC_API void tc_scene_clear_pipelines(tc_scene_handle h);
+
+// Get number of pipelines
+TC_API size_t tc_scene_pipeline_count(tc_scene_handle h);
+
+// Get pipeline name by index (for iteration)
+TC_API const char* tc_scene_pipeline_name_at(tc_scene_handle h, size_t index);
+
 #ifdef __cplusplus
 }
 #endif

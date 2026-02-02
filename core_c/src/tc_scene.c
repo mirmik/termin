@@ -107,6 +107,9 @@ typedef struct {
     void** collision_worlds;
     const char** names;
 
+    // Compiled pipelines (tc_resource_map: name -> void* pipeline)
+    tc_resource_map** pipelines;
+
     // Pool management
     uint32_t* free_stack;
     size_t free_count;
@@ -150,6 +153,7 @@ void tc_scene_pool_init(void) {
     g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
     g_pool->collision_worlds = (void**)calloc(cap, sizeof(void*));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
+    g_pool->pipelines = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
 
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
@@ -190,6 +194,7 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->skyboxes);
     free(g_pool->collision_worlds);
     free(g_pool->names);
+    free(g_pool->pipelines);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -224,6 +229,7 @@ static void pool_grow(void) {
     g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
     g_pool->collision_worlds = realloc(g_pool->collision_worlds, new_cap * sizeof(void*));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
+    g_pool->pipelines = realloc(g_pool->pipelines, new_cap * sizeof(tc_resource_map*));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
 
     // Initialize new slots
@@ -243,6 +249,7 @@ static void pool_grow(void) {
     memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
     memset(g_pool->collision_worlds + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
+    memset(g_pool->pipelines + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
 
     // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
@@ -349,6 +356,10 @@ void tc_scene_free(tc_scene_handle h) {
     // Free type heads map
     tc_resource_map_free(g_pool->type_heads[idx]);
     g_pool->type_heads[idx] = NULL;
+
+    // Free pipelines map (just the map, not the pipelines themselves - they're owned externally)
+    tc_resource_map_free(g_pool->pipelines[idx]);
+    g_pool->pipelines[idx] = NULL;
 
     // Destroy entity pool via registry to invalidate handles
     tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->pools[idx]);
@@ -1115,4 +1126,83 @@ void tc_scene_set_shadow_settings(tc_scene_handle h, int method, float softness,
     g_pool->lightings[h.index].shadow_method = method;
     g_pool->lightings[h.index].shadow_softness = softness;
     g_pool->lightings[h.index].shadow_bias = bias;
+}
+
+// ============================================================================
+// Compiled Pipelines
+// ============================================================================
+
+void tc_scene_set_pipeline(tc_scene_handle h, const char* name, void* pipeline) {
+    if (!handle_alive(h) || !name) return;
+    uint32_t idx = h.index;
+
+    // Create map if needed (no destructor - pipelines owned externally)
+    if (!g_pool->pipelines[idx]) {
+        g_pool->pipelines[idx] = tc_resource_map_new(NULL);
+    }
+
+    // Remove existing entry if any, then add
+    tc_resource_map_remove(g_pool->pipelines[idx], name);
+    tc_resource_map_add(g_pool->pipelines[idx], name, pipeline);
+}
+
+void* tc_scene_get_pipeline(tc_scene_handle h, const char* name) {
+    if (!handle_alive(h) || !name) return NULL;
+    uint32_t idx = h.index;
+
+    if (!g_pool->pipelines[idx]) return NULL;
+    return tc_resource_map_get(g_pool->pipelines[idx], name);
+}
+
+void tc_scene_remove_pipeline(tc_scene_handle h, const char* name) {
+    if (!handle_alive(h) || !name) return;
+    uint32_t idx = h.index;
+
+    if (!g_pool->pipelines[idx]) return;
+    tc_resource_map_remove(g_pool->pipelines[idx], name);
+}
+
+void tc_scene_clear_pipelines(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    uint32_t idx = h.index;
+
+    tc_resource_map_free(g_pool->pipelines[idx]);
+    g_pool->pipelines[idx] = NULL;
+}
+
+size_t tc_scene_pipeline_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    uint32_t idx = h.index;
+
+    if (!g_pool->pipelines[idx]) return 0;
+    return tc_resource_map_count(g_pool->pipelines[idx]);
+}
+
+// Helper struct for pipeline name iteration
+typedef struct {
+    size_t target_index;
+    size_t current_index;
+    const char* result;
+} pipeline_name_at_data;
+
+static bool pipeline_name_at_callback(const char* uuid, void* resource, void* user_data) {
+    (void)resource;
+    pipeline_name_at_data* data = (pipeline_name_at_data*)user_data;
+    if (data->current_index == data->target_index) {
+        data->result = uuid;
+        return false;  // Stop iteration
+    }
+    data->current_index++;
+    return true;
+}
+
+const char* tc_scene_pipeline_name_at(tc_scene_handle h, size_t index) {
+    if (!handle_alive(h)) return NULL;
+    uint32_t idx = h.index;
+
+    if (!g_pool->pipelines[idx]) return NULL;
+
+    pipeline_name_at_data data = { index, 0, NULL };
+    tc_resource_map_foreach(g_pool->pipelines[idx], pipeline_name_at_callback, &data);
+    return data.result;
 }

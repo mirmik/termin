@@ -493,8 +493,8 @@ class RenderingManager:
         """
         from termin._native import log
 
-        # Compile scene pipelines (stored in C++ RenderingManager)
-        scene.compile_scene_pipelines()
+        # NOTE: Scene pipelines are compiled at deserialization time (in Scene.load_from_data)
+        # Do not recompile here - it would invalidate pointers held by components
 
         # Build viewport lookup by name
         viewport_by_name: Dict[str, "Viewport"] = {}
@@ -548,7 +548,7 @@ class RenderingManager:
         """
         Get compiled scene pipeline by name.
 
-        Delegates to C++ RenderingManager.
+        Searches in attached scenes.
 
         Args:
             name: Scene pipeline asset name.
@@ -556,9 +556,11 @@ class RenderingManager:
         Returns:
             Compiled RenderPipeline or None if not found.
         """
-        from termin._native.render import RenderingManager as CppRenderingManager
-        cpp_rm = CppRenderingManager.instance()
-        return cpp_rm.get_scene_pipeline(name)
+        for scene in self._attached_scenes:
+            pipeline = scene.get_pipeline(name)
+            if pipeline is not None:
+                return pipeline
+        return None
 
     def get_render_stats(self) -> dict:
         """
@@ -572,9 +574,6 @@ class RenderingManager:
             - scene_names: list of attached scene names
             - pipeline_names: list of scene pipeline names
         """
-        from termin._native.render import RenderingManager as CppRenderingManager
-        cpp_rm = CppRenderingManager.instance()
-
         stats = {
             "attached_scenes": len(self._attached_scenes),
             "scene_pipelines": 0,
@@ -583,10 +582,10 @@ class RenderingManager:
             "pipeline_names": [],
         }
 
-        # Count scene pipelines from C++ RenderingManager
+        # Count scene pipelines from scenes
         for scene in self._attached_scenes:
             stats["scene_names"].append(scene.name or "<unnamed>")
-            pipeline_names = cpp_rm.get_pipeline_names(scene)
+            pipeline_names = scene.get_pipeline_names()
             for pipeline_name in pipeline_names:
                 stats["scene_pipelines"] += 1
                 stats["pipeline_names"].append(pipeline_name)

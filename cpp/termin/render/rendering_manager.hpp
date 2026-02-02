@@ -125,8 +125,9 @@ public:
     // Scene Pipeline Management
     // ========================================================================
 
-    // Register a compiled scene pipeline for a scene
-    void add_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline);
+    // Register a compiled scene pipeline for a scene (non-owning reference)
+    // Pipeline must outlive RenderingManager's reference (typically owned by TcScene)
+    void register_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline);
 
     // Unregister a scene pipeline
     void remove_scene_pipeline(tc_scene_handle scene, const std::string& name);
@@ -181,7 +182,8 @@ private:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
 
-    // Scene pipelines: scene_handle -> (pipeline_name -> pipeline)
+    // Scene pipelines: scene_handle -> (pipeline_name -> non-owning pointer)
+    // Pipelines are owned by TcScene, RenderingManager just references them
     // Key is (scene.index << 32 | scene.generation)
     std::unordered_map<uint64_t, std::unordered_map<std::string, RenderPipeline*>> scene_pipelines_;
 

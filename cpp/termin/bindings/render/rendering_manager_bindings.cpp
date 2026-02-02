@@ -28,14 +28,15 @@ void bind_rendering_manager(nb::module_& m) {
     nb::class_<RenderingManager>(m, "RenderingManager")
         .def_static("instance", &RenderingManager::instance, nb::rv_policy::reference)
 
-        // Scene pipeline management - accepts Python Scene object
-        .def("add_scene_pipeline", [](RenderingManager& self,
-                                       nb::object scene_py,
-                                       const std::string& name,
-                                       RenderPipeline* pipeline) {
+        // Register scene pipeline (non-owning reference, pipeline must be owned elsewhere)
+        .def("register_scene_pipeline", [](RenderingManager& self,
+                                            nb::object scene_py,
+                                            const std::string& name,
+                                            RenderPipeline* pipeline) {
             tc_scene_handle scene = get_scene_handle(scene_py);
-            self.add_scene_pipeline(scene, name, pipeline);
-        }, nb::arg("scene"), nb::arg("name"), nb::arg("pipeline"))
+            self.register_scene_pipeline(scene, name, pipeline);
+        }, nb::arg("scene"), nb::arg("name"), nb::arg("pipeline"),
+           "Register a scene pipeline (non-owning reference)")
 
         .def("remove_scene_pipeline", [](RenderingManager& self,
                                           nb::object scene_py,

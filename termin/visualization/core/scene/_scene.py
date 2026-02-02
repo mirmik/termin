@@ -15,8 +15,9 @@ from termin.colliders.raycast_hit import RaycastHit
 from termin.collision._collision_native import CollisionWorld
 from termin.core import Event
 
-from .lighting import LightingManager
 from termin.visualization.core.viewport_config import ViewportConfig
+from termin.lighting import ShadowSettings
+from termin._native.scene import TcSceneLighting
 
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -73,9 +74,8 @@ class Scene(TcScene):
         # Background color with alpha
         self._background_color = np.array(background_color, dtype=np.float32)
 
-        # Lighting manager
-        self._lighting = LightingManager()
-        self._lighting.tc_scene = self
+        # Lighting (lazy-loaded view into tc_scene_lighting)
+        self._tc_lighting: TcSceneLighting | None = None
 
         # Layer and flag names (index -> name)
         self.layer_names: dict[int, str] = {}  # 0-63
@@ -87,9 +87,6 @@ class Scene(TcScene):
         # Scene pipeline templates (list of TcScenePipelineTemplate handles)
         from termin._native.render import TcScenePipelineTemplate
         self._scene_pipelines: List[TcScenePipelineTemplate] = []
-
-        # Compiled pipelines - Python refs to prevent GC, also registered in C++ RenderingManager
-        self._compiled_pipelines: dict[str, "RenderPipeline"] = {}
 
         # Editor viewport state (runtime only, not serialized)
         # Stores camera name used in editor viewport for restore after game mode
@@ -195,23 +192,43 @@ class Scene(TcScene):
         self.get_skybox_mesh()
         self.ensure_skybox_material(type_int)
 
-    # --- Lighting delegation (backward compatibility) ---
+    # --- Lighting (stored in tc_scene_lighting) ---
+
+    def _get_lighting(self) -> TcSceneLighting | None:
+        """Get TcSceneLighting view (lazy-loaded)."""
+        if self._tc_lighting is None:
+            ptr = self.lighting_ptr()
+            if ptr:
+                self._tc_lighting = TcSceneLighting(ptr)
+        return self._tc_lighting
 
     @property
     def ambient_color(self) -> np.ndarray:
-        return self._lighting.ambient_color
+        lighting = self._get_lighting()
+        if lighting is not None:
+            c = lighting.ambient_color
+            return np.array([c[0], c[1], c[2]], dtype=np.float32)
+        return np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
     @ambient_color.setter
     def ambient_color(self, value):
-        self._lighting.ambient_color = np.asarray(value, dtype=np.float32)
+        lighting = self._get_lighting()
+        if lighting is not None:
+            arr = np.asarray(value, dtype=np.float32)
+            lighting.ambient_color = (float(arr[0]), float(arr[1]), float(arr[2]))
 
     @property
     def ambient_intensity(self) -> float:
-        return self._lighting.ambient_intensity
+        lighting = self._get_lighting()
+        if lighting is not None:
+            return lighting.ambient_intensity
+        return 0.1
 
     @ambient_intensity.setter
     def ambient_intensity(self, value: float):
-        self._lighting.ambient_intensity = value
+        lighting = self._get_lighting()
+        if lighting is not None:
+            lighting.ambient_intensity = float(value)
 
     @property
     def light_components(self) -> List[LightComponent]:
@@ -219,10 +236,18 @@ class Scene(TcScene):
         return self.get_components_of_type("LightComponent")
 
     @property
-    def shadow_settings(self):
+    def shadow_settings(self) -> ShadowSettings:
         """Shadow rendering settings."""
-        from .lighting import ShadowSettings
-        return self._lighting.shadow_settings
+        lighting = self._get_lighting()
+        if lighting is not None:
+            return lighting.shadow_settings
+        return ShadowSettings()
+
+    @shadow_settings.setter
+    def shadow_settings(self, value: ShadowSettings):
+        lighting = self._get_lighting()
+        if lighting is not None:
+            lighting.shadow_settings = value
 
     # --- Collision World ---
 
@@ -363,59 +388,23 @@ class Scene(TcScene):
         """Clear all scene pipeline handles."""
         self._scene_pipelines.clear()
 
-    # --- Compiled pipelines (stored in C++ RenderingManager) ---
+    # --- Compiled pipelines (stored in C++ TcScene) ---
 
     def compile_scene_pipelines(self) -> None:
         """
         Compile all scene pipeline templates into RenderPipelines.
 
-        Clears existing compiled pipelines and recompiles from scene_pipelines templates.
-        Python refs are stored in _compiled_pipelines to prevent GC.
-        Also registered in C++ RenderingManager for C++ component access.
+        Pipelines are stored in the C++ TcScene, not RenderingManager.
         """
-        from termin._native import log
-        from termin._native.render import RenderingManager
+        # Collect valid template UUIDs
+        template_uuids = [t.uuid for t in self._scene_pipelines if t.is_valid]
 
-        # Get C++ RenderingManager
-        cpp_rm = RenderingManager.instance()
-
-        log.info(f"[Scene] compile_scene_pipelines: {len(self._scene_pipelines)} templates, scene={self.name}")
-
-        # Clear old pipelines
-        self._compiled_pipelines.clear()
-        cpp_rm.clear_scene_pipelines(self)
-
-        # Compile from templates
-        for template in self._scene_pipelines:
-            if not template.is_valid:
-                log.warn(f"[Scene] Invalid scene pipeline template")
-                continue
-
-            if not template.is_loaded:
-                log.warn(f"[Scene] Scene pipeline template not loaded")
-                continue
-
-            pipeline = template.compile()
-            if pipeline is None:
-                log.warn(f"[Scene] Failed to compile scene pipeline '{template.name}'")
-                continue
-
-            pipeline.name = template.name
-            log.info(f"[Scene] Registered pipeline '{template.name}' for scene '{self.name}'")
-
-            # Store Python ref to prevent GC
-            self._compiled_pipelines[template.name] = pipeline
-
-            # Register in C++ RenderingManager for C++ component access
-            cpp_rm.add_scene_pipeline(self, template.name, pipeline)
-            cpp_rm.set_pipeline_targets(template.name, list(template.target_viewports))
+        # Compile in C++ TcScene (takes ownership of pipelines)
+        TcScene.compile_scene_pipelines(self, template_uuids)
 
     def destroy_compiled_pipelines(self) -> None:
         """Destroy all compiled pipelines."""
-        from termin._native.render import RenderingManager
-
-        cpp_rm = RenderingManager.instance()
-        cpp_rm.clear_scene_pipelines(self)
+        TcScene.clear_compiled_pipelines(self)
 
     # --- Editor entities data (runtime only) ---
 
@@ -753,6 +742,9 @@ class Scene(TcScene):
             if data is not None:
                 serialized_entities.append(data)
 
+        # Lighting settings
+        ss = self.shadow_settings
+
         result = {
             "uuid": self.uuid,
             "background_color": list(self.background_color),
@@ -761,8 +753,11 @@ class Scene(TcScene):
             "flag_names": {str(k): v for k, v in self.flag_names.items()},
             "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
             "scene_pipelines": [{"uuid": t.uuid} for t in self._scene_pipelines if t.is_valid],
+            # Lighting
+            "ambient_color": list(self.ambient_color),
+            "ambient_intensity": self.ambient_intensity,
+            "shadow_settings": ss.serialize(),
         }
-        result.update(self._lighting.serialize())
         # Skybox settings
         result["skybox_type"] = self.skybox_type
         result["skybox_color"] = list(self.skybox_color)
@@ -798,7 +793,16 @@ class Scene(TcScene):
                 data.get("background_color", [0.05, 0.05, 0.08, 1.0]),
                 dtype=np.float32
             )
-            self._lighting.load_from_data(data)
+            # Lighting settings
+            self.ambient_color = np.asarray(
+                data.get("ambient_color", [1.0, 1.0, 1.0]),
+                dtype=np.float32
+            )
+            self.ambient_intensity = data.get("ambient_intensity", 0.1)
+            if "shadow_settings" in data:
+                ss = self.shadow_settings
+                ss.load_from_data(data["shadow_settings"])
+                self.shadow_settings = ss
             # Skybox settings
             self.skybox_type = data.get("skybox_type", "gradient")
             self.skybox_color = np.asarray(
@@ -832,7 +836,7 @@ class Scene(TcScene):
                         self._scene_pipelines.append(template)
 
             # Compile scene pipelines immediately after loading
-            # (so components can find them in start())
+            # Pipelines are stored in TcScene, not RenderingManager
             if self._scene_pipelines:
                 self.compile_scene_pipelines()
 
@@ -905,13 +909,8 @@ class Scene(TcScene):
                 except Exception as ex:
                     print(f"Error in destroy handler of component '{tc_ref}': {e}")
 
-        # Destroy managers
-        if self._lighting is not None:
-            self._lighting.destroy()
-            self._lighting = None
-
-        # Clear collision world
-        self._collision_world = None
+        # Clear lighting reference
+        self._tc_lighting = None
 
         # Clear runtime editor state
         self._editor_entities_data = None

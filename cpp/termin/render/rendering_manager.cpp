@@ -322,18 +322,16 @@ void RenderingManager::present_display(tc_display* display) {
 // Scene Pipeline Management
 // ============================================================================
 
-void RenderingManager::add_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline) {
-    tc_log(TC_LOG_INFO, "[RenderingManager:%p] add_scene_pipeline: name='%s', scene=(%u,%u), valid=%d, pipeline=%p",
-           (void*)this, name.c_str(), scene.index, scene.generation, tc_scene_handle_valid(scene), (void*)pipeline);
+void RenderingManager::register_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline) {
     if (!tc_scene_handle_valid(scene) || name.empty() || !pipeline) {
-        tc_log(TC_LOG_WARN, "[RenderingManager:%p] add_scene_pipeline skipped: valid=%d, name_empty=%d, pipeline=%p",
-               (void*)this, tc_scene_handle_valid(scene), name.empty(), (void*)pipeline);
+        tc_log(TC_LOG_WARN, "[RenderingManager] register_scene_pipeline skipped: valid=%d, name_empty=%d, pipeline=%p",
+               tc_scene_handle_valid(scene), name.empty(), (void*)pipeline);
         return;
     }
     uint64_t key = scene_key(scene);
     scene_pipelines_[key][name] = pipeline;
-    tc_log(TC_LOG_INFO, "[RenderingManager:%p] add_scene_pipeline OK: key=%llu, total_scenes=%zu",
-           (void*)this, key, scene_pipelines_.size());
+    tc_log(TC_LOG_INFO, "[RenderingManager] register_scene_pipeline: '%s' for scene=(%u,%u)",
+           name.c_str(), scene.index, scene.generation);
 }
 
 void RenderingManager::remove_scene_pipeline(tc_scene_handle scene, const std::string& name) {
@@ -392,8 +390,6 @@ std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle sc
 }
 
 void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
-    tc_log(TC_LOG_INFO, "[RenderingManager:%p] clear_scene_pipelines: scene=(%u,%u), valid=%d, total_before=%zu",
-           (void*)this, scene.index, scene.generation, tc_scene_handle_valid(scene), scene_pipelines_.size());
     if (!tc_scene_handle_valid(scene)) return;
     uint64_t key = scene_key(scene);
 
@@ -405,14 +401,14 @@ void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
         }
     }
 
+    // Just clear references (TcScene owns the actual pipelines)
     scene_pipelines_.erase(key);
-    tc_log(TC_LOG_INFO, "[RenderingManager:%p] clear_scene_pipelines: key=%llu erased, total_after=%zu",
-           (void*)this, key, scene_pipelines_.size());
 }
 
 void RenderingManager::clear_all_scene_pipelines() {
-    tc_log(TC_LOG_WARN, "[RenderingManager] clear_all_scene_pipelines called! total=%zu", scene_pipelines_.size());
+    // Just clear references (TcScene owns the actual pipelines)
     scene_pipelines_.clear();
+    pipeline_targets_.clear();
 }
 
 // ============================================================================
@@ -426,7 +422,7 @@ void RenderingManager::shutdown() {
     }
     viewport_states_.clear();
 
-    // Clear scene pipelines (we don't own them)
+    // Clear scene pipelines (deletes owned pipelines)
     clear_all_scene_pipelines();
 
     // Clear displays (don't free them - we don't own them)
