@@ -7158,10 +7158,6 @@
             "type": "MeshRenderer"
           },
           {
-            "type": "CXXRotatorComponent",
-            "data": {}
-          },
-          {
             "data": {
               "enabled": true,
               "collider_type": "Box",
