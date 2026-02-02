@@ -71,6 +71,19 @@ void bind_tc_display(nb::module_& m) {
         }
     }, nb::arg("ptr"), nb::arg("editor_only"));
 
+    // Enabled property
+    m.def("_display_get_enabled", [](uintptr_t ptr) -> bool {
+        tc_display* d = reinterpret_cast<tc_display*>(ptr);
+        return d ? tc_display_get_enabled(d) : false;
+    }, nb::arg("ptr"));
+
+    m.def("_display_set_enabled", [](uintptr_t ptr, bool enabled) {
+        tc_display* d = reinterpret_cast<tc_display*>(ptr);
+        if (d) {
+            tc_display_set_enabled(d, enabled);
+        }
+    }, nb::arg("ptr"), nb::arg("enabled"));
+
     // Surface property
     m.def("_display_get_surface", [](uintptr_t ptr) -> uintptr_t {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);

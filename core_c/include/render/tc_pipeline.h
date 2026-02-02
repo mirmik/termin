@@ -24,6 +24,12 @@ struct tc_pipeline {
 
     // Python object wrapper (for Python bindings)
     void* py_wrapper;
+
+    // Frame graph cache (tc_frame_graph*)
+    void* cached_frame_graph;
+
+    // Dirty flag - set when passes change, cleared when frame graph is rebuilt
+    bool dirty;
 };
 
 // ============================================================================
@@ -53,6 +59,9 @@ TC_API void tc_pipeline_insert_pass_before(tc_pipeline_handle h, tc_pass* pass, 
 // Remove pass from pipeline (does not destroy pass)
 TC_API void tc_pipeline_remove_pass(tc_pipeline_handle h, tc_pass* pass);
 
+// Remove all passes with given name, returns count of removed passes
+TC_API size_t tc_pipeline_remove_passes_by_name(tc_pipeline_handle h, const char* name);
+
 // Find pass by name (returns NULL if not found)
 TC_API tc_pass* tc_pipeline_get_pass(tc_pipeline_handle h, const char* name);
 
@@ -76,6 +85,15 @@ TC_API void tc_pipeline_set_cpp_owner(tc_pipeline_handle h, void* owner);
 // Get/set py_wrapper (for Python interop)
 TC_API void* tc_pipeline_get_py_wrapper(tc_pipeline_handle h);
 TC_API void tc_pipeline_set_py_wrapper(tc_pipeline_handle h, void* wrapper);
+
+// Dirty flag management
+TC_API bool tc_pipeline_is_dirty(tc_pipeline_handle h);
+TC_API void tc_pipeline_mark_dirty(tc_pipeline_handle h);
+TC_API void tc_pipeline_clear_dirty(tc_pipeline_handle h);
+
+// Frame graph cache (returns cached or builds new if dirty)
+// Caller must NOT destroy the returned frame graph - it's owned by pipeline
+TC_API struct tc_frame_graph* tc_pipeline_get_frame_graph(tc_pipeline_handle h);
 
 // ============================================================================
 // Iteration (index-based)

@@ -43,6 +43,7 @@ from termin.visualization.render.framegraph.execute_context import ExecuteContex
 
 # Import to ensure GLSL preprocessor fallback loader is set up before any shader compilation
 import termin.visualization.render.glsl_preprocessor  # noqa: F401
+from termin._native import log
 
 # Import tc_frame_graph functions for C-based scheduling
 try:
@@ -429,16 +430,20 @@ class RenderEngine:
 
         # Вызываем C++ RenderEngine (lights собираются в C++)
         with profiler.section("C++ Render Pipeline"):
-            self._cpp_engine.render_view_to_fbo(
-                pipeline,
-                target_fbo,
-                pw,
-                ph,
-                scene._tc_scene.scene_ref(),
-                view.camera,
-                view.viewport,
-                view.layer_mask,
-            )
+            try:
+                self._cpp_engine.render_view_to_fbo(
+                    pipeline,
+                    target_fbo,
+                    pw,
+                    ph,
+                    scene.scene_ref(),
+                    view.camera,
+                    view.viewport,
+                    view.layer_mask,
+                )
+            except Exception as ex:
+                log.error(f"[render_view_to_fbo] {ex}")
+
 
     def render_scene_pipeline_offscreen(
         self,
@@ -504,7 +509,7 @@ class RenderEngine:
         with profiler.section("C++ Execute"):
             self._cpp_engine.render_scene_pipeline_offscreen(
                 pipeline,
-                scene._tc_scene.scene_ref(),
+                scene.scene_ref(),
                 cpp_viewport_contexts,
                 default_viewport,
             )

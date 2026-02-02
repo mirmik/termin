@@ -24,6 +24,8 @@ from termin._native.render import (
     _display_set_uuid,
     _display_get_editor_only,
     _display_set_editor_only,
+    _display_get_enabled,
+    _display_set_enabled,
     _display_get_surface,
     _display_add_viewport,
     _display_remove_viewport,
@@ -141,6 +143,15 @@ class Display:
     @editor_only.setter
     def editor_only(self, value: bool) -> None:
         _display_set_editor_only(self._tc_display_ptr, value)
+
+    @property
+    def enabled(self) -> bool:
+        """If True, display is rendered. If False, display is skipped during rendering."""
+        return _display_get_enabled(self._tc_display_ptr)
+
+    @enabled.setter
+    def enabled(self, value: bool) -> None:
+        _display_set_enabled(self._tc_display_ptr, value)
 
     @property
     def surface(self) -> "RenderSurface":

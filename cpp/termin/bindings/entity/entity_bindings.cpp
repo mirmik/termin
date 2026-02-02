@@ -19,7 +19,8 @@
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
 #include "../../../../core_c/include/tc_scene.h"
-#include "../../../../core_c/include/tc_inspect.hpp"
+#include "../../../../core_c/include/tc_inspect.h"
+#include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "../tc_value_helpers.hpp"
 #include "../../tc_scene_ref.hpp"
 #include "../../viewport/tc_viewport_ref.hpp"
@@ -91,8 +92,8 @@ public:
 
     // Get owner entity
     Entity entity() const {
-        if (!_c || !_c->owner_pool) return Entity();
-        return Entity(_c->owner_pool, _c->owner_entity_id);
+        if (!_c || !tc_entity_handle_valid(_c->owner)) return Entity();
+        return Entity(_c->owner);
     }
 
     // Serialize component data using tc_inspect
@@ -119,11 +120,32 @@ public:
     nb::object serialize() const {
         if (!_c) return nb::none();
 
+        // Special case for UnknownComponent - return original type instead of "UnknownComponent"
+        const char* tname = type_name();
+        if (tname && strcmp(tname, "UnknownComponent") == 0 && _c->kind == TC_CXX_COMPONENT) {
+            CxxComponent* cxx = CxxComponent::from_tc(_c);
+            if (cxx) {
+                tc_value orig_type = tc_inspect_get(cxx, "UnknownComponent", "original_type");
+                tc_value orig_data = tc_inspect_get(cxx, "UnknownComponent", "original_data");
+
+                nb::dict result;
+                if (orig_type.type == TC_VALUE_STRING && orig_type.data.s && orig_type.data.s[0]) {
+                    result["type"] = orig_type.data.s;
+                } else {
+                    result["type"] = "UnknownComponent";
+                }
+                result["data"] = tc_value_to_py(&orig_data);
+
+                tc_value_free(&orig_type);
+                tc_value_free(&orig_data);
+                return result;
+            }
+        }
+
         // For Python components, check if they have a custom serialize method
         if (_c->native_language == TC_LANGUAGE_PYTHON && _c->body) {
             nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->body));
             if (nb::hasattr(py_obj, "serialize")) {
-                // Call Python serialize method (e.g., for UnknownComponent)
                 nb::object result = py_obj.attr("serialize")();
                 if (!result.is_none()) {
                     return result;
@@ -188,20 +210,10 @@ public:
     void set_field(const std::string& field_name, nb::object value, TcSceneRef scene_ref = TcSceneRef()) {
         if (!_c || value.is_none()) return;
 
-        void* obj_ptr = nullptr;
-        if (_c->kind == TC_NATIVE_COMPONENT) {
-            obj_ptr = CxxComponent::from_tc(_c);
-        } else {
-            obj_ptr = _c->body;
-        }
-        if (!obj_ptr) return;
-
-        try {
-            tc::InspectRegistry_set(tc::InspectRegistry::instance(),
-                obj_ptr, tc_component_type_name(_c), field_name, value, scene_ref.handle());
-        } catch (...) {
-            // Field not found or setter failed
-        }
+        // Use C API which handles both C++ and Python components via InspectRegistry::set_tc_value
+        tc_value v = py_to_tc_value(value);
+        tc_component_inspect_set(_c, field_name.c_str(), v, scene_ref.handle());
+        tc_value_free(&v);
     }
 
     // Comparison
@@ -310,9 +322,8 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_ro("layer_mask", &TcViewportRef::layer_mask)
         .def_prop_ro("internal_entities", [](TcViewportRef& self) -> nb::object {
             if (!self.is_valid() || !self.has_internal_entities()) return nb::none();
-            tc_entity_pool* pool = self.internal_entities_pool();
-            tc_entity_id id = self.internal_entities_id();
-            return nb::cast(Entity(pool, id));
+            tc_entity_handle h = self.internal_entities();
+            return nb::cast(Entity(h));
         });
 
     // Non-owning component reference - works with any component regardless of language bindings
@@ -807,19 +818,17 @@ void bind_entity_class(nb::module_& m) {
                 }
 
                 // Get pool and scene from scene object or use standalone pool
+                // Scene inherits from TcScene, so we check for scene_handle method directly
                 tc_entity_pool* pool = nullptr;
                 tc_scene_handle c_scene = TC_SCENE_HANDLE_INVALID;
-                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
-                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
+                if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
+                    if (nb::hasattr(scene, "entity_pool_ptr")) {
+                        uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
                         pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
                     }
-                    if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                        c_scene.index = std::get<0>(h);
-                        c_scene.generation = std::get<1>(h);
-                    }
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
+                    c_scene.index = std::get<0>(h);
+                    c_scene.generation = std::get<1>(h);
                 }
                 if (!pool) {
                     pool = get_standalone_pool();
@@ -940,12 +949,12 @@ void bind_entity_class(nb::module_& m) {
                             // Create UnknownComponent to preserve data
                             tc::Log::warn("Unknown component type: %s (creating placeholder)", type_name.c_str());
                             try {
-                                tc_component* tc = ComponentRegistryPython::create_tc_component("UnknownComponent");
+                                tc_component* tc = tc_component_registry_create("UnknownComponent");
                                 if (tc) {
                                     ent.add_component_ptr(tc);
                                     TcComponentRef ref(tc);
-                                    ref.set_field("stored_type", nb::str(type_name.c_str()), scene_ref);
-                                    ref.set_field("stored_data", data_field, scene_ref);
+                                    ref.set_field("original_type", nb::str(type_name.c_str()), scene_ref);
+                                    ref.set_field("original_data", data_field, scene_ref);
                                 }
                             } catch (const std::exception& e) {
                                 tc::Log::error(e, "Failed to create UnknownComponent for %s", type_name.c_str());
@@ -1003,13 +1012,11 @@ void bind_entity_class(nb::module_& m) {
                 }
 
                 // Get pool from scene or use standalone
+                // Scene inherits from TcScene, so we check for entity_pool_ptr method directly
                 tc_entity_pool* pool = nullptr;
-                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "entity_pool_ptr")) {
-                        uintptr_t pool_ptr = nb::cast<uintptr_t>(tc_scene_obj.attr("entity_pool_ptr")());
-                        pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
-                    }
+                if (!scene.is_none() && nb::hasattr(scene, "entity_pool_ptr")) {
+                    uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
+                    pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
                 }
                 if (!pool) {
                     pool = get_standalone_pool();
@@ -1120,16 +1127,14 @@ void bind_entity_class(nb::module_& m) {
                 nb::list components = nb::cast<nb::list>(comp_list_obj);
 
                 // Get scene ref for entity reference resolution
+                // Scene inherits from TcScene, so we check for scene_handle method directly
                 TcSceneRef scene_ref;
-                if (!scene.is_none() && nb::hasattr(scene, "_tc_scene")) {
-                    nb::object tc_scene_obj = scene.attr("_tc_scene");
-                    if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                        tc_scene_handle handle;
-                        handle.index = std::get<0>(h);
-                        handle.generation = std::get<1>(h);
-                        scene_ref = TcSceneRef(handle);
-                    }
+                if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
+                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
+                    tc_scene_handle handle;
+                    handle.index = std::get<0>(h);
+                    handle.generation = std::get<1>(h);
+                    scene_ref = TcSceneRef(handle);
                 }
 
                 for (size_t i = 0; i < nb::len(components); ++i) {
@@ -1154,9 +1159,8 @@ void bind_entity_class(nb::module_& m) {
                             TcComponentRef ref = nb::cast<TcComponentRef>(
                                 py_entity.attr("add_component_by_name")("UnknownComponent"));
                             if (ref.valid()) {
-                                // Set stored_type and stored_data via tc_inspect
-                                ref.set_field("stored_type", nb::str(type_name.c_str()), scene_ref);
-                                ref.set_field("stored_data", data_field, scene_ref);
+                                ref.set_field("original_type", nb::str(type_name.c_str()), scene_ref);
+                                ref.set_field("original_data", data_field, scene_ref);
                             }
                         } catch (const std::exception& e) {
                             tc::Log::error(e, "Failed to create UnknownComponent for %s", type_name.c_str());

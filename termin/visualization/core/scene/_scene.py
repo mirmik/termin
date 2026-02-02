@@ -8,23 +8,16 @@ import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
-from termin._native.scene import TcScene
-from termin.visualization.render.components.light_component import LightComponent
-from termin.geombase import Ray3
-from termin.colliders.raycast_hit import RaycastHit
-from termin.collision._collision_native import CollisionWorld
+from termin._native.scene import TcScene, TcSceneLighting
+# Ray3 and SceneRaycastHit are used via C++ TcScene.raycast/closest_to_ray
 from termin.core import Event
 
-from .lighting import LightingManager
-from termin.visualization.core.viewport_config import ViewportConfig
-
-
-if TYPE_CHECKING:  # pragma: no cover
-    from termin.visualization.core.material import Material
-
-
-def _vec3_to_np(v) -> np.ndarray:
-    return np.array([v.x, v.y, v.z])
+from termin.visualization.core.viewport_config import (
+    ViewportConfig,
+    serialize_viewport_config,
+    deserialize_viewport_config,
+)
+from termin.lighting import ShadowSettings
 
 
 def is_overrides_method(obj, method_name, base_class):
@@ -41,10 +34,11 @@ def get_current_scene() -> "Scene | None":
     return _current_scene
 
 
-class Scene:
-    """Container for renderable entities and lighting data."""
+class Scene(TcScene):
+    """Container for renderable entities and lighting data.
 
-    _destroyed: bool = False
+    Inherits from TcScene (C++ class) for optimized entity/component management.
+    """
 
     def __init__(
         self,
@@ -52,52 +46,22 @@ class Scene:
         uuid: str | None = None,
         name: str = "",
     ):
-        self._destroyed = False
+        # Initialize C++ TcScene base class
+        super().__init__()
 
-        # C core scene for optimized entity/component management
-        self._tc_scene = TcScene()
-        self._tc_scene.set_py_wrapper(self)
+        # Set Python wrapper for callbacks from C to Python
+        self.set_py_wrapper(self)
 
-        # Identifiable fields
+        # Set identifiable fields (stored in C++)
         self.uuid = uuid or ""
         self.name = name
 
         from termin._native import log
-        log.info(f"[Scene] Created name='{name}', self={id(self):#x}, tc_scene={self._tc_scene}")
-        self.runtime_id = 0
+        log.info(f"[Scene] Created name='{name}', self={id(self):#x}")
 
-        # Background color with alpha
-        self._background_color = np.array(background_color, dtype=np.float32)
-
-        # Lighting manager
-        self._lighting = LightingManager()
-        self._lighting.tc_scene = self._tc_scene
-
-        # Layer and flag names (index -> name)
-        self.layer_names: dict[int, str] = {}  # 0-63
-        self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
-
-        # Viewport configuration (display_name -> camera/region mapping)
-        self._viewport_configs: List[ViewportConfig] = []
-
-        # Scene pipelines (list of handles referencing ScenePipelineAsset)
-        from termin.assets.scene_pipeline_handle import ScenePipelineHandle
-        self._scene_pipelines: List[ScenePipelineHandle] = []
-
-        # Compiled scene pipelines (name -> RenderPipeline)
-        # Populated by compile_scene_pipelines(), runtime only
-        from termin.visualization.render.framegraph.pipeline import RenderPipeline
-        self._compiled_pipelines: dict[str, RenderPipeline] = {}
-        # Target viewports for each compiled pipeline (name -> list of viewport names)
-        self._pipeline_targets: dict[str, list[str]] = {}
-
-        # Editor viewport state (runtime only, not serialized)
-        # Stores camera name used in editor viewport for restore after game mode
-        self.editor_viewport_camera_name: str | None = None
-
-        # Editor entities state (runtime only, not serialized to scene file)
-        # Stores EditorEntities component data for deserialization after game mode
-        self._editor_entities_data: dict | None = None
+        # Set initial background color in C++
+        bc = background_color
+        self.set_background_color(float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]) if len(bc) > 3 else 1.0)
 
         # Entity lifecycle events
         self._on_entity_added: Event[Entity] = Event()
@@ -106,17 +70,20 @@ class Scene:
     @property
     def is_destroyed(self) -> bool:
         """Check if scene has been destroyed."""
-        return self._destroyed
+        return not self.is_alive()
 
-    # --- Background color (with alpha, C++ only has RGB) ---
+    # --- Background color (RGBA, stored in C++) ---
 
     @property
     def background_color(self) -> np.ndarray:
-        return self._background_color
+        r, g, b, a = self.get_background_color()
+        return np.array([r, g, b, a], dtype=np.float32)
 
     @background_color.setter
     def background_color(self, value):
-        self._background_color = np.asarray(value, dtype=np.float32)
+        v = np.asarray(value, dtype=np.float32)
+        a = float(v[3]) if len(v) > 3 else 1.0
+        self.set_background_color(float(v[0]), float(v[1]), float(v[2]), a)
 
     # --- Skybox (stored in tc_scene) ---
 
@@ -134,336 +101,192 @@ class Scene:
 
     @property
     def skybox_type(self) -> str:
-        type_int = self._tc_scene.get_skybox_type()
+        type_int = self.get_skybox_type()
         return self._SKYBOX_TYPE_TO_STR.get(type_int, "gradient")
 
     @skybox_type.setter
     def skybox_type(self, value: str):
         type_int = self._SKYBOX_STR_TO_TYPE.get(value, self._SKYBOX_TYPE_GRADIENT)
-        self._tc_scene.set_skybox_type(type_int)
+        self.set_skybox_type(type_int)
 
     @property
     def skybox_color(self) -> np.ndarray:
-        r, g, b = self._tc_scene.get_skybox_color()
+        r, g, b = self.get_skybox_color()
         return np.array([r, g, b], dtype=np.float32)
 
     @skybox_color.setter
     def skybox_color(self, value):
         v = np.asarray(value, dtype=np.float32)
-        self._tc_scene.set_skybox_color(float(v[0]), float(v[1]), float(v[2]))
+        self.set_skybox_color(float(v[0]), float(v[1]), float(v[2]))
 
     @property
     def skybox_top_color(self) -> np.ndarray:
-        r, g, b = self._tc_scene.get_skybox_top_color()
+        r, g, b = self.get_skybox_top_color()
         return np.array([r, g, b], dtype=np.float32)
 
     @skybox_top_color.setter
     def skybox_top_color(self, value):
         v = np.asarray(value, dtype=np.float32)
-        self._tc_scene.set_skybox_top_color(float(v[0]), float(v[1]), float(v[2]))
+        self.set_skybox_top_color(float(v[0]), float(v[1]), float(v[2]))
 
     @property
     def skybox_bottom_color(self) -> np.ndarray:
-        r, g, b = self._tc_scene.get_skybox_bottom_color()
+        r, g, b = self.get_skybox_bottom_color()
         return np.array([r, g, b], dtype=np.float32)
 
     @skybox_bottom_color.setter
     def skybox_bottom_color(self, value):
         v = np.asarray(value, dtype=np.float32)
-        self._tc_scene.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
+        self.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
 
-    def skybox_mesh(self):
-        """Get skybox cube mesh (TcMesh). Creates lazily if needed."""
-        return self._tc_scene.get_skybox_mesh()
-
-    def skybox_material(self) -> "Material | None":
-        """Get skybox material based on current skybox_type. Creates lazily if needed."""
-        type_int = self._tc_scene.get_skybox_type()
-        if type_int == self._SKYBOX_TYPE_NONE:
-            return None
-        return self._tc_scene.ensure_skybox_material(type_int)
-
-    def set_skybox_type(self, skybox_type: str) -> None:
-        """Set skybox type."""
-        self.skybox_type = skybox_type
+    # skybox_mesh() -> use get_skybox_mesh() directly from TcScene
+    # skybox_material() -> use ensure_skybox_material(type) directly from TcScene
 
     def _ensure_skybox_resources(self) -> None:
         """Ensure skybox mesh and material are created and set in tc_scene."""
-        type_int = self._tc_scene.get_skybox_type()
+        type_int = self.get_skybox_type()
         if type_int == self._SKYBOX_TYPE_NONE:
             return
         # This triggers lazy creation in C
-        self._tc_scene.get_skybox_mesh()
-        self._tc_scene.ensure_skybox_material(type_int)
+        self.get_skybox_mesh()
+        self.ensure_skybox_material(type_int)
 
-    # --- Lighting delegation (backward compatibility) ---
+    # --- Lighting (stored in tc_scene_lighting) ---
+
+    def _get_lighting(self) -> TcSceneLighting | None:
+        """Get TcSceneLighting view from C."""
+        ptr = self.lighting_ptr()
+        return TcSceneLighting(ptr) if ptr else None
 
     @property
     def ambient_color(self) -> np.ndarray:
-        return self._lighting.ambient_color
+        lighting = self._get_lighting()
+        if lighting is not None:
+            c = lighting.ambient_color
+            return np.array([c[0], c[1], c[2]], dtype=np.float32)
+        return np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
     @ambient_color.setter
     def ambient_color(self, value):
-        self._lighting.ambient_color = np.asarray(value, dtype=np.float32)
+        lighting = self._get_lighting()
+        if lighting is not None:
+            arr = np.asarray(value, dtype=np.float32)
+            lighting.ambient_color = (float(arr[0]), float(arr[1]), float(arr[2]))
 
     @property
     def ambient_intensity(self) -> float:
-        return self._lighting.ambient_intensity
+        lighting = self._get_lighting()
+        if lighting is not None:
+            return lighting.ambient_intensity
+        return 0.1
 
     @ambient_intensity.setter
     def ambient_intensity(self, value: float):
-        self._lighting.ambient_intensity = value
+        lighting = self._get_lighting()
+        if lighting is not None:
+            lighting.ambient_intensity = float(value)
+
+    # light_components -> use get_components_of_type("LightComponent") directly
 
     @property
-    def light_components(self) -> List[LightComponent]:
-        """Get all light components from tc_scene type list."""
-        return self._tc_scene.get_components_of_type("LightComponent")
-
-    @property
-    def shadow_settings(self):
+    def shadow_settings(self) -> ShadowSettings:
         """Shadow rendering settings."""
-        from .lighting import ShadowSettings
-        return self._lighting.shadow_settings
+        lighting = self._get_lighting()
+        if lighting is not None:
+            return lighting.shadow_settings
+        return ShadowSettings()
+
+    @shadow_settings.setter
+    def shadow_settings(self, value: ShadowSettings):
+        lighting = self._get_lighting()
+        if lighting is not None:
+            lighting.shadow_settings = value
 
     # --- Collision World ---
 
     @property
-    def collision_world(self) -> CollisionWorld:
+    def collision_world(self):
         """Get the collision world for physics and raycasting."""
-        return self._tc_scene.collision_world()
+        return TcScene.collision_world(self)
 
-    @property
-    def colliders(self) -> List[Component]:
-        """Get all collider components from tc_scene type list."""
-        return self._tc_scene.get_components_of_type("ColliderComponent")
-
-    @property
-    def input_components(self) -> List[InputComponent]:
-        """Get all input components from tc_scene type list."""
-        return self._tc_scene.get_components_of_type("InputComponent")
+    # colliders -> use get_components_of_type("ColliderComponent") directly
+    # input_components -> use get_components_of_type("InputComponent") directly
 
     # --- Raycast ---
+    # raycast(ray) and closest_to_ray(ray) are inherited from TcScene (C++ implementation)
+    # They return SceneRaycastHit with properties: valid, entity, component, point_on_ray, point_on_collider, distance
 
-    def raycast(self, ray: Ray3):
-        """
-        Returns first intersection with any ColliderComponent
-        where distance == 0 (exact hit).
-        """
-        result = {"hit": None, "ray_dist": float("inf")}
-        origin = _vec3_to_np(ray.origin)
-
-        def check_collider(comp):
-            attached = comp.attached
-            if attached is None:
-                return True
-
-            hit = attached.closest_to_ray(ray)
-            if hit.distance != 0.0:
-                return True
-
-            p_ray = _vec3_to_np(hit.point_on_ray)
-            d_ray = np.linalg.norm(p_ray - origin)
-
-            if d_ray < result["ray_dist"]:
-                result["ray_dist"] = d_ray
-                result["hit"] = RaycastHit(
-                    comp.entity, comp, p_ray, _vec3_to_np(hit.point_on_collider), 0.0
-                )
-            return True
-
-        self._tc_scene.foreach_component_of_type("ColliderComponent", check_collider)
-        return result["hit"]
-
-    def closest_to_ray(self, ray: Ray3):
-        """
-        Returns closest object to ray (minimum distance).
-        Does not require intersection.
-        """
-        result = {"hit": None, "dist": float("inf")}
-
-        def check_collider(comp):
-            attached = comp.attached
-            if attached is None:
-                return True
-
-            hit = attached.closest_to_ray(ray)
-            if hit.distance < result["dist"]:
-                result["dist"] = hit.distance
-                result["hit"] = RaycastHit(
-                    comp.entity, comp,
-                    _vec3_to_np(hit.point_on_ray),
-                    _vec3_to_np(hit.point_on_collider),
-                    hit.distance
-                )
-            return True
-
-        self._tc_scene.foreach_component_of_type("ColliderComponent", check_collider)
-        return result["hit"]
-
-    # --- Layer and flag names ---
+    # --- Layer and flag names (stored in C) ---
 
     def get_layer_name(self, index: int) -> str:
-        """Get layer name by index, or default 'Layer N'."""
-        return self.layer_names.get(index, f"Layer {index}")
+        """Get layer name by index, or default 'Layer N' if not set."""
+        name = TcScene.get_layer_name(self, index)
+        return name if name else f"Layer {index}"
 
     def get_flag_name(self, index: int) -> str:
-        """Get flag name by bit index, or default 'Flag N'."""
-        return self.flag_names.get(index, f"Flag {index}")
+        """Get flag name by index, or default 'Flag N' if not set."""
+        name = TcScene.get_flag_name(self, index)
+        return name if name else f"Flag {index}"
 
-    def set_layer_name(self, index: int, name: str):
-        """Set layer name. Empty name removes the entry."""
-        if name:
-            self.layer_names[index] = name
-        else:
-            self.layer_names.pop(index, None)
+    # set_layer_name(index, name), set_flag_name(index, name) -> inherited from TcScene
 
-    def set_flag_name(self, index: int, name: str):
-        """Set flag name. Empty name removes the entry."""
-        if name:
-            self.flag_names[index] = name
-        else:
-            self.flag_names.pop(index, None)
-
-    # --- Viewport configuration ---
-
-    @property
-    def viewport_configs(self) -> List[ViewportConfig]:
-        """Get viewport configurations for this scene."""
-        return self._viewport_configs
-
-    def add_viewport_config(self, config: ViewportConfig) -> None:
-        """Add a viewport configuration."""
-        self._viewport_configs.append(config)
-
-    def remove_viewport_config(self, config: ViewportConfig) -> None:
-        """Remove a viewport configuration."""
-        if config in self._viewport_configs:
-            self._viewport_configs.remove(config)
-
-    def clear_viewport_configs(self) -> None:
-        """Clear all viewport configurations."""
-        self._viewport_configs.clear()
+    # --- Viewport configuration (stored in C++ TcScene) ---
+    # viewport_configs property -> inherited from TcScene
+    # add_viewport_config(config) -> inherited from TcScene
+    # viewport_config_at(index) -> inherited from TcScene
+    # remove_viewport_config(index) -> inherited from TcScene
+    # clear_viewport_configs() -> inherited from TcScene
 
     # --- Scene pipelines ---
+    # Pipeline templates stored in C++ tc_scene, compiled pipelines owned by RenderingManager
 
     @property
     def scene_pipelines(self) -> List:
-        """Get scene pipeline handles."""
-        return self._scene_pipelines
+        """Get scene pipeline template handles (from C++ tc_scene)."""
+        result = []
+        count = self.pipeline_template_count()
+        for i in range(count):
+            result.append(self.pipeline_template_at(i))
+        return result
 
-    def add_scene_pipeline(self, handle) -> None:
-        """Add a scene pipeline handle."""
-        self._scene_pipelines.append(handle)
+    # --- Editor state (stored in metadata) ---
 
-    def remove_scene_pipeline(self, handle) -> None:
-        """Remove a scene pipeline handle."""
-        if handle in self._scene_pipelines:
-            self._scene_pipelines.remove(handle)
-
-    def clear_scene_pipelines(self) -> None:
-        """Clear all scene pipeline handles."""
-        self._scene_pipelines.clear()
-
-    # --- Compiled pipelines (runtime) ---
+    _METADATA_EDITOR_PREFIX = "termin.editor"
 
     @property
-    def compiled_pipelines(self) -> dict:
-        """Get compiled scene pipelines (name -> RenderPipeline)."""
-        return self._compiled_pipelines
+    def editor_viewport_camera_name(self) -> str | None:
+        """Get editor viewport camera name from metadata."""
+        value = self.get_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.viewport_camera_name")
+        return value if isinstance(value, str) else None
 
-    def compile_scene_pipelines(self) -> None:
-        """
-        Compile all scene pipeline assets into RenderPipelines.
-
-        Clears existing compiled pipelines and recompiles from scene_pipelines handles.
-        """
-        from termin._native import log
-
-        # Destroy old pipelines
-        for pipeline in self._compiled_pipelines.values():
-            pipeline.destroy()
-        self._compiled_pipelines.clear()
-        self._pipeline_targets.clear()
-
-        # Compile from handles
-        for handle in self._scene_pipelines:
-            asset = handle.get_asset()
-            if asset is None:
-                log.warn(f"[Scene] Scene pipeline asset not found for handle")
-                continue
-
-            pipeline = asset.compile()
-            if pipeline is None:
-                log.warn(f"[Scene] Failed to compile scene pipeline '{asset.name}'")
-                continue
-
-            self._compiled_pipelines[asset.name] = pipeline
-            self._pipeline_targets[asset.name] = list(asset.target_viewports)
-
-    def get_compiled_pipeline(self, name: str):
-        """
-        Get compiled scene pipeline by name.
-
-        Args:
-            name: Pipeline asset name.
-
-        Returns:
-            RenderPipeline or None if not found.
-        """
-        return self._compiled_pipelines.get(name)
-
-    def get_pipeline_targets(self, name: str) -> list[str]:
-        """
-        Get target viewport names for a compiled pipeline.
-
-        Args:
-            name: Pipeline name.
-
-        Returns:
-            List of viewport names or empty list.
-        """
-        return self._pipeline_targets.get(name, [])
-
-    def destroy_compiled_pipelines(self) -> None:
-        """Destroy all compiled pipelines and clear the dicts."""
-        for pipeline in self._compiled_pipelines.values():
-            pipeline.destroy()
-        self._compiled_pipelines.clear()
-        self._pipeline_targets.clear()
-
-    # --- Editor entities data (runtime only) ---
+    @editor_viewport_camera_name.setter
+    def editor_viewport_camera_name(self, value: str | None) -> None:
+        """Set editor viewport camera name in metadata."""
+        self.set_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.viewport_camera_name", value)
 
     @property
     def editor_entities_data(self) -> dict | None:
-        """Get stored EditorEntities component data."""
-        return self._editor_entities_data
+        """Get stored EditorEntities component data from metadata."""
+        value = self.get_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.entities_data")
+        return value if isinstance(value, dict) else None
 
     @editor_entities_data.setter
     def editor_entities_data(self, value: dict | None) -> None:
-        """Store EditorEntities component data for later deserialization."""
-        self._editor_entities_data = value
+        """Store EditorEntities component data in metadata."""
+        self.set_metadata_value(f"{self._METADATA_EDITOR_PREFIX}.entities_data", value)
 
     # --- Entity management ---
 
     @property
     def entities(self) -> List[Entity]:
         """Get all entities in the scene (from pool)."""
-        return self._tc_scene.get_all_entities()
+        if not self.is_alive():
+            return []
+        return self.get_all_entities()
 
-    def create_entity(self, name: str = "") -> Entity:
-        """Create a new entity directly in scene's pool.
-
-        Creates entity in pool but does NOT register components or emit events.
-        Call add() after setup to complete registration, or use this for
-        entities that need no component registration.
-
-        Args:
-            name: Entity name (optional)
-
-        Returns:
-            New Entity in scene's pool
-        """
-        return self._tc_scene.create_entity(name)
+    # create_entity(name) -> inherited from TcScene
+    # Creates entity in pool but does NOT register components or emit events.
+    # Call add() after setup to complete registration.
 
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene.
@@ -476,7 +299,7 @@ class Scene:
         # Migrate entity to scene's pool (if not already there)
         # This copies all data (transform, flags, components) to scene's pool
         # and invalidates the old entity handle
-        entity = self._tc_scene.migrate_entity(entity)
+        entity = self.migrate_entity(entity)
         if not entity:
             raise RuntimeError("Failed to migrate entity to scene's pool")
 
@@ -532,7 +355,7 @@ class Scene:
         entity.on_removed()
 
         # Remove from C core (frees entity in pool, unregisters components)
-        self._tc_scene.remove_entity(entity)
+        self.remove_entity(entity)
 
     @property
     def on_entity_added(self) -> Event[Entity]:
@@ -550,46 +373,7 @@ class Scene:
     def on_entity_removed(self, value: Event[Entity]):
         pass  # __iadd__ modifies in place, setter is no-op
 
-    def get_entity(self, uuid: str) -> Entity | None:
-        """O(1) lookup of entity by UUID using hash map."""
-        return self._tc_scene.get_entity(uuid)
-
-    def get_entity_by_pick_id(self, pick_id: int) -> Entity | None:
-        """O(1) lookup of entity by pick_id using hash map."""
-        return self._tc_scene.get_entity_by_pick_id(pick_id)
-
-    def find_entity_by_uuid(self, uuid: str) -> Entity | None:
-        """
-        Find entity by UUID in the scene hierarchy.
-
-        Searches through all entities and their children recursively.
-
-        Args:
-            uuid: The UUID to search for
-
-        Returns:
-            Entity with matching UUID or None if not found
-        """
-        for entity in self.entities:
-            if entity.uuid == uuid:
-                return entity
-        return None
-
-    def find_entity_by_name(self, name: str) -> Entity | None:
-        """
-        Find entity by name in the scene hierarchy.
-
-        Searches through all entities and their children recursively.
-
-        Args:
-            name: The name to search for
-        Returns:
-            Entity with matching name or None if not found
-        """
-        for entity in self.entities:
-            if entity.name == name:
-                return entity
-        return None
+    # get_entity(uuid), get_entity_by_pick_id(pick_id), find_entity_by_name(name) -> inherited from TcScene
 
     # --- Component search ---
 
@@ -603,7 +387,7 @@ class Scene:
         Returns:
             First matching component or None.
         """
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             comp = entity.get_component(component_type)
             if comp is not None:
                 return comp
@@ -620,7 +404,7 @@ class Scene:
             List of all matching components.
         """
         result = []
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             comp = entity.get_component(component_type)
             if comp is not None:
                 result.append(comp)
@@ -636,7 +420,7 @@ class Scene:
         Returns:
             First matching component or None.
         """
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             for comp in entity.components:
                 if type(comp).__name__ == class_name:
                     return comp
@@ -664,9 +448,9 @@ class Scene:
         # on_added callback is called by C code in tc_scene_register_component
         if is_python:
             ptr = component.c_component_ptr()
-            self._tc_scene.register_component_ptr(ptr)
+            self.register_component_ptr(ptr)
         else:
-            self._tc_scene.register_component(component)
+            self.register_component(component)
 
     def unregister_component(self, component: Component):
         """Unregister component from tc_scene.
@@ -678,9 +462,9 @@ class Scene:
 
         # Unregister from TcScene (removes from type lists automatically)
         if isinstance(component, PythonComponent):
-            self._tc_scene.unregister_component_ptr(component.c_component_ptr())
+            self.unregister_component_ptr(component.c_component_ptr())
         else:
-            self._tc_scene.unregister_component(component)
+            self.unregister_component(component)
 
     # --- Update loop ---
 
@@ -689,7 +473,7 @@ class Scene:
         _current_scene = self
         try:
             # Delegate to C core (includes profiling via tc_profiler)
-            self._tc_scene.update(dt)
+            TcScene.update(self, dt)
         finally:
             _current_scene = None
 
@@ -704,7 +488,7 @@ class Scene:
         _current_scene = self
         try:
             # Delegate to C core
-            self._tc_scene.editor_update(dt)
+            TcScene.editor_update(self, dt)
         finally:
             _current_scene = None
 
@@ -716,63 +500,16 @@ class Scene:
         Used by SkeletonController to update bone matrices.
         """
         self._ensure_skybox_resources()
-        self._tc_scene.before_render()
+        TcScene.before_render(self)
 
-    def notify_editor_start(self):
-        """Notify all components that scene started in editor mode."""
-        self._tc_scene.notify_editor_start()
-
-    def notify_scene_inactive(self):
-        """Notify all components that scene is becoming inactive."""
-        self._tc_scene.notify_scene_inactive()
-
-    def notify_scene_active(self):
-        """Notify all components that scene is becoming active (from INACTIVE)."""
-        self._tc_scene.notify_scene_active()
+    # --- Notification methods (inherited from TcScene) ---
+    # notify_editor_start, notify_scene_inactive, notify_scene_active
+    # All inherited from TcScene base class
 
     # --- Input dispatch ---
-
-    def dispatch_mouse_button(self, event) -> None:
-        """Dispatch mouse button event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_button(event)
-
-    def dispatch_mouse_move(self, event) -> None:
-        """Dispatch mouse move event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_move(event)
-
-    def dispatch_scroll(self, event) -> None:
-        """Dispatch scroll event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_scroll(event)
-
-    def dispatch_key(self, event) -> None:
-        """Dispatch key event to all input handler components."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_key(event)
-
-    # --- Editor dispatch methods (with active_in_editor filter) ---
-
-    def dispatch_mouse_button_editor(self, event) -> None:
-        """Dispatch mouse button event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_button_editor(event)
-
-    def dispatch_mouse_move_editor(self, event) -> None:
-        """Dispatch mouse move event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_mouse_move_editor(event)
-
-    def dispatch_scroll_editor(self, event) -> None:
-        """Dispatch scroll event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_scroll_editor(event)
-
-    def dispatch_key_editor(self, event) -> None:
-        """Dispatch key event to input handlers with active_in_editor=True."""
-        if self._tc_scene is not None:
-            self._tc_scene.dispatch_key_editor(event)
+    # dispatch_mouse_button, dispatch_mouse_move, dispatch_scroll, dispatch_key
+    # dispatch_mouse_button_editor, dispatch_mouse_move_editor, dispatch_scroll_editor, dispatch_key_editor
+    # All inherited from TcScene base class
 
     def dispatch_input(self, event_name: str, event, filter_fn: Callable[[InputComponent], bool] | None = None):
         """Dispatch input event to InputComponents.
@@ -786,19 +523,16 @@ class Scene:
         Note: For best performance without filter_fn, use the specific dispatch methods
         (dispatch_mouse_button, dispatch_mouse_move, dispatch_scroll, dispatch_key).
         """
-        if self._tc_scene is None:
-            return
-
         # Fast path: use C-level dispatch when no filter is needed
         if filter_fn is None:
             if event_name == "on_mouse_button":
-                self._tc_scene.dispatch_mouse_button(event)
+                self.dispatch_mouse_button(event)
             elif event_name == "on_mouse_move":
-                self._tc_scene.dispatch_mouse_move(event)
+                self.dispatch_mouse_move(event)
             elif event_name == "on_scroll":
-                self._tc_scene.dispatch_scroll(event)
+                self.dispatch_scroll(event)
             elif event_name == "on_key":
-                self._tc_scene.dispatch_key(event)
+                self.dispatch_key(event)
             return
 
         # Slow path with filter: iterate components and call methods
@@ -813,7 +547,7 @@ class Scene:
                     print(f"Error in input handler '{event_name}' of component '{component}': {e}")
             return True
 
-        self._tc_scene.foreach_component_of_type("InputComponent", dispatch_to_component)
+        self.foreach_component_of_type("InputComponent", dispatch_to_component)
 
     # --- Serialization ---
 
@@ -825,7 +559,7 @@ class Scene:
         Child entities are serialized recursively inside their parents.
         """
         root_entities = [
-            e for e in self.entities
+            e for e in self.get_all_entities()
             if e.transform.parent is None and e.serializable
         ]
         serialized_entities = []
@@ -834,21 +568,51 @@ class Scene:
             if data is not None:
                 serialized_entities.append(data)
 
+        # Lighting settings
+        ss = self.shadow_settings
+
+        # Collect layer and flag names from C
+        layer_names_dict = {}
+        flag_names_dict = {}
+        for i in range(64):
+            ln = TcScene.get_layer_name(self, i)
+            if ln:
+                layer_names_dict[str(i)] = ln
+            fn = TcScene.get_flag_name(self, i)
+            if fn:
+                flag_names_dict[str(i)] = fn
+
+        # Collect pipeline template UUIDs
+        pipeline_uuids = []
+        for i in range(self.pipeline_template_count()):
+            t = self.pipeline_template_at(i)
+            if t.is_valid:
+                pipeline_uuids.append({"uuid": t.uuid})
+
         result = {
             "uuid": self.uuid,
             "background_color": list(self.background_color),
             "entities": serialized_entities,
-            "layer_names": {str(k): v for k, v in self.layer_names.items()},
-            "flag_names": {str(k): v for k, v in self.flag_names.items()},
-            "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
-            "scene_pipelines": [h.serialize() for h in self._scene_pipelines],
+            "layer_names": layer_names_dict,
+            "flag_names": flag_names_dict,
+            "viewport_configs": [serialize_viewport_config(vc) for vc in self.viewport_configs],
+            "scene_pipelines": pipeline_uuids,
+            # Lighting
+            "ambient_color": list(self.ambient_color),
+            "ambient_intensity": self.ambient_intensity,
+            "shadow_settings": ss.serialize(),
         }
-        result.update(self._lighting.serialize())
         # Skybox settings
         result["skybox_type"] = self.skybox_type
         result["skybox_color"] = list(self.skybox_color)
         result["skybox_top_color"] = list(self.skybox_top_color)
         result["skybox_bottom_color"] = list(self.skybox_bottom_color)
+
+        # Metadata (extensible storage for tools)
+        metadata = self.get_metadata()
+        if metadata:
+            result["metadata"] = metadata
+
         return result
 
     @classmethod
@@ -879,7 +643,16 @@ class Scene:
                 data.get("background_color", [0.05, 0.05, 0.08, 1.0]),
                 dtype=np.float32
             )
-            self._lighting.load_from_data(data)
+            # Lighting settings
+            self.ambient_color = np.asarray(
+                data.get("ambient_color", [1.0, 1.0, 1.0]),
+                dtype=np.float32
+            )
+            self.ambient_intensity = data.get("ambient_intensity", 0.1)
+            if "shadow_settings" in data:
+                ss = self.shadow_settings
+                ss.load_from_data(data["shadow_settings"])
+                self.shadow_settings = ss
             # Skybox settings
             self.skybox_type = data.get("skybox_type", "gradient")
             self.skybox_color = np.asarray(
@@ -894,20 +667,32 @@ class Scene:
                 data.get("skybox_bottom_color", [0.6, 0.5, 0.4]),
                 dtype=np.float32
             )
-            # Load layer and flag names
-            self.layer_names = {int(k): v for k, v in data.get("layer_names", {}).items()}
-            self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
-            # Load viewport configurations
-            self._viewport_configs = [
-                ViewportConfig.deserialize(vc_data)
-                for vc_data in data.get("viewport_configs", [])
-            ]
-            # Load scene pipelines
-            from termin.assets.scene_pipeline_handle import ScenePipelineHandle
-            self._scene_pipelines = [
-                ScenePipelineHandle.deserialize(sp_data)
-                for sp_data in data.get("scene_pipelines", [])
-            ]
+            # Load layer and flag names (into C)
+            for k, v in data.get("layer_names", {}).items():
+                TcScene.set_layer_name(self, int(k), v)
+            for k, v in data.get("flag_names", {}).items():
+                TcScene.set_flag_name(self, int(k), v)
+            # Load viewport configurations (stored in C++)
+            self.clear_viewport_configs()
+            for vc_data in data.get("viewport_configs", []):
+                vc = deserialize_viewport_config(vc_data)
+                self.add_viewport_config(vc)
+            # Load scene pipelines from templates (stored in C++ tc_scene)
+            from termin._native.render import TcScenePipelineTemplate
+            self.clear_pipeline_templates()
+            for sp_data in data.get("scene_pipelines", []):
+                uuid = sp_data.get("uuid", "")
+                if uuid:
+                    template = TcScenePipelineTemplate.find_by_uuid(uuid)
+                    if template.is_valid:
+                        self.add_pipeline_template(template)
+
+            # Note: Compiled pipelines are created by RenderingManager.attach_scene()
+            # (not at deserialization time)
+
+            # Load metadata (extensible storage for tools)
+            if "metadata" in data:
+                self.set_metadata(data["metadata"])
 
         entities_data = data.get("entities", [])
 
@@ -964,37 +749,22 @@ class Scene:
         """
         from termin._native import log
 
-        if self._destroyed:
+        if not self.is_alive():
             return
-        self._destroyed = True
 
-        log.info(f"[Scene] destroy() name='{self.name}', self={id(self):#x}, tc_scene={self._tc_scene}")
+        log.info(f"[Scene] destroy() name='{self.name}', self={id(self):#x}")
 
         # Call on_destroy on all components via tc_ref (works for both C++ and Python)
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             for tc_ref in entity.tc_components:
                 try:
                     tc_ref.on_destroy()
                 except Exception as ex:
-                    print(f"Error in destroy handler of component '{tc_ref}': {e}")
-
-        # Destroy managers
-        if self._lighting is not None:
-            self._lighting.destroy()
-            self._lighting = None
-
-        # Clear collision world
-        self._collision_world = None
-
-        # Clear runtime editor state
-        self._editor_entities_data = None
-        self.editor_viewport_camera_name = None
+                    print(f"Error in destroy handler of component '{tc_ref}': {ex}")
 
         # Clear events (break subscriber references)
         self._on_entity_added.clear()
         self._on_entity_removed.clear()
 
-        # Release C core scene
-        if self._tc_scene is not None:
-            self._tc_scene.destroy()
-            self._tc_scene = None
+        # Release C core scene (call base class TcScene.destroy())
+        TcScene.destroy(self)

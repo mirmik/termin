@@ -18,7 +18,14 @@ from __future__ import annotations
 
 from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
+import numpy as np
+
 from termin.visualization.core.entity import Entity
+
+
+def _vec3_to_array(v) -> np.ndarray:
+    """Convert Vec3 to numpy array for C++ gizmo bindings."""
+    return np.array([v.x, v.y, v.z], dtype=np.float32)
 from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
 from termin.visualization.render.framegraph import RenderPipeline
@@ -75,10 +82,9 @@ class EditorViewportFeatures:
         self._request_update = request_update
 
         # Transform gizmo (main gizmo for entity manipulation)
-        self._transform_gizmo = TransformGizmo(
-            size=1.5,
-            on_transform_changed=self._request_update,
-        )
+        self._transform_gizmo = TransformGizmo()
+        self._transform_gizmo.size = 1.5
+        self._transform_gizmo.on_transform_changed = self._request_update
         self._gizmo_manager.add_gizmo(self._transform_gizmo)
         self._on_transform_dragging = None
 
@@ -261,7 +267,7 @@ class EditorViewportFeatures:
         if self._gizmo_manager.is_dragging and viewport is not None:
             ray = viewport.screen_point_to_ray(x, y)
             if ray is not None:
-                self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
+                self._gizmo_manager.on_mouse_move(_vec3_to_array(ray.origin), _vec3_to_array(ray.direction))
 
     def after_render(self) -> None:
         """
@@ -304,7 +310,7 @@ class EditorViewportFeatures:
             with profiler.section("gizmo_raycast"):
                 ray = viewport.screen_point_to_ray(x, y)
                 if ray is not None:
-                    self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
+                    self._gizmo_manager.on_mouse_move(_vec3_to_array(ray.origin), _vec3_to_array(ray.direction))
 
         with profiler.section("pick_entity_at"):
             ent = self.pick_entity_at(x, y, viewport)
@@ -367,7 +373,7 @@ class EditorViewportFeatures:
             return
 
         # Try gizmo picking first (raycast-based)
-        handled = self._gizmo_manager.on_mouse_down(ray.origin, ray.direction)
+        handled = self._gizmo_manager.on_mouse_down(_vec3_to_array(ray.origin), _vec3_to_array(ray.direction))
         if handled:
             self._gizmo_handled_press = True
 
@@ -400,7 +406,7 @@ class EditorViewportFeatures:
 
     def set_gizmo_target(self, entity: Entity | None) -> None:
         """Set target entity for transform gizmo."""
-        self._transform_gizmo.target = entity
+        self._transform_gizmo.set_target(entity)
         self._transform_gizmo.visible = entity is not None
 
     def update_gizmo_screen_scale(self, viewport: Viewport) -> None:
@@ -424,7 +430,19 @@ class EditorViewportFeatures:
 
     def set_gizmo_undo_handler(self, handler) -> None:
         """Set undo handler for gizmo operations."""
-        self._transform_gizmo.set_undo_handler(handler)
+        # Wrap the handler to create TransformEditCommand from poses
+        def drag_end_handler(old_pose, new_pose):
+            from termin.editor.editor_commands import TransformEditCommand
+            target = self._transform_gizmo.target
+            if target is None:
+                return
+            cmd = TransformEditCommand(
+                transform=target.transform,
+                old_pose=old_pose,
+                new_pose=new_pose,
+            )
+            handler(cmd, False)
+        self._transform_gizmo.set_drag_end_handler(drag_end_handler)
 
     def set_on_transform_dragging(self, callback) -> None:
         """Set callback for when transform is being dragged."""
@@ -434,7 +452,7 @@ class EditorViewportFeatures:
             self._request_update()
             if self._on_transform_dragging is not None:
                 self._on_transform_dragging()
-        self._transform_gizmo._on_transform_changed = combined_callback
+        self._transform_gizmo.on_transform_changed = combined_callback
 
     @property
     def gizmo_manager(self) -> GizmoManager:
@@ -462,13 +480,14 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
-        from termin.visualization.render.posteffects.bloom import BloomEffect
+        #from termin.visualization.render.posteffects.bloom import BloomEffect
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
         from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
         from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
         from termin.visualization.render.framegraph.passes.grayscale import GrayscalePass
+        from termin.visualization.render.framegraph.passes.bloom_pass import BloomPass
 
         def get_gizmo_manager():
             return self._gizmo_manager
@@ -546,9 +565,15 @@ class EditorViewportFeatures:
         )
 
         tonemap_pass = TonemapPass(
-            input_res="color_pp",
+            input_res="color_bloom",
             output_res="color_tonemapped",
             pass_name="Tonemap",
+            method=2,  # TONEMAP_NONE - passthrough
+        )
+
+        bloom_pass = BloomPass(
+            input_res="color_pp",
+            output_res="color_bloom",
         )
 
         passes: list = [
@@ -564,6 +589,7 @@ class EditorViewportFeatures:
             IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
             resolve_pass,  # MSAA → обычный FBO
             postprocess,
+            bloom_pass,
             tonemap_pass,  # HDR → LDR (after bloom)
             UIWidgetPass(
                 input_res="color_tonemapped",
@@ -576,7 +602,7 @@ class EditorViewportFeatures:
             ),
         ]
 
-        postprocess.add_effect(BloomEffect())
+        # postprocess.add_effect(BloomEffect())
         postprocess.add_effect(
             HighlightEffect(
                 lambda: self.hover_entity_id,

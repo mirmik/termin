@@ -71,14 +71,6 @@ typedef struct tc_scene tc_scene;
 typedef struct tc_viewport tc_viewport;
 typedef struct tc_pipeline tc_pipeline;
 
-// ============================================================================
-// Handle Types
-// ============================================================================
-
-typedef struct tc_entity_handle {
-    char uuid[40];
-} tc_entity_handle;
-
 #ifdef __cplusplus
 }
 #endif

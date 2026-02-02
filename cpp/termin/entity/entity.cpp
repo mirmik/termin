@@ -9,8 +9,9 @@ namespace termin {
 static tc_entity_pool_handle g_standalone_pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
 
 // Legacy constructor from raw pointer
-Entity::Entity(tc_entity_pool* pool, tc_entity_id id) : _id(id) {
-    _pool_handle = tc_entity_pool_registry_find(pool);
+Entity::Entity(tc_entity_pool* pool, tc_entity_id id) {
+    _h.pool = tc_entity_pool_registry_find(pool);
+    _h.id = id;
 }
 
 void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
@@ -26,8 +27,7 @@ void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
     }
 
     if (uuid_str.empty()) {
-        _pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
-        _id = TC_ENTITY_ID_INVALID;
+        _h = TC_ENTITY_HANDLE_INVALID;
         return;
     }
 
@@ -45,15 +45,13 @@ void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
         // Find entity by UUID in pool
         tc_entity_id id = tc_entity_pool_find_by_uuid(pool, uuid_str.c_str());
         if (tc_entity_id_valid(id)) {
-            _pool_handle = pool_handle;
-            _id = id;
+            _h = tc_entity_handle_make(pool_handle, id);
             return;
         }
     }
 
     // Entity not found
-    _pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
-    _id = TC_ENTITY_ID_INVALID;
+    _h = TC_ENTITY_HANDLE_INVALID;
 }
 
 tc_entity_pool_handle Entity::standalone_pool_handle() {
@@ -99,30 +97,22 @@ Entity Entity::create_with_uuid(tc_entity_pool* pool, const std::string& name, c
 
 void Entity::add_component(Component* component) {
     if (!component || !valid()) return;
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return;
-    tc_entity_pool_add_component(pool, _id, component->c_component());
+    tc_entity_add_component(_h, component->c_component());
 }
 
 void Entity::add_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return;
-    tc_entity_pool_add_component(pool, _id, c);
+    tc_entity_add_component(_h, c);
 }
 
 void Entity::remove_component(Component* component) {
     if (!component || !valid()) return;
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return;
-    tc_entity_pool_remove_component(pool, _id, component->c_component());
+    tc_entity_remove_component(_h, component->c_component());
 }
 
 void Entity::remove_component_ptr(tc_component* c) {
     if (!c || !valid()) return;
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return;
-    tc_entity_pool_remove_component(pool, _id, c);
+    tc_entity_remove_component(_h, c);
 }
 
 CxxComponent* Entity::get_component_by_type(const std::string& type_name) {
@@ -155,40 +145,31 @@ tc_component* Entity::get_component_by_type_name(const std::string& type_name) {
 
 void Entity::set_parent(const Entity& parent_entity) {
     if (!valid()) return;
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return;
 
     // Check that parent is in the same pool
-    if (parent_entity.valid() && !tc_entity_pool_handle_eq(parent_entity._pool_handle, _pool_handle)) {
+    if (parent_entity.valid() && !tc_entity_pool_handle_eq(parent_entity._h.pool, _h.pool)) {
         throw std::runtime_error("Cannot set parent: entities must be in the same pool");
     }
 
-    tc_entity_id parent_id = parent_entity.valid() ? parent_entity._id : TC_ENTITY_ID_INVALID;
-    tc_entity_pool_set_parent(pool, _id, parent_id);
+    tc_entity_set_parent(_h, parent_entity._h);
 }
 
 Entity Entity::parent() const {
-    if (!valid()) return Entity();
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return Entity();
-    tc_entity_id parent_id = tc_entity_pool_parent(pool, _id);
-    if (!tc_entity_id_valid(parent_id)) return Entity();
-    return Entity(_pool_handle, parent_id);
+    tc_entity_handle parent_h = tc_entity_parent(_h);
+    return Entity(parent_h);
 }
 
 std::vector<Entity> Entity::children() const {
     std::vector<Entity> result;
     if (!valid()) return result;
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return result;
 
-    size_t count = tc_entity_pool_children_count(pool, _id);
+    size_t count = tc_entity_children_count(_h);
     result.reserve(count);
 
     for (size_t i = 0; i < count; i++) {
-        tc_entity_id child_id = tc_entity_pool_child_at(pool, _id, i);
-        if (tc_entity_id_valid(child_id)) {
-            result.push_back(Entity(_pool_handle, child_id));
+        tc_entity_handle child_h = tc_entity_child_at(_h, i);
+        if (tc_entity_handle_valid(child_h)) {
+            result.push_back(Entity(child_h));
         }
     }
     return result;
@@ -196,16 +177,14 @@ std::vector<Entity> Entity::children() const {
 
 Entity Entity::find_child(const std::string& name) const {
     if (!valid()) return Entity();
-    tc_entity_pool* pool = pool_ptr();
-    if (!pool) return Entity();
 
-    size_t count = tc_entity_pool_children_count(pool, _id);
+    size_t count = tc_entity_children_count(_h);
     for (size_t i = 0; i < count; i++) {
-        tc_entity_id child_id = tc_entity_pool_child_at(pool, _id, i);
-        if (tc_entity_id_valid(child_id)) {
-            const char* child_name = tc_entity_pool_name(pool, child_id);
+        tc_entity_handle child_h = tc_entity_child_at(_h, i);
+        if (tc_entity_handle_valid(child_h)) {
+            const char* child_name = tc_entity_name(child_h);
             if (child_name && name == child_name) {
-                return Entity(_pool_handle, child_id);
+                return Entity(child_h);
             }
         }
     }

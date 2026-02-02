@@ -160,7 +160,6 @@ nb::object ComponentRegistryPython::get_class(const std::string& name) {
     }
 
     try {
-        // Try entity module first (for CXXRotatorComponent, etc.)
         nb::object entity_mod = nb::module_::import_("termin.entity._entity_native");
         if (nb::hasattr(entity_mod, name.c_str())) {
             return entity_mod.attr(name.c_str());

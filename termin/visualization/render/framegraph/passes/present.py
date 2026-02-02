@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Set, TYPE_CHECKING
 
-from termin._native.render import TcShader
+from termin._native.render import TcShader, PresentToScreenPass
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
+
+# Re-export C++ PresentToScreenPass
+__all__ = ["PresentToScreenPass", "BlitPass", "ResolvePass", "blit_fbo_to_fbo"]
 
 
 def _get_texture_from_resource(resource, shadow_map_index: int = 0):
@@ -51,6 +54,42 @@ def _get_texture_from_resource(resource, shadow_map_index: int = 0):
     return None
 
 
+FSQ_VERT = """
+#version 330 core
+layout(location = 0) in vec2 a_pos;
+layout(location = 1) in vec2 a_uv;
+
+out vec2 v_uv;
+
+void main() {
+    v_uv = a_uv;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+"""
+
+FSQ_FRAG = """
+#version 330 core
+in vec2 v_uv;
+out vec4 FragColor;
+
+uniform sampler2D u_tex;
+
+void main() {
+    FragColor = texture(u_tex, v_uv);
+}
+"""
+
+_blit_shader: TcShader | None = None
+
+
+def _get_blit_shader() -> TcShader:
+    """Get or create the fullscreen quad shader for blitting."""
+    global _blit_shader
+    if _blit_shader is None:
+        _blit_shader = TcShader.from_sources(FSQ_VERT, FSQ_FRAG, "", "BlitShader")
+    return _blit_shader
+
+
 def blit_fbo_to_fbo(
     gfx: "GraphicsBackend",
     src_fb,
@@ -73,8 +112,8 @@ def blit_fbo_to_fbo(
     gfx.set_depth_test(False)
     gfx.set_depth_mask(False)
 
-    # берём ту же фуллскрин-квад-программу, что и PresentToScreenPass
-    shader = PresentToScreenPass._get_shader()
+    # берём фуллскрин-квад-программу
+    shader = _get_blit_shader()
     shader.ensure_ready()
     shader.use()
     shader.set_uniform_int("u_tex", 0)
@@ -160,32 +199,6 @@ class BlitPass(RenderFramePass):
         blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out, (pw, ph))
 
 
-FSQ_VERT = """
-#version 330 core
-layout(location = 0) in vec2 a_pos;
-layout(location = 1) in vec2 a_uv;
-
-out vec2 v_uv;
-
-void main() {
-    v_uv = a_uv;
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-}
-"""
-
-FSQ_FRAG = """
-#version 330 core
-in vec2 v_uv;
-out vec4 FragColor;
-
-uniform sampler2D u_tex;
-
-void main() {
-    FragColor = texture(u_tex, v_uv);
-}
-"""
-
-
 class ResolvePass(RenderFramePass):
     """
     Resolve MSAA FBO в обычный FBO через glBlitFramebuffer.
@@ -253,60 +266,7 @@ class ResolvePass(RenderFramePass):
         )
 
 
-class PresentToScreenPass(RenderFramePass):
-    """
-    Берёт текстуру из ресурса input_res и выводит её на экран
-    фуллскрин-квадом.
-    """
 
-    category = "Output"
-
-    node_inputs = [("input_res", "fbo")]
-    node_outputs = []  # Output is screen, not a resource
-
-    inspect_fields = {
-        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
-        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
-    }
-
-    _shader: TcShader | None = None
-
-    def __init__(self, input_res: str = "color", output_res: str = "DISPLAY", pass_name: str = "PresentToScreen"):
-        super().__init__(pass_name=pass_name)
-        self.input_res = input_res
-        self.output_res = output_res
-
-    def compute_reads(self) -> Set[str]:
-        return {self.input_res}
-
-    def compute_writes(self) -> Set[str]:
-        return {self.output_res}
-
-    @classmethod
-    def _get_shader(cls) -> TcShader:
-        if cls._shader is None:
-            cls._shader = TcShader.from_sources(FSQ_VERT, FSQ_FRAG, "", "PresentToScreen")
-        return cls._shader
-
-    def execute(self, ctx: "ExecuteContext") -> None:
-        from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
-
-        # Для NOP бэкенда пропускаем реальные OpenGL операции
-        if isinstance(ctx.graphics, NOPGraphicsBackend):
-            return
-
-        px, py, pw, ph = ctx.rect
-
-        fb_in = ctx.reads_fbos.get(self.input_res)
-        fb_out = ctx.writes_fbos.get("DISPLAY")
-        if fb_in is None or fb_out is None:
-            return
-
-        # Используем glBlitFramebuffer — работает и для обычных FBO, и для MSAA (resolve)
-        src_size = fb_in.get_size()
-        ctx.graphics.blit_framebuffer(
-            fb_in,
-            fb_out,
-            (0, 0, src_size[0], src_size[1]),
-            (px, py, px + pw, py + ph),
-        )
+# PresentToScreenPass is now imported from C++ (termin._native.render.PresentToScreenPass)
+# Add _get_shader static method for compatibility with blit code
+PresentToScreenPass._get_shader = staticmethod(_get_blit_shader)

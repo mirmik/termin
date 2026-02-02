@@ -26,9 +26,9 @@ public:
     // Embedded C component (MUST be first member for from_tc to work)
     tc_component _c;
 
-    // Owner entity - constructed from C-side owner_pool/owner_entity_id
+    // Owner entity - constructed from C-side owner handle
     Entity entity() const {
-        return Entity(_c.owner_pool, _c.owner_entity_id);
+        return Entity(_c.owner);
     }
 
 private:
@@ -133,6 +133,12 @@ public:
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
 
+    // Render lifecycle (called when scene is attached/detached from rendering)
+    // on_render_attach: scene pipelines are compiled, components can find passes
+    // on_render_detach: scene pipelines will be destroyed, clear references
+    virtual void on_render_attach() {}
+    virtual void on_render_detach() {}
+
     // Serialization - uses C API tc_inspect for INSPECT_FIELD properties.
     // Returns tc_value that caller must free with tc_value_free()
     virtual tc_value serialize_data() const {
@@ -153,7 +159,8 @@ public:
     }
 
     // Full serialize (type + data) - returns tc_value dict
-    tc_value serialize() const {
+    // Virtual to allow UnknownComponent to return original type
+    virtual tc_value serialize() const {
         tc_value result = tc_value_dict_new();
         tc_value_dict_set(&result, "type", tc_value_string(type_name()));
         tc_value data = serialize_data();
@@ -178,6 +185,8 @@ private:
     static void _cb_on_removed(tc_component* c);
     static void _cb_on_scene_inactive(tc_component* c);
     static void _cb_on_scene_active(tc_component* c);
+    static void _cb_on_render_attach(tc_component* c);
+    static void _cb_on_render_detach(tc_component* c);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
 

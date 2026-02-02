@@ -99,8 +99,11 @@ void ColliderComponent::on_added() {
 
     // Get scene handle from pool
     _scene_handle = TC_SCENE_HANDLE_INVALID;
-    if (_c.owner_pool) {
-        _scene_handle = tc_entity_pool_get_scene(_c.owner_pool);
+    if (tc_entity_handle_valid(_c.owner)) {
+        tc_entity_pool* pool = tc_entity_pool_registry_get(_c.owner.pool);
+        if (pool) {
+            _scene_handle = tc_entity_pool_get_scene(pool);
+        }
     }
 
     rebuild_collider();

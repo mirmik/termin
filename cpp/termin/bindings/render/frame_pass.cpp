@@ -21,6 +21,12 @@ extern "C" {
 #include "termin/render/normal_pass.hpp"
 #include "termin/render/id_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
+#include "termin/render/material_pass.hpp"
+#include "termin/render/present_pass.hpp"
+#include "termin/render/bloom_pass.hpp"
+#include "termin/render/grayscale_pass.hpp"
+#include "termin/render/tonemap_pass.hpp"
+#include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"
@@ -31,6 +37,7 @@ extern "C" {
 #include "tc_scene.h"
 #include "tc_log.hpp"
 #include <cstdint>
+#include <cstdio>
 #include <unordered_map>
 
 namespace termin {
@@ -139,6 +146,19 @@ static nb::object get_py_debugger_window(CxxFramePass* pass) {
 }
 
 void bind_frame_pass(nb::module_& m) {
+    // InternalSymbolTiming - timing info for debug symbols
+    nb::class_<InternalSymbolTiming>(m, "InternalSymbolTiming")
+        .def(nb::init<>())
+        .def_rw("name", &InternalSymbolTiming::name)
+        .def_rw("cpu_time_ms", &InternalSymbolTiming::cpu_time_ms)
+        .def_rw("gpu_time_ms", &InternalSymbolTiming::gpu_time_ms)
+        .def("__repr__", [](const InternalSymbolTiming& t) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "<InternalSymbolTiming '%s' cpu=%.3fms gpu=%.3fms>",
+                     t.name.c_str(), t.cpu_time_ms, t.gpu_time_ms);
+            return std::string(buf);
+        });
+
     // Rect4i - viewport rectangle
     nb::class_<Rect4i>(m, "Rect4i")
         .def(nb::init<>())
@@ -272,14 +292,12 @@ void bind_frame_pass(nb::module_& m) {
             if (kwargs.contains("scene")) {
                 nb::object s = nb::borrow<nb::object>(kwargs["scene"]);
                 if (!s.is_none()) {
-                    // Accept TcSceneRef directly or extract from Python Scene
+                    // Accept TcSceneRef directly or extract from Scene (inherits TcScene)
                     if (nb::isinstance<TcSceneRef>(s)) {
                         self->scene = nb::cast<TcSceneRef>(s);
-                    } else if (nb::hasattr(s, "_tc_scene")) {
-                        nb::object tc_scene_obj = s.attr("_tc_scene");
-                        if (nb::hasattr(tc_scene_obj, "scene_ref")) {
-                            self->scene = nb::cast<TcSceneRef>(tc_scene_obj.attr("scene_ref")());
-                        }
+                    } else if (nb::hasattr(s, "scene_ref")) {
+                        // Scene inherits from TcScene, has scene_ref method directly
+                        self->scene = nb::cast<TcSceneRef>(s.attr("scene_ref")());
                     }
                 }
             }
@@ -392,6 +410,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("is_inplace", &CxxFramePass::is_inplace)
         .def_prop_ro("inplace", &CxxFramePass::is_inplace)
         .def("get_internal_symbols", &CxxFramePass::get_internal_symbols)
+        .def("get_internal_symbols_with_timing", &CxxFramePass::get_internal_symbols_with_timing)
         .def("get_resource_specs", &CxxFramePass::get_resource_specs)
         .def("set_debug_internal_point", &CxxFramePass::set_debug_internal_point)
         .def("clear_debug_internal_point", &CxxFramePass::clear_debug_internal_point)
@@ -431,10 +450,10 @@ void bind_frame_pass(nb::module_& m) {
             return init_pass_from_deserialize(pass, "CxxFramePass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none());
 
-    // RenderContext
+    // RenderContext binding
     nb::class_<RenderContext>(m, "RenderContext")
         .def(nb::init<>())
-        // Constructor with keyword arguments for Python compatibility
+        // Constructor with keyword arguments
         .def("__init__", [](RenderContext* self, nb::kwargs kwargs) {
             new (self) RenderContext();
 
@@ -442,19 +461,24 @@ void bind_frame_pass(nb::module_& m) {
                 self->phase = nb::cast<std::string>(kwargs["phase"]);
             }
             if (kwargs.contains("scene")) {
-                self->scene = nb::borrow<nb::object>(kwargs["scene"]);
-            }
-            if (kwargs.contains("shadow_data")) {
-                self->shadow_data = nb::borrow<nb::object>(kwargs["shadow_data"]);
-            }
-            if (kwargs.contains("extra_uniforms")) {
-                self->extra_uniforms = nb::borrow<nb::object>(kwargs["extra_uniforms"]);
+                nb::object s = nb::borrow<nb::object>(kwargs["scene"]);
+                if (!s.is_none()) {
+                    if (nb::isinstance<TcSceneRef>(s)) {
+                        self->scene = nb::cast<TcSceneRef>(s);
+                    } else if (nb::hasattr(s, "scene_ref")) {
+                        // Scene inherits from TcScene, has scene_ref method directly
+                        self->scene = nb::cast<TcSceneRef>(s.attr("scene_ref")());
+                    }
+                }
             }
             if (kwargs.contains("layer_mask")) {
                 self->layer_mask = nb::cast<uint64_t>(kwargs["layer_mask"]);
             }
             if (kwargs.contains("camera")) {
-                self->camera = nb::borrow<nb::object>(kwargs["camera"]);
+                nb::object c = nb::borrow<nb::object>(kwargs["camera"]);
+                if (!c.is_none()) {
+                    self->camera = nb::cast<CameraComponent*>(c);
+                }
             }
             if (kwargs.contains("graphics")) {
                 nb::object g_obj = nb::borrow<nb::object>(kwargs["graphics"]);
@@ -462,7 +486,6 @@ void bind_frame_pass(nb::module_& m) {
                     self->graphics = nb::cast<GraphicsBackend*>(g_obj);
                 }
             }
-            // current_shader removed - use current_tc_shader instead
             if (kwargs.contains("view")) {
                 nb::object v = nb::borrow<nb::object>(kwargs["view"]);
                 if (nb::isinstance<Mat44>(v)) {
@@ -505,17 +528,15 @@ void bind_frame_pass(nb::module_& m) {
         })
         .def_rw("phase", &RenderContext::phase)
         .def_rw("scene", &RenderContext::scene)
-        .def_rw("shadow_data", &RenderContext::shadow_data)
-        .def_rw("extra_uniforms", &RenderContext::extra_uniforms)
         .def_rw("layer_mask", &RenderContext::layer_mask)
-        .def_rw("camera", &RenderContext::camera)
-        // graphics
+        .def_prop_rw("camera",
+            [](const RenderContext& self) -> CameraComponent* { return self.camera; },
+            [](RenderContext& self, CameraComponent* c) { self.camera = c; },
+            nb::rv_policy::reference)
         .def_prop_rw("graphics",
             [](const RenderContext& self) -> GraphicsBackend* { return self.graphics; },
             [](RenderContext& self, GraphicsBackend* g) { self.graphics = g; },
             nb::rv_policy::reference)
-        // current_shader removed - use current_tc_shader instead
-        // view matrix
         .def_prop_rw("view",
             [](const RenderContext& self) { return self.view; },
             [](RenderContext& self, nb::object v) {
@@ -533,7 +554,6 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
         )
-        // projection matrix
         .def_prop_rw("projection",
             [](const RenderContext& self) { return self.projection; },
             [](RenderContext& self, nb::object p) {
@@ -551,7 +571,6 @@ void bind_frame_pass(nb::module_& m) {
                 }
             }
         )
-        // model matrix
         .def_prop_rw("model",
             [](const RenderContext& self) { return self.model; },
             [](RenderContext& self, nb::object m) {
@@ -629,6 +648,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_inplace_aliases", &ColorPass::get_inplace_aliases)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
+        .def("get_internal_symbols_with_timing", &ColorPass::get_internal_symbols_with_timing)
         .def_prop_ro("reads", &ColorPass::compute_reads)
         .def_prop_ro("writes", &ColorPass::compute_writes)
         .def("execute_with_data", [](
@@ -680,15 +700,12 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene_handle from Python Scene object
+            // Get tc_scene_handle from Python Scene object (Scene inherits TcScene)
             tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
-                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                    scene.index = std::get<0>(h);
-                    scene.generation = std::get<1>(h);
-                }
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
+                scene.index = std::get<0>(h);
+                scene.generation = std::get<1>(h);
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -880,15 +897,12 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene_handle from Python Scene object
+            // Get tc_scene_handle from Python Scene object (Scene inherits TcScene)
             tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
-                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                    scene.index = std::get<0>(h);
-                    scene.generation = std::get<1>(h);
-                }
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
+                scene.index = std::get<0>(h);
+                scene.generation = std::get<1>(h);
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -1037,15 +1051,12 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene_handle from Python Scene object
+            // Get tc_scene_handle from Python Scene object (Scene inherits TcScene)
             tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
-                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                    scene.index = std::get<0>(h);
-                    scene.generation = std::get<1>(h);
-                }
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
+                scene.index = std::get<0>(h);
+                scene.generation = std::get<1>(h);
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -1191,15 +1202,12 @@ void bind_frame_pass(nb::module_& m) {
             rect.width = nb::cast<int>(rect_py[2]);
             rect.height = nb::cast<int>(rect_py[3]);
 
-            // Get tc_scene_handle from Python Scene object
+            // Get tc_scene_handle from Python Scene object (Scene inherits TcScene)
             tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
-                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                    scene.index = std::get<0>(h);
-                    scene.generation = std::get<1>(h);
-                }
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
+                scene.index = std::get<0>(h);
+                scene.generation = std::get<1>(h);
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
@@ -1341,15 +1349,12 @@ void bind_frame_pass(nb::module_& m) {
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_view_py,
             nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_projection_py
         ) {
-            // Get tc_scene_handle from Python Scene object
+            // Get tc_scene_handle from Python Scene object (Scene inherits TcScene)
             tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-            if (!scene_py.is_none() && nb::hasattr(scene_py, "_tc_scene")) {
-                nb::object tc_scene_obj = scene_py.attr("_tc_scene");
-                if (nb::hasattr(tc_scene_obj, "scene_handle")) {
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(tc_scene_obj.attr("scene_handle")());
-                    scene.index = std::get<0>(h);
-                    scene.generation = std::get<1>(h);
-                }
+            if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
+                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
+                scene.index = std::get<0>(h);
+                scene.generation = std::get<1>(h);
             }
 
             // Convert lights
@@ -1472,6 +1477,419 @@ void bind_frame_pass(nb::module_& m) {
             nb::make_tuple("input_res", "output_res")
         );
     }
+
+    // MaterialPass - post-processing pass using a Material
+    nb::class_<MaterialPass, CxxFramePass>(m, "MaterialPass")
+        .def("__init__", [](MaterialPass* self,
+                            const std::string& material_name,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) MaterialPass();
+            self->set_pass_name(pass_name);
+            self->output_res = output_res;
+            if (!material_name.empty() && material_name != "(None)") {
+                self->material = TcMaterial::from_name(material_name);
+            }
+            init_pass_from_python(self, "MaterialPass");
+        },
+             nb::arg("material_name") = "",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Material")
+        .def_prop_rw("material",
+            [](MaterialPass& p) { return p.material; },
+            [](MaterialPass& p, const TcMaterial& mat) { p.material = mat; })
+        .def_prop_rw("material_name",
+            [](MaterialPass& p) { return std::string(p.material.name()); },
+            [](MaterialPass& p, const std::string& name) {
+                if (!name.empty() && name != "(None)") {
+                    p.material = TcMaterial::from_name(name);
+                } else {
+                    p.material = TcMaterial();
+                }
+            })
+        .def_prop_rw("output_res",
+            [](MaterialPass& p) { return p.output_res; },
+            [](MaterialPass& p, const std::string& res) { p.output_res = res; })
+        .def("set_texture_resource", &MaterialPass::set_texture_resource,
+             nb::arg("uniform_name"), nb::arg("resource_name"))
+        .def("add_resource", &MaterialPass::add_resource,
+             nb::arg("resource_name"), nb::arg("uniform_name") = "")
+        .def("remove_resource", &MaterialPass::remove_resource,
+             nb::arg("resource_name"))
+        .def("add_extra_texture", [](MaterialPass& self,
+                                     const std::string& socket_name,
+                                     const std::string& resource_name) {
+            if (resource_name.empty() || resource_name.rfind("empty_", 0) == 0) {
+                return;
+            }
+            std::string uniform_name = (socket_name.rfind("u_", 0) == 0)
+                ? socket_name
+                : "u_" + socket_name;
+            self.set_texture_resource(uniform_name, resource_name);
+        }, nb::arg("socket_name"), nb::arg("resource_name"))
+        .def_prop_rw("before_draw",
+            [](MaterialPass& p) {
+                // Return None if no callback is set
+                if (!p.before_draw()) {
+                    return nb::none();
+                }
+                // Can't return C++ lambda to Python
+                return nb::none();
+            },
+            [](MaterialPass& p, nb::object callback) {
+                if (callback.is_none()) {
+                    p.set_before_draw(nullptr);
+                } else {
+                    // Wrap Python callback
+                    nb::object cb_ref = callback;
+                    p.set_before_draw([cb_ref](TcShader* shader) {
+                        nb::gil_scoped_acquire gil;
+                        try {
+                            cb_ref(nb::cast(shader, nb::rv_policy::reference));
+                        } catch (const std::exception& e) {
+                            tc::Log::error("[MaterialPass] before_draw callback error: %s", e.what());
+                        }
+                    });
+                }
+            })
+        .def("compute_reads", &MaterialPass::compute_reads)
+        .def("compute_writes", &MaterialPass::compute_writes)
+        .def_prop_ro("reads", &MaterialPass::compute_reads)
+        .def_prop_ro("writes", &MaterialPass::compute_writes)
+        .def("destroy", &MaterialPass::destroy)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Material";
+            std::string output_res = data.contains("output_res") ? nb::cast<std::string>(data["output_res"]) : "color";
+            std::string material_name = "";
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                // Support both "material" and legacy "material_name"
+                if (d.contains("material")) {
+                    material_name = nb::cast<std::string>(d["material"]);
+                } else if (d.contains("material_name")) {
+                    material_name = nb::cast<std::string>(d["material_name"]);
+                }
+            }
+            auto* p = new MaterialPass();
+            p->set_pass_name(pass_name);
+            p->output_res = output_res;
+            if (!material_name.empty() && material_name != "(None)") {
+                p->material = TcMaterial::from_name(material_name);
+            }
+            // Restore texture_resources
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("texture_resources")) {
+                    nb::dict tex_res = nb::cast<nb::dict>(d["texture_resources"]);
+                    for (auto item : tex_res) {
+                        std::string uniform_name = nb::cast<std::string>(item.first);
+                        std::string resource_name = nb::cast<std::string>(item.second);
+                        p->set_texture_resource(uniform_name, resource_name);
+                    }
+                }
+                if (d.contains("extra_resources")) {
+                    nb::dict extra_res = nb::cast<nb::dict>(d["extra_resources"]);
+                    for (auto item : extra_res) {
+                        std::string resource_name = nb::cast<std::string>(item.first);
+                        std::string uniform_name = nb::cast<std::string>(item.second);
+                        p->add_resource(resource_name, uniform_name);
+                    }
+                }
+            }
+            return init_pass_from_deserialize(p, "MaterialPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("__repr__", [](const MaterialPass& p) {
+            return "<MaterialPass '" + p.get_pass_name() + "' material='" + std::string(p.material.name()) + "'>";
+        });
+
+    // Node graph attributes for MaterialPass
+    {
+        m.attr("MaterialPass").attr("category") = "Effects";
+        m.attr("MaterialPass").attr("has_dynamic_inputs") = true;
+        m.attr("MaterialPass").attr("node_inputs") = nb::make_tuple();
+        m.attr("MaterialPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("MaterialPass").attr("node_inplace_pairs") = nb::make_tuple();
+
+        // inspect_fields for editor - uses Python InspectField class
+        // Will be set from Python side after import
+    }
+
+    // PresentToScreenPass - blit input FBO to output (typically screen)
+    nb::class_<PresentToScreenPass, CxxFramePass>(m, "PresentToScreenPass")
+        .def("__init__", [](PresentToScreenPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) PresentToScreenPass(input_res, output_res);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "PresentToScreenPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "OUTPUT",
+             nb::arg("pass_name") = "PresentToScreen")
+        .def_rw("input_res", &PresentToScreenPass::input_res)
+        .def_rw("output_res", &PresentToScreenPass::output_res)
+        .def("compute_reads", &PresentToScreenPass::compute_reads)
+        .def("compute_writes", &PresentToScreenPass::compute_writes)
+        .def("get_inplace_aliases", &PresentToScreenPass::get_inplace_aliases)
+        .def_prop_ro("reads", &PresentToScreenPass::compute_reads)
+        .def_prop_ro("writes", &PresentToScreenPass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "PresentToScreen";
+            std::string input_res = "color";
+            std::string output_res = "OUTPUT";
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+            }
+            auto* p = new PresentToScreenPass(input_res, output_res);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "PresentToScreenPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &PresentToScreenPass::destroy)
+        .def("__repr__", [](const PresentToScreenPass& p) {
+            return "<PresentToScreenPass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for PresentToScreenPass
+    {
+        m.attr("PresentToScreenPass").attr("category") = "Output";
+        m.attr("PresentToScreenPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
+    }
+
+    // BloomPass - HDR bloom post-processing pass
+    nb::class_<BloomPass, CxxFramePass>(m, "BloomPass")
+        .def("__init__", [](BloomPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float threshold,
+                            float soft_threshold,
+                            float intensity,
+                            int mip_levels) {
+            new (self) BloomPass(input_res, output_res, threshold, soft_threshold, intensity, mip_levels);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "BloomPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Bloom",
+             nb::arg("threshold") = 1.0f,
+             nb::arg("soft_threshold") = 0.5f,
+             nb::arg("intensity") = 1.0f,
+             nb::arg("mip_levels") = 5)
+        .def_rw("input_res", &BloomPass::input_res)
+        .def_rw("output_res", &BloomPass::output_res)
+        .def_rw("threshold", &BloomPass::threshold)
+        .def_rw("soft_threshold", &BloomPass::soft_threshold)
+        .def_rw("intensity", &BloomPass::intensity)
+        .def_rw("mip_levels", &BloomPass::mip_levels)
+        .def("compute_reads", &BloomPass::compute_reads)
+        .def("compute_writes", &BloomPass::compute_writes)
+        .def("get_inplace_aliases", &BloomPass::get_inplace_aliases)
+        .def_prop_ro("reads", &BloomPass::compute_reads)
+        .def_prop_ro("writes", &BloomPass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Bloom";
+            std::string input_res = "color";
+            std::string output_res = "color";
+            float threshold = 1.0f;
+            float soft_threshold = 0.5f;
+            float intensity = 1.0f;
+            int mip_levels = 5;
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("threshold")) {
+                    threshold = nb::cast<float>(d["threshold"]);
+                }
+                if (d.contains("soft_threshold")) {
+                    soft_threshold = nb::cast<float>(d["soft_threshold"]);
+                }
+                if (d.contains("intensity")) {
+                    intensity = nb::cast<float>(d["intensity"]);
+                }
+                if (d.contains("mip_levels")) {
+                    mip_levels = nb::cast<int>(d["mip_levels"]);
+                }
+            }
+            auto* p = new BloomPass(input_res, output_res, threshold, soft_threshold, intensity, mip_levels);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "BloomPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &BloomPass::destroy)
+        .def("__repr__", [](const BloomPass& p) {
+            return "<BloomPass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for BloomPass
+    {
+        m.attr("BloomPass").attr("category") = "Effects";
+        m.attr("BloomPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("BloomPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("BloomPass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    // GrayscalePass - simple grayscale post-processing pass
+    nb::class_<GrayscalePass, CxxFramePass>(m, "GrayscalePass")
+        .def("__init__", [](GrayscalePass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float strength) {
+            new (self) GrayscalePass(input_res, output_res, strength);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "GrayscalePass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Grayscale",
+             nb::arg("strength") = 1.0f)
+        .def_rw("input_res", &GrayscalePass::input_res)
+        .def_rw("output_res", &GrayscalePass::output_res)
+        .def_rw("strength", &GrayscalePass::strength)
+        .def("compute_reads", &GrayscalePass::compute_reads)
+        .def("compute_writes", &GrayscalePass::compute_writes)
+        .def("get_inplace_aliases", &GrayscalePass::get_inplace_aliases)
+        .def_prop_ro("reads", &GrayscalePass::compute_reads)
+        .def_prop_ro("writes", &GrayscalePass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Grayscale";
+            std::string input_res = "color";
+            std::string output_res = "color";
+            float strength = 1.0f;
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("strength")) {
+                    strength = nb::cast<float>(d["strength"]);
+                }
+            }
+            auto* p = new GrayscalePass(input_res, output_res, strength);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "GrayscalePass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &GrayscalePass::destroy)
+        .def("__repr__", [](const GrayscalePass& p) {
+            return "<GrayscalePass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for GrayscalePass
+    {
+        m.attr("GrayscalePass").attr("category") = "Effects";
+        m.attr("GrayscalePass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("GrayscalePass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("GrayscalePass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    // TonemapPass - HDR to LDR tonemapping pass
+    nb::class_<TonemapPass, CxxFramePass>(m, "TonemapPass")
+        .def("__init__", [](TonemapPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float exposure,
+                            int method) {
+            new (self) TonemapPass(input_res, output_res, exposure, method);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "TonemapPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Tonemap",
+             nb::arg("exposure") = 1.0f,
+             nb::arg("method") = 0)
+        .def_rw("input_res", &TonemapPass::input_res)
+        .def_rw("output_res", &TonemapPass::output_res)
+        .def_rw("exposure", &TonemapPass::exposure)
+        .def_rw("method", &TonemapPass::method)
+        .def("compute_reads", &TonemapPass::compute_reads)
+        .def("compute_writes", &TonemapPass::compute_writes)
+        .def("get_inplace_aliases", &TonemapPass::get_inplace_aliases)
+        .def_prop_ro("reads", &TonemapPass::compute_reads)
+        .def_prop_ro("writes", &TonemapPass::compute_writes)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "Tonemap";
+            std::string input_res = "color";
+            std::string output_res = "color";
+            float exposure = 1.0f;
+            int method = 0;
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) {
+                    input_res = nb::cast<std::string>(d["input_res"]);
+                }
+                if (d.contains("output_res")) {
+                    output_res = nb::cast<std::string>(d["output_res"]);
+                }
+                if (d.contains("exposure")) {
+                    exposure = nb::cast<float>(d["exposure"]);
+                }
+                if (d.contains("method")) {
+                    method = nb::cast<int>(d["method"]);
+                }
+            }
+            auto* p = new TonemapPass(input_res, output_res, exposure, method);
+            p->set_pass_name(pass_name);
+            return init_pass_from_deserialize(p, "TonemapPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def("destroy", &TonemapPass::destroy)
+        .def("__repr__", [](const TonemapPass& p) {
+            return "<TonemapPass '" + p.get_pass_name() + "'>";
+        });
+
+    // Node graph attributes for TonemapPass
+    {
+        m.attr("TonemapPass").attr("category") = "Effects";
+        m.attr("TonemapPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("TonemapPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("TonemapPass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    // TonemapMethod enum constants
+    m.attr("TONEMAP_ACES") = 0;
+    m.attr("TONEMAP_REINHARD") = 1;
+    m.attr("TONEMAP_NONE") = 2;
 }
 
 } // namespace termin

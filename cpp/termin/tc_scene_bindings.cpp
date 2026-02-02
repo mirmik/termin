@@ -1,282 +1,180 @@
-// tc_scene_bindings.cpp - Direct bindings for tc_scene C API
+// tc_scene_bindings.cpp - Python bindings for TcScene
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/tuple.h>
 
-#include "entity/entity.hpp"
+#include "tc_scene.hpp"
 #include "entity/component.hpp"
 #include "bindings/entity/entity_helpers.hpp"
-#include "tc_scene_ref.hpp"
 #include "mesh/tc_mesh_handle.hpp"
 #include "material/tc_material_handle.hpp"
-#include "collision/collision_world.hpp"
 #include "input/input_events.hpp"
-#include "../../core_c/include/tc_scene.h"
-#include <memory>
+#include "scene_bindings.hpp"
+#include "render/rendering_manager.hpp"
+#include "render/scene_pipeline_template.hpp"
+#include "collision/collision_world.hpp"
+#include "colliders/collider_component.hpp"
+#include "geom/ray3.hpp"
 #include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_skybox.h"
-#include "../../core_c/include/tc_scene_pool.h"
-#include "../../core_c/include/tc_entity_pool.h"
-#include "../../core_c/include/tc_log.h"
-#include "scene_bindings.hpp"
 
 namespace nb = nanobind;
 
 namespace termin {
 
-// Opaque wrapper for tc_scene_handle
-class TcScene {
-public:
-    tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
-    std::unique_ptr<collision::CollisionWorld> _collision_world;
+// ============================================================================
+// Trent <-> Python conversion helpers
+// ============================================================================
 
-    TcScene() {
-        _h = tc_scene_new();
-        _collision_world = std::make_unique<collision::CollisionWorld>();
-        tc_scene_set_collision_world(_h, _collision_world.get());
-        tc::Log::info("[TcScene] Created handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
-    }
-
-    ~TcScene() {
-        tc::Log::info("[TcScene] ~TcScene handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
-        destroy();
-    }
-
-    void destroy() {
-        if (tc_scene_handle_valid(_h)) {
-            tc::Log::info("[TcScene] destroy() handle=(%u,%u)", _h.index, _h.generation);
-            tc_scene_set_collision_world(_h, nullptr);
-            _collision_world.reset();
-            tc_scene_free(_h);
-            _h = TC_SCENE_HANDLE_INVALID;
+static nb::object trent_to_python(const nos::trent& t) {
+    switch (t.get_type()) {
+        case nos::trent_type::nil:
+            return nb::none();
+        case nos::trent_type::boolean:
+            return nb::bool_(t.as_bool());
+        case nos::trent_type::numer:
+            return nb::float_(static_cast<double>(t.as_numer()));
+        case nos::trent_type::string:
+            return nb::str(t.as_string().c_str());
+        case nos::trent_type::list: {
+            nb::list result;
+            for (const auto& item : t.as_list()) {
+                result.append(trent_to_python(item));
+            }
+            return result;
         }
-    }
-
-    // Get scene handle
-    tc_scene_handle handle() const {
-        return _h;
-    }
-
-    // Get non-owning reference to this scene
-    TcSceneRef scene_ref() const {
-        return TcSceneRef(_h);
-    }
-
-    // Disable copy
-    TcScene(const TcScene&) = delete;
-    TcScene& operator=(const TcScene&) = delete;
-
-    // Move
-    TcScene(TcScene&& other) noexcept
-        : _h(other._h), _collision_world(std::move(other._collision_world)) {
-        other._h = TC_SCENE_HANDLE_INVALID;
-    }
-
-    TcScene& operator=(TcScene&& other) noexcept {
-        if (this != &other) {
-            destroy();
-            _h = other._h;
-            _collision_world = std::move(other._collision_world);
-            other._h = TC_SCENE_HANDLE_INVALID;
+        case nos::trent_type::dict: {
+            nb::dict result;
+            for (const auto& [key, value] : t.as_dict()) {
+                result[nb::str(key.c_str())] = trent_to_python(value);
+            }
+            return result;
         }
-        return *this;
+        default:
+            return nb::none();
     }
+}
 
-    // Entity management
-    void add_entity(const Entity& e) {
-        (void)e;
+static nos::trent python_to_trent(nb::handle obj) {
+    if (obj.is_none()) {
+        return nos::trent();
     }
-
-    void remove_entity(const Entity& e) {
-        if (!e.valid()) return;
-        tc_entity_pool_free(e.pool(), e.id());
+    if (nb::isinstance<nb::bool_>(obj)) {
+        return nos::trent(nb::cast<bool>(obj));
     }
-
-    size_t entity_count() const {
-        return tc_scene_entity_count(_h);
+    if (nb::isinstance<nb::int_>(obj)) {
+        return nos::trent(static_cast<int64_t>(nb::cast<int64_t>(obj)));
     }
-
-    // Component registration (C++ Component)
-    void register_component(Component* c) {
-        if (!c) return;
-        tc_scene_register_component(_h, c->c_component());
+    if (nb::isinstance<nb::float_>(obj)) {
+        return nos::trent(nb::cast<double>(obj));
     }
-
-    void unregister_component(Component* c) {
-        if (!c) return;
-        tc_scene_unregister_component(_h, c->c_component());
+    if (nb::isinstance<nb::str>(obj)) {
+        return nos::trent(nb::cast<std::string>(obj));
     }
-
-    // Component registration by pointer (for TcComponent/pure Python components)
-    void register_component_ptr(uintptr_t ptr) {
-        tc_component* c = reinterpret_cast<tc_component*>(ptr);
-        if (c) {
-            tc_scene_register_component(_h, c);
+    if (nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) {
+        nos::trent result;
+        result.init(nos::trent::type::list);
+        for (auto item : obj) {
+            result.push_back(python_to_trent(item));
         }
-    }
-
-    void unregister_component_ptr(uintptr_t ptr) {
-        tc_component* c = reinterpret_cast<tc_component*>(ptr);
-        if (c) {
-            tc_scene_unregister_component(_h, c);
-        }
-    }
-
-    // Update loop
-    void update(double dt) {
-        tc_scene_update(_h, dt);
-    }
-
-    void editor_update(double dt) {
-        tc_scene_editor_update(_h, dt);
-    }
-
-    void before_render() {
-        tc_scene_before_render(_h);
-    }
-
-    // Fixed timestep
-    double fixed_timestep() const {
-        return tc_scene_fixed_timestep(_h);
-    }
-
-    void set_fixed_timestep(double dt) {
-        tc_scene_set_fixed_timestep(_h, dt);
-    }
-
-    double accumulated_time() const {
-        return tc_scene_accumulated_time(_h);
-    }
-
-    void reset_accumulated_time() {
-        tc_scene_reset_accumulated_time(_h);
-    }
-
-    // Component queries
-    size_t pending_start_count() const {
-        return tc_scene_pending_start_count(_h);
-    }
-
-    size_t update_list_count() const {
-        return tc_scene_update_list_count(_h);
-    }
-
-    size_t fixed_update_list_count() const {
-        return tc_scene_fixed_update_list_count(_h);
-    }
-
-    // Get entity pool owned by this scene
-    tc_entity_pool* entity_pool() const {
-        return tc_scene_entity_pool(_h);
-    }
-
-    // Set Python wrapper for callbacks from C to Python
-    void set_py_wrapper(nb::object wrapper) {
-        tc::Log::info("[TcScene] set_py_wrapper handle=(%u,%u), py_wrapper=%p", _h.index, _h.generation, (void*)wrapper.ptr());
-        tc_scene_set_py_wrapper(_h, wrapper.ptr());
-    }
-
-public:
-    // Create a new entity directly in scene's pool
-    Entity create_entity(const std::string& name = "") {
-        tc_entity_pool* pool = entity_pool();
-        if (!pool) return Entity();
-        return Entity::create(pool, name);
-    }
-
-    // Find entity by UUID in scene's pool
-    Entity get_entity(const std::string& uuid) const {
-        tc_entity_pool* pool = entity_pool();
-        if (!pool || uuid.empty()) return Entity();
-
-        tc_entity_id id = tc_entity_pool_find_by_uuid(pool, uuid.c_str());
-        if (!tc_entity_id_valid(id)) return Entity();
-
-        return Entity(pool, id);
-    }
-
-    // Find entity by pick_id in scene's pool
-    Entity get_entity_by_pick_id(uint32_t pick_id) const {
-        tc_entity_pool* pool = entity_pool();
-        if (!pool || pick_id == 0) return Entity();
-
-        tc_entity_id id = tc_entity_pool_find_by_pick_id(pool, pick_id);
-        if (!tc_entity_id_valid(id)) return Entity();
-
-        return Entity(pool, id);
-    }
-
-    // Find entity by name in scene's pool
-    Entity find_entity_by_name(const std::string& name) const {
-        if (name.empty()) return Entity();
-
-        tc_entity_id id = tc_scene_find_entity_by_name(_h, name.c_str());
-        if (!tc_entity_id_valid(id)) return Entity();
-
-        return Entity(entity_pool(), id);
-    }
-
-    // Scene name
-    std::string name() const {
-        const char* n = tc_scene_get_name(_h);
-        return n ? std::string(n) : "";
-    }
-
-    void set_name(const std::string& n) {
-        tc_scene_set_name(_h, n.c_str());
-    }
-
-    // Lighting properties
-    tc_scene_lighting* lighting() {
-        return tc_scene_get_lighting(_h);
-    }
-
-    // Get all entities in scene's pool
-    std::vector<Entity> get_all_entities() const {
-        std::vector<Entity> result;
-        tc_entity_pool* pool = entity_pool();
-        if (!pool) return result;
-
-        tc_entity_pool_foreach(pool, [](tc_entity_pool* p, tc_entity_id id, void* user_data) -> bool {
-            auto* vec = static_cast<std::vector<Entity>*>(user_data);
-            vec->push_back(Entity(p, id));
-            return true;
-        }, &result);
-
         return result;
     }
-
-    // Migrate entity to this scene's pool
-    Entity migrate_entity(Entity& entity) {
-        tc_entity_pool* dst_pool = entity_pool();
-        if (!entity.valid() || !dst_pool) {
-            return Entity();
+    if (nb::isinstance<nb::dict>(obj)) {
+        nos::trent result;
+        result.init(nos::trent::type::dict);
+        for (auto [key, value] : nb::cast<nb::dict>(obj)) {
+            std::string key_str = nb::cast<std::string>(nb::str(key));
+            result[key_str] = python_to_trent(value);
         }
-
-        tc_entity_pool* src_pool = entity.pool();
-        if (src_pool == dst_pool) {
-            return entity;
-        }
-
-        tc_entity_id new_id = tc_entity_pool_migrate(src_pool, entity.id(), dst_pool);
-        if (!tc_entity_id_valid(new_id)) {
-            return Entity();
-        }
-
-        return Entity(dst_pool, new_id);
+        return result;
     }
+    // Fallback: convert to string
+    return nos::trent(nb::cast<std::string>(nb::str(obj)));
+}
 
-    // Collision world access
-    collision::CollisionWorld* collision_world() const {
-        return _collision_world.get();
-    }
+// ============================================================================
+// Helper structs for callbacks (defined outside lambdas for MSVC compatibility)
+// ============================================================================
+
+struct ForeachCallbackData {
+    nb::object* py_callback;
+    bool should_continue;
 };
 
+// Forward declaration for dispatch_input_to_scene (defined at end of file)
+template<typename EventT>
+void dispatch_input_to_scene(tc_scene_handle h, const char* method_name, const EventT& event, bool editor_mode);
+
+// ============================================================================
+// Python bindings
+// ============================================================================
+
 void bind_tc_scene(nb::module_& m) {
+    // ViewportConfig binding
+    nb::class_<ViewportConfig>(m, "ViewportConfig")
+        .def(nb::init<>())
+        .def(nb::init<const std::string&, const std::string&, const std::string&,
+                      float, float, float, float,
+                      const std::string&, const std::string&,
+                      int, const std::string&, bool, uint64_t, bool>(),
+             nb::arg("name") = "",
+             nb::arg("display_name") = "Main",
+             nb::arg("camera_uuid") = "",
+             nb::arg("region_x") = 0.0f,
+             nb::arg("region_y") = 0.0f,
+             nb::arg("region_w") = 1.0f,
+             nb::arg("region_h") = 1.0f,
+             nb::arg("pipeline_uuid") = "",
+             nb::arg("pipeline_name") = "",
+             nb::arg("depth") = 0,
+             nb::arg("input_mode") = "simple",
+             nb::arg("block_input_in_editor") = false,
+             nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL,
+             nb::arg("enabled") = true)
+        .def_rw("name", &ViewportConfig::name)
+        .def_rw("display_name", &ViewportConfig::display_name)
+        .def_rw("camera_uuid", &ViewportConfig::camera_uuid)
+        .def_rw("region_x", &ViewportConfig::region_x)
+        .def_rw("region_y", &ViewportConfig::region_y)
+        .def_rw("region_w", &ViewportConfig::region_w)
+        .def_rw("region_h", &ViewportConfig::region_h)
+        .def_rw("pipeline_uuid", &ViewportConfig::pipeline_uuid)
+        .def_rw("pipeline_name", &ViewportConfig::pipeline_name)
+        .def_rw("depth", &ViewportConfig::depth)
+        .def_rw("input_mode", &ViewportConfig::input_mode)
+        .def_rw("block_input_in_editor", &ViewportConfig::block_input_in_editor)
+        .def_rw("layer_mask", &ViewportConfig::layer_mask)
+        .def_rw("enabled", &ViewportConfig::enabled)
+        .def_prop_ro("region", &ViewportConfig::region,
+                     "Get region as (x, y, w, h) tuple")
+        .def("set_region", &ViewportConfig::set_region,
+             nb::arg("x"), nb::arg("y"), nb::arg("w"), nb::arg("h"),
+             "Set region (x, y, width, height)");
+
+    // SceneRaycastHit binding
+    nb::class_<SceneRaycastHit>(m, "SceneRaycastHit")
+        .def_prop_ro("valid", &SceneRaycastHit::valid)
+        .def_prop_ro("entity", [](const SceneRaycastHit& h) -> nb::object {
+            if (!h.valid()) return nb::none();
+            return nb::cast(Entity(h.entity));
+        })
+        .def_prop_ro("component", [](const SceneRaycastHit& h) -> nb::object {
+            if (!h.component) return nb::none();
+            return nb::cast(h.component, nb::rv_policy::reference);
+        })
+        .def_prop_ro("point_on_ray", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_ray[0], h.point_on_ray[1], h.point_on_ray[2]);
+        })
+        .def_prop_ro("point_on_collider", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_collider[0], h.point_on_collider[1], h.point_on_collider[2]);
+        })
+        .def_ro("distance", &SceneRaycastHit::distance);
+
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
         .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
+        .def("is_alive", &TcScene::is_alive, "Check if scene is alive (not destroyed)")
         .def("scene_ref", &TcScene::scene_ref, "Get non-owning reference to this scene")
 
         // Entity management
@@ -348,8 +246,69 @@ void bind_tc_scene(nb::module_& m) {
             return nb::none();
         }, nb::arg("name"), "Find entity by name. Returns None if not found.")
 
-        // Scene name
+        // Scene name and UUID
         .def_prop_rw("name", &TcScene::name, &TcScene::set_name)
+        .def_prop_rw("uuid", &TcScene::uuid, &TcScene::set_uuid)
+
+        // Layer and flag names (0-63)
+        .def("get_layer_name", &TcScene::get_layer_name, nb::arg("index"),
+             "Get layer name by index (0-63), empty string if not set")
+        .def("set_layer_name", &TcScene::set_layer_name, nb::arg("index"), nb::arg("name"),
+             "Set layer name by index (0-63), empty string removes")
+        .def("get_flag_name", &TcScene::get_flag_name, nb::arg("index"),
+             "Get flag name by index (0-63), empty string if not set")
+        .def("set_flag_name", &TcScene::set_flag_name, nb::arg("index"), nb::arg("name"),
+             "Set flag name by index (0-63), empty string removes")
+
+        // Background color (RGBA)
+        .def("get_background_color", &TcScene::get_background_color,
+             "Get background color as (r, g, b, a) tuple")
+        .def("set_background_color", &TcScene::set_background_color,
+             nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("a"),
+             "Set background color RGBA")
+
+        // Viewport configurations (stored in C++ TcScene)
+        .def("add_viewport_config", &TcScene::add_viewport_config,
+             nb::arg("config"), "Add a viewport configuration")
+        .def("remove_viewport_config", &TcScene::remove_viewport_config,
+             nb::arg("index"), "Remove viewport configuration by index")
+        .def("clear_viewport_configs", &TcScene::clear_viewport_configs,
+             "Clear all viewport configurations")
+        .def("viewport_config_count", &TcScene::viewport_config_count,
+             "Get number of viewport configurations")
+        .def("viewport_config_at", [](TcScene& self, size_t index) -> nb::object {
+            ViewportConfig* config = self.viewport_config_at(index);
+            if (!config) return nb::none();
+            return nb::cast(config, nb::rv_policy::reference_internal);
+        }, nb::arg("index"), "Get viewport configuration by index")
+        .def_prop_ro("viewport_configs", [](TcScene& self) {
+            return self.viewport_configs();
+        }, nb::rv_policy::reference_internal, "Get all viewport configurations")
+
+        // Metadata (trent stored in C++, converted to Python at boundary)
+        .def("get_metadata", [](TcScene& self) -> nb::object {
+            return trent_to_python(self.metadata());
+        }, "Get all metadata as Python dict")
+        .def("set_metadata", [](TcScene& self, nb::handle data) {
+            self._metadata = python_to_trent(data);
+        }, nb::arg("data"), "Set all metadata from Python dict")
+        .def("get_metadata_value", [](TcScene& self, const std::string& path) -> nb::object {
+            const nos::trent* t = self.get_metadata_at_path(path);
+            if (!t) return nb::none();
+            return trent_to_python(*t);
+        }, nb::arg("path"), "Get metadata value at path (e.g. 'termin.editor.camera_name')")
+        .def("set_metadata_value", [](TcScene& self, const std::string& path, nb::handle value) {
+            self.set_metadata_at_path(path, python_to_trent(value));
+        }, nb::arg("path"), nb::arg("value"), "Set metadata value at path")
+        .def("has_metadata_value", &TcScene::has_metadata_at_path,
+             nb::arg("path"), "Check if metadata value exists at path")
+        .def("clear_metadata_value", [](TcScene& self, const std::string& path) {
+            self.set_metadata_at_path(path, nos::trent());
+        }, nb::arg("path"), "Clear metadata value at path (set to None)")
+        .def("metadata_to_json", &TcScene::metadata_to_json,
+             "Serialize metadata to JSON string")
+        .def("metadata_from_json", &TcScene::metadata_from_json,
+             nb::arg("json_str"), "Load metadata from JSON string")
 
         // Scene mode
         .def("get_mode", [](TcScene& self) {
@@ -360,8 +319,11 @@ void bind_tc_scene(nb::module_& m) {
         }, nb::arg("mode"), "Set scene mode")
 
         // Python wrapper for callbacks
-        .def("set_py_wrapper", &TcScene::set_py_wrapper, nb::arg("wrapper"),
-             "Set Python Scene wrapper for component auto-registration")
+        .def("set_py_wrapper", [](TcScene& self, nb::object wrapper) {
+            tc::Log::info("[TcScene] set_py_wrapper handle=(%u,%u), py_wrapper=%p",
+                         self._h.index, self._h.generation, (void*)wrapper.ptr());
+            tc_scene_set_py_wrapper(self._h, wrapper.ptr());
+        }, nb::arg("wrapper"), "Set Python Scene wrapper for component auto-registration")
 
         // Skybox type
         .def("get_skybox_type", [](TcScene& self) -> int {
@@ -371,7 +333,7 @@ void bind_tc_scene(nb::module_& m) {
             tc_scene_set_skybox_type(self._h, type);
         })
 
-        // Skybox colors (as tuples)
+        // Skybox colors
         .def("get_skybox_color", [](TcScene& self) -> std::tuple<float, float, float> {
             float r, g, b;
             tc_scene_get_skybox_color(self._h, &r, &g, &b);
@@ -397,483 +359,202 @@ void bind_tc_scene(nb::module_& m) {
             tc_scene_set_skybox_bottom_color(self._h, r, g, b);
         })
 
-        // Skybox mesh and material (ownership in tc_scene via refcount)
+        // Skybox mesh (lazy creation)
         .def("get_skybox_mesh", [](TcScene& self) -> TcMesh {
-            tc_mesh* raw = tc_scene_get_skybox_mesh(self._h);
-            if (!raw) return TcMesh();
-            return TcMesh(raw);
+            tc_mesh* mesh = tc_scene_get_skybox_mesh(self._h);
+            return TcMesh(mesh);
         })
-        .def("set_skybox_mesh", [](TcScene& self, const TcMesh& mesh) {
-            tc_scene_set_skybox_mesh(self._h, mesh.get());
-        })
-        .def("get_skybox_material", [](TcScene& self) -> TcMaterial {
-            tc_material* raw = tc_scene_get_skybox_material(self._h);
-            if (!raw) return TcMaterial();
-            return TcMaterial(raw);
-        })
-        .def("set_skybox_material", [](TcScene& self, const TcMaterial& material) {
-            tc_scene_set_skybox_material(self._h, material.get());
-        })
-        .def("ensure_skybox_material", [](TcScene& self, int type) -> TcMaterial {
+        .def("ensure_skybox_material", [](TcScene& self, int skybox_type) -> TcMaterial {
             tc_scene_skybox* skybox = tc_scene_get_skybox(self._h);
-            tc_material* raw = tc_scene_skybox_ensure_material(skybox, type);
-            if (!raw) return TcMaterial();
-            return TcMaterial(raw);
-        }, nb::arg("type"), "Ensure skybox material for type (0=none, 1=gradient, 2=solid)")
+            if (!skybox) return TcMaterial(nullptr);
 
-        // Lighting (returns pointer to internal tc_scene_lighting)
-        .def("lighting_ptr", [](TcScene& self) {
-            return reinterpret_cast<uintptr_t>(self.lighting());
-        }, "Get pointer to tc_scene_lighting")
-
-        // Component type queries
-        .def("get_components_of_type", [](TcScene& self, const std::string& type_name) {
-            nb::list result;
-            tc_component* c = tc_scene_first_component_of_type(self._h, type_name.c_str());
-            while (c != NULL) {
-                nb::object py_comp = tc_component_to_python(c);
-                if (!py_comp.is_none()) {
-                    result.append(py_comp);
-                }
-                c = c->type_next;
+            tc_material* mat = tc_scene_skybox_ensure_material(skybox, skybox_type);
+            if (mat) {
+                tc_scene_set_skybox_material(self._h, mat);
             }
-            return result;
-        }, nb::arg("type_name"), "Get all components of given type")
+            return TcMaterial(mat);
+        }, nb::arg("skybox_type"))
 
+        // Lighting access
+        .def("lighting_ptr", [](TcScene& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(self.lighting());
+        })
+
+        // Collision world
+        .def_prop_ro("collision_world", &TcScene::collision_world,
+                     nb::rv_policy::reference_internal)
+
+        // Raycast methods
+        .def("raycast", &TcScene::raycast, nb::arg("ray"),
+             "Find first intersection with a collider (distance == 0)")
+        .def("closest_to_ray", &TcScene::closest_to_ray, nb::arg("ray"),
+             "Find closest collider to ray (minimum distance)")
+
+        // Component type iteration
         .def("count_components_of_type", [](TcScene& self, const std::string& type_name) {
             return tc_scene_count_components_of_type(self._h, type_name.c_str());
-        }, nb::arg("type_name"), "Count components of given type")
+        }, nb::arg("type_name"))
 
-        .def("get_component_type_counts", [](TcScene& self) {
-            nb::dict result;
-
-            size_t type_count = 0;
-            tc_scene_component_type* types = tc_scene_get_all_component_types(self._h, &type_count);
-            if (types) {
-                for (size_t i = 0; i < type_count; i++) {
-                    if (types[i].type_name) {
-                        result[types[i].type_name] = types[i].count;
-                    }
-                }
-                free(types);
-            }
-            return result;
-        }, "Get dict of component type -> count for all types in scene")
-
-        .def("foreach_component_of_type", [](TcScene& self, const std::string& type_name, nb::callable callback) {
-            struct CallbackData {
-                nb::callable py_callback;
-                bool had_exception = false;
-            };
-            CallbackData data{callback};
+        .def("foreach_component_of_type", [](TcScene& self, const std::string& type_name, nb::object callback) {
+            ForeachCallbackData data{&callback, true};
 
             tc_scene_foreach_component_of_type(
                 self._h,
                 type_name.c_str(),
                 [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<CallbackData*>(user_data);
-                    if (data->had_exception) return false;
+                    auto* data = static_cast<ForeachCallbackData*>(user_data);
+                    if (!data->should_continue) return false;
+
+                    nb::object py_comp = tc_component_to_python(c);
+                    if (py_comp.is_none()) return true;
 
                     try {
-                        nb::object py_comp = tc_component_to_python(c);
-                        if (!py_comp.is_none()) {
-                            nb::object result = data->py_callback(py_comp);
-                            if (nb::isinstance<nb::bool_>(result) && !nb::cast<bool>(result)) {
-                                return false;
-                            }
+                        nb::object result = (*data->py_callback)(py_comp);
+                        if (!result.is_none() && nb::isinstance<nb::bool_>(result)) {
+                            data->should_continue = nb::cast<bool>(result);
                         }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
+                    } catch (const std::exception& e) {
+                        tc::Log::error("Error in foreach callback: %s", e.what());
+                        data->should_continue = false;
                     }
+                    return data->should_continue;
                 },
                 &data
             );
+        }, nb::arg("type_name"), nb::arg("callback"))
 
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("type_name"), nb::arg("callback"),
-           "Iterate components of type with callback(component) -> bool. Return False to stop.")
-
-        // Input dispatch methods
-        .def("dispatch_mouse_button", [](TcScene& self, MouseButtonEvent& event) {
-            struct DispatchData {
-                tc_mouse_button_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
+        .def("get_components_of_type", [](TcScene& self, const std::string& type_name) {
+            nb::list result;
+            tc_scene_foreach_component_of_type(
                 self._h,
+                type_name.c_str(),
                 [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_mouse_button) {
-                            c->input_vtable->on_mouse_button(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
+                    auto* list = static_cast<nb::list*>(user_data);
+                    nb::object py_comp = tc_component_to_python(c);
+                    if (!py_comp.is_none()) {
+                        list->append(py_comp);
                     }
+                    return true;
                 },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
+                &result
             );
+            return result;
+        }, nb::arg("type_name"))
 
-            if (data.had_exception) {
-                throw nb::python_error();
+        .def("get_component_type_counts", [](TcScene& self) {
+            nb::dict result;
+            size_t count = 0;
+            tc_scene_component_type* types = tc_scene_get_all_component_types(self._h, &count);
+            if (types) {
+                for (size_t i = 0; i < count; i++) {
+                    result[nb::str(types[i].type_name)] = types[i].count;
+                }
+                free(types);
             }
-        }, nb::arg("event"), "Dispatch mouse button event to all input handlers")
+            return result;
+        })
 
-        .def("dispatch_mouse_move", [](TcScene& self, MouseMoveEvent& event) {
-            struct DispatchData {
-                tc_mouse_move_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_mouse_move) {
-                            c->input_vtable->on_mouse_move(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch mouse move event to all input handlers")
-
-        .def("dispatch_scroll", [](TcScene& self, ScrollEvent& event) {
-            struct DispatchData {
-                tc_scroll_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_scroll) {
-                            c->input_vtable->on_scroll(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch scroll event to all input handlers")
-
-        .def("dispatch_key", [](TcScene& self, KeyEvent& event) {
-            struct DispatchData {
-                tc_key_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_key) {
-                            c->input_vtable->on_key(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch key event to all input handlers")
-
-        // Editor dispatch methods (with active_in_editor filter)
-        .def("dispatch_mouse_button_editor", [](TcScene& self, MouseButtonEvent& event) {
-            struct DispatchData {
-                tc_mouse_button_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_mouse_button) {
-                            c->input_vtable->on_mouse_button(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch mouse button event to editor input handlers")
-
-        .def("dispatch_mouse_move_editor", [](TcScene& self, MouseMoveEvent& event) {
-            struct DispatchData {
-                tc_mouse_move_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_mouse_move) {
-                            c->input_vtable->on_mouse_move(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch mouse move event to editor input handlers")
-
-        .def("dispatch_scroll_editor", [](TcScene& self, ScrollEvent& event) {
-            struct DispatchData {
-                tc_scroll_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_scroll) {
-                            c->input_vtable->on_scroll(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch scroll event to editor input handlers")
-
-        .def("dispatch_key_editor", [](TcScene& self, KeyEvent& event) {
-            struct DispatchData {
-                tc_key_event* event_ptr;
-                bool had_exception = false;
-            };
-            DispatchData data{&event};
-
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* data = static_cast<DispatchData*>(user_data);
-                    if (data->had_exception) return false;
-
-                    try {
-                        if (c->input_vtable && c->input_vtable->on_key) {
-                            c->input_vtable->on_key(c, data->event_ptr);
-                        }
-                        return true;
-                    } catch (...) {
-                        data->had_exception = true;
-                        return false;
-                    }
-                },
-                &data,
-                TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR
-            );
-
-            if (data.had_exception) {
-                throw nb::python_error();
-            }
-        }, nb::arg("event"), "Dispatch key event to editor input handlers")
-
-        // Notification methods
+        // Scene lifecycle notifications
         .def("notify_editor_start", [](TcScene& self) {
             tc_scene_notify_editor_start(self._h);
-        }, "Notify all components that editor has started")
+        })
         .def("notify_scene_inactive", [](TcScene& self) {
             tc_scene_notify_scene_inactive(self._h);
-        }, "Notify all components that scene became inactive")
+        })
         .def("notify_scene_active", [](TcScene& self) {
             tc_scene_notify_scene_active(self._h);
-        }, "Notify all components that scene became active")
+        })
 
-        // Collision world
-        .def("collision_world", &TcScene::collision_world,
-             nb::rv_policy::reference,
-             "Get collision world for this scene")
-        ;
+        // Input dispatch
+        .def("dispatch_mouse_button", [](TcScene& self, const MouseButtonEvent& event) {
+            dispatch_input_to_scene(self._h, "on_mouse_button", event, false);
+        }, nb::arg("event"))
+        .def("dispatch_mouse_move", [](TcScene& self, const MouseMoveEvent& event) {
+            dispatch_input_to_scene(self._h, "on_mouse_move", event, false);
+        }, nb::arg("event"))
+        .def("dispatch_scroll", [](TcScene& self, const ScrollEvent& event) {
+            dispatch_input_to_scene(self._h, "on_scroll", event, false);
+        }, nb::arg("event"))
+        .def("dispatch_key", [](TcScene& self, const KeyEvent& event) {
+            dispatch_input_to_scene(self._h, "on_key", event, false);
+        }, nb::arg("event"))
 
-    // =========================================================================
-    // Scene pool module-level functions
-    // =========================================================================
-    m.def("tc_scene_pool_count", []() {
-        return tc_scene_pool_count();
-    }, "Get number of scenes in pool");
+        .def("dispatch_mouse_button_editor", [](TcScene& self, const MouseButtonEvent& event) {
+            dispatch_input_to_scene(self._h, "on_mouse_button", event, true);
+        }, nb::arg("event"))
+        .def("dispatch_mouse_move_editor", [](TcScene& self, const MouseMoveEvent& event) {
+            dispatch_input_to_scene(self._h, "on_mouse_move", event, true);
+        }, nb::arg("event"))
+        .def("dispatch_scroll_editor", [](TcScene& self, const ScrollEvent& event) {
+            dispatch_input_to_scene(self._h, "on_scroll", event, true);
+        }, nb::arg("event"))
+        .def("dispatch_key_editor", [](TcScene& self, const KeyEvent& event) {
+            dispatch_input_to_scene(self._h, "on_key", event, true);
+        }, nb::arg("event"))
 
-    m.def("tc_scene_pool_get_all_info", []() {
-        nb::list result;
-        size_t count = 0;
-        tc_scene_info* infos = tc_scene_pool_get_all_info(&count);
-        if (infos) {
-            for (size_t i = 0; i < count; ++i) {
-                nb::dict d;
-                d["handle"] = std::make_tuple(infos[i].handle.index, infos[i].handle.generation);
-                d["name"] = infos[i].name ? std::string(infos[i].name) : "";
-                d["entity_count"] = infos[i].entity_count;
-                d["pending_count"] = infos[i].pending_count;
-                d["update_count"] = infos[i].update_count;
-                d["fixed_update_count"] = infos[i].fixed_update_count;
-                result.append(d);
-            }
-            free(infos);
-        }
-        return result;
-    }, "Get info for all scenes in pool");
+        // Pipeline templates
+        .def("add_pipeline_template", &TcScene::add_pipeline_template, nb::arg("template"))
+        .def("clear_pipeline_templates", &TcScene::clear_pipeline_templates)
+        .def("pipeline_template_count", &TcScene::pipeline_template_count)
+        .def("pipeline_template_at", &TcScene::pipeline_template_at, nb::arg("index"))
 
-    // Legacy aliases for compatibility
-    m.def("tc_scene_registry_count", []() {
-        return tc_scene_pool_count();
-    }, "Get number of scenes (legacy, use tc_scene_pool_count)");
-
-    m.def("tc_scene_registry_get_all_info", []() {
-        nb::list result;
-        size_t count = 0;
-        tc_scene_info* infos = tc_scene_pool_get_all_info(&count);
-        if (infos) {
-            for (size_t i = 0; i < count; ++i) {
-                nb::dict d;
-                d["handle"] = std::make_tuple(infos[i].handle.index, infos[i].handle.generation);
-                d["name"] = infos[i].name ? std::string(infos[i].name) : "";
-                d["entity_count"] = infos[i].entity_count;
-                d["pending_count"] = infos[i].pending_count;
-                d["update_count"] = infos[i].update_count;
-                d["fixed_update_count"] = infos[i].fixed_update_count;
-                result.append(d);
-            }
-            free(infos);
-        }
-        return result;
-    }, "Get info for all scenes (legacy, use tc_scene_pool_get_all_info)");
-
-    // =========================================================================
-    // Entity and component enumeration for registry viewer
-    // =========================================================================
-    m.def("tc_scene_get_entities", [](std::tuple<uint32_t, uint32_t> handle_tuple) {
-        nb::list result;
-        tc_scene_handle h;
-        h.index = std::get<0>(handle_tuple);
-        h.generation = std::get<1>(handle_tuple);
-
-        if (!tc_scene_alive(h)) return result;
-
-        tc_entity_pool* pool = tc_scene_entity_pool(h);
-        if (!pool) return result;
-
-        tc_entity_pool_foreach(pool, [](tc_entity_pool* p, tc_entity_id id, void* user_data) -> bool {
-            auto* list = static_cast<nb::list*>(user_data);
-            nb::dict d;
-            d["name"] = tc_entity_pool_name(p, id) ? std::string(tc_entity_pool_name(p, id)) : "";
-            d["uuid"] = tc_entity_pool_uuid(p, id) ? std::string(tc_entity_pool_uuid(p, id)) : "";
-            d["component_count"] = tc_entity_pool_component_count(p, id);
-            d["visible"] = tc_entity_pool_visible(p, id);
-            d["enabled"] = tc_entity_pool_enabled(p, id);
-            list->append(d);
-            return true;
-        }, &result);
-
-        return result;
-    }, nb::arg("handle"), "Get entities for scene handle");
-
-    m.def("tc_scene_get_component_types", [](std::tuple<uint32_t, uint32_t> handle_tuple) {
-        nb::list result;
-        tc_scene_handle h;
-        h.index = std::get<0>(handle_tuple);
-        h.generation = std::get<1>(handle_tuple);
-
-        if (!tc_scene_alive(h)) return result;
-
-        size_t type_count = 0;
-        tc_scene_component_type* types = tc_scene_get_all_component_types(h, &type_count);
-        if (types) {
-            for (size_t i = 0; i < type_count; i++) {
-                nb::dict d;
-                d["type_name"] = types[i].type_name ? std::string(types[i].type_name) : "";
-                d["count"] = types[i].count;
-                result.append(d);
-            }
-            free(types);
-        }
-        return result;
-    }, nb::arg("handle"), "Get component types for scene handle");
+        // Compiled pipelines (from RenderingManager)
+        .def("get_pipeline", &TcScene::get_pipeline, nb::arg("name"),
+             nb::rv_policy::reference)
+        .def("get_pipeline_names", &TcScene::get_pipeline_names)
+        .def("get_pipeline_targets", &TcScene::get_pipeline_targets, nb::arg("name"),
+             nb::rv_policy::reference);
 }
+
+// ============================================================================
+// Input dispatch helpers
+// ============================================================================
+
+static std::vector<nb::object> collect_input_handlers(tc_scene_handle h, bool editor_mode) {
+    std::vector<nb::object> result;
+    if (!tc_scene_alive(h)) return result;
+
+    int filter_flags = TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+    if (editor_mode) {
+        filter_flags |= TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR;
+    }
+
+    tc_scene_foreach_input_handler(
+        h,
+        [](tc_component* c, void* user_data) -> bool {
+            auto* vec = static_cast<std::vector<nb::object>*>(user_data);
+            nb::object py_comp = tc_component_to_python(c);
+            if (!py_comp.is_none()) {
+                vec->push_back(py_comp);
+            }
+            return true;
+        },
+        &result,
+        filter_flags
+    );
+
+    return result;
+}
+
+template<typename EventT>
+void dispatch_input_to_scene(tc_scene_handle h, const char* method_name, const EventT& event, bool editor_mode) {
+    auto handlers = collect_input_handlers(h, editor_mode);
+
+    for (auto& handler : handlers) {
+        try {
+            if (nb::hasattr(handler, method_name)) {
+                handler.attr(method_name)(event);
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error("Error in input handler %s: %s", method_name, e.what());
+        }
+    }
+}
+
+// Explicit instantiations
+template void dispatch_input_to_scene<MouseButtonEvent>(tc_scene_handle, const char*, const MouseButtonEvent&, bool);
+template void dispatch_input_to_scene<MouseMoveEvent>(tc_scene_handle, const char*, const MouseMoveEvent&, bool);
+template void dispatch_input_to_scene<ScrollEvent>(tc_scene_handle, const char*, const ScrollEvent&, bool);
+template void dispatch_input_to_scene<KeyEvent>(tc_scene_handle, const char*, const KeyEvent&, bool);
 
 } // namespace termin

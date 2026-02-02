@@ -124,6 +124,7 @@ protected:
     void install_drawable_vtable(tc_component* c) {
         if (c) {
             c->drawable_vtable = &cxx_drawable_vtable;
+            c->drawable_ptr = this;  // Avoid dynamic_cast in callbacks
         }
     }
 
@@ -140,6 +141,7 @@ struct PhaseDrawCall {
     Entity entity;
     tc_component* component = nullptr;  // Component with drawable_vtable
     tc_material_phase* phase = nullptr;
+    tc_shader_handle final_shader;      // Shader after override (skinning, etc.)
     int priority = 0;
     int geometry_id = 0;
 };

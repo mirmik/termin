@@ -23,6 +23,10 @@ extern "C" {
 
 namespace nb = nanobind;
 
+namespace termin {
+void bind_gizmo(nb::module_& m);
+}
+
 NB_MODULE(_native, m) {
     nb::set_leak_warnings(false);
     m.doc() = "Native C++ module for termin";
@@ -66,8 +70,10 @@ NB_MODULE(_native, m) {
     auto kind_module = m.def_submodule("kind", "Kind serialization module");
     auto component_module = m.def_submodule("component", "Component module");
     auto assets_module = m.def_submodule("assets", "Assets module");
+    auto editor_module = m.def_submodule("editor", "Editor module");
 
     termin::bind_render(render_module);
+    termin::bind_gizmo(editor_module);
     termin::bind_tc_render_surface(render_module);
     termin::bind_tc_input_manager(render_module);
     termin::bind_tc_display(render_module);

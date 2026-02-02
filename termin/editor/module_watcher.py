@@ -154,9 +154,8 @@ class ModuleWatcher:
         self._file_to_module[module_path] = module_name
         self._module_files[module_name].add(module_path)
 
-        # Find and watch source files
-        for pattern in module_info.get("sources", []):
-            self._watch_source_pattern(module_name, module_dir, pattern)
+        # Watch all C++ source files in the module directory
+        self._watch_cpp_sources(module_name, module_dir)
 
         return True
 
@@ -248,30 +247,28 @@ class ModuleWatcher:
             log.error(f"[ModuleWatcher] Failed to parse module file: {e}")
             return None
 
-    def _watch_source_pattern(
-        self, module_name: str, base_dir: str, pattern: str
-    ) -> None:
-        """Watch source files matching a glob pattern."""
+    def _watch_cpp_sources(self, module_name: str, module_dir: str) -> None:
+        """Watch all C++ source files in the module directory."""
         if self._file_watcher is None:
             return
 
-        # Handle glob patterns
-        if "*" in pattern:
-            import glob
+        cpp_extensions = {".cpp", ".c", ".cc", ".cxx", ".h", ".hpp", ".hxx"}
 
-            full_pattern = os.path.join(base_dir, pattern)
-            for file_path in glob.glob(full_pattern, recursive=True):
-                self._add_source_file(module_name, file_path)
-        else:
-            file_path = os.path.join(base_dir, pattern)
-            if os.path.exists(file_path):
-                self._add_source_file(module_name, file_path)
+        for root, dirs, files in os.walk(module_dir):
+            # Skip build directories
+            dirs[:] = [d for d in dirs if d not in ("build", ".git", "__pycache__")]
 
-        # Watch parent directories for new files
-        pattern_dir = os.path.dirname(os.path.join(base_dir, pattern))
-        if os.path.isdir(pattern_dir) and pattern_dir not in self._watched_dirs:
-            self._file_watcher.addPath(pattern_dir)
-            self._watched_dirs.add(pattern_dir)
+            # Watch the directory for new files
+            if root not in self._watched_dirs:
+                self._file_watcher.addPath(root)
+                self._watched_dirs.add(root)
+
+            # Watch source files
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in cpp_extensions:
+                    file_path = os.path.join(root, f)
+                    self._add_source_file(module_name, file_path)
 
     def _add_source_file(self, module_name: str, file_path: str) -> None:
         """Add a source file to watching."""
@@ -294,11 +291,8 @@ class ModuleWatcher:
         for module_name, module_path in self._module_paths.items():
             module_dir = os.path.dirname(module_path)
             if path.startswith(module_dir):
-                # Re-scan for new source files
-                module_info = self._parse_module_file(module_path)
-                if module_info:
-                    for pattern in module_info.get("sources", []):
-                        self._watch_source_pattern(module_name, module_dir, pattern)
+                # Re-scan for new source files in the changed directory
+                self._watch_cpp_sources(module_name, path)
                 break
 
     def _on_file_changed(self, path: str) -> None:

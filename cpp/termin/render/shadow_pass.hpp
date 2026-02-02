@@ -4,11 +4,6 @@
 #include <string>
 #include <unordered_map>
 
-#ifdef TERMIN_HAS_NANOBIND
-#include <nanobind/nanobind.h>
-namespace nb = nanobind;
-#endif
-
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -24,11 +19,7 @@ namespace nb = nanobind;
 #include "termin/entity/entity.hpp"
 #include "tc_scene.h"
 #include "tc_scene_pool.h"
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 #include "tc_shader_handle.hpp"
 
 namespace termin {
@@ -37,6 +28,7 @@ namespace termin {
 struct ShadowDrawCall {
     Entity entity;
     tc_component* component = nullptr;
+    tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
     int geometry_id = 0;
 };
 
@@ -120,7 +112,8 @@ public:
         tc_scene_handle scene,
         const std::vector<Light>& lights,
         const Mat44f& camera_view,
-        const Mat44f& camera_projection
+        const Mat44f& camera_projection,
+        uint64_t layer_mask = 0
     );
 
     std::vector<ResourceSpec> get_resource_specs() const override;
@@ -136,11 +129,17 @@ private:
     // FBO pool: index -> FBO
     std::unordered_map<int, FramebufferHandlePtr> fbo_pool_;
 
+    // Cached draw calls (reused between frames)
+    std::vector<ShadowDrawCall> cached_draw_calls_;
+
     // Get or create FBO for shadow map
     FramebufferHandle* get_or_create_fbo(GraphicsBackend* graphics, int resolution, int index);
 
     // Collect shadow caster draw calls
-    std::vector<ShadowDrawCall> collect_shadow_casters(tc_scene_handle scene);
+    void collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask);
+
+    // Sort draw calls by shader
+    void sort_draw_calls_by_shader();
 
     // Build shadow camera params for a light
     ShadowCameraParams build_shadow_params(

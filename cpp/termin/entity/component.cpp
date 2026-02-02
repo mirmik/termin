@@ -20,6 +20,9 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     CxxComponent::_cb_on_removed,
     CxxComponent::_cb_on_scene_inactive,
     CxxComponent::_cb_on_scene_active,
+    // Render lifecycle
+    CxxComponent::_cb_on_render_attach,
+    CxxComponent::_cb_on_render_detach,
     // Editor
     CxxComponent::_cb_on_editor_start,
     CxxComponent::_cb_setup_editor_defaults,
@@ -109,7 +112,7 @@ void CxxComponent::_cb_on_destroy(tc_component* c) {
 void CxxComponent::_cb_on_added_to_entity(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
-        // entity() now reads from c->owner_pool/owner_entity_id directly
+        // entity() reads from c->owner handle
         self->on_added_to_entity();
     }
 }
@@ -118,7 +121,7 @@ void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->on_removed_from_entity();
-        // entity() will return invalid after c->owner_pool is cleared
+        // entity() will return invalid after c->owner is cleared
     }
 }
 
@@ -147,6 +150,20 @@ void CxxComponent::_cb_on_scene_active(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->on_scene_active();
+    }
+}
+
+void CxxComponent::_cb_on_render_attach(tc_component* c) {
+    auto* self = from_tc(c);
+    if (self) {
+        self->on_render_attach();
+    }
+}
+
+void CxxComponent::_cb_on_render_detach(tc_component* c) {
+    auto* self = from_tc(c);
+    if (self) {
+        self->on_render_detach();
     }
 }
 

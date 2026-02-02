@@ -1,6 +1,7 @@
 // tc_pipeline.c - Pipeline implementation using pool with generational indices
 #include "render/tc_pipeline.h"
 #include "render/tc_pipeline_pool.h"
+#include "render/tc_frame_graph.h"
 #include "tc_pipeline_registry.h"
 #include "tc_log.h"
 #include <stdlib.h>
@@ -92,6 +93,11 @@ void tc_pipeline_pool_shutdown(void) {
     for (size_t i = 0; i < g_pool->capacity; i++) {
         if (g_pool->alive[i]) {
             tc_pipeline* p = &g_pool->pipelines[i];
+            // Destroy cached frame graph
+            if (p->cached_frame_graph) {
+                tc_frame_graph_destroy((tc_frame_graph*)p->cached_frame_graph);
+                p->cached_frame_graph = NULL;
+            }
             // Release all passes
             for (size_t j = 0; j < p->pass_count; j++) {
                 tc_pass* pass = p->passes[j];
@@ -191,6 +197,8 @@ tc_pipeline_handle tc_pipeline_pool_alloc(const char* name) {
     p->pass_capacity = 0;
     p->cpp_owner = NULL;
     p->py_wrapper = NULL;
+    p->cached_frame_graph = NULL;
+    p->dirty = true;
 
     g_pool->count++;
 
@@ -207,6 +215,12 @@ void tc_pipeline_pool_free(tc_pipeline_handle h) {
 
     uint32_t idx = h.index;
     tc_pipeline* p = &g_pool->pipelines[idx];
+
+    // Destroy cached frame graph
+    if (p->cached_frame_graph) {
+        tc_frame_graph_destroy((tc_frame_graph*)p->cached_frame_graph);
+        p->cached_frame_graph = NULL;
+    }
 
     // Release all passes
     for (size_t i = 0; i < p->pass_count; i++) {
@@ -336,6 +350,7 @@ void tc_pipeline_add_pass(tc_pipeline_handle h, tc_pass* pass) {
 
     pass->owner_pipeline = h;
     p->passes[p->pass_count++] = pass;
+    p->dirty = true;
 }
 
 void tc_pipeline_insert_pass_before(tc_pipeline_handle h, tc_pass* pass, tc_pass* before) {
@@ -353,6 +368,7 @@ void tc_pipeline_insert_pass_before(tc_pipeline_handle h, tc_pass* pass, tc_pass
         memmove(&p->passes[1], &p->passes[0], p->pass_count * sizeof(tc_pass*));
         p->passes[0] = pass;
         p->pass_count++;
+        p->dirty = true;
         return;
     }
 
@@ -370,6 +386,7 @@ void tc_pipeline_insert_pass_before(tc_pipeline_handle h, tc_pass* pass, tc_pass
             (p->pass_count - insert_idx) * sizeof(tc_pass*));
     p->passes[insert_idx] = pass;
     p->pass_count++;
+    p->dirty = true;
 }
 
 void tc_pipeline_remove_pass(tc_pipeline_handle h, tc_pass* pass) {
@@ -396,6 +413,37 @@ void tc_pipeline_remove_pass(tc_pipeline_handle h, tc_pass* pass) {
 
     // Release pass - may drop if ref_count reaches 0
     tc_pass_release(pass);
+
+    p->dirty = true;
+}
+
+size_t tc_pipeline_remove_passes_by_name(tc_pipeline_handle h, const char* name) {
+    if (!handle_alive(h) || !name) return 0;
+    tc_pipeline* p = &g_pool->pipelines[h.index];
+
+    size_t removed_count = 0;
+
+    // Iterate backwards to safely remove multiple items
+    for (size_t i = p->pass_count; i > 0; i--) {
+        tc_pass* pass = p->passes[i - 1];
+        if (pass && pass->pass_name && strcmp(pass->pass_name, name) == 0) {
+            // Shift elements down
+            size_t idx = i - 1;
+            memmove(&p->passes[idx], &p->passes[idx + 1],
+                    (p->pass_count - idx - 1) * sizeof(tc_pass*));
+            p->pass_count--;
+
+            pass->owner_pipeline = TC_PIPELINE_HANDLE_INVALID;
+            tc_pass_release(pass);
+            removed_count++;
+        }
+    }
+
+    if (removed_count > 0) {
+        p->dirty = true;
+    }
+
+    return removed_count;
 }
 
 tc_pass* tc_pipeline_get_pass(tc_pipeline_handle h, const char* name) {
@@ -570,4 +618,47 @@ tc_pass_info* tc_pass_registry_get_all_instance_info(size_t* count) {
 
     *count = idx;
     return infos;
+}
+
+// ============================================================================
+// Dirty Flag Management
+// ============================================================================
+
+bool tc_pipeline_is_dirty(tc_pipeline_handle h) {
+    if (!handle_alive(h)) return false;
+    return g_pool->pipelines[h.index].dirty;
+}
+
+void tc_pipeline_mark_dirty(tc_pipeline_handle h) {
+    if (!handle_alive(h)) return;
+    g_pool->pipelines[h.index].dirty = true;
+}
+
+void tc_pipeline_clear_dirty(tc_pipeline_handle h) {
+    if (!handle_alive(h)) return;
+    g_pool->pipelines[h.index].dirty = false;
+}
+
+// ============================================================================
+// Frame Graph Cache
+// ============================================================================
+
+tc_frame_graph* tc_pipeline_get_frame_graph(tc_pipeline_handle h) {
+    if (!handle_alive(h)) return NULL;
+    tc_pipeline* p = &g_pool->pipelines[h.index];
+
+    // If dirty or no cached graph, rebuild
+    if (p->dirty || p->cached_frame_graph == NULL) {
+        // Destroy old cached graph
+        if (p->cached_frame_graph) {
+            tc_frame_graph_destroy((tc_frame_graph*)p->cached_frame_graph);
+            p->cached_frame_graph = NULL;
+        }
+
+        // Build new frame graph
+        p->cached_frame_graph = tc_frame_graph_build(h);
+        p->dirty = false;
+    }
+
+    return (tc_frame_graph*)p->cached_frame_graph;
 }

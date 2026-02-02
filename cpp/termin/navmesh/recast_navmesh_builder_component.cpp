@@ -1427,7 +1427,7 @@ void RecastNavMeshBuilderComponent::capture_compact_data(rcCompactHeightfield* c
     // Cell index
     data.cells.resize(chf->width * chf->height);
     for (int i = 0; i < chf->width * chf->height; i++) {
-        data.cells[i] = {chf->cells[i].index, static_cast<uint8_t>(chf->cells[i].count)};
+        data.cells[i] = {static_cast<unsigned int>(chf->cells[i].index), static_cast<uint8_t>(chf->cells[i].count)};
     }
 }
 

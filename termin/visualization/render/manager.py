@@ -481,8 +481,9 @@ class RenderingManager:
         """
         Compile scene pipelines and mark managed viewports.
 
-        1. Compile scene pipeline assets into scene._compiled_pipelines
+        1. Compile scene pipeline assets (stored in C++ RenderingManager)
         2. Mark viewports as managed by scene pipeline (by name)
+        3. Notify components via on_render_attach
 
         Managed viewports are rendered by executing scene pipelines in render loop,
         not by iterating viewports directly.
@@ -492,9 +493,11 @@ class RenderingManager:
             viewports: List of viewports to potentially manage
         """
         from termin._native import log
+        from termin._native.render import RenderingManager
 
-        # Compile scene pipelines into scene
-        scene.compile_scene_pipelines()
+        # Attach scene to RenderingManager - compiles pipeline templates and
+        # notifies components via on_render_attach
+        RenderingManager.instance().attach_scene(scene)
 
         # Build viewport lookup by name
         viewport_by_name: Dict[str, "Viewport"] = {}
@@ -508,23 +511,21 @@ class RenderingManager:
                 if vp.name and vp.name not in viewport_by_name:
                     viewport_by_name[vp.name] = vp
 
-
         # Mark viewports as managed by their scene pipeline
-        for handle in scene.scene_pipelines:
-            asset = handle.get_asset()
-            if asset is None:
+        for template in scene.scene_pipelines:
+            if not template.is_valid:
                 continue
 
-            for viewport_name in asset.target_viewports:
+            for viewport_name in template.target_viewports:
                 viewport = viewport_by_name.get(viewport_name)
                 if viewport is None:
                     log.error(
-                        f"[attach_scene] Scene pipeline '{asset.name}' targets viewport "
+                        f"[attach_scene] Scene pipeline '{template.name}' targets viewport "
                         f"'{viewport_name}' but no such viewport found"
                     )
                     continue
 
-                viewport.managed_by_scene_pipeline = asset.name
+                viewport.managed_by_scene_pipeline = template.name
 
     def detach_scene(self, scene: "Scene") -> None:
         """
@@ -542,14 +543,16 @@ class RenderingManager:
         if scene in self._attached_scenes:
             self._attached_scenes.remove(scene)
 
-        # Destroy compiled pipelines
-        scene.destroy_compiled_pipelines()
+        # Detach from RenderingManager - destroys compiled pipelines and
+        # notifies components via on_render_detach
+        from termin._native.render import RenderingManager
+        RenderingManager.instance().detach_scene(scene)
 
     def get_scene_pipeline(self, name: str) -> Optional["RenderPipeline"]:
         """
         Get compiled scene pipeline by name.
 
-        Searches through attached scenes for a compiled pipeline with the given name.
+        Searches in attached scenes.
 
         Args:
             name: Scene pipeline asset name.
@@ -558,7 +561,7 @@ class RenderingManager:
             Compiled RenderPipeline or None if not found.
         """
         for scene in self._attached_scenes:
-            pipeline = scene.get_compiled_pipeline(name)
+            pipeline = scene.get_pipeline(name)
             if pipeline is not None:
                 return pipeline
         return None
@@ -583,10 +586,11 @@ class RenderingManager:
             "pipeline_names": [],
         }
 
-        # Count scene pipelines
+        # Count scene pipelines from scenes
         for scene in self._attached_scenes:
             stats["scene_names"].append(scene.name or "<unnamed>")
-            for pipeline_name in scene.compiled_pipelines.keys():
+            pipeline_names = scene.get_pipeline_names()
+            for pipeline_name in pipeline_names:
                 stats["scene_pipelines"] += 1
                 stats["pipeline_names"].append(pipeline_name)
 
@@ -732,7 +736,7 @@ class RenderingManager:
             from termin.visualization.render.engine import RenderEngine
             self._render_engine = RenderEngine(self._graphics)
 
-        # Collect ALL viewports from all displays
+        # Collect ALL viewports from all displays (scene pipelines can span displays)
         all_viewports_by_name: Dict[str, "Viewport"] = {}
         for display in self._displays:
             for vp in display.viewports:
@@ -740,9 +744,16 @@ class RenderingManager:
                     all_viewports_by_name[vp.name] = vp
 
         # 1. Execute scene pipelines (can span multiple displays)
+        from termin._native.render import RenderingManager as CppRenderingManager
+        cpp_rm = CppRenderingManager.instance()
+
         with profiler.section("Scene Pipelines"):
             for scene in self._attached_scenes:
-                for pipeline_name, pipeline in scene.compiled_pipelines.items():
+                pipeline_names = cpp_rm.get_pipeline_names(scene)
+                for pipeline_name in pipeline_names:
+                    pipeline = cpp_rm.get_scene_pipeline(scene, pipeline_name)
+                    if pipeline is None:
+                        continue
                     with profiler.section(f"Pipeline: {pipeline_name}"):
                         self._render_scene_pipeline_offscreen(
                             scene=scene,
@@ -754,6 +765,8 @@ class RenderingManager:
         # 2. Render unmanaged viewports
         with profiler.section("Unmanaged Viewports"):
             for display in self._displays:
+                if not display.enabled:
+                    continue
                 for viewport in display.viewports:
                     if not viewport.enabled:
                         continue
@@ -774,12 +787,14 @@ class RenderingManager:
     ) -> None:
         """Render a scene pipeline to viewport output_fbos."""
         from termin._native import log
+        from termin._native.render import RenderingManager as CppRenderingManager
         from termin.visualization.render.engine import ViewportContext
 
         if scene.is_destroyed:
             return
 
-        target_names = scene.get_pipeline_targets(pipeline_name)
+        cpp_rm = CppRenderingManager.instance()
+        target_names = cpp_rm.get_pipeline_targets(pipeline_name)
         if not target_names:
             return
 
@@ -880,7 +895,8 @@ class RenderingManager:
 
         with profiler.section("Present All"):
             for display in self._displays:
-                self._present_display(display)
+                if display.enabled:
+                    self._present_display(display)
 
     def _present_display(self, display: "Display") -> None:
         """Blit viewport output_fbos to a single display."""

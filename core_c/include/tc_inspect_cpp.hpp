@@ -623,6 +623,10 @@ struct InspectButtonRegistrar {
     inline static ::tc::InspectFieldRegistrar<cls, decltype(cls::field)> \
         _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, ##__VA_ARGS__};
 
+#define INSPECT_FIELD_RANGE(cls, field, label, kind, min_val, max_val) \
+    inline static ::tc::InspectFieldRegistrar<cls, decltype(cls::field)> \
+        _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, min_val, max_val, 0.01};
+
 #define INSPECT_FIELD_CALLBACK(cls, type, name, label, kind, getter_fn, setter_fn, ...) \
     inline static ::tc::InspectFieldCallbackRegistrar<cls, type> \
         _inspect_reg_##cls##_##name{#cls, #name, label, kind, getter_fn, setter_fn, ##__VA_ARGS__};

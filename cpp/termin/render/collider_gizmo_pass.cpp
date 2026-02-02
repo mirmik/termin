@@ -24,12 +24,17 @@ namespace {
 
 // Get model matrix from tc_component's owner entity
 Mat44f get_entity_world_matrix(tc_component* c) {
-    if (!c || !c->owner_pool) {
+    if (!c || !tc_entity_handle_valid(c->owner)) {
+        return mat4_identity();
+    }
+
+    tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+    if (!pool) {
         return mat4_identity();
     }
 
     double m[16];
-    tc_entity_pool_get_world_matrix(c->owner_pool, c->owner_entity_id, m);
+    tc_entity_pool_get_world_matrix(pool, c->owner.id, m);
 
     Mat44f result;
     for (int i = 0; i < 16; ++i) {

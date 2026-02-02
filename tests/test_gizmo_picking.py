@@ -11,8 +11,7 @@ from unittest.mock import MagicMock
 from termin.geombase import Pose3, GeneralPose3, Vec3, Quat
 from termin.visualization.core.camera import PerspectiveCameraComponent
 from termin.visualization.core.entity import Entity
-from termin.editor.gizmo.transform_gizmo import TransformGizmo
-from termin.editor.gizmo.base import CylinderGeometry, TorusGeometry
+from termin.editor.gizmo import TransformGizmo, TransformElement, CylinderGeometry, TorusGeometry
 
 
 def make_camera_entity(position: np.ndarray, look_at: np.ndarray) -> Entity:
@@ -275,8 +274,7 @@ class TestGizmoPickingWithRotation:
         colliders = gizmo.get_colliders()
 
         # Find X translate collider
-        from termin.editor.gizmo.transform_gizmo import TransformElement
-        x_colliders = [c for c in colliders if c.id == TransformElement.TRANSLATE_X]
+        x_colliders = [c for c in colliders if c.id == TransformElement.TRANSLATE_X.value]
 
         assert len(x_colliders) > 0, "Should have X translate colliders"
 
@@ -359,11 +357,9 @@ class TestColliderGeometry:
 
         colliders = gizmo.get_colliders()
 
-        from termin.editor.gizmo.transform_gizmo import TransformElement
-
         # Find X translate shaft collider
         for collider in colliders:
-            if collider.id == TransformElement.TRANSLATE_X:
+            if collider.id == TransformElement.TRANSLATE_X.value:
                 if isinstance(collider.geometry, CylinderGeometry):
                     print(f"X shaft: start={collider.geometry.start}, end={collider.geometry.end}")
 

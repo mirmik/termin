@@ -4,7 +4,7 @@
 #include <nanobind/nanobind.h>
 
 extern "C" {
-#include "../../../../core_c/include/tc_value.h"
+#include "tc_value.h"
 }
 
 namespace nb = nanobind;

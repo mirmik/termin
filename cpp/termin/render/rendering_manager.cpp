@@ -1,10 +1,13 @@
 // rendering_manager.cpp - Global rendering manager implementation
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/scene_pipeline_template.hpp"
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {
 #include "tc_log.h"
+#include "tc_scene.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_rendering_manager.h"
 }
 
 #include <algorithm>
@@ -17,14 +20,23 @@ static inline uint64_t viewport_key(tc_viewport_handle h) {
 }
 
 // ============================================================================
-// Singleton
+// Singleton - uses C API to ensure single instance across all DLLs
 // ============================================================================
 
 RenderingManager* RenderingManager::s_instance = nullptr;
 
 RenderingManager& RenderingManager::instance() {
+    // Check global storage in entity_lib first
+    RenderingManager* global = reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
+    if (global) {
+        s_instance = global;  // Cache locally
+        return *global;
+    }
+
+    // Create new instance and store globally
     if (!s_instance) {
         s_instance = new RenderingManager();
+        tc_rendering_manager_set_instance(reinterpret_cast<tc_rendering_manager*>(s_instance));
     }
     return *s_instance;
 }
@@ -33,6 +45,7 @@ void RenderingManager::reset_for_testing() {
     if (s_instance) {
         delete s_instance;
         s_instance = nullptr;
+        tc_rendering_manager_set_instance(nullptr);
     }
 }
 
@@ -167,6 +180,11 @@ void RenderingManager::render_all_offscreen() {
 
     // Render all viewports from all displays
     for (tc_display* display : displays_) {
+        // Skip disabled displays
+        if (!tc_display_get_enabled(display)) {
+            continue;
+        }
+
         // Make display context current before rendering its viewports
         tc_render_surface* surface = tc_display_get_surface(display);
         if (surface) {
@@ -233,7 +251,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
 void RenderingManager::present_all() {
     for (tc_display* display : displays_) {
-        present_display(display);
+        if (tc_display_get_enabled(display)) {
+            present_display(display);
+        }
     }
 }
 
@@ -300,6 +320,143 @@ void RenderingManager::present_display(tc_display* display) {
 }
 
 // ============================================================================
+// Scene Pipeline Management
+// ============================================================================
+
+void RenderingManager::attach_scene(tc_scene_handle scene) {
+    if (!tc_scene_handle_valid(scene)) return;
+
+    // Clear existing pipelines first (calls notify_render_detach)
+    detach_scene(scene);
+
+    size_t template_count = tc_scene_pipeline_template_count(scene);
+    tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene: %zu templates, scene='%s'",
+           template_count, tc_scene_get_name(scene) ? tc_scene_get_name(scene) : "");
+
+    uint64_t key = scene_key(scene);
+
+    for (size_t i = 0; i < template_count; i++) {
+        tc_spt_handle spt_handle = tc_scene_pipeline_template_at(scene, i);
+        if (!tc_spt_is_valid(spt_handle)) continue;
+
+        TcScenePipelineTemplate templ(spt_handle);
+        if (!templ.is_loaded()) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Template not loaded: '%s'", templ.name().c_str());
+            continue;
+        }
+
+        RenderPipeline* pipeline = templ.compile();
+        if (!pipeline) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Failed to compile template: '%s'", templ.name().c_str());
+            continue;
+        }
+
+        std::string name = templ.name();
+        pipeline->set_name(name);
+
+        tc_log(TC_LOG_INFO, "[RenderingManager] Compiled pipeline '%s'", name.c_str());
+
+        // Store ownership in scene_pipelines_
+        scene_pipelines_[key][name] = std::unique_ptr<RenderPipeline>(pipeline);
+
+        // Store targets
+        pipeline_targets_[name] = templ.target_viewports();
+    }
+
+    // Notify components that rendering is attached
+    tc_scene_notify_render_attach(scene);
+}
+
+void RenderingManager::detach_scene(tc_scene_handle scene) {
+    if (!tc_scene_handle_valid(scene)) return;
+    clear_scene_pipelines(scene);
+}
+
+RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
+    if (!tc_scene_handle_valid(scene)) return nullptr;
+    uint64_t key = scene_key(scene);
+    auto scene_it = scene_pipelines_.find(key);
+    if (scene_it == scene_pipelines_.end()) return nullptr;
+    auto pipe_it = scene_it->second.find(name);
+    return (pipe_it != scene_it->second.end()) ? pipe_it->second.get() : nullptr;
+}
+
+RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) const {
+    // Search all scenes
+    for (const auto& [key, pipelines] : scene_pipelines_) {
+        auto it = pipelines.find(name);
+        if (it != pipelines.end()) {
+            return it->second.get();
+        }
+    }
+    tc_log(TC_LOG_WARN, "[RenderingManager] get_scene_pipeline NOT FOUND: '%s'", name.c_str());
+    return nullptr;
+}
+
+void RenderingManager::set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets) {
+    pipeline_targets_[pipeline_name] = targets;
+}
+
+static const std::vector<std::string> empty_targets;
+
+const std::vector<std::string>& RenderingManager::get_pipeline_targets(const std::string& pipeline_name) const {
+    auto it = pipeline_targets_.find(pipeline_name);
+    return (it != pipeline_targets_.end()) ? it->second : empty_targets;
+}
+
+std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle scene) const {
+    std::vector<std::string> names;
+    if (!tc_scene_handle_valid(scene)) return names;
+
+    uint64_t key = scene_key(scene);
+    auto scene_it = scene_pipelines_.find(key);
+    if (scene_it != scene_pipelines_.end()) {
+        for (const auto& [name, ptr] : scene_it->second) {
+            (void)ptr;
+            names.push_back(name);
+        }
+    }
+    return names;
+}
+
+void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
+    if (!tc_scene_handle_valid(scene)) return;
+    uint64_t key = scene_key(scene);
+
+    auto scene_it = scene_pipelines_.find(key);
+    if (scene_it == scene_pipelines_.end()) return;
+
+    // Notify components that rendering is detaching (before destroying pipelines)
+    tc_scene_notify_render_detach(scene);
+
+    // Remove pipeline targets for this scene's pipelines
+    for (const auto& [name, ptr] : scene_it->second) {
+        (void)ptr;
+        pipeline_targets_.erase(name);
+    }
+
+    // Erase the scene entry (unique_ptrs will delete pipelines)
+    scene_pipelines_.erase(key);
+}
+
+void RenderingManager::clear_all_scene_pipelines() {
+    // Notify all scenes that rendering is detaching
+    for (const auto& [key, pipelines] : scene_pipelines_) {
+        // Reconstruct scene handle from key
+        tc_scene_handle scene;
+        scene.index = static_cast<uint32_t>(key >> 32);
+        scene.generation = static_cast<uint32_t>(key & 0xFFFFFFFF);
+        if (tc_scene_handle_valid(scene)) {
+            tc_scene_notify_render_detach(scene);
+        }
+    }
+
+    // Clear all (unique_ptrs will delete pipelines)
+    scene_pipelines_.clear();
+    pipeline_targets_.clear();
+}
+
+// ============================================================================
 // Shutdown
 // ============================================================================
 
@@ -309,6 +466,9 @@ void RenderingManager::shutdown() {
         pair.second->clear_all();
     }
     viewport_states_.clear();
+
+    // Clear scene pipelines (deletes owned pipelines)
+    clear_all_scene_pipelines();
 
     // Clear displays (don't free them - we don't own them)
     displays_.clear();

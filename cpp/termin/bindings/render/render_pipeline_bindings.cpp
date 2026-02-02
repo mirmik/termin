@@ -14,6 +14,7 @@ extern "C" {
 
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/tc_pass.hpp"
+#include "termin/render/graph_compiler.hpp"
 
 namespace termin {
 
@@ -121,6 +122,9 @@ void bind_render_pipeline(nb::module_& m) {
                 }
             }
         })
+        .def("remove_passes_by_name", &RenderPipeline::remove_passes_by_name,
+             nb::arg("name"),
+             "Remove all passes with the given name, returns count of removed passes")
         .def("insert_pass_before", [](RenderPipeline& self, TcPassRef pass_ref, TcPassRef before_ref) {
             if (pass_ref.valid()) {
                 self.insert_pass_before(pass_ref.ptr(), before_ref.valid() ? before_ref.ptr() : nullptr);
@@ -205,6 +209,12 @@ void bind_render_pipeline(nb::module_& m) {
         .def("clear_fbo_pool", [](RenderPipeline& self) {
             self.fbo_pool().clear();
         })
+
+        // Dirty flag management
+        .def_prop_ro("is_dirty", &RenderPipeline::is_dirty,
+            "Returns True if pipeline needs frame graph rebuild")
+        .def("mark_dirty", &RenderPipeline::mark_dirty,
+            "Mark pipeline for frame graph rebuild on next render")
 
         // Iteration support
         .def("__len__", &RenderPipeline::pass_count)
@@ -353,6 +363,13 @@ void bind_render_pipeline(nb::module_& m) {
 
             return result;
         }, nb::arg("resource_manager"));
+
+    // compile_graph_from_json - compile render pipeline from JSON string
+    m.def("compile_graph_from_json", [](const std::string& json_str) {
+        return tc::compile_graph(json_str);
+    }, nb::arg("json_str"),
+       nb::rv_policy::take_ownership,
+       "Compile a render pipeline from JSON graph representation");
 }
 
 } // namespace termin

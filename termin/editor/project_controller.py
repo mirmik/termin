@@ -189,25 +189,46 @@ class EditorProjectController:
         self._on_project_reset()
 
     def _load_project_modules(self, project_root: Path) -> None:
-        """Load all C++ modules from the project directory."""
+        """Load all C++ and Python modules from the project directory."""
+        # Load C++ modules
         from termin.editor.module_scanner import ModuleScanner
 
-        scanner = ModuleScanner(
+        cpp_scanner = ModuleScanner(
             on_module_loaded=self._on_module_loaded,
         )
-        loaded, failed = scanner.scan_and_load(str(project_root))
+        cpp_loaded, cpp_failed = cpp_scanner.scan_and_load(str(project_root))
 
-        if loaded > 0:
-            self._log_message(f"Loaded {loaded} C++ module(s)")
-        if failed > 0:
-            self._log_message(f"Failed to load {failed} C++ module(s)")
+        if cpp_loaded > 0:
+            self._log_message(f"Loaded {cpp_loaded} C++ module(s)")
+        if cpp_failed > 0:
+            self._log_message(f"Failed to load {cpp_failed} C++ module(s)")
+
+        # Load Python modules
+        from termin.editor.pymodule_scanner import PyModuleScanner
+
+        py_scanner = PyModuleScanner(
+            on_module_loaded=self._on_pymodule_loaded,
+        )
+        py_loaded, py_failed = py_scanner.scan_and_load(str(project_root))
+
+        if py_loaded > 0:
+            self._log_message(f"Loaded {py_loaded} Python module(s)")
+        if py_failed > 0:
+            self._log_message(f"Failed to load {py_failed} Python module(s)")
 
     def _on_module_loaded(self, name: str, success: bool, error: str) -> None:
-        """Callback for module load events."""
+        """Callback for C++ module load events."""
         if success:
-            self._log_message(f"Loaded module: {name}")
+            self._log_message(f"Loaded C++ module: {name}")
         else:
-            self._log_message(f"Failed to load module {name}: {error}")
+            self._log_message(f"Failed to load C++ module {name}: {error}")
+
+    def _on_pymodule_loaded(self, name: str, success: bool, error: str) -> None:
+        """Callback for Python module load events."""
+        if success:
+            self._log_message(f"Loaded Python module: {name}")
+        else:
+            self._log_message(f"Failed to load Python module {name}: {error}")
 
     def _on_project_file_selected(self, file_path) -> None:
         """Обработчик выбора файла в Project Browser (одинарный клик)."""

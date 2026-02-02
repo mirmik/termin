@@ -20,11 +20,7 @@
 
 #include "module_loader.hpp"
 #include "../entity/component_registry.hpp"
-#ifdef TERMIN_HAS_NANOBIND
-#include "../../../core_c/include/tc_inspect.hpp"
-#else
-#include "../../../core_c/include/tc_inspect_cpp.hpp"
-#endif
+#include "tc_inspect_cpp.hpp"
 #include <tc_log.hpp>
 #include <tc_version.h>
 
@@ -70,7 +66,7 @@ bool ModuleLoader::parse_module_file(const std::string& path, ModuleDescriptor& 
 
     out.path = path;
 
-    // Parse name
+    // Parse name (required)
     if (tr.contains("name") && tr["name"].is_string()) {
         out.name = tr["name"].as_string();
     } else {
@@ -78,25 +74,29 @@ bool ModuleLoader::parse_module_file(const std::string& path, ModuleDescriptor& 
         return false;
     }
 
-    // Parse sources
-    if (tr.contains("sources") && tr["sources"].is_list()) {
-        for (const auto& src : tr["sources"].as_list()) {
-            if (src.is_string()) {
-                out.sources.push_back(src.as_string());
-            }
+    // Parse build section (required)
+    if (tr.contains("build") && tr["build"].is_dict()) {
+        const auto& build = tr["build"];
+
+        if (build.contains("command") && build["command"].is_string()) {
+            out.build_command = build["command"].as_string();
+        } else {
+            _last_error = "Module file missing 'build.command' field";
+            return false;
         }
+
+        if (build.contains("output") && build["output"].is_string()) {
+            out.output_pattern = build["output"].as_string();
+        } else {
+            _last_error = "Module file missing 'build.output' field";
+            return false;
+        }
+    } else {
+        _last_error = "Module file missing 'build' section";
+        return false;
     }
 
-    // Parse include_dirs
-    if (tr.contains("include_dirs") && tr["include_dirs"].is_list()) {
-        for (const auto& dir : tr["include_dirs"].as_list()) {
-            if (dir.is_string()) {
-                out.include_dirs.push_back(dir.as_string());
-            }
-        }
-    }
-
-    // Parse components
+    // Parse components (optional)
     if (tr.contains("components") && tr["components"].is_list()) {
         for (const auto& comp : tr["components"].as_list()) {
             if (comp.is_string()) {
@@ -105,7 +105,37 @@ bool ModuleLoader::parse_module_file(const std::string& path, ModuleDescriptor& 
         }
     }
 
-    // Parse built_version (0 if missing = not built yet)
+    return true;
+}
+
+std::string ModuleLoader::get_state_path(const std::string& module_path) {
+    // module.module -> module.module.state
+    return module_path + ".state";
+}
+
+bool ModuleLoader::read_module_state(const std::string& module_path, ModuleState& out) {
+    std::string state_path = get_state_path(module_path);
+
+    std::ifstream file(state_path);
+    if (!file.is_open()) {
+        // No state file - not built yet
+        out.built_version = 0;
+        return true;
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+
+    nos::trent tr;
+    try {
+        tr = nos::yaml::parse(content);
+    } catch (const std::exception& e) {
+        tc::Log::warn("Failed to parse module state file: %s", e.what());
+        out.built_version = 0;
+        return true;
+    }
+
     if (tr.contains("built_version") && tr["built_version"].is_numer()) {
         out.built_version = (int)tr["built_version"].as_integer();
     } else {
@@ -115,70 +145,23 @@ bool ModuleLoader::parse_module_file(const std::string& path, ModuleDescriptor& 
     return true;
 }
 
-bool ModuleLoader::write_module_version(const std::string& path, int version) {
-    // Read existing content
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        tc::Log::error("Cannot open module file for version update: %s", path.c_str());
-        return false;
-    }
+bool ModuleLoader::write_module_state(const std::string& module_path, const ModuleState& state) {
+    std::string state_path = get_state_path(module_path);
 
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string content = buffer.str();
-    file.close();
-
-    nos::trent tr;
-    try {
-        tr = nos::yaml::parse(content);
-    } catch (const std::exception& e) {
-        tc::Log::error("Failed to parse module file for version update: %s", e.what());
-        return false;
-    }
-
-    // Update version
-    tr["built_version"] = version;
-
-    // Write back as JSON
-    std::ofstream out(path);
+    std::ofstream out(state_path);
     if (!out.is_open()) {
-        tc::Log::error("Cannot write module file: %s", path.c_str());
+        tc::Log::error("Cannot write module state file: %s", state_path.c_str());
         return false;
     }
 
-    // Manual JSON serialization (simple enough for .module format)
     out << "{\n";
-    out << "    \"name\": \"" << tr["name"].as_string() << "\",\n";
-    out << "    \"sources\": [";
-    bool first = true;
-    for (const auto& src : tr["sources"].as_list()) {
-        if (!first) out << ", ";
-        out << "\"" << src.as_string() << "\"";
-        first = false;
-    }
-    out << "],\n";
-    out << "    \"include_dirs\": [";
-    first = true;
-    for (const auto& dir : tr["include_dirs"].as_list()) {
-        if (!first) out << ", ";
-        out << "\"" << dir.as_string() << "\"";
-        first = false;
-    }
-    out << "],\n";
-    out << "    \"components\": [";
-    first = true;
-    for (const auto& comp : tr["components"].as_list()) {
-        if (!first) out << ", ";
-        out << "\"" << comp.as_string() << "\"";
-        first = false;
-    }
-    out << "],\n";
-    out << "    \"built_version\": " << version << "\n";
+    out << "    \"built_version\": " << state.built_version << "\n";
     out << "}\n";
     out.close();
 
     return true;
 }
+
 
 ModuleHandle ModuleLoader::load_dll(const std::string& path) {
 #ifdef _WIN32
@@ -262,93 +245,39 @@ void ModuleLoader::cleanup_temp_dll(const std::string& path) {
 #endif
 }
 
-bool ModuleLoader::generate_cmake(const ModuleDescriptor& desc, const std::string& build_dir) {
-    fs::path module_dir = fs::path(desc.path).parent_path();
-    fs::path cmake_path = fs::path(build_dir) / "CMakeLists.txt";
+std::string ModuleLoader::expand_output_pattern(const std::string& pattern, const std::string& name) {
+    std::string result = pattern;
 
-    std::ofstream cmake(cmake_path);
-    if (!cmake.is_open()) {
-        _last_error = "Cannot create CMakeLists.txt in: " + build_dir;
+    // Replace ${name} with module name
+    size_t pos = 0;
+    while ((pos = result.find("${name}", pos)) != std::string::npos) {
+        result.replace(pos, 7, name);
+        pos += name.length();
+    }
+
+    return result;
+}
+
+bool ModuleLoader::run_build_command(const std::string& command, const std::string& working_dir) {
+    _compiler_output.clear();
+
+    // Save current directory
+    fs::path old_cwd = fs::current_path();
+
+    // Change to working directory
+    try {
+        fs::current_path(working_dir);
+    } catch (const std::exception& e) {
+        _last_error = "Failed to change to module directory: " + std::string(e.what());
         return false;
     }
 
-    cmake << "cmake_minimum_required(VERSION 3.16)\n";
-    cmake << "project(" << desc.name << " LANGUAGES CXX)\n\n";
-    cmake << "set(CMAKE_CXX_STANDARD 20)\n";
-    cmake << "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n";
-
-    // Collect source files by expanding glob patterns
-    cmake << "set(MODULE_SOURCES\n";
-    for (const auto& pattern : desc.sources) {
-        // Only include .cpp files in sources
-        if (pattern.find(".cpp") != std::string::npos || pattern.find("*") != std::string::npos) {
-            fs::path pattern_path = module_dir / pattern;
-            std::string pattern_str = pattern_path.string();
-            // Replace backslashes for CMake
-            std::replace(pattern_str.begin(), pattern_str.end(), '\\', '/');
-
-            if (pattern.find("*") != std::string::npos) {
-                // Use glob
-                cmake << ")\n";
-                cmake << "file(GLOB MODULE_SOURCES_GLOB \"" << pattern_str << "\")\n";
-                cmake << "list(APPEND MODULE_SOURCES ${MODULE_SOURCES_GLOB})\n";
-                cmake << "set(MODULE_SOURCES ${MODULE_SOURCES}\n";
-            } else {
-                cmake << "    \"" << pattern_str << "\"\n";
-            }
-        }
-    }
-    cmake << ")\n\n";
-
-    cmake << "add_library(" << desc.name << " SHARED ${MODULE_SOURCES})\n\n";
-
-    // Include directories
-    auto to_cmake_path = [](std::string s) {
-        std::replace(s.begin(), s.end(), '\\', '/');
-        return s;
-    };
-
-    cmake << "target_include_directories(" << desc.name << " PRIVATE\n";
-    cmake << "    \"" << to_cmake_path(_core_c) << "\"\n";
-    cmake << "    \"" << to_cmake_path(_core_cpp) << "\"\n";
-    for (const auto& inc : desc.include_dirs) {
-        fs::path inc_path = module_dir / inc;
-        cmake << "    \"" << to_cmake_path(inc_path.string()) << "\"\n";
-    }
-    cmake << ")\n\n";
-
-    // Link libraries
-    std::string entity_lib_path = _lib_dir + "/entity_lib";
-    std::string termin_core_path = _lib_dir + "/termin_core";
-#ifdef _WIN32
-    entity_lib_path += ".lib";
-    termin_core_path += ".lib";
-#else
-    entity_lib_path = _lib_dir + "/libentity_lib.so";
-    termin_core_path = _lib_dir + "/libtermin_core.so";
-#endif
-    cmake << "target_link_libraries(" << desc.name << " PRIVATE\n";
-    cmake << "    \"" << to_cmake_path(entity_lib_path) << "\"\n";
-    cmake << "    \"" << to_cmake_path(termin_core_path) << "\"\n";
-    cmake << ")\n\n";
-
-    // Windows export settings
-    cmake << "if(WIN32)\n";
-    cmake << "    target_compile_definitions(" << desc.name << " PRIVATE MODULE_EXPORTS)\n";
-    cmake << "endif()\n";
-
-    cmake.close();
-    return true;
-}
-
-bool ModuleLoader::run_cmake_build(const std::string& build_dir, const std::string& module_name) {
-    _compiler_output.clear();
-
-    // Configure
-    std::string config_cmd = "cmake -S \"" + build_dir + "\" -B \"" + build_dir + "/build\" 2>&1";
-    FILE* pipe = popen(config_cmd.c_str(), "r");
+    // Run build command
+    std::string full_cmd = command + " 2>&1";
+    FILE* pipe = popen(full_cmd.c_str(), "r");
     if (!pipe) {
-        _last_error = "Failed to run cmake configure";
+        fs::current_path(old_cwd);
+        _last_error = "Failed to run build command";
         return false;
     }
 
@@ -356,26 +285,13 @@ bool ModuleLoader::run_cmake_build(const std::string& build_dir, const std::stri
     while (fgets(buffer, sizeof(buffer), pipe)) {
         _compiler_output += buffer;
     }
-    int config_result = pclose(pipe);
-    if (config_result != 0) {
-        _last_error = "CMake configure failed";
-        return false;
-    }
+    int result = pclose(pipe);
 
-    // Build
-    std::string build_cmd = "cmake --build \"" + build_dir + "/build\" --config Release 2>&1";
-    pipe = popen(build_cmd.c_str(), "r");
-    if (!pipe) {
-        _last_error = "Failed to run cmake build";
-        return false;
-    }
+    // Restore directory
+    fs::current_path(old_cwd);
 
-    while (fgets(buffer, sizeof(buffer), pipe)) {
-        _compiler_output += buffer;
-    }
-    int build_result = pclose(pipe);
-    if (build_result != 0) {
-        _last_error = "CMake build failed";
+    if (result != 0) {
+        _last_error = "Build command failed with exit code: " + std::to_string(result);
         return false;
     }
 
@@ -391,52 +307,30 @@ std::string ModuleLoader::compile_module(const std::string& name) {
 
     const ModuleDescriptor& desc = it->second.descriptor;
     fs::path module_dir = fs::path(desc.path).parent_path();
-    fs::path build_dir = module_dir / "build";
-
-    // Create build directory
-    try {
-        fs::create_directories(build_dir);
-    } catch (const std::exception& e) {
-        _last_error = "Failed to create build directory: " + std::string(e.what());
-        return "";
-    }
 
     emit_event(name, "compiling");
 
-    // Generate CMakeLists.txt
-    if (!generate_cmake(desc, build_dir.string())) {
+    // Run build command in module directory
+    if (!run_build_command(desc.build_command, module_dir.string())) {
         emit_event(name, "compile_failed");
         return "";
     }
 
-    // Run cmake build
-    if (!run_cmake_build(build_dir.string(), desc.name)) {
+    // Find output DLL using pattern
+    std::string output_relative = expand_output_pattern(desc.output_pattern, desc.name);
+    fs::path dll_path = module_dir / output_relative;
+
+    if (!fs::exists(dll_path)) {
+        _last_error = "Compiled DLL not found at: " + dll_path.string();
         emit_event(name, "compile_failed");
         return "";
     }
 
-    // Find output DLL
-#ifdef _WIN32
-    fs::path dll_path = build_dir / "build" / "Release" / (desc.name + ".dll");
-    if (!fs::exists(dll_path)) {
-        dll_path = build_dir / "build" / "Debug" / (desc.name + ".dll");
-    }
-    if (!fs::exists(dll_path)) {
-        dll_path = build_dir / "build" / (desc.name + ".dll");
-    }
-#else
-    fs::path dll_path = build_dir / "build" / ("lib" + desc.name + ".so");
-#endif
-
-    if (!fs::exists(dll_path)) {
-        _last_error = "Compiled DLL not found at expected location";
-        emit_event(name, "compile_failed");
-        return "";
-    }
-
-    // Update built_version in .module file
-    write_module_version(desc.path, TC_VERSION);
-    it->second.descriptor.built_version = TC_VERSION;
+    // Update state file
+    ModuleState new_state;
+    new_state.built_version = TC_VERSION;
+    write_module_state(desc.path, new_state);
+    it->second.state = new_state;
 
     emit_event(name, "compiled");
     return dll_path.string();
@@ -469,36 +363,18 @@ bool ModuleLoader::load_module(const std::string& module_path) {
 
     emit_event(desc.name, "loading");
 
-    // Compile if needed
+    // Find DLL using output pattern
     fs::path module_dir = fs::path(module_path).parent_path();
-    fs::path dll_path;
-
-#ifdef _WIN32
-    dll_path = module_dir / "build" / "build" / "Release" / (desc.name + ".dll");
-    if (!fs::exists(dll_path)) {
-        dll_path = module_dir / "build" / "build" / "Debug" / (desc.name + ".dll");
-    }
-#else
-    dll_path = module_dir / "build" / "build" / ("lib" + desc.name + ".so");
-#endif
+    std::string output_relative = expand_output_pattern(desc.output_pattern, desc.name);
+    fs::path dll_path = module_dir / output_relative;
 
     bool needs_compile = !fs::exists(dll_path);
 
     // Check if module was built with different engine version
-    if (!needs_compile && desc.built_version != TC_VERSION) {
+    ModuleState state;
+    read_module_state(module_path, state);
+    if (!needs_compile && state.built_version != TC_VERSION) {
         needs_compile = true;
-    }
-
-    // Check if sources are newer than DLL
-    if (!needs_compile && fs::exists(dll_path)) {
-        auto dll_time = fs::last_write_time(dll_path);
-        for (const auto& src : desc.sources) {
-            fs::path src_path = module_dir / src;
-            if (fs::exists(src_path) && fs::last_write_time(src_path) > dll_time) {
-                needs_compile = true;
-                break;
-            }
-        }
     }
 
     if (needs_compile) {
@@ -514,6 +390,7 @@ bool ModuleLoader::load_module(const std::string& module_path) {
             return false;
         }
         dll_path = compiled_path;
+        state.built_version = TC_VERSION;  // Update state after successful compilation
     }
 
     // Copy DLL for loading (Windows)
@@ -544,6 +421,7 @@ bool ModuleLoader::load_module(const std::string& module_path) {
     mod.temp_dll_path = load_path;
     mod.handle = handle;
     mod.descriptor = desc;
+    mod.state = state;
     mod.registered_components = desc.components;
 
     _modules[desc.name] = mod;

@@ -11,6 +11,7 @@ from termin.editor.drag_drop import (
     parse_entity_mime_data,
     parse_asset_path_mime_data,
 )
+from termin._native import log
 
 
 class NodeWrapper:
@@ -23,13 +24,30 @@ class NodeWrapper:
         self.parent = parent
         self.children: list[NodeWrapper] = []
 
+    def is_valid_entity(self) -> bool:
+        """Check if this node holds a valid entity."""
+        if self.obj is None:
+            return False
+        if not isinstance(self.obj, Entity):
+            return False
+        try:
+            return self.obj.valid()
+        except Exception:
+            return False
+
     @property
     def name(self) -> str:
-        if isinstance(self.obj, Entity):
+        if self.obj is None:
+            return "Scene"
+        if not isinstance(self.obj, Entity):
+            return "<unknown>"
+        try:
             if not self.obj.valid():
                 return "<invalid>"
-            return f"{self.obj.name}"
-        return "Scene"
+            return self.obj.name
+        except Exception as e:
+            log.error(f"[NodeWrapper.name] Exception: {e}")
+            return "<error>"
 
 
 class SceneTreeModel(QAbstractItemModel):
@@ -66,36 +84,95 @@ class SceneTreeModel(QAbstractItemModel):
         # карта Entity -> NodeWrapper, для быстрого поиска индекса
         self._obj_to_node: dict[Entity, NodeWrapper] = {}
 
-        if scene is not None:
+        if scene is not None and self._is_scene_valid(scene):
             self._build_hierarchy()
+
+    # ------------------------------------------------------
+    # Safety helpers
+    # ------------------------------------------------------
+
+    def _is_scene_valid(self, scene: Scene | None) -> bool:
+        """Check if scene is valid and alive."""
+        if scene is None:
+            return False
+        try:
+            return scene.is_alive()
+        except Exception:
+            return False
+
+    def _get_node_from_index(self, index: QModelIndex) -> NodeWrapper | None:
+        """Safely get NodeWrapper from QModelIndex."""
+        if not index.isValid():
+            return self.root
+        try:
+            ptr = index.internalPointer()
+            if ptr is None:
+                return None
+            if not isinstance(ptr, NodeWrapper):
+                return None
+            return ptr
+        except Exception:
+            return None
 
     # ------------------------------------------------------
     # Build Tree from scene
     # ------------------------------------------------------
+
     def _build_hierarchy(self):
         # чистим на случай пересборки
         self.root.children.clear()
         self._obj_to_node.clear()
 
+        if not self._is_scene_valid(self.scene):
+            return
+
         # Сначала создаём узлы для всех сущностей
-        for ent in self.scene.entities:
-            self._get_or_create_node(ent)
+        try:
+            entities = self.scene.entities
+        except Exception as e:
+            log.error(f"[_build_hierarchy] Failed to get entities: {e}")
+            return
+
+        for ent in entities:
+            try:
+                if not isinstance(ent, Entity):
+                    continue
+                if not ent.valid():
+                    continue
+                self._get_or_create_node(ent)
+            except Exception as e:
+                log.error(f"[_build_hierarchy] Error creating node: {e}")
 
         # Теперь связываем родителей и детей
-        for ent in self.scene.entities:
-            node = self._obj_to_node[ent]
+        for ent in entities:
+            try:
+                if not isinstance(ent, Entity):
+                    continue
+                if not ent.valid():
+                    continue
+                node = self._obj_to_node.get(ent)
+                if node is None:
+                    continue
 
-            parent_tf = ent.transform.parent
-            parent_ent = parent_tf.entity if parent_tf is not None else None
+                transform = ent.transform
+                if transform is None or not transform.valid():
+                    node.parent = self.root
+                    self.root.children.append(node)
+                    continue
 
-            # если трансформ родителя не привязан к Entity – считаем, что это корень
-            if isinstance(parent_ent, Entity) and parent_ent in self._obj_to_node:
-                parent_node = self._obj_to_node[parent_ent]
-            else:
-                parent_node = self.root
+                parent_tf = transform.parent
+                parent_ent = parent_tf.entity if parent_tf is not None else None
 
-            node.parent = parent_node
-            parent_node.children.append(node)
+                # если трансформ родителя не привязан к Entity – считаем, что это корень
+                if isinstance(parent_ent, Entity) and parent_ent.valid() and parent_ent in self._obj_to_node:
+                    parent_node = self._obj_to_node[parent_ent]
+                else:
+                    parent_node = self.root
+
+                node.parent = parent_node
+                parent_node.children.append(node)
+            except Exception as e:
+                log.error(f"[_build_hierarchy] Error linking node: {e}")
 
     def _get_or_create_node(self, ent: Entity) -> NodeWrapper:
         node = self._obj_to_node.get(ent)
@@ -135,7 +212,7 @@ class SceneTreeModel(QAbstractItemModel):
 
         # Set new scene and rebuild
         self.scene = scene
-        if scene is not None:
+        if self._is_scene_valid(scene):
             self._build_hierarchy()
 
         self.endResetModel()
@@ -145,73 +222,89 @@ class SceneTreeModel(QAbstractItemModel):
     # ==============================================================
 
     def index(self, row, column, parent):
-        parent_node = self.root if not parent.isValid() else parent.internalPointer()
+        parent_node = self._get_node_from_index(parent)
+        if parent_node is None:
+            return QModelIndex()
         if row < 0 or row >= len(parent_node.children):
             return QModelIndex()
         return self.createIndex(row, column, parent_node.children[row])
 
     def parent(self, index):
-        if not index.isValid():
+        node = self._get_node_from_index(index)
+        if node is None or node is self.root:
             return QModelIndex()
 
-        node: NodeWrapper = index.internalPointer()
         parent = node.parent
         if parent is None or parent is self.root:
             return QModelIndex()
 
         grand = parent.parent or self.root
-        row = grand.children.index(parent)
+        try:
+            row = grand.children.index(parent)
+        except ValueError:
+            return QModelIndex()
         return self.createIndex(row, 0, parent)
 
     def rowCount(self, parent):
-        node = self.root if not parent.isValid() else parent.internalPointer()
+        node = self._get_node_from_index(parent)
+        if node is None:
+            return 0
         return len(node.children)
 
     def columnCount(self, parent):
         return 1
 
     def data(self, index, role):
-        if not index.isValid():
+        node = self._get_node_from_index(index)
+        if node is None:
             return None
-        node: NodeWrapper = index.internalPointer()
-        if role == Qt.ItemDataRole.DisplayRole:
-            return node.name
-        if role == Qt.ItemDataRole.ForegroundRole:
-            # Blue color for prefab instances
-            if isinstance(node.obj, Entity):
-                # Check if entity is still valid (not destroyed)
-                if not node.obj.valid():
+
+        try:
+            if role == Qt.ItemDataRole.DisplayRole:
+                return node.name
+
+            if role == Qt.ItemDataRole.ForegroundRole:
+                if not node.is_valid_entity():
                     return None
-                if node.obj.has_component_type("PrefabInstanceMarker"):
+                ent = node.obj
+                if ent.has_component_type("PrefabInstanceMarker"):
                     return QColor(70, 130, 220)  # Steel blue
-                # Gray color for disabled entities
-                if not node.obj.enabled:
+                if not ent.enabled:
                     return QColor(128, 128, 128)
-        if role == Qt.ItemDataRole.CheckStateRole:
-            if isinstance(node.obj, Entity):
-                # Check if entity is still valid (not destroyed)
-                if not node.obj.valid():
+
+            if role == Qt.ItemDataRole.CheckStateRole:
+                if not node.is_valid_entity():
                     return None
                 return Qt.CheckState.Checked if node.obj.enabled else Qt.CheckState.Unchecked
+
+        except Exception as e:
+            log.error(f"[SceneTreeModel.data] Exception: {e}")
+            return None
+
         return None
 
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
-        if not index.isValid():
+        node = self._get_node_from_index(index)
+        if node is None:
             return False
-        node: NodeWrapper = index.internalPointer()
-        if role == Qt.ItemDataRole.CheckStateRole and isinstance(node.obj, Entity):
-            # Check validity before accessing entity
-            if not node.obj.valid():
+
+        if role == Qt.ItemDataRole.CheckStateRole:
+            if not node.is_valid_entity():
                 return False
-            # PyQt6: value can be int or Qt.CheckState
-            if isinstance(value, int):
-                enabled = (value == Qt.CheckState.Checked.value)
-            else:
-                enabled = (value == Qt.CheckState.Checked)
-            node.obj.enabled = enabled
-            self.dataChanged.emit(index, index, [role, Qt.ItemDataRole.ForegroundRole])
-            self.entity_enabled_changed.emit(node.obj, enabled)
-            return True
+            try:
+                # PyQt6: value can be int or Qt.CheckState
+                if isinstance(value, int):
+                    enabled = (value == Qt.CheckState.Checked.value)
+                else:
+                    enabled = (value == Qt.CheckState.Checked)
+                node.obj.enabled = enabled
+                self.dataChanged.emit(index, index, [role, Qt.ItemDataRole.ForegroundRole])
+                self.entity_enabled_changed.emit(node.obj, enabled)
+                return True
+            except Exception as e:
+                log.error(f"[SceneTreeModel.setData] Exception: {e}")
+                return False
+
         return False
 
     # ==============================================================
@@ -247,7 +340,10 @@ class SceneTreeModel(QAbstractItemModel):
         parent_node = self.root
 
         for n in path_nodes:
-            row = parent_node.children.index(n)
+            try:
+                row = parent_node.children.index(n)
+            except ValueError:
+                return QModelIndex()
             idx = self.index(row, 0, parent_index)
             parent_index = idx
             parent_node = n
@@ -263,13 +359,19 @@ class SceneTreeModel(QAbstractItemModel):
         Add an entity and all its children to the tree.
         Returns the QModelIndex of the root entity.
         """
+        if not isinstance(entity, Entity) or not entity.valid():
+            return QModelIndex()
+
         index = self.add_entity(entity)
 
         # Recursively add children
-        for child_tf in entity.transform.children:
-            child_ent = child_tf.entity
-            if child_ent is not None:
-                self.add_entity_hierarchy(child_ent)
+        try:
+            for child_tf in entity.transform.children:
+                child_ent = child_tf.entity
+                if child_ent is not None and child_ent.valid():
+                    self.add_entity_hierarchy(child_ent)
+        except Exception as e:
+            log.error(f"[add_entity_hierarchy] Exception: {e}")
 
         return index
 
@@ -278,38 +380,48 @@ class SceneTreeModel(QAbstractItemModel):
         Add a new entity to the tree (without children).
         Returns the QModelIndex of the new node.
         """
+        if not isinstance(entity, Entity) or not entity.valid():
+            return QModelIndex()
+
         if entity in self._obj_to_node:
             # Already exists
             return self.index_for_object(entity)
 
-        # Find parent node
-        parent_tf = entity.transform.parent
-        parent_ent = parent_tf.entity if parent_tf is not None else None
+        try:
+            # Find parent node
+            parent_tf = entity.transform.parent
+            parent_ent = parent_tf.entity if parent_tf is not None else None
 
-        if isinstance(parent_ent, Entity) and parent_ent in self._obj_to_node:
-            parent_node = self._obj_to_node[parent_ent]
-        else:
-            parent_node = self.root
+            if isinstance(parent_ent, Entity) and parent_ent.valid() and parent_ent in self._obj_to_node:
+                parent_node = self._obj_to_node[parent_ent]
+            else:
+                parent_node = self.root
 
-        parent_index = self.index_for_object(parent_ent) if parent_ent else QModelIndex()
+            parent_index = self.index_for_object(parent_ent) if parent_ent else QModelIndex()
 
-        # Insert new node
-        row = len(parent_node.children)
-        self.beginInsertRows(parent_index, row, row)
+            # Insert new node
+            row = len(parent_node.children)
+            self.beginInsertRows(parent_index, row, row)
 
-        node = NodeWrapper(entity, parent=parent_node)
-        self._obj_to_node[entity] = node
-        parent_node.children.append(node)
+            node = NodeWrapper(entity, parent=parent_node)
+            self._obj_to_node[entity] = node
+            parent_node.children.append(node)
 
-        self.endInsertRows()
+            self.endInsertRows()
 
-        return self.index_for_object(entity)
+            return self.index_for_object(entity)
+        except Exception as e:
+            log.error(f"[add_entity] Exception: {e}")
+            return QModelIndex()
 
     def remove_entity(self, entity: Entity) -> bool:
         """
         Remove an entity from the tree.
         Returns True if removed successfully.
         """
+        if not isinstance(entity, Entity):
+            return False
+
         node = self._obj_to_node.get(entity)
         if node is None:
             return False
@@ -318,25 +430,29 @@ class SceneTreeModel(QAbstractItemModel):
         if parent_node is None:
             return False
 
-        # Get parent index
-        if parent_node is self.root:
-            parent_index = QModelIndex()
-        else:
-            parent_index = self.index_for_object(parent_node.obj)
+        try:
+            # Get parent index
+            if parent_node is self.root:
+                parent_index = QModelIndex()
+            else:
+                parent_index = self.index_for_object(parent_node.obj)
 
-        row = parent_node.children.index(node)
+            row = parent_node.children.index(node)
 
-        self.beginRemoveRows(parent_index, row, row)
+            self.beginRemoveRows(parent_index, row, row)
 
-        parent_node.children.remove(node)
-        del self._obj_to_node[entity]
+            parent_node.children.remove(node)
+            del self._obj_to_node[entity]
 
-        # Also remove all descendants from the map
-        self._remove_descendants_from_map(node)
+            # Also remove all descendants from the map
+            self._remove_descendants_from_map(node)
 
-        self.endRemoveRows()
+            self.endRemoveRows()
 
-        return True
+            return True
+        except Exception as e:
+            log.error(f"[remove_entity] Exception: {e}")
+            return False
 
     def _remove_descendants_from_map(self, node: NodeWrapper) -> None:
         """Remove all descendant entities from _obj_to_node."""
@@ -350,6 +466,9 @@ class SceneTreeModel(QAbstractItemModel):
         Move an entity to a new parent.
         Returns True if moved successfully.
         """
+        if not isinstance(entity, Entity) or not entity.valid():
+            return False
+
         node = self._obj_to_node.get(entity)
         if node is None:
             return False
@@ -358,47 +477,53 @@ class SceneTreeModel(QAbstractItemModel):
         if old_parent_node is None:
             return False
 
-        # Determine new parent node
-        if new_parent is not None and new_parent in self._obj_to_node:
-            new_parent_node = self._obj_to_node[new_parent]
-        else:
-            new_parent_node = self.root
+        try:
+            # Determine new parent node
+            if new_parent is not None and isinstance(new_parent, Entity) and new_parent.valid() and new_parent in self._obj_to_node:
+                new_parent_node = self._obj_to_node[new_parent]
+            else:
+                new_parent_node = self.root
 
-        # Already at the right parent?
-        if old_parent_node is new_parent_node:
+            # Already at the right parent?
+            if old_parent_node is new_parent_node:
+                return True
+
+            # Get indices
+            if old_parent_node is self.root:
+                old_parent_index = QModelIndex()
+            else:
+                old_parent_index = self.index_for_object(old_parent_node.obj)
+
+            if new_parent_node is self.root:
+                new_parent_index = QModelIndex()
+            else:
+                new_parent_index = self.index_for_object(new_parent_node.obj)
+
+            old_row = old_parent_node.children.index(node)
+            new_row = len(new_parent_node.children)
+
+            # Use beginMoveRows for efficient move
+            if not self.beginMoveRows(old_parent_index, old_row, old_row,
+                                       new_parent_index, new_row):
+                return False
+
+            old_parent_node.children.remove(node)
+            node.parent = new_parent_node
+            new_parent_node.children.append(node)
+
+            self.endMoveRows()
+
             return True
-
-        # Get indices
-        if old_parent_node is self.root:
-            old_parent_index = QModelIndex()
-        else:
-            old_parent_index = self.index_for_object(old_parent_node.obj)
-
-        if new_parent_node is self.root:
-            new_parent_index = QModelIndex()
-        else:
-            new_parent_index = self.index_for_object(new_parent_node.obj)
-
-        old_row = old_parent_node.children.index(node)
-        new_row = len(new_parent_node.children)
-
-        # Use beginMoveRows for efficient move
-        if not self.beginMoveRows(old_parent_index, old_row, old_row,
-                                   new_parent_index, new_row):
+        except Exception as e:
+            log.error(f"[move_entity] Exception: {e}")
             return False
-
-        old_parent_node.children.remove(node)
-        node.parent = new_parent_node
-        new_parent_node.children.append(node)
-
-        self.endMoveRows()
-
-        return True
 
     def update_entity(self, entity: Entity) -> None:
         """
         Notify that an entity's data has changed (e.g., name).
         """
+        if not isinstance(entity, Entity):
+            return
         index = self.index_for_object(entity)
         if index.isValid():
             self.dataChanged.emit(index, index)
@@ -411,12 +536,15 @@ class SceneTreeModel(QAbstractItemModel):
         """Return item flags including drag-drop capability and checkbox."""
         default_flags = super().flags(index)
 
-        if not index.isValid():
+        node = self._get_node_from_index(index)
+        if node is None:
+            return default_flags
+
+        if node is self.root:
             # Root can accept drops (to move to top level)
             return default_flags | Qt.ItemFlag.ItemIsDropEnabled
 
-        node: NodeWrapper = index.internalPointer()
-        if isinstance(node.obj, Entity):
+        if node.is_valid_entity():
             # Entities can be dragged, accept drops, and have enabled checkbox
             return (
                 default_flags
@@ -437,17 +565,13 @@ class SceneTreeModel(QAbstractItemModel):
 
     def mimeData(self, indexes: list[QModelIndex]):
         """Create MIME data for dragged entities."""
-        from PyQt6.QtCore import QMimeData
-
         if not indexes:
             return None
 
         # Take the first valid entity
         for index in indexes:
-            if not index.isValid():
-                continue
-            node: NodeWrapper = index.internalPointer()
-            if isinstance(node.obj, Entity) and node.obj.valid():
+            node = self._get_node_from_index(index)
+            if node is not None and node.is_valid_entity():
                 return create_entity_mime_data(node.obj)
 
         return None
@@ -477,6 +601,9 @@ class SceneTreeModel(QAbstractItemModel):
         if not data.hasFormat(EditorMimeTypes.ENTITY):
             return False
 
+        if not self._is_scene_valid(self.scene):
+            return False
+
         # Parse the dragged entity data
         entity_data = parse_entity_mime_data(data)
         if entity_data is None:
@@ -487,29 +614,34 @@ class SceneTreeModel(QAbstractItemModel):
             return False
 
         # Find the dragged entity by UUID
-        dragged_entity = self.scene.get_entity(entity_uuid)
-        if dragged_entity is None:
+        try:
+            dragged_entity = self.scene.get_entity(entity_uuid)
+        except Exception:
+            return False
+        if dragged_entity is None or not dragged_entity.valid():
             return False
 
         # Get target entity (parent of drop location)
         target_entity = None
-        if parent.isValid():
-            node: NodeWrapper = parent.internalPointer()
-            if isinstance(node.obj, Entity) and node.obj.valid():
-                target_entity = node.obj
+        target_node = self._get_node_from_index(parent)
+        if target_node is not None and target_node.is_valid_entity():
+            target_entity = target_node.obj
 
         # Can't drop on self
         if target_entity is dragged_entity:
             return False
 
         # Can't drop on a descendant
-        if target_entity is not None and target_entity.valid():
-            check = target_entity.transform.parent
-            while check is not None:
-                check_entity = check.entity
-                if check_entity is not None and check_entity.valid() and check_entity is dragged_entity:
-                    return False
-                check = check.parent
+        if target_entity is not None:
+            try:
+                check = target_entity.transform.parent
+                while check is not None:
+                    check_entity = check.entity
+                    if check_entity is not None and check_entity.valid() and check_entity is dragged_entity:
+                        return False
+                    check = check.parent
+            except Exception:
+                return False
 
         return True
 
@@ -527,10 +659,9 @@ class SceneTreeModel(QAbstractItemModel):
 
         # Get target entity (common for both cases)
         target_entity = None
-        if parent.isValid():
-            node: NodeWrapper = parent.internalPointer()
-            if isinstance(node.obj, Entity) and node.obj.valid():
-                target_entity = node.obj
+        target_node = self._get_node_from_index(parent)
+        if target_node is not None and target_node.is_valid_entity():
+            target_entity = target_node.obj
 
         # Handle prefab/fbx asset drop
         if data.hasFormat(EditorMimeTypes.ASSET_PATH):
@@ -548,6 +679,9 @@ class SceneTreeModel(QAbstractItemModel):
                     return True
             return False
 
+        if not self._is_scene_valid(self.scene):
+            return False
+
         # Handle entity reparent
         entity_data = parse_entity_mime_data(data)
         if entity_data is None:
@@ -558,8 +692,11 @@ class SceneTreeModel(QAbstractItemModel):
             return False
 
         # Find the dragged entity by UUID
-        dragged_entity = self.scene.get_entity(entity_uuid)
-        if dragged_entity is None:
+        try:
+            dragged_entity = self.scene.get_entity(entity_uuid)
+        except Exception:
+            return False
+        if dragged_entity is None or not dragged_entity.valid():
             return False
 
         # Emit signal for controller to handle with undo support

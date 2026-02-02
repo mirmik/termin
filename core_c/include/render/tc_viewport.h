@@ -73,9 +73,8 @@ TC_API void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_widt
 // Internal Entities
 // ============================================================================
 
-TC_API void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_pool* pool, tc_entity_id id);
-TC_API tc_entity_pool* tc_viewport_get_internal_entities_pool(tc_viewport_handle h);
-TC_API tc_entity_id tc_viewport_get_internal_entities_id(tc_viewport_handle h);
+TC_API void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_handle ent);
+TC_API tc_entity_handle tc_viewport_get_internal_entities(tc_viewport_handle h);
 TC_API bool tc_viewport_has_internal_entities(tc_viewport_handle h);
 
 // ============================================================================

@@ -283,22 +283,22 @@ class GraphNode(QGraphicsItem):
         """
         # MaterialPass: update sockets when material changes
         # Skip if we just restored sockets from serialization (to avoid overwriting)
-        if name == "material_name" and self.data.get("pass_class") == "MaterialPass":
+        if name == "material" and self.data.get("pass_class") == "MaterialPass":
             if not getattr(self, "_dynamic_inputs_restored", False):
                 self._update_material_pass_inputs(value)
 
-    def _update_material_pass_inputs(self, material_name: str) -> None:
+    def _update_material_pass_inputs(self, material: str) -> None:
         """
         Update MaterialPass node inputs based on material's shader textures.
 
         Args:
-            material_name: Name of the selected material.
+            material: Name of the selected material.
         """
         try:
             from termin.visualization.render.framegraph.passes.material_pass import MaterialPass
 
             # Get texture inputs for this material
-            texture_inputs = MaterialPass.get_texture_inputs_for_material(material_name)
+            texture_inputs = MaterialPass.get_texture_inputs_for_material(material)
 
             # Update dynamic inputs (only keep output_res_target for FBO connection)
             self.update_dynamic_inputs(

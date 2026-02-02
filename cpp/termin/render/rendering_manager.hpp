@@ -19,6 +19,7 @@
 #include "termin/render/graphics_backend.hpp"
 
 extern "C" {
+#include "tc_scene.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -121,6 +122,38 @@ public:
     void present_all();
 
     // ========================================================================
+    // Scene Pipeline Management
+    // ========================================================================
+
+    // Attach scene to rendering - compiles pipeline templates stored in tc_scene
+    // Called when scene is mounted to display. Notifies components via on_render_attach.
+    void attach_scene(tc_scene_handle scene);
+
+    // Detach scene from rendering - destroys compiled pipelines
+    // Called when scene is unmounted. Notifies components via on_render_detach.
+    void detach_scene(tc_scene_handle scene);
+
+    // Get scene pipeline by name (searches in specific scene)
+    RenderPipeline* get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
+
+    // Get scene pipeline by name (searches all scenes)
+    RenderPipeline* get_scene_pipeline(const std::string& name) const;
+
+    // Pipeline targets (viewport names for each pipeline)
+    void set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets);
+    const std::vector<std::string>& get_pipeline_targets(const std::string& pipeline_name) const;
+
+    // Get all pipeline names for a scene
+    std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
+
+    // Clear all pipelines for a scene (called at render detach time)
+    // Calls tc_scene_notify_render_detach before destroying pipelines.
+    void clear_scene_pipelines(tc_scene_handle scene);
+
+    // Clear all scene pipelines
+    void clear_all_scene_pipelines();
+
+    // ========================================================================
     // Shutdown
     // ========================================================================
 
@@ -150,6 +183,19 @@ private:
     // Render engine (owned if created internally)
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
+
+    // Scene pipelines: scene_handle -> (pipeline_name -> owning pointer)
+    // RenderingManager owns compiled pipelines
+    // Key is (scene.index << 32 | scene.generation)
+    std::unordered_map<uint64_t, std::unordered_map<std::string, std::unique_ptr<RenderPipeline>>> scene_pipelines_;
+
+    // Pipeline targets: pipeline_name -> list of viewport names
+    std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
+
+    // Helper to make key from scene handle
+    static uint64_t scene_key(tc_scene_handle h) {
+        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
+    }
 };
 
 } // namespace termin

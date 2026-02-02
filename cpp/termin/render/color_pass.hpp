@@ -22,11 +22,7 @@
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 #include "tc_scene.h"
 #include "tc_scene_pool.h"
 
@@ -60,6 +56,9 @@ public:
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
+
+    // Timing for selected internal symbol (debug mode)
+    InternalSymbolTiming selected_symbol_timing;
 
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
@@ -159,6 +158,17 @@ public:
      */
     std::vector<std::string> get_internal_symbols() const override {
         return entity_names;
+    }
+
+    /**
+     * Get internal symbols with timing information.
+     * Returns timing only for the currently selected debug symbol.
+     */
+    std::vector<InternalSymbolTiming> get_internal_symbols_with_timing() const override {
+        if (selected_symbol_timing.name.empty()) {
+            return {};
+        }
+        return {selected_symbol_timing};
     }
 
 private:

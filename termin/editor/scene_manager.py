@@ -194,7 +194,7 @@ class SceneManager(CxxSceneManager):
         self._paths[name] = None
 
         # Register in C++ SceneManager
-        self.register_scene(name, scene._tc_scene.scene_handle())
+        self.register_scene(name, scene.scene_handle())
 
         return scene
 
@@ -216,7 +216,7 @@ class SceneManager(CxxSceneManager):
         self._paths[name] = None
 
         # Register in C++ SceneManager
-        self.register_scene(name, scene._tc_scene.scene_handle())
+        self.register_scene(name, scene.scene_handle())
 
     def copy_scene(self, source_name: str, dest_name: str) -> "Scene":
         """
@@ -241,19 +241,16 @@ class SceneManager(CxxSceneManager):
         source = self._scenes[source_name]
 
         # Serialize and deserialize to create deep copy
+        # (includes metadata with editor state)
         scene_data = source.serialize()
         dest = self._create_new_scene(dest_name)
         dest.load_from_data(scene_data, context=None, update_settings=True)
-
-        # Copy runtime state (not serialized)
-        dest.editor_viewport_camera_name = source.editor_viewport_camera_name
-        dest.editor_entities_data = source.editor_entities_data
 
         self._scenes[dest_name] = dest
         self._paths[dest_name] = None  # Copy has no file path
 
         # Register in C++ SceneManager
-        self.register_scene(dest_name, dest._tc_scene.scene_handle())
+        self.register_scene(dest_name, dest.scene_handle())
 
         return dest
 
@@ -292,7 +289,7 @@ class SceneManager(CxxSceneManager):
         self._paths[name] = path
 
         # Register in C++ SceneManager
-        self.register_scene(name, scene._tc_scene.scene_handle())
+        self.register_scene(name, scene.scene_handle())
 
         # Store editor data for later application (after editor entities are created)
         self._editor_data[name] = self._extract_editor_data(data)

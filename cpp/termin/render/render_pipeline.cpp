@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
 }
 
 namespace termin {
@@ -85,6 +86,10 @@ void RenderPipeline::remove_pass(tc_pass* pass) {
     tc_pipeline_remove_pass(handle_, pass);
 }
 
+size_t RenderPipeline::remove_passes_by_name(const std::string& name) {
+    return tc_pipeline_remove_passes_by_name(handle_, name.c_str());
+}
+
 void RenderPipeline::insert_pass_before(tc_pass* pass, tc_pass* before) {
     tc_pipeline_insert_pass_before(handle_, pass, before);
 }
@@ -112,6 +117,14 @@ void RenderPipeline::clear_specs() {
 const ResourceSpec* RenderPipeline::get_spec_at(size_t index) const {
     if (index >= specs_.size()) return nullptr;
     return &specs_[index];
+}
+
+bool RenderPipeline::is_dirty() const {
+    return tc_pipeline_is_dirty(handle_);
+}
+
+void RenderPipeline::mark_dirty() {
+    tc_pipeline_mark_dirty(handle_);
 }
 
 std::vector<ResourceSpec> RenderPipeline::collect_specs() const {

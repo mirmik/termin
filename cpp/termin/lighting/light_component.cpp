@@ -1,11 +1,7 @@
 #include "light_component.hpp"
 #include "../entity/component_registry.hpp"
 
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 
 namespace termin {
 

@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include "component.hpp"
+#include "../export.hpp"
 
 namespace termin {
 
@@ -20,7 +21,7 @@ namespace termin {
 //   on_mouse_move: Mouse movement
 //   on_scroll: Scroll wheel
 //   on_key: Keyboard input
-class InputHandler {
+class ENTITY_API InputHandler {
 public:
     virtual ~InputHandler() = default;
 

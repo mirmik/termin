@@ -54,11 +54,11 @@ static void dispatch_to_internal_entities(
     if (!tc_viewport_handle_valid(viewport)) return;
     if (!tc_viewport_has_internal_entities(viewport)) return;
 
-    tc_entity_pool* pool = tc_viewport_get_internal_entities_pool(viewport);
-    tc_entity_id root_id = tc_viewport_get_internal_entities_id(viewport);
+    tc_entity_handle ent = tc_viewport_get_internal_entities(viewport);
+    tc_entity_pool* pool = tc_entity_pool_registry_get(ent.pool);
 
-    if (pool && tc_entity_id_valid(root_id)) {
-        tc_entity_pool_foreach_input_handler_subtree(pool, root_id, callback, user_data);
+    if (pool && tc_entity_id_valid(ent.id)) {
+        tc_entity_pool_foreach_input_handler_subtree(pool, ent.id, callback, user_data);
     }
 }
 

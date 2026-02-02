@@ -301,18 +301,17 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        for handle in self._scene.scene_pipelines:
-            asset = handle.get_asset()
-            if asset is not None:
-                name = asset.name
-                uuid_short = asset.uuid[:8] if asset.uuid else ""
+        for template in self._scene.scene_pipelines:
+            if template.is_valid:
+                name = template.name
+                uuid_short = template.uuid[:8] if template.uuid else ""
                 item = QListWidgetItem(f"{name} ({uuid_short}...)")
-                item.setData(Qt.ItemDataRole.UserRole, handle)
+                item.setData(Qt.ItemDataRole.UserRole, template)
                 self._pipelines_list.addItem(item)
             else:
-                # Handle without asset (orphan reference)
+                # Invalid template (orphan reference)
                 item = QListWidgetItem("(missing pipeline)")
-                item.setData(Qt.ItemDataRole.UserRole, handle)
+                item.setData(Qt.ItemDataRole.UserRole, template)
                 self._pipelines_list.addItem(item)
 
     def _on_bg_color_clicked(self) -> None:
@@ -503,7 +502,6 @@ class SceneInspector(QWidget):
             return
 
         from termin.assets.resources import ResourceManager
-        from termin.assets.scene_pipeline_handle import ScenePipelineHandle
         from PyQt6.QtWidgets import QInputDialog
 
         rm = ResourceManager.instance()
@@ -523,10 +521,9 @@ class SceneInspector(QWidget):
 
         # Filter out already added pipelines
         existing_uuids = set()
-        for handle in self._scene.scene_pipelines:
-            asset = handle.get_asset()
-            if asset is not None:
-                existing_uuids.add(asset.uuid)
+        for template in self._scene.scene_pipelines:
+            if template.is_valid:
+                existing_uuids.add(template.uuid)
 
         available = []
         for name in pipeline_names:
@@ -555,13 +552,12 @@ class SceneInspector(QWidget):
         if not ok or not name:
             return
 
-        # Get asset and create handle
+        # Get asset and add its template to scene
         asset = rm.get_scene_pipeline_asset(name)
         if asset is None:
             return
 
-        handle = ScenePipelineHandle.from_uuid(asset.uuid)
-        self._scene.add_scene_pipeline(handle)
+        self._scene.add_scene_pipeline(asset.template)
         self._refresh_pipelines_list()
         self.scene_changed.emit()
 

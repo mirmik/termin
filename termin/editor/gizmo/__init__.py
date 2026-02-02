@@ -13,9 +13,18 @@ Core classes:
 - TransformGizmo: Standard translate/rotate gizmo
 """
 
-from termin.editor.gizmo.base import (
+# Import from C++ native module
+from termin._native.editor import (
     Gizmo,
     GizmoCollider,
+    GizmoHit,
+    GizmoManager,
+    TransformGizmo,
+    TransformElement,
+)
+
+# Python constraint and geometry types (for custom Python gizmos)
+from termin.editor.gizmo.base import (
     DragConstraint,
     AxisConstraint,
     PlaneConstraint,
@@ -29,20 +38,17 @@ from termin.editor.gizmo.base import (
     QuadGeometry,
 )
 
-from termin.editor.gizmo.manager import (
-    GizmoManager,
-    GizmoHit,
-)
-
-from termin.editor.gizmo.transform_gizmo import (
-    TransformGizmo,
-    TransformElement,
-)
-
 __all__ = [
-    # Base
+    # Base (from C++)
     "Gizmo",
     "GizmoCollider",
+    "GizmoHit",
+    # Manager (from C++)
+    "GizmoManager",
+    # Transform (from C++)
+    "TransformGizmo",
+    "TransformElement",
+    # Python constraint types (for custom gizmos)
     "DragConstraint",
     "AxisConstraint",
     "PlaneConstraint",
@@ -54,10 +60,4 @@ __all__ = [
     "CylinderGeometry",
     "TorusGeometry",
     "QuadGeometry",
-    # Manager
-    "GizmoManager",
-    "GizmoHit",
-    # Transform
-    "TransformGizmo",
-    "TransformElement",
 ]

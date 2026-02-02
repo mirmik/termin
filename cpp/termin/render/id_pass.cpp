@@ -50,6 +50,8 @@ void IdPass::execute_with_data(
     const Mat44f& projection,
     uint64_t layer_mask
 ) {
+    (void)reads_fbos;
+
     // Find output FBO
     auto it = writes_fbos.find(output_res);
     if (it == writes_fbos.end() || it->second == nullptr) {
@@ -64,11 +66,14 @@ void IdPass::execute_with_data(
     bind_and_clear(graphics, fb, rect);
     apply_default_render_state(graphics);
 
-    // Get shader
-    TcShader& shader = get_shader(graphics);
+    // Get base shader
+    TcShader& base_shader = get_shader(graphics);
 
-    // Collect draw calls
-    auto draw_calls = collect_draw_calls(scene, layer_mask);
+    // Collect draw calls (computes final_shader during collection)
+    collect_draw_calls(scene, layer_mask, base_shader.handle);
+
+    // Sort by shader to minimize state changes
+    sort_draw_calls_by_shader();
 
     // Render
     entity_names.clear();
@@ -82,10 +87,12 @@ void IdPass::execute_with_data(
 
     const std::string& debug_symbol = get_debug_internal_point();
 
+    // Track last shader and pick_id to avoid redundant operations
+    tc_shader_handle last_shader = tc_shader_handle_invalid();
     int current_pick_id = -1;
     float pick_r = 0.0f, pick_g = 0.0f, pick_b = 0.0f;
 
-    for (const auto& dc : draw_calls) {
+    for (const auto& dc : cached_draw_calls_) {
         Mat44f model = get_model_matrix(dc.entity);
         context.model = model;
 
@@ -100,19 +107,22 @@ void IdPass::execute_with_data(
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
-        // Get shader handle and apply override
-        tc_shader_handle base_handle = shader.handle;
-        tc_shader_handle shader_handle = tc_component_override_shader(
-            dc.component, phase_name(), dc.geometry_id, base_handle
-        );
+        // Use final shader (override already computed during collect)
+        tc_shader_handle shader_handle = dc.final_shader;
+        bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader);
 
-        // Use TcShader
         TcShader shader_to_use(shader_handle);
-        shader_to_use.use();
 
+        if (shader_changed) {
+            shader_to_use.use();
+            // Set view/projection only when shader changes
+            shader_to_use.set_uniform_mat4("u_view", view.data, false);
+            shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
+            last_shader = shader_handle;
+        }
+
+        // Model matrix and pick color always set per object
         shader_to_use.set_uniform_mat4("u_model", model.data, false);
-        shader_to_use.set_uniform_mat4("u_view", view.data, false);
-        shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
         shader_to_use.set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
 
         context.current_tc_shader = shader_to_use;

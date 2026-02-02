@@ -10,10 +10,7 @@ extern "C" {
 
 #include <string>
 #include <vector>
-#include <nanobind/nanobind.h>
 #include "../../core_c/include/tc_scene.h"
-
-namespace nb = nanobind;
 
 namespace termin {
 namespace animation {
@@ -203,19 +200,6 @@ public:
         tc_value_dict_set(&d, "uuid", tc_value_string(uuid()));
         tc_value_dict_set(&d, "name", tc_value_string(name()));
         tc_value_dict_set(&d, "type", tc_value_string("uuid"));
-        return d;
-    }
-
-    // Serialize for scene saving (returns nanobind dict) - for Python bindings
-    nb::dict serialize() const {
-        nb::dict d;
-        if (!is_valid()) {
-            d["type"] = "none";
-            return d;
-        }
-        d["uuid"] = uuid();
-        d["name"] = name();
-        d["type"] = "uuid";
         return d;
     }
 

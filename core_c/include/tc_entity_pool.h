@@ -54,8 +54,30 @@ static inline bool tc_entity_id_eq(tc_entity_id a, tc_entity_id b) {
 typedef struct tc_entity_pool tc_entity_pool;
 typedef struct tc_component tc_component;
 
+// Include pool registry for tc_entity_pool_handle
+#include "tc_entity_pool_registry.h"
+
 // Include scene handle type
 #include "tc_scene_pool.h"
+
+// ============================================================================
+// Entity Handle - unified handle combining pool + entity_id
+// (inline functions are defined after tc_entity_pool_alive declaration)
+// ============================================================================
+
+#ifndef TC_ENTITY_HANDLE_DEFINED
+#define TC_ENTITY_HANDLE_DEFINED
+typedef struct {
+    tc_entity_pool_handle pool;
+    tc_entity_id id;
+} tc_entity_handle;
+#endif
+
+#ifdef __cplusplus
+    #define TC_ENTITY_HANDLE_INVALID (tc_entity_handle{TC_ENTITY_POOL_HANDLE_INVALID, TC_ENTITY_ID_INVALID})
+#else
+    #define TC_ENTITY_HANDLE_INVALID ((tc_entity_handle){TC_ENTITY_POOL_HANDLE_INVALID, TC_ENTITY_ID_INVALID})
+#endif
 
 // ============================================================================
 // Pool lifecycle
@@ -76,6 +98,23 @@ TC_POOL_API tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* 
 TC_POOL_API tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* name, const char* uuid);
 TC_POOL_API void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API bool tc_entity_pool_alive(const tc_entity_pool* pool, tc_entity_id id);
+
+// Entity handle inline functions (after tc_entity_pool_alive declaration)
+static inline bool tc_entity_handle_valid(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool && tc_entity_pool_alive(pool, h.id);
+}
+
+static inline bool tc_entity_handle_eq(tc_entity_handle a, tc_entity_handle b) {
+    return tc_entity_pool_handle_eq(a.pool, b.pool) && tc_entity_id_eq(a.id, b.id);
+}
+
+static inline tc_entity_handle tc_entity_handle_make(tc_entity_pool_handle pool, tc_entity_id id) {
+    tc_entity_handle h;
+    h.pool = pool;
+    h.id = id;
+    return h;
+}
 
 TC_POOL_API size_t tc_entity_pool_count(const tc_entity_pool* pool);
 TC_POOL_API size_t tc_entity_pool_capacity(const tc_entity_pool* pool);
@@ -224,6 +263,222 @@ TC_POOL_API void tc_entity_pool_foreach_input_handler_subtree(
     tc_component_iter_fn callback,
     void* user_data
 );
+
+// ============================================================================
+// Entity Handle API (unified access via tc_entity_handle)
+// ============================================================================
+
+// Create entity and return handle
+static inline tc_entity_handle tc_entity_create(tc_entity_pool_handle pool_h, const char* name) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+    if (!pool) return TC_ENTITY_HANDLE_INVALID;
+    tc_entity_id id = tc_entity_pool_alloc(pool, name);
+    return tc_entity_handle_make(pool_h, id);
+}
+
+static inline tc_entity_handle tc_entity_create_with_uuid(tc_entity_pool_handle pool_h, const char* name, const char* uuid) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+    if (!pool) return TC_ENTITY_HANDLE_INVALID;
+    tc_entity_id id = tc_entity_pool_alloc_with_uuid(pool, name, uuid);
+    return tc_entity_handle_make(pool_h, id);
+}
+
+// Free entity
+static inline void tc_entity_free(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_free(pool, h.id);
+}
+
+// Identity
+static inline const char* tc_entity_name(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_name(pool, h.id) : "";
+}
+
+static inline void tc_entity_set_name(tc_entity_handle h, const char* name) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_name(pool, h.id, name);
+}
+
+static inline const char* tc_entity_uuid(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_uuid(pool, h.id) : "";
+}
+
+static inline void tc_entity_set_uuid(tc_entity_handle h, const char* uuid) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_uuid(pool, h.id, uuid);
+}
+
+// Flags
+static inline bool tc_entity_visible(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_visible(pool, h.id) : false;
+}
+
+static inline void tc_entity_set_visible(tc_entity_handle h, bool v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_visible(pool, h.id, v);
+}
+
+static inline bool tc_entity_enabled(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_enabled(pool, h.id) : false;
+}
+
+static inline void tc_entity_set_enabled(tc_entity_handle h, bool v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_enabled(pool, h.id, v);
+}
+
+static inline bool tc_entity_pickable(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_pickable(pool, h.id) : false;
+}
+
+static inline void tc_entity_set_pickable(tc_entity_handle h, bool v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_pickable(pool, h.id, v);
+}
+
+static inline bool tc_entity_selectable(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_selectable(pool, h.id) : false;
+}
+
+static inline void tc_entity_set_selectable(tc_entity_handle h, bool v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_selectable(pool, h.id, v);
+}
+
+static inline bool tc_entity_serializable(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_serializable(pool, h.id) : false;
+}
+
+static inline void tc_entity_set_serializable(tc_entity_handle h, bool v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_serializable(pool, h.id, v);
+}
+
+static inline int tc_entity_priority(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_priority(pool, h.id) : 0;
+}
+
+static inline void tc_entity_set_priority(tc_entity_handle h, int v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_priority(pool, h.id, v);
+}
+
+static inline uint64_t tc_entity_layer(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_layer(pool, h.id) : 0;
+}
+
+static inline void tc_entity_set_layer(tc_entity_handle h, uint64_t v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_layer(pool, h.id, v);
+}
+
+static inline uint64_t tc_entity_flags(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_flags(pool, h.id) : 0;
+}
+
+static inline void tc_entity_set_flags(tc_entity_handle h, uint64_t v) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_flags(pool, h.id, v);
+}
+
+// Transform
+static inline void tc_entity_get_local_position(tc_entity_handle h, double* xyz) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_get_local_position(pool, h.id, xyz);
+}
+
+static inline void tc_entity_set_local_position(tc_entity_handle h, const double* xyz) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_local_position(pool, h.id, xyz);
+}
+
+static inline void tc_entity_get_local_rotation(tc_entity_handle h, double* xyzw) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_get_local_rotation(pool, h.id, xyzw);
+}
+
+static inline void tc_entity_set_local_rotation(tc_entity_handle h, const double* xyzw) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_local_rotation(pool, h.id, xyzw);
+}
+
+static inline void tc_entity_get_local_scale(tc_entity_handle h, double* xyz) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_get_local_scale(pool, h.id, xyz);
+}
+
+static inline void tc_entity_set_local_scale(tc_entity_handle h, const double* xyz) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_local_scale(pool, h.id, xyz);
+}
+
+static inline void tc_entity_get_world_matrix(tc_entity_handle h, double* m16) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_get_world_matrix(pool, h.id, m16);
+}
+
+static inline void tc_entity_mark_dirty(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_mark_dirty(pool, h.id);
+}
+
+// Hierarchy
+static inline tc_entity_handle tc_entity_parent(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (!pool) return TC_ENTITY_HANDLE_INVALID;
+    tc_entity_id parent_id = tc_entity_pool_parent(pool, h.id);
+    if (!tc_entity_id_valid(parent_id)) return TC_ENTITY_HANDLE_INVALID;
+    return tc_entity_handle_make(h.pool, parent_id);
+}
+
+static inline void tc_entity_set_parent(tc_entity_handle h, tc_entity_handle parent) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_set_parent(pool, h.id, parent.id);
+}
+
+static inline size_t tc_entity_children_count(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_children_count(pool, h.id) : 0;
+}
+
+static inline tc_entity_handle tc_entity_child_at(tc_entity_handle h, size_t index) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (!pool) return TC_ENTITY_HANDLE_INVALID;
+    tc_entity_id child_id = tc_entity_pool_child_at(pool, h.id, index);
+    if (!tc_entity_id_valid(child_id)) return TC_ENTITY_HANDLE_INVALID;
+    return tc_entity_handle_make(h.pool, child_id);
+}
+
+// Components
+static inline void tc_entity_add_component(tc_entity_handle h, tc_component* c) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_add_component(pool, h.id, c);
+}
+
+static inline void tc_entity_remove_component(tc_entity_handle h, tc_component* c) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_remove_component(pool, h.id, c);
+}
+
+static inline size_t tc_entity_component_count(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_component_count(pool, h.id) : 0;
+}
+
+static inline tc_component* tc_entity_component_at(tc_entity_handle h, size_t index) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_component_at(pool, h.id, index) : NULL;
+}
 
 #ifdef __cplusplus
 }

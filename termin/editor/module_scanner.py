@@ -170,6 +170,19 @@ class ModuleScanner:
         Returns:
             True if module was loaded successfully
         """
+        import json
+
+        # Check if module is ignored
+        try:
+            with open(module_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("ignore", False):
+                    module_name = data.get("name", os.path.basename(module_path))
+                    log.info(f"[ModuleScanner] Skipping ignored module: {module_name}")
+                    return True  # Treat as success (intentionally skipped)
+        except Exception:
+            pass  # Continue with load attempt
+
         from termin.entity._entity_native import ModuleLoader
 
         loader = ModuleLoader.instance()

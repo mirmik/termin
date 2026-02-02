@@ -32,9 +32,13 @@ namespace termin {
 struct ModuleDescriptor {
     std::string name;
     std::string path;                          // Path to .module file
-    std::vector<std::string> sources;          // Glob patterns for sources
-    std::vector<std::string> include_dirs;     // Additional include directories
+    std::string build_command;                 // Command to build the module
+    std::string output_pattern;                // Path to output DLL (can use ${name})
     std::vector<std::string> components;       // Component type names
+};
+
+// Module state (stored separately in .module.state file)
+struct ModuleState {
     int built_version = 0;                     // Engine version module was built for
 };
 
@@ -45,6 +49,7 @@ struct LoadedModule {
     std::string temp_dll_path;                 // Temporary copy (Windows)
     ModuleHandle handle = nullptr;
     ModuleDescriptor descriptor;
+    ModuleState state;
     std::vector<std::string> registered_components;
 };
 
@@ -109,8 +114,14 @@ private:
     // Parse .module file
     bool parse_module_file(const std::string& path, ModuleDescriptor& out);
 
-    // Write built_version to .module file
-    bool write_module_version(const std::string& path, int version);
+    // Read .module.state file
+    bool read_module_state(const std::string& module_path, ModuleState& out);
+
+    // Write .module.state file
+    bool write_module_state(const std::string& module_path, const ModuleState& state);
+
+    // Get state file path from module path
+    std::string get_state_path(const std::string& module_path);
 
     // DLL operations
     ModuleHandle load_dll(const std::string& path);
@@ -123,11 +134,11 @@ private:
     // Clean up temporary DLL files
     void cleanup_temp_dll(const std::string& path);
 
-    // Generate CMakeLists.txt for module
-    bool generate_cmake(const ModuleDescriptor& desc, const std::string& build_dir);
+    // Run build command
+    bool run_build_command(const std::string& command, const std::string& working_dir);
 
-    // Run cmake build
-    bool run_cmake_build(const std::string& build_dir, const std::string& module_name);
+    // Expand ${name} in output pattern
+    std::string expand_output_pattern(const std::string& pattern, const std::string& name);
 
     // Serialize component state before unload
     void serialize_module_components(const std::string& module_name);

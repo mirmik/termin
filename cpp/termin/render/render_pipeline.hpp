@@ -56,6 +56,7 @@ public:
     // Pass management (delegates to tc_pipeline)
     void add_pass(tc_pass* pass);
     void remove_pass(tc_pass* pass);
+    size_t remove_passes_by_name(const std::string& name);
     void insert_pass_before(tc_pass* pass, tc_pass* before);
     tc_pass* get_pass(const std::string& name);
     tc_pass* get_pass_at(size_t index);
@@ -67,6 +68,10 @@ public:
     size_t spec_count() const { return specs_.size(); }
     const ResourceSpec* get_spec_at(size_t index) const;
     const std::vector<ResourceSpec>& specs() const { return specs_; }
+
+    // Dirty flag - marks pipeline for frame graph rebuild
+    bool is_dirty() const;
+    void mark_dirty();
 
     // Collect all specs (pipeline + pass specs)
     std::vector<ResourceSpec> collect_specs() const;

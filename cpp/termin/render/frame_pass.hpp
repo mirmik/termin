@@ -14,16 +14,19 @@ extern "C" {
 #include "render/tc_pass.h"
 }
 
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 
 #include "termin/render/handles.hpp"
 #include "termin/render/resource_spec.hpp"
 
 namespace termin {
+
+// Timing information for internal debug symbols
+struct InternalSymbolTiming {
+    std::string name;
+    double cpu_time_ms = 0.0;
+    double gpu_time_ms = 0.0;  // -1.0 if not available yet
+};
 
 // Forward declarations
 class GraphicsBackend;
@@ -237,6 +240,10 @@ public:
     }
 
     virtual std::vector<std::string> get_internal_symbols() const {
+        return {};
+    }
+
+    virtual std::vector<InternalSymbolTiming> get_internal_symbols_with_timing() const {
         return {};
     }
 

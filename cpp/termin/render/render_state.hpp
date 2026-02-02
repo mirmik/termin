@@ -139,6 +139,20 @@ struct RenderState {
         s.cull = false;
         return s;
     }
+
+    bool operator==(const RenderState& other) const {
+        return polygon_mode == other.polygon_mode &&
+               cull == other.cull &&
+               depth_test == other.depth_test &&
+               depth_write == other.depth_write &&
+               blend == other.blend &&
+               blend_src == other.blend_src &&
+               blend_dst == other.blend_dst;
+    }
+
+    bool operator!=(const RenderState& other) const {
+        return !(*this == other);
+    }
 };
 
 } // namespace termin

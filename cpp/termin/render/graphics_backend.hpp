@@ -188,6 +188,8 @@ public:
     virtual bool check_gl_error(const char* location) = 0;
     // Clear any accumulated GL errors without logging
     virtual void clear_gl_errors() = 0;
+    // Get texture ID currently bound to a texture unit (for debugging)
+    virtual uint32_t get_bound_texture(int unit) = 0;
 
     // --- Synchronization ---
     // Force submit commands to GPU (non-blocking)

@@ -338,12 +338,7 @@ tc_component_kind tc_component_get_kind(const tc_component* c) {
     return c ? c->kind : TC_NATIVE_COMPONENT;
 }
 
-tc_entity_id tc_component_get_owner_entity_id(const tc_component* c) {
-    if (c) return c->owner_entity_id;
-    tc_entity_id invalid = {0xFFFFFFFF, 0};
-    return invalid;
-}
-
-tc_entity_pool* tc_component_get_owner_pool(const tc_component* c) {
-    return c ? c->owner_pool : NULL;
+tc_entity_handle tc_component_get_owner(const tc_component* c) {
+    if (c) return c->owner;
+    return TC_ENTITY_HANDLE_INVALID;
 }

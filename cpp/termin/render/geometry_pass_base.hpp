@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <array>
+#include <algorithm>
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -21,11 +22,7 @@
 #include "tc_log.hpp"
 #include "tc_scene.h"
 #include "tc_scene_pool.h"
-#ifdef TERMIN_HAS_NANOBIND
-#include "tc_inspect.hpp"
-#else
 #include "tc_inspect_cpp.hpp"
-#endif
 
 namespace termin {
 
@@ -43,6 +40,7 @@ public:
     struct DrawCall {
         Entity entity;
         tc_component* component;
+        tc_shader_handle final_shader;  // Shader after override (skinning, etc.)
         int geometry_id = 0;
         int pick_id = 0;
     };
@@ -103,6 +101,9 @@ protected:
     // Cached shader
     TcShader _shader;
 
+    // Cached draw calls (reused between frames)
+    mutable std::vector<DrawCall> cached_draw_calls_;
+
     GeometryPassBase(
         const std::string& name,
         const std::string& input,
@@ -130,18 +131,16 @@ protected:
     // Return FBO format (nullopt = default RGBA8)
     virtual std::optional<std::string> fbo_format() const { return std::nullopt; }
 
-    // Setup uniforms for each draw call
-    virtual void setup_draw_uniforms(
+    // Setup extra uniforms for each draw call (MVP already set by base class)
+    virtual void setup_extra_uniforms(
         const DrawCall& dc,
         TcShader& shader,
-        const Mat44f& model,
-        const Mat44f& view,
-        const Mat44f& projection,
         RenderContext& context
     ) {
-        shader.set_uniform_mat4("u_model", model.data, false);
-        shader.set_uniform_mat4("u_view", view.data, false);
-        shader.set_uniform_mat4("u_projection", projection.data, false);
+        // Default: no extra uniforms
+        (void)dc;
+        (void)shader;
+        (void)context;
     }
 
     // Entity filter (return false to skip entity)
@@ -223,46 +222,61 @@ protected:
         );
     }
 
-    std::vector<DrawCall> collect_draw_calls(
+    void collect_draw_calls(
         tc_scene_handle scene,
-        uint64_t layer_mask
+        uint64_t layer_mask,
+        tc_shader_handle base_shader
     ) const {
-        std::vector<DrawCall> draw_calls;
+        cached_draw_calls_.clear();
 
         if (!tc_scene_handle_valid(scene)) {
-            return draw_calls;
+            return;
         }
 
         struct CollectContext {
             const GeometryPassBase* pass;
             std::vector<DrawCall>* draw_calls;
+            tc_shader_handle base_shader;
         };
 
         auto callback = [](tc_component* c, void* user_data) -> bool {
             auto* ctx = static_cast<CollectContext*>(user_data);
-            Entity ent(c->owner_pool, c->owner_entity_id);
+            Entity ent(c->owner);
 
             if (!ctx->pass->entity_filter(ent)) {
                 return true;
             }
 
+            // Compute final shader with override (skinning, etc.)
+            tc_shader_handle final_shader = tc_component_override_shader(
+                c, ctx->pass->phase_name(), 0, ctx->base_shader
+            );
+
             DrawCall dc;
             dc.entity = ent;
             dc.component = c;
+            dc.final_shader = final_shader;
             dc.geometry_id = 0;
             dc.pick_id = ctx->pass->get_pick_id(ent);
             ctx->draw_calls->push_back(dc);
             return true;
         };
 
-        CollectContext context{this, &draw_calls};
+        CollectContext context{this, &cached_draw_calls_, base_shader};
 
         int filter_flags = TC_DRAWABLE_FILTER_ENABLED
                          | TC_DRAWABLE_FILTER_VISIBLE
                          | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
         tc_scene_foreach_drawable(scene, callback, &context, filter_flags, layer_mask);
+    }
 
-        return draw_calls;
+    void sort_draw_calls_by_shader() const {
+        if (cached_draw_calls_.size() <= 1) return;
+
+        std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
+            [](const DrawCall& a, const DrawCall& b) {
+                return a.final_shader.index < b.final_shader.index;
+            });
     }
 
     // Main execution method - call from derived execute_with_data
@@ -278,10 +292,14 @@ protected:
         // Find output FBO
         auto it = writes_fbos.find(output_res);
         if (it == writes_fbos.end() || it->second == nullptr) {
+            tc::Log::error("[GeometryPassBase] '%s': output FBO '%s' not found!",
+                get_pass_name().c_str(), output_res.c_str());
             return;
         }
         FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
         if (!fb) {
+            tc::Log::error("[GeometryPassBase] '%s': output '%s' is not FramebufferHandle!",
+                get_pass_name().c_str(), output_res.c_str());
             return;
         }
 
@@ -289,26 +307,31 @@ protected:
         bind_and_clear(graphics, fb, rect);
         apply_default_render_state(graphics);
 
-        // Get shader
-        TcShader& shader = get_shader(graphics);
+        // Get base shader
+        TcShader& base_shader = get_shader(graphics);
 
-        // Collect draw calls
-        auto draw_calls = collect_draw_calls(scene, layer_mask);
+        // Collect draw calls (computes final_shader during collection)
+        collect_draw_calls(scene, layer_mask, base_shader.handle);
+
+        // Sort by shader to minimize state changes
+        sort_draw_calls_by_shader();
 
         // Render
         entity_names.clear();
-        std::set<std::string> seen_entities;
 
         RenderContext context;
         context.view = view;
         context.projection = projection;
         context.graphics = graphics;
         context.phase = phase_name();
-        context.current_tc_shader = shader;
 
         const std::string& debug_symbol = get_debug_internal_point();
 
-        for (const auto& dc : draw_calls) {
+        // Track last shader to avoid redundant bindings
+        tc_shader_handle last_shader = tc_shader_handle_invalid();
+        std::set<std::string> seen_entities;
+
+        for (const auto& dc : cached_draw_calls_) {
             Mat44f model = get_model_matrix(dc.entity);
             context.model = model;
 
@@ -317,20 +340,27 @@ protected:
                 entity_names.push_back(name);
             }
 
-            // Get shader handle and apply override
-            tc_shader_handle base_handle = shader.handle;
-            tc_shader_handle shader_handle = tc_component_override_shader(
-                dc.component, phase_name(), dc.geometry_id, base_handle
-            );
+            // Use final shader (override already computed during collect)
+            tc_shader_handle shader_handle = dc.final_shader;
+            bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader);
 
-            // Use TcShader for everything
             TcShader shader_to_use(shader_handle);
-            shader_to_use.use();
+
+            if (shader_changed) {
+                shader_to_use.use();
+                // Set view/projection only when shader changes
+                shader_to_use.set_uniform_mat4("u_view", view.data, false);
+                shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
+                last_shader = shader_handle;
+            }
 
             context.current_tc_shader = shader_to_use;
 
-            // Set uniforms via virtual method (allows derived classes to add custom uniforms)
-            setup_draw_uniforms(dc, shader_to_use, model, view, projection, context);
+            // Set model matrix (always changes per object)
+            shader_to_use.set_uniform_mat4("u_model", model.data, false);
+
+            // Call virtual for any extra uniforms (e.g., near/far for depth pass)
+            setup_extra_uniforms(dc, shader_to_use, context);
 
             tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 

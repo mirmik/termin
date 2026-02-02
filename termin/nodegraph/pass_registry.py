@@ -273,6 +273,19 @@ def _python_field_to_node_param(name: str, field) -> NodeParam | None:
             default=default,
             choices=choice_labels,
         )
+    elif kind == "tc_material":
+        # Get material names from ResourceManager
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        material_names = rm.list_material_names()
+        choices = ["(None)"] + material_names
+        return NodeParam(
+            name=name,
+            label=label,
+            param_type="choice",
+            default="(None)",
+            choices=choices,
+        )
 
     return None
 

@@ -1,6 +1,6 @@
 """ScenePipelineAsset - Asset for render pipeline configuration.
 
-Stores pipeline graph source (nodes, connections).
+Stores pipeline graph source (nodes, connections) via TcScenePipelineTemplate (C).
 Compilation to RenderPipeline happens on demand via compile().
 File extension: .scene_pipeline
 
@@ -11,27 +11,28 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from termin.assets.data_asset import DataAsset
+from termin.assets.asset import Asset
 from termin._native import log
+from termin._native.render import TcScenePipelineTemplate
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
 
-class ScenePipelineAsset(DataAsset[dict]):
+class ScenePipelineAsset(Asset):
     """
     Asset for render pipeline configuration.
 
     IMPORTANT: Create through ResourceManager, not directly.
     This ensures proper registration and avoids duplicates.
 
-    Stores pipeline graph source (nodes, connections).
+    Stores pipeline graph source (nodes, connections) in C template.
     Call compile() to get RenderPipeline.
     """
 
-    _uses_binary = False  # JSON text format
+    _template: TcScenePipelineTemplate
 
     def __init__(
         self,
@@ -40,63 +41,44 @@ class ScenePipelineAsset(DataAsset[dict]):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        super().__init__(data=graph_data, name=name, source_path=source_path, uuid=uuid)
-        self._target_viewports: list[str] = []
+        super().__init__(name=name, source_path=source_path, uuid=uuid)
+
+        # Declare C template with uuid/name
+        self._template = TcScenePipelineTemplate.declare(self.uuid, name)
+
+        # If graph_data provided, set it
+        if graph_data is not None:
+            self._template.set_graph_data(graph_data)
+            self._loaded = True
+
+    # --- Template access ---
+
+    @property
+    def template(self) -> TcScenePipelineTemplate:
+        """Get underlying C template."""
+        return self._template
 
     # --- Graph data property ---
 
     @property
     def graph_data(self) -> dict | None:
-        """Raw graph data (nodes, connections) - lazy-loaded from file."""
-        return self.data
+        """Raw graph data (nodes, connections) - stored in C template."""
+        data = self._template.graph_data
+        return data if data is not None else None
 
     @graph_data.setter
     def graph_data(self, value: dict | None) -> None:
         """Set graph data and bump version."""
-        self.data = value
+        if value is not None:
+            self._template.set_graph_data(value)
+        self._version += 1
 
-    # --- Content parsing ---
-
-    def _parse_content(self, content: str) -> dict | None:
-        """Parse JSON content, store as graph data (don't compile yet)."""
-        try:
-            data = json.loads(content)
-        except json.JSONDecodeError as e:
-            log.error(f"[ScenePipelineAsset] Failed to parse JSON: {e}")
-            return None
-
-        # Extract target viewports from graph if present
-        self._extract_target_viewports(data)
-
-        return data
-
-    def _extract_target_viewports(self, data: dict) -> None:
-        """Extract target viewport names from graph data."""
-        self._target_viewports = []
-
-        # Check viewport_frames list (contains frame dicts with viewport_name)
-        if "viewport_frames" in data:
-            for frame in data.get("viewport_frames", []):
-                if isinstance(frame, dict):
-                    viewport_name = frame.get("viewport_name", "")
-                    if viewport_name:
-                        self._target_viewports.append(viewport_name)
-                elif isinstance(frame, str):
-                    self._target_viewports.append(frame)
-
-        # Also check nodes for ViewportFrame type
-        if "nodes" in data:
-            for node_data in data.get("nodes", []):
-                if node_data.get("type") == "ViewportFrame":
-                    params = node_data.get("params", {})
-                    viewport_name = params.get("viewport_name", "")
-                    if viewport_name and viewport_name not in self._target_viewports:
-                        self._target_viewports.append(viewport_name)
+    # --- Target viewports ---
 
     @property
     def target_viewports(self) -> list[str]:
         """List of viewport names this pipeline targets (from ViewportFrames)."""
-        return self._target_viewports
+        return self._template.target_viewports
 
     # --- Compilation ---
 
@@ -107,36 +89,30 @@ class ScenePipelineAsset(DataAsset[dict]):
         Returns:
             Compiled RenderPipeline or None on error.
         """
-        if self._data is None:
+        if not self._template.is_loaded:
             log.error(f"[ScenePipelineAsset] No graph data to compile for '{self._name}'")
             return None
 
-        data = self._data
+        data = self._template.graph_data
+        if data is None:
+            log.error(f"[ScenePipelineAsset] No graph data to compile for '{self._name}'")
+            return None
 
         # Detect format: graph has "nodes", pipeline format has "passes"
         is_graph_format = "nodes" in data and "passes" not in data
 
         if is_graph_format:
-            return self._compile_graph(data)
+            return self._compile_graph()
         else:
             # Pipeline format - deserialize directly
             return self._deserialize_pipeline(data)
 
-    def _compile_graph(self, data: dict) -> "RenderPipeline | None":
-        """Compile graph format data into RenderPipeline."""
+    def _compile_graph(self) -> "RenderPipeline | None":
+        """Compile graph format data into RenderPipeline using C++ compiler."""
         try:
-            from termin.nodegraph.scene import NodeGraphScene
-            from termin.nodegraph.serialization import deserialize_graph
-            from termin.nodegraph.compiler import compile_graph
-
-            # Create temporary scene and deserialize graph into it
-            scene = NodeGraphScene()
-            deserialize_graph(data, scene)
-
-            # Compile to RenderPipeline
-            pipeline = compile_graph(scene)
-            pipeline.name = self._name
-
+            pipeline = self._template.compile()
+            if pipeline is not None:
+                pipeline.name = self._name
             return pipeline
         except Exception as e:
             log.error(f"[ScenePipelineAsset] Failed to compile graph: {e}")
@@ -158,9 +134,31 @@ class ScenePipelineAsset(DataAsset[dict]):
             log.error(f"[ScenePipelineAsset] Failed to deserialize pipeline: {e}")
             return None
 
-    def _on_loaded(self) -> None:
-        """After loading, save UUID to .meta file if needed."""
-        pass
+    # --- Loading ---
+
+    def load_from_content(self, content: str, spec_data: dict | None = None) -> None:
+        """Load from JSON content string."""
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            log.error(f"[ScenePipelineAsset] Failed to parse JSON: {e}")
+            return
+
+        # Extract UUID from data if present
+        if "uuid" in data:
+            self._uuid = data["uuid"]
+            # Re-declare with correct UUID if needed
+            existing = TcScenePipelineTemplate.find_by_uuid(self._uuid)
+            if existing.is_valid:
+                self._template = existing
+            else:
+                self._template = TcScenePipelineTemplate.declare(self._uuid, self._name)
+
+        # Set graph data
+        self._template.set_graph_data(data)
+        self._template.name = self._name
+        self._loaded = True
+        self.mark_just_saved()
 
     # --- Saving ---
 
@@ -179,24 +177,25 @@ class ScenePipelineAsset(DataAsset[dict]):
             log.error("[ScenePipelineAsset] No path specified for save")
             return False
 
-        if self._data is None:
+        data = self._template.graph_data
+        if data is None:
             log.error("[ScenePipelineAsset] No graph data to save")
             return False
 
         try:
             # Clone data to avoid modifying original
-            data = dict(self._data)
+            save_data = dict(data)
 
             # Add UUID
-            data["uuid"] = self.uuid
+            save_data["uuid"] = self.uuid
 
             # Write to file
             with open(target, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                json.dump(save_data, f, indent=2, ensure_ascii=False)
 
             # Update source path and mark save time
             self._source_path = target
-            self._mark_saved()
+            self.mark_just_saved()
 
             return True
 
@@ -251,8 +250,7 @@ class ScenePipelineAsset(DataAsset[dict]):
             ScenePipelineAsset.
         """
         asset = cls(graph_data=graph_data, name=name, source_path=source_path)
-        asset._extract_target_viewports(graph_data)
-        asset._is_loaded = True
+        asset._loaded = True
         return asset
 
     # --- Backwards compatibility ---

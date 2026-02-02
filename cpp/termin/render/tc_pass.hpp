@@ -1,15 +1,20 @@
 #pragma once
 
 #include <string>
+#include <cstdlib>
+#include <cstring>
 
 extern "C" {
 #include "render/tc_pass.h"
+#include "tc_value.h"
+#include "tc_scene.h"
 }
 
 namespace termin {
 
-// Forward declaration
+// Forward declarations
 class TcPass;
+class CxxFramePass;
 
 // ============================================================================
 // TcPassRef - non-owning reference to tc_pass
@@ -47,6 +52,24 @@ public:
     bool is_inplace() const {
         return _c ? tc_pass_is_inplace(_c) : false;
     }
+
+    std::string viewport_name() const {
+        return _c && _c->viewport_name ? _c->viewport_name : "";
+    }
+
+    void set_viewport_name(const std::string& name) {
+        if (!_c) return;
+        if (_c->viewport_name) {
+            free((void*)_c->viewport_name);
+        }
+        _c->viewport_name = name.empty() ? nullptr : strdup(name.c_str());
+    }
+
+    // Get object pointer for InspectRegistry operations
+    void* object_ptr() const;
+
+    // Set field value via InspectRegistry (uses tc_value)
+    bool set_field(const std::string& field_name, const tc_value& value);
 
     tc_pass* ptr() const { return _c; }
 };

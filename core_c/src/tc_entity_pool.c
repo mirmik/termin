@@ -1138,9 +1138,9 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
 
-    // Set owner entity reference
-    c->owner_entity_id = id;
-    c->owner_pool = pool;
+    // Set owner entity handle
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_find(pool);
+    c->owner = tc_entity_handle_make(pool_h, id);
 
     // Retain component unless factory already did it
     if (!c->factory_retained) {
@@ -1176,9 +1176,8 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
     // Notify component it's being removed from entity
     tc_component_on_removed_from_entity(c);
 
-    // Clear owner entity reference
-    c->owner_entity_id = (tc_entity_id){0xFFFFFFFF, 0};
-    c->owner_pool = NULL;
+    // Clear owner entity handle
+    c->owner = TC_ENTITY_HANDLE_INVALID;
 
     // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
@@ -1242,12 +1241,12 @@ tc_entity_id tc_entity_pool_migrate(
 
     // Move components (transfer ownership, don't copy)
     // Components keep their wrapper references
+    tc_entity_pool_handle dst_pool_h = tc_entity_pool_registry_find(dst_pool);
     ComponentArray* src_comps = &src_pool->components[src_idx];
     for (size_t i = 0; i < src_comps->count; i++) {
         tc_component* c = src_comps->items[i];
-        // Update component's owner to new pool/entity
-        c->owner_pool = dst_pool;
-        c->owner_entity_id = dst_id;
+        // Update component's owner handle to new pool/entity
+        c->owner = tc_entity_handle_make(dst_pool_h, dst_id);
         // Add to dst without incrementing refcount (we're transferring ownership)
         component_array_push(&dst_pool->components[dst_idx], c);
     }

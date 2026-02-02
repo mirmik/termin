@@ -116,6 +116,7 @@ if(WIN32)
         trent/trent_path.cpp
         trent/string_ext.cpp
         trent/yaml.cpp
+        trent/json.cpp
     )
 else()
     add_library(trent SHARED
@@ -123,6 +124,7 @@ else()
         trent/trent_path.cpp
         trent/string_ext.cpp
         trent/yaml.cpp
+        trent/json.cpp
     )
 endif()
 target_compile_options(trent PRIVATE
@@ -210,6 +212,7 @@ set(ENTITY_LIB_SOURCES
     termin/entity/entity_registry.cpp
     termin/entity/component.cpp
     termin/entity/component_registry.cpp
+    termin/entity/unknown_component.cpp
     termin/entity/vtable_utils.cpp
     termin/entity/input_handler.cpp
     termin/camera/camera_component.cpp
@@ -220,6 +223,7 @@ set(ENTITY_LIB_SOURCES
     termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
     ../core_c/src/tc_inspect_instance.cpp
+    ../core_c/src/tc_rendering_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/modules/module_loader.cpp
 )
@@ -227,6 +231,7 @@ set(ENTITY_LIB_SOURCES
 if(NOT BUILD_CSHARP_BINDINGS)
     list(APPEND ENTITY_LIB_SOURCES
         termin/bindings/inspect/tc_kind_python_instance.cpp
+        termin/bindings/inspect/tc_inspect_python.cpp
     )
 endif()
 add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
@@ -248,6 +253,20 @@ set_target_properties(entity_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# Animation library (AnimationPlayer component)
+add_library(animation_lib STATIC
+    termin/animation/animation_player.cpp
+)
+target_include_directories(animation_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(animation_lib PUBLIC skeleton_lib)
+target_compile_options(animation_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(animation_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 # Render library (Drawable vtable, shared by components that need rendering)
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
 add_library(render_lib STATIC
@@ -267,9 +286,19 @@ add_library(render_lib STATIC
     termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
+    termin/render/material_pass.cpp
+    termin/render/bloom_pass.cpp
+    termin/render/grayscale_pass.cpp
+    termin/render/tonemap_pass.cpp
     termin/render/shader_parser.cpp
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
+    termin/render/shader_skinning.cpp
+    termin/render/graph_data.cpp
+    termin/render/graph_compiler.cpp
+    termin/render/scene_pipeline_template.cpp
+    termin/render/tc_value_trent.cpp
+    termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
 )
@@ -438,13 +467,19 @@ nanobind_add_module(_native
     termin/bindings/render/tc_display_bindings.cpp
     termin/bindings/input/simple_display_input_manager_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
+    termin/bindings/render/scene_pipeline_template_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/bindings/render/render_engine.cpp
+    termin/bindings/render/rendering_manager_bindings.cpp
+    termin/bindings/editor/gizmo_bindings.cpp
+    termin/editor/gizmo_manager.cpp
+    termin/editor/transform_gizmo.cpp
     termin/sdl_bindings.cpp
     termin/platform/sdl_render_surface.cpp
+    termin/tc_scene.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp
     termin/scene/scene_manager.cpp
@@ -476,6 +511,10 @@ nanobind_add_module(_native
     termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
     termin/render/id_pass.cpp
+    termin/render/material_pass.cpp
+    termin/render/bloom_pass.cpp
+    termin/render/grayscale_pass.cpp
+    termin/render/tonemap_pass.cpp
     termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
@@ -555,6 +594,25 @@ install(TARGETS trent entity_lib termin_core
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows
+)
+
+# Install static libraries for external module compilation
+install(TARGETS skeleton_lib animation_lib
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+)
+
+# Install header files for external module compilation
+# core_c headers -> include/core_c/
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../core_c/include/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/core_c
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+# C++ headers -> include/cpp/
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/cpp
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    PATTERN "bindings" EXCLUDE
+    PATTERN "render/glad" EXCLUDE
 )
 
 # Set RPATH for shared libraries to find each other in the same directory

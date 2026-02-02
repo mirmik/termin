@@ -190,7 +190,7 @@
       "node_type": "effect",
       "name": "TimeSpection",
       "params": {
-        "material_name": "TimeSpection"
+        "material": "TimeSpection"
       },
       "width": 197.74881111226273,
       "height": 113.04404771248602,
@@ -337,7 +337,7 @@
       "node_type": "effect",
       "name": "NavMeshPost",
       "params": {
-        "material_name": "NavMeshPost"
+        "material": "NavMeshPost"
       },
       "dynamic_inputs": [
         [

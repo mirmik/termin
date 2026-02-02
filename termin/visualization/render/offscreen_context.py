@@ -71,9 +71,9 @@ class OffscreenContext:
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
         # Use 10-bit color (best balance: no banding, no Windows HDR issues)
-        video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, 10)
-        video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, 10)
-        video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, 10)
+        video.SDL_GL_SetAttribute(video.SDL_GL_RED_SIZE, 8)
+        video.SDL_GL_SetAttribute(video.SDL_GL_GREEN_SIZE, 8)
+        video.SDL_GL_SetAttribute(video.SDL_GL_BLUE_SIZE, 8)
 
         # Hidden window - minimal size, not visible
         flags = video.SDL_WINDOW_OPENGL | video.SDL_WINDOW_HIDDEN
