@@ -322,9 +322,8 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_ro("layer_mask", &TcViewportRef::layer_mask)
         .def_prop_ro("internal_entities", [](TcViewportRef& self) -> nb::object {
             if (!self.is_valid() || !self.has_internal_entities()) return nb::none();
-            tc_entity_pool* pool = self.internal_entities_pool();
-            tc_entity_id id = self.internal_entities_id();
-            return nb::cast(Entity(pool, id));
+            tc_entity_handle h = self.internal_entities();
+            return nb::cast(Entity(h));
         });
 
     // Non-owning component reference - works with any component regardless of language bindings

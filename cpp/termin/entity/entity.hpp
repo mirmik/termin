@@ -101,7 +101,7 @@ public:
     // --- Transform view (creates GeneralTransform3 on same data) ---
 
     GeneralTransform3 transform() const {
-        return GeneralTransform3(_h.pool, _h.id);
+        return GeneralTransform3(_h);
     }
 
     // --- Flags ---

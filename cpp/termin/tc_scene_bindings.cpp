@@ -157,7 +157,7 @@ void bind_tc_scene(nb::module_& m) {
         .def_prop_ro("valid", &SceneRaycastHit::valid)
         .def_prop_ro("entity", [](const SceneRaycastHit& h) -> nb::object {
             if (!h.valid()) return nb::none();
-            return nb::cast(Entity(h.pool, h.entity_id));
+            return nb::cast(Entity(h.entity));
         })
         .def_prop_ro("component", [](const SceneRaycastHit& h) -> nb::object {
             if (!h.component) return nb::none();

@@ -83,10 +83,10 @@ void bind_tc_viewport_class(nb::module_& m) {
                 tc_viewport_set_pipeline(vh, ph);
             }
 
-            // Internal entities - store pool + entity_id
+            // Internal entities
             if (!internal_entities.is_none()) {
                 termin::Entity ent = nb::cast<termin::Entity>(internal_entities);
-                tc_viewport_set_internal_entities(vh, ent.pool(), ent.id());
+                tc_viewport_set_internal_entities(vh, ent.handle());
             }
 
             // Construct TcViewport in-place with handle
@@ -295,22 +295,21 @@ void bind_tc_viewport_class(nb::module_& m) {
                 }
             })
 
-        // Internal entities (stored as pool + entity_id)
+        // Internal entities
         .def_prop_rw("internal_entities",
             [](TcViewport& self) -> nb::object {
                 if (!self.is_valid()) return nb::none();
                 if (!tc_viewport_has_internal_entities(self.handle_)) return nb::none();
-                tc_entity_pool* pool = tc_viewport_get_internal_entities_pool(self.handle_);
-                tc_entity_id id = tc_viewport_get_internal_entities_id(self.handle_);
-                return nb::cast(termin::Entity(pool, id));
+                tc_entity_handle h = tc_viewport_get_internal_entities(self.handle_);
+                return nb::cast(termin::Entity(h));
             },
             [](TcViewport& self, nb::object entity_obj) {
                 if (!self.is_valid()) return;
                 if (entity_obj.is_none()) {
-                    tc_viewport_set_internal_entities(self.handle_, nullptr, TC_ENTITY_ID_INVALID);
+                    tc_viewport_set_internal_entities(self.handle_, TC_ENTITY_HANDLE_INVALID);
                 } else {
                     termin::Entity ent = nb::cast<termin::Entity>(entity_obj);
-                    tc_viewport_set_internal_entities(self.handle_, ent.pool(), ent.id());
+                    tc_viewport_set_internal_entities(self.handle_, ent.handle());
                 }
             },
             nb::arg().none())

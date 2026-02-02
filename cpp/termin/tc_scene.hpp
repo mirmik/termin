@@ -32,8 +32,7 @@ namespace collision {
 
 // Result of scene raycast
 struct SceneRaycastHit {
-    tc_entity_pool* pool = nullptr;
-    tc_entity_id entity_id = TC_ENTITY_ID_INVALID;
+    tc_entity_handle entity = TC_ENTITY_HANDLE_INVALID;
     ColliderComponent* component = nullptr;
     double point_on_ray[3] = {0, 0, 0};
     double point_on_collider[3] = {0, 0, 0};

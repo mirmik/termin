@@ -53,12 +53,8 @@ public:
         return is_valid() ? tc_viewport_has_internal_entities(handle_) : false;
     }
 
-    tc_entity_pool* internal_entities_pool() const {
-        return is_valid() ? tc_viewport_get_internal_entities_pool(handle_) : nullptr;
-    }
-
-    tc_entity_id internal_entities_id() const {
-        return is_valid() ? tc_viewport_get_internal_entities_id(handle_) : TC_ENTITY_ID_INVALID;
+    tc_entity_handle internal_entities() const {
+        return is_valid() ? tc_viewport_get_internal_entities(handle_) : TC_ENTITY_HANDLE_INVALID;
     }
 };
 

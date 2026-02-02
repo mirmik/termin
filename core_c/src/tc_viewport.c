@@ -32,8 +32,7 @@ typedef struct {
     char** managed_by;
 
     // Internal entities
-    tc_entity_pool** internal_pools;
-    tc_entity_id* internal_ids;
+    tc_entity_handle* internal_entities;
 
     // Display linked list (handles instead of pointers)
     tc_viewport_handle* display_prevs;
@@ -97,8 +96,7 @@ void tc_viewport_pool_init(void) {
     g_pool->input_modes = (char**)calloc(cap, sizeof(char*));
     g_pool->block_input_in_editor = (bool*)calloc(cap, sizeof(bool));
     g_pool->managed_by = (char**)calloc(cap, sizeof(char*));
-    g_pool->internal_pools = (tc_entity_pool**)calloc(cap, sizeof(tc_entity_pool*));
-    g_pool->internal_ids = (tc_entity_id*)calloc(cap, sizeof(tc_entity_id));
+    g_pool->internal_entities = (tc_entity_handle*)calloc(cap, sizeof(tc_entity_handle));
     g_pool->display_prevs = (tc_viewport_handle*)calloc(cap, sizeof(tc_viewport_handle));
     g_pool->display_nexts = (tc_viewport_handle*)calloc(cap, sizeof(tc_viewport_handle));
 
@@ -108,7 +106,7 @@ void tc_viewport_pool_init(void) {
         g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
         g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
-        g_pool->internal_ids[i] = TC_ENTITY_ID_INVALID;
+        g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
     }
     g_pool->free_count = cap;
     g_pool->capacity = cap;
@@ -144,8 +142,7 @@ void tc_viewport_pool_shutdown(void) {
     free(g_pool->input_modes);
     free(g_pool->block_input_in_editor);
     free(g_pool->managed_by);
-    free(g_pool->internal_pools);
-    free(g_pool->internal_ids);
+    free(g_pool->internal_entities);
     free(g_pool->display_prevs);
     free(g_pool->display_nexts);
     free(g_pool->free_stack);
@@ -180,8 +177,7 @@ static void pool_grow(void) {
     g_pool->input_modes = realloc(g_pool->input_modes, new_cap * sizeof(char*));
     g_pool->block_input_in_editor = realloc(g_pool->block_input_in_editor, new_cap * sizeof(bool));
     g_pool->managed_by = realloc(g_pool->managed_by, new_cap * sizeof(char*));
-    g_pool->internal_pools = realloc(g_pool->internal_pools, new_cap * sizeof(tc_entity_pool*));
-    g_pool->internal_ids = realloc(g_pool->internal_ids, new_cap * sizeof(tc_entity_id));
+    g_pool->internal_entities = realloc(g_pool->internal_entities, new_cap * sizeof(tc_entity_handle));
     g_pool->display_prevs = realloc(g_pool->display_prevs, new_cap * sizeof(tc_viewport_handle));
     g_pool->display_nexts = realloc(g_pool->display_nexts, new_cap * sizeof(tc_viewport_handle));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
@@ -202,13 +198,12 @@ static void pool_grow(void) {
     memset(g_pool->input_modes + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
     memset(g_pool->block_input_in_editor + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->managed_by + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
-    memset(g_pool->internal_pools + old_cap, 0, (new_cap - old_cap) * sizeof(tc_entity_pool*));
 
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
         g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
-        g_pool->internal_ids[i] = TC_ENTITY_ID_INVALID;
+        g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
     }
 
     // Add new slots to free stack
@@ -284,8 +279,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->block_input_in_editor[idx] = false;
     g_pool->managed_by[idx] = NULL;
 
-    g_pool->internal_pools[idx] = NULL;
-    g_pool->internal_ids[idx] = TC_ENTITY_ID_INVALID;
+    g_pool->internal_entities[idx] = TC_ENTITY_HANDLE_INVALID;
 
     g_pool->display_prevs[idx] = TC_VIEWPORT_HANDLE_INVALID;
     g_pool->display_nexts[idx] = TC_VIEWPORT_HANDLE_INVALID;
@@ -518,27 +512,19 @@ void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_width, int 
 // Internal Entities
 // ============================================================================
 
-void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_pool* pool, tc_entity_id id) {
+void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_handle ent) {
     if (!handle_alive(h)) return;
-    g_pool->internal_pools[h.index] = pool;
-    g_pool->internal_ids[h.index] = id;
+    g_pool->internal_entities[h.index] = ent;
 }
 
-tc_entity_pool* tc_viewport_get_internal_entities_pool(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->internal_pools[h.index];
-}
-
-tc_entity_id tc_viewport_get_internal_entities_id(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_ENTITY_ID_INVALID;
-    return g_pool->internal_ids[h.index];
+tc_entity_handle tc_viewport_get_internal_entities(tc_viewport_handle h) {
+    if (!handle_alive(h)) return TC_ENTITY_HANDLE_INVALID;
+    return g_pool->internal_entities[h.index];
 }
 
 bool tc_viewport_has_internal_entities(tc_viewport_handle h) {
     if (!handle_alive(h)) return false;
-    tc_entity_pool* pool = g_pool->internal_pools[h.index];
-    if (!pool) return false;
-    return tc_entity_pool_alive(pool, g_pool->internal_ids[h.index]);
+    return tc_entity_handle_valid(g_pool->internal_entities[h.index]);
 }
 
 // ============================================================================

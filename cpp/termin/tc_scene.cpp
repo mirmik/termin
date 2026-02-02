@@ -435,9 +435,7 @@ SceneRaycastHit TcScene::raycast(const Ray3& ray) const {
 
             if (d_ray < ctx->best_dist) {
                 ctx->best_dist = d_ray;
-                Entity ent = cxx->entity();
-                ctx->result->pool = ent.pool();
-                ctx->result->entity_id = ent.id();
+                ctx->result->entity = cxx->entity().handle();
                 ctx->result->component = collider_comp;
                 ctx->result->point_on_ray[0] = p_ray.x;
                 ctx->result->point_on_ray[1] = p_ray.y;
@@ -482,9 +480,7 @@ SceneRaycastHit TcScene::closest_to_ray(const Ray3& ray) const {
 
             if (hit.distance < ctx->best_dist) {
                 ctx->best_dist = hit.distance;
-                Entity ent = cxx->entity();
-                ctx->result->pool = ent.pool();
-                ctx->result->entity_id = ent.id();
+                ctx->result->entity = cxx->entity().handle();
                 ctx->result->component = collider_comp;
                 ctx->result->point_on_ray[0] = hit.point_on_ray.x;
                 ctx->result->point_on_ray[1] = hit.point_on_ray.y;
