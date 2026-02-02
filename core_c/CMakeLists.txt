@@ -13,6 +13,7 @@ option(TC_BUILD_TESTS "Build tests" ON)
 # Source files (only .c)
 set(TC_SOURCES
     src/tc_animation_registry.c
+    src/tc_collision.c
     src/tc_component.c
     src/tc_core.c
     src/tc_display.c
@@ -53,6 +54,7 @@ set(TC_SOURCES
 set(TC_HEADERS
     include/tc_animation.h
     include/tc_animation_registry.h
+    include/tc_collision.h
     include/tc_component.h
     include/tc_entity_pool.h
     include/tc_entity_pool_registry.h

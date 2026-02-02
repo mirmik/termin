@@ -234,7 +234,12 @@ namespace Termin.WpfTest.Controls
             TerminCore.ViewportSetPipeline(_viewportHandle, _pipeline.handle());
 
             // Set internal entities
-            TerminCore.ViewportSetInternalEntities(_viewportHandle, _internalPool.Handle, _internalRootId);
+            var internalEntityHandle = new TcEntityHandle
+            {
+                Pool = _internalPool.PoolHandle,
+                Id = _internalRootId
+            };
+            TerminCore.ViewportSetInternalEntities(_viewportHandle, internalEntityHandle);
 
             // Add viewport to display
             _displayManager.AddViewport(_viewportHandle);

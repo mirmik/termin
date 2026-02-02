@@ -10,14 +10,28 @@ namespace Termin.Native;
 public class EntityPool : IDisposable
 {
     private IntPtr _handle;
+    private TcEntityPoolHandle _poolHandle;
     private readonly bool _ownsHandle;
     private bool _disposed;
 
     public IntPtr Handle => _handle;
+    public TcEntityPoolHandle PoolHandle => _poolHandle;
 
-    public EntityPool(IntPtr handle, bool ownsHandle = true)
+    public EntityPool(IntPtr handle, TcEntityPoolHandle poolHandle, bool ownsHandle = true)
     {
         _handle = handle;
+        _poolHandle = poolHandle;
+        _ownsHandle = ownsHandle;
+    }
+
+    /// <summary>
+    /// Constructor for wrapping existing registered pool (e.g., from Scene).
+    /// poolHandle is optional - if not provided, pool cannot be used with ViewportSetInternalEntities.
+    /// </summary>
+    public EntityPool(IntPtr handle, bool ownsHandle)
+    {
+        _handle = handle;
+        _poolHandle = TcEntityPoolHandle.Invalid; // Not known - pool is managed by Scene
         _ownsHandle = ownsHandle;
     }
 
@@ -38,7 +52,7 @@ public class EntityPool : IDisposable
             throw new InvalidOperationException("Failed to register EntityPool");
         }
 
-        return new EntityPool(handle, ownsHandle: true);
+        return new EntityPool(handle, poolHandle, ownsHandle: true);
     }
 
     public int Count => (int)TerminCore.EntityPoolCount(_handle);

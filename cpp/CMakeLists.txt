@@ -222,6 +222,7 @@ set(ENTITY_LIB_SOURCES
     termin/kinematic/actuator_component.cpp
     termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
+    termin/tc_collision_c_api.cpp
     ../core_c/src/tc_inspect_instance.cpp
     ../core_c/src/tc_rendering_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp

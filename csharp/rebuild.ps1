@@ -1,13 +1,17 @@
 # rebuild.ps1 - Full rebuild of SWIG bindings and termin.dll
-# Usage: .\rebuild.ps1 [-Run] [-SkipSwig] [-SkipCpp]
+# Usage: .\rebuild.ps1 [-Run] [-SkipSwig] [-SkipCpp] [-Clean] [-Reconfigure]
 
 param(
-    [switch]$Run,       # Run the app after build
-    [switch]$SkipSwig,  # Skip SWIG regeneration
-    [switch]$SkipCpp    # Skip C++ rebuild
+    [switch]$Run,         # Run the app after build
+    [switch]$SkipSwig,    # Skip SWIG regeneration
+    [switch]$SkipCpp,     # Skip C++ rebuild
+    [switch]$Clean,       # Clean build - remove all build artifacts
+    [switch]$Reconfigure  # Force CMake reconfiguration
 )
 
 $ErrorActionPreference = "Stop"
+$StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 if ($ProjectRoot -eq "") { $ProjectRoot = "c:\Users\sorok\project\termin" }
 
@@ -16,9 +20,41 @@ Write-Host "Project root: $ProjectRoot"
 
 # Paths
 $CSharpDir = "$ProjectRoot\csharp"
+$CppDir = "$ProjectRoot\cpp"
 $BuildDir = "$ProjectRoot\build_csharp"
 $GeneratedDir = "$CSharpDir\Termin.Native\Generated"
 $WpfTestBin = "$CSharpDir\Termin.WpfTest\bin\Debug\net9.0-windows"
+
+# Clean mode - remove build artifacts
+if ($Clean) {
+    Write-Host ""
+    Write-Host "=== Cleaning ===" -ForegroundColor Yellow
+    
+    if (Test-Path $BuildDir) {
+        Remove-Item -Recurse -Force $BuildDir
+        Write-Host "  Removed: $BuildDir" -ForegroundColor Gray
+    }
+    if (Test-Path $GeneratedDir) {
+        Remove-Item -Recurse -Force $GeneratedDir
+        Write-Host "  Removed: $GeneratedDir" -ForegroundColor Gray
+    }
+    if (Test-Path "$CSharpDir\termin_wrap.cxx") {
+        Remove-Item -Force "$CSharpDir\termin_wrap.cxx"
+        Write-Host "  Removed: termin_wrap.cxx" -ForegroundColor Gray
+    }
+    # Clean dotnet build outputs
+    Get-ChildItem "$CSharpDir" -Directory -Recurse -Include "bin","obj" | ForEach-Object {
+        Remove-Item -Recurse -Force $_.FullName
+        Write-Host "  Removed: $($_.FullName)" -ForegroundColor Gray
+    }
+    Write-Host "Clean: OK" -ForegroundColor Green
+}
+
+# Ensure Generated directory exists (SWIG output)
+if (-not (Test-Path $GeneratedDir)) {
+    New-Item -ItemType Directory -Path $GeneratedDir -Force | Out-Null
+    Write-Host "Created: $GeneratedDir" -ForegroundColor Gray
+}
 
 # Find SWIG
 $SwigExe = $null
@@ -82,6 +118,38 @@ if (-not $SkipSwig) {
 if (-not $SkipCpp) {
     Write-Host ""
     Write-Host "=== Step 2: CMake Build ===" -ForegroundColor Yellow
+    
+    # Ensure build directory exists and is configured
+    if (-not (Test-Path $BuildDir)) {
+        New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
+        Write-Host "Created build directory: $BuildDir" -ForegroundColor Gray
+    }
+    
+    # Configure CMake if not already configured or if -Reconfigure flag is set
+    if ($Reconfigure -and (Test-Path "$BuildDir\CMakeCache.txt")) {
+        Write-Host "Removing CMake cache for reconfiguration..." -ForegroundColor Gray
+        Remove-Item "$BuildDir\CMakeCache.txt" -Force
+    }
+    
+    if (-not (Test-Path "$BuildDir\CMakeCache.txt")) {
+        Write-Host "Configuring CMake..." -ForegroundColor Gray
+        Push-Location $BuildDir
+        try {
+            cmake $CppDir -DBUILD_CSHARP_BINDINGS=ON 2>&1 | ForEach-Object {
+                if ($_ -match "error") { Write-Host $_ -ForegroundColor Red }
+                elseif ($_ -match "warning") { Write-Host $_ -ForegroundColor Yellow }
+                else { Write-Host $_ -ForegroundColor Gray }
+            }
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "CMake configure failed!" -ForegroundColor Red
+                exit 1
+            }
+            Write-Host "CMake configure: OK" -ForegroundColor Green
+        }
+        finally {
+            Pop-Location
+        }
+    }
     
     Push-Location $BuildDir
     try {
@@ -159,4 +227,6 @@ if ($Run) {
 
 Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
+$StopWatch.Stop()
+Write-Host ("Build completed in {0:mm}:{0:ss}.{0:fff}" -f $StopWatch.Elapsed) -ForegroundColor Gray
 Write-Host "To run: cd $CSharpDir\Termin.WpfTest; dotnet run --no-build"
