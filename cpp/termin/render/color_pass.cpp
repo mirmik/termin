@@ -144,9 +144,20 @@ void ColorPass::bind_extra_textures(const FBOMap& reads_fbos) {
         }
 
         // Get FBO and its color texture
-        FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(it->second);
+        FrameGraphResource* resource = it->second;
+        tc::Log::info("[ColorPass:%s] Attempting cast for resource='%s', resource_type='%s', ptr=%p",
+                      get_pass_name().c_str(), resource_name.c_str(), resource->resource_type(), resource);
+
+        FramebufferHandle* fbo = nullptr;
+        try {
+            fbo = dynamic_cast<FramebufferHandle*>(resource);
+        } catch (const std::exception& e) {
+            tc::Log::error("[ColorPass:%s] dynamic_cast failed: %s", get_pass_name().c_str(), e.what());
+            continue;
+        }
+
         if (!fbo) {
-            tc::Log::warn("[ColorPass:%s] Resource %s is not a FramebufferHandle",
+            tc::Log::warn("[ColorPass:%s] Resource %s is not a FramebufferHandle (cast returned nullptr)",
                          get_pass_name().c_str(), resource_name.c_str());
             continue;
         }
@@ -362,9 +373,20 @@ void ColorPass::execute_with_data(
         }
         return;
     }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
+    FrameGraphResource* resource = it->second;
+    tc::Log::info("[ColorPass] Attempting cast for output FBO='%s', resource_type='%s', ptr=%p",
+                  output_res.c_str(), resource->resource_type(), resource);
+
+    FramebufferHandle* fb = nullptr;
+    try {
+        fb = dynamic_cast<FramebufferHandle*>(resource);
+    } catch (const std::exception& e) {
+        tc::Log::error("[ColorPass] dynamic_cast failed: %s", e.what());
+        return;
+    }
+
     if (!fb) {
-        tc::Log::warn("[ColorPass] FBO '%s' is not a FramebufferHandle", output_res.c_str());
+        tc::Log::warn("[ColorPass] FBO '%s' is not a FramebufferHandle (cast returned nullptr)", output_res.c_str());
         return;
     }
 

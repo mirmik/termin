@@ -189,9 +189,13 @@ nanobind_add_module(_graphics_native
 target_include_directories(_graphics_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
 )
-target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib)
+target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib render_lib)
 target_compile_options(_graphics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(_graphics_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 # Core C library
@@ -271,7 +275,8 @@ set_target_properties(animation_lib PROPERTIES
 
 # Render library (Drawable vtable, shared by components that need rendering)
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
-add_library(render_lib STATIC
+# SHARED to ensure consistent RTTI across all Python extension modules
+add_library(render_lib SHARED
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
     termin/render/frame_pass.cpp
@@ -303,6 +308,8 @@ add_library(render_lib STATIC
     termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
+    termin/render/opengl/opengl_backend.cpp
+    termin/render/opengl/opengl_framebuffer.cpp
 )
 target_include_directories(render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -321,6 +328,8 @@ target_compile_options(render_lib PRIVATE
 )
 set_target_properties(render_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # NavMesh library (RecastNavMeshBuilderComponent)
@@ -531,6 +540,10 @@ endif()
 target_compile_definitions(_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
 )
 # Exclude glad.c from precompiled headers (it's C, not C++)
 set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

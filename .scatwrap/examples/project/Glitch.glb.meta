@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Glitch.glb.meta</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;e4286707-26e4-4b99-b689-8b562815b57c&quot;,<br>
+&nbsp;&nbsp;&quot;resources&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;meshes&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;male_muscle_13290.003&quot;:&nbsp;&quot;8bd09416-9c7e-4e78-bda1-641d3482e506&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;gymuniform&quot;:&nbsp;&quot;786bb9bf-0e64-4dca-afec-d62b3dc9feae&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;jammers3&quot;:&nbsp;&quot;287cc28b-657b-429c-9d00-e69195cb1887&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;low-poly.002&quot;:&nbsp;&quot;ed833ccb-7339-4d23-94d2-07d21d3e7b08&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;male_muscle_13290.002&quot;:&nbsp;&quot;f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;male_muscle_13290&quot;:&nbsp;&quot;7b49ace0-9ca3-42f4-a911-fcf77a6cbd3c&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;MC-SciFi-Armor_Helios&quot;:&nbsp;&quot;507bd6b6-819a-4ebb-92bf-a167f42ac354&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mens_shirt_untuck_elvbhp1f.002&quot;:&nbsp;&quot;6432a38a-882f-4c5c-8e47-a800cb44cc3e&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mens_shirt_untuck_elvbhp1f&quot;:&nbsp;&quot;0cb882c2-d41b-4ebe-b500-72dd04b63e90&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mens_tanks_elv1f&quot;:&nbsp;&quot;282bd2fd-dcd6-42ff-a07d-f76aaa11cec9&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mens_trouser_f_elv_chr.002&quot;:&nbsp;&quot;c6513438-2b62-4d41-ab65-d7371067cd14&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mind_eyebrows_14.002&quot;:&nbsp;&quot;b7de39e1-9b44-4358-ac3f-40dffc2ca401&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mind_eyelashes_03.002&quot;:&nbsp;&quot;35f6c7a0-80f6-437e-9c89-04c71d55e4cc&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;shoes06.002&quot;:&nbsp;&quot;82ff9fa0-28ad-41fc-8007-54cda380f60c&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;spiky.002&quot;:&nbsp;&quot;f995496f-6565-44b6-9df1-99b10b48ca81&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;animations&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;A&quot;:&nbsp;&quot;d2ccc07e-eae7-4dfd-bd58-57421cf9da55&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Breakdance&quot;:&nbsp;&quot;872dc4d7-8cea-4545-972e-ec56b78e483c&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;CroachIdle&quot;:&nbsp;&quot;3e57fb7a-9883-4b55-9ea2-b7ef20b36809&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;CroachWalk&quot;:&nbsp;&quot;de42581b-783c-472c-a76e-b91b2fc2c0d6&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Crow&quot;:&nbsp;&quot;d26c236f-cfba-405b-bdc3-8cc867d7e9a5&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Dance1&quot;:&nbsp;&quot;48bd223c-be0d-48be-be4f-c431ea5b6809&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Dance2&quot;:&nbsp;&quot;0ec904f6-32ca-4549-8eed-dbb058de37b1&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Dance3&quot;:&nbsp;&quot;4f6c8fe4-84ed-4161-80a0-ac1be976aa7e&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Dance4&quot;:&nbsp;&quot;5fb119c1-7b0e-4595-8ebb-4afad5707d6f&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Dance5&quot;:&nbsp;&quot;f70beb73-114e-4e82-95ce-4252871b4e0a&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Death&quot;:&nbsp;&quot;3664add3-6497-4a45-bd59-409d7cdbf18a&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Idle&quot;:&nbsp;&quot;f9da6bd5-6767-4b49-b1c0-8cca7b382927&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;LeanStandLeft&quot;:&nbsp;&quot;190ec4e8-13d9-411d-a22b-51e5f7d0569e&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;LeanStandRight&quot;:&nbsp;&quot;e948fb08-eb17-4b67-ad07-169c21c4bb0a&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Run&quot;:&nbsp;&quot;476f1025-a4f9-4ea3-b7db-89a2f2ba872f&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Shoot&quot;:&nbsp;&quot;d62aec7b-0af7-4a90-ae4b-bde685a729db&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Walk&quot;:&nbsp;&quot;8af80f7c-d7e7-4a9b-a385-0f3145b51cc5&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;skeletons&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;skeleton&quot;:&nbsp;&quot;49cf1726-b337-44ec-b171-7ed5cb4c9ced&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&quot;normalize_scale&quot;:&nbsp;true,<br>
+&nbsp;&nbsp;&quot;convert_to_z_up&quot;:&nbsp;true,<br>
+&nbsp;&nbsp;&quot;blender_z_up_fix&quot;:&nbsp;true<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

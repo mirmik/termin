@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Assets/AAA.material</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;f8908c74-d610-4335-a365-d4eb068b2419&quot;,<br>
+&nbsp;&nbsp;&quot;shader&quot;:&nbsp;&quot;DefaultShader&quot;,<br>
+&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_color&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.08398565649986267,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.6048218607902527,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.8544594645500183,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_ambient&quot;:&nbsp;0.10000000149011612,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_shininess&quot;:&nbsp;32.0<br>
+&nbsp;&nbsp;}<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

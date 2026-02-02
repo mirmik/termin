@@ -66,9 +66,7 @@ private:
 
 public:
 
-    ~OpenGLFramebufferHandle() override {
-        release();
-    }
+    ~OpenGLFramebufferHandle() override;
 
     void resize(int width, int height) override {
         if (width == width_ && height == height_ && fbo_ != 0) {
@@ -341,9 +339,7 @@ public:
         create();
     }
 
-    ~OpenGLShadowFramebufferHandle() override {
-        release();
-    }
+    ~OpenGLShadowFramebufferHandle() override;
 
     void resize(int width, int height) override {
         if (width == width_ && height == height_ && fbo_ != 0) {

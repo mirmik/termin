@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/voxels/__init__.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+Voxel&nbsp;system&nbsp;for&nbsp;navmesh&nbsp;generation.<br>
+<br>
+Provides&nbsp;chunked&nbsp;voxel&nbsp;grid&nbsp;with&nbsp;visualization&nbsp;and&nbsp;serialization&nbsp;support.<br>
+&quot;&quot;&quot;<br>
+<br>
+#&nbsp;Setup&nbsp;DLL&nbsp;paths&nbsp;before&nbsp;importing&nbsp;native&nbsp;extensions<br>
+from&nbsp;termin&nbsp;import&nbsp;_dll_setup&nbsp;&nbsp;#&nbsp;noqa:&nbsp;F401<br>
+<br>
+from&nbsp;termin.voxels._voxels_native&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VoxelChunk,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VoxelGrid,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VoxelGridHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;CHUNK_SIZE,<br>
+)<br>
+from&nbsp;termin.voxels.component&nbsp;import&nbsp;VoxelGridComponent<br>
+from&nbsp;termin.voxels.visualization&nbsp;import&nbsp;VoxelVisualizer<br>
+from&nbsp;termin.voxels.voxelizer&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshVoxelizer,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;SceneVoxelizer,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;voxelize_scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VOXEL_EMPTY,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VOXEL_SOLID,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VOXEL_SURFACE,<br>
+)<br>
+from&nbsp;termin.voxels.persistence&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VoxelPersistence,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VOXEL_FILE_EXTENSION,<br>
+)<br>
+from&nbsp;termin.voxels.voxelizer_component&nbsp;import&nbsp;VoxelizerComponent,&nbsp;VoxelizeMode<br>
+from&nbsp;termin.voxels.display_component&nbsp;import&nbsp;VoxelDisplayComponent<br>
+from&nbsp;termin.voxels.voxel_shader&nbsp;import&nbsp;voxel_display_shader<br>
+from&nbsp;termin.voxels.voxel_mesh&nbsp;import&nbsp;create_voxel_mesh<br>
+<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelChunk&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelGrid&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelGridHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelGridComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelVisualizer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MeshVoxelizer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;SceneVoxelizer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;voxelize_scene&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelPersistence&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelizerComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelizeMode&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VoxelDisplayComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;create_voxel_mesh&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;CHUNK_SIZE&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VOXEL_EMPTY&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VOXEL_SOLID&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VOXEL_SURFACE&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VOXEL_FILE_EXTENSION&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;voxel_display_shader&quot;,<br>
+]<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

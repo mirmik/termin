@@ -431,6 +431,8 @@ class RenderEngine:
         # Вызываем C++ RenderEngine (lights собираются в C++)
         with profiler.section("C++ Render Pipeline"):
             try:
+                log.info(f"[TRACE Python] About to call C++ render_view_to_fbo")
+                log.info(f"[TRACE Python] pipeline type={type(pipeline)}, target_fbo type={type(target_fbo)}, camera type={type(view.camera)}")
                 self._cpp_engine.render_view_to_fbo(
                     pipeline,
                     target_fbo,
@@ -441,8 +443,11 @@ class RenderEngine:
                     view.viewport,
                     view.layer_mask,
                 )
+                log.info(f"[TRACE Python] C++ render_view_to_fbo completed successfully")
             except Exception as ex:
+                import traceback
                 log.error(f"[render_view_to_fbo] {ex}")
+                log.error(f"[render_view_to_fbo] Traceback:\n{traceback.format_exc()}")
 
 
     def render_scene_pipeline_offscreen(

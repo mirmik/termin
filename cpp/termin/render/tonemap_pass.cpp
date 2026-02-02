@@ -92,12 +92,29 @@ void TonemapPass::ensure_shader() {
 void TonemapPass::execute(ExecuteContext& ctx) {
     if (!ctx.graphics) return;
 
-    auto* input_fbo = ctx.reads_fbos.count(input_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.reads_fbos[input_res])
-        : nullptr;
-    auto* output_fbo = ctx.writes_fbos.count(output_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
-        : nullptr;
+    FramebufferHandle* input_fbo = nullptr;
+    if (ctx.reads_fbos.count(input_res)) {
+        FrameGraphResource* res = ctx.reads_fbos[input_res];
+        tc::Log::info("[TonemapPass] Attempting cast for input='%s', resource_type='%s', ptr=%p",
+                      input_res.c_str(), res->resource_type(), res);
+        try {
+            input_fbo = dynamic_cast<FramebufferHandle*>(res);
+        } catch (const std::exception& e) {
+            tc::Log::error("[TonemapPass] input dynamic_cast failed: %s", e.what());
+        }
+    }
+
+    FramebufferHandle* output_fbo = nullptr;
+    if (ctx.writes_fbos.count(output_res)) {
+        FrameGraphResource* res = ctx.writes_fbos[output_res];
+        tc::Log::info("[TonemapPass] Attempting cast for output='%s', resource_type='%s', ptr=%p",
+                      output_res.c_str(), res->resource_type(), res);
+        try {
+            output_fbo = dynamic_cast<FramebufferHandle*>(res);
+        } catch (const std::exception& e) {
+            tc::Log::error("[TonemapPass] output dynamic_cast failed: %s", e.what());
+        }
+    }
 
     if (!input_fbo) {
         tc::Log::error("[TonemapPass] Missing input FBO '%s'", input_res.c_str());
