@@ -198,11 +198,11 @@ target_compile_options(_graphics_native PRIVATE
 set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
-# Recastnavigation (static libraries for navmesh building)
-set(RECASTNAVIGATION_DEMO OFF CACHE BOOL "" FORCE)
-set(RECASTNAVIGATION_TESTS OFF CACHE BOOL "" FORCE)
-set(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation ${CMAKE_CURRENT_BINARY_DIR}/recastnavigation)
+# Recast library only (from recastnavigation, avoids configure_file race conditions)
+set(SOVERSION 1)
+set(LIB_VERSION 1.6.0)
+set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast)
 
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
