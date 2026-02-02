@@ -5,6 +5,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/string.h>
 
 extern "C" {
 #include "tc_scene.h"
@@ -28,23 +29,20 @@ void bind_rendering_manager(nb::module_& m) {
     nb::class_<RenderingManager>(m, "RenderingManager")
         .def_static("instance", &RenderingManager::instance, nb::rv_policy::reference)
 
-        // Register scene pipeline (non-owning reference, pipeline must be owned elsewhere)
-        .def("register_scene_pipeline", [](RenderingManager& self,
-                                            nb::object scene_py,
-                                            const std::string& name,
-                                            RenderPipeline* pipeline) {
+        // Scene attach/detach (compiles templates from tc_scene, owns compiled pipelines)
+        .def("attach_scene", [](RenderingManager& self, nb::object scene_py) {
             tc_scene_handle scene = get_scene_handle(scene_py);
-            self.register_scene_pipeline(scene, name, pipeline);
-        }, nb::arg("scene"), nb::arg("name"), nb::arg("pipeline"),
-           "Register a scene pipeline (non-owning reference)")
+            self.attach_scene(scene);
+        }, nb::arg("scene"),
+           "Attach scene - compiles pipeline templates and notifies components")
 
-        .def("remove_scene_pipeline", [](RenderingManager& self,
-                                          nb::object scene_py,
-                                          const std::string& name) {
+        .def("detach_scene", [](RenderingManager& self, nb::object scene_py) {
             tc_scene_handle scene = get_scene_handle(scene_py);
-            self.remove_scene_pipeline(scene, name);
-        }, nb::arg("scene"), nb::arg("name"))
+            self.detach_scene(scene);
+        }, nb::arg("scene"),
+           "Detach scene - destroys compiled pipelines and notifies components")
 
+        // Compiled pipeline access (read-only)
         .def("get_scene_pipeline", [](RenderingManager& self,
                                        nb::object scene_py,
                                        const std::string& name) -> RenderPipeline* {

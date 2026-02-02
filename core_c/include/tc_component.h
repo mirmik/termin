@@ -105,6 +105,12 @@ struct tc_component_vtable {
     void (*on_scene_inactive)(tc_component* self);
     void (*on_scene_active)(tc_component* self);
 
+    // Render lifecycle (called when scene is attached/detached from rendering)
+    // on_render_attach: scene pipelines are compiled, components can find passes
+    // on_render_detach: scene pipelines will be destroyed, clear references
+    void (*on_render_attach)(tc_component* self);
+    void (*on_render_detach)(tc_component* self);
+
     // Editor hooks
     void (*on_editor_start)(tc_component* self);
     void (*setup_editor_defaults)(tc_component* self);
@@ -300,6 +306,18 @@ static inline void tc_component_on_scene_inactive(tc_component* c) {
 static inline void tc_component_on_scene_active(tc_component* c) {
     if (c && c->vtable && c->vtable->on_scene_active) {
         c->vtable->on_scene_active(c);
+    }
+}
+
+static inline void tc_component_on_render_attach(tc_component* c) {
+    if (c && c->vtable && c->vtable->on_render_attach) {
+        c->vtable->on_render_attach(c);
+    }
+}
+
+static inline void tc_component_on_render_detach(tc_component* c) {
+    if (c && c->vtable && c->vtable->on_render_detach) {
+        c->vtable->on_render_detach(c);
     }
 }
 

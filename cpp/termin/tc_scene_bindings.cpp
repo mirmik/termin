@@ -35,11 +35,7 @@ public:
     tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
     std::unique_ptr<collision::CollisionWorld> _collision_world;
 
-    // Compiled render pipelines (owned by scene, stored via C API in tc_scene)
-    // We keep unique_ptrs here for ownership, and register raw pointers with tc_scene C API
-    std::unordered_map<std::string, std::unique_ptr<RenderPipeline>> _compiled_pipelines;
-    // Pipeline targets: pipeline_name -> list of viewport names
-    std::unordered_map<std::string, std::vector<std::string>> _pipeline_targets;
+    // Note: Compiled pipelines are now owned by RenderingManager, not TcScene
 
     TcScene() {
         _h = tc_scene_new();
@@ -56,12 +52,8 @@ public:
     void destroy() {
         if (tc_scene_handle_valid(_h)) {
             tc::Log::info("[TcScene] destroy() handle=(%u,%u)", _h.index, _h.generation);
-            // Clear from RenderingManager first (while pipelines still exist)
+            // Clear from RenderingManager (pipelines are owned there)
             RenderingManager::instance().clear_scene_pipelines(_h);
-
-            // Clear compiled pipelines (they may reference scene resources)
-            _compiled_pipelines.clear();
-            _pipeline_targets.clear();
 
             tc_scene_set_collision_world(_h, nullptr);
             _collision_world.reset();
@@ -290,88 +282,38 @@ public:
     }
 
     // =========================================================================
-    // Compiled Pipelines (owned by scene)
+    // Pipeline Templates (stored in tc_scene, compiled by RenderingManager)
     // =========================================================================
 
-    // Compile scene pipelines from template UUIDs
-    void compile_scene_pipelines(const std::vector<std::string>& template_uuids) {
-        // Clear existing pipelines
-        _compiled_pipelines.clear();
-        _pipeline_targets.clear();
-        tc_scene_clear_pipelines(_h);
-
-        // Also clear from RenderingManager
-        RenderingManager::instance().clear_scene_pipelines(_h);
-
-        tc::Log::info("[TcScene] compile_scene_pipelines: %zu templates, scene='%s'",
-                      template_uuids.size(), tc_scene_get_name(_h) ? tc_scene_get_name(_h) : "");
-
-        for (const std::string& uuid : template_uuids) {
-            TcScenePipelineTemplate templ = TcScenePipelineTemplate::find_by_uuid(uuid);
-            if (!templ.is_valid()) {
-                tc::Log::warn("[TcScene] Template not found: uuid='%s'", uuid.c_str());
-                continue;
-            }
-
-            if (!templ.is_loaded()) {
-                tc::Log::warn("[TcScene] Template not loaded: uuid='%s'", uuid.c_str());
-                continue;
-            }
-
-            RenderPipeline* pipeline = templ.compile();
-            if (!pipeline) {
-                tc::Log::warn("[TcScene] Failed to compile template: '%s'", templ.name().c_str());
-                continue;
-            }
-
-            std::string name = templ.name();
-            pipeline->set_name(name);
-
-            tc::Log::info("[TcScene] Compiled pipeline '%s'", name.c_str());
-
-            // Store ownership in _compiled_pipelines
-            _compiled_pipelines[name] = std::unique_ptr<RenderPipeline>(pipeline);
-            _pipeline_targets[name] = templ.target_viewports();
-
-            // Register raw pointer with C API for access from C++ code (TimeModifierController etc)
-            tc_scene_set_pipeline(_h, name.c_str(), pipeline);
-
-            // Register with RenderingManager for rendering lookup
-            RenderingManager::instance().register_scene_pipeline(_h, name, pipeline);
-            RenderingManager::instance().set_pipeline_targets(name, templ.target_viewports());
-        }
+    void add_pipeline_template(const TcScenePipelineTemplate& templ) {
+        tc_scene_add_pipeline_template(_h, templ.handle());
     }
 
-    // Get compiled pipeline by name
+    void clear_pipeline_templates() {
+        tc_scene_clear_pipeline_templates(_h);
+    }
+
+    size_t pipeline_template_count() const {
+        return tc_scene_pipeline_template_count(_h);
+    }
+
+    TcScenePipelineTemplate pipeline_template_at(size_t index) const {
+        return TcScenePipelineTemplate(tc_scene_pipeline_template_at(_h, index));
+    }
+
+    // Get compiled pipeline by name (from RenderingManager)
     RenderPipeline* get_pipeline(const std::string& name) const {
-        auto it = _compiled_pipelines.find(name);
-        return (it != _compiled_pipelines.end()) ? it->second.get() : nullptr;
+        return RenderingManager::instance().get_scene_pipeline(_h, name);
     }
 
-    // Get all pipeline names
+    // Get all pipeline names (from RenderingManager)
     std::vector<std::string> get_pipeline_names() const {
-        std::vector<std::string> names;
-        names.reserve(_compiled_pipelines.size());
-        for (const auto& [name, _] : _compiled_pipelines) {
-            names.push_back(name);
-        }
-        return names;
+        return RenderingManager::instance().get_pipeline_names(_h);
     }
 
-    // Get pipeline targets
+    // Get pipeline targets (from RenderingManager)
     const std::vector<std::string>& get_pipeline_targets(const std::string& name) const {
-        static const std::vector<std::string> empty;
-        auto it = _pipeline_targets.find(name);
-        return (it != _pipeline_targets.end()) ? it->second : empty;
-    }
-
-    // Clear all compiled pipelines
-    void clear_compiled_pipelines() {
-        // Clear from RenderingManager first (while pipelines still exist)
-        RenderingManager::instance().clear_scene_pipelines(_h);
-
-        _compiled_pipelines.clear();
-        _pipeline_targets.clear();
+        return RenderingManager::instance().get_pipeline_targets(name);
     }
 };
 
@@ -873,20 +815,27 @@ void bind_tc_scene(nb::module_& m) {
              nb::rv_policy::reference,
              "Get collision world for this scene")
 
-        // Compiled pipelines
-        .def("compile_scene_pipelines", &TcScene::compile_scene_pipelines,
-             nb::arg("template_uuids"),
-             "Compile scene pipelines from template UUIDs")
+        // Pipeline templates (stored in tc_scene, compiled by RenderingManager at attach time)
+        .def("add_pipeline_template", &TcScene::add_pipeline_template,
+             nb::arg("template"),
+             "Add a pipeline template to scene")
+        .def("clear_pipeline_templates", &TcScene::clear_pipeline_templates,
+             "Clear all pipeline templates")
+        .def("pipeline_template_count", &TcScene::pipeline_template_count,
+             "Get number of pipeline templates")
+        .def("pipeline_template_at", &TcScene::pipeline_template_at,
+             nb::arg("index"),
+             "Get pipeline template at index")
+
+        // Compiled pipelines (read-only, owned by RenderingManager)
         .def("get_pipeline", &TcScene::get_pipeline,
              nb::arg("name"), nb::rv_policy::reference,
-             "Get compiled pipeline by name")
+             "Get compiled pipeline by name (from RenderingManager)")
         .def("get_pipeline_names", &TcScene::get_pipeline_names,
-             "Get all compiled pipeline names")
+             "Get all compiled pipeline names (from RenderingManager)")
         .def("get_pipeline_targets", &TcScene::get_pipeline_targets,
              nb::arg("name"), nb::rv_policy::reference,
-             "Get target viewports for pipeline")
-        .def("clear_compiled_pipelines", &TcScene::clear_compiled_pipelines,
-             "Clear all compiled pipelines")
+             "Get target viewports for pipeline (from RenderingManager)")
         ;
 
     // =========================================================================

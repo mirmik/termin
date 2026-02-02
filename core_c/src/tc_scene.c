@@ -107,8 +107,10 @@ typedef struct {
     void** collision_worlds;
     const char** names;
 
-    // Compiled pipelines (tc_resource_map: name -> void* pipeline)
-    tc_resource_map** pipelines;
+    // Pipeline templates (dynamic arrays of tc_spt_handle per scene)
+    tc_spt_handle** pipeline_templates;
+    size_t* pipeline_template_counts;
+    size_t* pipeline_template_capacities;
 
     // Pool management
     uint32_t* free_stack;
@@ -153,7 +155,9 @@ void tc_scene_pool_init(void) {
     g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
     g_pool->collision_worlds = (void**)calloc(cap, sizeof(void*));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
-    g_pool->pipelines = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
+    g_pool->pipeline_templates = (tc_spt_handle**)calloc(cap, sizeof(tc_spt_handle*));
+    g_pool->pipeline_template_counts = (size_t*)calloc(cap, sizeof(size_t));
+    g_pool->pipeline_template_capacities = (size_t*)calloc(cap, sizeof(size_t));
 
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
@@ -194,7 +198,9 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->skyboxes);
     free(g_pool->collision_worlds);
     free(g_pool->names);
-    free(g_pool->pipelines);
+    free(g_pool->pipeline_templates);
+    free(g_pool->pipeline_template_counts);
+    free(g_pool->pipeline_template_capacities);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -229,7 +235,9 @@ static void pool_grow(void) {
     g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
     g_pool->collision_worlds = realloc(g_pool->collision_worlds, new_cap * sizeof(void*));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
-    g_pool->pipelines = realloc(g_pool->pipelines, new_cap * sizeof(tc_resource_map*));
+    g_pool->pipeline_templates = realloc(g_pool->pipeline_templates, new_cap * sizeof(tc_spt_handle*));
+    g_pool->pipeline_template_counts = realloc(g_pool->pipeline_template_counts, new_cap * sizeof(size_t));
+    g_pool->pipeline_template_capacities = realloc(g_pool->pipeline_template_capacities, new_cap * sizeof(size_t));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
 
     // Initialize new slots
@@ -249,7 +257,9 @@ static void pool_grow(void) {
     memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
     memset(g_pool->collision_worlds + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
-    memset(g_pool->pipelines + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
+    memset(g_pool->pipeline_templates + old_cap, 0, (new_cap - old_cap) * sizeof(tc_spt_handle*));
+    memset(g_pool->pipeline_template_counts + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
+    memset(g_pool->pipeline_template_capacities + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
 
     // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
@@ -357,9 +367,11 @@ void tc_scene_free(tc_scene_handle h) {
     tc_resource_map_free(g_pool->type_heads[idx]);
     g_pool->type_heads[idx] = NULL;
 
-    // Free pipelines map (just the map, not the pipelines themselves - they're owned externally)
-    tc_resource_map_free(g_pool->pipelines[idx]);
-    g_pool->pipelines[idx] = NULL;
+    // Free pipeline templates array
+    free(g_pool->pipeline_templates[idx]);
+    g_pool->pipeline_templates[idx] = NULL;
+    g_pool->pipeline_template_counts[idx] = 0;
+    g_pool->pipeline_template_capacities[idx] = 0;
 
     // Destroy entity pool via registry to invalidate handles
     tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->pools[idx]);
@@ -1129,80 +1141,89 @@ void tc_scene_set_shadow_settings(tc_scene_handle h, int method, float softness,
 }
 
 // ============================================================================
-// Compiled Pipelines
+// Render Lifecycle Notifications
 // ============================================================================
 
-void tc_scene_set_pipeline(tc_scene_handle h, const char* name, void* pipeline) {
-    if (!handle_alive(h) || !name) return;
-    uint32_t idx = h.index;
-
-    // Create map if needed (no destructor - pipelines owned externally)
-    if (!g_pool->pipelines[idx]) {
-        g_pool->pipelines[idx] = tc_resource_map_new(NULL);
+static bool notify_render_attach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    (void)user_data;
+    size_t count = tc_entity_pool_component_count(pool, id);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, id, i);
+        if (c && c->vtable && c->vtable->on_render_attach) {
+            c->vtable->on_render_attach(c);
+        }
     }
-
-    // Remove existing entry if any, then add
-    tc_resource_map_remove(g_pool->pipelines[idx], name);
-    tc_resource_map_add(g_pool->pipelines[idx], name, pipeline);
-}
-
-void* tc_scene_get_pipeline(tc_scene_handle h, const char* name) {
-    if (!handle_alive(h) || !name) return NULL;
-    uint32_t idx = h.index;
-
-    if (!g_pool->pipelines[idx]) return NULL;
-    return tc_resource_map_get(g_pool->pipelines[idx], name);
-}
-
-void tc_scene_remove_pipeline(tc_scene_handle h, const char* name) {
-    if (!handle_alive(h) || !name) return;
-    uint32_t idx = h.index;
-
-    if (!g_pool->pipelines[idx]) return;
-    tc_resource_map_remove(g_pool->pipelines[idx], name);
-}
-
-void tc_scene_clear_pipelines(tc_scene_handle h) {
-    if (!handle_alive(h)) return;
-    uint32_t idx = h.index;
-
-    tc_resource_map_free(g_pool->pipelines[idx]);
-    g_pool->pipelines[idx] = NULL;
-}
-
-size_t tc_scene_pipeline_count(tc_scene_handle h) {
-    if (!handle_alive(h)) return 0;
-    uint32_t idx = h.index;
-
-    if (!g_pool->pipelines[idx]) return 0;
-    return tc_resource_map_count(g_pool->pipelines[idx]);
-}
-
-// Helper struct for pipeline name iteration
-typedef struct {
-    size_t target_index;
-    size_t current_index;
-    const char* result;
-} pipeline_name_at_data;
-
-static bool pipeline_name_at_callback(const char* uuid, void* resource, void* user_data) {
-    (void)resource;
-    pipeline_name_at_data* data = (pipeline_name_at_data*)user_data;
-    if (data->current_index == data->target_index) {
-        data->result = uuid;
-        return false;  // Stop iteration
-    }
-    data->current_index++;
     return true;
 }
 
-const char* tc_scene_pipeline_name_at(tc_scene_handle h, size_t index) {
-    if (!handle_alive(h)) return NULL;
+void tc_scene_notify_render_attach(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    tc_entity_pool_foreach(g_pool->pools[h.index], notify_render_attach_callback, NULL);
+}
+
+static bool notify_render_detach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    (void)user_data;
+    size_t count = tc_entity_pool_component_count(pool, id);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, id, i);
+        if (c && c->vtable && c->vtable->on_render_detach) {
+            c->vtable->on_render_detach(c);
+        }
+    }
+    return true;
+}
+
+void tc_scene_notify_render_detach(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    tc_entity_pool_foreach(g_pool->pools[h.index], notify_render_detach_callback, NULL);
+}
+
+// ============================================================================
+// Scene Pipeline Templates
+// ============================================================================
+
+void tc_scene_add_pipeline_template(tc_scene_handle h, tc_spt_handle spt) {
+    if (!handle_alive(h)) return;
+    if (!tc_spt_is_valid(spt)) return;
     uint32_t idx = h.index;
 
-    if (!g_pool->pipelines[idx]) return NULL;
+    // Grow array if needed
+    if (g_pool->pipeline_template_counts[idx] >= g_pool->pipeline_template_capacities[idx]) {
+        size_t new_cap = g_pool->pipeline_template_capacities[idx] == 0 ? 4 : g_pool->pipeline_template_capacities[idx] * 2;
+        g_pool->pipeline_templates[idx] = realloc(g_pool->pipeline_templates[idx], new_cap * sizeof(tc_spt_handle));
+        g_pool->pipeline_template_capacities[idx] = new_cap;
+    }
 
-    pipeline_name_at_data data = { index, 0, NULL };
-    tc_resource_map_foreach(g_pool->pipelines[idx], pipeline_name_at_callback, &data);
-    return data.result;
+    g_pool->pipeline_templates[idx][g_pool->pipeline_template_counts[idx]++] = spt;
+}
+
+void tc_scene_remove_pipeline_template(tc_scene_handle h, tc_spt_handle spt) {
+    if (!handle_alive(h)) return;
+    uint32_t idx = h.index;
+
+    for (size_t i = 0; i < g_pool->pipeline_template_counts[idx]; i++) {
+        if (tc_spt_handle_eq(g_pool->pipeline_templates[idx][i], spt)) {
+            // Swap with last and decrement count
+            g_pool->pipeline_templates[idx][i] = g_pool->pipeline_templates[idx][--g_pool->pipeline_template_counts[idx]];
+            return;
+        }
+    }
+}
+
+void tc_scene_clear_pipeline_templates(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    uint32_t idx = h.index;
+    g_pool->pipeline_template_counts[idx] = 0;
+}
+
+size_t tc_scene_pipeline_template_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    return g_pool->pipeline_template_counts[h.index];
+}
+
+tc_spt_handle tc_scene_pipeline_template_at(tc_scene_handle h, size_t index) {
+    if (!handle_alive(h)) return TC_SPT_HANDLE_INVALID;
+    uint32_t idx = h.index;
+    if (index >= g_pool->pipeline_template_counts[idx]) return TC_SPT_HANDLE_INVALID;
+    return g_pool->pipeline_templates[idx][index];
 }

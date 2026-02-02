@@ -133,6 +133,12 @@ public:
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
 
+    // Render lifecycle (called when scene is attached/detached from rendering)
+    // on_render_attach: scene pipelines are compiled, components can find passes
+    // on_render_detach: scene pipelines will be destroyed, clear references
+    virtual void on_render_attach() {}
+    virtual void on_render_detach() {}
+
     // Serialization - uses C API tc_inspect for INSPECT_FIELD properties.
     // Returns tc_value that caller must free with tc_value_free()
     virtual tc_value serialize_data() const {
@@ -178,6 +184,8 @@ private:
     static void _cb_on_removed(tc_component* c);
     static void _cb_on_scene_inactive(tc_component* c);
     static void _cb_on_scene_active(tc_component* c);
+    static void _cb_on_render_attach(tc_component* c);
+    static void _cb_on_render_detach(tc_component* c);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
 

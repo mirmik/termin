@@ -125,12 +125,13 @@ public:
     // Scene Pipeline Management
     // ========================================================================
 
-    // Register a compiled scene pipeline for a scene (non-owning reference)
-    // Pipeline must outlive RenderingManager's reference (typically owned by TcScene)
-    void register_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline);
+    // Attach scene to rendering - compiles pipeline templates stored in tc_scene
+    // Called when scene is mounted to display. Notifies components via on_render_attach.
+    void attach_scene(tc_scene_handle scene);
 
-    // Unregister a scene pipeline
-    void remove_scene_pipeline(tc_scene_handle scene, const std::string& name);
+    // Detach scene from rendering - destroys compiled pipelines
+    // Called when scene is unmounted. Notifies components via on_render_detach.
+    void detach_scene(tc_scene_handle scene);
 
     // Get scene pipeline by name (searches in specific scene)
     RenderPipeline* get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
@@ -145,7 +146,8 @@ public:
     // Get all pipeline names for a scene
     std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
 
-    // Clear all pipelines for a scene
+    // Clear all pipelines for a scene (called at render detach time)
+    // Calls tc_scene_notify_render_detach before destroying pipelines.
     void clear_scene_pipelines(tc_scene_handle scene);
 
     // Clear all scene pipelines
@@ -182,10 +184,10 @@ private:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
 
-    // Scene pipelines: scene_handle -> (pipeline_name -> non-owning pointer)
-    // Pipelines are owned by TcScene, RenderingManager just references them
+    // Scene pipelines: scene_handle -> (pipeline_name -> owning pointer)
+    // RenderingManager owns compiled pipelines
     // Key is (scene.index << 32 | scene.generation)
-    std::unordered_map<uint64_t, std::unordered_map<std::string, RenderPipeline*>> scene_pipelines_;
+    std::unordered_map<uint64_t, std::unordered_map<std::string, std::unique_ptr<RenderPipeline>>> scene_pipelines_;
 
     // Pipeline targets: pipeline_name -> list of viewport names
     std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;

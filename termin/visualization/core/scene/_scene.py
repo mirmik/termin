@@ -84,9 +84,9 @@ class Scene(TcScene):
         # Viewport configuration (display_name -> camera/region mapping)
         self._viewport_configs: List[ViewportConfig] = []
 
-        # Scene pipeline templates (list of TcScenePipelineTemplate handles)
-        from termin._native.render import TcScenePipelineTemplate
-        self._scene_pipelines: List[TcScenePipelineTemplate] = []
+        # Note: Scene pipeline templates are stored in C++ tc_scene via
+        # add_pipeline_template() / clear_pipeline_templates() methods.
+        # Compiled pipelines are owned by RenderingManager (attach_scene/detach_scene).
 
         # Editor viewport state (runtime only, not serialized)
         # Stores camera name used in editor viewport for restore after game mode
@@ -369,42 +369,26 @@ class Scene(TcScene):
         self._viewport_configs.clear()
 
     # --- Scene pipelines ---
+    # Pipeline templates are stored in C++ tc_scene.
+    # Compiled pipelines are owned by RenderingManager.
 
     @property
     def scene_pipelines(self) -> List:
-        """Get scene pipeline handles."""
-        return self._scene_pipelines
+        """Get scene pipeline template handles (from C++ tc_scene)."""
+        from termin._native.render import TcScenePipelineTemplate
+        result = []
+        count = self.pipeline_template_count()
+        for i in range(count):
+            result.append(self.pipeline_template_at(i))
+        return result
 
-    def add_scene_pipeline(self, handle) -> None:
-        """Add a scene pipeline handle."""
-        self._scene_pipelines.append(handle)
-
-    def remove_scene_pipeline(self, handle) -> None:
-        """Remove a scene pipeline handle."""
-        if handle in self._scene_pipelines:
-            self._scene_pipelines.remove(handle)
+    def add_scene_pipeline(self, template) -> None:
+        """Add a scene pipeline template (stores in C++ tc_scene)."""
+        self.add_pipeline_template(template)
 
     def clear_scene_pipelines(self) -> None:
-        """Clear all scene pipeline handles."""
-        self._scene_pipelines.clear()
-
-    # --- Compiled pipelines (stored in C++ TcScene) ---
-
-    def compile_scene_pipelines(self) -> None:
-        """
-        Compile all scene pipeline templates into RenderPipelines.
-
-        Pipelines are stored in the C++ TcScene, not RenderingManager.
-        """
-        # Collect valid template UUIDs
-        template_uuids = [t.uuid for t in self._scene_pipelines if t.is_valid]
-
-        # Compile in C++ TcScene (takes ownership of pipelines)
-        TcScene.compile_scene_pipelines(self, template_uuids)
-
-    def destroy_compiled_pipelines(self) -> None:
-        """Destroy all compiled pipelines."""
-        TcScene.clear_compiled_pipelines(self)
+        """Clear all scene pipeline templates (in C++ tc_scene)."""
+        self.clear_pipeline_templates()
 
     # --- Editor entities data (runtime only) ---
 
@@ -752,7 +736,7 @@ class Scene(TcScene):
             "layer_names": {str(k): v for k, v in self.layer_names.items()},
             "flag_names": {str(k): v for k, v in self.flag_names.items()},
             "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
-            "scene_pipelines": [{"uuid": t.uuid} for t in self._scene_pipelines if t.is_valid],
+            "scene_pipelines": [{"uuid": t.uuid} for t in self.scene_pipelines if t.is_valid],
             # Lighting
             "ambient_color": list(self.ambient_color),
             "ambient_intensity": self.ambient_intensity,
@@ -825,20 +809,18 @@ class Scene(TcScene):
                 ViewportConfig.deserialize(vc_data)
                 for vc_data in data.get("viewport_configs", [])
             ]
-            # Load scene pipelines from templates
+            # Load scene pipelines from templates (stored in C++ tc_scene)
             from termin._native.render import TcScenePipelineTemplate
-            self._scene_pipelines = []
+            self.clear_pipeline_templates()
             for sp_data in data.get("scene_pipelines", []):
                 uuid = sp_data.get("uuid", "")
                 if uuid:
                     template = TcScenePipelineTemplate.find_by_uuid(uuid)
                     if template.is_valid:
-                        self._scene_pipelines.append(template)
+                        self.add_pipeline_template(template)
 
-            # Compile scene pipelines immediately after loading
-            # Pipelines are stored in TcScene, not RenderingManager
-            if self._scene_pipelines:
-                self.compile_scene_pipelines()
+            # Note: Compiled pipelines are created by RenderingManager.attach_scene()
+            # (not at deserialization time)
 
         entities_data = data.get("entities", [])
 

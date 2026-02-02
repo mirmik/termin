@@ -483,6 +483,7 @@ class RenderingManager:
 
         1. Compile scene pipeline assets (stored in C++ RenderingManager)
         2. Mark viewports as managed by scene pipeline (by name)
+        3. Notify components via on_render_attach
 
         Managed viewports are rendered by executing scene pipelines in render loop,
         not by iterating viewports directly.
@@ -492,9 +493,11 @@ class RenderingManager:
             viewports: List of viewports to potentially manage
         """
         from termin._native import log
+        from termin._native.render import RenderingManager
 
-        # NOTE: Scene pipelines are compiled at deserialization time (in Scene.load_from_data)
-        # Do not recompile here - it would invalidate pointers held by components
+        # Attach scene to RenderingManager - compiles pipeline templates and
+        # notifies components via on_render_attach
+        RenderingManager.instance().attach_scene(scene)
 
         # Build viewport lookup by name
         viewport_by_name: Dict[str, "Viewport"] = {}
@@ -507,7 +510,6 @@ class RenderingManager:
             for vp in display.viewports:
                 if vp.name and vp.name not in viewport_by_name:
                     viewport_by_name[vp.name] = vp
-
 
         # Mark viewports as managed by their scene pipeline
         for template in scene.scene_pipelines:
@@ -541,8 +543,10 @@ class RenderingManager:
         if scene in self._attached_scenes:
             self._attached_scenes.remove(scene)
 
-        # Destroy compiled pipelines
-        scene.destroy_compiled_pipelines()
+        # Detach from RenderingManager - destroys compiled pipelines and
+        # notifies components via on_render_detach
+        from termin._native.render import RenderingManager
+        RenderingManager.instance().detach_scene(scene)
 
     def get_scene_pipeline(self, name: str) -> Optional["RenderPipeline"]:
         """

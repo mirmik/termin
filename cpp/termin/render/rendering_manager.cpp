@@ -1,5 +1,6 @@
 // rendering_manager.cpp - Global rendering manager implementation
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/scene_pipeline_template.hpp"
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {
@@ -322,25 +323,53 @@ void RenderingManager::present_display(tc_display* display) {
 // Scene Pipeline Management
 // ============================================================================
 
-void RenderingManager::register_scene_pipeline(tc_scene_handle scene, const std::string& name, RenderPipeline* pipeline) {
-    if (!tc_scene_handle_valid(scene) || name.empty() || !pipeline) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] register_scene_pipeline skipped: valid=%d, name_empty=%d, pipeline=%p",
-               tc_scene_handle_valid(scene), name.empty(), (void*)pipeline);
-        return;
-    }
+void RenderingManager::attach_scene(tc_scene_handle scene) {
+    if (!tc_scene_handle_valid(scene)) return;
+
+    // Clear existing pipelines first (calls notify_render_detach)
+    detach_scene(scene);
+
+    size_t template_count = tc_scene_pipeline_template_count(scene);
+    tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene: %zu templates, scene='%s'",
+           template_count, tc_scene_get_name(scene) ? tc_scene_get_name(scene) : "");
+
     uint64_t key = scene_key(scene);
-    scene_pipelines_[key][name] = pipeline;
-    tc_log(TC_LOG_INFO, "[RenderingManager] register_scene_pipeline: '%s' for scene=(%u,%u)",
-           name.c_str(), scene.index, scene.generation);
+
+    for (size_t i = 0; i < template_count; i++) {
+        tc_spt_handle spt_handle = tc_scene_pipeline_template_at(scene, i);
+        if (!tc_spt_is_valid(spt_handle)) continue;
+
+        TcScenePipelineTemplate templ(spt_handle);
+        if (!templ.is_loaded()) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Template not loaded: '%s'", templ.name().c_str());
+            continue;
+        }
+
+        RenderPipeline* pipeline = templ.compile();
+        if (!pipeline) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Failed to compile template: '%s'", templ.name().c_str());
+            continue;
+        }
+
+        std::string name = templ.name();
+        pipeline->set_name(name);
+
+        tc_log(TC_LOG_INFO, "[RenderingManager] Compiled pipeline '%s'", name.c_str());
+
+        // Store ownership in scene_pipelines_
+        scene_pipelines_[key][name] = std::unique_ptr<RenderPipeline>(pipeline);
+
+        // Store targets
+        pipeline_targets_[name] = templ.target_viewports();
+    }
+
+    // Notify components that rendering is attached
+    tc_scene_notify_render_attach(scene);
 }
 
-void RenderingManager::remove_scene_pipeline(tc_scene_handle scene, const std::string& name) {
+void RenderingManager::detach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
-    uint64_t key = scene_key(scene);
-    auto it = scene_pipelines_.find(key);
-    if (it != scene_pipelines_.end()) {
-        it->second.erase(name);
-    }
+    clear_scene_pipelines(scene);
 }
 
 RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
@@ -349,7 +378,7 @@ RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, cons
     auto scene_it = scene_pipelines_.find(key);
     if (scene_it == scene_pipelines_.end()) return nullptr;
     auto pipe_it = scene_it->second.find(name);
-    return (pipe_it != scene_it->second.end()) ? pipe_it->second : nullptr;
+    return (pipe_it != scene_it->second.end()) ? pipe_it->second.get() : nullptr;
 }
 
 RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) const {
@@ -357,7 +386,7 @@ RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) co
     for (const auto& [key, pipelines] : scene_pipelines_) {
         auto it = pipelines.find(name);
         if (it != pipelines.end()) {
-            return it->second;
+            return it->second.get();
         }
     }
     tc_log(TC_LOG_WARN, "[RenderingManager] get_scene_pipeline NOT FOUND: '%s'", name.c_str());
@@ -382,7 +411,8 @@ std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle sc
     uint64_t key = scene_key(scene);
     auto scene_it = scene_pipelines_.find(key);
     if (scene_it != scene_pipelines_.end()) {
-        for (const auto& [name, _] : scene_it->second) {
+        for (const auto& [name, ptr] : scene_it->second) {
+            (void)ptr;
             names.push_back(name);
         }
     }
@@ -393,20 +423,35 @@ void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
     uint64_t key = scene_key(scene);
 
-    // Remove pipeline targets for this scene's pipelines
     auto scene_it = scene_pipelines_.find(key);
-    if (scene_it != scene_pipelines_.end()) {
-        for (const auto& [name, _] : scene_it->second) {
-            pipeline_targets_.erase(name);
-        }
+    if (scene_it == scene_pipelines_.end()) return;
+
+    // Notify components that rendering is detaching (before destroying pipelines)
+    tc_scene_notify_render_detach(scene);
+
+    // Remove pipeline targets for this scene's pipelines
+    for (const auto& [name, ptr] : scene_it->second) {
+        (void)ptr;
+        pipeline_targets_.erase(name);
     }
 
-    // Just clear references (TcScene owns the actual pipelines)
+    // Erase the scene entry (unique_ptrs will delete pipelines)
     scene_pipelines_.erase(key);
 }
 
 void RenderingManager::clear_all_scene_pipelines() {
-    // Just clear references (TcScene owns the actual pipelines)
+    // Notify all scenes that rendering is detaching
+    for (const auto& [key, pipelines] : scene_pipelines_) {
+        // Reconstruct scene handle from key
+        tc_scene_handle scene;
+        scene.index = static_cast<uint32_t>(key >> 32);
+        scene.generation = static_cast<uint32_t>(key & 0xFFFFFFFF);
+        if (tc_scene_handle_valid(scene)) {
+            tc_scene_notify_render_detach(scene);
+        }
+    }
+
+    // Clear all (unique_ptrs will delete pipelines)
     scene_pipelines_.clear();
     pipeline_targets_.clear();
 }

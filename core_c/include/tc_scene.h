@@ -8,6 +8,7 @@
 #include "tc_component.h"
 #include "tc_scene_lighting.h"
 #include "tc_scene_skybox.h"
+#include "tc_scene_pipeline_template.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -249,26 +250,35 @@ TC_API void tc_scene_set_ambient(tc_scene_handle h, float r, float g, float b, f
 TC_API void tc_scene_set_shadow_settings(tc_scene_handle h, int method, float softness, float bias);
 
 // ============================================================================
-// Compiled Pipelines (stored as opaque pointers, owned externally)
+// Scene Pipeline Templates
 // ============================================================================
 
-// Set a compiled pipeline for this scene (non-owning, caller manages lifetime)
-TC_API void tc_scene_set_pipeline(tc_scene_handle h, const char* name, void* pipeline);
+// Add a pipeline template handle to scene
+TC_API void tc_scene_add_pipeline_template(tc_scene_handle h, tc_spt_handle spt);
 
-// Get a compiled pipeline by name (returns NULL if not found)
-TC_API void* tc_scene_get_pipeline(tc_scene_handle h, const char* name);
+// Remove a pipeline template handle from scene
+TC_API void tc_scene_remove_pipeline_template(tc_scene_handle h, tc_spt_handle spt);
 
-// Remove a pipeline by name
-TC_API void tc_scene_remove_pipeline(tc_scene_handle h, const char* name);
+// Clear all pipeline template handles
+TC_API void tc_scene_clear_pipeline_templates(tc_scene_handle h);
 
-// Clear all pipelines for this scene
-TC_API void tc_scene_clear_pipelines(tc_scene_handle h);
+// Get number of pipeline templates
+TC_API size_t tc_scene_pipeline_template_count(tc_scene_handle h);
 
-// Get number of pipelines
-TC_API size_t tc_scene_pipeline_count(tc_scene_handle h);
+// Get pipeline template handle by index
+TC_API tc_spt_handle tc_scene_pipeline_template_at(tc_scene_handle h, size_t index);
 
-// Get pipeline name by index (for iteration)
-TC_API const char* tc_scene_pipeline_name_at(tc_scene_handle h, size_t index);
+// ============================================================================
+// Render Lifecycle Notifications
+// ============================================================================
+
+// Notify all components that scene is attached to rendering
+// Called after scene pipelines are compiled, components can find passes
+TC_API void tc_scene_notify_render_attach(tc_scene_handle h);
+
+// Notify all components that scene is detached from rendering
+// Called before scene pipelines are destroyed, components should clear pass references
+TC_API void tc_scene_notify_render_detach(tc_scene_handle h);
 
 #ifdef __cplusplus
 }
