@@ -8,20 +8,13 @@ import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
-from termin._native.scene import TcScene
-from termin.visualization.render.components.light_component import LightComponent
+from termin._native.scene import TcScene, TcSceneLighting
 from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit
-from termin.collision._collision_native import CollisionWorld
 from termin.core import Event
 
 from termin.visualization.core.viewport_config import ViewportConfig
 from termin.lighting import ShadowSettings
-from termin._native.scene import TcSceneLighting
-
-
-if TYPE_CHECKING:  # pragma: no cover
-    from termin.visualization.core.material import Material
 
 
 def _vec3_to_np(v) -> np.ndarray:
@@ -48,8 +41,6 @@ class Scene(TcScene):
     Inherits from TcScene (C++ class) for optimized entity/component management.
     """
 
-    _destroyed: bool = False
-
     def __init__(
         self,
         background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
@@ -58,42 +49,25 @@ class Scene(TcScene):
     ):
         # Initialize C++ TcScene base class
         super().__init__()
-        self._destroyed = False
 
         # Set Python wrapper for callbacks from C to Python
         self.set_py_wrapper(self)
 
-        # Identifiable fields
+        # Set identifiable fields (stored in C++)
         self.uuid = uuid or ""
         self.name = name
 
         from termin._native import log
         log.info(f"[Scene] Created name='{name}', self={id(self):#x}")
-        self.runtime_id = 0
 
-        # Background color with alpha
-        self._background_color = np.array(background_color, dtype=np.float32)
-
-        # Lighting (lazy-loaded view into tc_scene_lighting)
-        self._tc_lighting: TcSceneLighting | None = None
-
-        # Layer and flag names (index -> name)
-        self.layer_names: dict[int, str] = {}  # 0-63
-        self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
-
-        # Viewport configuration (display_name -> camera/region mapping)
-        self._viewport_configs: List[ViewportConfig] = []
-
-        # Note: Scene pipeline templates are stored in C++ tc_scene via
-        # add_pipeline_template() / clear_pipeline_templates() methods.
-        # Compiled pipelines are owned by RenderingManager (attach_scene/detach_scene).
+        # Set initial background color in C++
+        bc = background_color
+        self.set_background_color(float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]) if len(bc) > 3 else 1.0)
 
         # Editor viewport state (runtime only, not serialized)
-        # Stores camera name used in editor viewport for restore after game mode
         self.editor_viewport_camera_name: str | None = None
 
         # Editor entities state (runtime only, not serialized to scene file)
-        # Stores EditorEntities component data for deserialization after game mode
         self._editor_entities_data: dict | None = None
 
         # Entity lifecycle events
@@ -103,17 +77,20 @@ class Scene(TcScene):
     @property
     def is_destroyed(self) -> bool:
         """Check if scene has been destroyed."""
-        return self._destroyed
+        return not self.is_alive()
 
-    # --- Background color (with alpha, C++ only has RGB) ---
+    # --- Background color (RGBA, stored in C++) ---
 
     @property
     def background_color(self) -> np.ndarray:
-        return self._background_color
+        r, g, b, a = self.get_background_color()
+        return np.array([r, g, b, a], dtype=np.float32)
 
     @background_color.setter
     def background_color(self, value):
-        self._background_color = np.asarray(value, dtype=np.float32)
+        v = np.asarray(value, dtype=np.float32)
+        a = float(v[3]) if len(v) > 3 else 1.0
+        self.set_background_color(float(v[0]), float(v[1]), float(v[2]), a)
 
     # --- Skybox (stored in tc_scene) ---
 
@@ -169,19 +146,8 @@ class Scene(TcScene):
         v = np.asarray(value, dtype=np.float32)
         self.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
 
-    def skybox_mesh(self):
-        """Get skybox cube mesh (TcMesh). Creates lazily if needed."""
-        return self.get_skybox_mesh()
-
-    def skybox_material(self) -> "Material | None":
-        """Get skybox material based on current skybox_type. Creates lazily if needed."""
-        type_int = self.get_skybox_type()
-        if type_int == self._SKYBOX_TYPE_NONE:
-            return None
-        return self.ensure_skybox_material(type_int)
-
-    # set_skybox_type(int) is inherited from TcScene
-    # Use self.skybox_type = "gradient" (string) for the property setter
+    # skybox_mesh() -> use get_skybox_mesh() directly from TcScene
+    # skybox_material() -> use ensure_skybox_material(type) directly from TcScene
 
     def _ensure_skybox_resources(self) -> None:
         """Ensure skybox mesh and material are created and set in tc_scene."""
@@ -195,12 +161,9 @@ class Scene(TcScene):
     # --- Lighting (stored in tc_scene_lighting) ---
 
     def _get_lighting(self) -> TcSceneLighting | None:
-        """Get TcSceneLighting view (lazy-loaded)."""
-        if self._tc_lighting is None:
-            ptr = self.lighting_ptr()
-            if ptr:
-                self._tc_lighting = TcSceneLighting(ptr)
-        return self._tc_lighting
+        """Get TcSceneLighting view from C."""
+        ptr = self.lighting_ptr()
+        return TcSceneLighting(ptr) if ptr else None
 
     @property
     def ambient_color(self) -> np.ndarray:
@@ -230,10 +193,7 @@ class Scene(TcScene):
         if lighting is not None:
             lighting.ambient_intensity = float(value)
 
-    @property
-    def light_components(self) -> List[LightComponent]:
-        """Get all light components from tc_scene type list."""
-        return self.get_components_of_type("LightComponent")
+    # light_components -> use get_components_of_type("LightComponent") directly
 
     @property
     def shadow_settings(self) -> ShadowSettings:
@@ -252,19 +212,12 @@ class Scene(TcScene):
     # --- Collision World ---
 
     @property
-    def collision_world(self) -> CollisionWorld:
+    def collision_world(self):
         """Get the collision world for physics and raycasting."""
         return TcScene.collision_world(self)
 
-    @property
-    def colliders(self) -> List[Component]:
-        """Get all collider components from tc_scene type list."""
-        return self.get_components_of_type("ColliderComponent")
-
-    @property
-    def input_components(self) -> List[InputComponent]:
-        """Get all input components from tc_scene type list."""
-        return self.get_components_of_type("InputComponent")
+    # colliders -> use get_components_of_type("ColliderComponent") directly
+    # input_components -> use get_components_of_type("InputComponent") directly
 
     # --- Raycast ---
 
@@ -324,71 +277,77 @@ class Scene(TcScene):
         self.foreach_component_of_type("ColliderComponent", check_collider)
         return result["hit"]
 
-    # --- Layer and flag names ---
+    # --- Layer and flag names (stored in C) ---
 
     def get_layer_name(self, index: int) -> str:
-        """Get layer name by index, or default 'Layer N'."""
-        return self.layer_names.get(index, f"Layer {index}")
+        """Get layer name by index, or default 'Layer N' if not set."""
+        name = TcScene.get_layer_name(self, index)
+        return name if name else f"Layer {index}"
 
     def get_flag_name(self, index: int) -> str:
-        """Get flag name by bit index, or default 'Flag N'."""
-        return self.flag_names.get(index, f"Flag {index}")
+        """Get flag name by index, or default 'Flag N' if not set."""
+        name = TcScene.get_flag_name(self, index)
+        return name if name else f"Flag {index}"
 
-    def set_layer_name(self, index: int, name: str):
-        """Set layer name. Empty name removes the entry."""
-        if name:
-            self.layer_names[index] = name
-        else:
-            self.layer_names.pop(index, None)
+    # set_layer_name(index, name), set_flag_name(index, name) -> inherited from TcScene
 
-    def set_flag_name(self, index: int, name: str):
-        """Set flag name. Empty name removes the entry."""
-        if name:
-            self.flag_names[index] = name
-        else:
-            self.flag_names.pop(index, None)
-
-    # --- Viewport configuration ---
+    # --- Viewport configuration (stored in C++) ---
 
     @property
     def viewport_configs(self) -> List[ViewportConfig]:
         """Get viewport configurations for this scene."""
-        return self._viewport_configs
+        result = []
+        count = self.viewport_config_count()
+        for i in range(count):
+            d = self.get_viewport_config(i)
+            if d:
+                region = d.get("region", (0.0, 0.0, 1.0, 1.0))
+                result.append(ViewportConfig(
+                    name=d.get("name", ""),
+                    display_name=d.get("display_name", "Main"),
+                    camera_uuid=d.get("camera_uuid", ""),
+                    region=tuple(region),
+                    pipeline_uuid=d.get("pipeline_uuid") or None,
+                    pipeline_name=d.get("pipeline_name") or None,
+                    depth=d.get("depth", 0),
+                    input_mode=d.get("input_mode", "simple"),
+                    block_input_in_editor=d.get("block_input_in_editor", False),
+                    layer_mask=d.get("layer_mask", 0xFFFFFFFFFFFFFFFF),
+                    enabled=d.get("enabled", True),
+                ))
+        return result
 
     def add_viewport_config(self, config: ViewportConfig) -> None:
-        """Add a viewport configuration."""
-        self._viewport_configs.append(config)
+        """Add a viewport configuration (stores in C++)."""
+        TcScene.add_viewport_config(
+            self,
+            config.name,
+            config.display_name,
+            config.camera_uuid,
+            config.region[0], config.region[1], config.region[2], config.region[3],
+            config.pipeline_uuid or "",
+            config.pipeline_name or "",
+            config.depth,
+            config.input_mode,
+            config.block_input_in_editor,
+            config.layer_mask,
+            config.enabled,
+        )
 
-    def remove_viewport_config(self, config: ViewportConfig) -> None:
-        """Remove a viewport configuration."""
-        if config in self._viewport_configs:
-            self._viewport_configs.remove(config)
-
-    def clear_viewport_configs(self) -> None:
-        """Clear all viewport configurations."""
-        self._viewport_configs.clear()
+    # remove_viewport_config(index) -> inherited from TcScene
+    # clear_viewport_configs() -> inherited from TcScene
 
     # --- Scene pipelines ---
-    # Pipeline templates are stored in C++ tc_scene.
-    # Compiled pipelines are owned by RenderingManager.
+    # Pipeline templates stored in C++ tc_scene, compiled pipelines owned by RenderingManager
 
     @property
     def scene_pipelines(self) -> List:
         """Get scene pipeline template handles (from C++ tc_scene)."""
-        from termin._native.render import TcScenePipelineTemplate
         result = []
         count = self.pipeline_template_count()
         for i in range(count):
             result.append(self.pipeline_template_at(i))
         return result
-
-    def add_scene_pipeline(self, template) -> None:
-        """Add a scene pipeline template (stores in C++ tc_scene)."""
-        self.add_pipeline_template(template)
-
-    def clear_scene_pipelines(self) -> None:
-        """Clear all scene pipeline templates (in C++ tc_scene)."""
-        self.clear_pipeline_templates()
 
     # --- Editor entities data (runtime only) ---
 
@@ -409,7 +368,7 @@ class Scene(TcScene):
         """Get all entities in the scene (from pool)."""
         return self.get_all_entities()
 
-    # create_entity(name) - inherited from TcScene
+    # create_entity(name) -> inherited from TcScene
     # Creates entity in pool but does NOT register components or emit events.
     # Call add() after setup to complete registration.
 
@@ -498,40 +457,7 @@ class Scene(TcScene):
     def on_entity_removed(self, value: Event[Entity]):
         pass  # __iadd__ modifies in place, setter is no-op
 
-    # get_entity(uuid), get_entity_by_pick_id(pick_id) - inherited from TcScene
-
-    def find_entity_by_uuid(self, uuid: str) -> Entity | None:
-        """
-        Find entity by UUID in the scene hierarchy.
-
-        Searches through all entities and their children recursively.
-
-        Args:
-            uuid: The UUID to search for
-
-        Returns:
-            Entity with matching UUID or None if not found
-        """
-        for entity in self.entities:
-            if entity.uuid == uuid:
-                return entity
-        return None
-
-    def find_entity_by_name(self, name: str) -> Entity | None:
-        """
-        Find entity by name in the scene hierarchy.
-
-        Searches through all entities and their children recursively.
-
-        Args:
-            name: The name to search for
-        Returns:
-            Entity with matching name or None if not found
-        """
-        for entity in self.entities:
-            if entity.name == name:
-                return entity
-        return None
+    # get_entity(uuid), get_entity_by_pick_id(pick_id), find_entity_by_name(name) -> inherited from TcScene
 
     # --- Component search ---
 
@@ -545,7 +471,7 @@ class Scene(TcScene):
         Returns:
             First matching component or None.
         """
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             comp = entity.get_component(component_type)
             if comp is not None:
                 return comp
@@ -562,7 +488,7 @@ class Scene(TcScene):
             List of all matching components.
         """
         result = []
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             comp = entity.get_component(component_type)
             if comp is not None:
                 result.append(comp)
@@ -578,7 +504,7 @@ class Scene(TcScene):
         Returns:
             First matching component or None.
         """
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             for comp in entity.components:
                 if type(comp).__name__ == class_name:
                     return comp
@@ -717,7 +643,7 @@ class Scene(TcScene):
         Child entities are serialized recursively inside their parents.
         """
         root_entities = [
-            e for e in self.entities
+            e for e in self.get_all_entities()
             if e.transform.parent is None and e.serializable
         ]
         serialized_entities = []
@@ -729,14 +655,32 @@ class Scene(TcScene):
         # Lighting settings
         ss = self.shadow_settings
 
+        # Collect layer and flag names from C
+        layer_names_dict = {}
+        flag_names_dict = {}
+        for i in range(64):
+            ln = TcScene.get_layer_name(self, i)
+            if ln:
+                layer_names_dict[str(i)] = ln
+            fn = TcScene.get_flag_name(self, i)
+            if fn:
+                flag_names_dict[str(i)] = fn
+
+        # Collect pipeline template UUIDs
+        pipeline_uuids = []
+        for i in range(self.pipeline_template_count()):
+            t = self.pipeline_template_at(i)
+            if t.is_valid:
+                pipeline_uuids.append({"uuid": t.uuid})
+
         result = {
             "uuid": self.uuid,
             "background_color": list(self.background_color),
             "entities": serialized_entities,
-            "layer_names": {str(k): v for k, v in self.layer_names.items()},
-            "flag_names": {str(k): v for k, v in self.flag_names.items()},
-            "viewport_configs": [vc.serialize() for vc in self._viewport_configs],
-            "scene_pipelines": [{"uuid": t.uuid} for t in self.scene_pipelines if t.is_valid],
+            "layer_names": layer_names_dict,
+            "flag_names": flag_names_dict,
+            "viewport_configs": [vc.serialize() for vc in self.viewport_configs],
+            "scene_pipelines": pipeline_uuids,
             # Lighting
             "ambient_color": list(self.ambient_color),
             "ambient_intensity": self.ambient_intensity,
@@ -801,14 +745,16 @@ class Scene(TcScene):
                 data.get("skybox_bottom_color", [0.6, 0.5, 0.4]),
                 dtype=np.float32
             )
-            # Load layer and flag names
-            self.layer_names = {int(k): v for k, v in data.get("layer_names", {}).items()}
-            self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
-            # Load viewport configurations
-            self._viewport_configs = [
-                ViewportConfig.deserialize(vc_data)
-                for vc_data in data.get("viewport_configs", [])
-            ]
+            # Load layer and flag names (into C)
+            for k, v in data.get("layer_names", {}).items():
+                TcScene.set_layer_name(self, int(k), v)
+            for k, v in data.get("flag_names", {}).items():
+                TcScene.set_flag_name(self, int(k), v)
+            # Load viewport configurations (stored in C++)
+            self.clear_viewport_configs()
+            for vc_data in data.get("viewport_configs", []):
+                vc = ViewportConfig.deserialize(vc_data)
+                self.add_viewport_config(vc)
             # Load scene pipelines from templates (stored in C++ tc_scene)
             from termin._native.render import TcScenePipelineTemplate
             self.clear_pipeline_templates()
@@ -877,22 +823,18 @@ class Scene(TcScene):
         """
         from termin._native import log
 
-        if self._destroyed:
+        if not self.is_alive():
             return
-        self._destroyed = True
 
         log.info(f"[Scene] destroy() name='{self.name}', self={id(self):#x}")
 
         # Call on_destroy on all components via tc_ref (works for both C++ and Python)
-        for entity in self.entities:
+        for entity in self.get_all_entities():
             for tc_ref in entity.tc_components:
                 try:
                     tc_ref.on_destroy()
                 except Exception as ex:
-                    print(f"Error in destroy handler of component '{tc_ref}': {e}")
-
-        # Clear lighting reference
-        self._tc_lighting = None
+                    print(f"Error in destroy handler of component '{tc_ref}': {ex}")
 
         # Clear runtime editor state
         self._editor_entities_data = None

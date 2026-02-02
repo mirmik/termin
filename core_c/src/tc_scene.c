@@ -3,6 +3,7 @@
 #include "../include/tc_scene_pool.h"
 #include "../include/tc_scene_lighting.h"
 #include "../include/tc_scene_skybox.h"
+#include "../include/tc_viewport_config.h"
 #include "../include/tc_resource_map.h"
 #include "../include/tc_profiler.h"
 #include "../include/tc_mesh.h"
@@ -106,11 +107,22 @@ typedef struct {
     tc_scene_skybox* skyboxes;
     void** collision_worlds;
     const char** names;
+    const char** uuids;
+    float* background_colors;  // [capacity * 4] RGBA
+
+    // Layer and flag names (64 each per scene, interned strings)
+    const char** layer_names;  // [capacity * 64]
+    const char** flag_names;   // [capacity * 64]
 
     // Pipeline templates (dynamic arrays of tc_spt_handle per scene)
     tc_spt_handle** pipeline_templates;
     size_t* pipeline_template_counts;
     size_t* pipeline_template_capacities;
+
+    // Viewport configurations (dynamic arrays per scene)
+    tc_viewport_config** viewport_configs;
+    size_t* viewport_config_counts;
+    size_t* viewport_config_capacities;
 
     // Pool management
     uint32_t* free_stack;
@@ -155,9 +167,16 @@ void tc_scene_pool_init(void) {
     g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
     g_pool->collision_worlds = (void**)calloc(cap, sizeof(void*));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
+    g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
+    g_pool->background_colors = (float*)calloc(cap * 4, sizeof(float));
+    g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
+    g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->pipeline_templates = (tc_spt_handle**)calloc(cap, sizeof(tc_spt_handle*));
     g_pool->pipeline_template_counts = (size_t*)calloc(cap, sizeof(size_t));
     g_pool->pipeline_template_capacities = (size_t*)calloc(cap, sizeof(size_t));
+    g_pool->viewport_configs = (tc_viewport_config**)calloc(cap, sizeof(tc_viewport_config*));
+    g_pool->viewport_config_counts = (size_t*)calloc(cap, sizeof(size_t));
+    g_pool->viewport_config_capacities = (size_t*)calloc(cap, sizeof(size_t));
 
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
@@ -198,9 +217,16 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->skyboxes);
     free(g_pool->collision_worlds);
     free(g_pool->names);
+    free(g_pool->uuids);
+    free(g_pool->background_colors);
+    free(g_pool->layer_names);
+    free(g_pool->flag_names);
     free(g_pool->pipeline_templates);
     free(g_pool->pipeline_template_counts);
     free(g_pool->pipeline_template_capacities);
+    free(g_pool->viewport_configs);
+    free(g_pool->viewport_config_counts);
+    free(g_pool->viewport_config_capacities);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -235,9 +261,16 @@ static void pool_grow(void) {
     g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
     g_pool->collision_worlds = realloc(g_pool->collision_worlds, new_cap * sizeof(void*));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
+    g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
+    g_pool->background_colors = realloc(g_pool->background_colors, new_cap * 4 * sizeof(float));
+    g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
+    g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
     g_pool->pipeline_templates = realloc(g_pool->pipeline_templates, new_cap * sizeof(tc_spt_handle*));
     g_pool->pipeline_template_counts = realloc(g_pool->pipeline_template_counts, new_cap * sizeof(size_t));
     g_pool->pipeline_template_capacities = realloc(g_pool->pipeline_template_capacities, new_cap * sizeof(size_t));
+    g_pool->viewport_configs = realloc(g_pool->viewport_configs, new_cap * sizeof(tc_viewport_config*));
+    g_pool->viewport_config_counts = realloc(g_pool->viewport_config_counts, new_cap * sizeof(size_t));
+    g_pool->viewport_config_capacities = realloc(g_pool->viewport_config_capacities, new_cap * sizeof(size_t));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
 
     // Initialize new slots
@@ -257,9 +290,16 @@ static void pool_grow(void) {
     memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
     memset(g_pool->collision_worlds + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
+    memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
+    memset(g_pool->background_colors + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
+    memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
+    memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->pipeline_templates + old_cap, 0, (new_cap - old_cap) * sizeof(tc_spt_handle*));
     memset(g_pool->pipeline_template_counts + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
     memset(g_pool->pipeline_template_capacities + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
+    memset(g_pool->viewport_configs + old_cap, 0, (new_cap - old_cap) * sizeof(tc_viewport_config*));
+    memset(g_pool->viewport_config_counts + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
+    memset(g_pool->viewport_config_capacities + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
 
     // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
@@ -373,6 +413,12 @@ void tc_scene_free(tc_scene_handle h) {
     g_pool->pipeline_template_counts[idx] = 0;
     g_pool->pipeline_template_capacities[idx] = 0;
 
+    // Free viewport configs array
+    free(g_pool->viewport_configs[idx]);
+    g_pool->viewport_configs[idx] = NULL;
+    g_pool->viewport_config_counts[idx] = 0;
+    g_pool->viewport_config_capacities[idx] = 0;
+
     // Destroy entity pool via registry to invalidate handles
     tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->pools[idx]);
     if (tc_entity_pool_handle_valid(pool_handle)) {
@@ -414,6 +460,120 @@ const char* tc_scene_get_name(tc_scene_handle h) {
 
 void tc_scene_set_name(tc_scene_handle h, const char* name) {
     tc_scene_pool_set_name(h, name);
+}
+
+// ============================================================================
+// UUID
+// ============================================================================
+
+const char* tc_scene_get_uuid(tc_scene_handle h) {
+    if (!handle_alive(h)) return NULL;
+    return g_pool->uuids[h.index];
+}
+
+void tc_scene_set_uuid(tc_scene_handle h, const char* uuid) {
+    if (!handle_alive(h)) return;
+    g_pool->uuids[h.index] = uuid ? tc_intern_string(uuid) : NULL;
+}
+
+// ============================================================================
+// Layer and Flag Names
+// ============================================================================
+
+const char* tc_scene_get_layer_name(tc_scene_handle h, int index) {
+    if (!handle_alive(h)) return NULL;
+    if (index < 0 || index >= 64) return NULL;
+    return g_pool->layer_names[h.index * 64 + index];
+}
+
+void tc_scene_set_layer_name(tc_scene_handle h, int index, const char* name) {
+    if (!handle_alive(h)) return;
+    if (index < 0 || index >= 64) return;
+    g_pool->layer_names[h.index * 64 + index] = (name && name[0]) ? tc_intern_string(name) : NULL;
+}
+
+const char* tc_scene_get_flag_name(tc_scene_handle h, int index) {
+    if (!handle_alive(h)) return NULL;
+    if (index < 0 || index >= 64) return NULL;
+    return g_pool->flag_names[h.index * 64 + index];
+}
+
+void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name) {
+    if (!handle_alive(h)) return;
+    if (index < 0 || index >= 64) return;
+    g_pool->flag_names[h.index * 64 + index] = (name && name[0]) ? tc_intern_string(name) : NULL;
+}
+
+// ============================================================================
+// Background Color
+// ============================================================================
+
+void tc_scene_set_background_color(tc_scene_handle h, float r, float g, float b, float a) {
+    if (!handle_alive(h)) return;
+    float* c = g_pool->background_colors + h.index * 4;
+    c[0] = r;
+    c[1] = g;
+    c[2] = b;
+    c[3] = a;
+}
+
+void tc_scene_get_background_color(tc_scene_handle h, float* r, float* g, float* b, float* a) {
+    if (!handle_alive(h)) return;
+    float* c = g_pool->background_colors + h.index * 4;
+    if (r) *r = c[0];
+    if (g) *g = c[1];
+    if (b) *b = c[2];
+    if (a) *a = c[3];
+}
+
+// ============================================================================
+// Viewport Configurations
+// ============================================================================
+
+void tc_scene_add_viewport_config(tc_scene_handle h, const tc_viewport_config* config) {
+    if (!handle_alive(h) || !config) return;
+    uint32_t idx = h.index;
+
+    // Grow array if needed
+    if (g_pool->viewport_config_counts[idx] >= g_pool->viewport_config_capacities[idx]) {
+        size_t new_cap = g_pool->viewport_config_capacities[idx] == 0 ? 4 : g_pool->viewport_config_capacities[idx] * 2;
+        g_pool->viewport_configs[idx] = realloc(g_pool->viewport_configs[idx], new_cap * sizeof(tc_viewport_config));
+        g_pool->viewport_config_capacities[idx] = new_cap;
+    }
+
+    // Copy config (interns strings)
+    tc_viewport_config_copy(&g_pool->viewport_configs[idx][g_pool->viewport_config_counts[idx]], config);
+    g_pool->viewport_config_counts[idx]++;
+}
+
+void tc_scene_remove_viewport_config(tc_scene_handle h, size_t index) {
+    if (!handle_alive(h)) return;
+    uint32_t idx = h.index;
+    if (index >= g_pool->viewport_config_counts[idx]) return;
+
+    // Swap with last and decrement count
+    if (index < g_pool->viewport_config_counts[idx] - 1) {
+        g_pool->viewport_configs[idx][index] = g_pool->viewport_configs[idx][g_pool->viewport_config_counts[idx] - 1];
+    }
+    g_pool->viewport_config_counts[idx]--;
+}
+
+void tc_scene_clear_viewport_configs(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    uint32_t idx = h.index;
+    g_pool->viewport_config_counts[idx] = 0;
+}
+
+size_t tc_scene_viewport_config_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    return g_pool->viewport_config_counts[h.index];
+}
+
+tc_viewport_config* tc_scene_viewport_config_at(tc_scene_handle h, size_t index) {
+    if (!handle_alive(h)) return NULL;
+    uint32_t idx = h.index;
+    if (index >= g_pool->viewport_config_counts[idx]) return NULL;
+    return &g_pool->viewport_configs[idx][index];
 }
 
 // ============================================================================

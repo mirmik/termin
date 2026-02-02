@@ -46,6 +46,7 @@ set(TC_SOURCES
     src/tc_texture_registry.c
     src/tc_type_registry.c
     src/tc_viewport.c
+    src/tc_viewport_config.c
 )
 
 # Header files (only .h, for IDE integration)
@@ -87,6 +88,7 @@ set(TC_HEADERS
     include/tc_type_registry.h
     include/tc_types.h
     include/tc_vec3.h
+    include/tc_viewport_config.h
     include/termin_core.h
     include/render/tc_display.h
     include/render/tc_input_manager.h

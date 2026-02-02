@@ -67,6 +67,11 @@ public:
         return _h;
     }
 
+    // Check if scene is alive (not destroyed)
+    bool is_alive() const {
+        return tc_scene_alive(_h);
+    }
+
     // Get non-owning reference to this scene
     TcSceneRef scene_ref() const {
         return TcSceneRef(_h);
@@ -236,6 +241,84 @@ public:
         tc_scene_set_name(_h, n.c_str());
     }
 
+    // Scene UUID
+    std::string uuid() const {
+        const char* u = tc_scene_get_uuid(_h);
+        return u ? std::string(u) : "";
+    }
+
+    void set_uuid(const std::string& u) {
+        tc_scene_set_uuid(_h, u.empty() ? nullptr : u.c_str());
+    }
+
+    // Layer names (0-63)
+    std::string get_layer_name(int index) const {
+        const char* n = tc_scene_get_layer_name(_h, index);
+        return n ? std::string(n) : "";
+    }
+
+    void set_layer_name(int index, const std::string& name) {
+        tc_scene_set_layer_name(_h, index, name.empty() ? nullptr : name.c_str());
+    }
+
+    // Flag names (0-63)
+    std::string get_flag_name(int index) const {
+        const char* n = tc_scene_get_flag_name(_h, index);
+        return n ? std::string(n) : "";
+    }
+
+    void set_flag_name(int index, const std::string& name) {
+        tc_scene_set_flag_name(_h, index, name.empty() ? nullptr : name.c_str());
+    }
+
+    // Background color (RGBA)
+    std::tuple<float, float, float, float> get_background_color() const {
+        float r = 0, g = 0, b = 0, a = 1;
+        tc_scene_get_background_color(_h, &r, &g, &b, &a);
+        return {r, g, b, a};
+    }
+
+    void set_background_color(float r, float g, float b, float a) {
+        tc_scene_set_background_color(_h, r, g, b, a);
+    }
+
+    // Viewport configurations
+    void add_viewport_config(const std::string& name, const std::string& display_name,
+                            const std::string& camera_uuid, float x, float y, float w, float h,
+                            const std::string& pipeline_uuid, const std::string& pipeline_name,
+                            int depth, const std::string& input_mode, bool block_input_in_editor,
+                            uint64_t layer_mask, bool enabled) {
+        tc_viewport_config config;
+        tc_viewport_config_init(&config);
+        config.name = name.empty() ? nullptr : name.c_str();
+        config.display_name = display_name.c_str();
+        config.camera_uuid = camera_uuid.empty() ? nullptr : camera_uuid.c_str();
+        config.region[0] = x;
+        config.region[1] = y;
+        config.region[2] = w;
+        config.region[3] = h;
+        config.pipeline_uuid = pipeline_uuid.empty() ? nullptr : pipeline_uuid.c_str();
+        config.pipeline_name = pipeline_name.empty() ? nullptr : pipeline_name.c_str();
+        config.depth = depth;
+        config.input_mode = input_mode.c_str();
+        config.block_input_in_editor = block_input_in_editor;
+        config.layer_mask = layer_mask;
+        config.enabled = enabled;
+        tc_scene_add_viewport_config(_h, &config);
+    }
+
+    void remove_viewport_config(size_t index) {
+        tc_scene_remove_viewport_config(_h, index);
+    }
+
+    void clear_viewport_configs() {
+        tc_scene_clear_viewport_configs(_h);
+    }
+
+    size_t viewport_config_count() const {
+        return tc_scene_viewport_config_count(_h);
+    }
+
     // Lighting properties
     tc_scene_lighting* lighting() {
         return tc_scene_get_lighting(_h);
@@ -321,6 +404,7 @@ void bind_tc_scene(nb::module_& m) {
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
         .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
+        .def("is_alive", &TcScene::is_alive, "Check if scene is alive (not destroyed)")
         .def("scene_ref", &TcScene::scene_ref, "Get non-owning reference to this scene")
 
         // Entity management
@@ -392,8 +476,58 @@ void bind_tc_scene(nb::module_& m) {
             return nb::none();
         }, nb::arg("name"), "Find entity by name. Returns None if not found.")
 
-        // Scene name
+        // Scene name and UUID
         .def_prop_rw("name", &TcScene::name, &TcScene::set_name)
+        .def_prop_rw("uuid", &TcScene::uuid, &TcScene::set_uuid)
+
+        // Layer and flag names (0-63)
+        .def("get_layer_name", &TcScene::get_layer_name, nb::arg("index"),
+             "Get layer name by index (0-63), empty string if not set")
+        .def("set_layer_name", &TcScene::set_layer_name, nb::arg("index"), nb::arg("name"),
+             "Set layer name by index (0-63), empty string removes")
+        .def("get_flag_name", &TcScene::get_flag_name, nb::arg("index"),
+             "Get flag name by index (0-63), empty string if not set")
+        .def("set_flag_name", &TcScene::set_flag_name, nb::arg("index"), nb::arg("name"),
+             "Set flag name by index (0-63), empty string removes")
+
+        // Background color (RGBA)
+        .def("get_background_color", &TcScene::get_background_color,
+             "Get background color as (r, g, b, a) tuple")
+        .def("set_background_color", &TcScene::set_background_color,
+             nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("a"),
+             "Set background color RGBA")
+
+        // Viewport configurations
+        .def("add_viewport_config", &TcScene::add_viewport_config,
+             nb::arg("name"), nb::arg("display_name"), nb::arg("camera_uuid"),
+             nb::arg("x"), nb::arg("y"), nb::arg("w"), nb::arg("h"),
+             nb::arg("pipeline_uuid"), nb::arg("pipeline_name"),
+             nb::arg("depth"), nb::arg("input_mode"), nb::arg("block_input_in_editor"),
+             nb::arg("layer_mask"), nb::arg("enabled"),
+             "Add a viewport configuration")
+        .def("remove_viewport_config", &TcScene::remove_viewport_config,
+             nb::arg("index"), "Remove viewport configuration by index")
+        .def("clear_viewport_configs", &TcScene::clear_viewport_configs,
+             "Clear all viewport configurations")
+        .def("viewport_config_count", &TcScene::viewport_config_count,
+             "Get number of viewport configurations")
+        .def("get_viewport_config", [](TcScene& self, size_t index) -> nb::dict {
+            tc_viewport_config* config = tc_scene_viewport_config_at(self._h, index);
+            if (!config) return nb::dict();
+            nb::dict d;
+            d["name"] = config->name ? std::string(config->name) : "";
+            d["display_name"] = config->display_name ? std::string(config->display_name) : "Main";
+            d["camera_uuid"] = config->camera_uuid ? std::string(config->camera_uuid) : "";
+            d["region"] = std::make_tuple(config->region[0], config->region[1], config->region[2], config->region[3]);
+            d["pipeline_uuid"] = config->pipeline_uuid ? std::string(config->pipeline_uuid) : "";
+            d["pipeline_name"] = config->pipeline_name ? std::string(config->pipeline_name) : "";
+            d["depth"] = config->depth;
+            d["input_mode"] = config->input_mode ? std::string(config->input_mode) : "simple";
+            d["block_input_in_editor"] = config->block_input_in_editor;
+            d["layer_mask"] = config->layer_mask;
+            d["enabled"] = config->enabled;
+            return d;
+        }, nb::arg("index"), "Get viewport configuration as dict")
 
         // Scene mode
         .def("get_mode", [](TcScene& self) {
