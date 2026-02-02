@@ -212,6 +212,7 @@ set(ENTITY_LIB_SOURCES
     termin/entity/entity_registry.cpp
     termin/entity/component.cpp
     termin/entity/component_registry.cpp
+    termin/entity/unknown_component.cpp
     termin/entity/vtable_utils.cpp
     termin/entity/input_handler.cpp
     termin/camera/camera_component.cpp

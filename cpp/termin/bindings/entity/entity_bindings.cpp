@@ -120,11 +120,26 @@ public:
     nb::object serialize() const {
         if (!_c) return nb::none();
 
+        // For C++ components, use virtual serialize() method
+        // This allows UnknownComponent to return original_type instead of "UnknownComponent"
+        if (_c->kind == TC_CXX_COMPONENT) {
+            CxxComponent* cxx = CxxComponent::from_tc(_c);
+            if (cxx) {
+                const char* tname = cxx->type_name();
+                tc::Log::info("[TcComponentRef::serialize] C++ component type='%s'", tname ? tname : "null");
+                tc_value v = cxx->serialize();
+                tc::Log::info("[TcComponentRef::serialize] serialize() returned, type=%d", v.type);
+                nb::object result = tc_value_to_py(&v);
+                tc::Log::info("[TcComponentRef::serialize] tc_value_to_py done");
+                tc_value_free(&v);
+                return result;
+            }
+        }
+
         // For Python components, check if they have a custom serialize method
         if (_c->native_language == TC_LANGUAGE_PYTHON && _c->body) {
             nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(_c->body));
             if (nb::hasattr(py_obj, "serialize")) {
-                // Call Python serialize method (e.g., for UnknownComponent)
                 nb::object result = py_obj.attr("serialize")();
                 if (!result.is_none()) {
                     return result;
@@ -929,12 +944,12 @@ void bind_entity_class(nb::module_& m) {
                             // Create UnknownComponent to preserve data
                             tc::Log::warn("Unknown component type: %s (creating placeholder)", type_name.c_str());
                             try {
-                                tc_component* tc = ComponentRegistryPython::create_tc_component("UnknownComponent");
+                                tc_component* tc = tc_component_registry_create("UnknownComponent");
                                 if (tc) {
                                     ent.add_component_ptr(tc);
                                     TcComponentRef ref(tc);
-                                    ref.set_field("stored_type", nb::str(type_name.c_str()), scene_ref);
-                                    ref.set_field("stored_data", data_field, scene_ref);
+                                    ref.set_field("original_type", nb::str(type_name.c_str()), scene_ref);
+                                    ref.set_field("original_data", data_field, scene_ref);
                                 }
                             } catch (const std::exception& e) {
                                 tc::Log::error(e, "Failed to create UnknownComponent for %s", type_name.c_str());
@@ -1139,9 +1154,8 @@ void bind_entity_class(nb::module_& m) {
                             TcComponentRef ref = nb::cast<TcComponentRef>(
                                 py_entity.attr("add_component_by_name")("UnknownComponent"));
                             if (ref.valid()) {
-                                // Set stored_type and stored_data via tc_inspect
-                                ref.set_field("stored_type", nb::str(type_name.c_str()), scene_ref);
-                                ref.set_field("stored_data", data_field, scene_ref);
+                                ref.set_field("original_type", nb::str(type_name.c_str()), scene_ref);
+                                ref.set_field("original_data", data_field, scene_ref);
                             }
                         } catch (const std::exception& e) {
                             tc::Log::error(e, "Failed to create UnknownComponent for %s", type_name.c_str());

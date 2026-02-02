@@ -1,76 +1,12 @@
 """
-UnknownComponent - placeholder for components whose type is not registered.
+UnknownComponent utilities.
 
-When a scene is loaded and a component type is not found (e.g., module not loaded
-or has errors), an UnknownComponent is created to preserve the data. When the
-module is loaded/fixed, the component can be upgraded to the real type.
+UnknownComponent is now implemented in C++ (cpp/termin/entity/unknown_component.cpp).
+This module provides the upgrade function for converting UnknownComponents to real
+components when their modules are loaded.
 """
 
 from __future__ import annotations
-
-from typing import Any, Dict
-
-from termin.visualization.core.python_component import PythonComponent
-from termin.editor.inspect_field import InspectField
-
-
-class UnknownComponent(PythonComponent):
-    """
-    Placeholder component for unknown/unloaded component types.
-
-    Preserves original type name and serialized data so that:
-    1. The component can be upgraded when the module is loaded
-    2. If the scene is saved, the original data is preserved
-    """
-
-    inspect_fields: Dict[str, Any] = {
-        "original_type": InspectField(
-            label="Original Type",
-            kind="string",
-            read_only=True,
-        ),
-    }
-
-    original_type: str = ""
-    original_data: dict = None
-
-    def __init__(self, original_type: str = "", original_data: dict = None):
-        super().__init__(enabled=False)  # Disabled by default since it's a placeholder
-        self.original_type = original_type
-        self.original_data = original_data if original_data is not None else {}
-
-    @classmethod
-    def type_name(cls) -> str:
-        return "UnknownComponent"
-
-    def serialize(self) -> Dict[str, Any]:
-        """
-        Serialize as the original component type.
-
-        This ensures that if the scene is saved while the component is unavailable,
-        it will be correctly restored when the module is loaded.
-        """
-        return {
-            "type": self.original_type,
-            "data": self.original_data,
-        }
-
-    def serialize_data(self) -> Dict[str, Any]:
-        """Return original data for serialization."""
-        return self.original_data
-
-    def deserialize_data(self, data: Dict[str, Any], context: Any = None) -> None:
-        """
-        Deserialize - store the data for later upgrade.
-
-        Note: original_type should be set before calling this.
-        """
-        self.original_data = data if data else {}
-
-
-# Register the component
-from termin.entity._entity_native import ComponentRegistry
-ComponentRegistry.instance().register_python("UnknownComponent", UnknownComponent)
 
 
 def upgrade_unknown_components(scene) -> int:
@@ -95,15 +31,19 @@ def upgrade_unknown_components(scene) -> int:
     registry = ComponentRegistry.instance()
 
     for entity in scene.entities:
-        # Find all UnknownComponents on this entity
-        unknown_components = [
-            c for c in entity.components
-            if isinstance(c, UnknownComponent)
+        # Find all UnknownComponents on this entity (by type name)
+        unknown_refs = [
+            ref for ref in entity.tc_components
+            if ref.type_name == "UnknownComponent"
         ]
 
-        for unknown in unknown_components:
-            original_type = unknown.original_type
-            original_data = unknown.original_data
+        for ref in unknown_refs:
+            # Get original_type and original_data via tc_inspect
+            original_type = ref.get_field("original_type")
+            original_data = ref.get_field("original_data")
+
+            if not original_type:
+                continue
 
             # Check if type is now registered
             if not registry.has(original_type):
@@ -111,16 +51,16 @@ def upgrade_unknown_components(scene) -> int:
 
             try:
                 # Create real component via registry
-                comp = registry.create(original_type)
-                if comp is None:
+                new_ref = entity.add_component_by_name(original_type)
+                if not new_ref.valid():
                     continue
 
-                # Deserialize data - all components have this method
-                comp.deserialize_data(original_data, None)
+                # Deserialize data
+                if original_data:
+                    new_ref.deserialize_data(original_data, scene.tc_scene_ref)
 
-                # Remove unknown, add real
-                entity.remove_component(unknown)
-                entity.add_component(comp)
+                # Remove unknown component
+                entity.remove_component_ref(ref)
                 upgraded += 1
 
                 log.info(f"[UnknownComponent] Upgraded '{original_type}' on entity '{entity.name}'")

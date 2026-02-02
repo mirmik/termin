@@ -159,7 +159,8 @@ public:
     }
 
     // Full serialize (type + data) - returns tc_value dict
-    tc_value serialize() const {
+    // Virtual to allow UnknownComponent to return original type
+    virtual tc_value serialize() const {
         tc_value result = tc_value_dict_new();
         tc_value_dict_set(&result, "type", tc_value_string(type_name()));
         tc_value data = serialize_data();
