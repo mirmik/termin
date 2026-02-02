@@ -11,9 +11,11 @@ option(TC_BUILD_SHARED "Build shared library" ON)
 option(TC_BUILD_TESTS "Build tests" ON)
 
 # Source files (only .c)
+# Note: tc_collision.c is NOT included here because collision detection
+# requires C++ CollisionWorld from termin.dll. The C API is implemented
+# in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
     src/tc_animation_registry.c
-    src/tc_collision.c
     src/tc_component.c
     src/tc_core.c
     src/tc_display.c

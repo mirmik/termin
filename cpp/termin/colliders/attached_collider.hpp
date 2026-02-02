@@ -17,6 +17,7 @@
 #include "sphere_collider.hpp"
 #include "capsule_collider.hpp"
 #include "../geom/general_transform3.hpp"
+#include "tc_types.h"  // For tc_entity_id
 #include <cassert>
 #include <memory>
 
@@ -34,15 +35,18 @@ class AttachedCollider : public Collider {
 public:
     ColliderPrimitive* collider_;
     GeneralTransform3* transform_;
+    tc_entity_id owner_entity_id_ = TC_ENTITY_ID_INVALID;
 
     /**
      * Создать привязанный коллайдер.
      * @param collider Базовый примитив (в локальных координатах), не должен быть null
      * @param transform Указатель на GeneralTransform3, не должен быть null
+     * @param entity_id ID сущности-владельца (опционально)
      */
-    AttachedCollider(ColliderPrimitive* collider, GeneralTransform3* transform)
+    AttachedCollider(ColliderPrimitive* collider, GeneralTransform3* transform, tc_entity_id entity_id = TC_ENTITY_ID_INVALID)
         : collider_(collider)
         , transform_(transform)
+        , owner_entity_id_(entity_id)
     {
         assert(collider_ != nullptr && "collider must not be null");
         assert(transform_ != nullptr && "transform must not be null");
@@ -50,6 +54,7 @@ public:
 
     ColliderPrimitive* collider() const { return collider_; }
     GeneralTransform3* transform() const { return transform_; }
+    tc_entity_id owner_entity_id() const { return owner_entity_id_; }
 
     /**
      * Получить комбинированный мировой трансформ.
