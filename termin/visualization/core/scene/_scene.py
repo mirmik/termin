@@ -9,16 +9,11 @@ import numpy as np
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
 from termin._native.scene import TcScene, TcSceneLighting
-from termin.geombase import Ray3
-from termin.colliders.raycast_hit import RaycastHit
+# Ray3 and SceneRaycastHit are used via C++ TcScene.raycast/closest_to_ray
 from termin.core import Event
 
 from termin.visualization.core.viewport_config import ViewportConfig
 from termin.lighting import ShadowSettings
-
-
-def _vec3_to_np(v) -> np.ndarray:
-    return np.array([v.x, v.y, v.z])
 
 
 def is_overrides_method(obj, method_name, base_class):
@@ -214,62 +209,8 @@ class Scene(TcScene):
     # input_components -> use get_components_of_type("InputComponent") directly
 
     # --- Raycast ---
-
-    def raycast(self, ray: Ray3):
-        """
-        Returns first intersection with any ColliderComponent
-        where distance == 0 (exact hit).
-        """
-        result = {"hit": None, "ray_dist": float("inf")}
-        origin = _vec3_to_np(ray.origin)
-
-        def check_collider(comp):
-            attached = comp.attached
-            if attached is None:
-                return True
-
-            hit = attached.closest_to_ray(ray)
-            if hit.distance != 0.0:
-                return True
-
-            p_ray = _vec3_to_np(hit.point_on_ray)
-            d_ray = np.linalg.norm(p_ray - origin)
-
-            if d_ray < result["ray_dist"]:
-                result["ray_dist"] = d_ray
-                result["hit"] = RaycastHit(
-                    comp.entity, comp, p_ray, _vec3_to_np(hit.point_on_collider), 0.0
-                )
-            return True
-
-        self.foreach_component_of_type("ColliderComponent", check_collider)
-        return result["hit"]
-
-    def closest_to_ray(self, ray: Ray3):
-        """
-        Returns closest object to ray (minimum distance).
-        Does not require intersection.
-        """
-        result = {"hit": None, "dist": float("inf")}
-
-        def check_collider(comp):
-            attached = comp.attached
-            if attached is None:
-                return True
-
-            hit = attached.closest_to_ray(ray)
-            if hit.distance < result["dist"]:
-                result["dist"] = hit.distance
-                result["hit"] = RaycastHit(
-                    comp.entity, comp,
-                    _vec3_to_np(hit.point_on_ray),
-                    _vec3_to_np(hit.point_on_collider),
-                    hit.distance
-                )
-            return True
-
-        self.foreach_component_of_type("ColliderComponent", check_collider)
-        return result["hit"]
+    # raycast(ray) and closest_to_ray(ray) are inherited from TcScene (C++ implementation)
+    # They return SceneRaycastHit with properties: valid, entity, component, point_on_ray, point_on_collider, distance
 
     # --- Layer and flag names (stored in C) ---
 

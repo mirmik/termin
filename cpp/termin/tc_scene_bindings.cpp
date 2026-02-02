@@ -14,6 +14,8 @@
 #include "render/rendering_manager.hpp"
 #include "render/scene_pipeline_template.hpp"
 #include "collision/collision_world.hpp"
+#include "colliders/collider_component.hpp"
+#include "geom/ray3.hpp"
 #include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_skybox.h"
 
@@ -109,6 +111,25 @@ void dispatch_input_to_scene(tc_scene_handle h, const char* method_name, const E
 // ============================================================================
 
 void bind_tc_scene(nb::module_& m) {
+    // SceneRaycastHit binding
+    nb::class_<SceneRaycastHit>(m, "SceneRaycastHit")
+        .def_prop_ro("valid", &SceneRaycastHit::valid)
+        .def_prop_ro("entity", [](const SceneRaycastHit& h) -> nb::object {
+            if (!h.valid()) return nb::none();
+            return nb::cast(Entity(h.pool, h.entity_id));
+        })
+        .def_prop_ro("component", [](const SceneRaycastHit& h) -> nb::object {
+            if (!h.component) return nb::none();
+            return nb::cast(h.component, nb::rv_policy::reference);
+        })
+        .def_prop_ro("point_on_ray", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_ray[0], h.point_on_ray[1], h.point_on_ray[2]);
+        })
+        .def_prop_ro("point_on_collider", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_collider[0], h.point_on_collider[1], h.point_on_collider[2]);
+        })
+        .def_ro("distance", &SceneRaycastHit::distance);
+
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
         .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
@@ -335,6 +356,12 @@ void bind_tc_scene(nb::module_& m) {
         // Collision world
         .def_prop_ro("collision_world", &TcScene::collision_world,
                      nb::rv_policy::reference_internal)
+
+        // Raycast methods
+        .def("raycast", &TcScene::raycast, nb::arg("ray"),
+             "Find first intersection with a collider (distance == 0)")
+        .def("closest_to_ray", &TcScene::closest_to_ray, nb::arg("ray"),
+             "Find closest collider to ray (minimum distance)")
 
         // Component type iteration
         .def("count_components_of_type", [](TcScene& self, const std::string& type_name) {

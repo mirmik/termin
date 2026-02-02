@@ -23,10 +23,24 @@ class TcSceneRef;
 class TcScenePipelineTemplate;
 class RenderPipeline;
 class RenderingManager;
+class ColliderComponent;
+struct Ray3;
 
 namespace collision {
     class CollisionWorld;
 }
+
+// Result of scene raycast
+struct SceneRaycastHit {
+    tc_entity_pool* pool = nullptr;
+    tc_entity_id entity_id = TC_ENTITY_ID_INVALID;
+    ColliderComponent* component = nullptr;
+    double point_on_ray[3] = {0, 0, 0};
+    double point_on_collider[3] = {0, 0, 0};
+    double distance = 0.0;
+
+    bool valid() const { return component != nullptr; }
+};
 
 // C++ wrapper for tc_scene_handle with RAII semantics
 class TcScene {
@@ -155,6 +169,12 @@ public:
 
     // Collision world access
     collision::CollisionWorld* collision_world() const;
+
+    // Raycast - find first intersection (distance == 0)
+    SceneRaycastHit raycast(const Ray3& ray) const;
+
+    // Closest to ray - find closest object (minimum distance)
+    SceneRaycastHit closest_to_ray(const Ray3& ray) const;
 
     // Pipeline Templates (stored in tc_scene, compiled by RenderingManager)
     void add_pipeline_template(const TcScenePipelineTemplate& templ);
