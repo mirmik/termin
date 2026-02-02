@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/editor/external_editor.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+External&nbsp;text&nbsp;editor&nbsp;integration.<br>
+<br>
+Opens&nbsp;files&nbsp;in&nbsp;the&nbsp;configured&nbsp;external&nbsp;editor&nbsp;or&nbsp;system&nbsp;default.<br>
+&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+import&nbsp;os<br>
+import&nbsp;platform<br>
+import&nbsp;subprocess<br>
+from&nbsp;typing&nbsp;import&nbsp;Callable<br>
+<br>
+from&nbsp;PyQt6.QtWidgets&nbsp;import&nbsp;QWidget,&nbsp;QMessageBox<br>
+<br>
+from&nbsp;termin.editor.settings&nbsp;import&nbsp;EditorSettings<br>
+<br>
+<br>
+def&nbsp;open_in_text_editor(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;file_path:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;parent:&nbsp;QWidget&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;log_message:&nbsp;Callable[[str],&nbsp;None]&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Open&nbsp;file&nbsp;in&nbsp;external&nbsp;text&nbsp;editor.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Uses&nbsp;editor&nbsp;from&nbsp;settings&nbsp;if&nbsp;configured,&nbsp;otherwise&nbsp;system&nbsp;default.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;file_path:&nbsp;Path&nbsp;to&nbsp;file&nbsp;to&nbsp;open<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent:&nbsp;Parent&nbsp;widget&nbsp;for&nbsp;error&nbsp;dialogs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log_message:&nbsp;Optional&nbsp;callback&nbsp;for&nbsp;logging<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True&nbsp;if&nbsp;successful,&nbsp;False&nbsp;otherwise<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;settings&nbsp;=&nbsp;EditorSettings.instance()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;editor&nbsp;=&nbsp;settings.get_text_editor()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;editor:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subprocess.Popen([editor,&nbsp;file_path])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;system&nbsp;=&nbsp;platform.system()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;system&nbsp;==&nbsp;&quot;Windows&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;os.startfile(file_path)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;system&nbsp;==&nbsp;&quot;Darwin&quot;:&nbsp;&nbsp;#&nbsp;macOS<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subprocess.Popen([&quot;open&quot;,&nbsp;file_path])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:&nbsp;&nbsp;#&nbsp;Linux<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subprocess.Popen([&quot;xdg-open&quot;,&nbsp;file_path])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;log_message:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log_message(f&quot;Opened&nbsp;in&nbsp;editor:&nbsp;{file_path}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;Exception&nbsp;as&nbsp;e:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parent&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;QMessageBox.warning(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Error&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Failed&nbsp;to&nbsp;open&nbsp;file&nbsp;in&nbsp;text&nbsp;editor:\n{file_path}\n\nError:&nbsp;{e}&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

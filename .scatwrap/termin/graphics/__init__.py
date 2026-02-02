@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/graphics/__init__.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Graphics&nbsp;module&nbsp;-&nbsp;graphics&nbsp;backend&nbsp;and&nbsp;GPU&nbsp;resource&nbsp;handles.&quot;&quot;&quot;<br>
+<br>
+#&nbsp;Setup&nbsp;DLL&nbsp;paths&nbsp;before&nbsp;importing&nbsp;native&nbsp;extensions<br>
+from&nbsp;termin&nbsp;import&nbsp;_dll_setup&nbsp;&nbsp;#&nbsp;noqa:&nbsp;F401<br>
+<br>
+from&nbsp;termin.graphics._graphics_native&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Types<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Color4,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Size2i,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Rect2i,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Render&nbsp;state<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PolygonMode,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;BlendFactor,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;DepthFunc,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;RenderState,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;GPU&nbsp;handles<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ShaderHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GPUMeshHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GPUTextureHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FramebufferHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Graphics&nbsp;backends<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GraphicsBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OpenGLGraphicsBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Draw&nbsp;mode<br>
+&nbsp;&nbsp;&nbsp;&nbsp;DrawMode,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Functions<br>
+&nbsp;&nbsp;&nbsp;&nbsp;init_opengl,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Project&nbsp;settings&nbsp;(render&nbsp;sync)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;RenderSyncMode,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;get_render_sync_mode,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;set_render_sync_mode,<br>
+)<br>
+<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Color4&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Size2i&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Rect2i&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;PolygonMode&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;BlendFactor&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;DepthFunc&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderState&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;ShaderHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GPUMeshHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GPUTextureHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;FramebufferHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;OpenGLGraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;DrawMode&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;init_opengl&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderSyncMode&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;get_render_sync_mode&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;set_render_sync_mode&quot;,<br>
+]<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

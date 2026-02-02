@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Materials/Brown.material</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;26a30fc4-4abb-438c-aa43-90c4ee42ca7c&quot;,<br>
+&nbsp;&nbsp;&quot;shader&quot;:&nbsp;&quot;DefaultShader&quot;,<br>
+&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_color&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.1,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.1,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_shininess&quot;:&nbsp;32.0<br>
+&nbsp;&nbsp;}<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

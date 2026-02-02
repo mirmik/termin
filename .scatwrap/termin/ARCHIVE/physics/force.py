@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/ARCHIVE/physics/force.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+import&nbsp;numpy<br>
+from&nbsp;termin.ga201.screw&nbsp;import&nbsp;Screw2<br>
+from&nbsp;termin.physics.indexed_matrix&nbsp;import&nbsp;IndexedVector<br>
+<br>
+<br>
+class&nbsp;Force:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;v=[0,&nbsp;0],&nbsp;m=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._screw&nbsp;=&nbsp;Screw2(v=v,&nbsp;m=m)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._linked_object&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_right_global&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_right&nbsp;=&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_screw(scr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Force(v=scr.v,&nbsp;m=scr.m)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_right_global_type(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_right_global&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_right_type(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_right&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_right_global(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._is_right_global<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_right(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._is_right<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_linked_object(self,&nbsp;obj):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._linked_object&nbsp;=&nbsp;obj<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;screw(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._screw<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_vector(self,&nbsp;v):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._screw.set_vector(v)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_moment(self,&nbsp;m):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._screw.set_moment(v)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_indexed_vector(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedVector(self._screw.toarray(),&nbsp;self._linked_object.equation_indexes())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_indexed_vector_rotated_by(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedVector((self._screw.rotate_by(motor)).toarray(),&nbsp;self._linked_object.equation_indexes())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;unbind(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._linked_object.unbind_force(self)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;clean_bind_information(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._linked_object&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_left&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_right&nbsp;=&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_binded(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._linked_object&nbsp;is&nbsp;not&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_linked_to(self,&nbsp;obj):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;obj&nbsp;==&nbsp;self._linked_object<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

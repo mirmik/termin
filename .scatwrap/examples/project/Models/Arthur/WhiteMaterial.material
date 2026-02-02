@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Models/Arthur/WhiteMaterial.material</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;021365f4-f0d4-4202-a795-7f9bd59da658&quot;,<br>
+&nbsp;&nbsp;&quot;shader&quot;:&nbsp;&quot;DefaultShader&quot;,<br>
+&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_color&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_shininess&quot;:&nbsp;32.0<br>
+&nbsp;&nbsp;}<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

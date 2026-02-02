@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Materials/PBR_N.material</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;12b74b1a-cc4f-42d1-903f-280e7c92db52&quot;,<br>
+&nbsp;&nbsp;&quot;shader&quot;:&nbsp;&quot;AdvancedPBR&quot;,<br>
+&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_color&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.4563820958137512,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.32143130898475647,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.14695963263511658,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_metallic&quot;:&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_roughness&quot;:&nbsp;0.5,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_subsurface&quot;:&nbsp;0.0<br>
+&nbsp;&nbsp;}<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/NewMaterial.material</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;276dd150-158a-4485-91b6-0ea5a09b94ac&quot;,<br>
+&nbsp;&nbsp;&quot;shader&quot;:&nbsp;&quot;DefaultShader&quot;,<br>
+&nbsp;&nbsp;&quot;phase_marks&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;opaque&quot;<br>
+&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_color&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.07612726092338562,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.05842679366469383,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.7181200981140137,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_shininess&quot;:&nbsp;32.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_ambient&quot;:&nbsp;0.10000000149011612<br>
+&nbsp;&nbsp;}<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/Models/CorpGuard/CorpGuard.glb.meta</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+{<br>
+&nbsp;&nbsp;&quot;uuid&quot;:&nbsp;&quot;53957ca8-68d8-47fd-ba90-85cbe6a76d48&quot;,<br>
+&nbsp;&nbsp;&quot;resources&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;meshes&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;corpguard.001&quot;:&nbsp;&quot;67036e16-24cd-4bfb-ac54-d44adf5143b4&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;eyebrow004.001&quot;:&nbsp;&quot;7621e4b3-43d6-4074-8e9e-844ef2d9f020&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;low-poly.002&quot;:&nbsp;&quot;f03b45cb-da6d-4489-944e-58e4bee36f6e&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;m_trousers_02.001&quot;:&nbsp;&quot;884dc1a9-5cac-430d-bb14-ef5e22764fb1&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;shoes03.001&quot;:&nbsp;&quot;3cd4ac37-37e5-4fe3-95e8-812377ea1a3a&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;short02.001&quot;:&nbsp;&quot;b64efbd6-2d9b-4991-8bd0-42e14b5d3dee&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;uniform_jacket.001&quot;:&nbsp;&quot;d692788f-efba-4710-8556-216fc9c00fa3&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;skeletons&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;skeleton&quot;:&nbsp;&quot;9a358a86-c955-4b88-aba1-ded136579b83&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;animations&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;A&quot;:&nbsp;&quot;79d2d965-5629-4d1f-8b19-bdc387b43fa1&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Death&quot;:&nbsp;&quot;1be563f8-4449-4f2a-ba94-cc4f23e6e73a&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Dragged&quot;:&nbsp;&quot;968a3f5f-6855-4c63-a7e8-cc6af302a55f&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Grabbed&quot;:&nbsp;&quot;7f7ee388-ecd9-4755-bb9d-f7f65f15d8a1&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Idle&quot;:&nbsp;&quot;6aabb1ba-dc21-4f2f-9c72-b9ea8dbd7c1c&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;LowGravityWalk&quot;:&nbsp;&quot;2d661d36-fe58-4c39-a8a4-7fe22de43a78&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Run&quot;:&nbsp;&quot;6cbc3260-251c-497d-97c6-8ea364fd0565&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Shoot&quot;:&nbsp;&quot;0bbe0aa5-c64e-4673-bf23-dd36b140df8d&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Walk&quot;:&nbsp;&quot;c27f1c75-81bf-429f-a4d6-66758d3a404c&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&quot;convert_to_z_up&quot;:&nbsp;true,<br>
+&nbsp;&nbsp;&quot;normalize_scale&quot;:&nbsp;true,<br>
+&nbsp;&nbsp;&quot;blender_z_up_fix&quot;:&nbsp;true<br>
+}<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

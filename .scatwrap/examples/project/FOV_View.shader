@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>examples/project/FOV_View.shader</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+@program&nbsp;FOV_View<br>
+<br>
+@phase&nbsp;opaque<br>
+@priority&nbsp;0<br>
+@glDepthTest&nbsp;false<br>
+@glDepthMask&nbsp;false<br>
+@glCull&nbsp;false<br>
+<br>
+@property&nbsp;Texture2D&nbsp;u_input_tex&nbsp;=&nbsp;&quot;white&quot;<br>
+@property&nbsp;Texture2D&nbsp;u_depth_texture&nbsp;=&nbsp;&quot;depth_default&quot;<br>
+@property&nbsp;Texture2D&nbsp;u_fov_texture&nbsp;=&nbsp;&quot;white&quot;<br>
+<br>
+@stage&nbsp;vertex<br>
+#version&nbsp;330&nbsp;core<br>
+<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec2&nbsp;a_pos;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec2&nbsp;a_uv;<br>
+<br>
+out&nbsp;vec2&nbsp;v_uv;<br>
+<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_uv&nbsp;=&nbsp;a_uv;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;vec4(a_pos,&nbsp;0.0,&nbsp;1.0);<br>
+}<br>
+@endstage<br>
+<br>
+@stage&nbsp;fragment<br>
+#version&nbsp;330&nbsp;core<br>
+<br>
+in&nbsp;vec2&nbsp;v_uv;<br>
+<br>
+uniform&nbsp;sampler2D&nbsp;u_input_tex;<br>
+uniform&nbsp;sampler2D&nbsp;u_depth_texture;<br>
+uniform&nbsp;sampler2D&nbsp;u_fov_texture;<br>
+<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
+<br>
+vec4&nbsp;doit()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;color&nbsp;=&nbsp;texture(u_input_tex,&nbsp;v_uv);<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;color.b&nbsp;=&nbsp;0.0;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;color;<br>
+}<br>
+<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;doit();<br>
+}<br>
+@endstage<br>
+<br>
+@endphase<br>
+<!-- END SCAT CODE -->
+</body>
+</html>
