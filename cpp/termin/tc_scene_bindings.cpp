@@ -391,13 +391,6 @@ void bind_tc_scene(nb::module_& m) {
             tc_scene_set_mode(self._h, mode);
         }, nb::arg("mode"), "Set scene mode")
 
-        // Python wrapper for callbacks
-        .def("set_py_wrapper", [](TcSceneRef& self, nb::object wrapper) {
-            tc::Log::info("[TcSceneRef] set_py_wrapper handle=(%u,%u), py_wrapper=%p",
-                         self._h.index, self._h.generation, (void*)wrapper.ptr());
-            tc_scene_set_py_wrapper(self._h, wrapper.ptr());
-        }, nb::arg("wrapper"), "Set Python Scene wrapper for component auto-registration")
-
         // Skybox type
         .def("get_skybox_type", [](TcSceneRef& self) -> int {
             return tc_scene_get_skybox_type(self._h);

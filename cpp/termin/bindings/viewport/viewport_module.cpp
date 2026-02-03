@@ -119,15 +119,15 @@ void bind_tc_viewport_class(nb::module_& m) {
                 if (self.is_valid()) tc_viewport_set_name(self.handle_, n.c_str());
             })
 
-        // Scene - returns Python wrapper via tc_scene's py_wrapper
+        // Scene - returns TcScene directly (TcSceneRef is a non-owning reference)
         .def_prop_rw("scene",
             [](TcViewport& self) -> nb::object {
                 tc_scene_handle s = self.scene();
-                if (tc_scene_handle_valid(s)) {
-                    void* wrapper = tc_scene_get_py_wrapper(s);
-                    if (wrapper) {
-                        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
-                    }
+                if (tc_scene_handle_valid(s) && tc_scene_alive(s)) {
+                    // Import TcScene from _entity_native and create via from_handle
+                    nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
+                    nb::object tc_scene_class = entity_module.attr("TcScene");
+                    return tc_scene_class.attr("from_handle")(s.index, s.generation);
                 }
                 return nb::none();
             },

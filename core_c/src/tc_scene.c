@@ -102,7 +102,6 @@ typedef struct {
     ComponentList* before_render_lists;
     double* fixed_timesteps;
     double* accumulated_times;
-    void** py_wrappers;
     tc_resource_map** type_heads;
     tc_scene_lighting* lightings;
     tc_scene_skybox* skyboxes;
@@ -163,7 +162,6 @@ void tc_scene_pool_init(void) {
     g_pool->before_render_lists = (ComponentList*)calloc(cap, sizeof(ComponentList));
     g_pool->fixed_timesteps = (double*)calloc(cap, sizeof(double));
     g_pool->accumulated_times = (double*)calloc(cap, sizeof(double));
-    g_pool->py_wrappers = (void**)calloc(cap, sizeof(void*));
     g_pool->type_heads = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
     g_pool->lightings = (tc_scene_lighting*)calloc(cap, sizeof(tc_scene_lighting));
     g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
@@ -214,7 +212,6 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->before_render_lists);
     free(g_pool->fixed_timesteps);
     free(g_pool->accumulated_times);
-    free(g_pool->py_wrappers);
     free(g_pool->type_heads);
     free(g_pool->lightings);
     free(g_pool->skyboxes);
@@ -259,7 +256,6 @@ static void pool_grow(void) {
     g_pool->before_render_lists = realloc(g_pool->before_render_lists, new_cap * sizeof(ComponentList));
     g_pool->fixed_timesteps = realloc(g_pool->fixed_timesteps, new_cap * sizeof(double));
     g_pool->accumulated_times = realloc(g_pool->accumulated_times, new_cap * sizeof(double));
-    g_pool->py_wrappers = realloc(g_pool->py_wrappers, new_cap * sizeof(void*));
     g_pool->type_heads = realloc(g_pool->type_heads, new_cap * sizeof(tc_resource_map*));
     g_pool->lightings = realloc(g_pool->lightings, new_cap * sizeof(tc_scene_lighting));
     g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
@@ -289,7 +285,6 @@ static void pool_grow(void) {
     memset(g_pool->before_render_lists + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentList));
     memset(g_pool->fixed_timesteps + old_cap, 0, (new_cap - old_cap) * sizeof(double));
     memset(g_pool->accumulated_times + old_cap, 0, (new_cap - old_cap) * sizeof(double));
-    memset(g_pool->py_wrappers + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
     memset(g_pool->type_heads + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
     memset(g_pool->lightings + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_lighting));
     memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
@@ -366,7 +361,6 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     list_init(&g_pool->before_render_lists[idx]);
     g_pool->fixed_timesteps[idx] = 1.0 / 60.0;
     g_pool->accumulated_times[idx] = 0.0;
-    g_pool->py_wrappers[idx] = NULL;
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
     tc_scene_lighting_init(&g_pool->lightings[idx]);
     tc_scene_skybox_init(&g_pool->skyboxes[idx]);
@@ -966,20 +960,6 @@ size_t tc_scene_update_list_count(tc_scene_handle h) {
 size_t tc_scene_fixed_update_list_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
     return g_pool->fixed_update_lists[h.index].count;
-}
-
-// ============================================================================
-// Python Wrapper Access
-// ============================================================================
-
-void tc_scene_set_py_wrapper(tc_scene_handle h, void* py_wrapper) {
-    if (!handle_alive(h)) return;
-    g_pool->py_wrappers[h.index] = py_wrapper;
-}
-
-void* tc_scene_get_py_wrapper(tc_scene_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->py_wrappers[h.index];
 }
 
 // ============================================================================

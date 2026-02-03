@@ -103,14 +103,6 @@ TC_API size_t tc_scene_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_fixed_update_list_count(tc_scene_handle h);
 
 // ============================================================================
-// Python Wrapper Access
-// ============================================================================
-
-// Set/get Python Scene wrapper for callbacks from C to Python
-TC_API void tc_scene_set_py_wrapper(tc_scene_handle h, void* py_wrapper);
-TC_API void* tc_scene_get_py_wrapper(tc_scene_handle h);
-
-// ============================================================================
 // Entity Queries
 // ============================================================================
 
