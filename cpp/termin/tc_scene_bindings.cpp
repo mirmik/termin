@@ -16,6 +16,7 @@
 #include "collision/collision_world.hpp"
 #include "colliders/collider_component.hpp"
 #include "geom/ray3.hpp"
+#include "render/tc_value_trent.hpp"
 #include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_skybox.h"
 
@@ -277,25 +278,26 @@ void bind_tc_scene(nb::module_& m) {
         .def("viewport_config_count", &TcScene::viewport_config_count,
              "Get number of viewport configurations")
         .def("viewport_config_at", [](TcScene& self, size_t index) -> nb::object {
-            ViewportConfig* config = self.viewport_config_at(index);
-            if (!config) return nb::none();
-            return nb::cast(config, nb::rv_policy::reference_internal);
+            if (index >= self.viewport_config_count()) return nb::none();
+            return nb::cast(self.viewport_config_at(index));
         }, nb::arg("index"), "Get viewport configuration by index")
         .def_prop_ro("viewport_configs", [](TcScene& self) {
             return self.viewport_configs();
-        }, nb::rv_policy::reference_internal, "Get all viewport configurations")
+        }, "Get all viewport configurations")
 
         // Metadata (trent stored in C++, converted to Python at boundary)
         .def("get_metadata", [](TcScene& self) -> nb::object {
             return trent_to_python(self.metadata());
         }, "Get all metadata as Python dict")
         .def("set_metadata", [](TcScene& self, nb::handle data) {
-            self._metadata = python_to_trent(data);
+            nos::trent t = python_to_trent(data);
+            tc_value new_val = tc::trent_to_tc_value(t);
+            tc_scene_set_metadata(self._h, new_val);
         }, nb::arg("data"), "Set all metadata from Python dict")
         .def("get_metadata_value", [](TcScene& self, const std::string& path) -> nb::object {
-            const nos::trent* t = self.get_metadata_at_path(path);
-            if (!t) return nb::none();
-            return trent_to_python(*t);
+            nos::trent t = self.get_metadata_at_path(path);
+            if (t.is_nil()) return nb::none();
+            return trent_to_python(t);
         }, nb::arg("path"), "Get metadata value at path (e.g. 'termin.editor.camera_name')")
         .def("set_metadata_value", [](TcScene& self, const std::string& path, nb::handle value) {
             self.set_metadata_at_path(path, python_to_trent(value));

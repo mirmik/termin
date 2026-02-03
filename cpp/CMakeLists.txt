@@ -227,6 +227,7 @@ set(ENTITY_LIB_SOURCES
     termin/kinematic/actuator_component.cpp
     termin/lighting/light_component.cpp
     termin/geom/general_transform3.cpp
+    termin/viewport_config.cpp
     termin/tc_collision_c_api.cpp
     termin/collision/collision_world_c.cpp
     ../core_c/src/tc_inspect_instance.cpp
@@ -258,6 +259,7 @@ set_target_properties(entity_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
 # Animation library (AnimationPlayer component)

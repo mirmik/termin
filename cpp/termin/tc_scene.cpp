@@ -5,6 +5,7 @@
 #include "entity/component.hpp"
 #include "render/rendering_manager.hpp"
 #include "render/scene_pipeline_template.hpp"
+#include "render/tc_value_trent.hpp"
 #include "collision/collision_world.hpp"
 #include "colliders/collider_component.hpp"
 #include "geom/ray3.hpp"
@@ -14,9 +15,6 @@ namespace termin {
 
 TcScene::TcScene() {
     _h = tc_scene_new();
-    _collision_world = std::make_unique<collision::CollisionWorld>();
-    tc_scene_set_collision_world(_h, _collision_world.get());
-    _metadata.init(nos::trent::type::dict);
     tc::Log::info("[TcScene] Created handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
 }
 
@@ -29,8 +27,6 @@ void TcScene::destroy() {
     if (tc_scene_handle_valid(_h)) {
         tc::Log::info("[TcScene] destroy() handle=(%u,%u)", _h.index, _h.generation);
         RenderingManager::instance().clear_scene_pipelines(_h);
-        tc_scene_set_collision_world(_h, nullptr);
-        _collision_world.reset();
         tc_scene_free(_h);
         _h = TC_SCENE_HANDLE_INVALID;
     }
@@ -46,9 +42,6 @@ TcSceneRef TcScene::scene_ref() const {
 
 TcScene::TcScene(TcScene&& other) noexcept
     : _h(other._h)
-    , _collision_world(std::move(other._collision_world))
-    , _metadata(std::move(other._metadata))
-    , _viewport_configs(std::move(other._viewport_configs))
 {
     other._h = TC_SCENE_HANDLE_INVALID;
 }
@@ -57,9 +50,6 @@ TcScene& TcScene::operator=(TcScene&& other) noexcept {
     if (this != &other) {
         destroy();
         _h = other._h;
-        _collision_world = std::move(other._collision_world);
-        _metadata = std::move(other._metadata);
-        _viewport_configs = std::move(other._viewport_configs);
         other._h = TC_SCENE_HANDLE_INVALID;
     }
     return *this;
@@ -228,35 +218,51 @@ void TcScene::set_background_color(float r, float g, float b, float a) {
 }
 
 void TcScene::add_viewport_config(const ViewportConfig& config) {
-    _viewport_configs.push_back(config);
+    tc_viewport_config c = config.to_c();
+    tc_scene_add_viewport_config(_h, &c);
 }
 
 void TcScene::remove_viewport_config(size_t index) {
-    if (index < _viewport_configs.size()) {
-        _viewport_configs.erase(_viewport_configs.begin() + index);
-    }
+    tc_scene_remove_viewport_config(_h, index);
 }
 
 void TcScene::clear_viewport_configs() {
-    _viewport_configs.clear();
+    tc_scene_clear_viewport_configs(_h);
 }
 
 size_t TcScene::viewport_config_count() const {
-    return _viewport_configs.size();
+    return tc_scene_viewport_config_count(_h);
 }
 
-ViewportConfig* TcScene::viewport_config_at(size_t index) {
-    if (index >= _viewport_configs.size()) return nullptr;
-    return &_viewport_configs[index];
+ViewportConfig TcScene::viewport_config_at(size_t index) const {
+    tc_viewport_config* c = tc_scene_viewport_config_at(_h, index);
+    return ViewportConfig::from_c(c);
 }
 
-const ViewportConfig* TcScene::viewport_config_at(size_t index) const {
-    if (index >= _viewport_configs.size()) return nullptr;
-    return &_viewport_configs[index];
+std::vector<ViewportConfig> TcScene::viewport_configs() const {
+    std::vector<ViewportConfig> result;
+    size_t count = tc_scene_viewport_config_count(_h);
+    result.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        tc_viewport_config* c = tc_scene_viewport_config_at(_h, i);
+        result.push_back(ViewportConfig::from_c(c));
+    }
+    return result;
 }
 
-const nos::trent* TcScene::get_metadata_at_path(const std::string& path) const {
-    const nos::trent* current = &_metadata;
+nos::trent TcScene::metadata() const {
+    tc_value* v = tc_scene_get_metadata(_h);
+    if (v) {
+        return tc::tc_value_to_trent(*v);
+    }
+    nos::trent result;
+    result.init(nos::trent::type::dict);
+    return result;
+}
+
+nos::trent TcScene::get_metadata_at_path(const std::string& path) const {
+    nos::trent md = metadata();
+    const nos::trent* current = &md;
     std::string remaining = path;
 
     while (!remaining.empty() && current != nullptr) {
@@ -266,7 +272,7 @@ const nos::trent* TcScene::get_metadata_at_path(const std::string& path) const {
             : remaining.substr(0, dot_pos);
 
         if (!current->is_dict() || !current->contains(key)) {
-            return nullptr;
+            return nos::trent();  // nil
         }
         current = current->_get(key);
 
@@ -276,17 +282,23 @@ const nos::trent* TcScene::get_metadata_at_path(const std::string& path) const {
         remaining = remaining.substr(dot_pos + 1);
     }
 
-    return (current && !current->is_nil()) ? current : nullptr;
+    if (current && !current->is_nil()) {
+        return *current;
+    }
+    return nos::trent();  // nil
 }
 
 void TcScene::set_metadata_at_path(const std::string& path, const nos::trent& value) {
     if (path.empty()) return;
 
-    if (!_metadata.is_dict()) {
-        _metadata.init(nos::trent::type::dict);
+    // Load current metadata
+    nos::trent md = metadata();
+
+    if (!md.is_dict()) {
+        md.init(nos::trent::type::dict);
     }
 
-    nos::trent* current = &_metadata;
+    nos::trent* current = &md;
     std::string remaining = path;
 
     while (true) {
@@ -306,30 +318,38 @@ void TcScene::set_metadata_at_path(const std::string& path, const nos::trent& va
         current = &(*current)[key];
         remaining = remaining.substr(dot_pos + 1);
     }
+
+    // Save back to tc_value
+    tc_value new_val = tc::trent_to_tc_value(md);
+    tc_scene_set_metadata(_h, new_val);
 }
 
 bool TcScene::has_metadata_at_path(const std::string& path) const {
-    return get_metadata_at_path(path) != nullptr;
+    return !get_metadata_at_path(path).is_nil();
 }
 
 std::string TcScene::metadata_to_json() const {
-    return nos::json::dump(_metadata);
+    return nos::json::dump(metadata());
 }
 
 void TcScene::metadata_from_json(const std::string& json_str) {
+    nos::trent md;
     if (json_str.empty()) {
-        _metadata.init(nos::trent::type::dict);
-        return;
-    }
-    try {
-        _metadata = nos::json::parse(json_str);
-        if (!_metadata.is_dict()) {
-            _metadata.init(nos::trent::type::dict);
+        md.init(nos::trent::type::dict);
+    } else {
+        try {
+            md = nos::json::parse(json_str);
+            if (!md.is_dict()) {
+                md.init(nos::trent::type::dict);
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error("[TcScene] Failed to parse metadata JSON: %s", e.what());
+            md.init(nos::trent::type::dict);
         }
-    } catch (const std::exception& e) {
-        tc::Log::error("[TcScene] Failed to parse metadata JSON: %s", e.what());
-        _metadata.init(nos::trent::type::dict);
     }
+    // Save to tc_value
+    tc_value new_val = tc::trent_to_tc_value(md);
+    tc_scene_set_metadata(_h, new_val);
 }
 
 tc_scene_lighting* TcScene::lighting() {
@@ -398,7 +418,7 @@ const std::vector<std::string>& TcScene::get_pipeline_targets(const std::string&
 }
 
 collision::CollisionWorld* TcScene::collision_world() const {
-    return _collision_world.get();
+    return reinterpret_cast<collision::CollisionWorld*>(tc_scene_get_collision_world(_h));
 }
 
 SceneRaycastHit TcScene::raycast(const Ray3& ray) const {

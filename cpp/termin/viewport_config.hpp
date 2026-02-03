@@ -5,6 +5,10 @@
 #include <tuple>
 #include <cstdint>
 
+extern "C" {
+#include "../../core_c/include/tc_viewport_config.h"
+}
+
 namespace termin {
 
 // Configuration for mounting a scene viewport to a display
@@ -89,6 +93,12 @@ public:
         region_w = w;
         region_h = h;
     }
+
+    // Convert to C struct (strings are interned)
+    tc_viewport_config to_c() const;
+
+    // Create from C struct
+    static ViewportConfig from_c(const tc_viewport_config* c);
 };
 
 } // namespace termin

@@ -4,6 +4,7 @@
 #include "../include/tc_scene_lighting.h"
 #include "../include/tc_scene_skybox.h"
 #include "../include/tc_viewport_config.h"
+#include "../include/tc_collision_world.h"
 #include "../include/tc_resource_map.h"
 #include "../include/tc_profiler.h"
 #include "../include/tc_mesh.h"
@@ -106,6 +107,7 @@ typedef struct {
     tc_scene_lighting* lightings;
     tc_scene_skybox* skyboxes;
     void** collision_worlds;
+    tc_value* metadata;  // Extensible metadata storage (dict per scene)
     const char** names;
     const char** uuids;
     float* background_colors;  // [capacity * 4] RGBA
@@ -166,6 +168,7 @@ void tc_scene_pool_init(void) {
     g_pool->lightings = (tc_scene_lighting*)calloc(cap, sizeof(tc_scene_lighting));
     g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
     g_pool->collision_worlds = (void**)calloc(cap, sizeof(void*));
+    g_pool->metadata = (tc_value*)calloc(cap, sizeof(tc_value));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
     g_pool->background_colors = (float*)calloc(cap * 4, sizeof(float));
@@ -216,6 +219,7 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->lightings);
     free(g_pool->skyboxes);
     free(g_pool->collision_worlds);
+    free(g_pool->metadata);
     free(g_pool->names);
     free(g_pool->uuids);
     free(g_pool->background_colors);
@@ -260,6 +264,7 @@ static void pool_grow(void) {
     g_pool->lightings = realloc(g_pool->lightings, new_cap * sizeof(tc_scene_lighting));
     g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
     g_pool->collision_worlds = realloc(g_pool->collision_worlds, new_cap * sizeof(void*));
+    g_pool->metadata = realloc(g_pool->metadata, new_cap * sizeof(tc_value));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
     g_pool->background_colors = realloc(g_pool->background_colors, new_cap * 4 * sizeof(float));
@@ -289,6 +294,7 @@ static void pool_grow(void) {
     memset(g_pool->lightings + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_lighting));
     memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
     memset(g_pool->collision_worlds + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
+    memset(g_pool->metadata + old_cap, 0, (new_cap - old_cap) * sizeof(tc_value));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->background_colors + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
@@ -364,7 +370,8 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
     tc_scene_lighting_init(&g_pool->lightings[idx]);
     tc_scene_skybox_init(&g_pool->skyboxes[idx]);
-    g_pool->collision_worlds[idx] = NULL;
+    g_pool->collision_worlds[idx] = tc_collision_world_new();
+    g_pool->metadata[idx] = tc_value_dict_new();
     g_pool->names[idx] = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
 
     tc_scene_handle h = { idx, gen };
@@ -393,6 +400,15 @@ void tc_scene_free(tc_scene_handle h) {
     if (!handle_alive(h)) return;
 
     uint32_t idx = h.index;
+
+    // Free collision world
+    if (g_pool->collision_worlds[idx]) {
+        tc_collision_world_free(g_pool->collision_worlds[idx]);
+        g_pool->collision_worlds[idx] = NULL;
+    }
+
+    // Free metadata
+    tc_value_free(&g_pool->metadata[idx]);
 
     // Release skybox resources
     tc_scene_skybox_free(&g_pool->skyboxes[idx]);
@@ -1280,6 +1296,21 @@ void tc_scene_set_skybox_material(tc_scene_handle h, tc_material* material) {
 tc_material* tc_scene_get_skybox_material(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
     return g_pool->skyboxes[h.index].material;
+}
+
+// ============================================================================
+// Metadata
+// ============================================================================
+
+tc_value* tc_scene_get_metadata(tc_scene_handle h) {
+    if (!handle_alive(h)) return NULL;
+    return &g_pool->metadata[h.index];
+}
+
+void tc_scene_set_metadata(tc_scene_handle h, tc_value value) {
+    if (!handle_alive(h)) return;
+    tc_value_free(&g_pool->metadata[h.index]);
+    g_pool->metadata[h.index] = value;
 }
 
 // ============================================================================

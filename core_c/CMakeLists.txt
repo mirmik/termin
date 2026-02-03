@@ -16,6 +16,7 @@ option(TC_BUILD_TESTS "Build tests" ON)
 # in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
     src/tc_animation_registry.c
+    src/tc_collision_world.c
     src/tc_component.c
     src/tc_core.c
     src/tc_display.c

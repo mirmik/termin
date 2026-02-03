@@ -45,9 +45,6 @@ struct SceneRaycastHit {
 class TcScene {
 public:
     tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
-    std::unique_ptr<collision::CollisionWorld> _collision_world;
-    nos::trent _metadata;  // Extensible metadata storage (dict)
-    std::vector<ViewportConfig> _viewport_configs;
 
     TcScene();
     ~TcScene();
@@ -135,21 +132,20 @@ public:
     std::tuple<float, float, float, float> get_background_color() const;
     void set_background_color(float r, float g, float b, float a);
 
-    // Viewport configurations (stored in C++ TcScene, not C API)
+    // Viewport configurations (stored in tc_scene C API)
     void add_viewport_config(const ViewportConfig& config);
     void remove_viewport_config(size_t index);
     void clear_viewport_configs();
     size_t viewport_config_count() const;
-    ViewportConfig* viewport_config_at(size_t index);
-    const ViewportConfig* viewport_config_at(size_t index) const;
-    const std::vector<ViewportConfig>& viewport_configs() const { return _viewport_configs; }
+    ViewportConfig viewport_config_at(size_t index) const;
+    std::vector<ViewportConfig> viewport_configs() const;
 
-    // Metadata access (C++ level - trent-based)
-    nos::trent& metadata() { return _metadata; }
-    const nos::trent& metadata() const { return _metadata; }
+    // Metadata access (converted from tc_value on each call)
+    nos::trent metadata() const;
 
     // Metadata value access by path (e.g. "termin.editor.camera_name")
-    const nos::trent* get_metadata_at_path(const std::string& path) const;
+    // Returns nil trent if path not found
+    nos::trent get_metadata_at_path(const std::string& path) const;
     void set_metadata_at_path(const std::string& path, const nos::trent& value);
     bool has_metadata_at_path(const std::string& path) const;
 

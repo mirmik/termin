@@ -2,6 +2,7 @@
 #include "collision_world_c.hpp"
 #include "collision_world.hpp"
 #include "termin/colliders/attached_collider.hpp"
+#include "tc_collision_world.h"
 #include <vector>
 
 using termin::collision::CollisionWorld;
@@ -10,14 +11,33 @@ using termin::collision::ContactManifold;
 // Static storage for collision results (valid until next detect_contacts call)
 static std::vector<tc_contact_manifold> s_manifold_storage;
 
-extern "C" {
-
-CW_API void* tc_collision_world_create(void) {
+// Local allocator functions (registered with termin_core)
+static tc_collision_world* collision_world_alloc() {
     return new CollisionWorld();
 }
 
-CW_API void tc_collision_world_destroy(void* cw) {
+static void collision_world_free(tc_collision_world* cw) {
     delete static_cast<CollisionWorld*>(cw);
+}
+
+// Static registration: registers allocator when entity_lib loads
+namespace {
+struct CollisionWorldAllocatorRegistrar {
+    CollisionWorldAllocatorRegistrar() {
+        tc_collision_world_set_allocator(collision_world_alloc, collision_world_free);
+    }
+};
+static CollisionWorldAllocatorRegistrar s_registrar;
+}
+
+extern "C" {
+
+CW_API void* tc_collision_world_create(void) {
+    return collision_world_alloc();
+}
+
+CW_API void tc_collision_world_destroy(void* cw) {
+    collision_world_free(static_cast<tc_collision_world*>(cw));
 }
 
 CW_API int tc_collision_world_size(void* cw) {

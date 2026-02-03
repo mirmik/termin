@@ -10,6 +10,7 @@
 #include "tc_scene_skybox.h"
 #include "tc_scene_pipeline_template.h"
 #include "tc_viewport_config.h"
+#include "tc_value.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -280,6 +281,16 @@ TC_API void tc_scene_set_skybox_mesh(tc_scene_handle h, struct tc_mesh* mesh);
 TC_API struct tc_mesh* tc_scene_get_skybox_mesh(tc_scene_handle h);
 TC_API void tc_scene_set_skybox_material(tc_scene_handle h, struct tc_material* material);
 TC_API struct tc_material* tc_scene_get_skybox_material(tc_scene_handle h);
+
+// ============================================================================
+// Metadata
+// ============================================================================
+
+// Get scene metadata (returns pointer to internal storage, do not free)
+TC_API tc_value* tc_scene_get_metadata(tc_scene_handle h);
+
+// Set scene metadata (takes ownership of value, frees previous)
+TC_API void tc_scene_set_metadata(tc_scene_handle h, tc_value value);
 
 // ============================================================================
 // Lighting

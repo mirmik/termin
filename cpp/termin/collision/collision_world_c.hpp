@@ -5,9 +5,13 @@
 
 // Export macro for entity_lib.dll
 #ifdef _WIN32
-#define CW_API __declspec(dllexport)
+    #ifdef ENTITY_LIB_EXPORTS
+        #define CW_API __declspec(dllexport)
+    #else
+        #define CW_API __declspec(dllimport)
+    #endif
 #else
-#define CW_API __attribute__((visibility("default")))
+    #define CW_API __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus
