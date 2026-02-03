@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.render import RenderEngine, ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
+    from termin.visualization.render.offscreen_context import OffscreenContext
     from termin.editor.viewport_list_widget import ViewportListWidget
     from termin.editor.inspector_controller import InspectorController
 
@@ -122,9 +123,13 @@ class RenderingController:
         # Register pipeline factory with RenderingManager
         self._manager.set_pipeline_factory(self._create_pipeline_for_name)
 
-        # Initialize offscreen rendering context
-        # This creates dedicated GL context for rendering, shared by all displays
-        self._manager.initialize()
+        # Create dedicated GL context for rendering, shared by all displays
+        from termin.visualization.render.offscreen_context import OffscreenContext
+        self._offscreen_context: OffscreenContext = OffscreenContext()
+
+        # Pass graphics backend and make_current callback to RenderingManager
+        self._manager.set_graphics(self._offscreen_context.graphics)
+        self._manager.set_make_current_callback(self._offscreen_context.make_current)
 
         self._connect_signals()
 
@@ -203,12 +208,11 @@ class RenderingController:
             return None
 
         # Ensure SDL backend is configured with shared context
-        if self._manager.offscreen_context is not None:
-            sdl_backend.set_share_context(
-                share_context=self._manager.offscreen_context.gl_context,
-                make_current_fn=self._manager.offscreen_context.make_current,
-            )
-            sdl_backend.set_graphics(self._manager.graphics)
+        sdl_backend.set_share_context(
+            share_context=self._offscreen_context.gl_context,
+            make_current_fn=self._offscreen_context.make_current,
+        )
+        sdl_backend.set_graphics(self._offscreen_context.graphics)
 
         # Create tab container widget
         tab_container = QWidget()
@@ -483,6 +487,16 @@ class RenderingController:
         """Currently selected viewport."""
         return self._selected_viewport
 
+    @property
+    def offscreen_context(self) -> "OffscreenContext":
+        """Dedicated offscreen GL context for rendering."""
+        return self._offscreen_context
+
+    @property
+    def graphics(self) -> "GraphicsBackend":
+        """Graphics backend for rendering."""
+        return self._offscreen_context.graphics
+
     def add_display(self, display: "Display", name: Optional[str] = None) -> None:
         """
         Add a display to management.
@@ -601,12 +615,11 @@ class RenderingController:
         from termin.visualization.core.display import Display
 
         # Configure SDL backend to share GL context with offscreen rendering context
-        if self._manager.offscreen_context is not None:
-            sdl_backend.set_share_context(
-                share_context=self._manager.offscreen_context.gl_context,
-                make_current_fn=self._manager.offscreen_context.make_current,
-            )
-            sdl_backend.set_graphics(self._manager.graphics)
+        sdl_backend.set_share_context(
+            share_context=self._offscreen_context.gl_context,
+            make_current_fn=self._offscreen_context.make_current,
+        )
+        sdl_backend.set_graphics(self._offscreen_context.graphics)
 
         # Create SDL window (will share context with offscreen context)
         surface = sdl_backend.create_embedded_window(
@@ -1298,6 +1311,7 @@ class RenderingController:
         profiler.begin_frame()
 
         # Phase 1: Render all viewports to output_fbos
+        # (GL context activated via make_current_callback inside render_all_offscreen)
         self._manager.render_all_offscreen()
 
         # Phase 2: Present to displays

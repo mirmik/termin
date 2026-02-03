@@ -31,6 +31,10 @@ DisplayFactory = Callable[[str], Optional["Display"]]
 # Takes pipeline name (e.g., "(Editor)"), returns RenderPipeline or None
 PipelineFactory = Callable[[str], Optional["RenderPipeline"]]
 
+# Type alias for make_current callback
+# Called before rendering to activate GL context
+MakeCurrentCallback = Callable[[], None]
+
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
@@ -40,7 +44,6 @@ if TYPE_CHECKING:
     from termin.visualization.render.engine import RenderEngine
     from termin.visualization.render.state import ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
-    from termin.visualization.render.offscreen_context import OffscreenContext
 
 
 class RenderingManager:
@@ -70,15 +73,11 @@ class RenderingManager:
 
         self._displays: List["Display"] = []
 
-        # Dedicated offscreen GL context for rendering
-        # All GPU resources live in this context
-        self._offscreen_context: Optional["OffscreenContext"] = None
-
         # Viewport states - flat dict, not tied to displays
         # viewport_id -> ViewportRenderState
         self._viewport_states: Dict[int, "ViewportRenderState"] = {}
 
-        # Graphics backend (set via initialize() or set_graphics())
+        # Graphics backend (set via set_graphics())
         self._graphics: Optional["GraphicsBackend"] = None
 
         # RenderEngine (created lazily)
@@ -96,54 +95,18 @@ class RenderingManager:
         # Attached scenes (for scene pipeline execution)
         self._attached_scenes: List["Scene"] = []
 
-        # Flag to use new offscreen-first rendering
-        self._use_offscreen_rendering: bool = False
+        # Callback to activate GL context before rendering
+        self._make_current_callback: Optional[MakeCurrentCallback] = None
 
     # --- Configuration ---
 
-    def initialize(self) -> None:
-        """
-        Initialize the rendering manager with dedicated offscreen context.
-
-        Creates OffscreenContext which provides:
-        - Dedicated GL context for all rendering
-        - GraphicsBackend instance
-
-        Call this before creating displays. Displays should share context
-        with offscreen_context.gl_context.
-        """
-        from termin.visualization.render.offscreen_context import OffscreenContext
-
-        if self._offscreen_context is not None:
-            return  # Already initialized
-
-        self._offscreen_context = OffscreenContext()
-        self._graphics = self._offscreen_context.graphics
-        self._use_offscreen_rendering = True
-
-    @property
-    def offscreen_context(self) -> Optional["OffscreenContext"]:
-        """
-        Dedicated offscreen GL context.
-
-        Use offscreen_context.gl_context when creating displays
-        to share GL context with the rendering system.
-        """
-        return self._offscreen_context
-
-    @property
-    def is_initialized(self) -> bool:
-        """Check if rendering manager is initialized with offscreen context."""
-        return self._offscreen_context is not None
-
     def set_graphics(self, graphics: "GraphicsBackend") -> None:
-        """
-        Set graphics backend for rendering.
-
-        Note: prefer using initialize() which creates both
-        offscreen context and graphics backend.
-        """
+        """Set graphics backend for rendering."""
         self._graphics = graphics
+
+    def set_make_current_callback(self, callback: MakeCurrentCallback) -> None:
+        """Set callback to activate GL context before rendering."""
+        self._make_current_callback = callback
 
     def set_default_pipeline(self, pipeline: "RenderPipeline") -> None:
         """Set default pipeline for new viewports."""
@@ -234,11 +197,7 @@ class RenderingManager:
             if state is not None:
                 state.clear_all()
 
-        display_id = id(display)
         self._displays.remove(display)
-
-        # Legacy cleanup
-        self._legacy_viewport_states.pop(display_id, None)
 
     def get_display_name(self, display: "Display") -> str:
         """Get display name."""
@@ -696,11 +655,8 @@ class RenderingManager:
         Phase 1: render_all_offscreen() - renders to output_fbos
         Phase 2: present_all() - blits to displays
 
-        Requires initialize() to be called first.
+        GL context is activated via make_current_callback if set.
         """
-        if not self._use_offscreen_rendering:
-            raise RuntimeError("RenderingManager.initialize() must be called before render_all()")
-
         self.render_all_offscreen()
         if present:
             self.present_all()
@@ -709,27 +665,23 @@ class RenderingManager:
         """
         Phase 1: Render all viewports to their output_fbos.
 
-        Executes in dedicated offscreen context. All viewports (from all displays)
-        are rendered in a single pass. Scene pipelines can span multiple displays.
+        All viewports (from all displays) are rendered in a single pass.
+        Scene pipelines can span multiple displays.
         """
         from termin._native import log
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
-        if self._offscreen_context is None:
-            log.warn("[render_all_offscreen] OffscreenContext not initialized, call initialize() first")
-            return
-
         if self._graphics is None:
             log.warn("[render_all_offscreen] Graphics backend not set")
             return
 
-        with profiler.section("Offscreen Context"):
-            # Activate offscreen context
-            self._offscreen_context.make_current()
+        # Activate GL context via callback
+        if self._make_current_callback is not None:
+            self._make_current_callback()
 
-            # Ensure graphics is ready (load GL functions)
-            self._graphics.ensure_ready()
+        # Ensure graphics is ready (load GL functions)
+        self._graphics.ensure_ready()
 
         # Lazy create render engine
         if self._render_engine is None:
@@ -967,23 +919,12 @@ class RenderingManager:
         """
         Shutdown the rendering manager.
 
-        Cleans up all viewport states and destroys offscreen context.
+        Cleans up all viewport states.
         """
         # Clear all viewport states
         for state in self._viewport_states.values():
             state.clear_all()
         self._viewport_states.clear()
-
-        # Legacy cleanup
-        for states_dict in self._legacy_viewport_states.values():
-            for state in states_dict.values():
-                state.clear_all()
-        self._legacy_viewport_states.clear()
-
-        # Destroy offscreen context
-        if self._offscreen_context is not None:
-            self._offscreen_context.destroy()
-            self._offscreen_context = None
 
         self._graphics = None
         self._render_engine = None
