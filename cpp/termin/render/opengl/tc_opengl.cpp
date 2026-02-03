@@ -1,10 +1,9 @@
 // tc_opengl.cpp - OpenGL backend initialization C API implementation
 #include "tc_opengl.h"
 #include "termin/render/opengl/opengl_backend.hpp"
-#include <memory>
 
 static bool g_opengl_initialized = false;
-static std::unique_ptr<termin::OpenGLGraphicsBackend> g_graphics_backend;
+static termin::OpenGLGraphicsBackend* g_graphics_backend = nullptr;
 
 extern "C" {
 
@@ -22,8 +21,8 @@ TC_API bool tc_opengl_init(void) {
     // Register GPU operations vtable for tc_gpu module
     termin::gpu_ops_impl::register_gpu_ops();
 
-    // Create graphics backend
-    g_graphics_backend = std::make_unique<termin::OpenGLGraphicsBackend>();
+    // Get graphics backend singleton
+    g_graphics_backend = &termin::OpenGLGraphicsBackend::get_instance();
     g_graphics_backend->ensure_ready();
 
     g_opengl_initialized = true;
@@ -35,12 +34,13 @@ TC_API bool tc_opengl_is_initialized(void) {
 }
 
 TC_API void tc_opengl_shutdown(void) {
-    g_graphics_backend.reset();
+    // Singleton is not destroyed, just clear reference
+    g_graphics_backend = nullptr;
     g_opengl_initialized = false;
 }
 
 TC_API void* tc_opengl_get_graphics(void) {
-    return g_graphics_backend.get();
+    return g_graphics_backend;
 }
 
 } // extern "C"

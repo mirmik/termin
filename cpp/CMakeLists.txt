@@ -281,8 +281,8 @@ set_target_properties(animation_lib PROPERTIES
 
 # Render library (Drawable vtable, shared by components that need rendering)
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
-# SHARED to ensure consistent RTTI across all Python extension modules
-add_library(render_lib SHARED
+# SHARED for Python (consistent RTTI), STATIC for C# (WHOLEARCHIVE needs static lib)
+set(RENDER_LIB_SOURCES
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
     termin/render/frame_pass.cpp
@@ -319,6 +319,11 @@ add_library(render_lib SHARED
     termin/render/opengl/opengl_framebuffer.cpp
     termin/render/glad/src/glad.c
 )
+if(BUILD_CSHARP_BINDINGS)
+    add_library(render_lib STATIC ${RENDER_LIB_SOURCES})
+else()
+    add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
+endif()
 target_include_directories(render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
@@ -742,10 +747,10 @@ option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
 if(BUILD_CSHARP_BINDINGS)
     # SWIG wrapper library for C# bindings
     # This creates termin.dll that C# P/Invoke calls
+    # Note: glad.c is included via WHOLEARCHIVE from render_lib
     add_library(termin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/../csharp/termin_wrap.cxx
         termin/render/opengl/tc_opengl.cpp
-        termin/render/glad/src/glad.c
     )
     target_include_directories(termin PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -760,7 +765,7 @@ if(BUILD_CSHARP_BINDINGS)
             termin_core
             trent
             entity_lib
-            -WHOLEARCHIVE:$<TARGET_FILE:render_lib>
+            -WHOLEARCHIVE:$<TARGET_LINKER_FILE:render_lib>
         )
     else()
         target_link_libraries(termin PRIVATE
