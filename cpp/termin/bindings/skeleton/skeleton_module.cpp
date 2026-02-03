@@ -25,6 +25,12 @@ namespace nb = nanobind;
 static std::mutex g_skeleton_callback_mutex;
 static std::unordered_map<std::string, nb::callable> g_skeleton_python_callbacks;
 
+// Cleanup function to clear callbacks before Python shutdown
+void cleanup_skeleton_callbacks() {
+    std::lock_guard<std::mutex> lock(g_skeleton_callback_mutex);
+    g_skeleton_python_callbacks.clear();
+}
+
 // C callback wrapper that calls the stored Python callable
 static bool skeleton_python_load_callback_wrapper(tc_skeleton* skeleton, void* user_data) {
     (void)user_data;
@@ -545,4 +551,8 @@ NB_MODULE(_skeleton_native, m) {
 
         tc_skeleton_set_load_callback(handle.handle, nullptr, nullptr);
     }, nb::arg("handle"), "Clear load callback for skeleton");
+
+    // Register cleanup with Python's atexit module
+    nb::module_ atexit = nb::module_::import_("atexit");
+    atexit.attr("register")(nb::cpp_function(&cleanup_skeleton_callbacks));
 }

@@ -7,6 +7,7 @@
 #include "termin/render/handles.hpp"
 #include "termin/render/types.hpp"
 #include "termin/render/opengl/opengl_texture.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -308,6 +309,19 @@ private:
 
         GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE) {
+            tc::Log::error("[OpenGLFramebuffer] Framebuffer incomplete!");
+            tc::Log::error("  Status: 0x%x", status);
+            tc::Log::error("  Size: %dx%d", width_, height_);
+            tc::Log::error("  Samples: %d", samples_);
+            tc::Log::error("  Format: %s (internal=0x%x)", get_format().c_str(), internal_format);
+            tc::Log::error("  FBO: %u, Color tex: %u, Depth RB: %u", fbo_, color_tex_, depth_rb_);
+
+            // Check for OpenGL errors
+            GLenum err = glGetError();
+            if (err != GL_NO_ERROR) {
+                tc::Log::error("  OpenGL error: 0x%x", err);
+            }
+
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             throw std::runtime_error("Framebuffer incomplete: 0x" + std::to_string(status));
         }

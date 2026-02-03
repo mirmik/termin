@@ -27,9 +27,13 @@ endif()
 
 # Platform-specific optimization flags
 if(MSVC)
+    set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG")
+    set(CMAKE_C_FLAGS_DEBUG "/Zi /Od /DEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
     set(OPTIMIZE_FLAGS /O2 /fp:fast)
 else()
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
+    set(CMAKE_C_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
     set(OPTIMIZE_FLAGS -O3 -march=native -ffast-math)
 endif()

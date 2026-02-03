@@ -30,7 +30,7 @@ class CMakeBuildExt(build_ext):
         install_prefix = (build_lib / "termin").resolve()
         install_prefix.mkdir(parents=True, exist_ok=True)
 
-        cfg = "Debug" if self.debug else "Release"
+        cfg = "Debug"  # Always build with debug symbols
         cmake_args = [
             str(source_dir),
             f"-DCMAKE_BUILD_TYPE={cfg}",
