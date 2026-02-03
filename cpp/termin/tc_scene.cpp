@@ -3,13 +3,18 @@
 #include "tc_scene_ref.hpp"
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
+#include "entity/tc_component_ref.hpp"
 #include "render/rendering_manager.hpp"
+#include "../../core_c/include/tc_scene_skybox.h"
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
 #include "collision/collision_world.hpp"
 #include "colliders/collider_component.hpp"
 #include "geom/ray3.hpp"
 #include "tc_log.hpp"
+#include <sstream>
+#include <iomanip>
+#include <functional>
 
 namespace termin {
 
@@ -516,6 +521,458 @@ SceneRaycastHit TcScene::closest_to_ray(const Ray3& ray) const {
     );
 
     return result;
+}
+
+// --- Serialization helpers ---
+
+namespace {
+
+nos::trent serialize_viewport_config(const ViewportConfig& vc) {
+    nos::trent data;
+    data["name"] = vc.name;
+    data["display_name"] = vc.display_name;
+    data["camera_uuid"] = vc.camera_uuid;
+
+    nos::trent region;
+    region.push_back(nos::trent(static_cast<double>(vc.region_x)));
+    region.push_back(nos::trent(static_cast<double>(vc.region_y)));
+    region.push_back(nos::trent(static_cast<double>(vc.region_w)));
+    region.push_back(nos::trent(static_cast<double>(vc.region_h)));
+    data["region"] = std::move(region);
+
+    data["depth"] = static_cast<int64_t>(vc.depth);
+    data["input_mode"] = vc.input_mode;
+    data["block_input_in_editor"] = vc.block_input_in_editor;
+
+    if (!vc.pipeline_uuid.empty()) {
+        data["pipeline_uuid"] = vc.pipeline_uuid;
+    }
+    if (!vc.pipeline_name.empty()) {
+        data["pipeline_name"] = vc.pipeline_name;
+    }
+
+    // Only serialize layer_mask if not all layers
+    if (vc.layer_mask != 0xFFFFFFFFFFFFFFFFULL) {
+        std::ostringstream oss;
+        oss << "0x" << std::hex << vc.layer_mask;
+        data["layer_mask"] = oss.str();
+    }
+
+    // Only serialize enabled if False
+    if (!vc.enabled) {
+        data["enabled"] = false;
+    }
+
+    return data;
+}
+
+ViewportConfig deserialize_viewport_config(const nos::trent& data) {
+    ViewportConfig vc;
+
+    vc.name = data["name"].as_string_default("");
+    vc.display_name = data["display_name"].as_string_default("Main");
+    vc.camera_uuid = data["camera_uuid"].as_string_default("");
+
+    if (data.contains("region") && data["region"].is_list()) {
+        const auto& r = data["region"].as_list();
+        if (r.size() >= 4) {
+            vc.region_x = static_cast<float>(r[0].as_numer_default(0.0));
+            vc.region_y = static_cast<float>(r[1].as_numer_default(0.0));
+            vc.region_w = static_cast<float>(r[2].as_numer_default(1.0));
+            vc.region_h = static_cast<float>(r[3].as_numer_default(1.0));
+        }
+    }
+
+    vc.depth = static_cast<int>(data["depth"].as_numer_default(0));
+    vc.input_mode = data["input_mode"].as_string_default("simple");
+    vc.block_input_in_editor = data["block_input_in_editor"].as_bool_default(false);
+    vc.pipeline_uuid = data["pipeline_uuid"].as_string_default("");
+    vc.pipeline_name = data["pipeline_name"].as_string_default("");
+    vc.enabled = data["enabled"].as_bool_default(true);
+
+    // Parse layer_mask (may be hex string or int)
+    if (data.contains("layer_mask")) {
+        auto& lm = data["layer_mask"];
+        if (lm.is_string()) {
+            std::string s = lm.as_string();
+            if (s.size() > 2 && s[0] == '0' && s[1] == 'x') {
+                vc.layer_mask = std::stoull(s.substr(2), nullptr, 16);
+            } else {
+                vc.layer_mask = std::stoull(s, nullptr, 10);
+            }
+        } else if (lm.is_numer()) {
+            vc.layer_mask = static_cast<uint64_t>(lm.as_numer());
+        }
+    }
+
+    return vc;
+}
+
+nos::trent serialize_shadow_settings(const tc_scene_lighting* lighting) {
+    nos::trent data;
+    data["method"] = static_cast<int64_t>(lighting->shadow_method);
+    data["softness"] = static_cast<double>(lighting->shadow_softness);
+    data["bias"] = static_cast<double>(lighting->shadow_bias);
+    return data;
+}
+
+void deserialize_shadow_settings(tc_scene_lighting* lighting, const nos::trent& data) {
+    if (data.contains("method")) {
+        lighting->shadow_method = static_cast<int>(data["method"].as_numer_default(1));
+    }
+    if (data.contains("softness")) {
+        lighting->shadow_softness = static_cast<float>(data["softness"].as_numer_default(1.0));
+    }
+    if (data.contains("bias")) {
+        lighting->shadow_bias = static_cast<float>(data["bias"].as_numer_default(0.005));
+    }
+}
+
+nos::trent serialize_entity_recursive(const Entity& e) {
+    if (!e.valid() || !e.serializable()) {
+        return nos::trent();
+    }
+
+    // Serialize base data
+    tc_value base_val = e.serialize_base();
+    nos::trent data = tc::tc_value_to_trent(base_val);
+    tc_value_free(&base_val);
+
+    // Serialize components
+    nos::trent components;
+    components.init(nos::trent::type::list);
+    size_t comp_count = e.component_count();
+    for (size_t i = 0; i < comp_count; i++) {
+        tc_component* tc = e.component_at(i);
+        if (!tc) continue;
+
+        TcComponentRef ref(tc);
+        nos::trent comp_data = ref.serialize_trent();
+        if (!comp_data.is_nil()) {
+            components.push_back(std::move(comp_data));
+        }
+    }
+    data["components"] = std::move(components);
+
+    // Serialize children
+    std::vector<Entity> child_list = e.children();
+    if (!child_list.empty()) {
+        nos::trent children;
+        children.init(nos::trent::type::list);
+        for (const Entity& child : child_list) {
+            if (child.serializable()) {
+                nos::trent child_data = serialize_entity_recursive(child);
+                if (!child_data.is_nil()) {
+                    children.push_back(std::move(child_data));
+                }
+            }
+        }
+        if (!children.as_list().empty()) {
+            data["children"] = std::move(children);
+        }
+    }
+
+    return data;
+}
+
+} // anonymous namespace
+
+// --- TcScene serialization ---
+
+nos::trent TcScene::serialize() const {
+    nos::trent result;
+
+    result["uuid"] = uuid();
+
+    // Background color
+    auto [r, g, b, a] = get_background_color();
+    nos::trent bg;
+    bg.push_back(nos::trent(static_cast<double>(r)));
+    bg.push_back(nos::trent(static_cast<double>(g)));
+    bg.push_back(nos::trent(static_cast<double>(b)));
+    bg.push_back(nos::trent(static_cast<double>(a)));
+    result["background_color"] = std::move(bg);
+
+    // Root entities (no parent, serializable)
+    nos::trent entities;
+    entities.init(nos::trent::type::list);
+    for (const Entity& e : get_all_entities()) {
+        // Only root entities (no parent)
+        if (e.parent().valid()) continue;
+        if (!e.serializable()) continue;
+
+        nos::trent ent_data = serialize_entity_recursive(e);
+        if (!ent_data.is_nil()) {
+            entities.push_back(std::move(ent_data));
+        }
+    }
+    result["entities"] = std::move(entities);
+
+    // Layer names
+    nos::trent layer_names;
+    layer_names.init(nos::trent::type::dict);
+    for (int i = 0; i < 64; i++) {
+        std::string ln = get_layer_name(i);
+        if (!ln.empty()) {
+            layer_names[std::to_string(i)] = ln;
+        }
+    }
+    result["layer_names"] = std::move(layer_names);
+
+    // Flag names
+    nos::trent flag_names;
+    flag_names.init(nos::trent::type::dict);
+    for (int i = 0; i < 64; i++) {
+        std::string fn = get_flag_name(i);
+        if (!fn.empty()) {
+            flag_names[std::to_string(i)] = fn;
+        }
+    }
+    result["flag_names"] = std::move(flag_names);
+
+    // Viewport configs
+    nos::trent viewport_configs_list;
+    viewport_configs_list.init(nos::trent::type::list);
+    for (const ViewportConfig& vc : viewport_configs()) {
+        viewport_configs_list.push_back(serialize_viewport_config(vc));
+    }
+    result["viewport_configs"] = std::move(viewport_configs_list);
+
+    // Pipeline templates
+    nos::trent pipelines;
+    pipelines.init(nos::trent::type::list);
+    for (size_t i = 0; i < pipeline_template_count(); i++) {
+        TcScenePipelineTemplate t = pipeline_template_at(i);
+        if (t.is_valid()) {
+            nos::trent p;
+            p["uuid"] = t.uuid();
+            pipelines.push_back(std::move(p));
+        }
+    }
+    result["scene_pipelines"] = std::move(pipelines);
+
+    // Lighting
+    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    if (lit) {
+        nos::trent ambient;
+        ambient.push_back(nos::trent(static_cast<double>(lit->ambient_color[0])));
+        ambient.push_back(nos::trent(static_cast<double>(lit->ambient_color[1])));
+        ambient.push_back(nos::trent(static_cast<double>(lit->ambient_color[2])));
+        result["ambient_color"] = std::move(ambient);
+        result["ambient_intensity"] = static_cast<double>(lit->ambient_intensity);
+        result["shadow_settings"] = serialize_shadow_settings(lit);
+    }
+
+    // Skybox
+    float sr, sg, sb_c, str, stg, stb, sbr, sbg, sbb;
+    tc_scene_get_skybox_color(_h, &sr, &sg, &sb_c);
+    tc_scene_get_skybox_top_color(_h, &str, &stg, &stb);
+    tc_scene_get_skybox_bottom_color(_h, &sbr, &sbg, &sbb);
+
+    // Convert skybox type to string for JSON compatibility
+    int skybox_type_int = tc_scene_get_skybox_type(_h);
+    const char* skybox_type_str = "gradient";
+    if (skybox_type_int == TC_SKYBOX_NONE) skybox_type_str = "none";
+    else if (skybox_type_int == TC_SKYBOX_SOLID) skybox_type_str = "solid";
+    result["skybox_type"] = skybox_type_str;
+
+    nos::trent sc, st, sb;
+    sc.push_back(nos::trent(static_cast<double>(sr)));
+    sc.push_back(nos::trent(static_cast<double>(sg)));
+    sc.push_back(nos::trent(static_cast<double>(sb_c)));
+    result["skybox_color"] = std::move(sc);
+
+    st.push_back(nos::trent(static_cast<double>(str)));
+    st.push_back(nos::trent(static_cast<double>(stg)));
+    st.push_back(nos::trent(static_cast<double>(stb)));
+    result["skybox_top_color"] = std::move(st);
+
+    sb.push_back(nos::trent(static_cast<double>(sbr)));
+    sb.push_back(nos::trent(static_cast<double>(sbg)));
+    sb.push_back(nos::trent(static_cast<double>(sbb)));
+    result["skybox_bottom_color"] = std::move(sb);
+
+    // Metadata
+    nos::trent md = metadata();
+    if (!md.is_nil() && md.is_dict() && !md.as_dict().empty()) {
+        result["metadata"] = std::move(md);
+    }
+
+    return result;
+}
+
+int TcScene::load_from_data(const nos::trent& data, bool update_settings) {
+    if (update_settings) {
+        // Background color
+        if (data.contains("background_color") && data["background_color"].is_list()) {
+            const auto& bg = data["background_color"].as_list();
+            if (bg.size() >= 4) {
+                set_background_color(
+                    static_cast<float>(bg[0].as_numer_default(0.05)),
+                    static_cast<float>(bg[1].as_numer_default(0.05)),
+                    static_cast<float>(bg[2].as_numer_default(0.08)),
+                    static_cast<float>(bg[3].as_numer_default(1.0))
+                );
+            }
+        }
+
+        // Lighting
+        tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+        if (lit) {
+            if (data.contains("ambient_color") && data["ambient_color"].is_list()) {
+                const auto& ac = data["ambient_color"].as_list();
+                if (ac.size() >= 3) {
+                    lit->ambient_color[0] = static_cast<float>(ac[0].as_numer_default(1.0));
+                    lit->ambient_color[1] = static_cast<float>(ac[1].as_numer_default(1.0));
+                    lit->ambient_color[2] = static_cast<float>(ac[2].as_numer_default(1.0));
+                }
+            }
+            if (data.contains("ambient_intensity")) {
+                lit->ambient_intensity = static_cast<float>(data["ambient_intensity"].as_numer_default(0.1));
+            }
+            if (data.contains("shadow_settings")) {
+                deserialize_shadow_settings(lit, data["shadow_settings"]);
+            }
+        }
+
+        // Skybox
+        if (data.contains("skybox_type")) {
+            // Convert string to int enum
+            std::string type_str = data["skybox_type"].as_string_default("gradient");
+            int type_int = TC_SKYBOX_GRADIENT;
+            if (type_str == "none") type_int = TC_SKYBOX_NONE;
+            else if (type_str == "solid") type_int = TC_SKYBOX_SOLID;
+            tc_scene_set_skybox_type(_h, type_int);
+        }
+        if (data.contains("skybox_color") && data["skybox_color"].is_list()) {
+            const auto& c = data["skybox_color"].as_list();
+            if (c.size() >= 3) {
+                tc_scene_set_skybox_color(_h,
+                    static_cast<float>(c[0].as_numer_default(0.5)),
+                    static_cast<float>(c[1].as_numer_default(0.7)),
+                    static_cast<float>(c[2].as_numer_default(0.9)));
+            }
+        }
+        if (data.contains("skybox_top_color") && data["skybox_top_color"].is_list()) {
+            const auto& c = data["skybox_top_color"].as_list();
+            if (c.size() >= 3) {
+                tc_scene_set_skybox_top_color(_h,
+                    static_cast<float>(c[0].as_numer_default(0.4)),
+                    static_cast<float>(c[1].as_numer_default(0.6)),
+                    static_cast<float>(c[2].as_numer_default(0.9)));
+            }
+        }
+        if (data.contains("skybox_bottom_color") && data["skybox_bottom_color"].is_list()) {
+            const auto& c = data["skybox_bottom_color"].as_list();
+            if (c.size() >= 3) {
+                tc_scene_set_skybox_bottom_color(_h,
+                    static_cast<float>(c[0].as_numer_default(0.6)),
+                    static_cast<float>(c[1].as_numer_default(0.5)),
+                    static_cast<float>(c[2].as_numer_default(0.4)));
+            }
+        }
+
+        // Layer names
+        if (data.contains("layer_names") && data["layer_names"].is_dict()) {
+            for (const auto& [k, v] : data["layer_names"].as_dict()) {
+                int idx = std::stoi(k);
+                set_layer_name(idx, v.as_string());
+            }
+        }
+
+        // Flag names
+        if (data.contains("flag_names") && data["flag_names"].is_dict()) {
+            for (const auto& [k, v] : data["flag_names"].as_dict()) {
+                int idx = std::stoi(k);
+                set_flag_name(idx, v.as_string());
+            }
+        }
+
+        // Viewport configs
+        clear_viewport_configs();
+        if (data.contains("viewport_configs") && data["viewport_configs"].is_list()) {
+            for (const auto& vc_data : data["viewport_configs"].as_list()) {
+                add_viewport_config(deserialize_viewport_config(vc_data));
+            }
+        }
+
+        // Pipeline templates
+        clear_pipeline_templates();
+        if (data.contains("scene_pipelines") && data["scene_pipelines"].is_list()) {
+            for (const auto& sp : data["scene_pipelines"].as_list()) {
+                std::string templ_uuid = sp["uuid"].as_string_default("");
+                if (!templ_uuid.empty()) {
+                    TcScenePipelineTemplate templ = TcScenePipelineTemplate::find_by_uuid(templ_uuid);
+                    if (templ.is_valid()) {
+                        add_pipeline_template(templ);
+                    }
+                }
+            }
+        }
+
+        // Metadata
+        if (data.contains("metadata")) {
+            tc_value md_val = tc::trent_to_tc_value(data["metadata"]);
+            tc_scene_set_metadata(_h, md_val);
+        }
+    }
+
+    // === Two-phase entity deserialization ===
+    if (!data.contains("entities") || !data["entities"].is_list()) {
+        return 0;
+    }
+
+    const auto& entities_data = data["entities"].as_list();
+
+    // Collect (entity, data) pairs for phase 2
+    std::vector<std::pair<Entity, nos::trent>> entity_data_pairs;
+
+    // Helper to recursively deserialize entity hierarchy
+    std::function<void(const nos::trent&, Entity*)> deserialize_hierarchy;
+    deserialize_hierarchy = [&](const nos::trent& ent_data, Entity* parent_ent) {
+        Entity ent = Entity::deserialize_base_trent(ent_data, _h);
+        if (!ent.valid()) return;
+
+        // Set parent if provided
+        if (parent_ent && parent_ent->valid()) {
+            ent.set_parent(*parent_ent);
+        }
+
+        // Collect for phase 2
+        entity_data_pairs.emplace_back(ent, ent_data);
+
+        // Process children
+        if (ent_data.contains("children") && ent_data["children"].is_list()) {
+            for (const auto& child_data : ent_data["children"].as_list()) {
+                deserialize_hierarchy(child_data, &ent);
+            }
+        }
+    };
+
+    // Phase 1: Create all entities with hierarchy
+    for (const auto& ent_data : entities_data) {
+        deserialize_hierarchy(ent_data, nullptr);
+    }
+
+    // Phase 2: Deserialize components (now all entities exist for reference resolution)
+    for (auto& [ent, ent_data] : entity_data_pairs) {
+        ent.deserialize_components_trent(ent_data, _h);
+    }
+
+    return static_cast<int>(entity_data_pairs.size());
+}
+
+std::string TcScene::to_json_string() const {
+    return nos::json::dump(serialize(), 2);
+}
+
+void TcScene::from_json_string(const std::string& json) {
+    try {
+        nos::trent data = nos::json::parse(json);
+        load_from_data(data, true);
+    } catch (const std::exception& e) {
+        tc::Log::error("[TcScene] Failed to parse JSON: %s", e.what());
+    }
 }
 
 } // namespace termin

@@ -185,6 +185,21 @@ public:
 
     // Get pipeline targets (from RenderingManager)
     const std::vector<std::string>& get_pipeline_targets(const std::string& name) const;
+
+    // --- Serialization ---
+
+    // Serialize scene to trent (entities, settings, metadata)
+    nos::trent serialize() const;
+
+    // Load data into existing scene
+    // Returns number of loaded entities
+    int load_from_data(const nos::trent& data, bool update_settings = true);
+
+    // Serialize to JSON string
+    std::string to_json_string() const;
+
+    // Load from JSON string
+    void from_json_string(const std::string& json);
 };
 
 } // namespace termin

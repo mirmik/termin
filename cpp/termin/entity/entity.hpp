@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <trent/trent.h>
 #include "../geom/general_transform3.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
 #include "../../../core_c/include/tc_entity_pool_registry.h"
@@ -183,6 +184,14 @@ public:
 
     // Deserialize from tc_value with scene context for entity resolution
     void deserialize_from(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
+
+    // --- Serialization (trent-based, for C++ scene serialization) ---
+
+    // Create entity from trent data (Phase 1: base properties only, no components)
+    static Entity deserialize_base_trent(const nos::trent& data, tc_scene_handle scene);
+
+    // Deserialize components from trent data (Phase 2: after all entities exist)
+    void deserialize_components_trent(const nos::trent& data, tc_scene_handle scene);
 
     // --- Pool/ID access ---
 

@@ -505,7 +505,23 @@ void bind_tc_scene(nb::module_& m) {
              nb::rv_policy::reference)
         .def("get_pipeline_names", &TcScene::get_pipeline_names)
         .def("get_pipeline_targets", &TcScene::get_pipeline_targets, nb::arg("name"),
-             nb::rv_policy::reference);
+             nb::rv_policy::reference)
+
+        // --- Serialization (C++ implementation) ---
+        .def("serialize_cpp", [](TcScene& self) -> nb::object {
+            return trent_to_python(self.serialize());
+        }, "Serialize scene settings and entities to dict (C++ implementation)")
+
+        .def("load_from_data_cpp", [](TcScene& self, nb::handle data, bool update_settings) -> int {
+            nos::trent t = python_to_trent(data);
+            return self.load_from_data(t, update_settings);
+        }, nb::arg("data"), nb::arg("update_settings") = true,
+           "Load settings from dict (C++ implementation). Returns entity count.")
+
+        .def("to_json_string", &TcScene::to_json_string,
+             "Serialize scene to JSON string")
+        .def("from_json_string", &TcScene::from_json_string, nb::arg("json"),
+             "Load scene settings from JSON string");
 }
 
 // ============================================================================

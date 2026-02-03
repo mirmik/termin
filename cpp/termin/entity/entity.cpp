@@ -1,6 +1,9 @@
 #include "entity.hpp"
 #include "component.hpp"
 #include "../../../core_c/include/tc_scene.h"
+#include "../../../core_c/include/tc_inspect.h"
+#include "../render/tc_value_trent.hpp"
+#include <tc_log.hpp>
 #include <algorithm>
 
 namespace termin {
@@ -407,6 +410,163 @@ Entity Entity::deserialize(tc_entity_pool_handle pool_handle, const tc_value* da
 Entity Entity::deserialize(tc_entity_pool* pool, const tc_value* data) {
     tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
     return deserialize(pool_handle, data);
+}
+
+// ============================================================================
+// Trent-based serialization (for C++ scene serialization)
+// ============================================================================
+
+Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle scene) {
+    std::string uuid_str = data["uuid"].as_string_default("");
+    std::string name_str = data["name"].as_string_default("Entity");
+
+    if (uuid_str.empty()) {
+        return Entity();
+    }
+
+    // Get pool from scene or use standalone
+    tc_entity_pool_handle pool_handle;
+    if (tc_scene_handle_valid(scene)) {
+        tc_entity_pool* pool = tc_scene_entity_pool(scene);
+        pool_handle = tc_entity_pool_registry_find(pool);
+    } else {
+        pool_handle = standalone_pool_handle();
+    }
+
+    // Create entity with UUID
+    Entity ent = Entity::create_with_uuid(pool_handle, name_str, uuid_str);
+    if (!ent.valid()) {
+        return Entity();
+    }
+
+    // Restore flags
+    if (data.contains("priority")) {
+        ent.set_priority(static_cast<int>(data["priority"].as_numer_default(0)));
+    }
+    if (data.contains("visible")) {
+        ent.set_visible(data["visible"].as_bool_default(true));
+    }
+    if (data.contains("enabled")) {
+        ent.set_enabled(data["enabled"].as_bool_default(true));
+    }
+    if (data.contains("pickable")) {
+        ent.set_pickable(data["pickable"].as_bool_default(true));
+    }
+    if (data.contains("selectable")) {
+        ent.set_selectable(data["selectable"].as_bool_default(true));
+    }
+    if (data.contains("layer")) {
+        ent.set_layer(static_cast<uint64_t>(data["layer"].as_numer_default(0)));
+    }
+    if (data.contains("flags")) {
+        ent.set_flags(static_cast<uint64_t>(data["flags"].as_numer_default(0)));
+    }
+
+    // Restore pose
+    if (data.contains("pose") && data["pose"].is_dict()) {
+        const auto& pose = data["pose"];
+        if (pose.contains("position") && pose["position"].is_list()) {
+            const auto& p = pose["position"].as_list();
+            if (p.size() >= 3) {
+                double xyz[3] = {
+                    p[0].as_numer_default(0),
+                    p[1].as_numer_default(0),
+                    p[2].as_numer_default(0)
+                };
+                ent.set_local_position(xyz);
+            }
+        }
+        if (pose.contains("rotation") && pose["rotation"].is_list()) {
+            const auto& r = pose["rotation"].as_list();
+            if (r.size() >= 4) {
+                double xyzw[4] = {
+                    r[0].as_numer_default(0),
+                    r[1].as_numer_default(0),
+                    r[2].as_numer_default(0),
+                    r[3].as_numer_default(1)
+                };
+                ent.set_local_rotation(xyzw);
+            }
+        }
+    }
+
+    // Restore scale
+    if (data.contains("scale") && data["scale"].is_list()) {
+        const auto& s = data["scale"].as_list();
+        if (s.size() >= 3) {
+            double xyz[3] = {
+                s[0].as_numer_default(1),
+                s[1].as_numer_default(1),
+                s[2].as_numer_default(1)
+            };
+            ent.set_local_scale(xyz);
+        }
+    }
+
+    return ent;
+}
+
+void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handle scene) {
+    if (!valid()) return;
+    if (!data.contains("components") || !data["components"].is_list()) return;
+
+    const auto& components = data["components"].as_list();
+
+    for (const auto& comp_data : components) {
+        if (!comp_data.is_dict()) continue;
+        if (!comp_data.contains("type")) continue;
+
+        std::string type_name = comp_data["type"].as_string_default("");
+        if (type_name.empty()) continue;
+
+        // Check if type is registered
+        if (!tc_component_registry_has(type_name.c_str())) {
+            tc::Log::warn("[Entity] Unknown component type: %s (creating placeholder)", type_name.c_str());
+            // Create UnknownComponent placeholder
+            tc_component* unk = tc_component_registry_create("UnknownComponent");
+            if (unk) {
+                add_component_ptr(unk);
+                // Store original type and data
+                void* obj_ptr = (unk->kind == TC_CXX_COMPONENT) ? CxxComponent::from_tc(unk) : unk->body;
+                if (obj_ptr && comp_data.contains("data")) {
+                    tc_value orig_type = tc_value_string(type_name.c_str());
+                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_type", orig_type, scene);
+                    tc_value_free(&orig_type);
+
+                    tc_value orig_data = tc::trent_to_tc_value(comp_data["data"]);
+                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_data", orig_data, scene);
+                    tc_value_free(&orig_data);
+                }
+            }
+            continue;
+        }
+
+        // Create component via registry factory
+        tc_component* tc = tc_component_registry_create(type_name.c_str());
+        if (!tc) {
+            tc::Log::warn("[Entity] Failed to create component: %s", type_name.c_str());
+            continue;
+        }
+
+        // Add to entity
+        add_component_ptr(tc);
+
+        // Deserialize data
+        if (comp_data.contains("data")) {
+            void* obj_ptr = nullptr;
+            if (tc->kind == TC_CXX_COMPONENT || tc->kind == TC_NATIVE_COMPONENT) {
+                obj_ptr = CxxComponent::from_tc(tc);
+            } else {
+                obj_ptr = tc->body;
+            }
+
+            if (obj_ptr) {
+                tc_value v = tc::trent_to_tc_value(comp_data["data"]);
+                tc_inspect_deserialize(obj_ptr, type_name.c_str(), &v, scene);
+                tc_value_free(&v);
+            }
+        }
+    }
 }
 
 } // namespace termin

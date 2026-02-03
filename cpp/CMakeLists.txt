@@ -237,6 +237,7 @@ set(ENTITY_LIB_SOURCES
     ../core_c/src/tc_rendering_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/modules/module_loader.cpp
+    termin/render/tc_value_trent.cpp
 )
 # Python-specific sources (require nanobind)
 if(NOT BUILD_CSHARP_BINDINGS)
@@ -310,7 +311,6 @@ set(RENDER_LIB_SOURCES
     termin/render/graph_data.cpp
     termin/render/graph_compiler.cpp
     termin/render/scene_pipeline_template.cpp
-    termin/render/tc_value_trent.cpp
     termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
