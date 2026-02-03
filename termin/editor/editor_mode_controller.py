@@ -317,7 +317,7 @@ class EditorModeController:
         camera_name = None
         if viewport.camera is not None and viewport.camera.entity is not None:
             camera_name = viewport.camera.entity.name
-        scene.editor_viewport_camera_name = camera_name
+        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)
 
     def _on_game_mode_changed(
         self,

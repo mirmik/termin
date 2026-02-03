@@ -1,6 +1,5 @@
-// tc_scene.cpp - TcScene implementation
+// tc_scene.cpp - TcSceneRef implementation
 #include "tc_scene.hpp"
-#include "tc_scene_ref.hpp"
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
 #include "entity/tc_component_ref.hpp"
@@ -18,147 +17,115 @@
 
 namespace termin {
 
-TcScene::TcScene() {
-    _h = tc_scene_new();
-    tc::Log::info("[TcScene] Created handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
-}
-
-TcScene::TcScene(const std::string& name, const std::string& uuid) {
-    _h = tc_scene_new();
+TcSceneRef TcSceneRef::create(const std::string& name, const std::string& uuid) {
+    tc_scene_handle h = tc_scene_new();
     if (!name.empty()) {
-        tc_scene_set_name(_h, name.c_str());
+        tc_scene_set_name(h, name.c_str());
     }
     if (!uuid.empty()) {
-        tc_scene_set_uuid(_h, uuid.c_str());
+        tc_scene_set_uuid(h, uuid.c_str());
     }
-    tc::Log::info("[TcScene] Created handle=(%u,%u), name='%s', this=%p", _h.index, _h.generation, name.c_str(), (void*)this);
+    tc::Log::info("[TcSceneRef] create() handle=(%u,%u), name='%s'", h.index, h.generation, name.c_str());
+    return TcSceneRef(h);
 }
 
-TcScene::~TcScene() {
-    tc::Log::info("[TcScene] ~TcScene handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
-    destroy();
-}
-
-void TcScene::destroy() {
+void TcSceneRef::destroy() {
     if (tc_scene_handle_valid(_h)) {
-        tc::Log::info("[TcScene] destroy() handle=(%u,%u)", _h.index, _h.generation);
+        tc::Log::info("[TcSceneRef] destroy() handle=(%u,%u)", _h.index, _h.generation);
         RenderingManager::instance().clear_scene_pipelines(_h);
         tc_scene_free(_h);
         _h = TC_SCENE_HANDLE_INVALID;
     }
 }
 
-bool TcScene::is_alive() const {
-    return tc_scene_alive(_h);
-}
-
-TcSceneRef TcScene::scene_ref() const {
-    return TcSceneRef(_h);
-}
-
-TcScene::TcScene(TcScene&& other) noexcept
-    : _h(other._h)
-{
-    other._h = TC_SCENE_HANDLE_INVALID;
-}
-
-TcScene& TcScene::operator=(TcScene&& other) noexcept {
-    if (this != &other) {
-        destroy();
-        _h = other._h;
-        other._h = TC_SCENE_HANDLE_INVALID;
-    }
-    return *this;
-}
-
-void TcScene::add_entity(const Entity& e) {
+void TcSceneRef::add_entity(const Entity& e) {
     (void)e;
 }
 
-void TcScene::remove_entity(const Entity& e) {
+void TcSceneRef::remove_entity(const Entity& e) {
     if (!e.valid()) return;
     tc_entity_pool_free(e.pool(), e.id());
 }
 
-size_t TcScene::entity_count() const {
+size_t TcSceneRef::entity_count() const {
     return tc_scene_entity_count(_h);
 }
 
-void TcScene::register_component(CxxComponent* c) {
+void TcSceneRef::register_component(CxxComponent* c) {
     if (!c) return;
     tc_scene_register_component(_h, c->c_component());
 }
 
-void TcScene::unregister_component(CxxComponent* c) {
+void TcSceneRef::unregister_component(CxxComponent* c) {
     if (!c) return;
     tc_scene_unregister_component(_h, c->c_component());
 }
 
-void TcScene::register_component_ptr(uintptr_t ptr) {
+void TcSceneRef::register_component_ptr(uintptr_t ptr) {
     tc_component* c = reinterpret_cast<tc_component*>(ptr);
     if (c) {
         tc_scene_register_component(_h, c);
     }
 }
 
-void TcScene::unregister_component_ptr(uintptr_t ptr) {
+void TcSceneRef::unregister_component_ptr(uintptr_t ptr) {
     tc_component* c = reinterpret_cast<tc_component*>(ptr);
     if (c) {
         tc_scene_unregister_component(_h, c);
     }
 }
 
-void TcScene::update(double dt) {
+void TcSceneRef::update(double dt) {
     tc_scene_update(_h, dt);
 }
 
-void TcScene::editor_update(double dt) {
+void TcSceneRef::editor_update(double dt) {
     tc_scene_editor_update(_h, dt);
 }
 
-void TcScene::before_render() {
+void TcSceneRef::before_render() {
     tc_scene_before_render(_h);
 }
 
-double TcScene::fixed_timestep() const {
+double TcSceneRef::fixed_timestep() const {
     return tc_scene_fixed_timestep(_h);
 }
 
-void TcScene::set_fixed_timestep(double dt) {
+void TcSceneRef::set_fixed_timestep(double dt) {
     tc_scene_set_fixed_timestep(_h, dt);
 }
 
-double TcScene::accumulated_time() const {
+double TcSceneRef::accumulated_time() const {
     return tc_scene_accumulated_time(_h);
 }
 
-void TcScene::reset_accumulated_time() {
+void TcSceneRef::reset_accumulated_time() {
     tc_scene_reset_accumulated_time(_h);
 }
 
-size_t TcScene::pending_start_count() const {
+size_t TcSceneRef::pending_start_count() const {
     return tc_scene_pending_start_count(_h);
 }
 
-size_t TcScene::update_list_count() const {
+size_t TcSceneRef::update_list_count() const {
     return tc_scene_update_list_count(_h);
 }
 
-size_t TcScene::fixed_update_list_count() const {
+size_t TcSceneRef::fixed_update_list_count() const {
     return tc_scene_fixed_update_list_count(_h);
 }
 
-tc_entity_pool* TcScene::entity_pool() const {
+tc_entity_pool* TcSceneRef::entity_pool() const {
     return tc_scene_entity_pool(_h);
 }
 
-Entity TcScene::create_entity(const std::string& name) {
+Entity TcSceneRef::create_entity(const std::string& name) {
     tc_entity_pool* pool = entity_pool();
     if (!pool) return Entity();
     return Entity::create(pool, name);
 }
 
-Entity TcScene::get_entity(const std::string& uuid) const {
+Entity TcSceneRef::get_entity(const std::string& uuid) const {
     tc_entity_pool* pool = entity_pool();
     if (!pool || uuid.empty()) return Entity();
 
@@ -168,7 +135,7 @@ Entity TcScene::get_entity(const std::string& uuid) const {
     return Entity(pool, id);
 }
 
-Entity TcScene::get_entity_by_pick_id(uint32_t pick_id) const {
+Entity TcSceneRef::get_entity_by_pick_id(uint32_t pick_id) const {
     tc_entity_pool* pool = entity_pool();
     if (!pool || pick_id == 0) return Entity();
 
@@ -178,7 +145,7 @@ Entity TcScene::get_entity_by_pick_id(uint32_t pick_id) const {
     return Entity(pool, id);
 }
 
-Entity TcScene::find_entity_by_name(const std::string& name) const {
+Entity TcSceneRef::find_entity_by_name(const std::string& name) const {
     if (name.empty()) return Entity();
 
     tc_entity_id id = tc_scene_find_entity_by_name(_h, name.c_str());
@@ -187,59 +154,59 @@ Entity TcScene::find_entity_by_name(const std::string& name) const {
     return Entity(entity_pool(), id);
 }
 
-std::string TcScene::name() const {
+std::string TcSceneRef::name() const {
     const char* n = tc_scene_get_name(_h);
     return n ? std::string(n) : "";
 }
 
-void TcScene::set_name(const std::string& n) {
+void TcSceneRef::set_name(const std::string& n) {
     tc_scene_set_name(_h, n.c_str());
 }
 
-std::string TcScene::uuid() const {
+std::string TcSceneRef::uuid() const {
     const char* u = tc_scene_get_uuid(_h);
     return u ? std::string(u) : "";
 }
 
-void TcScene::set_uuid(const std::string& u) {
+void TcSceneRef::set_uuid(const std::string& u) {
     tc_scene_set_uuid(_h, u.empty() ? nullptr : u.c_str());
 }
 
-std::string TcScene::get_layer_name(int index) const {
+std::string TcSceneRef::get_layer_name(int index) const {
     const char* n = tc_scene_get_layer_name(_h, index);
     return n ? std::string(n) : "";
 }
 
-void TcScene::set_layer_name(int index, const std::string& name) {
+void TcSceneRef::set_layer_name(int index, const std::string& name) {
     tc_scene_set_layer_name(_h, index, name.empty() ? nullptr : name.c_str());
 }
 
-std::string TcScene::get_flag_name(int index) const {
+std::string TcSceneRef::get_flag_name(int index) const {
     const char* n = tc_scene_get_flag_name(_h, index);
     return n ? std::string(n) : "";
 }
 
-void TcScene::set_flag_name(int index, const std::string& name) {
+void TcSceneRef::set_flag_name(int index, const std::string& name) {
     tc_scene_set_flag_name(_h, index, name.empty() ? nullptr : name.c_str());
 }
 
-std::tuple<float, float, float, float> TcScene::get_background_color() const {
+std::tuple<float, float, float, float> TcSceneRef::get_background_color() const {
     float r = 0, g = 0, b = 0, a = 1;
     tc_scene_get_background_color(_h, &r, &g, &b, &a);
     return {r, g, b, a};
 }
 
-void TcScene::set_background_color(float r, float g, float b, float a) {
+void TcSceneRef::set_background_color(float r, float g, float b, float a) {
     tc_scene_set_background_color(_h, r, g, b, a);
 }
 
-Vec4 TcScene::background_color() const {
+Vec4 TcSceneRef::background_color() const {
     float r = 0, g = 0, b = 0, a = 1;
     tc_scene_get_background_color(_h, &r, &g, &b, &a);
     return Vec4(r, g, b, a);
 }
 
-void TcScene::set_background_color(const Vec4& color) {
+void TcSceneRef::set_background_color(const Vec4& color) {
     tc_scene_set_background_color(_h,
         static_cast<float>(color.x),
         static_cast<float>(color.y),
@@ -247,46 +214,46 @@ void TcScene::set_background_color(const Vec4& color) {
         static_cast<float>(color.w));
 }
 
-Vec3 TcScene::skybox_color() const {
+Vec3 TcSceneRef::skybox_color() const {
     float r, g, b;
     tc_scene_get_skybox_color(_h, &r, &g, &b);
     return Vec3(r, g, b);
 }
 
-void TcScene::set_skybox_color(const Vec3& color) {
+void TcSceneRef::set_skybox_color(const Vec3& color) {
     tc_scene_set_skybox_color(_h,
         static_cast<float>(color.x),
         static_cast<float>(color.y),
         static_cast<float>(color.z));
 }
 
-Vec3 TcScene::skybox_top_color() const {
+Vec3 TcSceneRef::skybox_top_color() const {
     float r, g, b;
     tc_scene_get_skybox_top_color(_h, &r, &g, &b);
     return Vec3(r, g, b);
 }
 
-void TcScene::set_skybox_top_color(const Vec3& color) {
+void TcSceneRef::set_skybox_top_color(const Vec3& color) {
     tc_scene_set_skybox_top_color(_h,
         static_cast<float>(color.x),
         static_cast<float>(color.y),
         static_cast<float>(color.z));
 }
 
-Vec3 TcScene::skybox_bottom_color() const {
+Vec3 TcSceneRef::skybox_bottom_color() const {
     float r, g, b;
     tc_scene_get_skybox_bottom_color(_h, &r, &g, &b);
     return Vec3(r, g, b);
 }
 
-void TcScene::set_skybox_bottom_color(const Vec3& color) {
+void TcSceneRef::set_skybox_bottom_color(const Vec3& color) {
     tc_scene_set_skybox_bottom_color(_h,
         static_cast<float>(color.x),
         static_cast<float>(color.y),
         static_cast<float>(color.z));
 }
 
-Vec3 TcScene::ambient_color() const {
+Vec3 TcSceneRef::ambient_color() const {
     tc_scene_lighting* lit = tc_scene_get_lighting(_h);
     if (lit) {
         return Vec3(lit->ambient_color[0], lit->ambient_color[1], lit->ambient_color[2]);
@@ -294,7 +261,7 @@ Vec3 TcScene::ambient_color() const {
     return Vec3(1.0, 1.0, 1.0);
 }
 
-void TcScene::set_ambient_color(const Vec3& color) {
+void TcSceneRef::set_ambient_color(const Vec3& color) {
     tc_scene_lighting* lit = tc_scene_get_lighting(_h);
     if (lit) {
         lit->ambient_color[0] = static_cast<float>(color.x);
@@ -303,41 +270,41 @@ void TcScene::set_ambient_color(const Vec3& color) {
     }
 }
 
-float TcScene::ambient_intensity() const {
+float TcSceneRef::ambient_intensity() const {
     tc_scene_lighting* lit = tc_scene_get_lighting(_h);
     return lit ? lit->ambient_intensity : 0.1f;
 }
 
-void TcScene::set_ambient_intensity(float intensity) {
+void TcSceneRef::set_ambient_intensity(float intensity) {
     tc_scene_lighting* lit = tc_scene_get_lighting(_h);
     if (lit) {
         lit->ambient_intensity = intensity;
     }
 }
 
-void TcScene::add_viewport_config(const ViewportConfig& config) {
+void TcSceneRef::add_viewport_config(const ViewportConfig& config) {
     tc_viewport_config c = config.to_c();
     tc_scene_add_viewport_config(_h, &c);
 }
 
-void TcScene::remove_viewport_config(size_t index) {
+void TcSceneRef::remove_viewport_config(size_t index) {
     tc_scene_remove_viewport_config(_h, index);
 }
 
-void TcScene::clear_viewport_configs() {
+void TcSceneRef::clear_viewport_configs() {
     tc_scene_clear_viewport_configs(_h);
 }
 
-size_t TcScene::viewport_config_count() const {
+size_t TcSceneRef::viewport_config_count() const {
     return tc_scene_viewport_config_count(_h);
 }
 
-ViewportConfig TcScene::viewport_config_at(size_t index) const {
+ViewportConfig TcSceneRef::viewport_config_at(size_t index) const {
     tc_viewport_config* c = tc_scene_viewport_config_at(_h, index);
     return ViewportConfig::from_c(c);
 }
 
-std::vector<ViewportConfig> TcScene::viewport_configs() const {
+std::vector<ViewportConfig> TcSceneRef::viewport_configs() const {
     std::vector<ViewportConfig> result;
     size_t count = tc_scene_viewport_config_count(_h);
     result.reserve(count);
@@ -348,7 +315,7 @@ std::vector<ViewportConfig> TcScene::viewport_configs() const {
     return result;
 }
 
-nos::trent TcScene::metadata() const {
+nos::trent TcSceneRef::metadata() const {
     tc_value* v = tc_scene_get_metadata(_h);
     if (v) {
         return tc::tc_value_to_trent(*v);
@@ -358,7 +325,7 @@ nos::trent TcScene::metadata() const {
     return result;
 }
 
-nos::trent TcScene::get_metadata_at_path(const std::string& path) const {
+nos::trent TcSceneRef::get_metadata_at_path(const std::string& path) const {
     nos::trent md = metadata();
     const nos::trent* current = &md;
     std::string remaining = path;
@@ -386,7 +353,7 @@ nos::trent TcScene::get_metadata_at_path(const std::string& path) const {
     return nos::trent();  // nil
 }
 
-void TcScene::set_metadata_at_path(const std::string& path, const nos::trent& value) {
+void TcSceneRef::set_metadata_at_path(const std::string& path, const nos::trent& value) {
     if (path.empty()) return;
 
     // Load current metadata
@@ -422,15 +389,15 @@ void TcScene::set_metadata_at_path(const std::string& path, const nos::trent& va
     tc_scene_set_metadata(_h, new_val);
 }
 
-bool TcScene::has_metadata_at_path(const std::string& path) const {
+bool TcSceneRef::has_metadata_at_path(const std::string& path) const {
     return !get_metadata_at_path(path).is_nil();
 }
 
-std::string TcScene::metadata_to_json() const {
+std::string TcSceneRef::metadata_to_json() const {
     return nos::json::dump(metadata());
 }
 
-void TcScene::metadata_from_json(const std::string& json_str) {
+void TcSceneRef::metadata_from_json(const std::string& json_str) {
     nos::trent md;
     if (json_str.empty()) {
         md.init(nos::trent::type::dict);
@@ -441,7 +408,7 @@ void TcScene::metadata_from_json(const std::string& json_str) {
                 md.init(nos::trent::type::dict);
             }
         } catch (const std::exception& e) {
-            tc::Log::error("[TcScene] Failed to parse metadata JSON: %s", e.what());
+            tc::Log::error("[TcSceneRef] Failed to parse metadata JSON: %s", e.what());
             md.init(nos::trent::type::dict);
         }
     }
@@ -450,11 +417,11 @@ void TcScene::metadata_from_json(const std::string& json_str) {
     tc_scene_set_metadata(_h, new_val);
 }
 
-tc_scene_lighting* TcScene::lighting() {
+tc_scene_lighting* TcSceneRef::lighting() {
     return tc_scene_get_lighting(_h);
 }
 
-std::vector<Entity> TcScene::get_all_entities() const {
+std::vector<Entity> TcSceneRef::get_all_entities() const {
     std::vector<Entity> result;
     tc_entity_pool* pool = entity_pool();
     if (!pool) return result;
@@ -468,7 +435,7 @@ std::vector<Entity> TcScene::get_all_entities() const {
     return result;
 }
 
-Entity TcScene::migrate_entity(Entity& entity) {
+Entity TcSceneRef::migrate_entity(Entity& entity) {
     tc_entity_pool* dst_pool = entity_pool();
     if (!entity.valid() || !dst_pool) {
         return Entity();
@@ -487,39 +454,39 @@ Entity TcScene::migrate_entity(Entity& entity) {
     return Entity(dst_pool, new_id);
 }
 
-void TcScene::add_pipeline_template(const TcScenePipelineTemplate& templ) {
+void TcSceneRef::add_pipeline_template(const TcScenePipelineTemplate& templ) {
     tc_scene_add_pipeline_template(_h, templ.handle());
 }
 
-void TcScene::clear_pipeline_templates() {
+void TcSceneRef::clear_pipeline_templates() {
     tc_scene_clear_pipeline_templates(_h);
 }
 
-size_t TcScene::pipeline_template_count() const {
+size_t TcSceneRef::pipeline_template_count() const {
     return tc_scene_pipeline_template_count(_h);
 }
 
-TcScenePipelineTemplate TcScene::pipeline_template_at(size_t index) const {
+TcScenePipelineTemplate TcSceneRef::pipeline_template_at(size_t index) const {
     return TcScenePipelineTemplate(tc_scene_pipeline_template_at(_h, index));
 }
 
-RenderPipeline* TcScene::get_pipeline(const std::string& name) const {
+RenderPipeline* TcSceneRef::get_pipeline(const std::string& name) const {
     return RenderingManager::instance().get_scene_pipeline(_h, name);
 }
 
-std::vector<std::string> TcScene::get_pipeline_names() const {
+std::vector<std::string> TcSceneRef::get_pipeline_names() const {
     return RenderingManager::instance().get_pipeline_names(_h);
 }
 
-const std::vector<std::string>& TcScene::get_pipeline_targets(const std::string& name) const {
+const std::vector<std::string>& TcSceneRef::get_pipeline_targets(const std::string& name) const {
     return RenderingManager::instance().get_pipeline_targets(name);
 }
 
-collision::CollisionWorld* TcScene::collision_world() const {
+collision::CollisionWorld* TcSceneRef::collision_world() const {
     return reinterpret_cast<collision::CollisionWorld*>(tc_scene_get_collision_world(_h));
 }
 
-SceneRaycastHit TcScene::raycast(const Ray3& ray) const {
+SceneRaycastHit TcSceneRef::raycast(const Ray3& ray) const {
     struct Context {
         SceneRaycastHit* result;
         double best_dist;
@@ -571,7 +538,7 @@ SceneRaycastHit TcScene::raycast(const Ray3& ray) const {
     return result;
 }
 
-SceneRaycastHit TcScene::closest_to_ray(const Ray3& ray) const {
+SceneRaycastHit TcSceneRef::closest_to_ray(const Ray3& ray) const {
     struct Context {
         SceneRaycastHit* result;
         double best_dist;
@@ -770,9 +737,9 @@ nos::trent serialize_entity_recursive(const Entity& e) {
 
 } // anonymous namespace
 
-// --- TcScene serialization ---
+// --- TcSceneRef serialization ---
 
-nos::trent TcScene::serialize() const {
+nos::trent TcSceneRef::serialize() const {
     nos::trent result;
 
     result["uuid"] = uuid();
@@ -894,7 +861,7 @@ nos::trent TcScene::serialize() const {
     return result;
 }
 
-int TcScene::load_from_data(const nos::trent& data, bool update_settings) {
+int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
     if (update_settings) {
         // Background color
         if (data.contains("background_color") && data["background_color"].is_list()) {
@@ -1055,16 +1022,16 @@ int TcScene::load_from_data(const nos::trent& data, bool update_settings) {
     return static_cast<int>(entity_data_pairs.size());
 }
 
-std::string TcScene::to_json_string() const {
+std::string TcSceneRef::to_json_string() const {
     return nos::json::dump(serialize(), 2);
 }
 
-void TcScene::from_json_string(const std::string& json) {
+void TcSceneRef::from_json_string(const std::string& json) {
     try {
         nos::trent data = nos::json::parse(json);
         load_from_data(data, true);
     } catch (const std::exception& e) {
-        tc::Log::error("[TcScene] Failed to parse JSON: %s", e.what());
+        tc::Log::error("[TcSceneRef] Failed to parse JSON: %s", e.what());
     }
 }
 

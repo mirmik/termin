@@ -11,7 +11,7 @@ extern "C" {
 #include "bindings/render/tc_input_manager_bindings.hpp"
 #include "bindings/render/tc_display_bindings.hpp"
 #include "bindings/input/simple_display_input_manager_bindings.hpp"
-#include "scene_bindings.hpp"
+// scene_bindings.hpp - TcScene bindings moved to _entity_native
 #include "scene/scene_manager_bindings.hpp"
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
@@ -90,8 +90,7 @@ NB_MODULE(_native, m) {
     termin::bind_tc_display(render_module);
     termin::bind_simple_display_input_manager(render_module);
     termin::bind_sdl(platform_module);
-    termin::bind_tc_scene(scene_module);
-    termin::bind_tc_scene_lighting(scene_module);
+    // TcScene and TcSceneLighting are now in _entity_native module
     termin::bind_scene_manager(scene_module);
     // TcViewport is now in separate _viewport_native module
     termin::bind_profiler(profiler_module);

@@ -4,7 +4,7 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/tc_scene_ref.hpp"
+#include "termin/tc_scene.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 #include <nanobind/stl/unordered_map.h>

@@ -112,7 +112,7 @@ class PlayerRuntime:
             data = json.load(f)
 
         # Create new scene and load data
-        self.scene = Scene(name=self.scene_name)
+        self.scene = Scene.create(name=self.scene_name)
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         if scene_data:
             self.scene.load_from_data(scene_data, context=None, update_settings=True)

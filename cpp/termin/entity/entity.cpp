@@ -1,5 +1,6 @@
 #include "entity.hpp"
 #include "component.hpp"
+#include "../tc_scene.hpp"
 #include "../../../core_c/include/tc_scene.h"
 #include "../../../core_c/include/tc_inspect.h"
 #include "../render/tc_value_trent.hpp"
@@ -567,6 +568,13 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
             }
         }
     }
+}
+
+TcSceneRef Entity::scene() const {
+    tc_entity_pool* p = pool_ptr();
+    if (!p) return TcSceneRef();
+    tc_scene_handle h = tc_entity_pool_get_scene(p);
+    return TcSceneRef(h);
 }
 
 } // namespace termin

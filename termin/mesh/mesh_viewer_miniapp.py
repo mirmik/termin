@@ -100,7 +100,7 @@ void main() {
 
 def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, PerspectiveCameraComponent]:
 
-    scene = Scene(name="mesh_viewer")
+    scene = Scene.create(name="mesh_viewer")
 
     mesh_tc = create_voxel_mesh(
         vertices=mesh.vertices,

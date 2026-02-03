@@ -10,7 +10,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
-#include "termin/tc_scene_ref.hpp"
+#include "termin/tc_scene.hpp"
 
 extern "C" {
 #include "render/tc_frame_graph.h"

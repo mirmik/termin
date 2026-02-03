@@ -28,6 +28,7 @@ extern "C" {
 #include "../camera/orbit_camera_bindings.hpp"
 #include "../colliders/collider_bindings.hpp"
 #include "../input/input_events_bindings.hpp"
+#include "../../scene_bindings.hpp"
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -60,7 +61,7 @@ inline bool check_heap_entity() { return true; }
 #include "termin/inspect/tc_kind.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
 #include "termin/modules/module_loader.hpp"
-#include "termin/tc_scene_ref.hpp"
+#include "termin/tc_scene.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
@@ -70,6 +71,10 @@ NB_MODULE(_entity_native, m) {
 
     // Import _viewport_native for TcViewport type (used by input events)
     nb::module_::import_("termin.viewport._viewport_native");
+
+    // --- Scene (TcScene, ViewportConfig) - must be before Entity bindings ---
+    bind_tc_scene(m);
+    bind_tc_scene_lighting(m);
 
     // --- CxxComponent (also exported as Component for compatibility) ---
     nb::class_<CxxComponent>(m, "Component", nb::dynamic_attr())

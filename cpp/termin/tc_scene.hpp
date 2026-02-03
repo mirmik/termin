@@ -21,7 +21,6 @@ namespace termin {
 // Forward declarations
 class Entity;
 class CxxComponent;
-class TcSceneRef;
 class TcScenePipelineTemplate;
 class RenderPipeline;
 class RenderingManager;
@@ -43,33 +42,56 @@ struct SceneRaycastHit {
     bool valid() const { return component != nullptr; }
 };
 
-// C++ wrapper for tc_scene_handle with RAII semantics
-class TcScene {
+// C++ wrapper for tc_scene_handle (non-owning reference)
+// Scene lifetime is managed by tc_scene_pool, not by TcSceneRef instances.
+// Use TcSceneRef::create() to create a new scene, destroy() to explicitly free it.
+class TcSceneRef {
 public:
     tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
 
-    TcScene();
-    TcScene(const std::string& name, const std::string& uuid = "");
-    ~TcScene();
+    // Default constructor - creates invalid reference
+    TcSceneRef() = default;
 
+    // Construct from existing handle (non-owning)
+    explicit TcSceneRef(tc_scene_handle h) : _h(h) {}
+
+    // Destructor does NOT destroy the scene (it's in the pool)
+    ~TcSceneRef() = default;
+
+    // Factory method to create a new scene in the pool
+    static TcSceneRef create(const std::string& name = "", const std::string& uuid = "");
+
+    // Explicitly destroy the scene (removes from pool)
     void destroy();
 
     // Get scene handle
     tc_scene_handle handle() const { return _h; }
 
     // Check if scene is alive (not destroyed)
-    bool is_alive() const;
+    bool is_alive() const { return tc_scene_alive(_h); }
+    bool valid() const { return is_alive(); }
 
-    // Get non-owning reference to this scene
-    TcSceneRef scene_ref() const;
+    // Check if handles point to same scene
+    bool operator==(const TcSceneRef& other) const {
+        return tc_scene_handle_eq(_h, other._h);
+    }
+    bool operator!=(const TcSceneRef& other) const { return !(*this == other); }
 
-    // Disable copy
-    TcScene(const TcScene&) = delete;
-    TcScene& operator=(const TcScene&) = delete;
+    // Copy is allowed (non-owning reference)
+    TcSceneRef(const TcSceneRef&) = default;
+    TcSceneRef& operator=(const TcSceneRef&) = default;
 
-    // Move
-    TcScene(TcScene&& other) noexcept;
-    TcScene& operator=(TcScene&& other) noexcept;
+    // Move is also allowed (invalidates source)
+    TcSceneRef(TcSceneRef&& other) noexcept : _h(other._h) {
+        other._h = TC_SCENE_HANDLE_INVALID;
+    }
+    TcSceneRef& operator=(TcSceneRef&& other) noexcept {
+        if (this != &other) {
+            _h = other._h;
+            other._h = TC_SCENE_HANDLE_INVALID;
+        }
+        return *this;
+    }
 
     // Entity management
     void add_entity(const Entity& e);

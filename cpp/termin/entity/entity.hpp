@@ -19,6 +19,7 @@ extern "C" {
 namespace termin {
 
 class CxxComponent;
+class TcSceneRef;
 using Component = CxxComponent;
 
 // Entity - wrapper around tc_entity_handle.
@@ -193,7 +194,7 @@ public:
     // Deserialize components from trent data (Phase 2: after all entities exist)
     void deserialize_components_trent(const nos::trent& data, tc_scene_handle scene);
 
-    // --- Pool/ID access ---
+    // --- Pool/ID/Scene access ---
 
     // Get pool pointer (may be NULL if pool destroyed) - prefer pool_ptr()
     tc_entity_pool* pool() const { return pool_ptr(); }
@@ -201,6 +202,9 @@ public:
 
     // Get pool handle (safe, never dangling)
     tc_entity_pool_handle pool_handle() const { return _h.pool; }
+
+    // Get scene reference (creates TcSceneRef from pool's scene handle)
+    TcSceneRef scene() const;
 
     // --- Comparison ---
 

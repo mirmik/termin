@@ -169,7 +169,7 @@ class SceneManager(CxxSceneManager):
         if self._scene_factory is not None:
             return self._scene_factory()
         from termin.visualization.core.scene import Scene
-        return Scene(name=name)
+        return Scene.create(name=name)
 
     # --- Scene Lifecycle ---
 

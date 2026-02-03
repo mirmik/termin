@@ -409,7 +409,7 @@ target_compile_options(_viewport_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Entity native module (Component, Entity, registries) - nanobind
+# Entity native module (Component, Entity, Scene, registries) - nanobind
 nanobind_add_module(_entity_native
     termin/bindings/entity/entity_module.cpp
     termin/bindings/entity/entity_bindings.cpp
@@ -417,8 +417,11 @@ nanobind_add_module(_entity_native
     termin/bindings/camera/orbit_camera_bindings.cpp
     termin/bindings/colliders/collider_bindings.cpp
     termin/bindings/input/input_events_bindings.cpp
+    termin/tc_scene.cpp
+    termin/tc_scene_bindings.cpp
+    termin/tc_scene_lighting_bindings.cpp
 )
-target_link_libraries(_entity_native PRIVATE entity_lib trent)
+target_link_libraries(_entity_native PRIVATE entity_lib trent render_lib)
 target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
@@ -517,9 +520,6 @@ nanobind_add_module(_native
     termin/editor/transform_gizmo.cpp
     termin/sdl_bindings.cpp
     termin/platform/sdl_render_surface.cpp
-    termin/tc_scene.cpp
-    termin/tc_scene_bindings.cpp
-    termin/tc_scene_lighting_bindings.cpp
     termin/scene/scene_manager.cpp
     termin/scene/scene_manager_bindings.cpp
     # tc_viewport_bindings.cpp moved to _viewport_native module

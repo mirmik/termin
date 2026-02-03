@@ -4,7 +4,7 @@
 
 #include "termin/geom/mat44.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "termin/tc_scene_ref.hpp"
+#include "termin/tc_scene.hpp"
 
 namespace termin {
 

@@ -141,9 +141,9 @@ class EditorSceneAttachment:
         if transfer_camera_state and old_camera_data is not None:
             # Transfer from previous scene
             self._camera_manager.set_camera_data(old_camera_data)
-        elif restore_state and scene.editor_entities_data is not None:
+        elif restore_state and scene.get_metadata_value("termin.editor.entities_data") is not None:
             # Restore from scene's stored data
-            self._camera_manager.set_camera_data(scene.editor_entities_data)
+            self._camera_manager.set_camera_data(scene.get_metadata_value("termin.editor.entities_data"))
 
         # Remove any existing viewports from this display
         self._remove_display_viewports()
@@ -186,7 +186,7 @@ class EditorSceneAttachment:
 
         # Save state to scene
         if save_state and self._camera_manager is not None:
-            self._attached_scene.editor_entities_data = self._camera_manager.get_camera_data()
+            self._attached_scene.set_metadata_value("termin.editor.entities_data", self._camera_manager.get_camera_data())
 
         # Remove viewport
         if self._viewport is not None:
@@ -233,10 +233,10 @@ class EditorSceneAttachment:
     # --- State management ---
 
     def save_state(self) -> None:
-        """Save current editor state to scene.editor_entities_data."""
+        """Save current editor state to scene metadata."""
         if self._attached_scene is None or self._camera_manager is None:
             return
-        self._attached_scene.editor_entities_data = self._camera_manager.get_camera_data()
+        self._attached_scene.set_metadata_value("termin.editor.entities_data", self._camera_manager.get_camera_data())
 
     def get_camera_data(self) -> dict | None:
         """Get current camera data for serialization."""

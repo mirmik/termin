@@ -311,26 +311,34 @@ void TcScene::destroy() {
 
 ---
 
-## Фаза 9: Финальная структура
+## Фаза 9: Финальная структура ✅ DONE
 
 ### 9.1 termin/visualization/core/scene/__init__.py
 
 ```python
-"""Scene - re-export from C++."""
+"""Scene module - container for entities and scene configuration."""
 
-from termin._native.scene import TcScene as Scene
-
-# Backward compatibility
+from termin._native.scene import TcScene as Scene, deserialize_scene
 from termin.lighting import ShadowSettings
 
-__all__ = ["Scene", "ShadowSettings"]
+from ._helpers import find_component, find_components, dispatch_input
+
+__all__ = [
+    "Scene",
+    "ShadowSettings",
+    "deserialize_scene",
+    "find_component",
+    "find_components",
+    "dispatch_input",
+]
 ```
 
-### 9.2 Удалить
+### 9.2 Удалено
 
-- `termin/visualization/core/scene/_scene.py`
-- `get_current_scene()`
-- `_current_scene` глобал
+- ✅ `termin/visualization/core/scene/_scene.py`
+- ✅ `termin/visualization/core/scene/lighting.py`
+- ✅ `get_current_scene()` (удалено ранее)
+- ✅ `_current_scene` глобал (удалено ранее)
 
 ---
 
@@ -341,10 +349,10 @@ __all__ = ["Scene", "ShadowSettings"]
 3. **Фаза 3:** ✅ DONE - Vec3/Vec4 properties (заменили numpy на Vec3/Vec4)
 4. **Фаза 4:** ✅ DONE - `add()` упрощён (migration auto-registers, only notify callbacks)
 5. **Фаза 5:** ✅ DONE - `find_component_by_name` оптимизирован (использует get_components_of_type)
-6. **Фаза 6:** DEFERRED - Editor metadata остаётся (thin wrappers, удобно)
-7. **Фаза 7:** ✅ DONE - Serialization aliases (уже есть)
-8. **Фаза 8:** DEFERRED - destroy() остаётся в Python (error handling удобнее)
-9. **Фаза 9:** PARTIAL - Scene всё ещё наследует TcScene, но значительно упрощён
+6. **Фаза 6:** ✅ DONE - Editor metadata - редактор использует metadata API напрямую
+7. **Фаза 7:** ✅ DONE - Serialization (serialize/load_from_data/deserialize_scene)
+8. **Фаза 8:** ✅ DONE - destroy() перенесён в C++ bindings
+9. **Фаза 9:** ✅ DONE - Scene = TcScene (чистый реэкспорт)
 
 ---
 
