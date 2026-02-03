@@ -113,7 +113,7 @@ class WebStreamServer:
         """Инициализирует OpenGL контекст и offscreen surface."""
         from termin.visualization.render.headless import HeadlessContext
         from termin.visualization.render.surface import OffscreenRenderSurface
-        from termin.visualization.render import RenderEngine, RenderView, ViewportRenderState
+        from termin.visualization.render import RenderEngine
         from termin.visualization.render.framegraph import RenderPipeline, ResourceSpec
         from termin.visualization.render.framegraph.passes.color import ColorPass
         from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
@@ -153,7 +153,6 @@ class WebStreamServer:
                 ),
             ],
         )
-        self._state = ViewportRenderState(pipeline=self._pipeline)
 
     def _render_frame(self) -> bytes:
         """
@@ -162,7 +161,6 @@ class WebStreamServer:
         Возвращает:
             JPEG изображение в виде bytes.
         """
-        from termin.visualization.render import RenderView
         from PIL import Image
 
         if self.scene is None or self.camera is None:
@@ -178,20 +176,25 @@ class WebStreamServer:
         # Вызываем before_render (например, SkeletonController обновляет матрицы костей)
         self.scene.before_render()
 
-        # Создаём RenderView
-        view = RenderView(
-            scene=self.scene,
-            camera=self.camera,
-            rect=(0, 0, 1, 1),
-            canvas=None,
-        )
+        # Make surface current
+        self._surface.make_current()
 
-        # Рендерим
-        self._engine.render_single_view(
-            surface=self._surface,
-            view=view,
-            state=self._state,
-            present=False,
+        # Get display FBO
+        display_fbo = self._surface.get_framebuffer()
+
+        # Update camera aspect ratio
+        self.camera.set_aspect(self.width / float(max(1, self.height)))
+
+        # Render via C++ RenderEngine
+        self._engine.render_view_to_fbo(
+            self._pipeline,
+            display_fbo,
+            self.width,
+            self.height,
+            self.scene,
+            self.camera,
+            None,  # No viewport
+            0xFFFFFFFFFFFFFFFF,  # All layers
         )
 
         # Читаем пиксели

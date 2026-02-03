@@ -41,9 +41,9 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.platform.backends.base import GraphicsBackend
-    from termin.visualization.render.engine import RenderEngine
     from termin.visualization.render.state import ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
+    from termin._native.render import RenderEngine
 
 
 class RenderingManager:
@@ -603,7 +603,7 @@ class RenderingManager:
 
         # Lazy create render engine
         if self._render_engine is None:
-            from termin.visualization.render.engine import RenderEngine
+            from termin._native.render import RenderEngine
             self._render_engine = RenderEngine(self._graphics)
 
         from termin.visualization.render.view import RenderView
@@ -636,14 +636,47 @@ class RenderingManager:
 
         # Render all viewports
         if views_and_states:
-            self._render_engine.render_views(
-                surface=surface,
-                views=views_and_states,
-                present=present,
-            )
+            from termin.visualization.platform.backends import register_context
+
+            self._graphics.ensure_ready()
+            surface.make_current()
+            width, height = surface.get_size()
+            display_fbo = surface.get_framebuffer()
+            register_context(surface.make_current)
+
+            for view, state in views_and_states:
+                try:
+                    scene = view.scene
+                    if scene is None or scene.is_destroyed:
+                        continue
+                    pipeline = view.pipeline
+                    if pipeline is None:
+                        continue
+
+                    # Update camera aspect ratio
+                    view.camera.set_aspect(width / float(max(1, height)))
+
+                    # Render view to display FBO
+                    self._render_engine.render_view_to_fbo(
+                        pipeline,
+                        display_fbo,
+                        width,
+                        height,
+                        scene,
+                        view.camera,
+                        view.viewport,
+                        view.layer_mask,
+                    )
+                except Exception as e:
+                    import traceback
+                    log.error(f"Pipeline error: {e}\n{traceback.format_exc()}")
+
+            if present:
+                surface.present()
         elif present:
             # No viewports - clear and present
             from OpenGL import GL as gl
+            surface.make_current()
             gl.glClearColor(0.1, 0.1, 0.1, 1.0)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             surface.present()
@@ -685,7 +718,7 @@ class RenderingManager:
 
         # Lazy create render engine
         if self._render_engine is None:
-            from termin.visualization.render.engine import RenderEngine
+            from termin._native.render import RenderEngine
             self._render_engine = RenderEngine(self._graphics)
 
         # Collect ALL viewports from all displays (scene pipelines can span displays)
@@ -740,7 +773,8 @@ class RenderingManager:
         """Render a scene pipeline to viewport output_fbos."""
         from termin._native import log
         from termin._native.render import RenderingManager as CppRenderingManager
-        from termin.visualization.render.engine import ViewportContext
+        from termin._native.render import ViewportContext as CppViewportContext, Rect4i
+        from termin.visualization.render.framegraph import RenderFramePass
 
         if scene.is_destroyed:
             return
@@ -751,7 +785,7 @@ class RenderingManager:
             return
 
         # Collect viewport contexts from ALL displays
-        viewport_contexts: Dict[str, ViewportContext] = {}
+        viewport_contexts: Dict[str, CppViewportContext] = {}
         first_viewport: Optional["Viewport"] = None
 
         for viewport_name in target_names:
@@ -775,26 +809,32 @@ class RenderingManager:
             state = self.get_or_create_viewport_state(viewport)
             output_fbo = state.ensure_output_fbo(self._graphics, (pw, ph))
 
-            viewport_contexts[viewport_name] = ViewportContext(
-                name=viewport_name,
-                camera=viewport.camera,
-                rect=(0, 0, pw, ph),  # Full FBO, offset at blit time
-                layer_mask=viewport.effective_layer_mask,
-                output_fbo=output_fbo,
-            )
+            # Update aspect ratio
+            viewport.camera.set_aspect(pw / float(max(1, ph)))
+
+            # Create C++ ViewportContext directly
+            cpp_ctx = CppViewportContext()
+            cpp_ctx.name = viewport_name
+            cpp_ctx.camera = viewport.camera
+            cpp_ctx.rect = Rect4i(0, 0, pw, ph)  # Full FBO, offset at blit time
+            cpp_ctx.layer_mask = viewport.effective_layer_mask
+            cpp_ctx.output_fbo = output_fbo
+            viewport_contexts[viewport_name] = cpp_ctx
 
         if not viewport_contexts or first_viewport is None:
             return
 
-        # Use first viewport's state for shared resources
-        state = self.get_or_create_viewport_state(first_viewport)
+        # Call required_resources on passes
+        for render_pass in pipeline.passes:
+            if isinstance(render_pass, RenderFramePass):
+                render_pass.required_resources()
 
+        # Execute via C++ RenderEngine
         self._render_engine.render_scene_pipeline_offscreen(
-            pipeline=pipeline,
-            scene=scene,
-            viewport_contexts=viewport_contexts,
-            shared_state=state,
-            default_viewport=target_names[0] if target_names else "",
+            pipeline,
+            scene,
+            viewport_contexts,
+            target_names[0] if target_names else "",
         )
 
     def _render_viewport_offscreen(
@@ -802,10 +842,14 @@ class RenderingManager:
         viewport: "Viewport",
     ) -> None:
         """Render a single unmanaged viewport to its output_fbo."""
-        from termin.visualization.render.view import RenderView
+        from termin._native import log
 
         scene = viewport.scene
         if scene is None or scene.is_destroyed:
+            return
+
+        pipeline = viewport.pipeline
+        if pipeline is None:
             return
 
         # Get output size from pixel_rect (updated by Display on resize)
@@ -815,22 +859,24 @@ class RenderingManager:
         state = self.get_or_create_viewport_state(viewport)
         output_fbo = state.ensure_output_fbo(self._graphics, (pw, ph))
 
-        # Create RenderView
-        view = RenderView(
-            scene=viewport.scene,
-            camera=viewport.camera,
-            rect=(0.0, 0.0, 1.0, 1.0),  # Full output FBO
-            pipeline=viewport.pipeline,
-            layer_mask=viewport.effective_layer_mask,
-            viewport=viewport,
-        )
+        # Update camera aspect ratio
+        viewport.camera.set_aspect(pw / float(max(1, ph)))
 
-        self._render_engine.render_view_to_fbo(
-            view=view,
-            state=state,
-            target_fbo=output_fbo,
-            size=(pw, ph),
-        )
+        # Render directly via C++ RenderEngine
+        try:
+            self._render_engine.render_view_to_fbo(
+                pipeline,
+                output_fbo,
+                pw,
+                ph,
+                scene,
+                viewport.camera,
+                viewport,
+                viewport.effective_layer_mask,
+            )
+        except Exception as e:
+            import traceback
+            log.error(f"[_render_viewport_offscreen] {e}\n{traceback.format_exc()}")
 
     def present_all(self) -> None:
         """

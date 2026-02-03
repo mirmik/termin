@@ -172,7 +172,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
 
     def _init_render_engine(self) -> None:
         """Initialize render engine and viewport state."""
-        from termin.visualization.render.engine import RenderEngine
+        from termin._native.render import RenderEngine
         from termin.visualization.render.state import ViewportRenderState
 
         self._render_engine = RenderEngine(self._graphics)
@@ -243,24 +243,40 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         if not self._initialized:
             return
 
-        self._surface.make_current()
+        surface = self._display.surface
+        if surface is None:
+            return
 
-        # Build render view
-        from termin.visualization.render.view import RenderView
+        surface.make_current()
+        self._graphics.ensure_ready()
 
         width, height = self._display.get_size()
         if width <= 0 or height <= 0:
             return
 
-        render_view = RenderView(
-            viewport=self._viewport,
-            surface_size=(width, height),
-        )
+        display_fbo = surface.get_framebuffer()
 
-        # Render
-        self._render_engine.render_views(
-            surface=self._display.surface,
-            views=[(render_view, self._viewport_state)],
+        # Get scene, camera, pipeline from viewport
+        scene = self._viewport.scene
+        camera = self._viewport.camera
+        pipeline = self._viewport.pipeline
+
+        if scene is None or scene.is_destroyed or pipeline is None or camera is None:
+            return
+
+        # Update camera aspect ratio
+        camera.set_aspect(width / float(max(1, height)))
+
+        # Render via C++ RenderEngine
+        self._render_engine.render_view_to_fbo(
+            pipeline,
+            display_fbo,
+            width,
+            height,
+            scene,
+            camera,
+            self._viewport,
+            self._viewport.effective_layer_mask,
         )
 
         self._display.present()
