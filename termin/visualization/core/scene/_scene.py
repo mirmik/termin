@@ -10,7 +10,6 @@ from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
 from termin._native.scene import TcScene, TcSceneLighting
 # Ray3 and SceneRaycastHit are used via C++ TcScene.raycast/closest_to_ray
-from termin.core import Event
 
 from termin.visualization.core.viewport_config import (
     ViewportConfig,
@@ -63,9 +62,7 @@ class Scene(TcScene):
         bc = background_color
         self.set_background_color(float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]) if len(bc) > 3 else 1.0)
 
-        # Entity lifecycle events
-        self._on_entity_added: Event[Entity] = Event()
-        self._on_entity_removed: Event[Entity] = Event()
+        # Entity lifecycle events removed
 
     @property
     def is_destroyed(self) -> bool:
@@ -311,7 +308,6 @@ class Scene(TcScene):
                 self.register_component(component)
 
             entity.on_added(self)
-            self._on_entity_added.emit(entity)
         finally:
             _current_scene = prev_scene
         return entity
@@ -341,7 +337,6 @@ class Scene(TcScene):
             for component in entity.components:
                 self.register_component(component)
             entity.on_added(self)
-            self._on_entity_added.emit(entity)
         finally:
             _current_scene = prev_scene
 
@@ -350,28 +345,12 @@ class Scene(TcScene):
             self._register_migrated_child(child)
 
     def remove(self, entity: Entity):
-        # Emit event while entity is still valid
-        self._on_entity_removed.emit(entity)
         entity.on_removed()
 
         # Remove from C core (frees entity in pool, unregisters components)
         self.remove_entity(entity)
 
-    @property
-    def on_entity_added(self) -> Event[Entity]:
-        return self._on_entity_added
-
-    @on_entity_added.setter
-    def on_entity_added(self, value: Event[Entity]):
-        pass  # __iadd__ modifies in place, setter is no-op
-
-    @property
-    def on_entity_removed(self) -> Event[Entity]:
-        return self._on_entity_removed
-
-    @on_entity_removed.setter
-    def on_entity_removed(self, value: Event[Entity]):
-        pass  # __iadd__ modifies in place, setter is no-op
+    # on_entity_added/on_entity_removed events removed
 
     # get_entity(uuid), get_entity_by_pick_id(pick_id), find_entity_by_name(name) -> inherited from TcScene
 
@@ -762,9 +741,7 @@ class Scene(TcScene):
                 except Exception as ex:
                     print(f"Error in destroy handler of component '{tc_ref}': {ex}")
 
-        # Clear events (break subscriber references)
-        self._on_entity_added.clear()
-        self._on_entity_removed.clear()
+        # Entity events removed
 
         # Release C core scene (call base class TcScene.destroy())
         TcScene.destroy(self)

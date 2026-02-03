@@ -51,19 +51,12 @@ class TweenManagerComponent(PythonComponent):
     def start(self) -> None:
         super().start()
         self._scene = get_current_scene()
-        if self._scene:
-            self._scene.on_entity_removed += self._on_entity_removed
 
     def on_removed(self) -> None:
         super().on_removed()
         if self._scene is not None:
-            self._scene.on_entity_removed -= self._on_entity_removed
             self._scene = None
         self._manager.clear()
-
-    def _on_entity_removed(self, entity: "Entity") -> None:
-        """Kill all tweens targeting the removed entity."""
-        self._manager.kill_entity(entity)
 
     def update(self, dt: float) -> None:
         """Update all tweens."""
