@@ -747,13 +747,6 @@ class RenderingManager:
         from termin._native.render import RenderingManager as CppRenderingManager
         cpp_rm = CppRenderingManager.instance()
 
-        # DEBUG: log state
-        log.info(f"[render_all_offscreen] displays={len(self._displays)}, attached_scenes={len(self._attached_scenes)}")
-        for i, display in enumerate(self._displays):
-            log.info(f"[render_all_offscreen] display[{i}] name={display.name}, enabled={display.enabled}, viewports={len(display.viewports)}")
-            for j, vp in enumerate(display.viewports):
-                log.info(f"[render_all_offscreen]   viewport[{j}] name={vp.name}, enabled={vp.enabled}, scene={vp.scene}, pipeline={vp.pipeline}")
-
         with profiler.section("Scene Pipelines"):
             for scene in self._attached_scenes:
                 pipeline_names = cpp_rm.get_pipeline_names(scene)
