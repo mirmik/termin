@@ -6,12 +6,10 @@ from typing import TYPE_CHECKING, List
 import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
-from termin.visualization.core.scene import get_current_scene
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
     from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
     from termin.physics.fem_fixed_joint_component import FEMFixedJointComponent
     from termin.physics.fem_revolute_joint_component import FEMRevoluteJointComponent
@@ -96,7 +94,7 @@ class FEMPhysicsWorldComponent(PythonComponent):
 
     def start(self):
         super().start()
-        self._scene = get_current_scene()
+        self._scene = self.entity.scene if self.entity else None
         self._rebuild_simulation()
         self._initialized = True
 
@@ -111,8 +109,9 @@ class FEMPhysicsWorldComponent(PythonComponent):
 
         # Собрать все компоненты
         visited = set()
-        for entity in self._scene.entities:
-            self._collect_from_entity(entity, visited)
+        if self._scene:
+            for entity in self._scene.get_all_entities():
+                self._collect_from_entity(entity, visited)
 
         # Инициализировать тела
         for body_comp in self._bodies:

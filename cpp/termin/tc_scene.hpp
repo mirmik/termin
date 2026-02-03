@@ -13,6 +13,8 @@
 #include "../../core_c/include/tc_scene_pool.h"
 #include "../../core_c/include/tc_entity_pool.h"
 #include "viewport_config.hpp"
+#include "geom/vec3.hpp"
+#include "geom/vec4.hpp"
 
 namespace termin {
 
@@ -47,6 +49,7 @@ public:
     tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
 
     TcScene();
+    TcScene(const std::string& name, const std::string& uuid = "");
     ~TcScene();
 
     void destroy();
@@ -131,6 +134,24 @@ public:
     // Background color (RGBA)
     std::tuple<float, float, float, float> get_background_color() const;
     void set_background_color(float r, float g, float b, float a);
+
+    // Background color as Vec4
+    Vec4 background_color() const;
+    void set_background_color(const Vec4& color);
+
+    // Skybox colors as Vec3
+    Vec3 skybox_color() const;
+    void set_skybox_color(const Vec3& color);
+    Vec3 skybox_top_color() const;
+    void set_skybox_top_color(const Vec3& color);
+    Vec3 skybox_bottom_color() const;
+    void set_skybox_bottom_color(const Vec3& color);
+
+    // Ambient color as Vec3
+    Vec3 ambient_color() const;
+    void set_ambient_color(const Vec3& color);
+    float ambient_intensity() const;
+    void set_ambient_intensity(float intensity);
 
     // Viewport configurations (stored in tc_scene C API)
     void add_viewport_config(const ViewportConfig& config);

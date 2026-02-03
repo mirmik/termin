@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 import warnings
 import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
-from termin.visualization.core.scene import get_current_scene
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
 from termin.editor.inspect_field import InspectField
-
-if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
-
 
 class RigidBodyComponent(PythonComponent):
     """
@@ -90,7 +85,7 @@ class RigidBodyComponent(PythonComponent):
         self._half_extents = self._compute_half_extents()
 
         # Ищем PhysicsWorldComponent в сцене и регистрируемся
-        scene = get_current_scene()
+        scene = self.entity.scene if self.entity else None
         if scene:
             self._find_and_register_with_physics_world(scene)
 

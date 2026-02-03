@@ -44,6 +44,7 @@ class ModuleWatcher:
         self,
         on_module_changed: Callable[[str], None] | None = None,
         on_reload_complete: Callable[[str, bool, str], None] | None = None,
+        get_scene: Callable[[], object] | None = None,
     ):
         """
         Initialize the module watcher.
@@ -51,6 +52,7 @@ class ModuleWatcher:
         Args:
             on_module_changed: Callback when module files change (module_name)
             on_reload_complete: Callback when reload finishes (module_name, success, message)
+            get_scene: Callback to get current scene for upgrading unknown components
         """
         self._file_watcher: "QFileSystemWatcher | None" = None
         self._debounce_timer: "QTimer | None" = None
@@ -70,6 +72,7 @@ class ModuleWatcher:
 
         # Callbacks
         self._on_module_changed = on_module_changed
+        self._get_scene = get_scene
         self._on_reload_complete = on_reload_complete
 
         # Auto-reload flag
@@ -83,6 +86,10 @@ class ModuleWatcher:
     @auto_reload.setter
     def auto_reload(self, value: bool) -> None:
         self._auto_reload = value
+
+    def set_scene_getter(self, get_scene: Callable[[], object] | None) -> None:
+        """Set the callback to get the current scene."""
+        self._get_scene = get_scene
 
     def enable(self) -> None:
         """Enable file watching."""
@@ -227,10 +234,9 @@ class ModuleWatcher:
     def _try_upgrade_unknown_components(self) -> None:
         """Try to upgrade UnknownComponents after module reload."""
         try:
-            from termin.visualization.core.scene import get_current_scene
             from termin.entity.unknown_component import upgrade_unknown_components
 
-            scene = get_current_scene()
+            scene = self._get_scene() if self._get_scene else None
             if scene:
                 upgrade_unknown_components(scene)
         except Exception as e:

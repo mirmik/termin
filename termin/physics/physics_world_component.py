@@ -6,13 +6,11 @@ from typing import TYPE_CHECKING, List
 import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
-from termin.visualization.core.scene import get_current_scene
 from termin.geombase._geom_native import Vec3
 from termin.physics._physics_native import PhysicsWorld
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
     from termin.physics.rigid_body_component import RigidBodyComponent
 
 
@@ -159,7 +157,7 @@ class PhysicsWorldComponent(PythonComponent):
 
     def start(self):
         super().start()
-        scene = get_current_scene()
+        scene = self.entity.scene if self.entity else None
         if not scene:
             return
         # Передаём CollisionWorld из сцены в PhysicsWorld
@@ -167,14 +165,14 @@ class PhysicsWorldComponent(PythonComponent):
         self._collect_rigid_bodies(scene)
         self._initialized = True
 
-    def _collect_rigid_bodies(self, scene: "Scene"):
+    def _collect_rigid_bodies(self, scene):
         """Найти все RigidBodyComponent в сцене и зарегистрировать их без дублей."""
         from termin.physics.rigid_body_component import RigidBodyComponent
 
         self._rigid_body_components.clear()
 
         visited_entities = set()
-        for entity in scene.entities:
+        for entity in scene.get_all_entities():
             self._collect_from_entity(entity, visited_entities)
 
     def _collect_from_entity(self, entity, visited_entities):

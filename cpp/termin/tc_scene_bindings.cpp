@@ -16,6 +16,8 @@
 #include "collision/collision_world.hpp"
 #include "colliders/collider_component.hpp"
 #include "geom/ray3.hpp"
+#include "geom/vec3.hpp"
+#include "geom/vec4.hpp"
 #include "render/tc_value_trent.hpp"
 #include "../../core_c/include/tc_scene_lighting.h"
 #include "../../core_c/include/tc_scene_skybox.h"
@@ -174,6 +176,9 @@ void bind_tc_scene(nb::module_& m) {
 
     nb::class_<TcScene>(m, "TcScene")
         .def(nb::init<>())
+        .def(nb::init<const std::string&, const std::string&>(),
+             nb::arg("name") = "", nb::arg("uuid") = "",
+             "Create scene with optional name and uuid")
         .def("destroy", &TcScene::destroy, "Explicitly release tc_scene resources")
         .def("is_alive", &TcScene::is_alive, "Check if scene is alive (not destroyed)")
         .def("scene_ref", &TcScene::scene_ref, "Get non-owning reference to this scene")
@@ -264,9 +269,39 @@ void bind_tc_scene(nb::module_& m) {
         // Background color (RGBA)
         .def("get_background_color", &TcScene::get_background_color,
              "Get background color as (r, g, b, a) tuple")
-        .def("set_background_color", &TcScene::set_background_color,
+        .def("set_background_color", static_cast<void(TcScene::*)(float,float,float,float)>(&TcScene::set_background_color),
              nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("a"),
              "Set background color RGBA")
+
+        // Background color as Vec4 property
+        .def_prop_rw("background_color",
+            &TcScene::background_color,
+            static_cast<void(TcScene::*)(const Vec4&)>(&TcScene::set_background_color),
+            "Background color as Vec4 (RGBA)")
+
+        // Skybox colors as Vec3 properties
+        .def_prop_rw("skybox_color",
+            static_cast<Vec3(TcScene::*)() const>(&TcScene::skybox_color),
+            static_cast<void(TcScene::*)(const Vec3&)>(&TcScene::set_skybox_color),
+            "Skybox color as Vec3 (RGB)")
+        .def_prop_rw("skybox_top_color",
+            &TcScene::skybox_top_color,
+            static_cast<void(TcScene::*)(const Vec3&)>(&TcScene::set_skybox_top_color),
+            "Skybox top color as Vec3 (RGB)")
+        .def_prop_rw("skybox_bottom_color",
+            &TcScene::skybox_bottom_color,
+            static_cast<void(TcScene::*)(const Vec3&)>(&TcScene::set_skybox_bottom_color),
+            "Skybox bottom color as Vec3 (RGB)")
+
+        // Ambient lighting as Vec3 property
+        .def_prop_rw("ambient_color",
+            &TcScene::ambient_color,
+            &TcScene::set_ambient_color,
+            "Ambient color as Vec3 (RGB)")
+        .def_prop_rw("ambient_intensity",
+            &TcScene::ambient_intensity,
+            &TcScene::set_ambient_intensity,
+            "Ambient light intensity")
 
         // Viewport configurations (stored in C++ TcScene)
         .def("add_viewport_config", &TcScene::add_viewport_config,

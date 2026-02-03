@@ -1242,13 +1242,27 @@ tc_entity_id tc_entity_pool_migrate(
     // Move components (transfer ownership, don't copy)
     // Components keep their wrapper references
     tc_entity_pool_handle dst_pool_h = tc_entity_pool_registry_find(dst_pool);
+    tc_scene_handle src_scene = tc_entity_pool_get_scene(src_pool);
+    tc_scene_handle dst_scene = tc_entity_pool_get_scene(dst_pool);
+
     ComponentArray* src_comps = &src_pool->components[src_idx];
     for (size_t i = 0; i < src_comps->count; i++) {
         tc_component* c = src_comps->items[i];
+
+        // Unregister from source scene (if any)
+        if (tc_scene_handle_valid(src_scene)) {
+            tc_scene_unregister_component(src_scene, c);
+        }
+
         // Update component's owner handle to new pool/entity
         c->owner = tc_entity_handle_make(dst_pool_h, dst_id);
         // Add to dst without incrementing refcount (we're transferring ownership)
         component_array_push(&dst_pool->components[dst_idx], c);
+
+        // Register with destination scene (if any)
+        if (tc_scene_handle_valid(dst_scene)) {
+            tc_scene_register_component(dst_scene, c);
+        }
     }
     // Clear source without decrementing refcounts (ownership transferred)
     src_comps->count = 0;

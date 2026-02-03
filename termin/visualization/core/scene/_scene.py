@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Callable, List, Sequence, TYPE_CHECKING
 
-import numpy as np
-
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
 from termin._native.scene import TcScene, TcSceneLighting
+from termin.geombase._geom_native import Vec3, Vec4
 # Ray3 and SceneRaycastHit are used via C++ TcScene.raycast/closest_to_ray
 
 from termin.visualization.core.viewport_config import (
@@ -23,16 +22,6 @@ def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
 
 
-# Global current scene - set before update/start loops
-# Temporary solution until proper scene wrapper architecture is implemented
-_current_scene: "Scene | None" = None
-
-
-def get_current_scene() -> "Scene | None":
-    """Get the current scene being updated."""
-    return _current_scene
-
-
 class Scene(TcScene):
     """Container for renderable entities and lighting data.
 
@@ -41,48 +30,41 @@ class Scene(TcScene):
 
     def __init__(
         self,
-        background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
+        background_color: Sequence[float] | Vec4 | None = None,
         uuid: str | None = None,
         name: str = "",
     ):
-        # Initialize C++ TcScene base class
-        super().__init__()
+        # Initialize C++ TcScene base class with name and uuid
+        super().__init__(name, uuid or "")
 
         # Set Python wrapper for callbacks from C to Python
         self.set_py_wrapper(self)
-
-        # Set identifiable fields (stored in C++)
-        self.uuid = uuid or ""
-        self.name = name
 
         from termin._native import log
         log.info(f"[Scene] Created name='{name}', self={id(self):#x}")
 
         # Set initial background color in C++
-        bc = background_color
-        self.set_background_color(float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]) if len(bc) > 3 else 1.0)
-
-        # Entity lifecycle events removed
+        if background_color is not None:
+            if isinstance(background_color, Vec4):
+                TcScene.background_color.__set__(self, background_color)
+            else:
+                bc = background_color
+                a = float(bc[3]) if len(bc) > 3 else 1.0
+                TcScene.background_color.__set__(self, Vec4(float(bc[0]), float(bc[1]), float(bc[2]), a))
+        else:
+            # Default background color
+            TcScene.background_color.__set__(self, Vec4(0.05, 0.05, 0.08, 1.0))
 
     @property
     def is_destroyed(self) -> bool:
         """Check if scene has been destroyed."""
         return not self.is_alive()
 
-    # --- Background color (RGBA, stored in C++) ---
-
-    @property
-    def background_color(self) -> np.ndarray:
-        r, g, b, a = self.get_background_color()
-        return np.array([r, g, b, a], dtype=np.float32)
-
-    @background_color.setter
-    def background_color(self, value):
-        v = np.asarray(value, dtype=np.float32)
-        a = float(v[3]) if len(v) > 3 else 1.0
-        self.set_background_color(float(v[0]), float(v[1]), float(v[2]), a)
+    # --- Background color (RGBA) - Vec4 property inherited from TcScene ---
+    # background_color property is inherited from TcScene (returns/accepts Vec4)
 
     # --- Skybox (stored in tc_scene) ---
+    # skybox_color, skybox_top_color, skybox_bottom_color - Vec3 properties inherited from TcScene
 
     # Skybox type constants (match tc_skybox_type enum)
     _SKYBOX_TYPE_NONE = 0
@@ -106,36 +88,6 @@ class Scene(TcScene):
         type_int = self._SKYBOX_STR_TO_TYPE.get(value, self._SKYBOX_TYPE_GRADIENT)
         self.set_skybox_type(type_int)
 
-    @property
-    def skybox_color(self) -> np.ndarray:
-        r, g, b = self.get_skybox_color()
-        return np.array([r, g, b], dtype=np.float32)
-
-    @skybox_color.setter
-    def skybox_color(self, value):
-        v = np.asarray(value, dtype=np.float32)
-        self.set_skybox_color(float(v[0]), float(v[1]), float(v[2]))
-
-    @property
-    def skybox_top_color(self) -> np.ndarray:
-        r, g, b = self.get_skybox_top_color()
-        return np.array([r, g, b], dtype=np.float32)
-
-    @skybox_top_color.setter
-    def skybox_top_color(self, value):
-        v = np.asarray(value, dtype=np.float32)
-        self.set_skybox_top_color(float(v[0]), float(v[1]), float(v[2]))
-
-    @property
-    def skybox_bottom_color(self) -> np.ndarray:
-        r, g, b = self.get_skybox_bottom_color()
-        return np.array([r, g, b], dtype=np.float32)
-
-    @skybox_bottom_color.setter
-    def skybox_bottom_color(self, value):
-        v = np.asarray(value, dtype=np.float32)
-        self.set_skybox_bottom_color(float(v[0]), float(v[1]), float(v[2]))
-
     # skybox_mesh() -> use get_skybox_mesh() directly from TcScene
     # skybox_material() -> use ensure_skybox_material(type) directly from TcScene
 
@@ -149,39 +101,12 @@ class Scene(TcScene):
         self.ensure_skybox_material(type_int)
 
     # --- Lighting (stored in tc_scene_lighting) ---
+    # ambient_color (Vec3) and ambient_intensity (float) - properties inherited from TcScene
 
     def _get_lighting(self) -> TcSceneLighting | None:
         """Get TcSceneLighting view from C."""
         ptr = self.lighting_ptr()
         return TcSceneLighting(ptr) if ptr else None
-
-    @property
-    def ambient_color(self) -> np.ndarray:
-        lighting = self._get_lighting()
-        if lighting is not None:
-            c = lighting.ambient_color
-            return np.array([c[0], c[1], c[2]], dtype=np.float32)
-        return np.array([1.0, 1.0, 1.0], dtype=np.float32)
-
-    @ambient_color.setter
-    def ambient_color(self, value):
-        lighting = self._get_lighting()
-        if lighting is not None:
-            arr = np.asarray(value, dtype=np.float32)
-            lighting.ambient_color = (float(arr[0]), float(arr[1]), float(arr[2]))
-
-    @property
-    def ambient_intensity(self) -> float:
-        lighting = self._get_lighting()
-        if lighting is not None:
-            return lighting.ambient_intensity
-        return 0.1
-
-    @ambient_intensity.setter
-    def ambient_intensity(self, value: float):
-        lighting = self._get_lighting()
-        if lighting is not None:
-            lighting.ambient_intensity = float(value)
 
     # light_components -> use get_components_of_type("LightComponent") directly
 
@@ -285,64 +210,31 @@ class Scene(TcScene):
     # Creates entity in pool but does NOT register components or emit events.
     # Call add() after setup to complete registration.
 
-    def add_non_recurse(self, entity: Entity) -> Entity:
-        """Add entity to the scene.
+    def add(self, entity: Entity) -> Entity:
+        """Add entity to the scene, including all its children.
 
         Migrates entity to scene's pool if it's in a different pool.
-        Old entity reference becomes invalid after migration.
+        Components are automatically registered during migration.
+        After add(), original entity reference is invalid - use the
+        returned entity instead.
         """
-        global _current_scene
-
-        # Migrate entity to scene's pool (if not already there)
-        # This copies all data (transform, flags, components) to scene's pool
-        # and invalidates the old entity handle
+        # Migrate entity to scene's pool (with all children)
+        # Migration auto-registers components with scene
         entity = self.migrate_entity(entity)
         if not entity:
             raise RuntimeError("Failed to migrate entity to scene's pool")
 
-        # Register all components with C core scene
-        prev_scene = _current_scene
-        _current_scene = self
-        try:
-            for component in entity.components:
-                self.register_component(component)
-
-            entity.on_added(self)
-        finally:
-            _current_scene = prev_scene
+        # Notify entity and children about scene addition
+        self._notify_entity_added_recursive(entity)
         return entity
 
-    def add(self, entity: Entity) -> Entity:
-        """Add entity to the scene, including all its children.
-
-        Note: Entity migration happens during add, which recursively migrates
-        children. After add(), original entity reference is invalid - use the
-        returned entity instead.
-        """
-        # add_non_recurse migrates entity to scene's pool (with all children)
-        # So we don't need to iterate children - they're already migrated
-        entity = self.add_non_recurse(entity)
-        # Children were migrated together with parent, register them
+    def _notify_entity_added_recursive(self, entity: Entity, scene_ref=None):
+        """Notify entity and children that they were added to scene."""
+        if scene_ref is None:
+            scene_ref = self.scene_ref()
+        entity.on_added(scene_ref)
         for child in entity.children():
-            self._register_migrated_child(child)
-        return entity
-
-    def _register_migrated_child(self, entity: Entity):
-        """Register a child entity that was already migrated with its parent."""
-        global _current_scene
-
-        prev_scene = _current_scene
-        _current_scene = self
-        try:
-            for component in entity.components:
-                self.register_component(component)
-            entity.on_added(self)
-        finally:
-            _current_scene = prev_scene
-
-        # Recursively register children
-        for child in entity.children():
-            self._register_migrated_child(child)
+            self._notify_entity_added_recursive(child, scene_ref)
 
     def remove(self, entity: Entity):
         entity.on_removed()
@@ -399,11 +291,9 @@ class Scene(TcScene):
         Returns:
             First matching component or None.
         """
-        for entity in self.get_all_entities():
-            for comp in entity.components:
-                if type(comp).__name__ == class_name:
-                    return comp
-        return None
+        # Use efficient C++ type-based lookup
+        components = self.get_components_of_type(class_name)
+        return components[0] if components else None
 
     # --- Component registration ---
 
@@ -411,6 +301,7 @@ class Scene(TcScene):
         """Register component with tc_scene.
 
         Components are automatically added to type lists based on their type_name.
+        Note: This is typically called automatically during entity migration.
         """
         from termin.visualization.core.python_component import PythonComponent
 
@@ -429,7 +320,8 @@ class Scene(TcScene):
             ptr = component.c_component_ptr()
             self.register_component_ptr(ptr)
         else:
-            self.register_component(component)
+            # C++ component - call base class method
+            TcScene.register_component(self, component)
 
     def unregister_component(self, component: Component):
         """Unregister component from tc_scene.
@@ -443,18 +335,14 @@ class Scene(TcScene):
         if isinstance(component, PythonComponent):
             self.unregister_component_ptr(component.c_component_ptr())
         else:
-            self.unregister_component(component)
+            # C++ component - call base class method
+            TcScene.unregister_component(self, component)
 
     # --- Update loop ---
 
     def update(self, dt: float):
-        global _current_scene
-        _current_scene = self
-        try:
-            # Delegate to C core (includes profiling via tc_profiler)
-            TcScene.update(self, dt)
-        finally:
-            _current_scene = None
+        # Delegate to C core (includes profiling via tc_profiler)
+        TcScene.update(self, dt)
 
     def editor_update(self, dt: float):
         """
@@ -463,13 +351,8 @@ class Scene(TcScene):
         Called in editor mode to run editor-specific components.
         Uses the same _started flag as regular update().
         """
-        global _current_scene
-        _current_scene = self
-        try:
-            # Delegate to C core
-            TcScene.editor_update(self, dt)
-        finally:
-            _current_scene = None
+        # Delegate to C core
+        TcScene.editor_update(self, dt)
 
     def before_render(self):
         """
@@ -570,22 +453,22 @@ class Scene(TcScene):
 
         result = {
             "uuid": self.uuid,
-            "background_color": list(self.background_color),
+            "background_color": self.background_color.tolist(),
             "entities": serialized_entities,
             "layer_names": layer_names_dict,
             "flag_names": flag_names_dict,
             "viewport_configs": [serialize_viewport_config(vc) for vc in self.viewport_configs],
             "scene_pipelines": pipeline_uuids,
             # Lighting
-            "ambient_color": list(self.ambient_color),
+            "ambient_color": self.ambient_color.tolist(),
             "ambient_intensity": self.ambient_intensity,
             "shadow_settings": ss.serialize(),
         }
         # Skybox settings
         result["skybox_type"] = self.skybox_type
-        result["skybox_color"] = list(self.skybox_color)
-        result["skybox_top_color"] = list(self.skybox_top_color)
-        result["skybox_bottom_color"] = list(self.skybox_bottom_color)
+        result["skybox_color"] = self.skybox_color.tolist()
+        result["skybox_top_color"] = self.skybox_top_color.tolist()
+        result["skybox_bottom_color"] = self.skybox_bottom_color.tolist()
 
         # Metadata (extensible storage for tools)
         metadata = self.get_metadata()
@@ -618,15 +501,11 @@ class Scene(TcScene):
             Number of loaded entities
         """
         if update_settings:
-            self.background_color = np.asarray(
-                data.get("background_color", [0.05, 0.05, 0.08, 1.0]),
-                dtype=np.float32
-            )
+            bg = data.get("background_color", [0.05, 0.05, 0.08, 1.0])
+            self.background_color = Vec4(bg[0], bg[1], bg[2], bg[3] if len(bg) > 3 else 1.0)
             # Lighting settings
-            self.ambient_color = np.asarray(
-                data.get("ambient_color", [1.0, 1.0, 1.0]),
-                dtype=np.float32
-            )
+            ac = data.get("ambient_color", [1.0, 1.0, 1.0])
+            self.ambient_color = Vec3(ac[0], ac[1], ac[2])
             self.ambient_intensity = data.get("ambient_intensity", 0.1)
             if "shadow_settings" in data:
                 ss = self.shadow_settings
@@ -634,18 +513,12 @@ class Scene(TcScene):
                 self.shadow_settings = ss
             # Skybox settings
             self.skybox_type = data.get("skybox_type", "gradient")
-            self.skybox_color = np.asarray(
-                data.get("skybox_color", [0.5, 0.7, 0.9]),
-                dtype=np.float32
-            )
-            self.skybox_top_color = np.asarray(
-                data.get("skybox_top_color", [0.4, 0.6, 0.9]),
-                dtype=np.float32
-            )
-            self.skybox_bottom_color = np.asarray(
-                data.get("skybox_bottom_color", [0.6, 0.5, 0.4]),
-                dtype=np.float32
-            )
+            sc = data.get("skybox_color", [0.5, 0.7, 0.9])
+            self.skybox_color = Vec3(sc[0], sc[1], sc[2])
+            stc = data.get("skybox_top_color", [0.4, 0.6, 0.9])
+            self.skybox_top_color = Vec3(stc[0], stc[1], stc[2])
+            sbc = data.get("skybox_bottom_color", [0.6, 0.5, 0.4])
+            self.skybox_bottom_color = Vec3(sbc[0], sbc[1], sbc[2])
             # Load layer and flag names (into C)
             for k, v in data.get("layer_names", {}).items():
                 TcScene.set_layer_name(self, int(k), v)

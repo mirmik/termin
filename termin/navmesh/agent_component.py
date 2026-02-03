@@ -14,7 +14,6 @@ from termin._native import log
 from termin.visualization.core.component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent
 from termin.visualization.platform.backends.base import MouseButton, Action
-from termin.visualization.core.scene import get_current_scene
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -115,12 +114,12 @@ class NavMeshAgentComponent(InputComponent):
         """Найти PathfindingWorldComponent в сцене."""
         from termin.navmesh.pathfinding_world_component import PathfindingWorldComponent
 
-        scene = get_current_scene()
+        scene = self.entity.scene if self.entity else None
         if scene is None:
             return
 
-        # Ищем в корневых entity
-        for entity in scene.entities:
+        # Ищем в entity сцены
+        for entity in scene.get_all_entities():
             comp = entity.get_component(PathfindingWorldComponent)
             if comp is not None:
                 self._pathfinding_world = comp

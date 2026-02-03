@@ -23,6 +23,17 @@ TcScene::TcScene() {
     tc::Log::info("[TcScene] Created handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
 }
 
+TcScene::TcScene(const std::string& name, const std::string& uuid) {
+    _h = tc_scene_new();
+    if (!name.empty()) {
+        tc_scene_set_name(_h, name.c_str());
+    }
+    if (!uuid.empty()) {
+        tc_scene_set_uuid(_h, uuid.c_str());
+    }
+    tc::Log::info("[TcScene] Created handle=(%u,%u), name='%s', this=%p", _h.index, _h.generation, name.c_str(), (void*)this);
+}
+
 TcScene::~TcScene() {
     tc::Log::info("[TcScene] ~TcScene handle=(%u,%u), this=%p", _h.index, _h.generation, (void*)this);
     destroy();
@@ -220,6 +231,88 @@ std::tuple<float, float, float, float> TcScene::get_background_color() const {
 
 void TcScene::set_background_color(float r, float g, float b, float a) {
     tc_scene_set_background_color(_h, r, g, b, a);
+}
+
+Vec4 TcScene::background_color() const {
+    float r = 0, g = 0, b = 0, a = 1;
+    tc_scene_get_background_color(_h, &r, &g, &b, &a);
+    return Vec4(r, g, b, a);
+}
+
+void TcScene::set_background_color(const Vec4& color) {
+    tc_scene_set_background_color(_h,
+        static_cast<float>(color.x),
+        static_cast<float>(color.y),
+        static_cast<float>(color.z),
+        static_cast<float>(color.w));
+}
+
+Vec3 TcScene::skybox_color() const {
+    float r, g, b;
+    tc_scene_get_skybox_color(_h, &r, &g, &b);
+    return Vec3(r, g, b);
+}
+
+void TcScene::set_skybox_color(const Vec3& color) {
+    tc_scene_set_skybox_color(_h,
+        static_cast<float>(color.x),
+        static_cast<float>(color.y),
+        static_cast<float>(color.z));
+}
+
+Vec3 TcScene::skybox_top_color() const {
+    float r, g, b;
+    tc_scene_get_skybox_top_color(_h, &r, &g, &b);
+    return Vec3(r, g, b);
+}
+
+void TcScene::set_skybox_top_color(const Vec3& color) {
+    tc_scene_set_skybox_top_color(_h,
+        static_cast<float>(color.x),
+        static_cast<float>(color.y),
+        static_cast<float>(color.z));
+}
+
+Vec3 TcScene::skybox_bottom_color() const {
+    float r, g, b;
+    tc_scene_get_skybox_bottom_color(_h, &r, &g, &b);
+    return Vec3(r, g, b);
+}
+
+void TcScene::set_skybox_bottom_color(const Vec3& color) {
+    tc_scene_set_skybox_bottom_color(_h,
+        static_cast<float>(color.x),
+        static_cast<float>(color.y),
+        static_cast<float>(color.z));
+}
+
+Vec3 TcScene::ambient_color() const {
+    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    if (lit) {
+        return Vec3(lit->ambient_color[0], lit->ambient_color[1], lit->ambient_color[2]);
+    }
+    return Vec3(1.0, 1.0, 1.0);
+}
+
+void TcScene::set_ambient_color(const Vec3& color) {
+    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    if (lit) {
+        lit->ambient_color[0] = static_cast<float>(color.x);
+        lit->ambient_color[1] = static_cast<float>(color.y);
+        lit->ambient_color[2] = static_cast<float>(color.z);
+    }
+}
+
+float TcScene::ambient_intensity() const {
+    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    return lit ? lit->ambient_intensity : 0.1f;
+}
+
+void TcScene::set_ambient_intensity(float intensity) {
+    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    if (lit) {
+        lit->ambient_intensity = intensity;
+    }
 }
 
 void TcScene::add_viewport_config(const ViewportConfig& config) {

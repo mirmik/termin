@@ -676,9 +676,12 @@ class EditorWindow(QMainWindow):
         """Toggle modules panel visibility."""
         if checked:
             if self._modules_panel is None:
+                from termin.editor.module_watcher import get_module_watcher
                 self._modules_panel = ModulesPanel(self)
                 self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._modules_panel)
                 self._modules_panel.visibilityChanged.connect(self._on_modules_panel_visibility_changed)
+                # Set scene getter for module hot-reload
+                get_module_watcher().set_scene_getter(lambda: self.scene)
             self._modules_panel.show()
         else:
             if self._modules_panel is not None:
