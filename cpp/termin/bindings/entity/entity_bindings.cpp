@@ -374,10 +374,8 @@ void bind_entity_class(nb::module_& m) {
             if (!scene.is_alive()) {
                 return nb::none();
             }
-            // TcScene is bound in _native.scene module, so import it and use from_handle
-            nb::module_ scene_module = nb::module_::import_("termin._native.scene");
-            nb::object tc_scene_class = scene_module.attr("TcScene");
-            return tc_scene_class.attr("from_handle")(scene._h.index, scene._h.generation);
+            // TcScene is bound in this module as TcScene
+            return nb::cast(scene);
         })
 
         // Flags

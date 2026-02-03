@@ -436,7 +436,7 @@ class RenderEngine:
                     target_fbo,
                     pw,
                     ph,
-                    scene.scene_ref(),
+                    scene,  # TcScene is now a non-owning reference
                     view.camera,
                     view.viewport,
                     view.layer_mask,
@@ -511,7 +511,7 @@ class RenderEngine:
         with profiler.section("C++ Execute"):
             self._cpp_engine.render_scene_pipeline_offscreen(
                 pipeline,
-                scene.scene_ref(),
+                scene,  # TcScene is now a non-owning reference
                 cpp_viewport_contexts,
                 default_viewport,
             )

@@ -437,6 +437,14 @@ void bind_tc_scene(nb::module_& m) {
             tc_mesh* mesh = tc_scene_get_skybox_mesh(self._h);
             return TcMesh(mesh);
         })
+        .def("skybox_mesh", [](TcSceneRef& self) -> TcMesh {
+            tc_mesh* mesh = tc_scene_get_skybox_mesh(self._h);
+            return TcMesh(mesh);
+        })
+        .def("skybox_material", [](TcSceneRef& self) -> TcMaterial {
+            tc_material* mat = tc_scene_get_skybox_material(self._h);
+            return TcMaterial(mat);
+        })
         .def("ensure_skybox_material", [](TcSceneRef& self, int skybox_type) -> TcMaterial {
             tc_scene_skybox* skybox = tc_scene_get_skybox(self._h);
             if (!skybox) return TcMaterial(nullptr);

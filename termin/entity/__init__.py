@@ -21,11 +21,14 @@ from termin.entity._entity_native import (
     ComponentRegistry,
     EntityRegistry,
     TcComponentRef,
-    TcSceneRef,
+    TcScene,
     CameraComponent,
     PerspectiveCameraComponent,
     OrthographicCameraComponent,
 )
+
+# Alias for backwards compatibility
+TcSceneRef = TcScene
 
 __all__ = [
     "Component",
@@ -33,7 +36,8 @@ __all__ = [
     "ComponentRegistry",
     "EntityRegistry",
     "TcComponentRef",
-    "TcSceneRef",
+    "TcScene",
+    "TcSceneRef",  # alias
     "Viewport",
     "CameraComponent",
     "PerspectiveCameraComponent",

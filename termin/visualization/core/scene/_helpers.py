@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, List, Type, TypeVar
 
 if TYPE_CHECKING:
-    from termin._native.scene import TcScene
+    from termin.entity._entity_native import TcScene
     from termin.visualization.core.component import Component, InputComponent
 
 T = TypeVar("T", bound="Component")

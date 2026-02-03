@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Tuple
 
 # Re-export C++ class
-from termin._native.scene import ViewportConfig
+from termin.entity._entity_native import ViewportConfig
 
 __all__ = ["ViewportConfig", "serialize_viewport_config", "deserialize_viewport_config"]
 
