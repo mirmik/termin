@@ -81,7 +81,7 @@ class SceneManagerViewer(QWidget):
         left_layout.addWidget(scenes_label)
 
         self._scenes_tree = QTreeWidget()
-        self._scenes_tree.setHeaderLabels(["Name", "Mode", "Entities"])
+        self._scenes_tree.setHeaderLabels(["Name", "Mode", "Entities", "Handle"])
         self._scenes_tree.setAlternatingRowColors(True)
         self._scenes_tree.itemClicked.connect(self._on_scene_clicked)
         left_layout.addWidget(self._scenes_tree)
@@ -436,6 +436,7 @@ class SceneManagerViewer(QWidget):
 
         mode = self._scene_manager.get_mode(scene_name)
         path = self._scene_manager.get_scene_path(scene_name)
+        handle = scene.scene_handle()
 
         # Check if this scene is being edited
         is_editing = False
@@ -446,6 +447,7 @@ class SceneManagerViewer(QWidget):
 
         lines = [
             f"Name: {scene_name}",
+            f"Handle: {handle[0]}:{handle[1]} (index:generation)",
             f"Mode: {mode.name}",
             f"Path: {path or '(unsaved)'}",
             f"Editing: {'YES' if is_editing else 'no'}",
@@ -482,10 +484,12 @@ class SceneManagerViewer(QWidget):
         for name in self._scene_manager.scene_names():
             scene = self._scene_manager.get_scene(name)
             if scene:
+                handle = scene.scene_handle()
                 info[name] = {
                     "mode": self._scene_manager.get_mode(name).name,
                     "entity_count": len(list(scene.entities)),
                     "path": self._scene_manager.get_scene_path(name),
+                    "handle": handle,
                 }
         return info
 
@@ -506,6 +510,7 @@ class SceneManagerViewer(QWidget):
             mode = info["mode"]
             entity_count = info["entity_count"]
             path = info.get("path")
+            handle = info.get("handle", (0, 0))
 
             # Show file name if available, otherwise slot name
             if path:
@@ -515,10 +520,14 @@ class SceneManagerViewer(QWidget):
             else:
                 display_name = f"{name} (unsaved)"
 
+            # Format handle as "index:gen"
+            handle_str = f"{handle[0]}:{handle[1]}"
+
             item = QTreeWidgetItem([
                 display_name,
                 mode,
                 str(entity_count),
+                handle_str,
             ])
             # Store slot name for click handler
             item.setData(0, Qt.ItemDataRole.UserRole, name)
@@ -530,7 +539,7 @@ class SceneManagerViewer(QWidget):
             self._scenes_tree.addTopLevelItem(item)
 
         # Resize columns
-        for i in range(3):
+        for i in range(4):
             self._scenes_tree.resizeColumnToContents(i)
 
         # Update details if scene selected

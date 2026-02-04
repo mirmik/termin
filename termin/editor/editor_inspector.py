@@ -103,9 +103,14 @@ class ComponentsPanel(QWidget):
         if self._entity is None:
             return None
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._entity.components):
+        tc_components = self._entity.tc_components
+        if row < 0 or row >= len(tc_components):
             return None
-        return self._entity.components[row]
+        try:
+            return self._entity.components[row]
+        except RuntimeError:
+            # Component has no Python bindings
+            return None
 
     def current_component_ref(self):
         """Get current component as TcComponentRef."""
@@ -146,17 +151,18 @@ class ComponentsPanel(QWidget):
 
         global_pos = self._list.mapToGlobal(pos)
         menu = QMenu(self)
-        comp = self.current_component()
+        comp_ref = self.current_component_ref()
+        has_component = comp_ref is not None and comp_ref.valid
 
         # Rename action
         rename_action = QAction("Переименовать", self)
-        rename_action.setEnabled(comp is not None)
+        rename_action.setEnabled(has_component)
         rename_action.triggered.connect(self._rename_current_component)
         menu.addAction(rename_action)
 
         # Remove action
         remove_action = QAction("Удалить компонент", self)
-        remove_action.setEnabled(comp is not None)
+        remove_action.setEnabled(has_component)
         remove_action.triggered.connect(self._remove_current_component)
         menu.addAction(remove_action)
 
