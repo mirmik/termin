@@ -21,7 +21,7 @@
 #include "entity_helpers.hpp"
 
 extern "C" {
-#include "tc_binding.h"
+#include "resources/tc_binding.h"
 }
 #include "entity_bindings.hpp"
 #include "../camera/camera_bindings.hpp"
