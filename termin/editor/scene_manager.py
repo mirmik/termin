@@ -1,24 +1,17 @@
 """
-SceneManager - manages scene lifecycle, update cycles, and editor state.
+SceneManager - manages scene lifecycle and update cycles.
 
-Responsibilities:
-- Named scene storage and lifecycle (create, copy, load, save, close)
-- Scene modes (INACTIVE, EDITOR, GAME)
-- Editor entities injection
-- Scene update tick
-- Editor state persistence (camera, selection, expanded entities)
-- Debug info
+Thin Python wrapper over C++ SceneManager that stores TcScene objects
+for Python access while delegating all logic to C++.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import tempfile
 from typing import TYPE_CHECKING, Callable, Optional
 
 import numpy as np
-from PyQt6.QtCore import QTimer, QElapsedTimer
 
 from termin._native.scene import SceneManager as CxxSceneManager, SceneMode
 
@@ -61,23 +54,16 @@ class SceneManager(CxxSceneManager):
     """
     Manages scene lifecycle, update cycles, and editor state.
 
-    Scenes are identified by name (e.g., "editor", "game", "prefab_preview").
-    Each scene has a mode controlling how it's updated.
-
-    Standard scene names:
-    - "editor" - main editor scene
-    - "game" - copy of editor scene for game mode
-    - "prefab" - isolated scene for prefab editing
+    Thin wrapper over C++ SceneManager that stores TcScene objects
+    for Python access. Most logic is delegated to C++.
     """
 
     def __init__(
         self,
         resource_manager: "ResourceManager",
-        scene_factory: Optional[Callable[[], "Scene"]] = None,
         on_after_render: Optional[Callable[[], None]] = None,
-        use_internal_timer: bool = False,
         on_before_scene_close: Optional[Callable[["Scene"], None]] = None,
-        # Editor state callbacks
+        # Editor state callbacks (deprecated, use EditorWindow methods directly)
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
         get_selected_entity_uuid: Optional[Callable[[], str | None]] = None,
@@ -87,41 +73,17 @@ class SceneManager(CxxSceneManager):
         get_expanded_entities: Optional[Callable[[], list[str]]] = None,
         set_expanded_entities: Optional[Callable[[list[str]], None]] = None,
         rescan_file_resources: Optional[Callable[[], None]] = None,
+        # Deprecated parameters (ignored)
+        scene_factory: Optional[Callable[[], "Scene"]] = None,
+        use_internal_timer: bool = False,
     ):
-        """
-        Args:
-            resource_manager: Resource manager for loading assets.
-            scene_factory: Factory for creating new scenes. If None, uses Scene().
-            on_after_render: Callback to run after render (e.g. editor features).
-            use_internal_timer: If True, use internal QTimer for PLAY scenes.
-            on_before_scene_close: Callback(scene) called before scene is destroyed.
-            get_editor_camera_data: Callback to get editor camera state.
-            set_editor_camera_data: Callback to set editor camera state.
-            get_selected_entity_uuid: Callback to get selected entity UUID.
-            select_entity_by_uuid: Callback to select entity by UUID.
-            get_displays_data: Callback to get displays/viewports data.
-            set_displays_data: Callback to set displays/viewports data.
-            get_expanded_entities: Callback to get expanded entity names in tree.
-            set_expanded_entities: Callback to set expanded entity names.
-            rescan_file_resources: Callback to rescan project file resources.
-        """
         super().__init__()
 
         self._resource_manager = resource_manager
-        self._scene_factory = scene_factory
         self._on_after_render = on_after_render
-        self._use_internal_timer = use_internal_timer
         self._on_before_scene_close = on_before_scene_close
 
-        # Game loop timer (auto-starts when GAME scenes exist)
-        self._game_timer = QTimer()
-        self._game_timer.setSingleShot(True)
-        self._game_timer.timeout.connect(self._game_loop_tick)
-        self._elapsed_timer = QElapsedTimer()
-        self._timer_running = False
-        self._target_frame_ms = 16  # ~60 FPS
-
-        # Editor state callbacks
+        # Editor state callbacks (kept for compatibility during transition)
         self._get_editor_camera_data = get_editor_camera_data
         self._set_editor_camera_data = set_editor_camera_data
         self._get_selected_entity_uuid = get_selected_entity_uuid
@@ -132,10 +94,11 @@ class SceneManager(CxxSceneManager):
         self._set_expanded_entities = set_expanded_entities
         self._rescan_file_resources = rescan_file_resources
 
-        # Named scenes (Python Scene objects)
+        # TcScene objects storage (Python needs these, not just handles)
         self._scenes: dict[str, "Scene"] = {}
-        self._paths: dict[str, str | None] = {}  # scene_name -> file_path
-        self._editor_data: dict[str, dict] = {}  # scene_name -> stored editor data
+
+        # Editor data storage (temporary during load)
+        self._editor_data: dict[str, dict] = {}
 
         # Resources initialized flag
         self._resources_initialized: bool = False
@@ -151,10 +114,7 @@ class SceneManager(CxxSceneManager):
         return list(self._scenes.keys())
 
     def initialize_resources(self) -> None:
-        """
-        Initialize file resources once on startup.
-        Should be called once after editor is ready.
-        """
+        """Initialize file resources once on startup."""
         if self._resources_initialized:
             return
         self._resources_initialized = True
@@ -166,32 +126,18 @@ class SceneManager(CxxSceneManager):
 
     def _create_new_scene(self, name: str = "") -> "Scene":
         """Create a new empty scene."""
-        if self._scene_factory is not None:
-            return self._scene_factory()
         from termin.visualization.core.scene import Scene
         return Scene.create(name=name)
 
     # --- Scene Lifecycle ---
 
     def create_scene(self, name: str) -> "Scene":
-        """
-        Create a new empty scene with given name.
-
-        Args:
-            name: Scene name (must be unique).
-
-        Returns:
-            Created scene.
-
-        Raises:
-            ValueError: If scene with this name already exists.
-        """
+        """Create a new empty scene with given name."""
         if name in self._scenes:
             raise ValueError(f"Scene '{name}' already exists")
 
         scene = self._create_new_scene(name)
         self._scenes[name] = scene
-        self._paths[name] = None
 
         # Register in C++ SceneManager
         self.register_scene(name, scene.scene_handle())
@@ -199,40 +145,17 @@ class SceneManager(CxxSceneManager):
         return scene
 
     def add_existing_scene(self, name: str, scene: "Scene") -> None:
-        """
-        Register an existing scene with the manager.
-
-        Args:
-            name: Scene name (must be unique).
-            scene: Existing Scene object.
-
-        Raises:
-            ValueError: If scene with this name already exists.
-        """
+        """Register an existing scene with the manager."""
         if name in self._scenes:
             raise ValueError(f"Scene '{name}' already exists")
 
         self._scenes[name] = scene
-        self._paths[name] = None
 
         # Register in C++ SceneManager
         self.register_scene(name, scene.scene_handle())
 
     def copy_scene(self, source_name: str, dest_name: str) -> "Scene":
-        """
-        Create a copy of existing scene.
-
-        Args:
-            source_name: Name of scene to copy.
-            dest_name: Name for the copy (must be unique).
-
-        Returns:
-            Copied scene.
-
-        Raises:
-            KeyError: If source scene doesn't exist.
-            ValueError: If dest scene already exists.
-        """
+        """Create a copy of existing scene."""
         if source_name not in self._scenes:
             raise KeyError(f"Scene '{source_name}' not found")
         if dest_name in self._scenes:
@@ -241,13 +164,11 @@ class SceneManager(CxxSceneManager):
         source = self._scenes[source_name]
 
         # Serialize and deserialize to create deep copy
-        # (includes metadata with editor state)
         scene_data = source.serialize()
         dest = self._create_new_scene(dest_name)
         dest.load_from_data(scene_data, context=None, update_settings=True)
 
         self._scenes[dest_name] = dest
-        self._paths[dest_name] = None  # Copy has no file path
 
         # Register in C++ SceneManager
         self.register_scene(dest_name, dest.scene_handle())
@@ -255,25 +176,14 @@ class SceneManager(CxxSceneManager):
         return dest
 
     def load_scene(self, name: str, path: str) -> "Scene":
-        """
-        Load scene from file.
-
-        Args:
-            name: Name for the loaded scene.
-            path: File path to load from.
-
-        Returns:
-            Loaded scene.
-
-        Raises:
-            ValueError: If scene with this name already exists.
-            FileNotFoundError: If file doesn't exist.
-        """
+        """Load scene from file."""
         if name in self._scenes:
             raise ValueError(f"Scene '{name}' already exists")
 
-        with open(path, "r", encoding="utf-8") as f:
-            json_str = f.read()
+        # Use C++ file I/O
+        json_str = CxxSceneManager.read_json_file(path)
+        if not json_str:
+            raise FileNotFoundError(f"Failed to read scene file: {path}")
         data = json.loads(json_str)
 
         # Set scene name BEFORE loading data (components need it for cache)
@@ -286,12 +196,14 @@ class SceneManager(CxxSceneManager):
             scene.load_from_data(scene_data, context=None, update_settings=True)
 
         self._scenes[name] = scene
-        self._paths[name] = path
+
+        # Store path in C++ SceneManager
+        self.set_scene_path(name, path)
 
         # Register in C++ SceneManager
         self.register_scene(name, scene.scene_handle())
 
-        # Store editor data for later application (after editor entities are created)
+        # Store editor data for later application
         self._editor_data[name] = self._extract_editor_data(data)
 
         # Notify editor start
@@ -334,69 +246,46 @@ class SceneManager(CxxSceneManager):
         return result
 
     def get_stored_editor_data(self, name: str) -> dict:
-        """
-        Get stored editor data for a scene.
-
-        Returns editor data that was stored when scene was loaded.
-        Used by EditorWindow to apply camera/selection/etc. after creating editor entities.
-        """
+        """Get stored editor data for a scene (used by EditorWindow)."""
         return self._editor_data.get(name, {})
 
     def clear_stored_editor_data(self, name: str) -> None:
-        """Clear stored editor data for a scene (after it's been applied)."""
+        """Clear stored editor data for a scene."""
         self._editor_data.pop(name, None)
 
     def apply_editor_data(self, data: dict) -> None:
-        """
-        Apply editor data (camera, selection, displays, expanded entities).
+        """Apply editor data via callbacks (deprecated, use EditorWindow._apply_editor_state)."""
+        if self._set_editor_camera_data is not None:
+            camera_data = data.get("camera")
+            if camera_data is not None:
+                self._set_editor_camera_data(camera_data)
 
-        Called by EditorWindow after editor entities are created.
-        """
-        # Camera
-        camera_data = data.get("camera")
-        if camera_data is not None and self._set_editor_camera_data is not None:
-            self._set_editor_camera_data(camera_data)
+        if self._select_entity_by_uuid is not None:
+            selected_uuid = data.get("selected_entity")
+            if selected_uuid:
+                self._select_entity_by_uuid(selected_uuid)
 
-        # Selection
-        selected_uuid = data.get("selected_entity")
-        if selected_uuid and self._select_entity_by_uuid is not None:
-            self._select_entity_by_uuid(selected_uuid)
-
-        # Displays - always call to attach viewport_configs from scene
         if self._set_displays_data is not None:
             self._set_displays_data(data.get("displays"))
 
-        # Expanded entities
-        expanded_entities = data.get("expanded_entities")
-        if expanded_entities is not None and self._set_expanded_entities is not None:
-            self._set_expanded_entities(expanded_entities)
+        if self._set_expanded_entities is not None:
+            expanded_entities = data.get("expanded_entities")
+            if expanded_entities is not None:
+                self._set_expanded_entities(expanded_entities)
 
     def save_scene(self, name: str, path: str | None = None) -> dict:
-        """
-        Save scene to file.
-
-        Args:
-            name: Scene name.
-            path: File path. If None, uses previously saved path.
-
-        Returns:
-            Statistics dict.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-            ValueError: If no path provided and scene was never saved.
-        """
+        """Save scene to file."""
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
 
         scene = self._scenes[name]
 
         if path is None:
-            path = self._paths.get(name)
-        if path is None:
+            path = CxxSceneManager.get_scene_path(self, name)
+        if not path:
             raise ValueError(f"No path specified for scene '{name}'")
 
-        # Collect editor state
+        # Collect editor state via callbacks
         editor_data = self._collect_editor_state()
 
         scene_data = scene.serialize()
@@ -414,20 +303,11 @@ class SceneManager(CxxSceneManager):
 
         json_str = json.dumps(data, indent=2, ensure_ascii=False, default=numpy_encoder)
 
-        # Atomic write
-        dir_path = os.path.dirname(path) or "."
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            suffix=".tmp",
-            dir=dir_path,
-            delete=False
-        ) as f:
-            f.write(json_str)
-            temp_path = f.name
+        # Use C++ atomic write
+        CxxSceneManager.write_json_file(path, json_str)
 
-        os.replace(temp_path, path)
-        self._paths[name] = path
+        # Update path in C++ SceneManager
+        self.set_scene_path(name, path)
 
         return {
             "entities": sum(1 for e in scene.entities if e.transform.parent is None and e.serializable),
@@ -462,50 +342,32 @@ class SceneManager(CxxSceneManager):
         return editor_data
 
     def close_scene(self, name: str) -> None:
-        """
-        Close and destroy a scene.
-
-        Args:
-            name: Scene name.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-        """
+        """Close and destroy a scene."""
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
 
         scene = self._scenes[name]
 
-        # Notify before closing (allows cleanup of viewports, etc.)
+        # Notify before closing
         if self._on_before_scene_close is not None:
             self._on_before_scene_close(scene)
 
-        # Unregister from C++ SceneManager
+        # Unregister from C++ SceneManager (also clears path)
         self.unregister_scene(name)
 
         self._scenes.pop(name)
-        self._paths.pop(name, None)
         self._editor_data.pop(name, None)
-
-        self._update_timer_state()
 
         scene.destroy()
 
     def get_scene(self, name: str) -> "Scene | None":
-        """
-        Get scene by name.
-
-        Args:
-            name: Scene name.
-
-        Returns:
-            Scene or None if not found.
-        """
+        """Get scene by name."""
         return self._scenes.get(name)
 
     def get_scene_path(self, name: str) -> str | None:
         """Get file path for scene."""
-        return self._paths.get(name)
+        path = CxxSceneManager.get_scene_path(self, name)
+        return path if path else None
 
     def has_scene(self, name: str) -> bool:
         """Check if scene exists."""
@@ -514,108 +376,41 @@ class SceneManager(CxxSceneManager):
     # --- Scene Mode ---
 
     def set_mode(self, name: str, mode: SceneMode) -> None:
-        """
-        Set scene update mode.
-
-        Args:
-            name: Scene name.
-            mode: New mode.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-        """
+        """Set scene update mode."""
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
 
         old_mode = CxxSceneManager.get_mode(self, name)
         scene = self._scenes[name]
 
-        # When transitioning to INACTIVE, notify viewports callback
-        # (Component notifications are handled in C++ tc_scene_set_mode)
+        # When transitioning to INACTIVE, notify callback
         if mode == SceneMode.INACTIVE and old_mode != SceneMode.INACTIVE:
             if self._on_before_scene_close is not None:
                 self._on_before_scene_close(scene)
 
-        # Set mode in C++ (this also notifies components)
+        # Set mode in C++
         CxxSceneManager.set_mode(self, name, mode)
-        self._update_timer_state()
 
     def get_mode(self, name: str) -> SceneMode:
-        """
-        Get scene mode.
-
-        Args:
-            name: Scene name.
-
-        Returns:
-            Scene mode.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-        """
+        """Get scene mode."""
         if name not in self._scenes:
             raise KeyError(f"Scene '{name}' not found")
         return CxxSceneManager.get_mode(self, name)
 
-    # --- Editor Entities ---
-
-    def add_editor_entities(self, name: str) -> None:
-        """
-        Add editor entities (gizmos, grid, etc.) to scene.
-
-        Args:
-            name: Scene name.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-        """
-        if name not in self._scenes:
-            raise KeyError(f"Scene '{name}' not found")
-
-        # Editor entities are managed by EditorCameraManager
-        # This is called by EditorWindow after scene creation
-        pass
-
-    def remove_editor_entities(self, name: str) -> None:
-        """
-        Remove editor entities from scene.
-
-        Args:
-            name: Scene name.
-
-        Raises:
-            KeyError: If scene doesn't exist.
-        """
-        if name not in self._scenes:
-            raise KeyError(f"Scene '{name}' not found")
-
-        # Editor entities are managed by EditorCameraManager
-        pass
-
     # --- Update Cycle ---
 
     def tick(self, dt: float) -> bool:
-        """
-        Update all active scenes.
-
-        Args:
-            dt: Delta time in seconds.
-
-        Returns:
-            True if render was performed.
-        """
+        """Update all active scenes."""
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
         profiler.begin_frame()
 
         # Call C++ tick which updates all scenes based on their mode
-        # Returns True if render is needed (has PLAY scenes or render_requested)
         should_render = CxxSceneManager.tick(self, dt)
 
         if should_render:
             with profiler.section("Scene Manager Before Render"):
-                # C++ before_render handles calling scene.before_render()
                 CxxSceneManager.before_render(self)
 
             from termin.visualization.render import RenderingManager
@@ -629,50 +424,15 @@ class SceneManager(CxxSceneManager):
         profiler.end_frame()
         return should_render
 
-    def _update_timer_state(self) -> None:
-        """Start or stop game timer based on whether GAME scenes exist."""
-        if not self._use_internal_timer:
-            return
-        has_game_scenes = self.has_play_scenes()
-
-        if has_game_scenes and not self._timer_running:
-            self._elapsed_timer.start()
-            self._timer_running = True
-            self._game_timer.start(self._target_frame_ms)
-        elif not has_game_scenes and self._timer_running:
-            self._game_timer.stop()
-            self._timer_running = False
-
-    def _game_loop_tick(self) -> None:
-        """Called by game timer to update GAME scenes."""
-        elapsed_ms = self._elapsed_timer.restart()
-        dt = elapsed_ms / 1000.0
-
-        self.tick(dt)
-
-        # Schedule next tick if still running
-        if self._timer_running:
-            tick_duration_ms = self._elapsed_timer.elapsed()
-            remaining_ms = self._target_frame_ms - tick_duration_ms
-            next_interval = max(0, remaining_ms)
-            self._game_timer.start(next_interval)
-
-    # request_render is inherited from CxxSceneManager
-
     def set_render_callbacks(
         self,
         on_after_render: Optional[Callable[[], None]] = None,
     ) -> None:
-        """Configure render callbacks for the editor."""
+        """Configure render callbacks."""
         if on_after_render is not None:
             self._on_after_render = on_after_render
 
-    # @property
-    # def is_game_mode(self) -> bool:
-    #     """True if any scene is in GAME mode."""
-    #     return any(m == SceneMode.PLAY for m in self._modes.values())
-
-    # --- Reset/New Scene ---
+    # --- Reset ---
 
     def close_all_scenes(self) -> None:
         """Close and destroy all scenes."""
@@ -680,26 +440,20 @@ class SceneManager(CxxSceneManager):
             self.close_scene(name)
 
     def reset(self) -> None:
-        """Reset manager state by closing all scenes and clearing editor data."""
+        """Reset manager state."""
         self.close_all_scenes()
         self._editor_data.clear()
-        self._update_timer_state()
 
     # --- Debug Info ---
 
     def get_debug_info(self) -> dict:
-        """
-        Get debug information about all scenes.
-
-        Returns:
-            Dict with scene info: {name: {mode, entity_count, path}, ...}
-        """
+        """Get debug information about all scenes."""
         info = {}
         for name, scene in self._scenes.items():
             mode = CxxSceneManager.get_mode(self, name)
             info[name] = {
                 "mode": mode.name,
                 "entity_count": len(list(scene.entities)),
-                "path": self._paths.get(name),
+                "path": CxxSceneManager.get_scene_path(self, name),
             }
         return info

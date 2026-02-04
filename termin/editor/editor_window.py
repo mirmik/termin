@@ -812,6 +812,47 @@ class EditorWindow(QMainWindow):
         self.scene_tree_controller.rebuild()
         self.scene_tree_controller.set_expanded_entity_uuids(uuids)
 
+    # --- Editor State File I/O ---
+
+    def _collect_editor_state(self) -> dict:
+        """Collect current editor state for saving."""
+        editor_data = {}
+
+        camera_data = self._get_editor_camera_data()
+        if camera_data is not None:
+            editor_data["camera"] = camera_data
+
+        selected_uuid = self._get_selected_entity_uuid()
+        if selected_uuid is not None:
+            editor_data["selected_entity"] = selected_uuid
+
+        displays_data = self._get_displays_data()
+        if displays_data is not None:
+            editor_data["displays"] = displays_data
+
+        expanded = self._get_expanded_entities()
+        if expanded:
+            editor_data["expanded_entities"] = expanded
+
+        return editor_data
+
+    def _apply_editor_state(self, editor_data: dict) -> None:
+        """Apply editor state loaded from file."""
+        camera_data = editor_data.get("camera")
+        if camera_data is not None:
+            self._set_editor_camera_data(camera_data)
+
+        selected_uuid = editor_data.get("selected_entity")
+        if selected_uuid:
+            self._select_entity_by_uuid(selected_uuid)
+
+        # Always call to attach viewport_configs from scene
+        self._set_displays_data(editor_data.get("displays"))
+
+        expanded_entities = editor_data.get("expanded_entities")
+        if expanded_entities is not None:
+            self._set_expanded_entities(expanded_entities)
+
     def _get_project_path(self) -> str | None:
         """Get current project path from project browser."""
         if self._project_controller is None:
@@ -1547,7 +1588,7 @@ class EditorWindow(QMainWindow):
         # Apply stored editor data (camera position, selection, displays, etc.) from loaded scene
         # Must be after all viewport/scene setup is complete
         stored_data = self.scene_manager.get_stored_editor_data(name)
-        self.scene_manager.apply_editor_data(stored_data)
+        self._apply_editor_state(stored_data)
         self.scene_manager.clear_stored_editor_data(name)
 
         self._request_viewport_update()
