@@ -4,7 +4,7 @@
 #include "tc_scene_lighting.h"
 #include "tc_scene_skybox.h"
 #include "tc_viewport_config.h"
-#include "tc_collision_world.h"
+#include "physics/tc_collision_world.h"
 #include "resources/tc_resource_map.h"
 #include "tc_profiler.h"
 #include "resources/tc_mesh.h"

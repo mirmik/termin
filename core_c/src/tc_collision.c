@@ -3,7 +3,7 @@
  * @brief C API implementation for collision detection.
  */
 
-#include "tc_collision.h"
+#include "physics/tc_collision.h"
 #include "tc_scene.h"
 #include <stdlib.h>
 #include <string.h>

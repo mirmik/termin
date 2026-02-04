@@ -1,7 +1,7 @@
 // collision_world_c.hpp - C API for CollisionWorld
 #pragma once
 
-#include "tc_collision.h"  // For tc_contact_manifold
+#include "physics/tc_collision.h"  // For tc_contact_manifold
 
 // Export macro for entity_lib.dll
 #ifdef _WIN32

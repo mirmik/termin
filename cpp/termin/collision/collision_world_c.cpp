@@ -2,7 +2,7 @@
 #include "collision_world_c.hpp"
 #include "collision_world.hpp"
 #include "termin/colliders/attached_collider.hpp"
-#include "tc_collision_world.h"
+#include "physics/tc_collision_world.h"
 #include <vector>
 
 using termin::collision::CollisionWorld;

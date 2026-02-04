@@ -1,4 +1,4 @@
-#include "tc_primitive_mesh.h"
+#include "resources/tc_primitive_mesh.h"
 #include "resources/tc_mesh_registry.h"
 #include "tc_gpu.h"
 #include <stdlib.h>

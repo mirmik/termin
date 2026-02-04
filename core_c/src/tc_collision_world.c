@@ -1,6 +1,6 @@
 // tc_collision_world.c - Collision world allocator registry
 // Stores function pointers registered by entity_lib (C++ side)
-#include "tc_collision_world.h"
+#include "physics/tc_collision_world.h"
 #include "tc_log.h"
 #include <stddef.h>
 

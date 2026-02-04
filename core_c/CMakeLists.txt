@@ -62,7 +62,7 @@ set(TC_HEADERS
     include/inspect/tc_kind.h
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
-    include/tc_collision.h
+    include/physics/tc_collision.h
     include/tc_component.h
     include/tc_entity_pool.h
     include/tc_entity_pool_registry.h
