@@ -1,120 +1,60 @@
-# План миграции SceneManager в C++
+# Миграция SceneManager в C++ - ЗАВЕРШЕНА
 
-## Статус: Этапы 1-5 завершены
+## Результат
 
-### Выполнено:
+**Python SceneManager: 9 строк** (было ~700) - чистый реэкспорт!
 
-#### Этап 1: C++ lifecycle методы ✓
-- `_paths: map<string, string>` в C++ SceneManager
-- `get_scene_path()` / `set_scene_path()`
-- `create_scene(name)` - создаёт сцену + регистрирует
-- `close_scene(name)` - unregister + destroy
-- `close_all_scenes()`
-- Python bindings
+### C++ SceneManager (`cpp/termin/scene/scene_manager.hpp/cpp`):
+- Scene lifecycle: `create_scene`, `close_scene`, `copy_scene`
+- Scene access: `get_scene`, `has_scene`, `scene_names`
+- File I/O: `load_scene`, `save_scene`, `read_json_file`, `write_json_file`
+- Path management: `get_scene_path`, `set_scene_path`
+- Mode management: `get_mode`, `set_mode`, `has_play_scenes`
+- Update cycle: `tick`, `tick_and_render`, `before_render`
+- Callbacks: `set_on_after_render`, `set_on_before_scene_close`
 
-#### Этап 2: C++ File I/O ✓
-- `read_json_file(path)` - читает файл, возвращает строку
-- `write_json_file(path, json)` - атомарная запись
-- Python bindings
-- Python SceneManager использует C++ file I/O
-
-#### Этап 3: C++ callbacks ✓
-- `set_on_after_render(callback)`
-- `set_on_before_scene_close(callback)`
-- `invoke_after_render()` / `invoke_before_scene_close(name)`
-- Python bindings с GIL
-
-#### Этап 4: Editor state в EditorWindow ✓
-- `_collect_editor_state()` в EditorWindow
-- `_apply_editor_state()` в EditorWindow
-- EditorWindow использует `_apply_editor_state` напрямую
-
-#### Этап 5: Упрощение Python SceneManager ✓
-- Удалён game timer (QTimer, _game_loop_tick, _update_timer_state)
-- Упрощён код с 700 до 459 строк
-- Делегирование в C++: file I/O, path storage, mode management
-
-## Текущая архитектура
-
-### C++ SceneManager (scene_manager.hpp/cpp):
-```cpp
-class SceneManager {
-public:
-    // Scene lifecycle
-    tc_scene_handle create_scene(const std::string& name);
-    void close_scene(const std::string& name);
-    void close_all_scenes();
-
-    // Scene registration
-    void register_scene(const std::string& name, tc_scene_handle scene);
-    void unregister_scene(const std::string& name);
-
-    // Scene access
-    tc_scene_handle get_scene(const std::string& name) const;
-    bool has_scene(const std::string& name) const;
-    std::vector<std::string> scene_names() const;
-
-    // Paths
-    std::string get_scene_path(const std::string& name) const;
-    void set_scene_path(const std::string& name, const std::string& path);
-
-    // File I/O
-    static std::string read_json_file(const std::string& path);
-    static void write_json_file(const std::string& path, const std::string& json);
-
-    // Mode
-    tc_scene_mode get_mode(const std::string& name) const;
-    void set_mode(const std::string& name, tc_scene_mode mode);
-    bool has_play_scenes() const;
-
-    // Update cycle
-    virtual bool tick(double dt);
-    void before_render();
-    void request_render();
-    bool consume_render_request();
-
-    // Callbacks
-    void set_on_after_render(AfterRenderCallback callback);
-    void set_on_before_scene_close(BeforeSceneCloseCallback callback);
-    void invoke_after_render();
-    void invoke_before_scene_close(const std::string& name);
-
-protected:
-    std::unordered_map<std::string, tc_scene_handle> _scenes;
-    std::unordered_map<std::string, std::string> _paths;
-    bool _render_requested = false;
-    AfterRenderCallback _on_after_render;
-    BeforeSceneCloseCallback _on_before_scene_close;
-};
+### Python SceneManager (`termin/editor/scene_manager.py`):
+Чистый реэкспорт из C++:
+```python
+from termin._native.scene import SceneManager, SceneMode
 ```
 
-### Python SceneManager (459 строк):
-Тонкая обёртка над C++ SceneManager:
-- Хранит TcScene объекты для Python доступа (`_scenes: dict[str, Scene]`)
-- Хранит editor data временно при загрузке (`_editor_data`)
-- Делегирует логику в C++
+### EditorWindow:
+- `_editor_data: dict` - хранение editor state
+- `_store_editor_data` - сохранение при загрузке
+- `_collect_editor_state` - сбор при сохранении
+- `_apply_editor_state` - применение после загрузки
+- `_on_before_scene_close(scene_name)` - принимает имя, получает scene через get_scene
 
-## Этап 6: tick() интеграция с RenderingManager (TODO)
+### SceneFileController:
+- `store_editor_data` callback
+- `collect_editor_data` callback
+- `_extract_editor_data` - извлечение из файла
 
-Для полной миграции tick() в C++ нужно:
-1. Вызов RenderingManager.render_all() из C++
-2. Вызов _on_after_render callback после рендера
-3. Профайлер секции в C++
+## Ключевые изменения
 
-Это требует доступа к RenderingManager из C++, что создаёт
-зависимости между модулями. Оставлено для будущей работы.
+1. **C++ bindings возвращают TcScene** (не tuple handles)
+2. **tick_and_render()** - полный цикл в C++ с RenderingManager
+3. **Editor data в EditorWindow** (не в SceneManager)
+4. **Убран game timer** (не используется)
+5. **Убраны editor callbacks** из SceneManager (10 штук)
+6. **Убран resource_manager** из SceneManager
 
-## Почему нельзя сделать чистый реэкспорт
+## Архитектура
 
-Python код использует TcScene объекты (не только handles):
-- `scene_manager.get_scene("editor")` возвращает Scene
-- Scene используется для entity manipulation, raycast, etc.
+```
+C++ SceneManager (scene_manager.cpp)
+├── Хранит tc_scene_handle (числа)
+├── Возвращает TcScene через from_handle()
+├── File I/O, mode, tick_and_render
+└── RenderingManager::instance().render_all()
 
-C++ SceneManager хранит tc_scene_handle (числа).
-Python wrapper хранит TcScene объекты для Python доступа.
+Python SceneManager (9 строк)
+└── Чистый реэкспорт из termin._native.scene
 
-Для чистого реэкспорта нужно либо:
-1. C++ возвращает TcScene объекты (сложно из-за модульности)
-2. Lookup TcScene по handle где-то ещё
-
-Текущая архитектура (тонкая Python обёртка) - оптимальный компромисс.
+EditorWindow
+├── _editor_data: dict[str, dict]
+├── _store_editor_data(name, data)
+├── _collect_editor_state() -> dict
+└── _apply_editor_state(data)
+```

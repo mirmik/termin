@@ -122,7 +122,7 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     # Render first frame immediately to avoid showing uninitialized buffer
     sdl_backend.poll_events()
     win.scene_manager.request_render()
-    win.scene_manager.tick(0.016)  # Render first frame
+    win.scene_manager.tick_and_render(0.016)  # Render first frame
 
     # Main render loop
     target_fps = 60
@@ -141,7 +141,7 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
         sdl_backend.poll_events()
 
         # Tick editor (game mode update + render if needed)
-        win.scene_manager.tick(dt)
+        win.scene_manager.tick_and_render(dt)
 
         # Frame limiting - sleep if we're ahead of schedule
         elapsed = time.perf_counter() - current_time

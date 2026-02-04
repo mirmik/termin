@@ -1,5 +1,6 @@
 // scene_manager.cpp - SceneManager implementation
 #include "scene_manager.hpp"
+#include "termin/render/rendering_manager.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -205,6 +206,40 @@ std::string SceneManager::read_json_file(const std::string& path) {
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
+}
+
+// --- Full tick with rendering ---
+
+bool SceneManager::tick_and_render(double dt) {
+    bool profile = tc_profiler_enabled();
+
+    if (profile) tc_profiler_begin_frame();
+
+    // Update all scenes
+    bool should_render = tick(dt);
+
+    if (should_render) {
+        // Prepare scenes for rendering
+        if (profile) tc_profiler_begin_section("SceneManager Before Render");
+        before_render();
+        if (profile) tc_profiler_end_section();
+
+        // Render via RenderingManager
+        if (profile) tc_profiler_begin_section("SceneManager Render");
+        RenderingManager::instance().render_all(true);
+        if (profile) tc_profiler_end_section();
+
+        // After-render callback (e.g., editor features)
+        if (_on_after_render) {
+            if (profile) tc_profiler_begin_section("SceneManager After Render");
+            _on_after_render();
+            if (profile) tc_profiler_end_section();
+        }
+    }
+
+    if (profile) tc_profiler_end_frame();
+
+    return should_render;
 }
 
 // --- Callbacks ---

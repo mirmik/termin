@@ -41,6 +41,8 @@ class SceneFileController:
         set_editor_scene_name: Callable[[str | None], None] | None = None,
         log_message: Callable[[str], None] | None = None,
         on_before_close_scene: Callable[[str], None] | None = None,
+        store_editor_data: Callable[[str, dict], None] | None = None,
+        collect_editor_data: Callable[[], dict] | None = None,
     ):
         self._parent = parent
         self._get_scene_manager = get_scene_manager
@@ -50,6 +52,8 @@ class SceneFileController:
         self._get_editor_scene_name = get_editor_scene_name
         self._set_editor_scene_name = set_editor_scene_name
         self._on_before_close_scene = on_before_close_scene
+        self._store_editor_data = store_editor_data
+        self._collect_editor_data = collect_editor_data
 
     def new_scene(self) -> bool:
         """
@@ -158,7 +162,12 @@ class SceneFileController:
             if scene_name is None:
                 raise RuntimeError("No editor scene to save")
 
-            sm.save_scene(scene_name, file_path)
+            # Collect editor data
+            editor_data = None
+            if self._collect_editor_data is not None:
+                editor_data = self._collect_editor_data()
+
+            sm.save_scene(scene_name, file_path, editor_data)
             EditorSettings.instance().set_last_scene_path(file_path)
             log.info(f"Scene saved: {file_path}")
             self._on_after_save()
@@ -231,6 +240,11 @@ class SceneFileController:
 
             sm.load_scene(new_scene_name, file_path)
 
+            # Extract and store editor data for later application
+            if self._store_editor_data is not None:
+                editor_data = self._extract_editor_data(file_path)
+                self._store_editor_data(new_scene_name, editor_data)
+
             self._switch_to_scene(new_scene_name)
 
             EditorSettings.instance().set_last_scene_path(file_path)
@@ -282,6 +296,11 @@ class SceneFileController:
 
             sm.load_scene(new_scene_name, str(last_scene_path))
 
+            # Extract and store editor data
+            if self._store_editor_data is not None:
+                editor_data = self._extract_editor_data(str(last_scene_path))
+                self._store_editor_data(new_scene_name, editor_data)
+
             self._switch_to_scene(new_scene_name)
             return True
 
@@ -289,3 +308,49 @@ class SceneFileController:
             import traceback
             log.warning(f"Could not restore last scene: {e}\n{traceback.format_exc()}")
             return False
+
+    def _extract_editor_data(self, file_path: str) -> dict:
+        """Extract editor data from scene file."""
+        import json
+        from termin._native.scene import SceneManager
+
+        json_str = SceneManager.read_json_file(file_path)
+        if not json_str:
+            return {}
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            return {}
+
+        editor_data = data.get("editor", {})
+        scene_data = data.get("scene") or (data.get("scenes", [{}])[0] if data.get("scenes") else {})
+
+        result = {}
+
+        # Camera (check both locations for backwards compatibility)
+        camera_data = editor_data.get("camera")
+        if camera_data is None and scene_data:
+            camera_data = scene_data.get("editor_camera")
+        if camera_data is not None:
+            result["camera"] = camera_data
+
+        # Selection
+        selected = editor_data.get("selected_entity")
+        if selected is None:
+            editor_state = data.get("editor_state", {})
+            selected = editor_state.get("selected_entity_name")
+        if selected:
+            result["selected_entity"] = selected
+
+        # Displays
+        displays = editor_data.get("displays")
+        if displays is not None:
+            result["displays"] = displays
+
+        # Expanded entities
+        expanded = editor_data.get("expanded_entities")
+        if expanded is not None:
+            result["expanded_entities"] = expanded
+
+        return result

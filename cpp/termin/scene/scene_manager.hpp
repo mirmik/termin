@@ -80,7 +80,7 @@ public:
     void request_render();
     bool consume_render_request();
 
-    // --- Callbacks (called from Python) ---
+    // --- Callbacks ---
     using AfterRenderCallback = std::function<void()>;
     using BeforeSceneCloseCallback = std::function<void(const std::string&)>;
 
@@ -89,6 +89,10 @@ public:
 
     void invoke_after_render();
     void invoke_before_scene_close(const std::string& name);
+
+    // --- Full tick with rendering ---
+    // Calls tick(), before_render(), RenderingManager::render_all(), and after_render callback
+    bool tick_and_render(double dt);
 
 protected:
     // Registered scenes: name -> tc_scene_handle

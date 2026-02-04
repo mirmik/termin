@@ -87,24 +87,16 @@ class EditorWindow(QMainWindow):
 
         # --- SceneManager - владеет всеми сценами ---
         # Создаётся ПЕРВЫМ, до всех контроллеров
-        self.scene_manager = SceneManager(
-            resource_manager=self.resource_manager,
-            on_before_scene_close=self._on_before_scene_close,
-            get_editor_camera_data=self._get_editor_camera_data,
-            set_editor_camera_data=self._set_editor_camera_data,
-            get_selected_entity_uuid=self._get_selected_entity_uuid,
-            select_entity_by_uuid=self._select_entity_by_uuid,
-            get_displays_data=self._get_displays_data,
-            set_displays_data=self._set_displays_data,
-            get_expanded_entities=self._get_expanded_entities,
-            set_expanded_entities=self._set_expanded_entities,
-            rescan_file_resources=self._rescan_file_resources,
-        )
+        self.scene_manager = SceneManager()
+        self.scene_manager.set_on_before_scene_close(self._on_before_scene_close)
+
+        # Editor data storage (extracted from scene files on load)
+        self._editor_data: dict[str, dict] = {}
 
         # Создаём начальную сцену (или используем переданную)
         self._editor_scene_name = "untitled"
         if initial_scene is not None:
-            self.scene_manager.add_existing_scene(self._editor_scene_name, initial_scene)
+            self.scene_manager.register_scene(self._editor_scene_name, initial_scene.scene_handle())
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         else:
             self.scene_manager.create_scene(self._editor_scene_name)
@@ -317,7 +309,7 @@ class EditorWindow(QMainWindow):
             inspector_controller=self._inspector_controller,
             log_message=self._log_to_console,
             update_window_title=self._update_window_title,
-            on_project_reset=self.scene_manager.reset,
+            on_project_reset=self.scene_manager.close_all_scenes,
             on_load_scene=self._load_scene_from_file,
             on_open_prefab=self._open_prefab,
         )
@@ -371,9 +363,7 @@ class EditorWindow(QMainWindow):
         self._editor_features[editor_display.tc_display_ptr] = self.editor_viewport
 
         RenderingManager.instance().set_graphics(self.world.graphics)
-        self.scene_manager.set_render_callbacks(
-            on_after_render=self._after_render,
-        )
+        self.scene_manager.set_on_after_render(self._after_render)
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
         self._rendering_controller.set_editor_pipeline_maker(
@@ -424,6 +414,8 @@ class EditorWindow(QMainWindow):
             set_editor_scene_name=self._set_editor_scene_name,
             log_message=self._log_to_console,
             on_before_close_scene=self._on_before_close_editor_scene,
+            store_editor_data=self._store_editor_data,
+            collect_editor_data=self._collect_editor_state,
         )
 
         # --- SpaceMouse support ---
@@ -432,8 +424,8 @@ class EditorWindow(QMainWindow):
         # --- Инициализация настроек (поиск VS Code и т.п.) ---
         EditorSettings.instance().init_text_editor_if_empty()
 
-        # --- Инициализируем ресурсы один раз при старте ---
-        self.scene_manager.initialize_resources()
+        # --- Инициализируем ресурсы проекта ---
+        self._rescan_file_resources()
 
         # --- Загружаем последнюю открытую сцену ---
         self._scene_file_controller.load_last_scene()
@@ -853,6 +845,10 @@ class EditorWindow(QMainWindow):
         if expanded_entities is not None:
             self._set_expanded_entities(expanded_entities)
 
+    def _store_editor_data(self, name: str, data: dict) -> None:
+        """Store editor data for later application after scene setup."""
+        self._editor_data[name] = data
+
     def _get_project_path(self) -> str | None:
         """Get current project path from project browser."""
         if self._project_controller is None:
@@ -1123,9 +1119,10 @@ class EditorWindow(QMainWindow):
             with profiler.section(f"EditorFeatures[{display_id}].after_render"):
                 editor_features.after_render()
 
-    def _on_before_scene_close(self, scene) -> None:
+    def _on_before_scene_close(self, scene_name: str) -> None:
         """Called before a scene is destroyed. Removes viewports referencing this scene."""
-        if self._rendering_controller is not None:
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is not None and self._rendering_controller is not None:
             self._rendering_controller.remove_viewports_for_scene(scene)
 
     def _on_before_close_editor_scene(self, scene_name: str) -> None:
@@ -1587,9 +1584,8 @@ class EditorWindow(QMainWindow):
 
         # Apply stored editor data (camera position, selection, displays, etc.) from loaded scene
         # Must be after all viewport/scene setup is complete
-        stored_data = self.scene_manager.get_stored_editor_data(name)
+        stored_data = self._editor_data.pop(name, {})
         self._apply_editor_state(stored_data)
-        self.scene_manager.clear_stored_editor_data(name)
 
         self._request_viewport_update()
         self._update_window_title()
