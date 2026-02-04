@@ -34,14 +34,15 @@ SkinnedMeshRenderer::SkinnedMeshRenderer()
 }
 
 void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {
-    _skeleton_controller = controller;
+    _skeleton_controller.reset(controller);
 }
 
 SkeletonInstance* SkinnedMeshRenderer::skeleton_instance() {
-    if (_skeleton_controller == nullptr) {
+    SkeletonController* ctrl = _skeleton_controller.get();
+    if (!ctrl) {
         return nullptr;
     }
-    return _skeleton_controller->skeleton_instance();
+    return ctrl->skeleton_instance();
 }
 
 void SkinnedMeshRenderer::update_bone_matrices() {
@@ -86,7 +87,7 @@ TcShader SkinnedMeshRenderer::override_shader(
     int geometry_id,
     TcShader original_shader
 ) {
-    if (_skeleton_controller == nullptr || !original_shader.is_valid()) {
+    if (!_skeleton_controller.valid() || !original_shader.is_valid()) {
         return original_shader;
     }
 
@@ -124,7 +125,7 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geomet
     }
 
     // Upload bone matrices if we have a skeleton
-    if (_skeleton_controller != nullptr && context.current_tc_shader.is_valid()) {
+    if (_skeleton_controller.valid() && context.current_tc_shader.is_valid()) {
         update_bone_matrices();
         if (_bone_count > 0) {
             // Use TcShader for uniform upload
@@ -150,7 +151,7 @@ void SkinnedMeshRenderer::start() {
     Component::start();
 
     // After deserialization, skeleton_controller may be null - try to find it
-    if (_skeleton_controller == nullptr && entity().valid()) {
+    if (!_skeleton_controller.valid() && entity().valid()) {
         // Look for SkeletonController by type name
         // Check parent entity first (typical for GLB structure)
         Entity parent_entity = entity().parent();
@@ -158,15 +159,15 @@ void SkinnedMeshRenderer::start() {
         if (parent_entity.valid()) {
             Component* controller = parent_entity.get_component_by_type("SkeletonController");
             if (controller != nullptr) {
-                _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
+                _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
             }
         }
 
         // Also check current entity
-        if (_skeleton_controller == nullptr) {
+        if (!_skeleton_controller.valid()) {
             Component* controller = entity().get_component_by_type("SkeletonController");
             if (controller != nullptr) {
-                _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
+                _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
             }
         }
     }

@@ -46,16 +46,24 @@ void AnimationPlayer::_acquire_skeleton() {
 
     SkeletonController* sc = entity().get_component<SkeletonController>();
     if (sc != nullptr) {
-        _target_skeleton = sc->skeleton_instance();
+        _target_skeleton_controller.reset(sc);
     }
 }
 
-void AnimationPlayer::set_target_skeleton(SkeletonInstance* skeleton) {
-    _target_skeleton = skeleton;
+void AnimationPlayer::set_target_skeleton_controller(SkeletonController* controller) {
+    _target_skeleton_controller.reset(controller);
     // Rebuild mapping if we have a clip
     if (_current_index >= 0) {
         _build_channel_mapping();
     }
+}
+
+SkeletonInstance* AnimationPlayer::target_skeleton() const {
+    SkeletonController* ctrl = _target_skeleton_controller.get();
+    if (!ctrl) {
+        return nullptr;
+    }
+    return ctrl->skeleton_instance();
 }
 
 void AnimationPlayer::set_current(const std::string& name) {
@@ -97,11 +105,12 @@ void AnimationPlayer::_build_channel_mapping() {
 
     const animation::TcAnimationClip& clip = clips[_current_index];
     tc_animation* anim = clip.get();
-    if (!anim || !_target_skeleton) {
+    SkeletonInstance* skel_inst = target_skeleton();
+    if (!anim || !skel_inst) {
         return;
     }
 
-    tc_skeleton* skel = _target_skeleton->_skeleton;
+    tc_skeleton* skel = skel_inst->_skeleton;
     if (!skel) {
         return;
     }
@@ -138,11 +147,12 @@ void AnimationPlayer::update_bones_at_time(double t) {
     }
 
     // Lazy skeleton acquisition (in case start() was called before SkeletonController existed)
-    if (!_target_skeleton) {
+    if (!_target_skeleton_controller.valid()) {
         _acquire_skeleton();
     }
 
-    if (!_target_skeleton) {
+    SkeletonInstance* skel_inst = target_skeleton();
+    if (!skel_inst) {
         tc::Log::warn("[AnimationPlayer::update_bones_at_time] no target skeleton");
         return;
     }
@@ -153,9 +163,10 @@ void AnimationPlayer::update_bones_at_time(double t) {
 }
 
 void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t count) {
-    if (!_target_skeleton || !samples) {
+    SkeletonInstance* skel_inst = target_skeleton();
+    if (!skel_inst || !samples) {
         tc::Log::warn("[AnimationPlayer::_apply_sample] skeleton=%p samples=%p",
-            (void*)_target_skeleton, (void*)samples);
+            (void*)skel_inst, (void*)samples);
         return;
     }
 
@@ -190,7 +201,7 @@ void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t cou
             sc_ptr = sc;
         }
 
-        _target_skeleton->set_bone_transform(bone_idx, tr_ptr, rot_ptr, sc_ptr);
+        skel_inst->set_bone_transform(bone_idx, tr_ptr, rot_ptr, sc_ptr);
     }
 }
 

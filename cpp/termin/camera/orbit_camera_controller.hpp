@@ -2,6 +2,7 @@
 
 #include "../export.hpp"
 #include "../entity/component.hpp"
+#include "../entity/cmp_ref.hpp"
 #include "../entity/input_handler.hpp"
 #include "../input/input_events.hpp"
 #include "../geom/vec3.hpp"
@@ -145,9 +146,9 @@ private:
     };
     std::unordered_map<uintptr_t, ViewportState> _viewport_states;
 
-    // === Camera component reference ===
+    // === Camera component reference (CmpRef validates entity liveness) ===
 
-    CameraComponent* _camera = nullptr;
+    CmpRef<CameraComponent> _camera;
 
     // === Internal methods ===
 

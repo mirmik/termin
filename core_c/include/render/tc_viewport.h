@@ -53,6 +53,11 @@ TC_API tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h);
 TC_API void tc_viewport_set_camera(tc_viewport_handle h, tc_component* camera);
 TC_API tc_component* tc_viewport_get_camera(tc_viewport_handle h);
 
+// Camera entity handle - used for validating camera pointer liveness
+// When setting camera, the entity handle is automatically extracted from camera->owner
+// When getting camera, returns NULL if the entity is no longer alive
+TC_API tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h);
+
 TC_API void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode);
 TC_API const char* tc_viewport_get_input_mode(tc_viewport_handle h);
 

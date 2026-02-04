@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "termin/render/mesh_renderer.hpp"
+#include "termin/entity/cmp_ref.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 
 namespace termin {
@@ -20,8 +21,8 @@ class SkeletonController;
  */
 class SkinnedMeshRenderer : public MeshRenderer {
 public:
-    // C++ SkeletonController pointer (not owned)
-    SkeletonController* _skeleton_controller = nullptr;
+    // C++ SkeletonController reference (CmpRef validates entity liveness)
+    CmpRef<SkeletonController> _skeleton_controller;
 
     // Cached bone matrices (column-major, ready for shader)
     std::vector<float> _bone_matrices_flat;
@@ -34,9 +35,9 @@ public:
     ~SkinnedMeshRenderer() override = default;
 
     /**
-     * Get skeleton controller.
+     * Get skeleton controller (nullptr if entity is dead).
      */
-    SkeletonController* skeleton_controller() const { return _skeleton_controller; }
+    SkeletonController* skeleton_controller() const { return _skeleton_controller.get(); }
 
     /**
      * Set skeleton controller.

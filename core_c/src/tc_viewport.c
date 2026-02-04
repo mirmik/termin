@@ -1,6 +1,7 @@
 // tc_viewport.c - Viewport implementation using pool with generational indices
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "tc_component.h"
 #include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@ typedef struct {
     char** names;
     tc_scene_handle* scenes;
     tc_component** cameras;
+    tc_entity_handle* camera_entities;  // Entity handles for camera validation
     float* rects;           // 4 floats per viewport (x, y, w, h)
     int* pixel_rects;       // 4 ints per viewport (px, py, pw, ph)
     int* depths;
@@ -87,6 +89,7 @@ void tc_viewport_pool_init(void) {
     g_pool->names = (char**)calloc(cap, sizeof(char*));
     g_pool->scenes = (tc_scene_handle*)calloc(cap, sizeof(tc_scene_handle));
     g_pool->cameras = (tc_component**)calloc(cap, sizeof(tc_component*));
+    g_pool->camera_entities = (tc_entity_handle*)calloc(cap, sizeof(tc_entity_handle));
     g_pool->rects = (float*)calloc(cap * 4, sizeof(float));
     g_pool->pixel_rects = (int*)calloc(cap * 4, sizeof(int));
     g_pool->depths = (int*)calloc(cap, sizeof(int));
@@ -104,6 +107,7 @@ void tc_viewport_pool_init(void) {
     for (size_t i = 0; i < cap; i++) {
         g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
         g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
+        g_pool->camera_entities[i] = TC_ENTITY_HANDLE_INVALID;
         g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
@@ -133,6 +137,7 @@ void tc_viewport_pool_shutdown(void) {
     free(g_pool->names);
     free(g_pool->scenes);
     free(g_pool->cameras);
+    free(g_pool->camera_entities);
     free(g_pool->rects);
     free(g_pool->pixel_rects);
     free(g_pool->depths);
@@ -168,6 +173,7 @@ static void pool_grow(void) {
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(char*));
     g_pool->scenes = realloc(g_pool->scenes, new_cap * sizeof(tc_scene_handle));
     g_pool->cameras = realloc(g_pool->cameras, new_cap * sizeof(tc_component*));
+    g_pool->camera_entities = realloc(g_pool->camera_entities, new_cap * sizeof(tc_entity_handle));
     g_pool->rects = realloc(g_pool->rects, new_cap * 4 * sizeof(float));
     g_pool->pixel_rects = realloc(g_pool->pixel_rects, new_cap * 4 * sizeof(int));
     g_pool->depths = realloc(g_pool->depths, new_cap * sizeof(int));
@@ -201,6 +207,7 @@ static void pool_grow(void) {
 
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
+        g_pool->camera_entities[i] = TC_ENTITY_HANDLE_INVALID;
         g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
@@ -258,6 +265,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->names[idx] = tc_strdup(name);
     g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
     g_pool->cameras[idx] = NULL;
+    g_pool->camera_entities[idx] = TC_ENTITY_HANDLE_INVALID;
 
     // Default rect: full viewport
     g_pool->rects[idx * 4 + 0] = 0.0f;
@@ -295,6 +303,7 @@ tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_c
     if (tc_viewport_handle_valid(h)) {
         g_pool->scenes[h.index] = scene;
         g_pool->cameras[h.index] = camera;
+        g_pool->camera_entities[h.index] = camera ? camera->owner : TC_ENTITY_HANDLE_INVALID;
     }
     return h;
 }
@@ -443,11 +452,27 @@ tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h) {
 void tc_viewport_set_camera(tc_viewport_handle h, tc_component* camera) {
     if (!handle_alive(h)) return;
     g_pool->cameras[h.index] = camera;
+    g_pool->camera_entities[h.index] = camera ? camera->owner : TC_ENTITY_HANDLE_INVALID;
 }
 
 tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
     if (!handle_alive(h)) return NULL;
+
+    // Check if camera entity is still alive
+    tc_entity_handle cam_entity = g_pool->camera_entities[h.index];
+    if (!tc_entity_handle_valid(cam_entity)) {
+        // Entity is dead, clear the stale pointer
+        g_pool->cameras[h.index] = NULL;
+        g_pool->camera_entities[h.index] = TC_ENTITY_HANDLE_INVALID;
+        return NULL;
+    }
+
     return g_pool->cameras[h.index];
+}
+
+tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h) {
+    if (!handle_alive(h)) return TC_ENTITY_HANDLE_INVALID;
+    return g_pool->camera_entities[h.index];
 }
 
 void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode) {

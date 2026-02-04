@@ -182,16 +182,16 @@ CameraComponent* ColorPass::find_camera_by_name(tc_scene_handle scene, const std
         return nullptr;
     }
 
-    // Check cache
-    if (cached_camera_name_ == name && cached_camera_ != nullptr) {
-        return cached_camera_;
+    // Check cache - CmpRef.valid() checks entity liveness
+    if (cached_camera_name_ == name && cached_camera_.valid()) {
+        return cached_camera_.get();
     }
 
     // Search in scene entities
     // TODO: This requires iterating scene entities and finding CameraComponent
     // For now, return nullptr - camera lookup by name needs scene iteration support
     cached_camera_name_ = name;
-    cached_camera_ = nullptr;
+    cached_camera_.reset();
     return nullptr;
 }
 

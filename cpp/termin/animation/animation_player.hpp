@@ -6,6 +6,7 @@
 
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
+#include "termin/entity/cmp_ref.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 
@@ -36,8 +37,8 @@ private:
     // Current clip index (-1 if none)
     int _current_index = -1;
 
-    // Target skeleton (from SkeletonController on same entity)
-    SkeletonInstance* _target_skeleton = nullptr;
+    // Target skeleton controller (CmpRef validates entity liveness)
+    CmpRef<SkeletonController> _target_skeleton_controller;
 
     // Cached bone index mapping: channel index -> bone index
     // Rebuilt when clip changes
@@ -78,9 +79,12 @@ public:
     // Update bones at specific time (for external control)
     void update_bones_at_time(double t);
 
-    // Get/set target skeleton
-    SkeletonInstance* target_skeleton() const { return _target_skeleton; }
-    void set_target_skeleton(SkeletonInstance* skeleton);
+    // Get/set target skeleton controller
+    SkeletonController* target_skeleton_controller() const { return _target_skeleton_controller.get(); }
+    void set_target_skeleton_controller(SkeletonController* controller);
+
+    // Get target skeleton instance (from controller, nullptr if controller is dead)
+    SkeletonInstance* target_skeleton() const;
 
     // Component lifecycle
     void start() override;

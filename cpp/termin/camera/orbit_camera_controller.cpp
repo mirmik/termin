@@ -37,8 +37,8 @@ void OrbitCameraController::on_added() {
     CxxComponent::on_added();
 
     // Find CameraComponent on same entity
-    _camera = entity().get_component<CameraComponent>();
-    if (!_camera) {
+    _camera.reset(entity().get_component<CameraComponent>());
+    if (!_camera.valid()) {
         tc_log(TC_LOG_ERROR, "[OrbitCameraController] No CameraComponent found on entity '%s'",
                entity().name());
     }
@@ -174,9 +174,10 @@ void OrbitCameraController::orbit(double delta_azimuth, double delta_elevation) 
 
 void OrbitCameraController::zoom(double delta) {
     // Check for orthographic camera
-    if (_camera && _camera->get_projection_type_str() == "orthographic") {
+    CameraComponent* cam = _camera.get();
+    if (cam && cam->get_projection_type_str() == "orthographic") {
         double scale_factor = 1.0 + delta * 0.1;
-        _camera->ortho_size = std::max(0.1, _camera->ortho_size * scale_factor);
+        cam->ortho_size = std::max(0.1, cam->ortho_size * scale_factor);
     } else {
         // Perspective: change radius
         radius = _clamp(radius + delta, min_radius, max_radius);
@@ -216,7 +217,7 @@ OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state
 // Events are C struct pointers (tc_mouse_button_event*, etc.)
 
 void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
-    if (!_camera || !e) {
+    if (!_camera.valid() || !e) {
         return;
     }
 
@@ -241,7 +242,7 @@ void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
 
 void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
     if (_prevent_moving) return;
-    if (!_camera || !e) return;
+    if (!_camera.valid() || !e) return;
 
     uintptr_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);

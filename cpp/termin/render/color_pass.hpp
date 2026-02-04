@@ -22,6 +22,7 @@
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
+#include "termin/entity/cmp_ref.hpp"
 #include "tc_inspect_cpp.hpp"
 #include "tc_scene.h"
 #include "tc_scene_pool.h"
@@ -183,9 +184,9 @@ private:
      */
     CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name);
 
-    // Cached camera lookup
+    // Cached camera lookup (CmpRef validates entity liveness)
     std::string cached_camera_name_;
-    CameraComponent* cached_camera_ = nullptr;
+    CmpRef<CameraComponent> cached_camera_;
     // Last GPU time in ms (from detailed profiling mode)
     double last_gpu_time_ms_ = 0.0;
 

@@ -17,6 +17,7 @@
 #include "termin/render/drawable.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
+#include "termin/entity/cmp_ref.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
@@ -73,30 +74,30 @@ public:
     CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) {
         if (name.empty() || !tc_scene_handle_valid(scene)) return nullptr;
 
-        // Check cache
-        if (_cached_camera_name == name && _cached_camera != nullptr) {
-            return _cached_camera;
+        // Check cache - CmpRef.valid() checks entity liveness
+        if (_cached_camera_name == name && _cached_camera.valid()) {
+            return _cached_camera.get();
         }
 
         // Find entity by name
         tc_entity_id eid = tc_scene_find_entity_by_name(scene, name.c_str());
         if (!tc_entity_id_valid(eid)) {
             _cached_camera_name = name;
-            _cached_camera = nullptr;
+            _cached_camera.reset();
             return nullptr;
         }
 
         // Get CameraComponent from entity
         Entity ent(tc_scene_entity_pool(scene), eid);
-        _cached_camera = ent.get_component<CameraComponent>();
+        _cached_camera.reset(ent.get_component<CameraComponent>());
         _cached_camera_name = name;
-        return _cached_camera;
+        return _cached_camera.get();
     }
 
 protected:
-    // Cached camera lookup
+    // Cached camera lookup (CmpRef validates entity liveness)
     std::string _cached_camera_name;
-    CameraComponent* _cached_camera = nullptr;
+    CmpRef<CameraComponent> _cached_camera;
 
     // Cached shader
     TcShader _shader;
