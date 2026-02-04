@@ -246,9 +246,9 @@ class SceneInspector(QWidget):
 
         self._updating_from_model = True
         try:
-            # Background color
+            # Background color (Vec4 doesn't support slicing, extract RGB manually)
             bg_color = self._scene.background_color
-            qcolor = _to_qcolor(bg_color[:3] if len(bg_color) > 3 else bg_color)
+            qcolor = _to_qcolor((bg_color[0], bg_color[1], bg_color[2]))
             self._bg_color_btn._set_color(qcolor)
 
             # Ambient color

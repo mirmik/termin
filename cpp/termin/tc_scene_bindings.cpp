@@ -442,10 +442,8 @@ void bind_tc_scene(nb::module_& m) {
             tc_scene_skybox* skybox = tc_scene_get_skybox(self._h);
             if (!skybox) return TcMaterial(nullptr);
 
+            // ensure_material already sets skybox->material internally
             tc_material* mat = tc_scene_skybox_ensure_material(skybox, skybox_type);
-            if (mat) {
-                tc_scene_set_skybox_material(self._h, mat);
-            }
             return TcMaterial(mat);
         }, nb::arg("skybox_type"))
 

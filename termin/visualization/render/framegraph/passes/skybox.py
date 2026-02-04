@@ -84,8 +84,18 @@ class SkyBoxPass(RenderFramePass):
         if ctx.scene is None:
             return
 
+        # Check skybox type - skip if "none"
+        skybox_type = ctx.scene.skybox_type
+        if skybox_type == "none":
+            return
+
+        # Convert skybox_type string to int for ensure_skybox_material
+        # TC_SKYBOX_NONE=0, TC_SKYBOX_GRADIENT=1, TC_SKYBOX_SOLID=2
+        type_int = {"none": 0, "gradient": 1, "solid": 2}.get(skybox_type, 1)
+
         mesh = ctx.scene.skybox_mesh()
-        material = ctx.scene.skybox_material()
+        # Ensure material exists for current skybox type
+        material = ctx.scene.ensure_skybox_material(type_int)
 
         # Check validity - TcMesh/TcMaterial from TcSceneRef may be invalid
         if mesh is None or not mesh.is_valid:
@@ -126,10 +136,10 @@ class SkyBoxPass(RenderFramePass):
         ctx.graphics.set_depth_func("lequal")
 
         # Set skybox colors on material before applying
-        if ctx.scene.skybox_type == "solid":
+        if skybox_type == "solid":
             c = ctx.scene.skybox_color
             material.set_uniform_vec3("u_skybox_color", Vec3(c[0], c[1], c[2]))
-        elif ctx.scene.skybox_type == "gradient":
+        elif skybox_type == "gradient":
             top = ctx.scene.skybox_top_color
             bottom = ctx.scene.skybox_bottom_color
             material.set_uniform_vec3("u_skybox_top_color", Vec3(top[0], top[1], top[2]))
