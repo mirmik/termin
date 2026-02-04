@@ -5,6 +5,7 @@
 
 #include "termin/animation/animation_player.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
+#include "termin/render/skeleton_controller.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
 #include "tc_log.hpp"
@@ -207,9 +208,12 @@ void bind_animation_player(nb::module_& m) {
         .def("play", &AnimationPlayer::play, nb::arg("name"), nb::arg("restart") = true)
         .def("stop", &AnimationPlayer::stop)
         .def("update_bones_at_time", &AnimationPlayer::update_bones_at_time)
-        .def_prop_rw("target_skeleton",
+        .def_prop_ro("target_skeleton",
             &AnimationPlayer::target_skeleton,
-            &AnimationPlayer::set_target_skeleton,
+            nb::rv_policy::reference)
+        .def_prop_rw("target_skeleton_controller",
+            &AnimationPlayer::target_skeleton_controller,
+            &AnimationPlayer::set_target_skeleton_controller,
             nb::rv_policy::reference)
         .def("add_clip", [](AnimationPlayer& self, const TcAnimationClip& clip) {
             self.clips.push_back(clip);
