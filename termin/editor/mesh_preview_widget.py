@@ -243,17 +243,16 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         if not self._initialized:
             return
 
-        surface = self._display.surface
-        if surface is None:
-            return
-
-        surface.make_current()
+        self._display.make_current()
         self._graphics.ensure_ready()
 
         width, height = self._display.get_size()
         if width <= 0 or height <= 0:
             return
 
+        surface = self._display.surface
+        if surface is None:
+            return
         display_fbo = surface.get_framebuffer()
 
         # Get scene, camera, pipeline from viewport

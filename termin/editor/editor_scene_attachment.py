@@ -200,11 +200,10 @@ class EditorSceneAttachment:
                 self._camera_manager.camera.remove_viewport(self._viewport)
 
             # Make GL context current before destroying GPU resources
-            if self._display.surface is not None:
-                try:
-                    self._display.surface.make_current()
-                except Exception:
-                    pass  # Context may be invalid during shutdown
+            try:
+                self._display.make_current()
+            except Exception:
+                pass  # Context may be invalid during shutdown
 
             # Clear viewport state (output_fbo)
             state = self._rendering_controller.get_viewport_state(self._viewport)

@@ -114,9 +114,6 @@ class RenderingController:
         # Map tc_display_ptr -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
 
-        # Map tc_display_ptr -> Python Display (for looking up Python objects from C++ pointers)
-        self._display_registry: dict[int, "Display"] = {}
-
         # Editor display tc_display_ptr (not serialized, created before scene)
         self._editor_display_ptr: Optional[int] = None
 
@@ -174,15 +171,12 @@ class RenderingController:
 
     # --- Helpers ---
 
-    def _get_python_display(self, display) -> Optional["Display"]:
-        """
-        Get Python Display object from C++ TcDisplay.
-
-        The C++ RenderingManager returns TcDisplay wrappers, but we need
-        the Python Display object with the surface reference.
-        """
+    def _get_surface_for_display(self, display) -> Optional[object]:
+        """Get surface for a display from _display_tabs."""
         ptr = display.tc_display_ptr
-        return self._display_registry.get(ptr)
+        if ptr in self._display_tabs:
+            return self._display_tabs[ptr][1]
+        return None
 
     # --- Factories ---
 
@@ -262,9 +256,6 @@ class RenderingController:
         # Store mapping (include qwindow to prevent GC)
         display_id = display.tc_display_ptr
         self._display_tabs[display_id] = (tab_container, surface, qwindow)
-
-        # Register in ptr->Display mapping for C++ interop
-        self._display_registry[display.tc_display_ptr] = display
 
         # Add tab to center widget
         tab_index = self._center_tabs.addTab(tab_container, name)
@@ -361,14 +352,12 @@ class RenderingController:
             display: Display to set up input for.
             input_mode: Input mode ("none", "simple", "basic", "editor").
         """
-        # Get Python Display with surface reference
-        py_display = self._get_python_display(display)
-        if py_display is None:
-            return
-        display_id = py_display.tc_display_ptr
+        display_id = display.tc_display_ptr
 
-        # Get surface from display
-        surface = py_display.surface
+        # Get surface from _display_tabs
+        surface = self._get_surface_for_display(display)
+        if surface is None:
+            return
 
         # Remove old input manager
         if display_id in self._display_input_managers:
@@ -416,8 +405,7 @@ class RenderingController:
 
         for display in self._manager.displays:
             # Skip editor display - it's managed separately
-            py_display = self._display_registry.get(display.tc_display_ptr)
-            if py_display is not None and py_display.tc_display_ptr == self._editor_display_ptr:
+            if display.tc_display_ptr == self._editor_display_ptr:
                 continue
 
             for viewport in display.viewports:
@@ -693,9 +681,8 @@ class RenderingController:
         if self._editor_display_ptr is None:
             return None
         for display in self._manager.displays:
-            py_display = self._display_registry.get(display.tc_display_ptr)
-            if py_display is not None and py_display.tc_display_ptr == self._editor_display_ptr:
-                return py_display
+            if display.tc_display_ptr == self._editor_display_ptr:
+                return display
         return None
 
     @property
@@ -795,7 +782,17 @@ class RenderingController:
 
     def get_editor_fbo_pool(self):
         """Get FBO pool (pipeline) for the editor viewport (for picking)."""
-        return self.get_display_fbo_pool(self.editor_display)
+        from termin._native import log
+        result = self.get_display_fbo_pool(self.editor_display)
+        if result is None:
+            ed = self.editor_display
+            log.debug(f"[get_editor_fbo_pool] returning None! editor_display={ed}")
+            if ed is not None:
+                log.debug(f"[get_editor_fbo_pool] viewports={list(ed.viewports)}")
+                if ed.viewports:
+                    vp = ed.viewports[0]
+                    log.debug(f"[get_editor_fbo_pool] viewport[0].pipeline={vp.pipeline}")
+        return result
 
     def get_display_fbo_pool(self, display: Optional["Display"]):
         """Get FBO pool (pipeline) for a display's primary viewport (for picking).
@@ -1017,14 +1014,9 @@ class RenderingController:
 
     def _apply_display_input_mode(self, display: "Display", surface, mode: str) -> None:
         """Apply input mode to a display."""
-        # Get Python Display with surface reference
-        py_display = self._get_python_display(display)
-        if py_display is None:
+        if surface is None:
             return
-        display_id = py_display.tc_display_ptr
-
-        # Get surface from display
-        surface = py_display.surface
+        display_id = display.tc_display_ptr
 
         # Check if blocked from first viewport
         is_blocked = False
@@ -1201,9 +1193,6 @@ class RenderingController:
             for display in self._manager.displays:
                 # Use tc_display_ptr as stable key (id() changes for each Python wrapper)
                 display_ptr = display.tc_display_ptr
-                py_display = self._display_registry.get(display_ptr)
-                if py_display is None:
-                    continue
                 if display_ptr not in self._display_tabs:
                     continue
 
@@ -1278,11 +1267,7 @@ class RenderingController:
 
         # Add tabs for additional displays (not Editor)
         for display in self._manager.displays:
-            # Use tc_display_ptr as stable key
             display_ptr = display.tc_display_ptr
-            py_display = self._display_registry.get(display_ptr)
-            if py_display is None:
-                continue
 
             # Skip Editor display (it's already the first tab, managed externally)
             if display_ptr == self._editor_display_ptr:
@@ -1302,9 +1287,7 @@ class RenderingController:
         # Enable editor display if first tab is active
         if self._editor_display_ptr is not None:
             for display in self._manager.displays:
-                display_ptr = display.tc_display_ptr
-                py_display = self._display_registry.get(display_ptr)
-                if py_display is not None and display_ptr == self._editor_display_ptr:
+                if display.tc_display_ptr == self._editor_display_ptr:
                     display.enabled = (current_index == 0)
                     break
 

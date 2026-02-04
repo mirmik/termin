@@ -89,6 +89,19 @@ void bind_tc_display(nb::module_& m) {
             return self.get_size();
         }, "Return display size in pixels as (width, height)")
 
+        .def("get_window_size", [](TcDisplay& self) {
+            return self.get_window_size();
+        }, "Return window size in logical pixels as (width, height)")
+
+        .def("get_cursor_pos", [](TcDisplay& self) {
+            return self.get_cursor_pos();
+        }, "Return cursor position in window pixels as (x, y)")
+
+        .def_prop_rw("should_close",
+            &TcDisplay::should_close,
+            &TcDisplay::set_should_close,
+            "Whether window should close")
+
         // Viewport management - returns TcViewport objects
         .def_prop_ro("viewports", [](TcDisplay& self) -> std::vector<TcViewport> {
             std::vector<TcViewport> result;
@@ -319,6 +332,30 @@ void bind_tc_display(nb::module_& m) {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
         if (d) tc_display_swap_buffers(d);
     }, nb::arg("ptr"));
+
+    m.def("_display_get_window_size", [](uintptr_t ptr) -> std::tuple<int, int> {
+        tc_display* d = reinterpret_cast<tc_display*>(ptr);
+        int w = 0, h = 0;
+        if (d) tc_display_get_window_size(d, &w, &h);
+        return std::make_tuple(w, h);
+    }, nb::arg("ptr"));
+
+    m.def("_display_get_cursor_pos", [](uintptr_t ptr) -> std::tuple<double, double> {
+        tc_display* d = reinterpret_cast<tc_display*>(ptr);
+        double x = 0.0, y = 0.0;
+        if (d) tc_display_get_cursor_pos(d, &x, &y);
+        return std::make_tuple(x, y);
+    }, nb::arg("ptr"));
+
+    m.def("_display_should_close", [](uintptr_t ptr) -> bool {
+        tc_display* d = reinterpret_cast<tc_display*>(ptr);
+        return d ? tc_display_should_close(d) : false;
+    }, nb::arg("ptr"));
+
+    m.def("_display_set_should_close", [](uintptr_t ptr, bool value) {
+        tc_display* d = reinterpret_cast<tc_display*>(ptr);
+        if (d) tc_display_set_should_close(d, value);
+    }, nb::arg("ptr"), nb::arg("value"));
 }
 
 } // namespace termin

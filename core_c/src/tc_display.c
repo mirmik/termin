@@ -143,6 +143,24 @@ void tc_display_get_size(const tc_display* display, int* width, int* height) {
     }
 }
 
+void tc_display_get_window_size(const tc_display* display, int* width, int* height) {
+    if (display && display->surface) {
+        tc_render_surface_get_window_size(display->surface, width, height);
+    } else {
+        if (width) *width = 0;
+        if (height) *height = 0;
+    }
+}
+
+void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y) {
+    if (display && display->surface) {
+        tc_render_surface_get_cursor_pos(display->surface, x, y);
+    } else {
+        if (x) *x = 0.0;
+        if (y) *y = 0.0;
+    }
+}
+
 void tc_display_make_current(tc_display* display) {
     if (display && display->surface) {
         tc_render_surface_make_current(display->surface);
@@ -152,6 +170,19 @@ void tc_display_make_current(tc_display* display) {
 void tc_display_swap_buffers(tc_display* display) {
     if (display && display->surface) {
         tc_render_surface_swap_buffers(display->surface);
+    }
+}
+
+bool tc_display_should_close(const tc_display* display) {
+    if (display && display->surface) {
+        return tc_render_surface_should_close(display->surface);
+    }
+    return false;
+}
+
+void tc_display_set_should_close(tc_display* display, bool value) {
+    if (display && display->surface) {
+        tc_render_surface_set_should_close(display->surface, value);
     }
 }
 

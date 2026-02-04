@@ -65,11 +65,23 @@ TC_API tc_render_surface* tc_display_get_surface(const tc_display* display);
 // Get display size in pixels (delegates to surface)
 TC_API void tc_display_get_size(const tc_display* display, int* width, int* height);
 
+// Get window size in logical pixels (may differ from framebuffer on HiDPI)
+TC_API void tc_display_get_window_size(const tc_display* display, int* width, int* height);
+
+// Get cursor position in window pixels
+TC_API void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y);
+
 // Make context current (delegates to surface)
 TC_API void tc_display_make_current(tc_display* display);
 
 // Swap buffers (delegates to surface)
 TC_API void tc_display_swap_buffers(tc_display* display);
+
+// Check if window should close
+TC_API bool tc_display_should_close(const tc_display* display);
+
+// Set should close flag
+TC_API void tc_display_set_should_close(tc_display* display, bool value);
 
 // ============================================================================
 // Viewport Management

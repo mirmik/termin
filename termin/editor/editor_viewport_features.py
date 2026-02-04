@@ -296,14 +296,19 @@ class EditorViewportFeatures:
 
     def _process_pending_hover(self, pending_hover) -> None:
         from termin.core.profiler import Profiler
+        from termin._native import log
         profiler = Profiler.instance()
 
         x, y, viewport = pending_hover
         self._pending_hover = None
 
         # Skip if viewport's scene is destroyed
-        if viewport is not None and viewport.scene is not None and viewport.scene.is_destroyed:
-            return
+        if viewport is not None and viewport.scene is not None:
+            scene = viewport.scene
+            is_destroyed = getattr(scene, 'is_destroyed', False)
+            if is_destroyed:
+                log.debug("[hover] scene is destroyed, skipping")
+                return
 
         # Update gizmo hover state (raycast-based)
         if not self._gizmo_manager.is_dragging and viewport is not None:
@@ -327,10 +332,15 @@ class EditorViewportFeatures:
         1. Gizmo didn't handle the press (no transform started)
         2. Mouse didn't move significantly from press position (click, not drag)
         """
+        from termin._native import log
+
         x, y, viewport = pending_release
         self._pending_pick_release = None
 
+        log.debug(f"[pick_release] x={x:.1f} y={y:.1f} viewport={viewport}")
+
         if self._gizmo_handled_press:
+            log.debug("[pick_release] gizmo handled press, skipping")
             self._gizmo_handled_press = False
             self._press_position = None
             return
@@ -342,12 +352,15 @@ class EditorViewportFeatures:
             distance_sq = dx * dx + dy * dy
             threshold_sq = self._click_threshold * self._click_threshold
             if distance_sq > threshold_sq:
+                log.debug(f"[pick_release] drag detected (dist={distance_sq**.5:.1f}), skipping selection")
                 self._press_position = None
                 return
             self._press_position = None
 
         ent = self.pick_entity_at(x, y, viewport)
+        log.debug(f"[pick_release] pick_entity_at returned: {ent}")
         if ent is not None and not ent.selectable:
+            log.debug(f"[pick_release] entity not selectable, setting to None")
             ent = None
 
         self._on_entity_picked(ent)

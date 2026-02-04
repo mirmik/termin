@@ -120,6 +120,29 @@ public:
         return {w, h};
     }
 
+    // Window size (logical pixels, may differ from framebuffer on HiDPI)
+    std::pair<int, int> get_window_size() const {
+        int w = 0, h = 0;
+        if (ptr_) tc_display_get_window_size(ptr_, &w, &h);
+        return {w, h};
+    }
+
+    // Cursor position in window pixels
+    std::pair<double, double> get_cursor_pos() const {
+        double x = 0.0, y = 0.0;
+        if (ptr_) tc_display_get_cursor_pos(ptr_, &x, &y);
+        return {x, y};
+    }
+
+    // Should close
+    bool should_close() const {
+        return ptr_ ? tc_display_should_close(ptr_) : false;
+    }
+
+    void set_should_close(bool value) {
+        if (ptr_) tc_display_set_should_close(ptr_, value);
+    }
+
     // Viewport management
     size_t viewport_count() const {
         return ptr_ ? tc_display_get_viewport_count(ptr_) : 0;

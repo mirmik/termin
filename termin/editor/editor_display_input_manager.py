@@ -220,8 +220,8 @@ class EditorDisplayInputManager:
         return self._display.viewport_rect_to_pixels(viewport)
 
     def _get_cursor_pos(self) -> tuple[float, float]:
-        """Get cursor position from display surface."""
-        return self._display.surface.get_cursor_pos()
+        """Get cursor position from display."""
+        return self._display.get_cursor_pos()
 
     # ----------------------------------------------------------------
     # Picking support
@@ -245,23 +245,28 @@ class EditorDisplayInputManager:
         Returns:
             (r, g, b, a) in [0..1] or None.
         """
+        from termin._native import log
+
         if self._get_fbo_pool is None:
+            log.debug("[pick_color_at] _get_fbo_pool is None")
             return None
 
         fbo_pool = self._get_fbo_pool()
         if fbo_pool is None:
+            log.debug("[pick_color_at] fbo_pool is None")
             return None
 
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
             if viewport is None:
+                log.debug("[pick_color_at] viewport is None")
                 return None
 
-        surface = self._display.surface
-        win_w, win_h = surface.window_size()
-        fb_w, fb_h = surface.get_size()
+        win_w, win_h = self._display.get_window_size()
+        fb_w, fb_h = self._display.get_size()
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
+            log.debug(f"[pick_color_at] invalid sizes: win={win_w}x{win_h} fb={fb_w}x{fb_h}")
             return None
 
         px, py, pw, ph = self._viewport_rect_to_pixels(viewport)
@@ -277,6 +282,7 @@ class EditorDisplayInputManager:
         vy = y_phys - py
 
         if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
+            log.debug(f"[pick_color_at] out of viewport: vx={vx} vy={vy} pw={pw} ph={ph}")
             return None
 
         # Convert to FBO coordinates (origin bottom-left)
@@ -285,6 +291,7 @@ class EditorDisplayInputManager:
 
         fb = fbo_pool.get_fbo(buffer_name)
         if fb is None:
+            log.debug(f"[pick_color_at] fbo_pool.get_fbo('{buffer_name}') returned None")
             return None
 
         from termin.core.profiler import Profiler
@@ -292,6 +299,7 @@ class EditorDisplayInputManager:
         with profiler.section("read_pixel"):
             r, g, b, a = self._graphics.read_pixel(fb, read_x, read_y)
         # Return framebuffer back to window
+        surface = self._display.surface
         window_fb = surface.get_framebuffer()
         self._graphics.bind_framebuffer(window_fb)
         return (r, g, b, a)
@@ -312,18 +320,30 @@ class EditorDisplayInputManager:
         Returns:
             Entity or None.
         """
+        from termin._native import log
+
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
             if viewport is None:
+                log.debug("[pick_entity_at] viewport is None")
                 return None
         color = self.pick_color_at(x, y, viewport, buffer_name="id")
         if color is None:
+            log.debug("[pick_entity_at] pick_color_at returned None")
             return None
         r, g, b, a = color
         pid = rgb_to_id(r, g, b)
+        log.debug(f"[pick_entity_at] color=({r:.3f},{g:.3f},{b:.3f},{a:.3f}) pid={pid}")
         if pid == 0:
             return None
-        return viewport.scene.get_entity_by_pick_id(pid)
+        scene = viewport.scene
+        log.debug(f"[pick_entity_at] viewport.scene={scene} is_alive={scene.is_alive() if scene else 'N/A'}")
+        if scene is None:
+            log.debug("[pick_entity_at] scene is None!")
+            return None
+        ent = scene.get_entity_by_pick_id(pid)
+        log.debug(f"[pick_entity_at] get_entity_by_pick_id({pid}) -> {ent}")
+        return ent
 
     def pick_depth_at(
         self,
@@ -355,9 +375,8 @@ class EditorDisplayInputManager:
             if viewport is None:
                 return None
 
-        surface = self._display.surface
-        win_w, win_h = surface.window_size()
-        fb_w, fb_h = surface.get_size()
+        win_w, win_h = self._display.get_window_size()
+        fb_w, fb_h = self._display.get_size()
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
             return None
@@ -387,6 +406,7 @@ class EditorDisplayInputManager:
 
         depth = self._graphics.read_depth_pixel(fb, read_x, read_y)
         # Return framebuffer back to window
+        surface = self._display.surface
         window_fb = surface.get_framebuffer()
         self._graphics.bind_framebuffer(window_fb)
         return depth
@@ -565,7 +585,7 @@ class EditorDisplayInputManager:
 
         # ESC in game mode closes window
         if self._world_mode == "game" and key == Key.ESCAPE.value and action == TC_INPUT_PRESS:
-            self._display.surface.set_should_close(True)
+            self._display.should_close = True
 
         py_action = Action(action)
         py_key = Key(key)
