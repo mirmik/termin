@@ -114,6 +114,9 @@ class RenderingController:
         # Map display id -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
 
+        # Map tc_display_ptr -> Python Display (for looking up Python objects from C++ pointers)
+        self._display_registry: dict[int, "Display"] = {}
+
         # Editor display ID (not serialized, created before scene)
         self._editor_display_id: Optional[int] = None
 
@@ -168,6 +171,18 @@ class RenderingController:
         self._make_editor_pipeline = maker
         # Also update ViewportInspector
         self._inspector.viewport_inspector.set_editor_pipeline_getter(maker)
+
+    # --- Helpers ---
+
+    def _get_python_display(self, display) -> Optional["Display"]:
+        """
+        Get Python Display object from C++ TcDisplay.
+
+        The C++ RenderingManager returns TcDisplay wrappers, but we need
+        the Python Display object with the surface reference.
+        """
+        ptr = display.tc_display_ptr
+        return self._display_registry.get(ptr)
 
     # --- Factories ---
 
@@ -247,6 +262,9 @@ class RenderingController:
         # Store mapping (include qwindow to prevent GC)
         display_id = id(display)
         self._display_tabs[display_id] = (tab_container, surface, qwindow)
+
+        # Register in ptr->Display mapping for C++ interop
+        self._display_registry[display.tc_display_ptr] = display
 
         # Add tab to center widget
         tab_index = self._center_tabs.addTab(tab_container, name)
@@ -343,10 +361,14 @@ class RenderingController:
             display: Display to set up input for.
             input_mode: Input mode ("none", "simple", "basic", "editor").
         """
-        display_id = id(display)
+        # Get Python Display with surface reference
+        py_display = self._get_python_display(display)
+        if py_display is None:
+            return
+        display_id = id(py_display)
 
         # Get surface from display
-        surface = display.surface
+        surface = py_display.surface
 
         # Remove old input manager
         if display_id in self._display_input_managers:
@@ -993,10 +1015,14 @@ class RenderingController:
 
     def _apply_display_input_mode(self, display: "Display", surface, mode: str) -> None:
         """Apply input mode to a display."""
-        display_id = id(display)
+        # Get Python Display with surface reference
+        py_display = self._get_python_display(display)
+        if py_display is None:
+            return
+        display_id = id(py_display)
 
         # Get surface from display
-        surface = display.surface
+        surface = py_display.surface
 
         # Check if blocked from first viewport
         is_blocked = False

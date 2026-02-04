@@ -2,10 +2,17 @@
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/lighting/light_component.hpp"
+#include "termin/entity/entity.hpp"
+#include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
 #include "tc_log.h"
 #include "tc_scene.h"
+#include "tc_scene_pool.h"
+#include "tc_entity_pool.h"
+#include "tc_entity_pool_registry.h"
+#include "tc_viewport_config.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_rendering_manager.h"
 }
@@ -80,6 +87,18 @@ RenderEngine* RenderingManager::render_engine() {
     return render_engine_;
 }
 
+void RenderingManager::set_make_current_callback(MakeCurrentCallback callback) {
+    make_current_callback_ = std::move(callback);
+}
+
+void RenderingManager::set_display_factory(DisplayFactory factory) {
+    display_factory_ = std::move(factory);
+}
+
+void RenderingManager::set_pipeline_factory(PipelineFactory factory) {
+    pipeline_factory_ = std::move(factory);
+}
+
 // ============================================================================
 // Display Management
 // ============================================================================
@@ -124,6 +143,333 @@ tc_display* RenderingManager::get_display_by_name(const std::string& name) const
     return nullptr;
 }
 
+tc_display* RenderingManager::get_or_create_display(const std::string& name) {
+    // Check existing displays
+    tc_display* display = get_display_by_name(name);
+    if (display) {
+        return display;
+    }
+
+    // Try factory
+    if (display_factory_) {
+        display = display_factory_(name);
+        if (display) {
+            add_display(display);
+            return display;
+        }
+    }
+
+    return nullptr;
+}
+
+// ============================================================================
+// Scene Mounting
+// ============================================================================
+
+tc_viewport_handle RenderingManager::mount_scene(
+    tc_scene_handle scene,
+    tc_display* display,
+    CameraComponent* camera,
+    float region_x, float region_y, float region_w, float region_h,
+    RenderPipeline* pipeline,
+    const std::string& name
+) {
+    if (!tc_scene_handle_valid(scene) || !display || !camera) {
+        return TC_VIEWPORT_HANDLE_INVALID;
+    }
+
+    // Create viewport
+    tc_viewport_handle viewport = tc_viewport_new(
+        name.c_str(),
+        scene,
+        camera->tc_component_ptr()
+    );
+
+    if (!tc_viewport_handle_valid(viewport)) {
+        tc_log(TC_LOG_ERROR, "[RenderingManager] Failed to create viewport '%s'", name.c_str());
+        return TC_VIEWPORT_HANDLE_INVALID;
+    }
+
+    // Set rect
+    tc_viewport_set_rect(viewport, region_x, region_y, region_w, region_h);
+
+    // Set pipeline if provided
+    if (pipeline) {
+        tc_viewport_set_pipeline(viewport, pipeline->handle());
+    }
+
+    // Add to display
+    tc_display_add_viewport(display, viewport);
+
+    // Register viewport with camera
+    camera->add_viewport(TcViewport(viewport));
+
+    return viewport;
+}
+
+void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display) {
+    if (!display) return;
+
+    // Collect viewports showing this scene
+    std::vector<tc_viewport_handle> to_remove;
+    tc_viewport_handle vp = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(vp)) {
+        tc_scene_handle vp_scene = tc_viewport_get_scene(vp);
+        if (tc_scene_handle_eq(vp_scene, scene)) {
+            to_remove.push_back(vp);
+        }
+        vp = tc_viewport_get_display_next(vp);
+    }
+
+    // Remove them
+    for (tc_viewport_handle viewport : to_remove) {
+        // Remove from camera
+        tc_component* camera_comp = tc_viewport_get_camera(viewport);
+        if (camera_comp) {
+            CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
+            CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
+            if (camera) {
+                camera->remove_viewport(TcViewport(viewport));
+            }
+        }
+
+        // Remove viewport state
+        remove_viewport_state(viewport);
+
+        // Remove from display
+        tc_display_remove_viewport(display, viewport);
+
+        // Free viewport
+        tc_viewport_free(viewport);
+    }
+}
+
+// Helper struct for camera search callback
+struct CameraSearchData {
+    tc_entity_pool* pool;
+    CameraComponent* camera;
+    const char* found_name;
+};
+
+static bool find_first_camera_cb(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    CameraSearchData* data = static_cast<CameraSearchData*>(user_data);
+
+    // Get entity handle
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
+    tc_entity_handle eh = tc_entity_handle_make(pool_handle, id);
+    Entity entity(eh);
+
+    CameraComponent* cam = entity.get_component<CameraComponent>();
+    if (cam) {
+        data->camera = cam;
+        data->found_name = tc_entity_pool_name(pool, id);
+        return false; // Stop iteration
+    }
+    return true; // Continue
+}
+
+std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_handle scene) {
+    std::vector<tc_viewport_handle> viewports;
+
+    if (!tc_scene_handle_valid(scene)) {
+        return viewports;
+    }
+
+    size_t config_count = tc_scene_viewport_config_count(scene);
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    tc_entity_pool_handle pool_handle = pool ? tc_entity_pool_registry_find(pool) : TC_ENTITY_POOL_HANDLE_INVALID;
+
+    for (size_t i = 0; i < config_count; i++) {
+        tc_viewport_config* config = tc_scene_viewport_config_at(scene, i);
+        if (!config) continue;
+
+        // Get or create display
+        std::string display_name = config->display_name ? config->display_name : "Main";
+        tc_display* display = get_or_create_display(display_name);
+        if (!display) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Cannot create display '%s' for scene viewport",
+                   display_name.c_str());
+            continue;
+        }
+
+        // Find camera by UUID
+        CameraComponent* camera = nullptr;
+        if (config->camera_uuid && config->camera_uuid[0] != '\0' && pool) {
+            tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, config->camera_uuid);
+            if (tc_entity_id_valid(eid)) {
+                tc_entity_handle eh = tc_entity_handle_make(pool_handle, eid);
+                Entity entity(eh);
+                camera = entity.get_component<CameraComponent>();
+            }
+            if (!camera) {
+                tc_log(TC_LOG_WARN, "[RenderingManager] Camera entity not found for uuid=%s",
+                       config->camera_uuid);
+            }
+        }
+
+        // Fallback: find first camera in scene using iterator
+        if (!camera && pool) {
+            CameraSearchData search_data{pool, nullptr, nullptr};
+            tc_entity_pool_foreach(pool, find_first_camera_cb, &search_data);
+            if (search_data.camera) {
+                camera = search_data.camera;
+                tc_log(TC_LOG_WARN, "[RenderingManager] Using fallback camera from entity '%s'",
+                       search_data.found_name ? search_data.found_name : "?");
+            }
+        }
+
+        if (!camera) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] No camera found for viewport on display '%s'",
+                   display_name.c_str());
+            continue;
+        }
+
+        // Get pipeline
+        RenderPipeline* pipeline = nullptr;
+
+        // Try by UUID first
+        if (config->pipeline_uuid && config->pipeline_uuid[0] != '\0') {
+            // TODO: lookup pipeline by UUID from ResourceManager
+            // For now, skip UUID lookup
+        }
+
+        // Try by name via factory
+        if (!pipeline && config->pipeline_name && config->pipeline_name[0] != '\0') {
+            if (pipeline_factory_) {
+                pipeline = pipeline_factory_(config->pipeline_name);
+                if (!pipeline) {
+                    tc_log(TC_LOG_WARN, "[RenderingManager] Pipeline factory returned null for name=%s",
+                           config->pipeline_name);
+                }
+            } else {
+                tc_log(TC_LOG_WARN, "[RenderingManager] No pipeline factory set for name=%s",
+                       config->pipeline_name);
+            }
+        }
+
+        // Create viewport
+        std::string vp_name = config->name ? config->name : "";
+        tc_viewport_handle viewport = mount_scene(
+            scene,
+            display,
+            camera,
+            config->region[0], config->region[1], config->region[2], config->region[3],
+            pipeline,
+            vp_name
+        );
+
+        if (!tc_viewport_handle_valid(viewport)) {
+            continue;
+        }
+
+        // Apply additional properties
+        tc_viewport_set_depth(viewport, config->depth);
+        tc_viewport_set_enabled(viewport, config->enabled);
+        tc_viewport_set_layer_mask(viewport, config->layer_mask);
+        if (config->input_mode) {
+            tc_viewport_set_input_mode(viewport, config->input_mode);
+        }
+        tc_viewport_set_block_input_in_editor(viewport, config->block_input_in_editor);
+
+        viewports.push_back(viewport);
+    }
+
+    // Apply scene pipelines (compile templates, mark managed viewports)
+    apply_scene_pipelines(scene, viewports);
+
+    // Track attached scene
+    auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
+        [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
+    if (it == attached_scenes_.end()) {
+        attached_scenes_.push_back(scene);
+    }
+
+    return viewports;
+}
+
+void RenderingManager::detach_scene_full(tc_scene_handle scene) {
+    // Unmount from all displays
+    for (tc_display* display : displays_) {
+        unmount_scene(scene, display);
+    }
+
+    // Remove from attached scenes
+    auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
+        [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
+    if (it != attached_scenes_.end()) {
+        attached_scenes_.erase(it);
+    }
+
+    // Detach scene pipelines
+    detach_scene(scene);
+}
+
+void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::vector<tc_viewport_handle>& viewports) {
+    // Compile scene pipeline templates (this calls attach_scene internally)
+    attach_scene(scene);
+
+    // Build viewport lookup by name
+    std::unordered_map<std::string, tc_viewport_handle> viewport_by_name;
+    for (tc_viewport_handle vp : viewports) {
+        const char* name = tc_viewport_get_name(vp);
+        if (name && name[0] != '\0') {
+            viewport_by_name[name] = vp;
+        }
+    }
+
+    // Also check all displays for viewports
+    for (tc_display* display : displays_) {
+        tc_viewport_handle vp = tc_display_get_first_viewport(display);
+        while (tc_viewport_handle_valid(vp)) {
+            const char* name = tc_viewport_get_name(vp);
+            if (name && name[0] != '\0') {
+                if (viewport_by_name.find(name) == viewport_by_name.end()) {
+                    viewport_by_name[name] = vp;
+                }
+            }
+            vp = tc_viewport_get_display_next(vp);
+        }
+    }
+
+    // Mark viewports as managed by their scene pipeline
+    size_t template_count = tc_scene_pipeline_template_count(scene);
+    for (size_t i = 0; i < template_count; i++) {
+        tc_spt_handle spt_handle = tc_scene_pipeline_template_at(scene, i);
+        if (!tc_spt_is_valid(spt_handle)) continue;
+
+        TcScenePipelineTemplate templ(spt_handle);
+        if (!templ.is_loaded()) continue;
+
+        std::string pipeline_name = templ.name();
+        std::vector<std::string> targets = templ.target_viewports();
+
+        for (const std::string& vp_name : targets) {
+            auto it = viewport_by_name.find(vp_name);
+            if (it == viewport_by_name.end()) {
+                tc_log(TC_LOG_ERROR, "[RenderingManager] Scene pipeline '%s' targets viewport '%s' but not found",
+                       pipeline_name.c_str(), vp_name.c_str());
+                continue;
+            }
+            tc_viewport_set_managed_by(it->second, pipeline_name.c_str());
+        }
+    }
+}
+
+std::unordered_map<std::string, tc_viewport_handle> RenderingManager::collect_all_viewports() const {
+    std::unordered_map<std::string, tc_viewport_handle> result;
+    for (tc_display* display : displays_) {
+        tc_viewport_handle vp = tc_display_get_first_viewport(display);
+        while (tc_viewport_handle_valid(vp)) {
+            const char* name = tc_viewport_get_name(vp);
+            if (name && name[0] != '\0') {
+                result[name] = vp;
+            }
+            vp = tc_viewport_get_display_next(vp);
+        }
+    }
+    return result;
+}
+
 // ============================================================================
 // Viewport State Management
 // ============================================================================
@@ -160,6 +506,8 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 // ============================================================================
 
 void RenderingManager::render_all(bool present) {
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] render_all(present=%d) displays=%zu scenes=%zu",
+           present, displays_.size(), attached_scenes_.size());
     render_all_offscreen();
     if (present) {
         present_all();
@@ -167,9 +515,16 @@ void RenderingManager::render_all(bool present) {
 }
 
 void RenderingManager::render_all_offscreen() {
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] render_all_offscreen() START");
+
     if (!graphics_) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: graphics not set");
         return;
+    }
+
+    // Activate GL context via callback
+    if (make_current_callback_) {
+        make_current_callback_();
     }
 
     RenderEngine* engine = render_engine();
@@ -178,31 +533,178 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
-    // Render all viewports from all displays
-    for (tc_display* display : displays_) {
-        // Skip disabled displays
-        if (!tc_display_get_enabled(display)) {
-            continue;
-        }
+    // 1. Execute scene pipelines (can span multiple displays)
+    auto all_viewports = collect_all_viewports();
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] all_viewports count: %zu", all_viewports.size());
 
-        // Make display context current before rendering its viewports
-        tc_render_surface* surface = tc_display_get_surface(display);
-        if (surface) {
-            tc_render_surface_make_current(surface);
+    for (tc_scene_handle scene : attached_scenes_) {
+        if (!tc_scene_handle_valid(scene)) continue;
+
+        const char* scene_name = tc_scene_get_name(scene);
+        std::vector<std::string> pipeline_names = get_pipeline_names(scene);
+        tc_log(TC_LOG_DEBUG, "[RenderingManager] Scene '%s': %zu pipelines",
+               scene_name ? scene_name : "(null)", pipeline_names.size());
+
+        for (const std::string& pipeline_name : pipeline_names) {
+            RenderPipeline* pipeline = get_scene_pipeline(scene, pipeline_name);
+            if (pipeline) {
+                tc_log(TC_LOG_DEBUG, "[RenderingManager] Rendering scene pipeline '%s'", pipeline_name.c_str());
+                render_scene_pipeline_offscreen(scene, pipeline_name, pipeline);
+            }
+        }
+    }
+
+    // 2. Render unmanaged viewports
+    int unmanaged_count = 0;
+    for (tc_display* display : displays_) {
+        const char* disp_name = tc_display_get_name(display);
+        bool enabled = tc_display_get_enabled(display);
+        size_t vp_count = tc_display_get_viewport_count(display);
+        tc_log(TC_LOG_DEBUG, "[RenderingManager] Display '%s' enabled=%d viewports=%zu",
+               disp_name ? disp_name : "(null)", enabled, vp_count);
+
+        // Log viewport names even if display is disabled (for debugging)
+        if (!enabled) {
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                const char* vp_name = tc_viewport_get_name(vp);
+                tc_log(TC_LOG_DEBUG, "[RenderingManager]   (disabled) Viewport '%s'",
+                       vp_name ? vp_name : "(null)");
+                vp = tc_viewport_get_display_next(vp);
+            }
+            continue;
         }
 
         tc_viewport_handle vp = tc_display_get_first_viewport(display);
         while (tc_viewport_handle_valid(vp)) {
-            if (tc_viewport_get_enabled(vp)) {
+            const char* vp_name = tc_viewport_get_name(vp);
+            bool vp_enabled = tc_viewport_get_enabled(vp);
+            const char* managed_by = tc_viewport_get_managed_by(vp);
+
+            tc_log(TC_LOG_DEBUG, "[RenderingManager]   Viewport '%s' enabled=%d managed_by='%s'",
+                   vp_name ? vp_name : "(null)", vp_enabled,
+                   (managed_by && managed_by[0]) ? managed_by : "(none)");
+
+            if (vp_enabled) {
                 // Skip viewports managed by scene pipeline
-                const char* managed_by = tc_viewport_get_managed_by(vp);
                 if (!managed_by || managed_by[0] == '\0') {
+                    tc_log(TC_LOG_DEBUG, "[RenderingManager]   -> Rendering unmanaged viewport '%s'",
+                           vp_name ? vp_name : "(null)");
                     render_viewport_offscreen(vp);
+                    unmanaged_count++;
                 }
             }
             vp = tc_viewport_get_display_next(vp);
         }
     }
+
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] render_all_offscreen() END - rendered %d unmanaged viewports", unmanaged_count);
+}
+
+void RenderingManager::render_scene_pipeline_offscreen(
+    tc_scene_handle scene,
+    const std::string& pipeline_name,
+    RenderPipeline* pipeline
+) {
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] render_scene_pipeline_offscreen('%s') START", pipeline_name.c_str());
+
+    if (!tc_scene_handle_valid(scene) || !pipeline || !graphics_) {
+        tc_log(TC_LOG_DEBUG, "[RenderingManager] render_scene_pipeline_offscreen: invalid args");
+        return;
+    }
+
+    const std::vector<std::string>& target_names = get_pipeline_targets(pipeline_name);
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] Pipeline '%s' has %zu targets", pipeline_name.c_str(), target_names.size());
+    for (const auto& t : target_names) {
+        tc_log(TC_LOG_DEBUG, "[RenderingManager]   target: '%s'", t.c_str());
+    }
+
+    if (target_names.empty()) {
+        tc_log(TC_LOG_DEBUG, "[RenderingManager] No targets, returning early");
+        return;
+    }
+
+    auto all_viewports = collect_all_viewports();
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] all_viewports for pipeline: %zu", all_viewports.size());
+
+    // Collect viewport contexts
+    std::unordered_map<std::string, ViewportContext> contexts;
+    std::string first_viewport_name;
+
+    // Log all available viewports for debugging
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] Available viewports:");
+    for (const auto& [name, handle] : all_viewports) {
+        tc_log(TC_LOG_DEBUG, "[RenderingManager]   '%s'", name.c_str());
+    }
+
+    for (const std::string& vp_name : target_names) {
+        auto it = all_viewports.find(vp_name);
+        if (it == all_viewports.end()) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] Scene pipeline '%s' target viewport '%s' NOT FOUND in %zu viewports",
+                   pipeline_name.c_str(), vp_name.c_str(), all_viewports.size());
+            continue;
+        }
+        tc_log(TC_LOG_DEBUG, "[RenderingManager] Found target viewport '%s'", vp_name.c_str());
+
+        tc_viewport_handle viewport = it->second;
+        if (!tc_viewport_get_enabled(viewport)) continue;
+
+        tc_component* camera_comp = tc_viewport_get_camera(viewport);
+        if (!camera_comp) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no camera", vp_name.c_str());
+            continue;
+        }
+
+        CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
+        CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
+        if (!camera) continue;
+
+        if (first_viewport_name.empty()) {
+            first_viewport_name = vp_name;
+        }
+
+        // Get pixel rect
+        int px, py, pw, ph;
+        tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
+        if (pw <= 0 || ph <= 0) continue;
+
+        // Ensure output FBO
+        ViewportRenderState* state = get_or_create_viewport_state(viewport);
+        FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+
+        // Update camera aspect ratio
+        camera->set_aspect(static_cast<double>(pw) / std::max(1, ph));
+
+        // Create viewport context
+        ViewportContext ctx;
+        ctx.name = vp_name;
+        ctx.camera = camera;
+        ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
+        ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+        ctx.output_fbo = output_fbo;
+        contexts[vp_name] = std::move(ctx);
+    }
+
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] Created %zu viewport contexts for pipeline '%s'",
+           contexts.size(), pipeline_name.c_str());
+    if (contexts.empty()) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] No viewport contexts for pipeline '%s', skipping render",
+               pipeline_name.c_str());
+        return;
+    }
+
+    // Collect lights
+    std::vector<Light> lights = collect_lights(scene);
+
+    // Execute pipeline for all contexts
+    RenderEngine* engine = render_engine();
+    engine->render_scene_pipeline_offscreen(
+        pipeline,
+        scene,
+        contexts,
+        lights,
+        first_viewport_name
+    );
 }
 
 void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
@@ -250,8 +752,13 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 }
 
 void RenderingManager::present_all() {
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] present_all() displays=%zu", displays_.size());
     for (tc_display* display : displays_) {
-        if (tc_display_get_enabled(display)) {
+        const char* name = tc_display_get_name(display);
+        bool enabled = tc_display_get_enabled(display);
+        tc_log(TC_LOG_DEBUG, "[RenderingManager] Display '%s' enabled=%d",
+               name ? name : "(null)", enabled);
+        if (enabled) {
             present_display(display);
         }
     }
@@ -294,9 +801,15 @@ void RenderingManager::present_display(tc_display* display) {
     });
 
     // Blit viewports
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] present_display: blitting %zu viewports", viewports.size());
     for (tc_viewport_handle viewport : viewports) {
+        const char* vp_name = tc_viewport_get_name(viewport);
         ViewportRenderState* state = get_viewport_state(viewport);
-        if (!state || !state->has_output_fbo()) continue;
+        if (!state || !state->has_output_fbo()) {
+            tc_log(TC_LOG_DEBUG, "[RenderingManager]   Viewport '%s': no output FBO, skipping",
+                   vp_name ? vp_name : "(null)");
+            continue;
+        }
 
         // Get viewport position on display
         int px, py, pw, ph;
@@ -305,6 +818,10 @@ void RenderingManager::present_display(tc_display* display) {
         // Get output FBO size
         int src_w = state->output_width;
         int src_h = state->output_height;
+
+        tc_log(TC_LOG_DEBUG, "[RenderingManager]   Viewport '%s': blit fbo=%u (%dx%d) -> display (%d,%d,%d,%d)",
+               vp_name ? vp_name : "(null)", state->output_fbo->get_fbo_id(),
+               src_w, src_h, px, py, pw, ph);
 
         // Blit output_fbo → display_fbo
         graphics_->blit_framebuffer_to_id(
@@ -316,6 +833,7 @@ void RenderingManager::present_display(tc_display* display) {
     }
 
     // Swap buffers
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] present_display: swap_buffers");
     tc_render_surface_swap_buffers(surface);
 }
 
@@ -467,11 +985,19 @@ void RenderingManager::shutdown() {
     }
     viewport_states_.clear();
 
+    // Clear attached scenes
+    attached_scenes_.clear();
+
     // Clear scene pipelines (deletes owned pipelines)
     clear_all_scene_pipelines();
 
     // Clear displays (don't free them - we don't own them)
     displays_.clear();
+
+    // Clear callbacks
+    make_current_callback_ = nullptr;
+    display_factory_ = nullptr;
+    pipeline_factory_ = nullptr;
 
     // Release owned render engine
     owned_render_engine_.reset();
@@ -484,10 +1010,45 @@ void RenderingManager::shutdown() {
 // Helpers
 // ============================================================================
 
+// Helper struct for light collection callback
+struct LightCollectData {
+    tc_entity_pool* pool;
+    std::vector<Light>* lights;
+};
+
+static bool collect_lights_cb(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    LightCollectData* data = static_cast<LightCollectData*>(user_data);
+
+    // Get entity handle
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
+    tc_entity_handle eh = tc_entity_handle_make(pool_handle, id);
+    Entity entity(eh);
+
+    LightComponent* light = entity.get_component<LightComponent>();
+    if (light) {
+        data->lights->push_back(light->to_light());
+    }
+    return true; // Continue iteration
+}
+
 std::vector<Light> RenderingManager::collect_lights(tc_scene_handle scene) {
-    // TODO: Implement proper light collection from scene
-    // For now, return empty - ambient lighting only
-    return {};
+    std::vector<Light> lights;
+
+    if (!tc_scene_handle_valid(scene)) {
+        return lights;
+    }
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    if (!pool) {
+        return lights;
+    }
+
+    LightCollectData data{pool, &lights};
+    tc_entity_pool_foreach(pool, collect_lights_cb, &data);
+
+    tc_log(TC_LOG_DEBUG, "[RenderingManager] collect_lights: found %zu lights", lights.size());
+
+    return lights;
 }
 
 } // namespace termin

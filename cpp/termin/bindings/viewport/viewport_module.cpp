@@ -244,7 +244,7 @@ void bind_tc_viewport_class(nb::module_& m) {
                     tc_pipeline_set_py_wrapper(ph, pipeline_obj.ptr());
                     tc_viewport_set_pipeline(self.handle_, ph);
                 }
-            })
+            }, nb::arg("value").none())
 
         // Layer mask
         .def_prop_rw("layer_mask",

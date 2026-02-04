@@ -1,13 +1,9 @@
 """
-Display — Python wrapper for tc_display (render target with viewports).
+Display — Python wrapper for C++ TcDisplay.
 
-Display combines:
-- tc_render_surface — where we render (window or offscreen)
-- Viewports — list of viewports with cameras and scenes
-
-Display does NOT handle:
-- Input (handled by DisplayInputManager)
-- Window creation (handled by Visualization or Editor)
+Minimal wrapper that adds:
+- surface property (stores Python RenderSurface to prevent GC)
+- Resize callback setup
 """
 
 from __future__ import annotations
@@ -15,49 +11,17 @@ from __future__ import annotations
 import uuid as uuid_module
 from typing import TYPE_CHECKING
 
-from termin._native.render import (
-    _display_new,
-    _display_free,
-    _display_get_name,
-    _display_set_name,
-    _display_get_uuid,
-    _display_set_uuid,
-    _display_get_editor_only,
-    _display_set_editor_only,
-    _display_get_enabled,
-    _display_set_enabled,
-    _display_get_surface,
-    _display_add_viewport,
-    _display_remove_viewport,
-    _display_get_viewport_count,
-    _display_get_viewport_at_index,
-    _display_viewport_at,
-    _display_viewport_at_screen,
-    _display_get_size,
-    _display_update_all_pixel_rects,
-    _display_make_current,
-    _display_swap_buffers,
-)
+from termin._native.render import Display as CppDisplay
 
 if TYPE_CHECKING:
-    from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.core.scene import Scene
-    from termin.visualization.core.viewport import Viewport
     from termin.visualization.render.surface import RenderSurface
-    from termin.visualization.render.framegraph import RenderPipeline
-    from termin.visualization.ui.canvas import Canvas
 
 
-class Display:
+class Display(CppDisplay):
     """
     Display — what and where to render.
 
-    Wraps tc_display from core_c. Contains:
-    - surface: RenderSurface (window or offscreen FBO)
-    - viewports: list of Viewports
-
-    For rendering use RenderEngine externally:
-        engine.render_views(display.surface, views)
+    Inherits from C++ TcDisplay, adds surface property.
     """
 
     def __init__(
@@ -76,27 +40,19 @@ class Display:
             editor_only: If True, display is created and rendered only in editor.
             uuid: UUID (generated if not specified).
         """
-        # Initialize pointer to 0 before any operations that could fail
-        self._tc_display_ptr: int = 0
-
         # Store Python surface reference to prevent GC
         self._surface = surface
 
         # Get tc_render_surface pointer from surface
-        # SDLWindowRenderSurface has tc_surface() method returning tc_render_surface*
         tc_surface_obj = surface.tc_surface()
         tc_surface_ptr = tc_surface_obj.ptr if tc_surface_obj else 0
 
-        # Create tc_display
-        self._tc_display_ptr = _display_new(tc_surface_ptr, name)
-
-        # Set UUID (generate if not provided)
+        # Generate UUID if not provided
         if uuid is None:
             uuid = str(uuid_module.uuid4())
-        _display_set_uuid(self._tc_display_ptr, uuid)
 
-        # Set editor_only flag
-        _display_set_editor_only(self._tc_display_ptr, editor_only)
+        # Initialize C++ base class
+        super().__init__(tc_surface_ptr, name, editor_only, uuid)
 
         # Set up resize callback to update viewport pixel_rects
         from termin._native.render import _render_surface_set_on_resize
@@ -106,197 +62,12 @@ class Display:
         """Called when surface resizes - update viewport pixel_rects."""
         self.update_all_pixel_rects()
 
-    def __del__(self):
-        if self._tc_display_ptr:
-            _display_free(self._tc_display_ptr)
-            self._tc_display_ptr = 0
-
-    @property
-    def tc_display_ptr(self) -> int:
-        """Raw pointer to tc_display (for C interop)."""
-        return self._tc_display_ptr
-
-    @property
-    def name(self) -> str:
-        """Display name."""
-        return _display_get_name(self._tc_display_ptr)
-
-    @name.setter
-    def name(self, value: str) -> None:
-        _display_set_name(self._tc_display_ptr, value)
-
-    @property
-    def uuid(self) -> str:
-        """Unique identifier (for serialization)."""
-        return _display_get_uuid(self._tc_display_ptr)
-
-    @property
-    def runtime_id(self) -> int:
-        """64-bit hash of UUID (for fast runtime lookup)."""
-        return hash(self.uuid) & 0xFFFFFFFFFFFFFFFF
-
-    @property
-    def editor_only(self) -> bool:
-        """If True, display is created and rendered only in editor."""
-        return _display_get_editor_only(self._tc_display_ptr)
-
-    @editor_only.setter
-    def editor_only(self, value: bool) -> None:
-        _display_set_editor_only(self._tc_display_ptr, value)
-
-    @property
-    def enabled(self) -> bool:
-        """If True, display is rendered. If False, display is skipped during rendering."""
-        return _display_get_enabled(self._tc_display_ptr)
-
-    @enabled.setter
-    def enabled(self, value: bool) -> None:
-        _display_set_enabled(self._tc_display_ptr, value)
-
     @property
     def surface(self) -> "RenderSurface":
         """Render surface."""
         return self._surface
 
-    @property
-    def viewports(self) -> list["Viewport"]:
-        """List of viewports (read-only, iterates C linked list)."""
-        from termin.viewport import Viewport
-
-        count = _display_get_viewport_count(self._tc_display_ptr)
-        result = []
-        for i in range(count):
-            vh = _display_get_viewport_at_index(self._tc_display_ptr, i)
-            # vh is (index, generation) tuple, invalid if index == 0xFFFFFFFF
-            if vh[0] != 0xFFFFFFFF:
-                result.append(Viewport._from_handle(vh))
-        return result
-
-    def get_size(self) -> tuple[int, int]:
-        """Return display size in pixels."""
-        return _display_get_size(self._tc_display_ptr)
-
-    def add_viewport(self, viewport: "Viewport") -> "Viewport":
-        """
-        Add viewport to display.
-
-        Args:
-            viewport: Viewport to add.
-
-        Returns:
-            Added viewport.
-        """
-        vh = viewport._viewport_handle()
-        _display_add_viewport(self._tc_display_ptr, vh)
-        self._update_viewport_pixel_rect(viewport)
-        return viewport
-
-    def remove_viewport(self, viewport: "Viewport") -> None:
-        """
-        Remove viewport from display.
-
-        Args:
-            viewport: Viewport to remove.
-        """
-        vh = viewport._viewport_handle()
-        _display_remove_viewport(self._tc_display_ptr, vh)
-        # Remove viewport from camera's list
-        if viewport.camera is not None:
-            viewport.camera.remove_viewport(viewport)
-
-    def _update_viewport_pixel_rect(self, viewport: "Viewport") -> None:
-        """Recalculate pixel_rect for one viewport."""
-        width, height = self.get_size()
-        vx, vy, vw, vh = viewport.rect
-        px = int(vx * width)
-        py = int(vy * height)
-        pw = max(1, int(vw * width))
-        ph = max(1, int(vh * height))
-        viewport.pixel_rect = (px, py, pw, ph)
-
-    def update_all_pixel_rects(self) -> None:
-        """Recalculate pixel_rect for all viewports. Call on surface resize."""
-        _display_update_all_pixel_rects(self._tc_display_ptr)
-
-    def create_viewport(
-        self,
-        scene: "Scene",
-        camera: "CameraComponent",
-        rect: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
-        pipeline: "RenderPipeline | None" = None,
-        name: str = "main",
-    ) -> "Viewport":
-        """
-        Create and add new viewport.
-
-        Args:
-            scene: Scene to render.
-            camera: Camera for rendering.
-            rect: Normalized rectangle (x, y, w, h) in [0..1].
-            pipeline: Render pipeline (None = default pipeline).
-            name: Viewport name for identification in pipeline.
-
-        Returns:
-            Created Viewport.
-        """
-        from termin.visualization.core.viewport import Viewport, make_default_pipeline
-
-        if pipeline is None:
-            pipeline = make_default_pipeline()
-
-        viewport = Viewport(
-            name=name,
-            scene=scene,
-            camera=camera,
-            rect=rect,
-            pipeline=pipeline,
-        )
-        camera.add_viewport(viewport)
-        self.add_viewport(viewport)
-        return viewport
-
-    def viewport_at(self, x: float, y: float) -> "Viewport | None":
-        """
-        Find viewport at specified coordinates.
-
-        Returns viewport with highest depth when overlapping.
-
-        Args:
-            x, y: Normalized coordinates [0..1], origin top-left.
-
-        Returns:
-            Viewport under cursor or None.
-        """
-        # Transform y: screen coordinates (top-down) -> OpenGL (bottom-up)
-        ny = 1.0 - y
-
-        vh = _display_viewport_at(self._tc_display_ptr, x, ny)
-        # vh is (index, generation) tuple, invalid if index == 0xFFFFFFFF
-        if vh[0] == 0xFFFFFFFF:
-            return None
-
-        from termin.viewport import Viewport
-        return Viewport._from_handle(vh)
-
-    def viewport_at_pixels(self, px: float, py: float) -> "Viewport | None":
-        """
-        Find viewport at specified pixel coordinates.
-
-        Args:
-            px, py: Pixel coordinates, origin top-left.
-
-        Returns:
-            Viewport under cursor or None.
-        """
-        vh = _display_viewport_at_screen(self._tc_display_ptr, px, py)
-        # vh is (index, generation) tuple, invalid if index == 0xFFFFFFFF
-        if vh[0] == 0xFFFFFFFF:
-            return None
-
-        from termin.viewport import Viewport
-        return Viewport._from_handle(vh)
-
-    def viewport_rect_to_pixels(self, viewport: "Viewport") -> tuple[int, int, int, int]:
+    def viewport_rect_to_pixels(self, viewport) -> tuple[int, int, int, int]:
         """
         Convert normalized viewport rect to pixels.
 
@@ -313,11 +84,3 @@ class Display:
         pw = int(vw * width)
         ph = int(vh * height)
         return (px, py, pw, ph)
-
-    def make_current(self) -> None:
-        """Make render context current."""
-        _display_make_current(self._tc_display_ptr)
-
-    def present(self) -> None:
-        """Present rendered result (swap buffers)."""
-        _display_swap_buffers(self._tc_display_ptr)

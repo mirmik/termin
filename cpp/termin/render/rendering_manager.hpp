@@ -20,6 +20,7 @@
 
 extern "C" {
 #include "tc_scene.h"
+#include "tc_viewport_config.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -35,6 +36,11 @@ extern "C" {
 namespace termin {
 
 class CameraComponent;
+
+// Factory callback types
+using DisplayFactory = std::function<tc_display*(const std::string& name)>;
+using PipelineFactory = std::function<RenderPipeline*(const std::string& name)>;
+using MakeCurrentCallback = std::function<void()>;
 
 // RenderingManager - Global singleton for managing displays and rendering
 //
@@ -67,6 +73,15 @@ public:
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
 
+    // Set callback to activate GL context before rendering
+    void set_make_current_callback(MakeCurrentCallback callback);
+
+    // Set factory for creating displays on demand
+    void set_display_factory(DisplayFactory factory);
+
+    // Set factory for creating pipelines by special name (e.g., "(Editor)")
+    void set_pipeline_factory(PipelineFactory factory);
+
     // ========================================================================
     // Display Management
     // ========================================================================
@@ -82,6 +97,9 @@ public:
 
     // Find display by name
     tc_display* get_display_by_name(const std::string& name) const;
+
+    // Get existing display or create via factory
+    tc_display* get_or_create_display(const std::string& name);
 
     // ========================================================================
     // Viewport State Management
@@ -122,11 +140,40 @@ public:
     void present_all();
 
     // ========================================================================
+    // Scene Mounting
+    // ========================================================================
+
+    // Mount scene to display region, creating a viewport
+    // Returns viewport handle (invalid if failed)
+    tc_viewport_handle mount_scene(
+        tc_scene_handle scene,
+        tc_display* display,
+        CameraComponent* camera,
+        float region_x, float region_y, float region_w, float region_h,
+        RenderPipeline* pipeline,
+        const std::string& name
+    );
+
+    // Unmount scene from display (removes all viewports showing this scene)
+    void unmount_scene(tc_scene_handle scene, tc_display* display);
+
+    // Attach scene using its viewport_configs
+    // Creates displays via factory, mounts viewports, compiles scene pipelines
+    // Returns list of created viewport handles
+    std::vector<tc_viewport_handle> attach_scene_full(tc_scene_handle scene);
+
+    // Detach scene from all displays and cleanup
+    void detach_scene_full(tc_scene_handle scene);
+
+    // Get attached scenes list
+    const std::vector<tc_scene_handle>& attached_scenes() const { return attached_scenes_; }
+
+    // ========================================================================
     // Scene Pipeline Management
     // ========================================================================
 
-    // Attach scene to rendering - compiles pipeline templates stored in tc_scene
-    // Called when scene is mounted to display. Notifies components via on_render_attach.
+    // Attach scene pipelines only - compiles pipeline templates stored in tc_scene
+    // Called by attach_scene_full. Notifies components via on_render_attach.
     void attach_scene(tc_scene_handle scene);
 
     // Detach scene from rendering - destroys compiled pipelines
@@ -160,15 +207,32 @@ public:
     // Cleanup all resources
     void shutdown();
 
-private:
-    // Render single viewport to its output FBO
-    void render_viewport_offscreen(tc_viewport_handle viewport);
+    // ========================================================================
+    // Low-level Presentation (for RenderingController)
+    // ========================================================================
 
     // Blit viewports to single display
     void present_display(tc_display* display);
 
+private:
+    // Render single viewport to its output FBO
+    void render_viewport_offscreen(tc_viewport_handle viewport);
+
+    // Render scene pipeline to viewport output FBOs
+    void render_scene_pipeline_offscreen(
+        tc_scene_handle scene,
+        const std::string& pipeline_name,
+        RenderPipeline* pipeline
+    );
+
     // Collect lights from scene (simplified - returns empty for now)
     std::vector<Light> collect_lights(tc_scene_handle scene);
+
+    // Apply scene pipelines after viewports are created
+    void apply_scene_pipelines(tc_scene_handle scene, const std::vector<tc_viewport_handle>& viewports);
+
+    // Collect all viewports from all displays by name
+    std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
 
 private:
     // Managed displays
@@ -183,6 +247,18 @@ private:
     // Render engine (owned if created internally)
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
+
+    // Callback to activate GL context before rendering
+    MakeCurrentCallback make_current_callback_;
+
+    // Factory for creating displays on demand
+    DisplayFactory display_factory_;
+
+    // Factory for creating pipelines by special name
+    PipelineFactory pipeline_factory_;
+
+    // Attached scenes (for scene pipeline execution)
+    std::vector<tc_scene_handle> attached_scenes_;
 
     // Scene pipelines: scene_handle -> (pipeline_name -> owning pointer)
     // RenderingManager owns compiled pipelines
