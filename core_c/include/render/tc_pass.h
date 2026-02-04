@@ -4,7 +4,7 @@
 #define TC_PASS_H
 
 #include "tc_types.h"
-#include "resources/tc_binding.h"
+#include "inspect/tc_binding.h"
 #include "tc_type_registry.h"
 #include "tc_scene_pool.h"
 #include "render/tc_viewport_pool.h"

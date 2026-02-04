@@ -9,7 +9,7 @@
 #include <iostream>
 
 extern "C" {
-#include "resources/tc_binding.h"
+#include "inspect/tc_binding.h"
 }
 
 #include "termin/render/render_pipeline.hpp"

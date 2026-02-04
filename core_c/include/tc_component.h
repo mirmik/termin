@@ -27,7 +27,7 @@ typedef enum tc_component_kind {
 #define TC_PYTHON_COMPONENT TC_EXTERNAL_COMPONENT
 
 // Language enum
-#include "resources/tc_binding.h"
+#include "inspect/tc_binding.h"
 
 // ============================================================================
 // Drawable VTable - for components that can render geometry
