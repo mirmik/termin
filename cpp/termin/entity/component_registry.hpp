@@ -7,7 +7,7 @@
 #include "component.hpp"
 #include "vtable_utils.hpp"
 #include "input_handler.hpp"
-#include "../../../core_c/include/tc_inspect_cpp.hpp"
+#include "tc_inspect_cpp.hpp"
 
 #include "../export.hpp"
 

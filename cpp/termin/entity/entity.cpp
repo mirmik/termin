@@ -1,6 +1,6 @@
 #include "entity.hpp"
 #include "component.hpp"
-#include "../tc_scene.hpp"
+#include "termin/tc_scene.hpp"
 #include "tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "../render/tc_value_trent.hpp"

@@ -20,7 +20,7 @@ extern "C" {
 }
 
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
-#include "../tc_value_helpers.hpp"
+#include "termin/bindings/tc_value_helpers.hpp"
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"

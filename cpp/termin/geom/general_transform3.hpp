@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <stdexcept>
 #include "general_pose3.hpp"
-#include "../../../core_c/include/tc_entity_pool.h"
-#include "../../../core_c/include/tc_entity_pool_registry.h"
+#include "tc_entity_pool.h"
+#include "tc_entity_pool_registry.h"
 
 #include "../export.hpp"
 #include "tc_log.hpp"

@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "termin/entity/entity.hpp"
-#include "../../../../core_c/include/tc_entity_pool_registry.h"
+#include "tc_entity_pool_registry.h"
 
 namespace termin {
 

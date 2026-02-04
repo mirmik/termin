@@ -5,13 +5,13 @@
 #include <cstdint>
 #include <trent/trent.h>
 #include "../geom/general_transform3.hpp"
-#include "../../../core_c/include/tc_entity_pool.h"
-#include "../../../core_c/include/tc_entity_pool_registry.h"
-#include "../../../core_c/include/tc_component.h"
-#include "../../../core_c/include/tc_scene.h"
+#include "tc_entity_pool.h"
+#include "tc_entity_pool_registry.h"
+#include "tc_component.h"
+#include "tc_scene.h"
 
 extern "C" {
-#include "../../../core_c/include/tc_value.h"
+#include "tc_value.h"
 }
 
 #include "../export.hpp"

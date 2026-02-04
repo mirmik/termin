@@ -14,7 +14,7 @@ extern "C" {
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
-#include "../../../core_c/include/tc_component.h"
+#include "tc_component.h"
 
 namespace termin {
 

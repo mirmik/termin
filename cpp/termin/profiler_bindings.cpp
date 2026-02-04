@@ -2,7 +2,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
-#include "../../core_c/include/tc_profiler.h"
+#include "tc_profiler.h"
 #include "profiler_bindings.hpp"
 
 namespace nb = nanobind;

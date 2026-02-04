@@ -6,7 +6,7 @@
 #include <cstdint>
 
 extern "C" {
-#include "../../core_c/include/tc_viewport_config.h"
+#include "tc_viewport_config.h"
 }
 
 namespace termin {

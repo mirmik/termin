@@ -2,7 +2,7 @@
 
 #include <string>
 #include <nanobind/nanobind.h>
-#include "../../core_c/include/tc_scene.h"
+#include "tc_scene.h"
 #include "inspect/tc_inspect.h"
 
 namespace nb = nanobind;

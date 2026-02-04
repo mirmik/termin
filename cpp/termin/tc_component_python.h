@@ -4,7 +4,7 @@
 #ifndef TC_COMPONENT_PYTHON_H
 #define TC_COMPONENT_PYTHON_H
 
-#include "../../core_c/include/tc_component.h"
+#include "tc_component.h"
 
 #ifdef __cplusplus
 extern "C" {

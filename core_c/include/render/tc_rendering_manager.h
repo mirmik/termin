@@ -4,7 +4,7 @@
 #ifndef TC_RENDERING_MANAGER_H
 #define TC_RENDERING_MANAGER_H
 
-#include "../tc_types.h"
+#include "tc_types.h"
 
 #ifdef __cplusplus
 extern "C" {

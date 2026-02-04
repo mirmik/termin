@@ -7,8 +7,8 @@
 #include <filesystem>
 
 extern "C" {
-#include "../../../core_c/include/tc_profiler.h"
-#include "../../../core_c/include/tc_log.h"
+#include "tc_profiler.h"
+#include "tc_log.h"
 }
 
 namespace termin {

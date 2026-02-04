@@ -1,7 +1,7 @@
 #include "collider_component.hpp"
 #include "tc_log.hpp"
-#include "../../../core_c/include/tc_entity_pool.h"
-#include "../../../core_c/include/tc_inspect_cpp.hpp"
+#include "tc_entity_pool.h"
+#include "tc_inspect_cpp.hpp"
 #include <algorithm>
 
 namespace termin {

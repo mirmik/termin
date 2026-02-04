@@ -4,7 +4,7 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/tuple.h>
 
-#include "tc_scene.hpp"
+#include "termin/tc_scene.hpp"
 #include "entity/component.hpp"
 #include "bindings/entity/entity_helpers.hpp"
 #include "mesh/tc_mesh_handle.hpp"
@@ -19,9 +19,9 @@
 #include "geom/vec3.hpp"
 #include "geom/vec4.hpp"
 #include "render/tc_value_trent.hpp"
-#include "../../core_c/include/tc_scene_lighting.h"
-#include "../../core_c/include/tc_scene_skybox.h"
-#include "../../core_c/include/tc_component.h"
+#include "tc_scene_lighting.h"
+#include "tc_scene_skybox.h"
+#include "tc_component.h"
 
 namespace nb = nanobind;
 

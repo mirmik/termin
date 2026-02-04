@@ -10,7 +10,7 @@ extern "C" {
 
 #include <string>
 #include <vector>
-#include "../../core_c/include/tc_scene.h"
+#include "tc_scene.h"
 
 namespace termin {
 namespace animation {

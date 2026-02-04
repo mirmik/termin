@@ -5,8 +5,8 @@
 #include <unordered_map>
 
 #include "tc_component_python.h"
-#include "../../core_c/include/tc_material.h"
-#include "../../core_c/include/tc_scene.h"
+#include "resources/tc_material.h"
+#include "tc_scene.h"
 #include "tc_log.hpp"
 #include "render/drawable.hpp"
 #include "render/render_context.hpp"

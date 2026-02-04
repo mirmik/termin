@@ -1,10 +1,10 @@
 // tc_scene.cpp - TcSceneRef implementation
-#include "tc_scene.hpp"
+#include "termin/tc_scene.hpp"
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
 #include "entity/tc_component_ref.hpp"
 #include "render/rendering_manager.hpp"
-#include "../../core_c/include/tc_scene_skybox.h"
+#include "tc_scene_skybox.h"
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
 #include "collision/collision_world.hpp"

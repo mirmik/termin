@@ -1,6 +1,6 @@
 #include "rotator_component.hpp"
 #include "tc_log.hpp"
-#include "../../../core_c/include/tc_inspect_cpp.hpp"
+#include "tc_inspect_cpp.hpp"
 #include <cmath>
 
 namespace termin {
