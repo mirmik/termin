@@ -336,7 +336,7 @@ class EditorModeController:
         # Только обновляем world_mode
         editor_display = self._window._rendering_controller.editor_display
         if editor_display is not None:
-            editor_display_id = id(editor_display)
+            editor_display_id = editor_display.tc_display_ptr
             editor_features = self._window._editor_features.get(editor_display_id)
             if editor_features is not None:
                 editor_features.set_world_mode("game" if is_playing else "editor")

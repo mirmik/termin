@@ -81,7 +81,7 @@ class ViewportListWidget(QWidget):
         super().__init__(parent)
 
         self._displays: List["Display"] = []
-        self._display_names: dict[int, str] = {}  # id(display) -> name
+        self._display_names: dict[int, str] = {}  # tc_display_ptr -> name
 
         self._init_ui()
 
@@ -135,13 +135,13 @@ class ViewportListWidget(QWidget):
 
     def set_display_name(self, display: "Display", name: str) -> None:
         """Set custom name for a display."""
-        self._display_names[id(display)] = name
+        self._display_names[display.tc_display_ptr] = name
         self._rebuild_tree()
 
     def get_display_name(self, display: "Display") -> str:
         """Get display name (custom or default)."""
-        if id(display) in self._display_names:
-            return self._display_names[id(display)]
+        if display.tc_display_ptr in self._display_names:
+            return self._display_names[display.tc_display_ptr]
         idx = self._displays.index(display) if display in self._displays else 0
         return f"Display {idx}"
 
@@ -150,14 +150,14 @@ class ViewportListWidget(QWidget):
         if display not in self._displays:
             self._displays.append(display)
             if name is not None:
-                self._display_names[id(display)] = name
+                self._display_names[display.tc_display_ptr] = name
             self._rebuild_tree()
 
     def remove_display(self, display: "Display") -> None:
         """Remove a display from the list."""
         if display in self._displays:
             self._displays.remove(display)
-            self._display_names.pop(id(display), None)
+            self._display_names.pop(display.tc_display_ptr, None)
             self._rebuild_tree()
 
     def refresh(self) -> None:

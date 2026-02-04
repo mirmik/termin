@@ -107,18 +107,18 @@ class RenderingController:
         self._selected_display: Optional["Display"] = None
         self._selected_viewport: Optional["Viewport"] = None
 
-        # Map display id -> (tab container widget, SDLWindowRenderSurface, QWindow)
+        # Map tc_display_ptr -> (tab container widget, SDLWindowRenderSurface, QWindow)
         # QWindow is stored to prevent garbage collection
         self._display_tabs: dict[int, Tuple[QWidget, object, QWindow]] = {}
 
-        # Map display id -> input manager (to prevent GC)
+        # Map tc_display_ptr -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
 
         # Map tc_display_ptr -> Python Display (for looking up Python objects from C++ pointers)
         self._display_registry: dict[int, "Display"] = {}
 
-        # Editor display ID (not serialized, created before scene)
-        self._editor_display_id: Optional[int] = None
+        # Editor display tc_display_ptr (not serialized, created before scene)
+        self._editor_display_ptr: Optional[int] = None
 
         # Register display factory with RenderingManager
         self._manager.set_display_factory(self._create_display_for_name)
@@ -260,7 +260,7 @@ class RenderingController:
         display = Display(surface, name=name)
 
         # Store mapping (include qwindow to prevent GC)
-        display_id = id(display)
+        display_id = display.tc_display_ptr
         self._display_tabs[display_id] = (tab_container, surface, qwindow)
 
         # Register in ptr->Display mapping for C++ interop
@@ -302,7 +302,7 @@ class RenderingController:
             display = self._manager.get_display_for_viewport(viewport)
             if display is None:
                 continue
-            display_id = id(display)
+            display_id = display.tc_display_ptr
 
             # Find matching ViewportConfig
             config = self._find_viewport_config(scene, viewport, display)
@@ -322,7 +322,7 @@ class RenderingController:
             viewport, config, display = vp_configs[0]
 
             # Skip editor display - it has its own input handling
-            if display_id == self._editor_display_id:
+            if display_id == self._editor_display_ptr:
                 continue
 
             self._setup_display_input(display, config.input_mode)
@@ -365,7 +365,7 @@ class RenderingController:
         py_display = self._get_python_display(display)
         if py_display is None:
             return
-        display_id = id(py_display)
+        display_id = py_display.tc_display_ptr
 
         # Get surface from display
         surface = py_display.surface
@@ -416,7 +416,8 @@ class RenderingController:
 
         for display in self._manager.displays:
             # Skip editor display - it's managed separately
-            if id(display) == self._editor_display_id:
+            py_display = self._display_registry.get(display.tc_display_ptr)
+            if py_display is not None and py_display.tc_display_ptr == self._editor_display_ptr:
                 continue
 
             for viewport in display.viewports:
@@ -466,29 +467,29 @@ class RenderingController:
         Args:
             scene: Scene to detach.
         """
-        # Get displays that will lose all viewports
+        # Get displays that will lose all viewports (track by tc_display_ptr)
         displays_to_check = set()
         for display in self._manager.displays:
             for viewport in display.viewports:
                 if viewport.scene is scene:
-                    displays_to_check.add(id(display))
+                    displays_to_check.add(display.tc_display_ptr)
 
         # Detach scene
         self._manager.detach_scene(scene)
 
         # Clean up input managers for displays that now have no viewports
-        for display_id in displays_to_check:
+        for display_ptr in displays_to_check:
             # Find display
             display = None
             for d in self._manager.displays:
-                if id(d) == display_id:
+                if d.tc_display_ptr == display_ptr:
                     display = d
                     break
 
             if display is not None and not display.viewports:
                 # Remove input manager
-                if display_id in self._display_input_managers:
-                    del self._display_input_managers[display_id]
+                if display_ptr in self._display_input_managers:
+                    del self._display_input_managers[display_ptr]
 
         # Refresh UI
         self._viewport_list.refresh()
@@ -544,7 +545,7 @@ class RenderingController:
         if display not in self._manager.displays:
             return
 
-        display_id = id(display)
+        display_id = display.tc_display_ptr
 
         self._manager.remove_display(display)
         self._viewport_list.remove_display(display)
@@ -586,7 +587,7 @@ class RenderingController:
         Destroys pipelines to clear callbacks, clears FBOs, then removes viewports.
         """
         for display in self._manager.displays:
-            display_id = id(display)
+            display_id = display.tc_display_ptr
             viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
             if not viewports_to_remove:
                 continue
@@ -673,9 +674,9 @@ class RenderingController:
         display = Display(surface, name="Editor", editor_only=True)
 
         # Store mapping
-        display_id = id(display)
+        display_id = display.tc_display_ptr
         self._display_tabs[display_id] = (container, surface, qwindow)
-        self._editor_display_id = display_id
+        self._editor_display_ptr = display_id
 
         # Add to displays list (editor display input is managed by EditorViewportFeatures)
         self.add_display(display, "Editor")
@@ -684,26 +685,27 @@ class RenderingController:
 
     def is_editor_display(self, display: "Display") -> bool:
         """Check if display is the editor display (not serialized)."""
-        return id(display) == self._editor_display_id
+        return display.tc_display_ptr == self._editor_display_ptr
 
     @property
     def editor_display(self) -> Optional["Display"]:
         """Get the editor display."""
-        if self._editor_display_id is None:
+        if self._editor_display_ptr is None:
             return None
         for display in self._manager.displays:
-            if id(display) == self._editor_display_id:
-                return display
+            py_display = self._display_registry.get(display.tc_display_ptr)
+            if py_display is not None and py_display.tc_display_ptr == self._editor_display_ptr:
+                return py_display
         return None
 
     @property
     def editor_surface(self) -> Optional[object]:
         """Get the editor SDLEmbeddedWindowHandle."""
-        if self._editor_display_id is None:
+        if self._editor_display_ptr is None:
             return None
-        if self._editor_display_id not in self._display_tabs:
+        if self._editor_display_ptr not in self._display_tabs:
             return None
-        _container, surface, _qwindow = self._display_tabs[self._editor_display_id]
+        _container, surface, _qwindow = self._display_tabs[self._editor_display_ptr]
         return surface
 
     def create_editor_viewport(
@@ -757,8 +759,8 @@ class RenderingController:
             return
 
         # Make GL context current
-        if self._editor_display_id is not None:
-            tab_info = self._display_tabs.get(self._editor_display_id)
+        if self._editor_display_ptr is not None:
+            tab_info = self._display_tabs.get(self._editor_display_ptr)
             if tab_info is not None:
                 _tab_container, surface, _qwindow = tab_info
                 if surface is not None:
@@ -780,11 +782,11 @@ class RenderingController:
     @property
     def editor_gl_widget(self) -> Optional[QWidget]:
         """Get the Qt widget containing the editor GL surface."""
-        if self._editor_display_id is None:
+        if self._editor_display_ptr is None:
             return None
-        if self._editor_display_id not in self._display_tabs:
+        if self._editor_display_ptr not in self._display_tabs:
             return None
-        container, _sfc, _qwindow = self._display_tabs[self._editor_display_id]
+        container, _sfc, _qwindow = self._display_tabs[self._editor_display_ptr]
         # The gl_widget is the first child of the container layout
         layout = container.layout()
         if layout is not None and layout.count() > 0:
@@ -807,7 +809,7 @@ class RenderingController:
 
     def get_display_sfc(self, display: "Display") -> Optional[object]:
         """Get SDLWindowRenderSurface for a display."""
-        display_id = id(display)
+        display_id = display.tc_display_ptr
         tab_info = self._display_tabs.get(display_id)
         if tab_info is None:
             return None
@@ -848,8 +850,8 @@ class RenderingController:
             self._selected_display = self._manager.get_display_for_viewport(viewport)
 
             scene = self._get_scene() if self._get_scene is not None else None
-            # Build display_names dict for inspector
-            display_names = {id(d): self._manager.get_display_name(d) for d in self._manager.displays}
+            # Build display_names dict for inspector (keyed by tc_display_ptr)
+            display_names = {d.tc_display_ptr: self._manager.get_display_name(d) for d in self._manager.displays}
             self._inspector.show_viewport_inspector(
                 viewport=viewport,
                 displays=self._manager.displays,
@@ -920,7 +922,7 @@ class RenderingController:
         display = Display(surface)
 
         # Store mapping (include qwindow to prevent GC)
-        display_id = id(display)
+        display_id = display.tc_display_ptr
         self._display_tabs[display_id] = (tab_container, surface, qwindow)
 
         # Create input manager for this display (default: simple mode)
@@ -996,7 +998,7 @@ class RenderingController:
             return
 
         display = self._selected_display
-        display_id = id(display)
+        display_id = display.tc_display_ptr
 
         # Get surface for this display
         tab_info = self._display_tabs.get(display_id)
@@ -1019,7 +1021,7 @@ class RenderingController:
         py_display = self._get_python_display(display)
         if py_display is None:
             return
-        display_id = id(py_display)
+        display_id = py_display.tc_display_ptr
 
         # Get surface from display
         surface = py_display.surface
@@ -1197,11 +1199,15 @@ class RenderingController:
             active_widget = self._center_tabs.widget(index)
 
             for display in self._manager.displays:
-                display_id = id(display)
-                if display_id not in self._display_tabs:
+                # Use tc_display_ptr as stable key (id() changes for each Python wrapper)
+                display_ptr = display.tc_display_ptr
+                py_display = self._display_registry.get(display_ptr)
+                if py_display is None:
+                    continue
+                if display_ptr not in self._display_tabs:
                     continue
 
-                tab_container, _surface, _qwindow = self._display_tabs[display_id]
+                tab_container, _surface, _qwindow = self._display_tabs[display_ptr]
                 # Enable display if its tab is active
                 display.enabled = (tab_container is active_widget)
 
@@ -1272,27 +1278,33 @@ class RenderingController:
 
         # Add tabs for additional displays (not Editor)
         for display in self._manager.displays:
-            display_id = id(display)
+            # Use tc_display_ptr as stable key
+            display_ptr = display.tc_display_ptr
+            py_display = self._display_registry.get(display_ptr)
+            if py_display is None:
+                continue
 
             # Skip Editor display (it's already the first tab, managed externally)
-            if display_id == self._editor_display_id:
+            if display_ptr == self._editor_display_ptr:
                 continue
 
             # Skip displays not in _display_tabs (legacy external displays)
-            if display_id not in self._display_tabs:
+            if display_ptr not in self._display_tabs:
                 continue
 
             name = self._manager.get_display_name(display)
-            tab_container, _sfc, _qwindow = self._display_tabs[display_id]
+            tab_container, _sfc, _qwindow = self._display_tabs[display_ptr]
             tab_index = self._center_tabs.addTab(tab_container, name)
 
             # Enable display only if its tab is active
             display.enabled = (tab_index == current_index)
 
         # Enable editor display if first tab is active
-        if self._editor_display_id is not None:
+        if self._editor_display_ptr is not None:
             for display in self._manager.displays:
-                if id(display) == self._editor_display_id:
+                display_ptr = display.tc_display_ptr
+                py_display = self._display_registry.get(display_ptr)
+                if py_display is not None and display_ptr == self._editor_display_ptr:
                     display.enabled = (current_index == 0)
                     break
 
@@ -1310,7 +1322,7 @@ class RenderingController:
     def any_additional_display_needs_render(self) -> bool:
         """Check if any additional display needs rendering (excluding editor)."""
         for display_id in self._display_tabs:
-            if display_id == self._editor_display_id:
+            if display_id == self._editor_display_ptr:
                 continue
             _tab_container, surface, _qwindow = self._display_tabs[display_id]
             if surface is not None and surface.needs_render():
@@ -1342,7 +1354,7 @@ class RenderingController:
 
         # Phase 2: Present to displays
         for display in self._manager.displays:
-            display_id = id(display)
+            display_id = display.tc_display_ptr
 
             if display_id not in self._display_tabs:
                 continue

@@ -62,7 +62,7 @@ class ViewportInspector(QWidget):
         self._viewport: Optional["Viewport"] = None
         self._current_display: Optional["Display"] = None
         self._displays: List["Display"] = []
-        self._display_names: dict[int, str] = {}
+        self._display_names: dict[int, str] = {}  # tc_display_ptr -> name
         self._cameras: List[Tuple["CameraComponent", str]] = []  # (camera, name)
         self._scene: Optional["Scene"] = None
         self._pipelines: List[Tuple[str, Optional["RenderPipeline"]]] = []  # (name, pipeline or None)
@@ -197,7 +197,7 @@ class ViewportInspector(QWidget):
 
         Args:
             displays: List of Display objects.
-            display_names: Optional dict mapping id(display) to name.
+            display_names: Optional dict mapping tc_display_ptr to name.
         """
         self._displays = list(displays)
         self._display_names = display_names or {}
@@ -363,8 +363,8 @@ class ViewportInspector(QWidget):
         try:
             self._display_combo.clear()
             for i, display in enumerate(self._displays):
-                if id(display) in self._display_names:
-                    name = self._display_names[id(display)]
+                if display.tc_display_ptr in self._display_names:
+                    name = self._display_names[display.tc_display_ptr]
                 else:
                     name = f"Display {i}"
                 self._display_combo.addItem(name)

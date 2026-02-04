@@ -609,7 +609,10 @@ void RenderingManager::render_scene_pipeline_offscreen(
         }
 
         tc_viewport_handle viewport = it->second;
-        if (!tc_viewport_get_enabled(viewport)) continue;
+        if (!tc_viewport_get_enabled(viewport)) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' is disabled, skipping", vp_name.c_str());
+            continue;
+        }
 
         tc_component* camera_comp = tc_viewport_get_camera(viewport);
         if (!camera_comp) {
@@ -619,7 +622,10 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
         CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
         CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
-        if (!camera) continue;
+        if (!camera) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' camera is not CxxComponent", vp_name.c_str());
+            continue;
+        }
 
         if (first_viewport_name.empty()) {
             first_viewport_name = vp_name;
@@ -628,7 +634,11 @@ void RenderingManager::render_scene_pipeline_offscreen(
         // Get pixel rect
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-        if (pw <= 0 || ph <= 0) continue;
+        if (pw <= 0 || ph <= 0) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has invalid pixel_rect: %dx%d",
+                   vp_name.c_str(), pw, ph);
+            continue;
+        }
 
         // Ensure output FBO
         ViewportRenderState* state = get_or_create_viewport_state(viewport);
@@ -648,7 +658,17 @@ void RenderingManager::render_scene_pipeline_offscreen(
     }
 
     if (contexts.empty()) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_scene_pipeline_offscreen('%s'): no contexts, skipping",
+               pipeline_name.c_str());
         return;
+    }
+
+    tc_log(TC_LOG_INFO, "[RenderingManager] render_scene_pipeline_offscreen('%s'): rendering %zu contexts",
+           pipeline_name.c_str(), contexts.size());
+    for (const auto& [name, ctx] : contexts) {
+        tc_log(TC_LOG_INFO, "[RenderingManager]   context '%s': fbo=%u size=%dx%d",
+               name.c_str(), ctx.output_fbo ? ctx.output_fbo->get_fbo_id() : 0,
+               ctx.rect.width, ctx.rect.height);
     }
 
     // Collect lights
@@ -656,6 +676,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
     // Execute pipeline for all contexts
     RenderEngine* engine = render_engine();
+    tc_log(TC_LOG_INFO, "[RenderingManager] Calling engine->render_scene_pipeline_offscreen");
     engine->render_scene_pipeline_offscreen(
         pipeline,
         scene,
@@ -739,14 +760,23 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
 void RenderingManager::present_all() {
     for (tc_display* display : displays_) {
-        if (tc_display_get_enabled(display)) {
+        const char* name = tc_display_get_name(display);
+        bool enabled = tc_display_get_enabled(display);
+        if (enabled) {
             present_display(display);
+        } else {
+            tc_log(TC_LOG_INFO, "[RenderingManager] present_all: skipping disabled display '%s'",
+                   name ? name : "(null)");
         }
     }
 }
 
 void RenderingManager::present_display(tc_display* display) {
     if (!display || !graphics_) return;
+
+    const char* disp_name = tc_display_get_name(display);
+    tc_log(TC_LOG_INFO, "[RenderingManager] present_display('%s') START",
+           disp_name ? disp_name : "(null)");
 
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
@@ -782,11 +812,17 @@ void RenderingManager::present_display(tc_display* display) {
     });
 
     // Blit viewports
+    tc_log(TC_LOG_INFO, "[RenderingManager] present_display: blitting %zu viewports", viewports.size());
     for (tc_viewport_handle viewport : viewports) {
+        const char* vp_name = tc_viewport_get_name(viewport);
         ViewportRenderState* state = get_viewport_state(viewport);
         if (!state || !state->has_output_fbo()) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no output FBO",
+                   vp_name ? vp_name : "(null)");
             continue;
         }
+        tc_log(TC_LOG_INFO, "[RenderingManager] Blitting viewport '%s' fbo=%u",
+               vp_name ? vp_name : "(null)", state->output_fbo->get_fbo_id());
 
         // Get viewport position on display
         int px, py, pw, ph;

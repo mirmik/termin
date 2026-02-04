@@ -330,7 +330,7 @@ class EditorWindow(QMainWindow):
         # Must be created BEFORE EditorViewportFeatures
         self._init_viewport_list_widget()
 
-        # Map display_id -> EditorViewportFeatures for displays in "editor" mode
+        # Map tc_display_ptr -> EditorViewportFeatures for displays in "editor" mode
         self._editor_features: dict[int, EditorViewportFeatures] = {}
 
         # --- Create editor display through RenderingController ---
@@ -368,7 +368,7 @@ class EditorWindow(QMainWindow):
         self.editor_viewport.set_on_transform_dragging(self._on_gizmo_transform_dragging)
 
         # Register in editor features dict
-        self._editor_features[id(editor_display)] = self.editor_viewport
+        self._editor_features[editor_display.tc_display_ptr] = self.editor_viewport
 
         RenderingManager.instance().set_graphics(self.world.graphics)
         self.scene_manager.set_render_callbacks(
@@ -1767,7 +1767,7 @@ class EditorWindow(QMainWindow):
         if self._rendering_controller is None:
             return
 
-        display_id = id(display)
+        display_id = display.tc_display_ptr
 
         if mode == "editor":
             # Create EditorViewportFeatures for this display (if not exists)
