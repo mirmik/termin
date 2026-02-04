@@ -111,8 +111,6 @@ void RenderingManager::add_display(tc_display* display) {
     if (it != displays_.end()) return;
 
     displays_.push_back(display);
-    tc_log(TC_LOG_INFO, "[RenderingManager] Added display: %s",
-           tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
 }
 
 void RenderingManager::remove_display(tc_display* display) {
@@ -129,8 +127,6 @@ void RenderingManager::remove_display(tc_display* display) {
     }
 
     displays_.erase(it);
-    tc_log(TC_LOG_INFO, "[RenderingManager] Removed display: %s",
-           tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
 }
 
 tc_display* RenderingManager::get_display_by_name(const std::string& name) const {
@@ -276,13 +272,9 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         return viewports;
     }
 
-    const char* scene_name = tc_scene_get_name(scene);
     size_t config_count = tc_scene_viewport_config_count(scene);
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
     tc_entity_pool_handle pool_handle = pool ? tc_entity_pool_registry_find(pool) : TC_ENTITY_POOL_HANDLE_INVALID;
-
-    tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene_full('%s'): %zu viewport configs",
-           scene_name ? scene_name : "(null)", config_count);
 
     for (size_t i = 0; i < config_count; i++) {
         tc_viewport_config* config = tc_scene_viewport_config_at(scene, i);
@@ -376,12 +368,8 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         }
         tc_viewport_set_block_input_in_editor(viewport, config->block_input_in_editor);
 
-        tc_log(TC_LOG_INFO, "[RenderingManager] Created viewport '%s' on display '%s'",
-               vp_name.c_str(), display_name.c_str());
         viewports.push_back(viewport);
     }
-
-    tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene_full: created %zu viewports", viewports.size());
 
     // Apply scene pipelines (compile templates, mark managed viewports)
     apply_scene_pipelines(scene, viewports);
@@ -397,15 +385,8 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
 }
 
 void RenderingManager::detach_scene_full(tc_scene_handle scene) {
-    const char* scene_name = tc_scene_get_name(scene);
-    tc_log(TC_LOG_INFO, "[RenderingManager] detach_scene_full('%s') START",
-           scene_name ? scene_name : "(null)");
-
     // Unmount from all displays
     for (tc_display* display : displays_) {
-        const char* disp_name = tc_display_get_name(display);
-        tc_log(TC_LOG_DEBUG, "[RenderingManager] Unmounting from display '%s'",
-               disp_name ? disp_name : "(null)");
         unmount_scene(scene, display);
     }
 
@@ -414,14 +395,10 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
     if (it != attached_scenes_.end()) {
         attached_scenes_.erase(it);
-        tc_log(TC_LOG_DEBUG, "[RenderingManager] Removed from attached_scenes");
     }
 
     // Detach scene pipelines
     detach_scene(scene);
-
-    tc_log(TC_LOG_INFO, "[RenderingManager] detach_scene_full('%s') END - %zu scenes remain",
-           scene_name ? scene_name : "(null)", attached_scenes_.size());
 }
 
 void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::vector<tc_viewport_handle>& viewports) {
@@ -658,17 +635,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
     }
 
     if (contexts.empty()) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_scene_pipeline_offscreen('%s'): no contexts, skipping",
-               pipeline_name.c_str());
         return;
-    }
-
-    tc_log(TC_LOG_INFO, "[RenderingManager] render_scene_pipeline_offscreen('%s'): rendering %zu contexts",
-           pipeline_name.c_str(), contexts.size());
-    for (const auto& [name, ctx] : contexts) {
-        tc_log(TC_LOG_INFO, "[RenderingManager]   context '%s': fbo=%u size=%dx%d",
-               name.c_str(), ctx.output_fbo ? ctx.output_fbo->get_fbo_id() : 0,
-               ctx.rect.width, ctx.rect.height);
     }
 
     // Collect lights
@@ -676,7 +643,6 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
     // Execute pipeline for all contexts
     RenderEngine* engine = render_engine();
-    tc_log(TC_LOG_INFO, "[RenderingManager] Calling engine->render_scene_pipeline_offscreen");
     engine->render_scene_pipeline_offscreen(
         pipeline,
         scene,
@@ -760,23 +726,14 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
 void RenderingManager::present_all() {
     for (tc_display* display : displays_) {
-        const char* name = tc_display_get_name(display);
-        bool enabled = tc_display_get_enabled(display);
-        if (enabled) {
+        if (tc_display_get_enabled(display)) {
             present_display(display);
-        } else {
-            tc_log(TC_LOG_INFO, "[RenderingManager] present_all: skipping disabled display '%s'",
-                   name ? name : "(null)");
         }
     }
 }
 
 void RenderingManager::present_display(tc_display* display) {
     if (!display || !graphics_) return;
-
-    const char* disp_name = tc_display_get_name(display);
-    tc_log(TC_LOG_INFO, "[RenderingManager] present_display('%s') START",
-           disp_name ? disp_name : "(null)");
 
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
@@ -812,17 +769,11 @@ void RenderingManager::present_display(tc_display* display) {
     });
 
     // Blit viewports
-    tc_log(TC_LOG_INFO, "[RenderingManager] present_display: blitting %zu viewports", viewports.size());
     for (tc_viewport_handle viewport : viewports) {
-        const char* vp_name = tc_viewport_get_name(viewport);
         ViewportRenderState* state = get_viewport_state(viewport);
         if (!state || !state->has_output_fbo()) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no output FBO",
-                   vp_name ? vp_name : "(null)");
             continue;
         }
-        tc_log(TC_LOG_INFO, "[RenderingManager] Blitting viewport '%s' fbo=%u",
-               vp_name ? vp_name : "(null)", state->output_fbo->get_fbo_id());
 
         // Get viewport position on display
         int px, py, pw, ph;
@@ -856,9 +807,6 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
     detach_scene(scene);
 
     size_t template_count = tc_scene_pipeline_template_count(scene);
-    tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene: %zu templates, scene='%s'",
-           template_count, tc_scene_get_name(scene) ? tc_scene_get_name(scene) : "");
-
     uint64_t key = scene_key(scene);
 
     for (size_t i = 0; i < template_count; i++) {
@@ -879,8 +827,6 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
 
         std::string name = templ.name();
         pipeline->set_name(name);
-
-        tc_log(TC_LOG_INFO, "[RenderingManager] Compiled pipeline '%s'", name.c_str());
 
         // Store ownership in scene_pipelines_
         scene_pipelines_[key][name] = std::unique_ptr<RenderPipeline>(pipeline);
