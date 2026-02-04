@@ -124,6 +124,12 @@ class SceneManagerViewer(QWidget):
         self._unload_btn.setEnabled(False)
         actions_layout.addWidget(self._unload_btn)
 
+        self._duplicate_btn = QPushButton("Duplicate")
+        self._duplicate_btn.setToolTip("Create a copy of selected scene")
+        self._duplicate_btn.clicked.connect(self._on_duplicate_scene)
+        self._duplicate_btn.setEnabled(False)
+        actions_layout.addWidget(self._duplicate_btn)
+
         actions_layout.addSpacing(20)
 
         self._inactive_btn = QPushButton("Inactive")
@@ -208,6 +214,7 @@ class SceneManagerViewer(QWidget):
         """Update action buttons based on selected scene."""
         has_selection = self._selected_scene_name is not None
         self._unload_btn.setEnabled(has_selection)
+        self._duplicate_btn.setEnabled(has_selection)
         self._inactive_btn.setEnabled(has_selection)
         self._stop_btn.setEnabled(has_selection)
         self._play_btn.setEnabled(has_selection)
@@ -264,6 +271,36 @@ class SceneManagerViewer(QWidget):
             self.refresh()
         except Exception as e:
             QMessageBox.critical(self, "Unload Error", f"Failed to close scene:\n{e}")
+
+    def _on_duplicate_scene(self) -> None:
+        """Create a copy of selected scene."""
+        if self._selected_scene_name is None:
+            return
+
+        # Ask for new scene name
+        new_name, ok = QInputDialog.getText(
+            self,
+            "Duplicate Scene",
+            "Enter name for the copy:",
+            text=f"{self._selected_scene_name}_copy",
+        )
+        if not ok or not new_name:
+            return
+
+        # Check if name already exists
+        if self._scene_manager.has_scene(new_name):
+            QMessageBox.warning(
+                self,
+                "Name Exists",
+                f"Scene '{new_name}' already exists. Choose a different name.",
+            )
+            return
+
+        try:
+            self._scene_manager.copy_scene(self._selected_scene_name, new_name)
+            self.refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Duplicate Error", f"Failed to duplicate scene:\n{e}")
 
     def _set_mode(self, mode: SceneMode) -> None:
         """Set mode for selected scene."""
