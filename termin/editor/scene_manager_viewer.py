@@ -439,11 +439,24 @@ class SceneManagerViewer(QWidget):
 
         self._details_text.setText("\n".join(lines))
 
+    def _get_debug_info(self) -> dict:
+        """Get debug info for all scenes."""
+        info = {}
+        for name in self._scene_manager.scene_names():
+            scene = self._scene_manager.get_scene(name)
+            if scene:
+                info[name] = {
+                    "mode": self._scene_manager.get_mode(name).name,
+                    "entity_count": len(list(scene.entities)),
+                    "path": self._scene_manager.get_scene_path(name),
+                }
+        return info
+
     def refresh(self) -> None:
         """Refresh scene list."""
         self._scenes_tree.clear()
 
-        debug_info = self._scene_manager.get_debug_info()
+        debug_info = self._get_debug_info()
 
         # Color brushes for different modes
         mode_colors = {
