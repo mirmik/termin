@@ -34,7 +34,7 @@ extern "C" {
 #include "termin/lighting/shadow_settings.hpp"
 #include "termin/tc_scene.hpp"
 #include "termin/viewport/tc_viewport_ref.hpp"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include "tc_log.hpp"
 #include <cstdint>
 #include <cstdio>

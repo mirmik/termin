@@ -59,7 +59,7 @@ typedef struct tc_field_info {
 // ============================================================================
 
 // Include scene pool for tc_scene_handle
-#include "tc_scene_pool.h"
+#include "core/tc_scene_pool.h"
 
 // Callback types
 typedef bool (*tc_inspect_has_type_fn)(const char* type_name, void* ctx);

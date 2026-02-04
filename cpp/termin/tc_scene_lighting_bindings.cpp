@@ -5,7 +5,7 @@
 #include <nanobind/stl/tuple.h>
 
 #include "lighting/shadow_settings.hpp"
-#include "tc_scene_lighting.h"
+#include "core/tc_scene_lighting.h"
 
 namespace nb = nanobind;
 

@@ -26,7 +26,7 @@
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "tc_opengl.h"
-#include "tc_component.h"
+#include "core/tc_component.h"
 %}
 
 // Use std::string

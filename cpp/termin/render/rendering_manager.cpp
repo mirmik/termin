@@ -8,10 +8,10 @@
 
 extern "C" {
 #include "tc_log.h"
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
-#include "tc_entity_pool.h"
-#include "tc_entity_pool_registry.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
+#include "core/tc_entity_pool.h"
+#include "core/tc_entity_pool_registry.h"
 #include "tc_viewport_config.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_rendering_manager.h"

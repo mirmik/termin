@@ -5,8 +5,8 @@
 #include "tc_log.hpp"
 
 extern "C" {
-#include "tc_scene.h"
-#include "tc_component.h"
+#include "core/tc_scene.h"
+#include "core/tc_component.h"
 #include "inspect/tc_inspect.h"
 #include "tc_value.h"
 }

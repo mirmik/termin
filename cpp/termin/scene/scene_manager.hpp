@@ -8,8 +8,8 @@
 #include <functional>
 
 extern "C" {
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
 }
 
 namespace termin {

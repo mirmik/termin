@@ -13,7 +13,7 @@
 #include "termin/geom/quat.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
 #include "tc_log.hpp"
-#include "tc_entity_pool_registry.h"
+#include "core/tc_entity_pool_registry.h"
 
 namespace nb = nanobind;
 

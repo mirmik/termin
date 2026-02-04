@@ -1,6 +1,6 @@
 #pragma once
 
-#include "tc_entity_pool.h"
+#include "core/tc_entity_pool.h"
 #include "component.hpp"
 
 namespace termin {

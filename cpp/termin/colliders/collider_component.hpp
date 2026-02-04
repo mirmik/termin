@@ -6,7 +6,7 @@
 #include "../geom/general_transform3.hpp"
 #include "colliders.hpp"
 #include "../collision/collision_world.hpp"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include <memory>
 #include <string>
 

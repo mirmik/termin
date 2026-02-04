@@ -1,6 +1,6 @@
 // tc_scene_pipeline_template.c - Scene pipeline template registry
 
-#include "tc_scene_pipeline_template.h"
+#include "core/tc_scene_pipeline_template.h"
 #include "termin_core.h"
 #include "tc_log.h"
 #include <stdlib.h>

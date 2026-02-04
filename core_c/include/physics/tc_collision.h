@@ -7,7 +7,7 @@
  */
 
 #include "tc_types.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -12,7 +12,7 @@
 #include <nanobind/stl/function.h>
 
 extern "C" {
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 }

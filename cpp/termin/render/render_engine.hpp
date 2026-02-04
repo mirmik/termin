@@ -15,7 +15,7 @@
 extern "C" {
 #include "render/tc_frame_graph.h"
 #include "render/tc_viewport_pool.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 }
 
 namespace termin {

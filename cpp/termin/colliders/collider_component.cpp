@@ -1,6 +1,6 @@
 #include "collider_component.hpp"
 #include "tc_log.hpp"
-#include "tc_entity_pool.h"
+#include "core/tc_entity_pool.h"
 #include "tc_inspect_cpp.hpp"
 #include <algorithm>
 

@@ -1,8 +1,8 @@
 // tc_scene.c - Scene implementation using pool with generational indices
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
-#include "tc_scene_lighting.h"
-#include "tc_scene_skybox.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
+#include "core/tc_scene_lighting.h"
+#include "core/tc_scene_skybox.h"
 #include "tc_viewport_config.h"
 #include "physics/tc_collision_world.h"
 #include "resources/tc_resource_map.h"
@@ -10,7 +10,7 @@
 #include "resources/tc_mesh.h"
 #include "resources/tc_material.h"
 #include "tc_log.h"
-#include "tc_entity_pool_registry.h"
+#include "core/tc_entity_pool_registry.h"
 #include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>

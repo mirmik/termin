@@ -1,5 +1,5 @@
 // tc_component.c - Component registry implementation
-#include "tc_component.h"
+#include "core/tc_component.h"
 #include "tc_type_registry.h"
 #include "termin_core.h"
 #include "tc_log.h"

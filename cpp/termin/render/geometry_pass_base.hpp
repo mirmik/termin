@@ -21,8 +21,8 @@
 #include "termin/camera/camera_component.hpp"
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
 
 namespace termin {

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "tc_types.h"
-#include "tc_scene_pool.h"
+#include "core/tc_scene_pool.h"
 
 #ifdef __cplusplus
 extern "C" {

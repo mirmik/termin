@@ -3,12 +3,12 @@
 #define TC_SCENE_H
 
 #include "tc_types.h"
-#include "tc_scene_pool.h"
-#include "tc_entity_pool.h"
-#include "tc_component.h"
-#include "tc_scene_lighting.h"
-#include "tc_scene_skybox.h"
-#include "tc_scene_pipeline_template.h"
+#include "core/tc_scene_pool.h"
+#include "core/tc_entity_pool.h"
+#include "core/tc_component.h"
+#include "core/tc_scene_lighting.h"
+#include "core/tc_scene_skybox.h"
+#include "core/tc_scene_pipeline_template.h"
 #include "tc_viewport_config.h"
 #include "tc_value.h"
 

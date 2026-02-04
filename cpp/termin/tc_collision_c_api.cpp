@@ -10,7 +10,7 @@
 #include "collision/collision_world.hpp"
 #include "colliders/attached_collider.hpp"
 #include "physics/tc_collision.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include <vector>
 
 using namespace termin;

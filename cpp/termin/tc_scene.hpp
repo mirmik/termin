@@ -9,9 +9,9 @@
 #include <trent/trent.h>
 #include <trent/json.h>
 
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
-#include "tc_entity_pool.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
+#include "core/tc_entity_pool.h"
 #include "viewport_config.hpp"
 #include "geom/vec3.hpp"
 #include "geom/vec4.hpp"

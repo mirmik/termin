@@ -63,9 +63,9 @@ set(TC_HEADERS
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
     include/physics/tc_collision.h
-    include/tc_component.h
-    include/tc_entity_pool.h
-    include/tc_entity_pool_registry.h
+    include/core/tc_component.h
+    include/core/tc_entity_pool.h
+    include/core/tc_entity_pool_registry.h
     include/tc_gpu.h
     include/tc_handle.h
     include/tc_hash_map.h
@@ -81,10 +81,10 @@ set(TC_HEADERS
     include/tc_registry_utils.h
     include/resources/tc_resource.h
     include/resources/tc_resource_map.h
-    include/tc_scene.h
-    include/tc_scene_pipeline_template.h
-    include/tc_scene_pool.h
-    include/tc_scene_registry.h
+    include/core/tc_scene.h
+    include/core/tc_scene_pipeline_template.h
+    include/core/tc_scene_pool.h
+    include/core/tc_scene_registry.h
     include/resources/tc_shader.h
     include/resources/tc_shader_registry.h
     include/resources/tc_skeleton.h

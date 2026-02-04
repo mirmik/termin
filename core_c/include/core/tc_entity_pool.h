@@ -55,10 +55,10 @@ typedef struct tc_entity_pool tc_entity_pool;
 typedef struct tc_component tc_component;
 
 // Include pool registry for tc_entity_pool_handle
-#include "tc_entity_pool_registry.h"
+#include "core/tc_entity_pool_registry.h"
 
 // Include scene handle type
-#include "tc_scene_pool.h"
+#include "core/tc_scene_pool.h"
 
 // ============================================================================
 // Entity Handle - unified handle combining pool + entity_id

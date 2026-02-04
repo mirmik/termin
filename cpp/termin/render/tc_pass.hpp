@@ -7,7 +7,7 @@
 extern "C" {
 #include "render/tc_pass.h"
 #include "tc_value.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 }
 
 namespace termin {

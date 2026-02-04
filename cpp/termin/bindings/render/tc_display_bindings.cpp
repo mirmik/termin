@@ -10,8 +10,8 @@
 
 extern "C" {
 #include "render/tc_render_surface.h"
-#include "tc_scene.h"
-#include "tc_component.h"
+#include "core/tc_scene.h"
+#include "core/tc_component.h"
 }
 
 namespace nb = nanobind;

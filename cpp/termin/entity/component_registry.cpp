@@ -1,6 +1,6 @@
 #include "component_registry.hpp"
 #include "component.hpp"
-#include "tc_component.h"
+#include "core/tc_component.h"
 #include <stdexcept>
 #include <algorithm>
 #include <memory>

@@ -4,7 +4,7 @@
  */
 
 #include "physics/tc_collision.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include <stdlib.h>
 #include <string.h>
 

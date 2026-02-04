@@ -5,7 +5,7 @@
 #include "tc_types.h"
 #include "resources/tc_shader.h"
 #include "tc_type_registry.h"
-#include "tc_entity_pool.h"
+#include "core/tc_entity_pool.h"
 #include <stdint.h>
 #include <stdbool.h>
 

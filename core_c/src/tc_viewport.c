@@ -1,7 +1,7 @@
 // tc_viewport.c - Viewport implementation using pool with generational indices
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
-#include "tc_component.h"
+#include "core/tc_component.h"
 #include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>

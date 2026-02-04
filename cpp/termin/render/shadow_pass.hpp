@@ -17,8 +17,8 @@
 #include "termin/render/shadow_camera.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
 #include "tc_shader_handle.hpp"
 

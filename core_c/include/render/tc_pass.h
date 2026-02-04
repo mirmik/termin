@@ -6,7 +6,7 @@
 #include "tc_types.h"
 #include "inspect/tc_binding.h"
 #include "tc_type_registry.h"
-#include "tc_scene_pool.h"
+#include "core/tc_scene_pool.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_pipeline_pool.h"
 #include <stdbool.h>

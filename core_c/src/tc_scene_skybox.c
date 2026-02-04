@@ -1,6 +1,6 @@
 // tc_scene_skybox.c - Scene skybox implementation
-#include "tc_scene_skybox.h"
-#include "tc_scene.h"
+#include "core/tc_scene_skybox.h"
+#include "core/tc_scene.h"
 #include "resources/tc_mesh.h"
 #include "resources/tc_mesh_registry.h"
 #include "resources/tc_material.h"

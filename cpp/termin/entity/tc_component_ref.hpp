@@ -4,9 +4,9 @@
 #include <string>
 #include <cstring>
 #include <trent/trent.h>
-#include "tc_component.h"
+#include "core/tc_component.h"
 #include "inspect/tc_inspect.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include "../render/tc_value_trent.hpp"
 #include "component.hpp"
 

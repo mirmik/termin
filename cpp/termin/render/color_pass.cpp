@@ -6,10 +6,10 @@ extern "C" {
 #include "resources/tc_shader.h"
 #include "resources/tc_shader_registry.h"
 #include "tc_profiler.h"
-#include "tc_component.h"
+#include "core/tc_component.h"
 #include "resources/tc_material.h"
 #include "tc_gpu.h"
-#include "tc_scene_lighting.h"
+#include "core/tc_scene_lighting.h"
 }
 
 #include <cmath>

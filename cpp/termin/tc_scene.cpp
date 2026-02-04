@@ -4,7 +4,7 @@
 #include "entity/component.hpp"
 #include "entity/tc_component_ref.hpp"
 #include "render/rendering_manager.hpp"
-#include "tc_scene_skybox.h"
+#include "core/tc_scene_skybox.h"
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
 #include "collision/collision_world.hpp"

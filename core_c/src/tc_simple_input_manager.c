@@ -4,9 +4,9 @@
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
-#include "tc_scene.h"
-#include "tc_component.h"
-#include "tc_entity_pool.h"
+#include "core/tc_scene.h"
+#include "core/tc_component.h"
+#include "core/tc_entity_pool.h"
 #include "tc_input_event.h"
 #include "tc_log.h"
 

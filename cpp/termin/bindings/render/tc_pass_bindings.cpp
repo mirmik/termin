@@ -16,7 +16,7 @@ extern "C" {
 #include "tc_log.h"
 #include "termin_core.h"
 #include "inspect/tc_inspect.h"
-#include "tc_scene_pool.h"
+#include "core/tc_scene_pool.h"
 }
 
 #include "termin/bindings/inspect/tc_inspect_python.hpp"

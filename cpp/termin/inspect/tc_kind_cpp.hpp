@@ -12,7 +12,7 @@ extern "C" {
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_kind.h"
 #include "tc_log.h"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 }
 
 // DLL export/import macros - singletons must be in entity_lib

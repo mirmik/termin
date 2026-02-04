@@ -19,7 +19,7 @@
 #include "termin/render/graphics_backend.hpp"
 
 extern "C" {
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include "tc_viewport_config.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"

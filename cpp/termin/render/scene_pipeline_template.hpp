@@ -5,7 +5,7 @@
 #include <vector>
 
 extern "C" {
-#include "tc_scene_pipeline_template.h"
+#include "core/tc_scene_pipeline_template.h"
 }
 
 namespace termin {

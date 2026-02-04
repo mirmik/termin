@@ -1,7 +1,7 @@
 #include "entity.hpp"
 #include "component.hpp"
 #include "termin/tc_scene.hpp"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "../render/tc_value_trent.hpp"
 #include <tc_log.hpp>

@@ -9,8 +9,8 @@ extern "C" {
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_viewport_pool.h"
-#include "tc_scene.h"
-#include "tc_component.h"
+#include "core/tc_scene.h"
+#include "core/tc_component.h"
 #include "tc_project_settings.h"
 }
 

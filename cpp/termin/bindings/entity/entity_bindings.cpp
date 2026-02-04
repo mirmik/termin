@@ -18,7 +18,7 @@
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
-#include "tc_scene.h"
+#include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"

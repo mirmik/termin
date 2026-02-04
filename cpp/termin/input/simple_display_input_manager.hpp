@@ -7,9 +7,9 @@
 #include "render/tc_viewport_pool.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
-#include "tc_scene.h"
-#include "tc_scene_pool.h"
-#include "tc_component.h"
+#include "core/tc_scene.h"
+#include "core/tc_scene_pool.h"
+#include "core/tc_component.h"
 
 namespace termin {
 
