@@ -1,9 +1,9 @@
 // tc_entity_pool.c - Entity pool implementation
-#include "../include/tc_entity_pool.h"
-#include "../include/tc_hash_map.h"
-#include "../include/tc_component.h"
-#include "../include/tc_scene.h"
-#include "../include/tc_log.h"
+#include "tc_entity_pool.h"
+#include "tc_hash_map.h"
+#include "tc_component.h"
+#include "tc_scene.h"
+#include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

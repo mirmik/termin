@@ -1,4 +1,4 @@
-#include "../include/tc_log.h"
+#include "tc_log.h"
 #include <stdio.h>
 #include <stdarg.h>
 

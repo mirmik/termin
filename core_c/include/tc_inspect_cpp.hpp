@@ -3,7 +3,7 @@
 // Use tc_inspect.hpp if you need Python interop.
 #pragma once
 
-#include "tc_inspect.h"
+#include "inspect/tc_inspect.h"
 #include "tc_log.h"
 #include <string>
 #include <vector>

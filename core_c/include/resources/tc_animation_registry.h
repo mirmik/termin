@@ -1,7 +1,7 @@
 // tc_animation_registry.h - Global animation storage with pool + hash table
 #pragma once
 
-#include "tc_animation.h"
+#include "resources/tc_animation.h"
 
 #ifdef __cplusplus
 extern "C" {

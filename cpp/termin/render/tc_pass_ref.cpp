@@ -3,7 +3,7 @@
 #include "frame_pass.hpp"
 
 extern "C" {
-#include "tc_inspect.h"
+#include "inspect/tc_inspect.h"
 }
 
 namespace termin {

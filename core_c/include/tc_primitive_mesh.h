@@ -2,7 +2,7 @@
 #define TC_PRIMITIVE_MESH_H
 
 #include "tc_types.h"
-#include "tc_mesh.h"
+#include "resources/tc_mesh.h"
 
 #ifdef __cplusplus
 extern "C" {

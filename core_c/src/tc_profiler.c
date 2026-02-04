@@ -1,5 +1,5 @@
 // tc_profiler.c - Hierarchical profiler implementation
-#include "../include/tc_profiler.h"
+#include "tc_profiler.h"
 #include <string.h>
 #include <stdlib.h>
 

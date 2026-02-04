@@ -9,8 +9,8 @@
 #include <any>
 
 extern "C" {
-#include "tc_inspect.h"
-#include "tc_kind.h"
+#include "inspect/tc_inspect.h"
+#include "inspect/tc_kind.h"
 #include "tc_log.h"
 #include "tc_scene.h"
 }

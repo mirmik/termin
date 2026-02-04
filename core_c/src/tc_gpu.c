@@ -1,9 +1,9 @@
 // tc_gpu.c - GPU operations implementation
 #include "tc_gpu.h"
 #include "tc_log.h"
-#include "tc_material.h"
-#include "tc_shader_registry.h"
-#include "tc_texture_registry.h"
+#include "resources/tc_material.h"
+#include "resources/tc_shader_registry.h"
+#include "resources/tc_texture_registry.h"
 #include <string.h>
 #include <stdlib.h>
 

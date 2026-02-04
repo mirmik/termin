@@ -1,14 +1,14 @@
 // tc_scene_skybox.c - Scene skybox implementation
-#include "../include/tc_scene_skybox.h"
-#include "../include/tc_scene.h"
-#include "../include/tc_mesh.h"
-#include "../include/tc_mesh_registry.h"
-#include "../include/tc_material.h"
-#include "../include/tc_material_registry.h"
-#include "../include/tc_shader.h"
-#include "../include/tc_shader_registry.h"
-#include "../include/tc_resource.h"
-#include "../include/tc_gpu.h"
+#include "tc_scene_skybox.h"
+#include "tc_scene.h"
+#include "resources/tc_mesh.h"
+#include "resources/tc_mesh_registry.h"
+#include "resources/tc_material.h"
+#include "resources/tc_material_registry.h"
+#include "resources/tc_shader.h"
+#include "resources/tc_shader_registry.h"
+#include "resources/tc_resource.h"
+#include "tc_gpu.h"
 #include <stdlib.h>
 #include <string.h>
 

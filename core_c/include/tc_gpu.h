@@ -3,10 +3,10 @@
 #pragma once
 
 #include "tc_types.h"
-#include "tc_texture.h"
-#include "tc_shader.h"
-#include "tc_mesh.h"
-#include "tc_material.h"
+#include "resources/tc_texture.h"
+#include "resources/tc_shader.h"
+#include "resources/tc_mesh.h"
+#include "resources/tc_material.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,7 +1,7 @@
 // tc_texture_registry.h - Global texture storage with pool + hash table
 #pragma once
 
-#include "tc_texture.h"
+#include "resources/tc_texture.h"
 
 #ifdef __cplusplus
 extern "C" {

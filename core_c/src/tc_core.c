@@ -1,5 +1,5 @@
 // tc_core.c - Library initialization, utilities, version info
-#include "../include/termin_core.h"
+#include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

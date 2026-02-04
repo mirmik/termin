@@ -4,7 +4,7 @@
 #include "tc_kind_python.hpp"
 
 extern "C" {
-#include "tc_kind.h"
+#include "inspect/tc_kind.h"
 }
 
 namespace tc {

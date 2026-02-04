@@ -1,9 +1,9 @@
 // tc_scene_registry.c - Global scene registry implementation
-#include "../include/tc_scene_registry.h"
-#include "../include/tc_scene.h"
-#include "../include/tc_entity_pool.h"
-#include "../include/tc_log.h"
-#include "../include/termin_core.h"
+#include "tc_scene_registry.h"
+#include "tc_scene.h"
+#include "tc_entity_pool.h"
+#include "tc_log.h"
+#include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

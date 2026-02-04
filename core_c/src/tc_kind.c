@@ -1,6 +1,6 @@
 // tc_kind.c - Kind registry dispatcher implementation
 // C acts only as access point; each language manages its own registry.
-#include "tc_kind.h"
+#include "inspect/tc_kind.h"
 #include <string.h>
 
 // Language registry vtables

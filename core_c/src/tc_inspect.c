@@ -1,8 +1,8 @@
 // tc_inspect.c - Field inspection/serialization implementation
 // C is a dispatcher only - routes calls to language-specific vtables
-#include "../include/tc_inspect.h"
-#include "../include/tc_kind.h"
-#include "../include/tc_log.h"
+#include "inspect/tc_inspect.h"
+#include "inspect/tc_kind.h"
+#include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

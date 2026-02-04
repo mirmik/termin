@@ -3,11 +3,11 @@
 #include "tc_log.hpp"
 #include "termin/lighting/lighting_upload.hpp"
 extern "C" {
-#include "tc_shader.h"
-#include "tc_shader_registry.h"
+#include "resources/tc_shader.h"
+#include "resources/tc_shader_registry.h"
 #include "tc_profiler.h"
 #include "tc_component.h"
-#include "tc_material.h"
+#include "resources/tc_material.h"
 #include "tc_gpu.h"
 #include "tc_scene_lighting.h"
 }

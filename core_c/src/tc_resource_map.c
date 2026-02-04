@@ -1,4 +1,4 @@
-#include "tc_resource_map.h"
+#include "resources/tc_resource_map.h"
 #include <stdlib.h>
 #include <string.h>
 

@@ -1,7 +1,7 @@
 // tc_skeleton_registry.h - Global skeleton storage with pool + hash table
 #pragma once
 
-#include "tc_skeleton.h"
+#include "resources/tc_skeleton.h"
 
 #ifdef __cplusplus
 extern "C" {

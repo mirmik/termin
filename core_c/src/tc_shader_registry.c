@@ -1,7 +1,7 @@
 // tc_shader_registry.c - Shader registry with pool + hash table and variant support
-#include "tc_shader_registry.h"
+#include "resources/tc_shader_registry.h"
 #include "tc_pool.h"
-#include "tc_resource_map.h"
+#include "resources/tc_resource_map.h"
 #include "tc_registry_utils.h"
 #include "tc_log.h"
 #include "termin_core.h"

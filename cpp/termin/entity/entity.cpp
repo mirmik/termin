@@ -1,8 +1,8 @@
 #include "entity.hpp"
 #include "component.hpp"
 #include "../tc_scene.hpp"
-#include "../../../core_c/include/tc_scene.h"
-#include "../../../core_c/include/tc_inspect.h"
+#include "tc_scene.h"
+#include "inspect/tc_inspect.h"
 #include "../render/tc_value_trent.hpp"
 #include <tc_log.hpp>
 #include <algorithm>

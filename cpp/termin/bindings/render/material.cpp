@@ -8,8 +8,8 @@
 #include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
 extern "C" {
-#include "tc_shader.h"
-#include "tc_material_registry.h"
+#include "resources/tc_shader.h"
+#include "resources/tc_material_registry.h"
 }
 
 namespace termin {

@@ -1,8 +1,8 @@
 // test_mesh.c - Tests for mesh API
 #include <stdio.h>
 #include <string.h>
-#include "../include/tc_mesh.h"
-#include "../include/tc_mesh_registry.h"
+#include "resources/tc_mesh.h"
+#include "resources/tc_mesh_registry.h"
 
 #define TEST_ASSERT(cond, msg) \
     do { \

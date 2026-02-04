@@ -1,5 +1,5 @@
-#include "tc_mesh.h"
-#include "tc_mesh_registry.h"
+#include "resources/tc_mesh.h"
+#include "resources/tc_mesh_registry.h"
 #include "tc_log.h"
 #include <string.h>
 #include <stdio.h>

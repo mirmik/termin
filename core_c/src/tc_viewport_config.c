@@ -1,6 +1,6 @@
 // tc_viewport_config.c - Viewport configuration implementation
-#include "../include/tc_viewport_config.h"
-#include "../include/termin_core.h"
+#include "tc_viewport_config.h"
+#include "termin_core.h"
 #include <string.h>
 
 void tc_viewport_config_init(tc_viewport_config* config) {

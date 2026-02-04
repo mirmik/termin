@@ -7,7 +7,7 @@
 extern "C" {
 #include "tc_scene.h"
 #include "tc_component.h"
-#include "tc_inspect.h"
+#include "inspect/tc_inspect.h"
 #include "tc_value.h"
 }
 

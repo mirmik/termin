@@ -3,9 +3,9 @@
 
 #include "tc_types.h"
 #include "tc_handle.h"
-#include "tc_resource.h"
-#include "tc_shader.h"
-#include "tc_texture.h"
+#include "resources/tc_resource.h"
+#include "resources/tc_shader.h"
+#include "resources/tc_texture.h"
 
 #ifdef __cplusplus
 extern "C" {

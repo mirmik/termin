@@ -5,7 +5,7 @@
 #include <nanobind/ndarray.h>
 
 #include "../../core_c/include/tc_scene.h"
-#include "../../core_c/include/tc_inspect.h"
+#include "inspect/tc_inspect.h"
 #include "termin/render/handles.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/texture/tc_texture_handle.hpp"

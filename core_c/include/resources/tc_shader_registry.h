@@ -1,7 +1,7 @@
 // tc_shader_registry.h - Global shader storage with pool + hash table and variant support
 #pragma once
 
-#include "tc_shader.h"
+#include "resources/tc_shader.h"
 
 #ifdef __cplusplus
 extern "C" {

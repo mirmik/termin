@@ -1,7 +1,7 @@
 // tc_material_registry.h - Global material storage with pool + hash table
 #pragma once
 
-#include "tc_material.h"
+#include "resources/tc_material.h"
 
 #ifdef __cplusplus
 extern "C" {

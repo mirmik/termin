@@ -3,7 +3,7 @@
 #include <string>
 #include <nanobind/nanobind.h>
 #include "../../core_c/include/tc_scene.h"
-#include "../../core_c/include/tc_inspect.h"
+#include "inspect/tc_inspect.h"
 
 namespace nb = nanobind;
 

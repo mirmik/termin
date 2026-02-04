@@ -7,7 +7,7 @@
 
 #include "tc_types.h"
 #include "tc_handle.h"
-#include "tc_resource.h"
+#include "resources/tc_resource.h"
 #include "tc_value.h"
 
 #ifdef __cplusplus

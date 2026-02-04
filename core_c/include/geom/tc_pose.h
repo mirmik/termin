@@ -3,8 +3,8 @@
 #define TC_POSE_H
 
 #include "tc_types.h"
-#include "tc_vec3.h"
-#include "tc_quat.h"
+#include "geom/tc_vec3.h"
+#include "geom/tc_quat.h"
 
 // C/C++ compatible struct initialization
 // Layout: rotation first, then position (matches C++ Pose3/GeneralPose3)

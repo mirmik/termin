@@ -1,5 +1,5 @@
 // tc_project_settings.c - Project settings implementation
-#include "../include/tc_project_settings.h"
+#include "tc_project_settings.h"
 
 // ============================================================================
 // Global State

@@ -55,8 +55,13 @@ set(TC_SOURCES
 
 # Header files (only .h, for IDE integration)
 set(TC_HEADERS
-    include/tc_animation.h
-    include/tc_animation_registry.h
+    include/geom/tc_pose.h
+    include/geom/tc_vec3.h
+    include/geom/tc_quat.h
+    include/inspect/tc_inspect.h
+    include/inspect/tc_kind.h
+    include/resources/tc_animation.h
+    include/resources/tc_animation_registry.h
     include/tc_collision.h
     include/tc_component.h
     include/tc_entity_pool.h
@@ -64,35 +69,30 @@ set(TC_HEADERS
     include/tc_gpu.h
     include/tc_handle.h
     include/tc_hash_map.h
-    include/tc_inspect.h
-    include/tc_kind.h
     include/tc_log.h
-    include/tc_material.h
-    include/tc_material_registry.h
-    include/tc_mesh.h
-    include/tc_mesh_registry.h
+    include/resources/tc_material.h
+    include/resources/tc_material_registry.h
+    include/resources/tc_mesh.h
+    include/resources/tc_mesh_registry.h
     include/tc_picking.h
     include/tc_pool.h
-    include/tc_pose.h
     include/tc_profiler.h
     include/tc_project_settings.h
-    include/tc_quat.h
     include/tc_registry_utils.h
-    include/tc_resource.h
-    include/tc_resource_map.h
+    include/resources/tc_resource.h
+    include/resources/tc_resource_map.h
     include/tc_scene.h
     include/tc_scene_pipeline_template.h
     include/tc_scene_pool.h
     include/tc_scene_registry.h
-    include/tc_shader.h
-    include/tc_shader_registry.h
-    include/tc_skeleton.h
-    include/tc_skeleton_registry.h
-    include/tc_texture.h
-    include/tc_texture_registry.h
+    include/resources/tc_shader.h
+    include/resources/tc_shader_registry.h
+    include/resources/tc_skeleton.h
+    include/resources/tc_skeleton_registry.h
+    include/resources/tc_texture.h
+    include/resources/tc_texture_registry.h
     include/tc_type_registry.h
     include/tc_types.h
-    include/tc_vec3.h
     include/tc_viewport_config.h
     include/termin_core.h
     include/render/tc_display.h

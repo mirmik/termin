@@ -3,10 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "../include/termin_core.h"
-#include "../include/tc_resource_map.h"
-#include "../include/tc_mesh.h"
-#include "../include/tc_mesh_registry.h"
+#include "termin_core.h"
+#include "resources/tc_resource_map.h"
+#include "resources/tc_mesh.h"
+#include "resources/tc_mesh_registry.h"
 
 #define TEST_ASSERT(cond, msg) \
     do { \

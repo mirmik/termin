@@ -5,7 +5,7 @@
 #include <cstring>
 #include <trent/trent.h>
 #include "../../../core_c/include/tc_component.h"
-#include "../../../core_c/include/tc_inspect.h"
+#include "inspect/tc_inspect.h"
 #include "../../../core_c/include/tc_scene.h"
 #include "../render/tc_value_trent.hpp"
 #include "component.hpp"

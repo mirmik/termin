@@ -15,7 +15,7 @@ extern "C" {
 #include "render/tc_frame_graph.h"
 #include "tc_log.h"
 #include "termin_core.h"
-#include "tc_inspect.h"
+#include "inspect/tc_inspect.h"
 #include "tc_scene_pool.h"
 }
 

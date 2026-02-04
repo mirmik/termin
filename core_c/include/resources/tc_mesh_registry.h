@@ -1,7 +1,7 @@
 // tc_mesh_registry.h - Global mesh storage with pool + hash table
 #pragma once
 
-#include "tc_mesh.h"
+#include "resources/tc_mesh.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "tc_types.h"
-#include "tc_inspect.h"
+#include "inspect/tc_inspect.h"
 
 #ifdef __cplusplus
 extern "C" {

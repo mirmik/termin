@@ -3,7 +3,7 @@
 #define TC_QUAT_H
 
 #include "tc_types.h"
-#include "tc_vec3.h"
+#include "geom/tc_vec3.h"
 #include <math.h>
 
 // C/C++ compatible struct initialization

@@ -6,7 +6,7 @@
 #include "termin/material/tc_material_handle.hpp"
 
 extern "C" {
-#include "tc_kind.h"
+#include "inspect/tc_kind.h"
 }
 
 namespace tc {

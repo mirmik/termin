@@ -7,10 +7,10 @@
 // Include Component BEFORE tc_inspect so it's fully defined
 #include "../../cpp/termin/entity/component.hpp"
 
-#include "../include/tc_inspect_cpp.hpp"
-#include "../include/render/tc_pass.h"
-#include "../include/tc_mesh_registry.h"
-#include "../include/tc_material_registry.h"
+#include "tc_inspect_cpp.hpp"
+#include "render/tc_pass.h"
+#include "resources/tc_mesh_registry.h"
+#include "resources/tc_material_registry.h"
 #include "tc_log.hpp"
 
 // For CxxFramePass::from_tc in pass inspect functions

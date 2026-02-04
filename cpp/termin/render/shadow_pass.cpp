@@ -4,7 +4,7 @@
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {
-#include "tc_shader_registry.h"
+#include "resources/tc_shader_registry.h"
 #include "tc_profiler.h"
 }
 

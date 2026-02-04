@@ -5,7 +5,7 @@
 
 extern "C" {
 #include "termin_core.h"
-#include "tc_inspect.h"
+#include "inspect/tc_inspect.h"
 }
 
 #include <string>
