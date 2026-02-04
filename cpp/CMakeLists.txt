@@ -574,6 +574,77 @@ set_target_properties(_native PROPERTIES
 # Exclude glad.c from precompiled headers (it's C, not C++)
 set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
+# ---------------- Editor Executable ----------------
+option(BUILD_EDITOR_EXE "Build termin_editor executable with embedded Python" OFF)
+option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
+
+# Minimal version - just Python embedding, PyQt6 handles Qt
+if(BUILD_EDITOR_MINIMAL)
+    add_executable(termin_editor
+        app/main_minimal.cpp
+    )
+    target_include_directories(termin_editor PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_editor PRIVATE
+        Python::Python
+    )
+    target_compile_options(termin_editor PRIVATE
+        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+    )
+    set_target_properties(termin_editor PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    if(WIN32)
+        set_target_properties(termin_editor PROPERTIES
+            WIN32_EXECUTABLE FALSE
+        )
+    endif()
+    install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()
+
+# Full version - C++ Qt + embedded Python
+if(BUILD_EDITOR_EXE)
+    find_package(Qt6 COMPONENTS Widgets QUIET)
+    if(NOT Qt6_FOUND)
+        message(STATUS "Qt6 not found, trying Qt5...")
+        find_package(Qt5 COMPONENTS Widgets REQUIRED)
+        set(QT_LIBS Qt5::Widgets)
+    else()
+        set(QT_LIBS Qt6::Widgets)
+    endif()
+
+    add_executable(termin_editor_qt
+        app/main.cpp
+    )
+    target_include_directories(termin_editor_qt PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_editor_qt PRIVATE
+        ${QT_LIBS}
+        Python::Python
+        entity_lib
+        render_lib
+        ${SDL2_LIBRARIES}
+    )
+    target_compile_options(termin_editor_qt PRIVATE
+        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+    )
+    set_target_properties(termin_editor_qt PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+    if(WIN32)
+        set_target_properties(termin_editor_qt PROPERTIES
+            WIN32_EXECUTABLE FALSE
+        )
+    endif()
+    install(TARGETS termin_editor_qt RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()
+
 # ---------------- Tests ----------------
 option(BUILD_TESTS "Build C++ tests" OFF)
 

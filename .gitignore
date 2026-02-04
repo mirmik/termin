@@ -176,5 +176,5 @@ build_csharp/
 !csharp/Termin.sln
 
 build_cpp/
-
+build_app/
 build_core/
