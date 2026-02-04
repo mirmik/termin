@@ -152,7 +152,7 @@ void bind_tc_display(nb::module_& m) {
                                    const std::string& name) -> TcViewport {
             // Get scene handle
             tc_scene_handle scene_h = TC_SCENE_HANDLE_INVALID;
-            if (!scene_obj.is_none() && nb::hasattr(scene_obj, "scene_handle")) {
+            if (!scene_obj.is_none()) {
                 auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_obj.attr("scene_handle")());
                 scene_h.index = std::get<0>(h);
                 scene_h.generation = std::get<1>(h);
@@ -160,9 +160,9 @@ void bind_tc_display(nb::module_& m) {
 
             // Get camera component pointer
             tc_component* camera_ptr = nullptr;
-            if (!camera_obj.is_none() && nb::hasattr(camera_obj, "_component_ptr")) {
+            if (!camera_obj.is_none()) {
                 camera_ptr = reinterpret_cast<tc_component*>(
-                    nb::cast<uintptr_t>(camera_obj.attr("_component_ptr"))
+                    nb::cast<uintptr_t>(camera_obj.attr("c_component_ptr")())
                 );
             }
 
@@ -179,7 +179,7 @@ void bind_tc_display(nb::module_& m) {
             vp.update_pixel_rect(w, h);
 
             // Add viewport to camera's list
-            if (!camera_obj.is_none() && nb::hasattr(camera_obj, "add_viewport")) {
+            if (!camera_obj.is_none()) {
                 camera_obj.attr("add_viewport")(vp);
             }
 
