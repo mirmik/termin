@@ -312,6 +312,7 @@ target_link_libraries(animation_lib PUBLIC skeleton_lib)
 target_compile_options(animation_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(animation_lib PRIVATE termin/pch.hpp)
 set_target_properties(animation_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -377,16 +378,10 @@ if(WIN32)
         PUBLIC GLAD_API_CALL_EXPORT
     )
 endif()
-if(NOT BUILD_CSHARP_BINDINGS)
-    target_include_directories(render_lib PRIVATE
-        $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
-        ${Python_INCLUDE_DIRS}
-    )
-    target_compile_definitions(render_lib PRIVATE TERMIN_HAS_NANOBIND)
-endif()
 target_compile_options(render_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -404,13 +399,10 @@ target_include_directories(navmesh_lib PUBLIC
     $<INSTALL_INTERFACE:include/cpp>
 )
 target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
-target_include_directories(navmesh_lib PRIVATE
-    $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
-    ${Python_INCLUDE_DIRS}
-)
 target_compile_options(navmesh_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
 set_target_properties(navmesh_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -426,14 +418,10 @@ add_library(skeleton_lib STATIC
     termin/render/skeleton_controller.cpp
 )
 target_link_libraries(skeleton_lib PUBLIC entity_lib PRIVATE trent)
-# Need nanobind and Python includes for compilation
-target_include_directories(skeleton_lib PRIVATE
-    $<TARGET_PROPERTY:nanobind-static,INTERFACE_INCLUDE_DIRECTORIES>
-    ${Python_INCLUDE_DIRS}
-)
 target_compile_options(skeleton_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(skeleton_lib PRIVATE termin/pch.hpp)
 set_target_properties(skeleton_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
