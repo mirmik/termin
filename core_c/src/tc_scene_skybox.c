@@ -210,6 +210,13 @@ static tc_material* create_skybox_material(const char* name, const char* frag_so
         return NULL;
     }
 
+    // Add ref for material's usage + extra ref to keep builtin shader alive forever
+    tc_shader* shader = tc_shader_get(sh);
+    if (shader) {
+        tc_shader_add_ref(shader);  // ref for material
+        tc_shader_add_ref(shader);  // ref to prevent deletion (builtin shader)
+    }
+
     // Create material
     mh = tc_material_create(NULL, name);
     if (!tc_material_is_valid(mh)) {

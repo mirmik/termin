@@ -493,6 +493,10 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
     uint64_t key = viewport_key(viewport);
     auto it = viewport_states_.find(key);
     if (it != viewport_states_.end()) {
+        // Ensure GL context is current before deleting GPU resources
+        if (make_current_callback_) {
+            make_current_callback_();
+        }
         it->second->clear_all();
         viewport_states_.erase(it);
     }
@@ -933,6 +937,11 @@ void RenderingManager::clear_all_scene_pipelines() {
 // ============================================================================
 
 void RenderingManager::shutdown() {
+    // Ensure GL context is current before deleting GPU resources
+    if (make_current_callback_) {
+        make_current_callback_();
+    }
+
     // Clear viewport states
     for (auto& pair : viewport_states_) {
         pair.second->clear_all();

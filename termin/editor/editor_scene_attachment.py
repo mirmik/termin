@@ -199,11 +199,9 @@ class EditorSceneAttachment:
             if self._camera_manager is not None and self._camera_manager.camera is not None:
                 self._camera_manager.camera.remove_viewport(self._viewport)
 
-            # Make GL context current before destroying GPU resources
-            try:
-                self._display.make_current()
-            except Exception:
-                pass  # Context may be invalid during shutdown
+            # Make offscreen GL context current before destroying GPU resources
+            # (offscreen context owns all GPU resources and is always valid)
+            self._rendering_controller.offscreen_context.make_current()
 
             # Clear viewport state (output_fbo)
             state = self._rendering_controller.get_viewport_state(self._viewport)
@@ -273,6 +271,12 @@ class EditorSceneAttachment:
 
     def _remove_display_viewports(self) -> None:
         """Remove all viewports from this display."""
+        if not self._display.viewports:
+            return
+
+        # Make offscreen GL context current before destroying GPU resources
+        self._rendering_controller.offscreen_context.make_current()
+
         for vp in list(self._display.viewports):
             # Remove from camera
             if vp.camera is not None:

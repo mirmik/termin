@@ -574,18 +574,14 @@ class RenderingController:
         Called before scene is destroyed or deactivated.
         Destroys pipelines to clear callbacks, clears FBOs, then removes viewports.
         """
+        # Make offscreen GL context current before deleting GPU resources
+        self._offscreen_context.make_current()
+
         for display in self._manager.displays:
             display_id = display.tc_display_ptr
             viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
             if not viewports_to_remove:
                 continue
-
-            # Make GL context current for this display before deleting resources
-            tab_info = self._display_tabs.get(display_id)
-            if tab_info is not None:
-                _tab_container, surface, _qwindow = tab_info
-                if surface is not None:
-                    surface.make_current()
 
             for vp in viewports_to_remove:
                 # Destroy pipeline
@@ -745,13 +741,8 @@ class RenderingController:
         if display is None:
             return
 
-        # Make GL context current
-        if self._editor_display_ptr is not None:
-            tab_info = self._display_tabs.get(self._editor_display_ptr)
-            if tab_info is not None:
-                _tab_container, surface, _qwindow = tab_info
-                if surface is not None:
-                    surface.make_current()
+        # Make offscreen GL context current before deleting GPU resources
+        self._offscreen_context.make_current()
 
         for vp in list(display.viewports):
             # Destroy pipeline
