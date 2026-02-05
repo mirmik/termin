@@ -726,7 +726,7 @@ endif()
 
 # Install to python packages
 # Install shared libraries to root termin directory
-install(TARGETS trent entity_lib termin_core render_lib
+install(TARGETS trent entity_lib termin_core render_lib navmesh_lib
     RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib  # .lib import libraries on Windows

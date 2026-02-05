@@ -462,7 +462,10 @@ class RenderingController:
                 if viewport.scene is scene:
                     displays_to_check.add(display.tc_display_ptr)
 
-        # Detach scene
+        # Remove viewports for this scene (destroys pipelines, clears FBOs)
+        self.remove_viewports_for_scene(scene)
+
+        # Detach scene pipelines
         self._manager.detach_scene(scene)
 
         # Clean up input managers for displays that now have no viewports

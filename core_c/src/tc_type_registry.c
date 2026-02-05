@@ -139,8 +139,7 @@ tc_type_entry* tc_type_registry_register_with_parent(
     entry->factory_userdata = factory_userdata;
     entry->version = 1;
     entry->registered = true;
-    entry->first_instance = NULL;
-    entry->last_instance = NULL;
+    tc_dlist_init_head(&entry->instances);
     entry->instance_count = 0;
     entry->parent = parent;
     entry->children = NULL;
@@ -268,63 +267,29 @@ const char* tc_type_registry_type_at(tc_type_registry* reg, size_t index) {
 void tc_type_entry_link_instance(
     tc_type_entry* entry,
     void* instance,
-    size_t instance_prev_offset,
-    size_t instance_next_offset
+    size_t node_offset
 ) {
     if (!entry || !instance) return;
 
-    // Get prev/next pointers in instance
-    void** prev_ptr = (void**)((char*)instance + instance_prev_offset);
-    void** next_ptr = (void**)((char*)instance + instance_next_offset);
-
-    // Add to end of list
-    *prev_ptr = entry->last_instance;
-    *next_ptr = NULL;
-
-    if (entry->last_instance) {
-        void** last_next = (void**)((char*)entry->last_instance + instance_next_offset);
-        *last_next = instance;
-    } else {
-        entry->first_instance = instance;
-    }
-
-    entry->last_instance = instance;
+    tc_dlist_node* node = (tc_dlist_node*)((char*)instance + node_offset);
+    tc_dlist_add_tail(node, &entry->instances);
     entry->instance_count++;
 }
 
 void tc_type_entry_unlink_instance(
     tc_type_entry* entry,
     void* instance,
-    size_t instance_prev_offset,
-    size_t instance_next_offset
+    size_t node_offset
 ) {
     if (!entry || !instance) return;
 
-    // Get prev/next pointers in instance
-    void** prev_ptr = (void**)((char*)instance + instance_prev_offset);
-    void** next_ptr = (void**)((char*)instance + instance_next_offset);
+    tc_dlist_node* node = (tc_dlist_node*)((char*)instance + node_offset);
 
-    void* prev = *prev_ptr;
-    void* next = *next_ptr;
-
-    // Update adjacent nodes
-    if (prev) {
-        void** prev_next = (void**)((char*)prev + instance_next_offset);
-        *prev_next = next;
-    } else {
-        entry->first_instance = next;
+    // tc_dlist_del is safe to call multiple times (no-op if not linked)
+    if (tc_dlist_is_linked(node)) {
+        tc_dlist_del(node);
+        entry->instance_count--;
     }
-
-    if (next) {
-        void** next_prev = (void**)((char*)next + instance_prev_offset);
-        *next_prev = prev;
-    } else {
-        entry->last_instance = prev;
-    }
-
-    *prev_ptr = NULL;
-    *next_ptr = NULL;
-    entry->instance_count--;
 }
 
 // ============================================================================

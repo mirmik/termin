@@ -6,6 +6,7 @@
 #include "resources/tc_shader.h"
 #include "tc_type_registry.h"
 #include "core/tc_entity_pool.h"
+#include "core/tc_dlist.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -178,6 +179,7 @@ struct tc_component {
 
     // Intrusive list for scene's type-based component lists
     // Linked when registered with scene, unlinked on unregister
+    // Note: uses raw pointers (not tc_dlist) because head is stored externally
     tc_component* type_prev;
     tc_component* type_next;
 
@@ -186,8 +188,8 @@ struct tc_component {
     uint32_t type_version;
 
     // Intrusive list for global type registry instance tracking
-    tc_component* registry_prev;
-    tc_component* registry_next;
+    // Uses tc_dlist_node for safe multiple-unlink
+    tc_dlist_node registry_node;
 };
 
 // ============================================================================
@@ -215,8 +217,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->type_next = NULL;
     c->type_entry = NULL;
     c->type_version = 0;
-    c->registry_prev = NULL;
-    c->registry_next = NULL;
+    tc_dlist_init_node(&c->registry_node);
 }
 
 // ============================================================================

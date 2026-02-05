@@ -55,6 +55,7 @@ CxxComponent::CxxComponent() {
 }
 
 CxxComponent::~CxxComponent() {
+    tc_component_unlink_from_registry(&_c);
 }
 
 void CxxComponent::release() {

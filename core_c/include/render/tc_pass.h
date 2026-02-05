@@ -7,6 +7,7 @@
 #include "inspect/tc_binding.h"
 #include "tc_type_registry.h"
 #include "core/tc_scene_pool.h"
+#include "core/tc_dlist.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_pipeline_pool.h"
 #include <stdbool.h>
@@ -124,8 +125,7 @@ struct tc_pass {
     uint32_t type_version;
 
     // Intrusive list for global type registry instance tracking
-    tc_pass* registry_prev;
-    tc_pass* registry_next;
+    tc_dlist_node registry_node;
 };
 
 // ============================================================================
@@ -149,8 +149,7 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->owner_pipeline = TC_PIPELINE_HANDLE_INVALID;
     p->type_entry = NULL;
     p->type_version = 0;
-    p->registry_prev = NULL;
-    p->registry_next = NULL;
+    tc_dlist_init_node(&p->registry_node);
 }
 
 // ============================================================================

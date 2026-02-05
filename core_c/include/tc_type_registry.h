@@ -4,6 +4,7 @@
 #define TC_TYPE_REGISTRY_H
 
 #include "tc_types.h"
+#include "core/tc_dlist.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -36,9 +37,8 @@ struct tc_type_entry {
     uint32_t version;               // Incremented on re-register
     bool registered;                // false after unregister, entry NOT deleted
 
-    // Intrusive instance list (void* for generic use)
-    void* first_instance;
-    void* last_instance;
+    // Intrusive instance list
+    tc_dlist_head instances;
     size_t instance_count;
 
     // Type hierarchy (for components with inheritance)
@@ -125,20 +125,19 @@ TC_API const char* tc_type_registry_type_at(tc_type_registry* reg, size_t index)
 // ============================================================================
 
 // Link instance to type entry (adds to intrusive list)
-// instance_prev_offset and instance_next_offset are offsets of prev/next pointers in instance struct
+// node_offset is offset of tc_dlist_node in instance struct
 TC_API void tc_type_entry_link_instance(
     tc_type_entry* entry,
     void* instance,
-    size_t instance_prev_offset,
-    size_t instance_next_offset
+    size_t node_offset
 );
 
 // Unlink instance from type entry
+// Safe to call multiple times (no-op if not linked)
 TC_API void tc_type_entry_unlink_instance(
     tc_type_entry* entry,
     void* instance,
-    size_t instance_prev_offset,
-    size_t instance_next_offset
+    size_t node_offset
 );
 
 // Get instance count for type
@@ -146,9 +145,10 @@ static inline size_t tc_type_entry_instance_count(const tc_type_entry* entry) {
     return entry ? entry->instance_count : 0;
 }
 
-// Get first instance for type
-static inline void* tc_type_entry_first_instance(const tc_type_entry* entry) {
-    return entry ? entry->first_instance : NULL;
+// Get first instance for type (NULL if empty)
+static inline void* tc_type_entry_first_instance(const tc_type_entry* entry, size_t node_offset) {
+    if (!entry || tc_dlist_empty(&entry->instances)) return NULL;
+    return (char*)entry->instances.next - node_offset;
 }
 
 // Create instance via type entry's factory

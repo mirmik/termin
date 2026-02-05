@@ -3,6 +3,7 @@
 # Usage:
 #   ./build.sh          # Release build
 #   ./build.sh --debug  # Debug build
+#   ./build.sh --asan   # Debug build with AddressSanitizer
 #   ./build.sh --clean  # Clean and rebuild
 #   ./build.sh --install-only  # Only install (skip build)
 
@@ -15,12 +16,18 @@ INSTALL_DIR="$SCRIPT_DIR/install"
 BUILD_TYPE="Release"
 CLEAN=0
 INSTALL_ONLY=0
+ASAN=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --debug|-d)
             BUILD_TYPE="Debug"
+            shift
+            ;;
+        --asan|-a)
+            BUILD_TYPE="Debug"
+            ASAN=1
             shift
             ;;
         --clean|-c)
@@ -36,6 +43,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --debug, -d        Build with debug symbols"
+            echo "  --asan, -a         Build with AddressSanitizer (implies --debug)"
             echo "  --clean, -c        Clean build directory before building"
             echo "  --install-only, -i Skip build, only run install"
             echo "  --help, -h         Show this help"
@@ -50,6 +58,9 @@ done
 
 echo "=== Termin Build Script ==="
 echo "Build type: $BUILD_TYPE"
+if [[ $ASAN -eq 1 ]]; then
+    echo "AddressSanitizer: ON"
+fi
 echo "Build dir:  $BUILD_DIR"
 echo "Install dir: $INSTALL_DIR"
 echo ""
@@ -66,10 +77,23 @@ mkdir -p "$BUILD_DIR"
 # Configure
 if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]] || [[ $CLEAN -eq 1 ]]; then
     echo "Configuring CMake..."
-    cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
-        -DBUILD_EDITOR_MINIMAL=ON \
-        -DBUNDLE_PYTHON=ON \
-        -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+
+    if [[ $ASAN -eq 1 ]]; then
+        ASAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+        cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
+            -DBUILD_EDITOR_MINIMAL=ON \
+            -DBUNDLE_PYTHON=ON \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
+            -DCMAKE_CXX_FLAGS="$ASAN_FLAGS" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
+    else
+        cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
+            -DBUILD_EDITOR_MINIMAL=ON \
+            -DBUNDLE_PYTHON=ON \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    fi
 fi
 
 # Build

@@ -40,9 +40,8 @@ void tc_pass_set_passthrough(tc_pass* p, bool passthrough) {
 
 static tc_type_registry* g_pass_registry = NULL;
 
-// Offset macros for intrusive list
-#define PASS_REGISTRY_PREV_OFFSET offsetof(tc_pass, registry_prev)
-#define PASS_REGISTRY_NEXT_OFFSET offsetof(tc_pass, registry_next)
+// Offset macro for intrusive list node
+#define PASS_REGISTRY_NODE_OFFSET offsetof(tc_pass, registry_node)
 
 static void ensure_pass_registry_initialized(void) {
     if (!g_pass_registry) {
@@ -96,12 +95,7 @@ tc_pass* tc_pass_registry_create(const char* type_name) {
         // Link to type registry for instance tracking
         p->type_entry = entry;
         p->type_version = entry->version;
-        tc_type_entry_link_instance(
-            entry,
-            p,
-            PASS_REGISTRY_PREV_OFFSET,
-            PASS_REGISTRY_NEXT_OFFSET
-        );
+        tc_type_entry_link_instance(entry, p, PASS_REGISTRY_NODE_OFFSET);
     }
     return p;
 }
@@ -138,12 +132,7 @@ size_t tc_pass_registry_instance_count(const char* type_name) {
 void tc_pass_unlink_from_registry(tc_pass* p) {
     if (!p || !p->type_entry) return;
 
-    tc_type_entry_unlink_instance(
-        p->type_entry,
-        p,
-        PASS_REGISTRY_PREV_OFFSET,
-        PASS_REGISTRY_NEXT_OFFSET
-    );
+    tc_type_entry_unlink_instance(p->type_entry, p, PASS_REGISTRY_NODE_OFFSET);
 
     p->type_entry = NULL;
     p->type_version = 0;
@@ -295,12 +284,7 @@ tc_pass* tc_pass_new_external(void* body, const char* type_name) {
 
     p->type_entry = entry;
     p->type_version = entry->version;
-    tc_type_entry_link_instance(
-        entry,
-        p,
-        PASS_REGISTRY_PREV_OFFSET,
-        PASS_REGISTRY_NEXT_OFFSET
-    );
+    tc_type_entry_link_instance(entry, p, PASS_REGISTRY_NODE_OFFSET);
 
     return p;
 }

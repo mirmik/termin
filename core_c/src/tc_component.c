@@ -13,9 +13,8 @@
 
 static tc_type_registry* g_component_registry = NULL;
 
-// Offset macros for intrusive list
-#define COMPONENT_REGISTRY_PREV_OFFSET offsetof(tc_component, registry_prev)
-#define COMPONENT_REGISTRY_NEXT_OFFSET offsetof(tc_component, registry_next)
+// Offset macro for intrusive list node
+#define COMPONENT_REGISTRY_NODE_OFFSET offsetof(tc_component, registry_node)
 
 // ============================================================================
 // Internal Helpers
@@ -107,12 +106,7 @@ tc_component* tc_component_registry_create(const char* type_name) {
     // Link to type registry for instance tracking
     c->type_entry = entry;
     c->type_version = entry->version;
-    tc_type_entry_link_instance(
-        entry,
-        c,
-        COMPONENT_REGISTRY_PREV_OFFSET,
-        COMPONENT_REGISTRY_NEXT_OFFSET
-    );
+    tc_type_entry_link_instance(entry, c, COMPONENT_REGISTRY_NODE_OFFSET);
 
     return c;
 }
@@ -253,12 +247,7 @@ size_t tc_component_registry_instance_count(const char* type_name) {
 void tc_component_unlink_from_registry(tc_component* c) {
     if (!c || !c->type_entry) return;
 
-    tc_type_entry_unlink_instance(
-        c->type_entry,
-        c,
-        COMPONENT_REGISTRY_PREV_OFFSET,
-        COMPONENT_REGISTRY_NEXT_OFFSET
-    );
+    tc_type_entry_unlink_instance(c->type_entry, c, COMPONENT_REGISTRY_NODE_OFFSET);
 
     c->type_entry = NULL;
     c->type_version = 0;
