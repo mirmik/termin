@@ -178,6 +178,7 @@ build_csharp/
 build_cpp/
 build_app/
 build_core/
+build_win/
 
 build_standalone/
 install/
