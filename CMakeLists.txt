@@ -97,17 +97,28 @@ if(BUNDLE_PYTHON)
             PATTERN "libpython${PYTHON_VERSION}*.so*"
             PATTERN "python${PYTHON_VERSION}" EXCLUDE
         )
+        set(STDLIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}")
+        set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     else()
-        # Windows: Install python3xx.dll from prefix
+        # Windows: Install python3xx.dll to bin/
         file(GLOB PYTHON_DLLS "${PYTHON_PREFIX}/python*.dll")
         install(FILES ${PYTHON_DLLS}
             DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
         )
+        # Windows: Install DLLs/ directory (C extension modules)
+        if(EXISTS "${PYTHON_PREFIX}/DLLs")
+            install(DIRECTORY "${PYTHON_PREFIX}/DLLs"
+                DESTINATION ${CMAKE_INSTALL_PREFIX}
+            )
+        endif()
+        # Windows expects stdlib in {prefix}/Lib/ (capital L, no version)
+        set(STDLIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/Lib")
+        set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     endif()
 
     # Install Python standard library (excluding heavy/unneeded parts)
     install(DIRECTORY ${PYTHON_STDLIB}/
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}
+        DESTINATION ${STDLIB_INSTALL_DIR}
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
         PATTERN "*.pyo" EXCLUDE
@@ -143,7 +154,7 @@ if(BUNDLE_PYTHON)
     foreach(pkg ${BUNDLE_PACKAGES})
         if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}")
             install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}"
-                DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+                DESTINATION ${SITEPACKAGES_INSTALL_DIR}
                 PATTERN "__pycache__" EXCLUDE
                 PATTERN "*.pyc" EXCLUDE
             )
@@ -152,7 +163,7 @@ if(BUNDLE_PYTHON)
         file(GLOB DIST_INFOS "${PYTHON_SITEPACKAGES}/${pkg}*.dist-info")
         foreach(di ${DIST_INFOS})
             install(DIRECTORY ${di}
-                DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+                DESTINATION ${SITEPACKAGES_INSTALL_DIR}
             )
         endforeach()
     endforeach()
@@ -161,13 +172,13 @@ if(BUNDLE_PYTHON)
         # Linux: Copy standalone .so files (like PyQt6_sip)
         file(GLOB STANDALONE_SOS "${PYTHON_SITEPACKAGES}/*.so")
         install(FILES ${STANDALONE_SOS}
-            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+            DESTINATION ${SITEPACKAGES_INSTALL_DIR}
         )
     else()
         # Windows: Copy standalone .pyd files
         file(GLOB STANDALONE_PYDS "${PYTHON_SITEPACKAGES}/*.pyd")
         install(FILES ${STANDALONE_PYDS}
-            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+            DESTINATION ${SITEPACKAGES_INSTALL_DIR}
         )
     endif()
 
@@ -175,7 +186,7 @@ if(BUNDLE_PYTHON)
     foreach(pkg numpy scipy pillow Pillow)
         if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}.libs")
             install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}.libs"
-                DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+                DESTINATION ${SITEPACKAGES_INSTALL_DIR}
             )
         endif()
     endforeach()

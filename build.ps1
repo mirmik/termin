@@ -9,6 +9,7 @@ param(
     [switch]$Debug,
     [switch]$Clean,
     [switch]$InstallOnly,
+    [switch]$BundlePython,
     [switch]$Help
 )
 
@@ -21,6 +22,7 @@ if ($Help) {
     Write-Host "  -Debug        Build with debug symbols"
     Write-Host "  -Clean        Clean build directory before building"
     Write-Host "  -InstallOnly  Skip build, only run install"
+    Write-Host "  -BundlePython Bundle Python runtime (slow, for distribution)"
     Write-Host "  -Help         Show this help"
     exit 0
 }
@@ -33,6 +35,7 @@ $BuildType = if ($Debug) { "Debug" } else { "Release" }
 
 Write-Host "=== Termin Build Script (Windows) ===" -ForegroundColor Cyan
 Write-Host "Build type: $BuildType"
+Write-Host "Bundle Python: $BundlePython"
 Write-Host "Build dir:  $BuildDir"
 Write-Host "Install dir: $InstallDir"
 Write-Host ""
@@ -56,11 +59,12 @@ if (-not (Test-Path $BuildDirWin)) {
 $CacheFile = "$BuildDir/CMakeCache.txt"
 if (-not (Test-Path $CacheFile) -or $Clean) {
     Write-Host "Configuring CMake..."
+    $BundlePythonValue = if ($BundlePython) { "ON" } else { "OFF" }
     $cmakeArgs = @(
         "-S", $ScriptDir,
         "-B", $BuildDir,
         "-DBUILD_EDITOR_MINIMAL=ON",
-        "-DBUNDLE_PYTHON=ON",
+        "-DBUNDLE_PYTHON=$BundlePythonValue",
         "-DCMAKE_BUILD_TYPE=$BuildType",
         "-DCMAKE_INSTALL_PREFIX=$InstallDir"
     )

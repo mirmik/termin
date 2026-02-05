@@ -48,8 +48,19 @@ static fs::path get_executable_dir() {
 #endif
 }
 
-// Find bundled Python home (lib/python3.x/)
-static fs::path find_python_home(const fs::path& install_root) {
+// Find bundled Python stdlib directory
+// Linux: {install_root}/lib/python3.x/
+// Windows: {install_root}/Lib/
+static fs::path find_python_stdlib(const fs::path& install_root) {
+#ifdef _WIN32
+    // Windows: stdlib is in {prefix}/Lib/
+    fs::path lib_dir = install_root / "Lib";
+    if (fs::exists(lib_dir) && fs::exists(lib_dir / "os.py")) {
+        return lib_dir;
+    }
+    return {};
+#else
+    // Linux: stdlib is in {prefix}/lib/python3.x/
     fs::path lib_dir = install_root / "lib";
     if (!fs::exists(lib_dir)) return {};
 
@@ -74,6 +85,7 @@ static fs::path find_python_home(const fs::path& install_root) {
     }
 
     return {};
+#endif
 }
 
 int main(int argc, char* argv[]) {
@@ -85,18 +97,18 @@ int main(int argc, char* argv[]) {
     bool bundled_python = false;
 
     // Check for bundled Python (standalone mode)
-    fs::path python_home = find_python_home(install_root);
+    fs::path python_stdlib = find_python_stdlib(install_root);
     fs::path termin_path;
 
-    if (!python_home.empty() && fs::exists(python_home / "os.py")) {
+    if (!python_stdlib.empty()) {
         // Bundled Python found
         bundled_python = true;
         termin_path = install_root / "lib" / "python" / "termin";
 
-        std::cout << "Using bundled Python: " << python_home << std::endl;
+        std::cout << "Using bundled Python: " << python_stdlib << std::endl;
 
         // Set PYTHONHOME before Py_Initialize
-        // PYTHONHOME should point to the prefix (parent of lib/python3.x)
+        // PYTHONHOME should point to the prefix (parent of Lib/ on Windows, parent of lib/python3.x/ on Linux)
         static std::string python_home_str = install_root.string();
         static std::wstring python_home_wstr(python_home_str.begin(), python_home_str.end());
         Py_SetPythonHome(python_home_wstr.c_str());
@@ -133,7 +145,7 @@ int main(int argc, char* argv[]) {
     std::string init_code;
     if (bundled_python) {
         // For bundled: add both termin path and site-packages
-        fs::path site_packages = python_home / "site-packages";
+        fs::path site_packages = python_stdlib / "site-packages";
         init_code =
             "import sys\n"
             "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n"
