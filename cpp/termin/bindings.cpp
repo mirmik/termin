@@ -6,7 +6,9 @@ extern "C" {
 }
 
 #include "render_bindings.hpp"
+#ifdef TERMIN_HAS_SDL2
 #include "sdl_bindings.hpp"
+#endif
 #include "bindings/render/tc_render_surface_bindings.hpp"
 #include "bindings/render/tc_input_manager_bindings.hpp"
 #include "bindings/render/tc_display_bindings.hpp"
@@ -89,7 +91,9 @@ NB_MODULE(_native, m) {
     termin::bind_tc_input_manager(render_module);
     termin::bind_tc_display(render_module);
     termin::bind_simple_display_input_manager(render_module);
+#ifdef TERMIN_HAS_SDL2
     termin::bind_sdl(platform_module);
+#endif
     // TcScene and TcSceneLighting are now in _entity_native module
     termin::bind_scene_manager(scene_module);
     // TcViewport is now in separate _viewport_native module

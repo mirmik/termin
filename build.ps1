@@ -68,6 +68,7 @@ if (-not (Test-Path $CacheFile) -or $Clean) {
         "-B", $BuildDir,
         "-DBUILD_EDITOR_MINIMAL=ON",
         "-DBUNDLE_PYTHON=$BundlePythonValue",
+        "-DUSE_SYSTEM_SDL2=ON",
         "-DCMAKE_BUILD_TYPE=$BuildType",
         "-DCMAKE_INSTALL_PREFIX=$InstallDir"
     )

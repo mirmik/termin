@@ -29,9 +29,10 @@ if (-not (Test-Path $Editor)) {
 Push-Location $InstallDir
 
 try {
-    # Add lib directory to PATH for DLL loading
-    $LibDir = Join-Path $InstallDir "lib"
-    $env:PATH = "$InstallDir;$LibDir;$env:PATH"
+    # Add directories with DLLs to PATH
+    $BinDir = Join-Path $InstallDir "bin"
+    $TerminDir = Join-Path $InstallDir "lib\python\termin"
+    $env:PATH = "$BinDir;$TerminDir;$env:PATH"
 
     # Run editor
     & $Editor $args

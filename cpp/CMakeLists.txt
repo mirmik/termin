@@ -487,50 +487,77 @@ target_compile_options(_navmesh_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Find SDL2 (required)
-if(WIN32)
-    # Check common Windows locations
-    set(SDL2_SEARCH_PATHS
-        "C:/SDL2"
-        "$ENV{SDL2_DIR}"
-        "$ENV{PROGRAMFILES}/SDL2"
-    )
-    # Find SDL2 include directory (parent of SDL2/SDL.h)
-    find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
-        PATH_SUFFIXES include
-        PATHS ${SDL2_SEARCH_PATHS}
-    )
-    find_library(SDL2_LIBRARIES
-        NAMES SDL2
-        PATH_SUFFIXES lib/x64 lib
-        PATHS ${SDL2_SEARCH_PATHS}
-    )
-    find_library(SDL2MAIN_LIBRARY
-        NAMES SDL2main
-        PATH_SUFFIXES lib/x64 lib
-        PATHS ${SDL2_SEARCH_PATHS}
-    )
-    if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARIES)
-        set(SDL2_FOUND TRUE)
-        if(SDL2MAIN_LIBRARY)
-            list(APPEND SDL2_LIBRARIES ${SDL2MAIN_LIBRARY})
+# Find SDL2 (optional on Windows - pysdl2 can be used instead)
+option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
+
+if(USE_SYSTEM_SDL2)
+    if(WIN32)
+        # Check common Windows locations
+        set(SDL2_SEARCH_PATHS
+            "C:/SDL2"
+            "$ENV{SDL2_DIR}"
+            "$ENV{PROGRAMFILES}/SDL2"
+        )
+        # Find SDL2 include directory (parent of SDL2/SDL.h)
+        find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
+            PATH_SUFFIXES include
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        find_library(SDL2_LIBRARY
+            NAMES SDL2
+            PATH_SUFFIXES lib/x64 lib
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        find_library(SDL2MAIN_LIBRARY
+            NAMES SDL2main
+            PATH_SUFFIXES lib/x64 lib
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY)
+            set(SDL2_FOUND TRUE)
+            set(SDL2_LIBRARIES ${SDL2_LIBRARY})
+            if(SDL2MAIN_LIBRARY)
+                list(APPEND SDL2_LIBRARIES ${SDL2MAIN_LIBRARY})
+            endif()
+            # Find SDL2.dll for installation
+            get_filename_component(SDL2_LIB_DIR ${SDL2_LIBRARY} DIRECTORY)
+            find_file(SDL2_DLL
+                NAMES SDL2.dll
+                PATHS ${SDL2_LIB_DIR} ${SDL2_LIB_DIR}/../bin ${SDL2_LIB_DIR}/..
+                NO_DEFAULT_PATH
+            )
+            message(STATUS "Found SDL2: ${SDL2_INCLUDE_DIRS}")
+            message(STATUS "SDL2 DLL: ${SDL2_DLL}")
+        else()
+            message(STATUS "SDL2 not found, disabling SDL2 support (use pysdl2 instead)")
+            set(SDL2_FOUND FALSE)
         endif()
-        message(STATUS "Found SDL2: ${SDL2_INCLUDE_DIRS}")
     else()
-        message(FATAL_ERROR "SDL2 not found. Set SDL2_DIR or install to C:\\SDL2")
+        find_package(SDL2 QUIET)
+        if(NOT SDL2_FOUND)
+            find_package(PkgConfig REQUIRED)
+            pkg_check_modules(SDL2 REQUIRED sdl2)
+        endif()
     endif()
 else()
-    find_package(SDL2 QUIET)
-    if(NOT SDL2_FOUND)
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(SDL2 REQUIRED sdl2)
-    endif()
+    set(SDL2_FOUND FALSE)
+    message(STATUS "System SDL2 disabled, using pysdl2")
 endif()
 
 # Unified native module (Render + SDL + Scene + Skeleton + Inspect + Assets) - nanobind
 # Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
 # Note: Graphics types (Color4, Size2i, etc), GraphicsBackend, handles are in _graphics_native
 # Note: Component, Entity are in _entity_native module, imported at runtime
+
+# SDL2 sources (optional)
+set(_NATIVE_SDL_SOURCES "")
+if(SDL2_FOUND)
+    set(_NATIVE_SDL_SOURCES
+        termin/sdl_bindings.cpp
+        termin/platform/sdl_render_surface.cpp
+    )
+endif()
+
 nanobind_add_module(_native
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
@@ -558,8 +585,7 @@ nanobind_add_module(_native
     termin/bindings/editor/gizmo_bindings.cpp
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
-    termin/sdl_bindings.cpp
-    termin/platform/sdl_render_surface.cpp
+    ${_NATIVE_SDL_SOURCES}
     termin/scene/scene_manager.cpp
     termin/scene/scene_manager_bindings.cpp
     # tc_viewport_bindings.cpp moved to _viewport_native module
@@ -596,9 +622,14 @@ nanobind_add_module(_native
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-    ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_lib skeleton_lib navmesh_lib render_lib)
+target_link_libraries(_native PRIVATE OpenGL::GL trent entity_lib skeleton_lib navmesh_lib render_lib)
+
+if(SDL2_FOUND)
+    target_include_directories(_native PRIVATE ${SDL2_INCLUDE_DIRS})
+    target_link_libraries(_native PRIVATE ${SDL2_LIBRARIES})
+    target_compile_definitions(_native PRIVATE TERMIN_HAS_SDL2)
+endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
@@ -753,6 +784,11 @@ install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
     LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib  # .lib import libraries on Windows
 )
+
+# Install SDL2.dll on Windows
+if(WIN32 AND SDL2_DLL)
+    install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_PREFIX})
+endif()
 
 # Install static libraries for external module compilation
 install(TARGETS skeleton_lib animation_lib
