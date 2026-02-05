@@ -1,6 +1,8 @@
-# Termin run script (Windows)
+# Termin run script (Windows) - for bundled builds
 # Usage:
-#   .\run.ps1           # Run editor
+#   .\run.ps1           # Run editor (requires -BundlePython build)
+#
+# For development, use .\run_dev.ps1 instead
 
 param(
     [switch]$Help
