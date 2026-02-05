@@ -62,7 +62,7 @@ if(BUNDLE_PYTHON)
     # Get Python paths
     execute_process(
         COMMAND ${Python_EXECUTABLE} -c "import sys; print(sys.prefix)"
-        OUTPUT_VARIABLE PYTHON_PREFIX
+        OUTPUT_VARIABLE PYTHON_PREFIX_RAW
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     execute_process(
@@ -71,18 +71,39 @@ if(BUNDLE_PYTHON)
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
-    set(PYTHON_LIBDIR "${PYTHON_PREFIX}/lib")
-    set(PYTHON_STDLIB "${PYTHON_LIBDIR}/python${PYTHON_VERSION}")
+    # Normalize path to CMake format (forward slashes)
+    file(TO_CMAKE_PATH "${PYTHON_PREFIX_RAW}" PYTHON_PREFIX)
+
+    # Platform-specific paths:
+    # Linux: {prefix}/lib/python3.12/, libpython3.12.so
+    # Windows: {prefix}/Lib/, python312.dll (DLL is in prefix, not lib)
+    if(WIN32)
+        set(PYTHON_STDLIB "${PYTHON_PREFIX}/Lib")
+        set(PYTHON_SITEPACKAGES "${PYTHON_PREFIX}/Lib/site-packages")
+    else()
+        set(PYTHON_LIBDIR "${PYTHON_PREFIX}/lib")
+        set(PYTHON_STDLIB "${PYTHON_LIBDIR}/python${PYTHON_VERSION}")
+        set(PYTHON_SITEPACKAGES "${PYTHON_STDLIB}/site-packages")
+    endif()
 
     message(STATUS "Will bundle Python ${PYTHON_VERSION} from ${PYTHON_PREFIX}")
+    message(STATUS "Python stdlib: ${PYTHON_STDLIB}")
 
-    # Install libpython
-    install(DIRECTORY ${PYTHON_LIBDIR}/
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-        FILES_MATCHING
-        PATTERN "libpython${PYTHON_VERSION}*.so*"
-        PATTERN "python${PYTHON_VERSION}" EXCLUDE
-    )
+    if(NOT WIN32)
+        # Linux: Install libpython shared library
+        install(DIRECTORY ${PYTHON_LIBDIR}/
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+            FILES_MATCHING
+            PATTERN "libpython${PYTHON_VERSION}*.so*"
+            PATTERN "python${PYTHON_VERSION}" EXCLUDE
+        )
+    else()
+        # Windows: Install python3xx.dll from prefix
+        file(GLOB PYTHON_DLLS "${PYTHON_PREFIX}/python*.dll")
+        install(FILES ${PYTHON_DLLS}
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+        )
+    endif()
 
     # Install Python standard library (excluding heavy/unneeded parts)
     install(DIRECTORY ${PYTHON_STDLIB}/
@@ -105,7 +126,6 @@ if(BUNDLE_PYTHON)
     set(BUNDLE_PACKAGES
         numpy
         PyQt6
-        PyQt6_sip.cpython-310-x86_64-linux-gnu.so
         sip
         sipbuild
         PIL
@@ -116,22 +136,20 @@ if(BUNDLE_PYTHON)
         pyassimp
         pyopengl
         sdl2
-        ctypes
         yaml
-        _yaml
     )
 
     # Install each package
     foreach(pkg ${BUNDLE_PACKAGES})
-        if(EXISTS "${PYTHON_STDLIB}/site-packages/${pkg}")
-            install(DIRECTORY "${PYTHON_STDLIB}/site-packages/${pkg}"
+        if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}")
+            install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}"
                 DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
                 PATTERN "__pycache__" EXCLUDE
                 PATTERN "*.pyc" EXCLUDE
             )
         endif()
         # Also copy .dist-info directories
-        file(GLOB DIST_INFOS "${PYTHON_STDLIB}/site-packages/${pkg}*.dist-info")
+        file(GLOB DIST_INFOS "${PYTHON_SITEPACKAGES}/${pkg}*.dist-info")
         foreach(di ${DIST_INFOS})
             install(DIRECTORY ${di}
                 DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
@@ -139,16 +157,24 @@ if(BUNDLE_PYTHON)
         endforeach()
     endforeach()
 
-    # Copy standalone .so files (like PyQt6_sip)
-    file(GLOB STANDALONE_SOS "${PYTHON_STDLIB}/site-packages/*.so")
-    install(FILES ${STANDALONE_SOS}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
-    )
+    if(NOT WIN32)
+        # Linux: Copy standalone .so files (like PyQt6_sip)
+        file(GLOB STANDALONE_SOS "${PYTHON_SITEPACKAGES}/*.so")
+        install(FILES ${STANDALONE_SOS}
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+        )
+    else()
+        # Windows: Copy standalone .pyd files
+        file(GLOB STANDALONE_PYDS "${PYTHON_SITEPACKAGES}/*.pyd")
+        install(FILES ${STANDALONE_PYDS}
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
+        )
+    endif()
 
     # Copy .libs directories (numpy.libs, scipy.libs, pillow.libs contain vendored shared libs)
-    foreach(pkg numpy scipy pillow)
-        if(EXISTS "${PYTHON_STDLIB}/site-packages/${pkg}.libs")
-            install(DIRECTORY "${PYTHON_STDLIB}/site-packages/${pkg}.libs"
+    foreach(pkg numpy scipy pillow Pillow)
+        if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}.libs")
+            install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}.libs"
                 DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}/site-packages
             )
         endif()
