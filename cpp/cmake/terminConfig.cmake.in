@@ -1,0 +1,23 @@
+@PACKAGE_INIT@
+
+# terminConfig.cmake - CMake package config for termin engine
+# Usage:
+#   find_package(termin REQUIRED)
+#   target_link_libraries(my_module PRIVATE termin::entity_lib)
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies
+find_dependency(OpenGL REQUIRED)
+
+# Include exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/terminTargets.cmake")
+
+# Provide include directories for convenience
+set(TERMIN_INCLUDE_DIRS
+    "${PACKAGE_PREFIX_DIR}/include/cpp"
+    "${PACKAGE_PREFIX_DIR}/include/core_c"
+)
+
+# Check that required targets exist
+check_required_components(termin)

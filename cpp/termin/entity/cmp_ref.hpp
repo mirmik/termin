@@ -107,6 +107,15 @@ public:
     bool operator!=(const CmpRef& other) const {
         return !(*this == other);
     }
+
+    // Comparison with nullptr
+    bool operator==(std::nullptr_t) const {
+        return ptr == nullptr;
+    }
+
+    bool operator!=(std::nullptr_t) const {
+        return ptr != nullptr;
+    }
 };
 
 } // namespace termin

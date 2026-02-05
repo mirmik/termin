@@ -229,7 +229,16 @@ add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 set(SOVERSION 1)
 set(LIB_VERSION 1.6.0)
 set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
-add_subdirectory(${TERMIN_ROOT}/third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast)
+set(SKIP_INSTALL_ALL ON)  # Don't use recast's own install rules
+add_subdirectory(${TERMIN_ROOT}/third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
+
+# Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
+set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE)
+
+# Add INSTALL_INTERFACE to Recast includes for proper export
+target_include_directories(Recast PUBLIC
+    $<INSTALL_INTERFACE:include/recastnavigation>
+)
 
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
@@ -266,7 +275,13 @@ if(NOT BUILD_CSHARP_BINDINGS)
     )
 endif()
 add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
-target_include_directories(entity_lib PUBLIC ${TERMIN_ROOT}/core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(entity_lib PUBLIC
+    $<BUILD_INTERFACE:${TERMIN_ROOT}/core_c/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/core_c>
+    $<INSTALL_INTERFACE:include/cpp>
+    $<INSTALL_INTERFACE:include>
+)
 if(BUILD_CSHARP_BINDINGS)
     target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent)
 else()
@@ -289,7 +304,10 @@ set_target_properties(entity_lib PROPERTIES
 add_library(animation_lib STATIC
     termin/animation/animation_player.cpp
 )
-target_include_directories(animation_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(animation_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
 target_link_libraries(animation_lib PUBLIC skeleton_lib)
 target_compile_options(animation_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
@@ -344,7 +362,10 @@ else()
     add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
 endif()
 target_include_directories(render_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
+target_include_directories(render_lib PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
 )
 target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL)
@@ -379,8 +400,8 @@ add_library(navmesh_lib SHARED
     termin/navmesh/recast_navmesh_builder_component.cpp
 )
 target_include_directories(navmesh_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/${TERMIN_ROOT}/third/recastnavigation/Recast/Include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
 )
 target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
 target_include_directories(navmesh_lib PRIVATE
@@ -726,7 +747,8 @@ endif()
 
 # Install to python packages
 # Install shared libraries to root termin directory
-install(TARGETS trent entity_lib termin_core render_lib navmesh_lib
+install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
+    EXPORT terminTargets
     RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}  # .dll on Windows
     LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}  # .so on Linux
     ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib  # .lib import libraries on Windows
@@ -734,6 +756,7 @@ install(TARGETS trent entity_lib termin_core render_lib navmesh_lib
 
 # Install static libraries for external module compilation
 install(TARGETS skeleton_lib animation_lib
+    EXPORT terminTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
 )
 
@@ -749,6 +772,16 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
     PATTERN "render/glad" EXCLUDE
+)
+# Recast headers -> include/recastnavigation/
+install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
+    FILES_MATCHING PATTERN "*.h"
+)
+# trent headers -> include/
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 # Set RPATH for shared libraries to find each other in the same directory
@@ -884,3 +917,36 @@ if(BUILD_CSHARP_BINDINGS)
         LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${TERMIN_ROOT}/csharp/Termin.Native/runtimes/linux-x64/native
     )
 endif()
+
+# ============== CMake Package Export ==============
+# Allows external modules to use: find_package(termin REQUIRED)
+
+include(CMakePackageConfigHelpers)
+
+# Export targets to terminTargets.cmake
+install(EXPORT terminTargets
+    FILE terminTargets.cmake
+    NAMESPACE termin::
+    DESTINATION lib/cmake/termin
+)
+
+# Generate package config file
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/terminConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/termin
+)
+
+# Generate version file
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
+    VERSION 1.0.0
+    COMPATIBILITY SameMajorVersion
+)
+
+# Install config files
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
+    DESTINATION lib/cmake/termin
+)
