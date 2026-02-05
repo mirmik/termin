@@ -25,9 +25,9 @@ if ($Help) {
     exit 0
 }
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BuildDir = Join-Path $ScriptDir "build_win"
-$InstallDir = Join-Path $ScriptDir "install_win"
+$ScriptDir = (Split-Path -Parent $MyInvocation.MyCommand.Path) -replace '\\', '/'
+$BuildDir = "$ScriptDir/build_win"
+$InstallDir = "$ScriptDir/install_win"
 
 $BuildType = if ($Debug) { "Debug" } else { "Release" }
 
@@ -40,24 +40,31 @@ Write-Host ""
 # Clean if requested
 if ($Clean) {
     Write-Host "Cleaning build directories..."
-    if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
-    if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
+    $BuildDirWin = $BuildDir -replace '/', '\'
+    $InstallDirWin = $InstallDir -replace '/', '\'
+    if (Test-Path $BuildDirWin) { Remove-Item -Recurse -Force $BuildDirWin }
+    if (Test-Path $InstallDirWin) { Remove-Item -Recurse -Force $InstallDirWin }
 }
 
-# Create build directory
-if (-not (Test-Path $BuildDir)) {
-    New-Item -ItemType Directory -Path $BuildDir | Out-Null
+# Create build directory (convert back to Windows path for Test-Path)
+$BuildDirWin = $BuildDir -replace '/', '\'
+if (-not (Test-Path $BuildDirWin)) {
+    New-Item -ItemType Directory -Path $BuildDirWin | Out-Null
 }
 
 # Configure
-$CacheFile = Join-Path $BuildDir "CMakeCache.txt"
+$CacheFile = "$BuildDir/CMakeCache.txt"
 if (-not (Test-Path $CacheFile) -or $Clean) {
     Write-Host "Configuring CMake..."
-    cmake -S $ScriptDir -B $BuildDir `
-        -DBUILD_EDITOR_MINIMAL=ON `
-        -DBUNDLE_PYTHON=ON `
-        -DCMAKE_BUILD_TYPE=$BuildType `
-        -DCMAKE_INSTALL_PREFIX=$InstallDir
+    $cmakeArgs = @(
+        "-S", $ScriptDir,
+        "-B", $BuildDir,
+        "-DBUILD_EDITOR_MINIMAL=ON",
+        "-DBUNDLE_PYTHON=ON",
+        "-DCMAKE_BUILD_TYPE=$BuildType",
+        "-DCMAKE_INSTALL_PREFIX=$InstallDir"
+    )
+    & cmake @cmakeArgs
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "CMake configuration failed!" -ForegroundColor Red
@@ -78,8 +85,9 @@ if (-not $InstallOnly) {
 
 # Install
 Write-Host "Installing..."
-if (Test-Path $InstallDir) {
-    Remove-Item -Recurse -Force $InstallDir
+$InstallDirWin = $InstallDir -replace '/', '\'
+if (Test-Path $InstallDirWin) {
+    Remove-Item -Recurse -Force $InstallDirWin
 }
 cmake --install $BuildDir --config $BuildType
 

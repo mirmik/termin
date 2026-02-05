@@ -15,7 +15,7 @@ if ($Help) {
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $InstallDir = Join-Path $ScriptDir "install_win"
-$Editor = Join-Path $InstallDir "bin\termin_editor.exe"
+$Editor = Join-Path $InstallDir "bin" | Join-Path -ChildPath "termin_editor.exe"
 
 if (-not (Test-Path $Editor)) {
     Write-Host "Editor not found at $Editor" -ForegroundColor Red
