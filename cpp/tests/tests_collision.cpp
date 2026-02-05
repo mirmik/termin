@@ -354,11 +354,18 @@ TEST_CASE("CollisionWorld mixed colliders")
 
 TEST_CASE("AttachedCollider basic")
 {
-    SphereCollider sphere(1.0);  // at origin
-    GeneralPose3 pose = GeneralPose3::translation(5, 0, 0);
-    tc_transform* tc_t = tc_transform_new_with_pose(
-        *reinterpret_cast<const tc_general_pose3*>(&pose));
-    GeneralTransform3 transform(tc_t);
+    // Create entity pool for test
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(16);
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+
+    // Create entity at position (5, 0, 0)
+    tc_entity_id eid = tc_entity_pool_alloc(pool, "test_entity");
+    double pos[3] = {5.0, 0.0, 0.0};
+    tc_entity_pool_set_local_position(pool, eid, pos);
+    tc_entity_pool_update_transforms(pool);
+
+    GeneralTransform3 transform(pool_h, eid);
+    SphereCollider sphere(1.0);
     AttachedCollider attached(&sphere, &transform);
 
     // Center should be translated
@@ -367,19 +374,28 @@ TEST_CASE("AttachedCollider basic")
     CHECK_EQ(center.y, Approx(0.0).epsilon(1e-12));
     CHECK_EQ(center.z, Approx(0.0).epsilon(1e-12));
 
-    tc_transform_free(tc_t);
+    tc_entity_pool_registry_destroy(pool_h);
 }
 
 TEST_CASE("AttachedCollider in CollisionWorld")
 {
+    // Create entity pool for test
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(16);
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+
+    // Create two entities
+    tc_entity_id eid1 = tc_entity_pool_alloc(pool, "entity1");
+    tc_entity_id eid2 = tc_entity_pool_alloc(pool, "entity2");
+
+    // Entity 2 at position (5, 0, 0) - far from entity 1
+    double pos2[3] = {5.0, 0.0, 0.0};
+    tc_entity_pool_set_local_position(pool, eid2, pos2);
+    tc_entity_pool_update_transforms(pool);
+
+    GeneralTransform3 t1(pool_h, eid1);
+    GeneralTransform3 t2(pool_h, eid2);
     SphereCollider s1(1.0);
     SphereCollider s2(1.0);
-    tc_transform* tc_t1 = tc_transform_new();
-    GeneralPose3 pose2 = GeneralPose3::translation(5, 0, 0);
-    tc_transform* tc_t2 = tc_transform_new_with_pose(
-        *reinterpret_cast<const tc_general_pose3*>(&pose2));
-    GeneralTransform3 t1(tc_t1);
-    GeneralTransform3 t2(tc_t2);
     AttachedCollider a1(&s1, &t1);
     AttachedCollider a2(&s2, &t2);
 
@@ -391,15 +407,16 @@ TEST_CASE("AttachedCollider in CollisionWorld")
     auto manifolds = world.detect_contacts();
     CHECK(manifolds.empty());
 
-    // Move t2 to overlap
-    t2.relocate(GeneralPose3::translation(1.5, 0, 0));
+    // Move entity 2 to overlap with entity 1
+    double pos2_new[3] = {1.5, 0.0, 0.0};
+    tc_entity_pool_set_local_position(pool, eid2, pos2_new);
+    tc_entity_pool_update_transforms(pool);
     world.update_pose(&a2);
 
     manifolds = world.detect_contacts();
     CHECK_EQ(manifolds.size(), 1u);
 
-    tc_transform_free(tc_t1);
-    tc_transform_free(tc_t2);
+    tc_entity_pool_registry_destroy(pool_h);
 }
 
 // ==================== ContactManifold tests ====================
