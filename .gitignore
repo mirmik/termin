@@ -183,3 +183,6 @@ build_win/
 build_standalone/
 install/
 install_win/
+
+
+!cpp/python_bindings.cmake

@@ -19,6 +19,9 @@ if(BUILD_EDITOR_MINIMAL OR BUILD_EDITOR_EXE)
     set(BUILD_STANDALONE ON)
 endif()
 
+# C# SWIG bindings option (must be declared early to skip nanobind when ON)
+option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
+
 # Install prefix for Python modules
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
 if(BUILD_STANDALONE)
@@ -60,79 +63,10 @@ endif()
 
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
-# Find nanobind via pip
-if(WIN32)
-    execute_process(
-        COMMAND python -m nanobind --cmake_dir
-        OUTPUT_VARIABLE nanobind_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    execute_process(
-        COMMAND python3 -m nanobind --cmake_dir
-        OUTPUT_VARIABLE nanobind_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-endif()
-find_package(nanobind CONFIG REQUIRED)
-
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3, Transform, AABB) - using nanobind
-nanobind_add_module(_geom_native
-    termin/bindings/geom/geom_module.cpp
-    termin/bindings/geom/vec3.cpp
-    termin/bindings/geom/vec4.cpp
-    termin/bindings/geom/quat.cpp
-    termin/bindings/geom/mat44.cpp
-    termin/bindings/geom/pose3.cpp
-    termin/bindings/geom/general_pose3.cpp
-    termin/bindings/geom/screw3.cpp
-    termin/bindings/geom/transform.cpp
-    termin/bindings/geom/aabb.cpp
-)
-target_compile_options(_geom_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-target_link_libraries(_geom_native PRIVATE entity_lib)
-
-# Colliders native module (BoxCollider, SphereCollider) - using nanobind
-nanobind_add_module(_colliders_native termin/colliders_bindings.cpp)
-target_link_libraries(_colliders_native PRIVATE entity_lib)
-target_compile_options(_colliders_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Physics native module (RigidBody, PhysicsWorld, Contact) - using nanobind
-nanobind_add_module(_physics_native termin/physics_bindings.cpp)
-target_link_libraries(_physics_native PRIVATE entity_lib)
-target_compile_options(_physics_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Voxels native module (VoxelGrid, voxelization, VoxelGridHandle) - using nanobind
-nanobind_add_module(_voxels_native termin/voxels_bindings.cpp)
-target_compile_options(_voxels_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-target_link_libraries(_voxels_native PRIVATE entity_lib trent)
-
-# Collision native module (BVH, CollisionWorld, ContactManifold) - using nanobind
-nanobind_add_module(_collision_native termin/collision_bindings.cpp)
-target_link_libraries(_collision_native PRIVATE entity_lib)
-target_compile_options(_collision_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Lighting native module (Light, AttenuationCoefficients, LightComponent) - using nanobind
-nanobind_add_module(_lighting_native termin/lighting_bindings.cpp)
-target_link_libraries(_lighting_native PRIVATE entity_lib)
-target_compile_options(_lighting_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Trent library (shared by all resource modules)
+# ============== Trent library ==============
 # trent library - STATIC on Windows (avoids DLL import library issues), SHARED on Linux
 if(WIN32)
     add_library(trent STATIC
@@ -151,12 +85,9 @@ else()
         trent/json.cpp
     )
 endif()
-target_compile_options(trent PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
+target_compile_options(trent PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 set_target_properties(trent PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    # Explicit output directories for multi-config builds
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
     ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
@@ -165,60 +96,15 @@ set_target_properties(trent PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
 )
 
-# Mesh native module (Mesh3, TcMesh, MeshHandle) - using nanobind
-nanobind_add_module(_mesh_native
-    termin/bindings/mesh/mesh_module.cpp
-    termin/mesh_bindings.cpp
-    termin/mesh/tc_mesh.cpp
-)
-target_link_libraries(_mesh_native PRIVATE trent entity_lib)
-target_compile_options(_mesh_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
+# ============== External dependencies ==============
 
-# Skeleton native module (Bone, SkeletonData, SkeletonInstance, SkeletonController) - using nanobind
-# Implementation is in entity_lib, this module only contains bindings
-nanobind_add_module(_skeleton_native
-    termin/bindings/skeleton/skeleton_module.cpp
-)
-target_link_libraries(_skeleton_native PRIVATE trent entity_lib skeleton_lib)
-target_compile_options(_skeleton_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Texture native module (TcTexture, TcTexture) - using nanobind
-nanobind_add_module(_texture_native
-    termin/bindings/texture/texture_module.cpp
-    termin/texture/tc_texture_handle.cpp
-)
-target_link_libraries(_texture_native PRIVATE trent entity_lib)
-target_compile_options(_texture_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Find OpenGL (needed by _graphics_native and _native)
+# Find OpenGL
 find_package(OpenGL REQUIRED)
 
 # Disable optimizations for glad.c (large file, slow to compile with -O2)
 set_source_files_properties(
     termin/render/glad/src/glad.c
     PROPERTIES COMPILE_OPTIONS "-O0"
-)
-
-# Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles) - nanobind
-nanobind_add_module(_graphics_native
-    termin/bindings/graphics/graphics_module.cpp
-)
-target_include_directories(_graphics_native PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-)
-target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib render_lib)
-target_compile_options(_graphics_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-set_target_properties(_graphics_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 # Core C library
@@ -240,7 +126,7 @@ target_include_directories(Recast PUBLIC
     $<INSTALL_INTERFACE:include/recastnavigation>
 )
 
-# Entity shared library (shared by _entity_native and _native)
+# ============== Entity shared library ==============
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
 # are the same instance across all Python extension modules.
 set(ENTITY_LIB_SOURCES
@@ -285,13 +171,26 @@ target_include_directories(entity_lib PUBLIC
 if(BUILD_CSHARP_BINDINGS)
     target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent)
 else()
+    # Find nanobind for entity_lib linking
+    if(WIN32)
+        execute_process(
+            COMMAND python -m nanobind --cmake_dir
+            OUTPUT_VARIABLE nanobind_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    else()
+        execute_process(
+            COMMAND python3 -m nanobind --cmake_dir
+            OUTPUT_VARIABLE nanobind_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    endif()
+    find_package(nanobind CONFIG REQUIRED)
     target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
-target_compile_options(entity_lib PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
+target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
 set_target_properties(entity_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -300,7 +199,19 @@ set_target_properties(entity_lib PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
-# Animation library (AnimationPlayer component)
+# ============== Skeleton library ==============
+add_library(skeleton_lib STATIC
+    termin/skeleton/skeleton_instance.cpp
+    termin/render/skeleton_controller.cpp
+)
+target_link_libraries(skeleton_lib PUBLIC entity_lib PRIVATE trent)
+target_compile_options(skeleton_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(skeleton_lib PRIVATE termin/pch.hpp)
+set_target_properties(skeleton_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# ============== Animation library ==============
 add_library(animation_lib STATIC
     termin/animation/animation_player.cpp
 )
@@ -309,16 +220,14 @@ target_include_directories(animation_lib PUBLIC
     $<INSTALL_INTERFACE:include/cpp>
 )
 target_link_libraries(animation_lib PUBLIC skeleton_lib)
-target_compile_options(animation_lib PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
+target_compile_options(animation_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(animation_lib PRIVATE termin/pch.hpp)
 set_target_properties(animation_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# Render library (Drawable vtable, shared by components that need rendering)
+# ============== Render library ==============
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
 # SHARED for Python (consistent RTTI), STATIC for C# (WHOLEARCHIVE needs static lib)
 set(RENDER_LIB_SOURCES
@@ -372,15 +281,12 @@ target_include_directories(render_lib PRIVATE
 target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL)
 if(WIN32)
     # GLAD export macros for Windows DLL
-    # RENDER_LIB_EXPORTS for dllexport/dllimport
     target_compile_definitions(render_lib
         PRIVATE GLAD_API_CALL_EXPORT GLAD_API_CALL_EXPORT_BUILD RENDER_LIB_EXPORTS
         PUBLIC GLAD_API_CALL_EXPORT
     )
 endif()
-target_compile_options(render_lib PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
+target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -390,18 +296,23 @@ set_target_properties(render_lib PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
-# NavMesh library (RecastNavMeshBuilderComponent)
-add_library(navmesh_lib SHARED
-    termin/navmesh/recast_navmesh_builder_component.cpp
-)
+# ============== NavMesh library ==============
+# STATIC for C# (to avoid PCH symbol conflicts), SHARED for Python
+if(BUILD_CSHARP_BINDINGS)
+    add_library(navmesh_lib STATIC
+        termin/navmesh/recast_navmesh_builder_component.cpp
+    )
+else()
+    add_library(navmesh_lib SHARED
+        termin/navmesh/recast_navmesh_builder_component.cpp
+    )
+endif()
 target_include_directories(navmesh_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
 target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
-target_compile_options(navmesh_lib PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
+target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
 set_target_properties(navmesh_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -411,82 +322,16 @@ set_target_properties(navmesh_lib PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
-# Skeleton static library (linked into _skeleton_native, _animation_native, _native)
-# Static because it uses nanobind runtime and can't be a DLL without symbol conflicts
-add_library(skeleton_lib STATIC
-    termin/skeleton/skeleton_instance.cpp
-    termin/render/skeleton_controller.cpp
-)
-target_link_libraries(skeleton_lib PUBLIC entity_lib PRIVATE trent)
-target_compile_options(skeleton_lib PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-target_precompile_headers(skeleton_lib PRIVATE termin/pch.hpp)
-set_target_properties(skeleton_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-)
-
-# Viewport native module (TcViewport) - nanobind
-# Must be before _entity_native since CameraComponent uses TcViewport
-nanobind_add_module(_viewport_native
-    termin/bindings/viewport/viewport_module.cpp
-)
-target_link_libraries(_viewport_native PRIVATE entity_lib)
-target_compile_definitions(_viewport_native PRIVATE TERMIN_HAS_NANOBIND)
-target_compile_options(_viewport_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Entity native module (Component, Entity, Scene, registries) - nanobind
-nanobind_add_module(_entity_native
-    termin/bindings/entity/entity_module.cpp
-    termin/bindings/entity/entity_bindings.cpp
-    termin/bindings/camera/camera_bindings.cpp
-    termin/bindings/camera/orbit_camera_bindings.cpp
-    termin/bindings/colliders/collider_bindings.cpp
-    termin/bindings/input/input_events_bindings.cpp
-    termin/tc_scene.cpp
-    termin/tc_scene_bindings.cpp
-    termin/tc_scene_lighting_bindings.cpp
-)
-target_link_libraries(_entity_native PRIVATE entity_lib trent render_lib)
-target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
-target_compile_options(_entity_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Animation native module (TcAnimationClip, AnimationPlayer) - nanobind
-# Must be after entity_lib since it links against it
-nanobind_add_module(_animation_native
-    termin/bindings/animation/animation_module.cpp
-    termin/animation/animation_player.cpp
-)
-target_link_libraries(_animation_native PRIVATE trent entity_lib skeleton_lib)
-target_compile_options(_animation_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# NavMesh native module (RecastNavMeshBuilderComponent) - nanobind
-nanobind_add_module(_navmesh_native
-    termin/bindings/navmesh/navmesh_module.cpp
-)
-target_link_libraries(_navmesh_native PRIVATE trent entity_lib navmesh_lib render_lib)
-target_compile_options(_navmesh_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Find SDL2 (optional on Windows - pysdl2 can be used instead)
+# ============== SDL2 (optional) ==============
 option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
 
 if(USE_SYSTEM_SDL2)
     if(WIN32)
-        # Check common Windows locations
         set(SDL2_SEARCH_PATHS
             "C:/SDL2"
             "$ENV{SDL2_DIR}"
             "$ENV{PROGRAMFILES}/SDL2"
         )
-        # Find SDL2 include directory (parent of SDL2/SDL.h)
         find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
             PATH_SUFFIXES include
             PATHS ${SDL2_SEARCH_PATHS}
@@ -507,7 +352,6 @@ if(USE_SYSTEM_SDL2)
             if(SDL2MAIN_LIBRARY)
                 list(APPEND SDL2_LIBRARIES ${SDL2MAIN_LIBRARY})
             endif()
-            # Find SDL2.dll for installation
             get_filename_component(SDL2_LIB_DIR ${SDL2_LIBRARY} DIRECTORY)
             find_file(SDL2_DLL
                 NAMES SDL2.dll
@@ -532,112 +376,15 @@ else()
     message(STATUS "System SDL2 disabled, using pysdl2")
 endif()
 
-# Unified native module (Render + SDL + Scene + Skeleton + Inspect + Assets) - nanobind
-# Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
-# Note: Graphics types (Color4, Size2i, etc), GraphicsBackend, handles are in _graphics_native
-# Note: Component, Entity are in _entity_native module, imported at runtime
-
-# SDL2 sources (optional)
-set(_NATIVE_SDL_SOURCES "")
-if(SDL2_FOUND)
-    set(_NATIVE_SDL_SOURCES
-        termin/sdl_bindings.cpp
-        termin/platform/sdl_render_surface.cpp
-    )
+# ============== Python bindings (nanobind) ==============
+if(NOT BUILD_CSHARP_BINDINGS)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/python_bindings.cmake)
 endif()
 
-nanobind_add_module(_native
-    termin/bindings.cpp
-    termin/bindings/render/render_module.cpp
-    termin/bindings/render/shader.cpp
-    termin/bindings/render/shader_parser.cpp
-    termin/bindings/render/camera.cpp
-    termin/bindings/render/shadow.cpp
-    termin/bindings/render/resource_spec.cpp
-    termin/bindings/render/immediate.cpp
-    termin/bindings/render/wireframe.cpp
-    termin/bindings/render/frame_pass.cpp
-    termin/bindings/render/tc_pass_bindings.cpp
-    termin/bindings/render/tc_render_surface_bindings.cpp
-    termin/bindings/render/tc_input_manager_bindings.cpp
-    termin/bindings/render/tc_display_bindings.cpp
-    termin/bindings/input/simple_display_input_manager_bindings.cpp
-    termin/bindings/render/render_pipeline_bindings.cpp
-    termin/bindings/render/scene_pipeline_template_bindings.cpp
-    termin/bindings/render/material.cpp
-    termin/bindings/render/drawable.cpp
-    termin/bindings/render/renderers.cpp
-    termin/bindings/render/solid_primitive.cpp
-    termin/bindings/render/render_engine.cpp
-    termin/bindings/render/rendering_manager_bindings.cpp
-    termin/bindings/editor/gizmo_bindings.cpp
-    termin/editor/gizmo_manager.cpp
-    termin/editor/transform_gizmo.cpp
-    ${_NATIVE_SDL_SOURCES}
-    termin/scene/scene_manager.cpp
-    termin/scene/scene_manager_bindings.cpp
-    # tc_viewport_bindings.cpp moved to _viewport_native module
-    termin/tc_component_python.cpp
-    termin/tc_component_python_bindings.cpp
-    termin/profiler_bindings.cpp
-    termin/skeleton_bindings.cpp
-    termin/inspect_bindings.cpp
-    termin/log_bindings.cpp
-    termin/kind_bindings.cpp
-    termin/assets/assets_bindings.cpp
-    termin/assets/handles.cpp
-    termin/render/shader_parser.cpp
-    termin/render/shadow_camera.cpp
-    termin/render/immediate_renderer.cpp
-    termin/render/wireframe_renderer.cpp
-    termin/render/solid_primitive_renderer.cpp
-    termin/render/glsl_preprocessor.cpp
-    termin/texture/tc_texture_handle.cpp
-    termin/render/skinned_mesh_renderer.cpp
-    termin/render/fbo_pool.cpp
-    termin/render/render_engine.cpp
-    termin/render/color_pass.cpp
-    termin/render/collider_gizmo_pass.cpp
-    termin/render/present_pass.cpp
-    termin/render/depth_pass.cpp
-    termin/render/normal_pass.cpp
-    termin/render/shadow_pass.cpp
-    termin/render/id_pass.cpp
-    termin/render/material_pass.cpp
-    termin/render/bloom_pass.cpp
-    termin/render/grayscale_pass.cpp
-    termin/render/tonemap_pass.cpp
-)
-target_include_directories(_native PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-)
-target_link_libraries(_native PRIVATE OpenGL::GL trent entity_lib skeleton_lib navmesh_lib render_lib)
-
-if(SDL2_FOUND)
-    target_include_directories(_native PRIVATE ${SDL2_INCLUDE_DIRS})
-    target_link_libraries(_native PRIVATE ${SDL2_LIBRARIES})
-    target_compile_definitions(_native PRIVATE TERMIN_HAS_SDL2)
-endif()
-
-if(UNIX AND NOT APPLE)
-    target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
-endif()
-target_compile_definitions(_native PRIVATE TERMIN_HAS_NANOBIND)
-target_compile_options(_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-set_target_properties(_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-# Exclude glad.c from precompiled headers (it's C, not C++)
-set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-
-# ---------------- Editor Executable ----------------
+# ============== Editor Executable ==============
 option(BUILD_EDITOR_EXE "Build termin_editor executable with embedded Python" OFF)
 option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
 
-# Minimal version - just Python embedding, PyQt6 handles Qt
 if(BUILD_EDITOR_MINIMAL)
     add_executable(termin_editor
         app/main_minimal.cpp
@@ -646,21 +393,14 @@ if(BUILD_EDITOR_MINIMAL)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${Python_INCLUDE_DIRS}
     )
-    target_link_libraries(termin_editor PRIVATE
-        Python::Python
-    )
-    target_compile_options(termin_editor PRIVATE
-        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-    )
+    target_link_libraries(termin_editor PRIVATE Python::Python)
+    target_compile_options(termin_editor PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     set_target_properties(termin_editor PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
     if(WIN32)
-        set_target_properties(termin_editor PROPERTIES
-            WIN32_EXECUTABLE FALSE
-        )
+        set_target_properties(termin_editor PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
-    # For standalone: exe in bin/, libs in lib/python/termin/
     install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     set_target_properties(termin_editor PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib/python/termin"
@@ -668,7 +408,6 @@ if(BUILD_EDITOR_MINIMAL)
     )
 endif()
 
-# Full version - C++ Qt + embedded Python
 if(BUILD_EDITOR_EXE)
     find_package(Qt6 COMPONENTS Widgets QUIET)
     if(NOT Qt6_FOUND)
@@ -693,29 +432,24 @@ if(BUILD_EDITOR_EXE)
         render_lib
         ${SDL2_LIBRARIES}
     )
-    target_compile_options(termin_editor_qt PRIVATE
-        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-    )
+    target_compile_options(termin_editor_qt PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     set_target_properties(termin_editor_qt PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
         INSTALL_RPATH "$ORIGIN"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
     if(WIN32)
-        set_target_properties(termin_editor_qt PROPERTIES
-            WIN32_EXECUTABLE FALSE
-        )
+        set_target_properties(termin_editor_qt PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
     install(TARGETS termin_editor_qt RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
 
-# ---------------- Tests ----------------
+# ============== Tests ==============
 option(BUILD_TESTS "Build C++ tests" OFF)
 
 if(BUILD_TESTS)
     enable_testing()
 
-    # Default config for multi-config generators so that plain `ctest` works
     set(DEFAULT_CTEST_CONFIG "Debug")
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake.in
@@ -734,29 +468,9 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
     target_link_libraries(termin_tests PRIVATE entity_lib)
-    target_compile_options(termin_tests PRIVATE
-        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-    )
+    target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 
-    # Nanobind module to run C++ tests from Python
-    nanobind_add_module(_cpp_tests
-        tests/tests_binding.cpp
-        tests/tests_general_pose3.cpp
-        tests/tests_colliders.cpp
-        tests/tests_collision.cpp
-    )
-    target_include_directories(_cpp_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    )
-    target_link_libraries(_cpp_tests PRIVATE entity_lib)
-    target_compile_options(_cpp_tests PRIVATE
-        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-    )
-    install(TARGETS _cpp_tests DESTINATION ${TERMIN_PYTHON_PREFIX}/tests)
-
-    # Convenience target to run tests with correct config on multi-config generators (MSVC)
     add_custom_target(run_tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
         DEPENDS termin_tests
@@ -764,152 +478,54 @@ if(BUILD_TESTS)
         COMMENT "Running C++ tests")
 endif()
 
-# Install to python packages
-# Install shared libraries to root termin directory
+# ============== Install shared libraries ==============
 install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
     EXPORT terminTargets
-    RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}  # .dll on Windows
-    LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}  # .so on Linux
-    ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib  # .lib import libraries on Windows
+    RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}
+    LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}
+    ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib
 )
 
-# Install SDL2.dll on Windows
 if(WIN32 AND SDL2_DLL)
     install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_PREFIX})
 endif()
 
-# Install static libraries for external module compilation
 install(TARGETS skeleton_lib animation_lib
     EXPORT terminTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
 )
 
-# Install header files for external module compilation
-# core_c headers -> include/core_c/
+# Install headers
 install(DIRECTORY ${TERMIN_ROOT}/core_c/include/
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include/core_c
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
-# C++ headers -> include/cpp/
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include/cpp
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
     PATTERN "render/glad" EXCLUDE
 )
-# Recast headers -> include/recastnavigation/
 install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
     FILES_MATCHING PATTERN "*.h"
 )
-# trent headers -> include/
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
-# Set RPATH for shared libraries to find each other in the same directory
-set_target_properties(entity_lib PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-
-# Set RPATH for all modules that depend on entity_lib/trent
-# Modules in subdirectories need $ORIGIN/.. to find libs in parent (termin/)
-set_target_properties(_geom_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_colliders_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_physics_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_voxels_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_collision_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_lighting_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_texture_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_graphics_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_mesh_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_skeleton_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_viewport_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_entity_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_animation_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/../.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_navmesh_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-
-install(TARGETS _geom_native DESTINATION ${TERMIN_PYTHON_PREFIX}/geombase)
-install(TARGETS _colliders_native DESTINATION ${TERMIN_PYTHON_PREFIX}/colliders)
-install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/physics)
-install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_PREFIX}/voxels)
-install(TARGETS _collision_native DESTINATION ${TERMIN_PYTHON_PREFIX}/collision)
-install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_PREFIX}/visualization/animation)
-install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/navmesh)
-install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_PREFIX}/lighting)
-install(TARGETS _mesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/mesh)
-install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_PREFIX}/skeleton)
-install(TARGETS _texture_native DESTINATION ${TERMIN_PYTHON_PREFIX}/texture)
-install(TARGETS _graphics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/graphics)
-install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_PREFIX}/viewport)
-install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_PREFIX}/entity)
-install(TARGETS _native DESTINATION ${TERMIN_PYTHON_PREFIX})
-
 # ============== C# SWIG Bindings ==============
-option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
-
 if(BUILD_CSHARP_BINDINGS)
-    # SWIG wrapper library for C# bindings
-    # This creates termin.dll that C# P/Invoke calls
-    # Note: glad.c is included via WHOLEARCHIVE from render_lib
     add_library(termin SHARED
-        ${CMAKE_CURRENT_SOURCE_DIR}/${TERMIN_ROOT}/csharp/termin_wrap.cxx
+        ${TERMIN_ROOT}/csharp/termin_wrap.cxx
         termin/render/opengl/tc_opengl.cpp
     )
     target_include_directories(termin PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/${TERMIN_ROOT}/core_c/include
+        ${TERMIN_ROOT}/core_c/include
         ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     )
-    # Link render_lib with whole-archive to include static pass registrations
     add_dependencies(termin render_lib)
     if(MSVC)
         target_link_libraries(termin PRIVATE
@@ -930,45 +546,36 @@ if(BUILD_CSHARP_BINDINGS)
     endif()
     target_compile_definitions(termin PRIVATE SWIG_CSHARP TC_EXPORTS)
     if(WIN32)
-        # Export all symbols on Windows
         set_target_properties(termin PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()
-    target_compile_options(termin PRIVATE
-        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-    )
+    target_compile_options(termin PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     install(TARGETS termin
-        RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/${TERMIN_ROOT}/csharp/Termin.Native/runtimes/win-x64/native
-        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${TERMIN_ROOT}/csharp/Termin.Native/runtimes/linux-x64/native
+        RUNTIME DESTINATION ${TERMIN_ROOT}/csharp/Termin.Native/runtimes/win-x64/native
+        LIBRARY DESTINATION ${TERMIN_ROOT}/csharp/Termin.Native/runtimes/linux-x64/native
     )
 endif()
 
 # ============== CMake Package Export ==============
-# Allows external modules to use: find_package(termin REQUIRED)
-
 include(CMakePackageConfigHelpers)
 
-# Export targets to terminTargets.cmake
 install(EXPORT terminTargets
     FILE terminTargets.cmake
     NAMESPACE termin::
     DESTINATION lib/cmake/termin
 )
 
-# Generate package config file
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/terminConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
     INSTALL_DESTINATION lib/cmake/termin
 )
 
-# Generate version file
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
     VERSION 1.0.0
     COMPATIBILITY SameMajorVersion
 )
 
-# Install config files
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
