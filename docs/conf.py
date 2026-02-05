@@ -1,7 +1,7 @@
 # Sphinx configuration for Termin documentation
 
 project = "Termin"
-copyright = "2024, mirmik"
+copyright = "2026, mirmik"
 author = "mirmik"
 
 extensions = [
