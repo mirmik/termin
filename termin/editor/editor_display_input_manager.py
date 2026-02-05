@@ -321,29 +321,24 @@ class EditorDisplayInputManager:
             Entity or None.
         """
         from termin._native import log
-
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
             if viewport is None:
-                log.debug("[pick_entity_at] viewport is None")
+                log.warn("[pick_entity_at] viewport is None")
                 return None
         color = self.pick_color_at(x, y, viewport, buffer_name="id")
         if color is None:
-            log.debug("[pick_entity_at] pick_color_at returned None")
+            log.warn("[pick_entity_at] pick_color_at returned None")
             return None
         r, g, b, a = color
         pid = rgb_to_id(r, g, b)
-        log.debug(f"[pick_entity_at] color=({r:.3f},{g:.3f},{b:.3f},{a:.3f}) pid={pid}")
         if pid == 0:
             return None
         scene = viewport.scene
-        log.debug(f"[pick_entity_at] viewport.scene={scene} is_alive={scene.is_alive() if scene else 'N/A'}")
         if scene is None:
-            log.debug("[pick_entity_at] scene is None!")
+            log.warn("[pick_entity_at] viewport.scene is None")
             return None
-        ent = scene.get_entity_by_pick_id(pid)
-        log.debug(f"[pick_entity_at] get_entity_by_pick_id({pid}) -> {ent}")
-        return ent
+        return scene.get_entity_by_pick_id(pid)
 
     def pick_depth_at(
         self,

@@ -1,0 +1,262 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "",
+    "background_color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.07999999821186066,
+      1.0
+    ],
+    "entities": [
+      {
+        "uuid": "c1dfe026-30b2-46a9-8f86-7b522f89c5f9",
+        "name": "Platform",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "scale": [
+          10.0,
+          10.0,
+          0.2
+        ],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube"
+              },
+              "material": {
+                "uuid": "00000000-0001-0000-0001-000000000003",
+                "name": "NormalizedPBR",
+                "type": "uuid"
+              },
+              "cast_shadow": true,
+              "_override_material": true,
+              "_overridden_material_data": {
+                "phases_uniforms": [
+                  {
+                    "u_diffuse_mul": 3.140000104904175,
+                    "u_color": [
+                      0.7114061117172241,
+                      0.3617303669452667,
+                      0.3617303669452667,
+                      1.0
+                    ]
+                  },
+                  {
+                    "u_color": [
+                      0.7114061117172241,
+                      0.3617303669452667,
+                      0.3617303669452667,
+                      1.0
+                    ],
+                    "u_metallic": 0.0,
+                    "u_roughness": 0.5,
+                    "u_subsurface": 0.0,
+                    "u_diffuse_mul": 3.140000104904175,
+                    "u_emission_color": [
+                      0.0,
+                      0.0,
+                      0.0,
+                      1.0
+                    ],
+                    "u_emission_intensity": 0.0,
+                    "u_normal_strength": 1.0
+                  }
+                ],
+                "phases_textures": [
+                  {},
+                  {
+                    "u_albedo_texture": {
+                      "uuid": "5fb7972ad02ddfad",
+                      "name": "__white_1x1__",
+                      "type": "path",
+                      "path": "__white_1x1__"
+                    },
+                    "u_normal_texture": {
+                      "uuid": "07151644d3bb92c7",
+                      "name": "__normal_1x1__",
+                      "type": "path",
+                      "path": "__normal_1x1__"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fc45e9d9-ceaf-4784-a652-0c7fe9de3aab",
+        "name": "Light",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [
+            0.0,
+            -1.9532655477523804,
+            3.948225975036621
+          ],
+          "rotation": [
+            -0.5275303721427917,
+            0.0,
+            0.0,
+            0.8495360612869263
+          ]
+        },
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "components": [
+          {
+            "type": "LightComponent",
+            "data": {
+              "light_type": "directional",
+              "color": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "intensity": 1.0,
+              "shadows_enabled": false,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 1.0,
+              "max_distance": 100.0,
+              "split_lambda": 0.5,
+              "cascade_blend": true
+            }
+          }
+        ]
+      }
+    ],
+    "layer_names": {
+      "1": "Actor",
+      "2": "NavMesh"
+    },
+    "flag_names": {},
+    "viewport_configs": [],
+    "scene_pipelines": [],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.10000000149011612,
+    "shadow_settings": {
+      "method": 1.0,
+      "softness": 1.0,
+      "bias": 0.004999999888241291
+    },
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.5,
+      0.699999988079071,
+      0.8999999761581421
+    ],
+    "skybox_top_color": [
+      0.4000000059604645,
+      0.6000000238418579,
+      0.8999999761581421
+    ],
+    "skybox_bottom_color": [
+      0.6000000238418579,
+      0.5,
+      0.4000000059604645
+    ]
+  },
+  "editor": {
+    "camera": {
+      "position": [
+        16.191818763420425,
+        -6.440603355900949,
+        8.042042346606374
+      ],
+      "rotation": [
+        -0.17256928685148418,
+        -0.11596175120712196,
+        0.5455570451770633,
+        0.8118745124403276
+      ],
+      "radius": 21.5,
+      "editor_entities": {
+        "camera": [
+          {
+            "type": "CameraComponent",
+            "data": {
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 45.0,
+              "fov_mode": "FixHorizontal"
+            }
+          },
+          {
+            "type": "OrbitCameraController",
+            "data": {
+              "radius": 21.5,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "type": "ViewportHintComponent",
+            "data": {
+              "display_name": "",
+              "enabled": true,
+              "pipeline_name": "(Editor)",
+              "layer_mask": "0xff"
+            }
+          }
+        ],
+        "editor_ui": [
+          {
+            "type": "UIComponent",
+            "data": {
+              "display_name": "",
+              "enabled": true
+            }
+          },
+          {
+            "type": "EditorCameraUIController",
+            "data": {
+              "display_name": "",
+              "enabled": true,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "ortho_enabled": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}

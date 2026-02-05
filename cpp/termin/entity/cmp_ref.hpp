@@ -101,9 +101,7 @@ public:
     // Equality comparison
     bool operator==(const CmpRef& other) const {
         return ptr == other.ptr &&
-               entity_handle.pool == other.entity_handle.pool &&
-               entity_handle.id.index == other.entity_handle.id.index &&
-               entity_handle.id.generation == other.entity_handle.id.generation;
+               tc_entity_handle_eq(entity_handle, other.entity_handle);
     }
 
     bool operator!=(const CmpRef& other) const {

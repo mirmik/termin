@@ -8,6 +8,25 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Ensure standard install dir variables (CMAKE_INSTALL_INCLUDEDIR, etc.) are set.
 include(GNUInstallDirs)
 
+# Project root - either from parent CMakeLists.txt or compute from here
+if(NOT DEFINED TERMIN_ROOT)
+    set(TERMIN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+endif()
+
+# Standalone build mode (C++ app with embedded Python)
+option(BUILD_STANDALONE "Build as standalone C++ application" OFF)
+if(BUILD_EDITOR_MINIMAL OR BUILD_EDITOR_EXE)
+    set(BUILD_STANDALONE ON)
+endif()
+
+# Install prefix for Python modules
+# For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
+if(BUILD_STANDALONE)
+    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/lib/python/termin")
+else()
+    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}")
+endif()
+
 # Default to Release build for single-config generators
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -204,13 +223,13 @@ set_target_properties(_graphics_native PROPERTIES
 
 # Core C library
 set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
+add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
 # Recast library only (from recastnavigation, avoids configure_file race conditions)
 set(SOVERSION 1)
 set(LIB_VERSION 1.6.0)
 set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast)
+add_subdirectory(${TERMIN_ROOT}/third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast)
 
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
@@ -233,8 +252,8 @@ set(ENTITY_LIB_SOURCES
     termin/viewport_config.cpp
     termin/tc_collision_c_api.cpp
     termin/collision/collision_world_c.cpp
-    ../core_c/src/tc_inspect_instance.cpp
-    ../core_c/src/tc_rendering_manager_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_inspect_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/modules/module_loader.cpp
     termin/render/tc_value_trent.cpp
@@ -247,7 +266,7 @@ if(NOT BUILD_CSHARP_BINDINGS)
     )
 endif()
 add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
-target_include_directories(entity_lib PUBLIC ../core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(entity_lib PUBLIC ${TERMIN_ROOT}/core_c/include ${CMAKE_CURRENT_SOURCE_DIR})
 if(BUILD_CSHARP_BINDINGS)
     target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent)
 else()
@@ -361,7 +380,7 @@ add_library(navmesh_lib SHARED
 )
 target_include_directories(navmesh_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../third/recastnavigation/Recast/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/${TERMIN_ROOT}/third/recastnavigation/Recast/Include
 )
 target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
 target_include_directories(navmesh_lib PRIVATE
@@ -601,7 +620,12 @@ if(BUILD_EDITOR_MINIMAL)
             WIN32_EXECUTABLE FALSE
         )
     endif()
-    install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
+    # For standalone: exe in bin/, libs in lib/python/termin/
+    install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    set_target_properties(termin_editor PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib/python/termin"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
 endif()
 
 # Full version - C++ Qt + embedded Python
@@ -690,7 +714,7 @@ if(BUILD_TESTS)
     target_compile_options(_cpp_tests PRIVATE
         $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
     )
-    install(TARGETS _cpp_tests DESTINATION ${CMAKE_INSTALL_PREFIX}/tests)
+    install(TARGETS _cpp_tests DESTINATION ${TERMIN_PYTHON_PREFIX}/tests)
 
     # Convenience target to run tests with correct config on multi-config generators (MSVC)
     add_custom_target(run_tests
@@ -703,9 +727,9 @@ endif()
 # Install to python packages
 # Install shared libraries to root termin directory
 install(TARGETS trent entity_lib termin_core render_lib
-    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib  # .lib import libraries on Windows
+    RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}  # .dll on Windows
+    LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}  # .so on Linux
+    ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib  # .lib import libraries on Windows
 )
 
 # Install static libraries for external module compilation
@@ -715,7 +739,7 @@ install(TARGETS skeleton_lib animation_lib
 
 # Install header files for external module compilation
 # core_c headers -> include/core_c/
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../core_c/include/
+install(DIRECTORY ${TERMIN_ROOT}/core_c/include/
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include/core_c
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
@@ -796,21 +820,21 @@ set_target_properties(_native PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
-install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
-install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)
-install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
-install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
-install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
-install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
-install(TARGETS _navmesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/navmesh)
-install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
-install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
-install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
-install(TARGETS _texture_native DESTINATION ${CMAKE_INSTALL_PREFIX}/texture)
-install(TARGETS _graphics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/graphics)
-install(TARGETS _viewport_native DESTINATION ${CMAKE_INSTALL_PREFIX}/viewport)
-install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
-install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(TARGETS _geom_native DESTINATION ${TERMIN_PYTHON_PREFIX}/geombase)
+install(TARGETS _colliders_native DESTINATION ${TERMIN_PYTHON_PREFIX}/colliders)
+install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/physics)
+install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_PREFIX}/voxels)
+install(TARGETS _collision_native DESTINATION ${TERMIN_PYTHON_PREFIX}/collision)
+install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_PREFIX}/visualization/animation)
+install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/navmesh)
+install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_PREFIX}/lighting)
+install(TARGETS _mesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/mesh)
+install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_PREFIX}/skeleton)
+install(TARGETS _texture_native DESTINATION ${TERMIN_PYTHON_PREFIX}/texture)
+install(TARGETS _graphics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/graphics)
+install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_PREFIX}/viewport)
+install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_PREFIX}/entity)
+install(TARGETS _native DESTINATION ${TERMIN_PYTHON_PREFIX})
 
 # ============== C# SWIG Bindings ==============
 option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
@@ -820,12 +844,12 @@ if(BUILD_CSHARP_BINDINGS)
     # This creates termin.dll that C# P/Invoke calls
     # Note: glad.c is included via WHOLEARCHIVE from render_lib
     add_library(termin SHARED
-        ${CMAKE_CURRENT_SOURCE_DIR}/../csharp/termin_wrap.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/${TERMIN_ROOT}/csharp/termin_wrap.cxx
         termin/render/opengl/tc_opengl.cpp
     )
     target_include_directories(termin PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../core_c/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/${TERMIN_ROOT}/core_c/include
         ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     )
     # Link render_lib with whole-archive to include static pass registrations
@@ -856,7 +880,7 @@ if(BUILD_CSHARP_BINDINGS)
         $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
     )
     install(TARGETS termin
-        RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/../csharp/Termin.Native/runtimes/win-x64/native
-        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/../csharp/Termin.Native/runtimes/linux-x64/native
+        RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/${TERMIN_ROOT}/csharp/Termin.Native/runtimes/win-x64/native
+        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${TERMIN_ROOT}/csharp/Termin.Native/runtimes/linux-x64/native
     )
 endif()
