@@ -255,6 +255,39 @@ std::string ModuleLoader::expand_output_pattern(const std::string& pattern, cons
         pos += name.length();
     }
 
+#ifndef _WIN32
+    // On Linux/macOS: convert Windows-style paths to Unix-style
+    // "build/Release/${name}.dll" -> "build/lib${name}.so"
+
+    // Replace backslashes with forward slashes
+    for (char& c : result) {
+        if (c == '\\') c = '/';
+    }
+
+    // Remove /Release/ or /Debug/ from path (CMake single-config on Unix)
+    pos = result.find("/Release/");
+    if (pos != std::string::npos) {
+        result.erase(pos, 8);  // Remove "/Release" but keep trailing "/"
+    }
+    pos = result.find("/Debug/");
+    if (pos != std::string::npos) {
+        result.erase(pos, 6);  // Remove "/Debug" but keep trailing "/"
+    }
+
+    // Replace .dll with .so
+    pos = result.rfind(".dll");
+    if (pos != std::string::npos && pos == result.length() - 4) {
+        result.replace(pos, 4, ".so");
+    }
+
+    // Add lib prefix if not present
+    size_t last_slash = result.rfind('/');
+    size_t name_start = (last_slash != std::string::npos) ? last_slash + 1 : 0;
+    if (result.substr(name_start, 3) != "lib") {
+        result.insert(name_start, "lib");
+    }
+#endif
+
     return result;
 }
 
@@ -272,8 +305,34 @@ bool ModuleLoader::run_build_command(const std::string& command, const std::stri
         return false;
     }
 
-    // Run build command
-    std::string full_cmd = command + " 2>&1";
+    // Build command with CMAKE_PREFIX_PATH for find_package(termin)
+    std::string full_cmd = command;
+
+    // Derive install prefix from lib_dir (lib_dir is PREFIX/lib, we need PREFIX)
+    if (!_lib_dir.empty()) {
+        fs::path lib_path(_lib_dir);
+        fs::path prefix = lib_path.parent_path();
+        if (fs::exists(prefix / "lib" / "cmake" / "termin")) {
+            // Inject CMAKE_PREFIX_PATH into cmake commands
+            std::string prefix_arg = "-DCMAKE_PREFIX_PATH=" + prefix.string();
+
+            // Find "cmake -B" and insert prefix path after it
+            size_t pos = full_cmd.find("cmake -B");
+            if (pos != std::string::npos) {
+                // Find the end of "-B <dir>" part
+                size_t space_after_B = full_cmd.find(' ', pos + 8);
+                if (space_after_B != std::string::npos) {
+                    size_t next_space = full_cmd.find(' ', space_after_B + 1);
+                    if (next_space == std::string::npos) {
+                        next_space = full_cmd.length();
+                    }
+                    full_cmd.insert(next_space, " " + prefix_arg);
+                }
+            }
+        }
+    }
+
+    full_cmd += " 2>&1";
     FILE* pipe = popen(full_cmd.c_str(), "r");
     if (!pipe) {
         fs::current_path(old_cwd);

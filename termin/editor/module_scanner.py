@@ -55,38 +55,42 @@ class ModuleScanner:
         import termin
 
         termin_path = os.path.dirname(termin.__file__)
-        project_root = os.path.normpath(os.path.join(termin_path, ".."))
 
-        # Try development paths first (source checkout)
-        core_c_dev = os.path.join(project_root, "core_c", "include")
-        core_cpp_dev = os.path.join(project_root, "cpp")
+        # Detect install root from termin package location
+        # termin_path is like: install/lib/python/termin
+        # install_root should be: install/
+        install_root = os.path.normpath(os.path.join(termin_path, "..", "..", ".."))
 
-        # Check for pip install -e . (editable install) with build dir
-        lib_dir_build = os.path.join(
-            project_root, "build", "temp.win-amd64-cpython-312", "Release", "bin"
+        # Installed package paths (standard install layout)
+        core_c_install = os.path.join(install_root, "include", "core_c")
+        core_cpp_install = os.path.join(install_root, "include", "cpp")
+        lib_dir_install = os.path.join(install_root, "lib")
+
+        # Development paths (source checkout)
+        dev_root = os.path.normpath(os.path.join(termin_path, ".."))
+        core_c_dev = os.path.join(dev_root, "core_c", "include")
+        core_cpp_dev = os.path.join(dev_root, "cpp")
+        lib_dir_dev = os.path.join(
+            dev_root, "build", "temp.win-amd64-cpython-312", "Release", "bin"
         )
-        if not os.path.exists(lib_dir_build):
-            lib_dir_build = os.path.join(project_root, "cpp", "build", "bin")
+        if not os.path.exists(lib_dir_dev):
+            lib_dir_dev = os.path.join(dev_root, "cpp", "build", "bin")
 
-        # Installed package paths
-        core_c_pkg = os.path.join(termin_path, "include", "core_c")
-        core_cpp_pkg = os.path.join(termin_path, "include", "cpp")
-        lib_dir_pkg = os.path.join(termin_path, "lib")
-
-        # Use development paths if available, otherwise installed package
-        if os.path.exists(core_c_dev) and os.path.exists(core_cpp_dev):
+        # Check installed paths first (more common case)
+        if os.path.exists(core_c_install) and os.path.exists(core_cpp_install):
+            core_c = core_c_install
+            core_cpp = core_cpp_install
+            lib_dir = lib_dir_install
+        # Then check development paths
+        elif os.path.exists(core_c_dev) and os.path.exists(core_cpp_dev):
             core_c = core_c_dev
             core_cpp = core_cpp_dev
-            lib_dir = lib_dir_build
-        elif os.path.exists(core_c_pkg) and os.path.exists(core_cpp_pkg):
-            core_c = core_c_pkg
-            core_cpp = core_cpp_pkg
-            lib_dir = lib_dir_pkg
+            lib_dir = lib_dir_dev
         else:
             log.warning("[ModuleScanner] Could not find engine include paths")
-            core_c = core_c_dev
-            core_cpp = core_cpp_dev
-            lib_dir = lib_dir_build
+            core_c = core_c_install
+            core_cpp = core_cpp_install
+            lib_dir = lib_dir_install
 
         loader.set_engine_paths(core_c, core_cpp, lib_dir)
         self._engine_paths_configured = True
