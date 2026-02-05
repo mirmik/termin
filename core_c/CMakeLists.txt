@@ -158,6 +158,10 @@ if(TC_BUILD_TESTS)
     add_executable(termin_mesh_test tests/test_mesh.c)
     target_link_libraries(termin_mesh_test PRIVATE termin_core)
     add_test(NAME termin_mesh_test COMMAND termin_mesh_test)
+
+    add_executable(termin_data_structures_test tests/test_data_structures.c)
+    target_link_libraries(termin_data_structures_test PRIVATE termin_core)
+    add_test(NAME termin_data_structures_test COMMAND termin_data_structures_test)
 endif()
 
 # Install

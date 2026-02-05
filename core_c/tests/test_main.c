@@ -119,7 +119,7 @@ static int test_entity_pool(void) {
 
     // Test flags
     TEST_ASSERT(tc_entity_pool_visible(pool, e1) == true, "visible default");
-    TEST_ASSERT(tc_entity_pool_active(pool, e1) == true, "active default");
+    TEST_ASSERT(tc_entity_pool_enabled(pool, e1) == true, "enabled default");
 
     tc_entity_pool_set_visible(pool, e1, false);
     TEST_ASSERT(tc_entity_pool_visible(pool, e1) == false, "set visible");
@@ -250,7 +250,7 @@ static int test_tc_value(void) {
     tc_value_list_push(&list, tc_value_int(1));
     tc_value_list_push(&list, tc_value_int(2));
     tc_value_list_push(&list, tc_value_int(3));
-    TEST_ASSERT(tc_value_list_count(&list) == 3, "list count");
+    TEST_ASSERT(tc_value_list_size(&list) == 3, "list count");
     TEST_ASSERT(tc_value_list_get(&list, 1)->data.i == 2, "list get");
     tc_value_free(&list);
 
@@ -359,13 +359,13 @@ static int test_vertex_layout(void) {
     TEST_ASSERT(layout.stride == 0, "initial stride is 0");
     TEST_ASSERT(layout.attrib_count == 0, "initial attrib count is 0");
 
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     TEST_ASSERT(layout.stride == 12, "stride is 12 after position");
 
-    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
     TEST_ASSERT(layout.stride == 24, "stride is 24 after normal");
 
-    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32, 2);
     TEST_ASSERT(layout.stride == 32, "stride is 32 after uv");
 
     const tc_vertex_attrib* pos = tc_vertex_layout_find(&layout, "position");
@@ -395,10 +395,11 @@ static int test_mesh(void) {
     tc_mesh* mesh1 = tc_mesh_add("test-mesh-001");
     TEST_ASSERT(mesh1 != NULL, "add returns mesh");
     TEST_ASSERT(tc_mesh_count() == 1, "count is 1");
-    TEST_ASSERT(strcmp(mesh1->uuid, "test-mesh-001") == 0, "uuid matches");
+    TEST_ASSERT(strcmp(mesh1->header.uuid, "test-mesh-001") == 0, "uuid matches");
 
     // Get by UUID
-    TEST_ASSERT(tc_mesh_get("test-mesh-001") == mesh1, "get returns same mesh");
+    tc_mesh_handle h1 = tc_mesh_find("test-mesh-001");
+    TEST_ASSERT(tc_mesh_get(h1) == mesh1, "get returns same mesh");
     TEST_ASSERT(tc_mesh_contains("test-mesh-001"), "contains");
 
     // Set data
@@ -413,7 +414,7 @@ static int test_mesh(void) {
     tc_mesh_set_data(mesh1, verts, 3, &layout, idx, 3, "test-mesh");
     TEST_ASSERT(mesh1->vertex_count == 3, "vertex count");
     TEST_ASSERT(mesh1->index_count == 3, "index count");
-    TEST_ASSERT(mesh1->version == 2, "version is 2");
+    TEST_ASSERT(mesh1->header.version == 2, "version is 2");
 
     // Duplicate rejected
     TEST_ASSERT(tc_mesh_add("test-mesh-001") == NULL, "duplicate rejected");
