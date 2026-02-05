@@ -1,0 +1,11 @@
+sphinx>=7.0
+myst-parser>=2.0
+breathe
+
+# Themes (install whichever you want to try)
+furo
+sphinx-rtd-theme
+pydata-sphinx-theme
+sphinx-book-theme
+sphinx-material
+piccolo-theme

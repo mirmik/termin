@@ -1,3 +1,4 @@
+using System;
 // Helper methods for creating SWIG wrapper types from IntPtr
 // These methods expose internal constructors for external use
 
