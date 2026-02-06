@@ -396,25 +396,19 @@ class SceneManagerViewer(QWidget):
             # Set scene mode to STOP (editor mode)
             self._scene_manager.set_mode(self._selected_scene_name, SceneMode.STOP)
 
-            # Update EditorViewportFeatures
-            for features in editor._editor_features.values():
-                features.set_scene(scene)
-                features.set_camera(attachment.camera)
-                features.selected_entity_id = 0
-                features.hover_entity_id = 0
+            # Clear selection in C++ interaction system
+            if editor._interaction_system is not None:
+                editor._interaction_system.selection.clear()
 
             # Update scene tree
             if editor.scene_tree_controller is not None:
                 editor.scene_tree_controller.set_scene(scene)
                 editor.scene_tree_controller.rebuild()
 
-            # Clear selection
-            if editor.selection_manager is not None:
-                editor.selection_manager.clear()
-
-            # Clear gizmo
-            if editor.editor_viewport is not None:
-                editor.editor_viewport.set_gizmo_target(None)
+            # Clear selection and gizmo
+            if editor._interaction_system is not None:
+                editor._interaction_system.selection.clear()
+                editor._interaction_system.set_gizmo_target(None)
 
             # Update window title
             editor._update_window_title()

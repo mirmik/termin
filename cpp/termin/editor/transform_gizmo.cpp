@@ -92,17 +92,17 @@ Mat44f compose_trs(const Vec3f& translate, const Mat44f& rotate, float scale) {
 // TransformGizmo Implementation
 // ============================================================
 
-void TransformGizmo::set_target(Entity* entity) {
+void TransformGizmo::set_target(Entity entity) {
     _target = entity;
-    visible = (_target != nullptr);
-    if (_target != nullptr) {
+    visible = _target.valid();
+    if (_target.valid()) {
         _update_position();
     }
 }
 
 void TransformGizmo::_update_position() {
-    if (_target != nullptr && _target->valid()) {
-        GeneralPose3 pose = _target->transform().global_pose();
+    if (_target.valid()) {
+        GeneralPose3 pose = _target.transform().global_pose();
         _target_position = Vec3f{
             static_cast<float>(pose.lin.x),
             static_cast<float>(pose.lin.y),
@@ -112,7 +112,7 @@ void TransformGizmo::_update_position() {
 }
 
 Vec3f TransformGizmo::_get_position() {
-    if (_target != nullptr) {
+    if (_target.valid()) {
         _update_position();
     }
     return _target_position;
@@ -124,12 +124,12 @@ Vec3f TransformGizmo::_get_world_axis(const std::string& axis) {
     else if (axis == "y") base = Vec3f{0.0f, 1.0f, 0.0f};
     else base = Vec3f{0.0f, 0.0f, 1.0f};
 
-    if (orientation_mode == "world" || _target == nullptr) {
+    if (orientation_mode == "world" || !_target.valid()) {
         return base;
     }
 
     // Local orientation: rotate by entity's rotation
-    GeneralPose3 pose = _target->transform().global_pose();
+    GeneralPose3 pose = _target.transform().global_pose();
     float q[4] = {
         static_cast<float>(pose.ang.x),
         static_cast<float>(pose.ang.y),
@@ -169,7 +169,7 @@ void TransformGizmo::draw_solid(
     const Mat44f& view,
     const Mat44f& proj
 ) {
-    if (!visible || _target == nullptr) return;
+    if (!visible || !_target.valid()) return;
 
     Vec3f origin = _get_position();
 
@@ -220,7 +220,7 @@ void TransformGizmo::draw_transparent_solid(
     const Mat44f& view,
     const Mat44f& proj
 ) {
-    if (!visible || _target == nullptr) return;
+    if (!visible || !_target.valid()) return;
 
     Vec3f origin = _get_position();
 
@@ -262,7 +262,7 @@ void TransformGizmo::draw_transparent_solid(
 std::vector<GizmoCollider> TransformGizmo::get_colliders() {
     std::vector<GizmoCollider> colliders;
 
-    if (!visible || _target == nullptr) {
+    if (!visible || !_target.valid()) {
         return colliders;
     }
 
@@ -364,8 +364,8 @@ void TransformGizmo::on_click(int collider_id, const Vec3f* hit_position) {
     _active_element = element;
 
     // Save start pose for undo
-    if (_target != nullptr) {
-        _drag_start_pose = _target->transform().global_pose();
+    if (_target.valid()) {
+        _drag_start_pose = _target.transform().global_pose();
     }
 
     Vec3f origin = _get_position();
@@ -387,8 +387,8 @@ void TransformGizmo::on_click(int collider_id, const Vec3f* hit_position) {
 
     // Rotation
     if (_is_rotate_element(element)) {
-        if (_target != nullptr) {
-            GeneralPose3 pose = _target->transform().global_pose();
+        if (_target.valid()) {
+            GeneralPose3 pose = _target.transform().global_pose();
             _rot_start_quat[0] = static_cast<float>(pose.ang.x);
             _rot_start_quat[1] = static_cast<float>(pose.ang.y);
             _rot_start_quat[2] = static_cast<float>(pose.ang.z);
@@ -422,7 +422,7 @@ void TransformGizmo::on_click(int collider_id, const Vec3f* hit_position) {
 }
 
 void TransformGizmo::on_drag(int collider_id, const Vec3f& position, const Vec3f& delta) {
-    if (_target == nullptr) return;
+    if (!_target.valid()) return;
 
     TransformElement element = static_cast<TransformElement>(collider_id);
 
@@ -439,8 +439,8 @@ void TransformGizmo::on_drag(int collider_id, const Vec3f& position, const Vec3f
 
 void TransformGizmo::on_release(int collider_id) {
     // Call drag end handler for undo support
-    if (on_drag_end && _target != nullptr) {
-        GeneralPose3 end_pose = _target->transform().global_pose();
+    if (on_drag_end && _target.valid()) {
+        GeneralPose3 end_pose = _target.transform().global_pose();
         on_drag_end(_drag_start_pose, end_pose);
     }
 
@@ -455,11 +455,11 @@ void TransformGizmo::_apply_translation(const Vec3f& projected_position) {
         new_position = projected_position + _grab_offset;
     }
 
-    GeneralPose3 old_pose = _target->transform().global_pose();
+    GeneralPose3 old_pose = _target.transform().global_pose();
     GeneralPose3 new_pose = old_pose;
     new_pose.lin = Vec3{new_position.x, new_position.y, new_position.z};
 
-    _target->transform().relocate_global(new_pose);
+    _target.transform().relocate_global(new_pose);
 }
 
 void TransformGizmo::_apply_rotation(TransformElement element, const Vec3f& plane_hit) {
@@ -514,9 +514,9 @@ void TransformGizmo::_apply_rotation(TransformElement element, const Vec3f& plan
     GeneralPose3 new_pose;
     new_pose.lin = Vec3{origin.x, origin.y, origin.z};
     new_pose.ang = Quat{new_quat[0], new_quat[1], new_quat[2], new_quat[3]};
-    new_pose.scale = _target->transform().global_pose().scale;
+    new_pose.scale = _target.transform().global_pose().scale;
 
-    _target->transform().relocate_global(new_pose);
+    _target.transform().relocate_global(new_pose);
 }
 
 bool TransformGizmo::_is_translate_element(TransformElement e) {

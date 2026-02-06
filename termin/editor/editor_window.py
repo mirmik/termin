@@ -12,11 +12,8 @@ from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
-from termin.editor.editor_viewport_features import EditorViewportFeatures
-from termin.editor.gizmo import GizmoManager
 from termin.editor.prefab_edit_controller import PrefabEditController
 from termin.editor.scene_manager import SceneManager, SceneMode
-from termin.editor.selection_manager import SelectionManager
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
@@ -103,9 +100,8 @@ class EditorWindow(QMainWindow):
 
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
-        self.editor_viewport: EditorViewportFeatures | None = None
-        self.gizmo_manager: GizmoManager | None = None
-        self.selection_manager: SelectionManager | None = None
+        self._interaction_system = None
+        self.gizmo_manager = None
         self.prefab_edit_controller: PrefabEditController | None = None
         self.project_browser = None
         self._project_controller: EditorProjectController | None = None
@@ -286,8 +282,15 @@ class EditorWindow(QMainWindow):
         # --- SpaceMouse support (initialized later after console is ready) ---
         self._spacemouse: SpaceMouseController | None = None
 
-        # --- unified gizmo manager ---
-        self.gizmo_manager = GizmoManager()
+        # --- C++ EditorInteractionSystem (singleton) ---
+        from termin._native.editor import EditorInteractionSystem, EditorDisplayInputManager as CppEditorDisplayInputManager
+        self._interaction_system = EditorInteractionSystem()
+        EditorInteractionSystem.set_instance(self._interaction_system)
+        self._interaction_system.set_graphics(self.world.graphics)
+        self.gizmo_manager = self._interaction_system.gizmo_manager
+
+        # Per-display C++ input managers: tc_display_ptr -> EditorDisplayInputManager
+        self._editor_input_managers: dict[int, CppEditorDisplayInputManager] = {}
 
         # --- дерево сцены ---
         self.scene_tree_controller = SceneTreeController(
@@ -318,11 +321,7 @@ class EditorWindow(QMainWindow):
         self._init_project_browser()
 
         # --- ViewportListWidget and RenderingController ---
-        # Must be created BEFORE EditorViewportFeatures
         self._init_viewport_list_widget()
-
-        # Map tc_display_ptr -> EditorViewportFeatures for displays in "editor" mode
-        self._editor_features: dict[int, EditorViewportFeatures] = {}
 
         # --- Create editor display through RenderingController ---
         editor_display, editor_surface = self._rendering_controller.create_editor_display(
@@ -342,39 +341,29 @@ class EditorWindow(QMainWindow):
         self.editorViewportTab.setAcceptDrops(True)
         self.editorViewportTab.installEventFilter(self)
 
-        # --- EditorViewportFeatures (editor UX layer) ---
-        # Created before attachment - viewport will be created by attachment.attach()
-        self.editor_viewport = EditorViewportFeatures(
-            display=editor_display,
-            surface=editor_surface,
-            graphics=self.world.graphics,
-            gizmo_manager=self.gizmo_manager,
-            on_entity_picked=self._on_entity_picked_from_viewport,
-            on_hover_entity=self._on_hover_entity_from_viewport,
-            get_fbo_pool=self._rendering_controller.get_editor_fbo_pool,
-            request_update=self._request_viewport_update,
-        )
-        # Set undo handler and transform callback for gizmo operations
-        self.editor_viewport.set_gizmo_undo_handler(self.push_undo_command)
-        self.editor_viewport.set_on_transform_dragging(self._on_gizmo_transform_dragging)
+        # --- C++ EditorDisplayInputManager for editor display ---
+        input_mgr = CppEditorDisplayInputManager(editor_display.tc_display_ptr)
+        editor_surface.set_input_manager(input_mgr.tc_input_manager_ptr())
+        self._editor_input_managers[editor_display.tc_display_ptr] = input_mgr
 
-        # Register in editor features dict
-        self._editor_features[editor_display.tc_display_ptr] = self.editor_viewport
+        # --- Debug features (from former EditorViewportFeatures) ---
+        self._framegraph_debugger = None
+        self._debug_source_res: str = "color_pp"
+        self._debug_paused: bool = False
 
         RenderingManager.instance().set_graphics(self.world.graphics)
         self.scene_manager.set_on_after_render(self._after_render)
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
-        self._rendering_controller.set_editor_pipeline_maker(
-            self.editor_viewport.make_editor_pipeline
-        )
+        from termin.editor.editor_pipeline import make_editor_pipeline
+        self._rendering_controller.set_editor_pipeline_maker(make_editor_pipeline)
 
         # --- EditorSceneAttachment ---
         # Manages EditorEntities, viewport, and scene connection
         self._editor_attachment = EditorSceneAttachment(
             display=editor_display,
             rendering_controller=self._rendering_controller,
-            make_editor_pipeline=self.editor_viewport.make_editor_pipeline,
+            make_editor_pipeline=make_editor_pipeline,
         )
 
         # Attach to initial scene (creates EditorEntities and viewport)
@@ -383,15 +372,11 @@ class EditorWindow(QMainWindow):
         # Sync backward-compatible references from attachment
         self._sync_attachment_refs()
 
-        # For backwards compatibility
-        self.viewport_controller = self.editor_viewport
-
-        # --- SelectionManager ---
-        self.selection_manager = SelectionManager(
-            get_pick_id=self._get_pick_id_for_entity,
-            on_selection_changed=self._on_selection_changed_internal,
-            on_hover_changed=self._on_hover_changed_internal,
-        )
+        # --- C++ SelectionManager callbacks ---
+        self._interaction_system.selection.on_selection_changed = self._on_selection_changed
+        self._interaction_system.selection.on_hover_changed = self._on_hover_changed
+        self._interaction_system.on_request_update = self._request_viewport_update
+        self._interaction_system.on_transform_end = self._on_transform_end
 
         # --- PrefabEditController - режим изоляции для редактирования префабов ---
         self.prefab_edit_controller = PrefabEditController(
@@ -602,9 +587,10 @@ class EditorWindow(QMainWindow):
             on_request_update=self._request_viewport_update,
             initial_resource=initial_resource,
         )
-        # Connect debugger to editor viewport for updates in after_render
-        if self.editor_viewport is not None:
-            self.editor_viewport.set_framegraph_debugger(debugger)
+        # Connect debugger for updates in after_render
+        self._framegraph_debugger = debugger
+        if debugger is not None:
+            debugger.destroyed.connect(self._on_framegraph_debugger_destroyed)
 
     def _refresh_framegraph_debugger(self) -> None:
         """Refresh framegraph debugger if it's open (e.g., after scene change)."""
@@ -722,10 +708,10 @@ class EditorWindow(QMainWindow):
         """
         Возвращает UUID выделенной сущности.
         """
-        if self.selection_manager is None:
+        if self._interaction_system is None:
             return None
-        selected = self.selection_manager.selected
-        if selected is None:
+        selected = self._interaction_system.selection.selected
+        if selected is None or not selected.valid():
             return None
         return selected.uuid
 
@@ -741,9 +727,9 @@ class EditorWindow(QMainWindow):
         if entity is None or not entity.selectable:
             return
 
-        # Выделяем через SelectionManager
-        if self.selection_manager is not None:
-            self.selection_manager.select(entity)
+        # Выделяем через C++ SelectionManager
+        if self._interaction_system is not None:
+            self._interaction_system.selection.select(entity)
 
         # Обновляем дерево сцены
         if self.scene_tree_controller is not None:
@@ -902,11 +888,6 @@ class EditorWindow(QMainWindow):
     def _on_inspector_component_changed(self):
         self._request_viewport_update()
 
-    def _on_gizmo_transform_dragging(self):
-        """Обновляет инспектор при перетаскивании объекта гизмо."""
-        if self.entity_inspector is not None:
-            self.entity_inspector.refresh_transform()
-
     def _on_material_inspector_changed(self):
         """Обработчик изменения материала в инспекторе."""
         self._request_viewport_update()
@@ -945,9 +926,8 @@ class EditorWindow(QMainWindow):
         from termin.assets.resources import ResourceManager
 
         if pipeline_name == "(Editor)":
-            if self.editor_viewport is not None:
-                return self.editor_viewport.make_editor_pipeline()
-            pipeline_name = "Default"
+            from termin.editor.editor_pipeline import make_editor_pipeline
+            return make_editor_pipeline()
 
         if not pipeline_name:
             pipeline_name = "Default"
@@ -1112,11 +1092,11 @@ class EditorWindow(QMainWindow):
                 surface.request_update()
 
     def _after_render(self) -> None:
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-        for display_id, editor_features in self._editor_features.items():
-            with profiler.section(f"EditorFeatures[{display_id}].after_render"):
-                editor_features.after_render()
+        sys = self._interaction_system
+        if sys:
+            sys.after_render()
+        if self._framegraph_debugger is not None and self._framegraph_debugger.isVisible():
+            self._framegraph_debugger.debugger_request_update()
 
     def _on_before_scene_close(self, scene_name: str) -> None:
         """Called before a scene is destroyed. Removes viewports referencing this scene."""
@@ -1153,29 +1133,9 @@ class EditorWindow(QMainWindow):
             ent = None
             self.show_entity_inspector(None)
 
-        if self.selection_manager is not None:
-            self.selection_manager.select(ent)
+        if self._interaction_system is not None:
+            self._interaction_system.selection.select(ent)
         self._request_viewport_update()
-
-    def _on_entity_picked_from_viewport(self, ent: Entity | None) -> None:
-        """
-        Колбэк от EditorViewportFeatures при выборе сущности кликом в вьюпорте.
-        Синхронизируем выделение в дереве и инспекторе.
-        """
-        if self.selection_manager is not None:
-            self.selection_manager.select(ent)
-
-        if self.scene_tree_controller is not None and ent is not None:
-            self.scene_tree_controller.select_object(ent)
-
-        self.show_entity_inspector(ent)
-
-    def _on_hover_entity_from_viewport(self, ent: Entity | None) -> None:
-        """
-        Колбэк от EditorViewportFeatures при изменении подсвеченной (hover) сущности.
-        """
-        if self.selection_manager is not None:
-            self.selection_manager.hover(ent)
 
     # ----------- Qt eventFilter -----------
 
@@ -1196,8 +1156,8 @@ class EditorWindow(QMainWindow):
             and event.type() == QEvent.Type.KeyPress
             and event.key() == Qt.Key.Key_Delete
         ):
-            ent = self.selection_manager.selected if self.selection_manager else None
-            if isinstance(ent, Entity):
+            ent = self._interaction_system.selection.selected if self._interaction_system else None
+            if ent is not None and ent.valid():
                 # удаление через команду, дерево и вьюпорт обновятся через undo-стек
                 cmd = DeleteEntityCommand(self.scene, ent)
                 self.push_undo_command(cmd, merge=False)
@@ -1260,8 +1220,8 @@ class EditorWindow(QMainWindow):
         self.scene_tree_controller.add_entity_hierarchy(entity)
 
         # Выделяем entity
-        if self.selection_manager is not None:
-            self.selection_manager.select(entity)
+        if self._interaction_system is not None:
+            self._interaction_system.selection.select(entity)
 
     def _unproject_drop_position(self, drop_pos) -> "np.ndarray":
         """
@@ -1285,15 +1245,15 @@ class EditorWindow(QMainWindow):
             cam_forward = rot[:, 1]  # Y колонка = forward
             fallback_pos = cam_pos + cam_forward * 5.0
 
-        if self.editor_viewport is None or self.viewport is None:
+        if self.viewport is None:
             return fallback_pos
 
         # Координаты drop в пикселях виджета
         x = float(drop_pos.x())
         y = float(drop_pos.y())
 
-        # Читаем глубину из ID buffer
-        depth = self.editor_viewport.pick_depth_at(x, y, self.viewport, buffer_name="id")
+        # TODO: picking via C++ EditorInteractionSystem
+        depth = None
         if depth is None or depth >= 1.0:
             # Нет геометрии под курсором — используем fallback
             return fallback_pos
@@ -1339,38 +1299,57 @@ class EditorWindow(QMainWindow):
         """Resync inspector based on current tree selection."""
         self._inspector_controller.resync_from_tree_selection(self.sceneTree, self.scene)
 
-    # ----------- SelectionManager колбэки -----------
+    # ----------- C++ SelectionManager callbacks -----------
 
-    def _get_pick_id_for_entity(self, entity: Entity | None) -> int:
-        """Получает pick ID для сущности через editor_viewport."""
-        if self.editor_viewport is not None:
-            return self.editor_viewport.get_pick_id_for_entity(entity)
-        return 0
-
-    def _on_selection_changed_internal(self, entity: Entity | None) -> None:
-        """Колбэк от SelectionManager при изменении выделения."""
-        # Обновляем все EditorViewportFeatures
-        if self.selection_manager is not None:
-            selected_id = self.selection_manager.selected_entity_id
-            for editor_features in self._editor_features.values():
-                editor_features.selected_entity_id = selected_id
-
-        # Обновляем гизмо target через EditorViewportFeatures
-        if self.editor_viewport is not None:
-            self.editor_viewport.set_gizmo_target(entity)
-            self.editor_viewport.update_gizmo_screen_scale(self.editor_viewport.viewport)
-
+    def _on_selection_changed(self, entity) -> None:
+        """C++ SelectionManager callback — entity selected."""
+        sys = self._interaction_system
+        sys.set_gizmo_target(entity)
+        self._update_gizmo_screen_scale()
+        if self.scene_tree_controller is not None and entity.valid():
+            self.scene_tree_controller.select_object(entity)
+        self.show_entity_inspector(entity if entity.valid() else None)
         self._request_viewport_update()
 
-    def _on_hover_changed_internal(self, entity: Entity | None) -> None:
-        """Колбэк от SelectionManager при изменении hover."""
-        # Обновляем все EditorViewportFeatures
-        if self.selection_manager is not None:
-            hover_id = self.selection_manager.hover_entity_id
-            for editor_features in self._editor_features.values():
-                editor_features.hover_entity_id = hover_id
-
+    def _on_hover_changed(self, entity) -> None:
+        """C++ SelectionManager callback — entity hovered."""
         self._request_viewport_update()
+
+    def _on_transform_end(self, old_pose, new_pose) -> None:
+        """C++ TransformGizmo callback — drag finished."""
+        from termin.editor.editor_commands import TransformEditCommand
+        tg = self._interaction_system.transform_gizmo
+        if tg is None or not tg.target.valid():
+            return
+        cmd = TransformEditCommand(
+            transform=tg.target.transform,
+            old_pose=old_pose,
+            new_pose=new_pose,
+        )
+        self.push_undo_command(cmd, False)
+
+    def _on_framegraph_debugger_destroyed(self) -> None:
+        self._framegraph_debugger = None
+
+    def _update_gizmo_screen_scale(self) -> None:
+        """Update gizmo screen scale based on camera distance."""
+        sys = self._interaction_system
+        if sys is None:
+            return
+        tg = sys.transform_gizmo
+        if tg is None or not tg.target.valid():
+            return
+        viewport = self.viewport
+        if viewport is None:
+            return
+        camera = viewport.camera
+        if camera is None or camera.entity is None:
+            return
+        import numpy as np
+        camera_pos = camera.entity.transform.global_pose().lin
+        gizmo_pos = tg.target.transform.global_pose().lin
+        distance = np.linalg.norm(np.array(camera_pos) - np.array(gizmo_pos))
+        tg.set_screen_scale(max(0.1, distance * 0.1))
 
     # ----------- загрузка материалов -----------
 
@@ -1555,20 +1534,10 @@ class EditorWindow(QMainWindow):
         self._update_undo_redo_actions()
         self.undo_stack_changed.emit()
 
-        # Clear selection (viewport must exist before this, as callbacks access it)
-        if self.selection_manager is not None:
-            self.selection_manager.clear()
-
-        # Clear gizmo target for new scene
-        if self.editor_viewport is not None:
-            self.editor_viewport.set_gizmo_target(None)
-
-        # Update all EditorViewportFeatures
-        for editor_features in self._editor_features.values():
-            editor_features.set_scene(new_scene)
-            editor_features.set_camera(self._editor_attachment.camera)
-            editor_features.selected_entity_id = 0
-            editor_features.hover_entity_id = 0
+        # Clear selection
+        if self._interaction_system is not None:
+            self._interaction_system.selection.clear()
+            self._interaction_system.set_gizmo_target(None)
 
         # Update scene tree
         if self.scene_tree_controller is not None:
@@ -1621,11 +1590,9 @@ class EditorWindow(QMainWindow):
             self.scene_manager.close_scene(self._editor_scene_name)
             self._editor_scene_name = None
 
-            # Clear viewports
-            for editor_features in self._editor_features.values():
-                editor_features.set_scene(None)
-                editor_features.selected_entity_id = 0
-                editor_features.hover_entity_id = 0
+            # Clear selection
+            if self._interaction_system is not None:
+                self._interaction_system.selection.clear()
 
             # Clear scene tree
             if self.scene_tree_controller is not None:
@@ -1791,10 +1758,8 @@ class EditorWindow(QMainWindow):
         """
         Handle display input mode change from RenderingController.
 
-        When a display switches to "editor" mode, creates EditorViewportFeatures
-        for that display. When switching away, destroys it.
-
-        Multiple displays can be in "editor" mode simultaneously.
+        When a display switches to "editor" mode, creates C++ EditorDisplayInputManager
+        for that display. When switching away, removes it.
 
         Args:
             display: Display that changed mode.
@@ -1806,53 +1771,33 @@ class EditorWindow(QMainWindow):
         display_id = display.tc_display_ptr
 
         if mode == "editor":
-            # Create EditorViewportFeatures for this display (if not exists)
-            if display_id in self._editor_features:
-                # Already has editor features
+            if display_id in self._editor_input_managers:
                 return
 
-            surface = self._rendering_controller.get_display_surface(display)
+            surface = self._rendering_controller.get_display_sfc(display)
             if surface is None:
                 return
 
-            def get_fbo_pool(d=display):
-                return self._rendering_controller.get_display_fbo_pool(d)
-
-            # Create new EditorViewportFeatures
-            editor_features = EditorViewportFeatures(
-                display=display,
-                surface=surface,
-                graphics=self.world.graphics,
-                gizmo_manager=self.gizmo_manager,
-                on_entity_picked=self._on_entity_picked_from_viewport,
-                on_hover_entity=self._on_hover_entity_from_viewport,
-                get_fbo_pool=get_fbo_pool,
-                request_update=self._request_viewport_update,
-            )
-            editor_features.set_gizmo_undo_handler(self.push_undo_command)
-            editor_features.set_on_transform_dragging(self._on_gizmo_transform_dragging)
-
-            # Sync current selection state
-            if self.selection_manager is not None:
-                editor_features.selected_entity_id = self.selection_manager.selected_entity_id
-                editor_features.hover_entity_id = self.selection_manager.hover_entity_id
-
-            # Register
-            self._editor_features[display_id] = editor_features
+            from termin._native.editor import EditorDisplayInputManager as CppEditorDisplayInputManager
+            input_mgr = CppEditorDisplayInputManager(display_id)
+            surface.set_input_manager(input_mgr.tc_input_manager_ptr())
+            self._editor_input_managers[display_id] = input_mgr
 
             # Set editor pipeline for the viewport (if it has viewports)
             if display.viewports:
-                editor_pipeline = editor_features.make_editor_pipeline()
+                from termin.editor.editor_pipeline import make_editor_pipeline
+                editor_pipeline = make_editor_pipeline()
                 self._rendering_controller.set_viewport_pipeline(
                     display.viewports[0],
                     editor_pipeline,
                 )
         else:
-            # Destroy EditorViewportFeatures for this display (if exists)
-            if display_id in self._editor_features:
-                editor_features = self._editor_features.pop(display_id)
-                # Clean up callbacks
-                editor_features.detach_from_display()
+            # Remove C++ input manager for this display
+            if display_id in self._editor_input_managers:
+                del self._editor_input_managers[display_id]
+                surface = self._rendering_controller.get_display_sfc(display)
+                if surface is not None:
+                    surface.set_input_manager(0)
 
         self._request_viewport_update()
 

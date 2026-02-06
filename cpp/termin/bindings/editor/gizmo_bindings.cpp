@@ -213,11 +213,11 @@ void bind_gizmo(nb::module_& m) {
         .def_prop_rw("on_transform_changed",
             [](TransformGizmo& self) { return self.on_transform_changed; },
             [](TransformGizmo& self, std::function<void()> cb) { self.on_transform_changed = cb; })
-        .def_prop_ro("target", [](TransformGizmo& self) -> Entity* { return self.target(); },
-            nb::rv_policy::reference)
-        .def("set_target", [](TransformGizmo& self, Entity* entity) { self.set_target(entity); },
-            nb::arg("entity").none())
-        .def("clear_target", [](TransformGizmo& self) { self.set_target(nullptr); })
+        .def_prop_ro("target", [](TransformGizmo& self) -> Entity { return self.target(); })
+        .def("set_target", [](TransformGizmo& self, nb::object obj) {
+            self.set_target(obj.is_none() ? Entity() : nb::cast<Entity>(obj));
+        }, nb::arg("entity"))
+        .def("clear_target", [](TransformGizmo& self) { self.set_target(Entity()); })
         .def("set_screen_scale", &TransformGizmo::set_screen_scale)
         .def("set_orientation_mode", &TransformGizmo::set_orientation_mode)
         .def("set_drag_end_handler", &TransformGizmo::set_drag_end_handler);

@@ -21,8 +21,12 @@ void bind_editor_interaction(nb::module_& m) {
         .def_prop_ro("hovered", &SelectionManager::hovered)
         .def_ro("selected_pick_id", &SelectionManager::selected_pick_id)
         .def_ro("hovered_pick_id", &SelectionManager::hovered_pick_id)
-        .def("select", &SelectionManager::select, nb::arg("entity"))
-        .def("hover", &SelectionManager::hover, nb::arg("entity"))
+        .def("select", [](SelectionManager& s, nb::object obj) {
+            s.select(obj.is_none() ? Entity() : nb::cast<Entity>(obj));
+        }, nb::arg("entity").none())
+        .def("hover", [](SelectionManager& s, nb::object obj) {
+            s.hover(obj.is_none() ? Entity() : nb::cast<Entity>(obj));
+        }, nb::arg("entity").none())
         .def("clear", &SelectionManager::clear)
         .def("deselect", &SelectionManager::deselect)
         .def_prop_rw("on_selection_changed",
@@ -67,8 +71,9 @@ void bind_editor_interaction(nb::module_& m) {
                 return s.transform_gizmo();
             }, nb::rv_policy::reference_internal)
         .def("after_render", &EditorInteractionSystem::after_render)
-        .def("set_gizmo_target", &EditorInteractionSystem::set_gizmo_target,
-            nb::arg("entity"))
+        .def("set_gizmo_target", [](EditorInteractionSystem& s, nb::object obj) {
+            s.set_gizmo_target(obj.is_none() ? Entity() : nb::cast<Entity>(obj));
+        }, nb::arg("entity").none())
         .def("pick_entity_at", [](EditorInteractionSystem& s,
                 float x, float y,
                 uint32_t vp_index, uint32_t vp_generation,

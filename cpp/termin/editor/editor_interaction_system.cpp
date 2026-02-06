@@ -63,9 +63,9 @@ void EditorInteractionSystem::set_instance(EditorInteractionSystem* inst) {
 // Gizmo
 // ============================================================================
 
-void EditorInteractionSystem::set_gizmo_target(Entity* entity) {
+void EditorInteractionSystem::set_gizmo_target(Entity entity) {
     _transform_gizmo.set_target(entity);
-    _transform_gizmo.visible = (entity != nullptr);
+    _transform_gizmo.visible = entity.valid();
 }
 
 // ============================================================================

@@ -2,6 +2,7 @@
 
 #include "termin/editor/gizmo.hpp"
 #include "termin/editor/gizmo_types.hpp"
+#include "termin/entity/entity.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/render/types.hpp"
@@ -11,8 +12,6 @@
 #include <string>
 
 namespace termin {
-
-class Entity;
 class SolidPrimitiveRenderer;
 class GraphicsBackend;
 
@@ -49,7 +48,7 @@ public:
 
 private:
     // Target entity
-    Entity* _target = nullptr;
+    Entity _target;
     Vec3f _target_position{0.0f, 0.0f, 0.0f};
 
     // Undo support - pose at drag start
@@ -91,8 +90,8 @@ public:
     ~TransformGizmo() override = default;
 
     // Target
-    Entity* target() const { return _target; }
-    void set_target(Entity* entity);
+    Entity target() const { return _target; }
+    void set_target(Entity entity);
 
     void set_screen_scale(float scale) { _screen_scale = scale; }
     void set_orientation_mode(const std::string& mode) { orientation_mode = mode; }

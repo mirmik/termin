@@ -69,7 +69,7 @@ public:
 
     // Transform gizmo access
     TransformGizmo* transform_gizmo() { return &_transform_gizmo; }
-    void set_gizmo_target(Entity* entity);
+    void set_gizmo_target(Entity entity);
 
     // Picking (reads from ID buffer)
     Entity pick_entity_at(float x, float y, tc_viewport_handle viewport, tc_display* display);
