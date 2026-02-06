@@ -10,6 +10,7 @@
 extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
+#include "scene/tc_scene_manager.h"
 }
 
 namespace termin {
@@ -17,8 +18,13 @@ namespace termin {
 // SceneManager - manages multiple scenes and their update cycles
 class SceneManager {
 public:
-    SceneManager() = default;
+    SceneManager();
     virtual ~SceneManager();
+
+    // Singleton access (via C API for cross-DLL safety)
+    static SceneManager* instance() {
+        return reinterpret_cast<SceneManager*>(tc_scene_manager_instance());
+    }
 
     // Disable copy
     SceneManager(const SceneManager&) = delete;

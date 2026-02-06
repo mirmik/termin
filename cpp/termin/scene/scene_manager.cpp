@@ -13,8 +13,15 @@ extern "C" {
 
 namespace termin {
 
+SceneManager::SceneManager() {
+    tc_scene_manager_set_instance(reinterpret_cast<tc_scene_manager*>(this));
+}
+
 SceneManager::~SceneManager() {
     close_all_scenes();
+    if (tc_scene_manager_instance() == reinterpret_cast<tc_scene_manager*>(this)) {
+        tc_scene_manager_set_instance(nullptr);
+    }
 }
 
 // --- Scene lifecycle ---

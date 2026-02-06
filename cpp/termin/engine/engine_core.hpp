@@ -7,6 +7,10 @@
 #include "termin/scene/scene_manager.hpp"
 #include "termin/render/rendering_manager.hpp"
 
+extern "C" {
+#include "engine/tc_engine_core.h"
+}
+
 #include <functional>
 #include <atomic>
 
@@ -19,8 +23,6 @@ public:
     RenderingManager rendering_manager;
 
 private:
-    static EngineCore* _instance;
-
     std::atomic<bool> _running{false};
     double _target_fps = 60.0;
 
@@ -32,8 +34,10 @@ public:
     EngineCore();
     ~EngineCore();
 
-    // Singleton access
-    static EngineCore* instance() { return _instance; }
+    // Singleton access (via C API for cross-DLL safety)
+    static EngineCore* instance() {
+        return reinterpret_cast<EngineCore*>(tc_engine_core_instance());
+    }
 
     // Disable copy
     EngineCore(const EngineCore&) = delete;

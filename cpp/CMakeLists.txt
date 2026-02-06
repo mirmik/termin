@@ -149,6 +149,8 @@ set(ENTITY_LIB_SOURCES
     termin/collision/collision_world_c.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_engine_core_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_scene_manager_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/modules/module_loader.cpp
     termin/render/tc_value_trent.cpp
@@ -424,8 +426,9 @@ if(BUILD_EDITOR_MINIMAL)
     endif()
     install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     set_target_properties(termin_editor PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib/python/termin"
-        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN"
+        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
+        BUILD_WITH_INSTALL_RPATH FALSE
     )
 endif()
 

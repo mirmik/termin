@@ -84,10 +84,6 @@ def init_and_run_editor(debug_resource: str | None = None, no_scene: bool = Fals
     # Create SDL embedded backend
     sdl_backend = SDLEmbeddedWindowBackend(graphics=graphics)
 
-    # Configure RenderingManager
-    engine.rendering_manager.set_graphics(graphics._backend)
-    engine.rendering_manager.set_make_current_callback(graphics.make_current)
-
     # Create world and scene
     world = VisualizationWorld()
     if no_scene:

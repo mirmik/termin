@@ -10,16 +10,14 @@ extern "C" {
 
 namespace termin {
 
-EngineCore* EngineCore::_instance = nullptr;
-
 EngineCore::EngineCore() {
-    _instance = this;
+    tc_engine_core_set_instance(reinterpret_cast<tc_engine_core*>(this));
     tc_log(TC_LOG_INFO, "[EngineCore] Created");
 }
 
 EngineCore::~EngineCore() {
-    if (_instance == this) {
-        _instance = nullptr;
+    if (tc_engine_core_instance() == reinterpret_cast<tc_engine_core*>(this)) {
+        tc_engine_core_set_instance(nullptr);
     }
     tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
 }
