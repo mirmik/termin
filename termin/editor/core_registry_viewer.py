@@ -46,6 +46,8 @@ from termin._native.render import (
 from termin.entity._entity_native import (
     component_registry_get_all_info,
     component_registry_type_count,
+    soa_registry_get_all_info,
+    soa_registry_type_count,
 )
 
 
@@ -126,6 +128,13 @@ class CoreRegistryViewer(QDialog):
         self._components_tree.setAlternatingRowColors(True)
         self._components_tree.itemClicked.connect(self._on_component_clicked)
         self._tab_widget.addTab(self._components_tree, "Components")
+
+        # SoA Types tab
+        self._soa_tree = QTreeWidget()
+        self._soa_tree.setHeaderLabels(["Name", "ID", "Size", "Align", "Init", "Destroy"])
+        self._soa_tree.setAlternatingRowColors(True)
+        self._soa_tree.itemClicked.connect(self._on_soa_clicked)
+        self._tab_widget.addTab(self._soa_tree, "SoA Types")
 
         # Pipelines tab
         self._pipelines_tree = QTreeWidget()
@@ -232,6 +241,7 @@ class CoreRegistryViewer(QDialog):
         self._refresh_shaders()
         self._refresh_materials()
         self._refresh_components()
+        self._refresh_soa()
         self._refresh_pipelines()
         self._refresh_passes()
         self._refresh_scenes()
@@ -593,6 +603,57 @@ class CoreRegistryViewer(QDialog):
         self._details_text.setText("\n".join(lines))
 
     # =========================================================================
+    # SoA Types
+    # =========================================================================
+
+    def _refresh_soa(self) -> None:
+        """Refresh SoA type list from global registry."""
+        self._soa_tree.clear()
+
+        infos = soa_registry_get_all_info()
+        for info in sorted(infos, key=lambda x: x["id"]):
+            name = info["name"]
+            type_id = str(info["id"])
+            size = str(info["element_size"])
+            align = str(info["alignment"])
+            has_init = "Yes" if info["has_init"] else "-"
+            has_destroy = "Yes" if info["has_destroy"] else "-"
+
+            item = QTreeWidgetItem([name, type_id, size, align, has_init, has_destroy])
+            item.setData(0, Qt.ItemDataRole.UserRole, ("soa", info))
+            self._soa_tree.addTopLevelItem(item)
+
+        for i in range(6):
+            self._soa_tree.resizeColumnToContents(i)
+
+    def _on_soa_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Show SoA type details in details panel."""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data is None or data[0] != "soa":
+            return
+
+        info = data[1]
+        self._show_soa_details(info)
+
+    def _show_soa_details(self, info: dict) -> None:
+        """Display SoA type details in the details panel."""
+        lines = [
+            "=== SOA TYPE ===",
+            "",
+            f"Name:           {info['name']}",
+            f"Type ID:        {info['id']}",
+            "",
+            "--- Layout ---",
+            f"Element size:   {info['element_size']} bytes",
+            f"Alignment:      {info['alignment']} bytes",
+            "",
+            "--- Callbacks ---",
+            f"Init:           {'Yes (non-trivial constructor)' if info['has_init'] else 'No (zero-init)'}",
+            f"Destroy:        {'Yes (non-trivial destructor)' if info['has_destroy'] else 'No (trivial)'}",
+        ]
+        self._details_text.setText("\n".join(lines))
+
+    # =========================================================================
     # Pipelines
     # =========================================================================
 
@@ -840,6 +901,7 @@ class CoreRegistryViewer(QDialog):
         shader_memory = sum(info["source_size"] for info in shader_infos)
 
         component_count_val = component_registry_type_count()
+        soa_count_val = soa_registry_type_count()
 
         self._status_label.setText(
             f"Meshes: {mesh_count_val} ({self._format_bytes(mesh_memory)}) | "
@@ -848,5 +910,6 @@ class CoreRegistryViewer(QDialog):
             f"Materials: {material_count_val} | "
             f"Pipelines: {pipeline_count_val} | "
             f"Passes: {pass_count_val} | "
-            f"Scenes: {scene_count_val}"
+            f"Scenes: {scene_count_val} | "
+            f"SoA: {soa_count_val}"
         )

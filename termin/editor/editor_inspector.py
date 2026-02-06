@@ -32,6 +32,7 @@ from termin.editor.editor_commands import (
 )
 from termin.editor.transform_inspector import TransformInspector
 from termin.editor.entity_inspector import EntityInspector as EntityPropertiesInspector
+from termin.entity._entity_native import soa_registry_get_all_info
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,12 @@ class ComponentsPanel(QWidget):
         for ref in ent.tc_components:
             name = self._get_component_display_name_ref(ref)
             item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, None)
+            self._list.addItem(item)
+        # SoA components
+        for soa_name in ent.soa_component_names:
+            item = QListWidgetItem(f"[SoA] {soa_name}")
+            item.setData(Qt.ItemDataRole.UserRole, soa_name)
             self._list.addItem(item)
         # Clear selection after populating
         self._list.setCurrentRow(-1)
@@ -145,6 +152,14 @@ class ComponentsPanel(QWidget):
 
         menu.exec(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
 
+    def _is_soa_item_selected(self) -> bool:
+        """Check if the currently selected list item is an SoA component."""
+        row = self._list.currentRow()
+        if row < 0:
+            return False
+        item = self._list.item(row)
+        return item is not None and item.data(Qt.ItemDataRole.UserRole) is not None
+
     def _on_context_menu(self, pos) -> None:
         if self._entity is None:
             return
@@ -152,11 +167,12 @@ class ComponentsPanel(QWidget):
         global_pos = self._list.mapToGlobal(pos)
         menu = QMenu(self)
         comp_ref = self.current_component_ref()
-        has_component = comp_ref is not None and comp_ref.valid
+        is_soa = self._is_soa_item_selected()
+        has_component = is_soa or (comp_ref is not None and comp_ref.valid)
 
-        # Rename action
+        # Rename action (only for AoS components)
         rename_action = QAction("Переименовать", self)
-        rename_action.setEnabled(has_component)
+        rename_action.setEnabled(not is_soa and comp_ref is not None and comp_ref.valid)
         rename_action.triggered.connect(self._rename_current_component)
         menu.addAction(rename_action)
 
@@ -178,6 +194,17 @@ class ComponentsPanel(QWidget):
                     lambda _checked=False, n=name: self._add_component(n)
                 )
                 add_menu.addAction(act)
+
+        # SoA component submenu
+        soa_types = soa_registry_get_all_info()
+        soa_menu = menu.addMenu("Добавить SoA компонент")
+        for info in soa_types:
+            soa_name = info["name"]
+            act = QAction(soa_name, self)
+            act.triggered.connect(
+                lambda _checked=False, n=soa_name: self._add_soa_component(n)
+            )
+            soa_menu.addAction(act)
 
         self._list.blockSignals(True)
         menu.exec(global_pos)
@@ -214,6 +241,21 @@ class ComponentsPanel(QWidget):
     def _remove_current_component(self) -> None:
         if self._entity is None:
             return
+
+        # Check if it's an SoA item
+        if self._is_soa_item_selected():
+            row = self._list.currentRow()
+            item = self._list.item(row)
+            soa_name = item.data(Qt.ItemDataRole.UserRole)
+            try:
+                self._entity.remove_soa_by_name(soa_name)
+            except Exception:
+                logger.exception("Failed to remove SoA component %s", soa_name)
+                return
+            self.set_entity(self._entity)
+            self.components_changed.emit()
+            return
+
         ref = self.current_component_ref()
         if ref is None or not ref.valid:
             return
@@ -252,6 +294,19 @@ class ComponentsPanel(QWidget):
         self._list.blockSignals(False)
 
         # self.components_changed.emit()
+
+    def _add_soa_component(self, name: str) -> None:
+        if self._entity is None:
+            return
+
+        try:
+            self._entity.add_soa_by_name(name)
+        except Exception:
+            logger.exception("Failed to add SoA component %s", name)
+            return
+
+        self.set_entity(self._entity)
+        self.components_changed.emit()
 
 
 class ComponentInspectorPanel(QWidget):
@@ -499,6 +554,11 @@ class EntityInspector(QWidget):
 
     def _on_component_selected(self, row: int) -> None:
         if self._entity is None or row < 0:
+            self._component_inspector.set_component(None)
+            return
+        # Check if it's an SoA item (no field inspection yet)
+        item = self._components_panel._list.item(row)
+        if item is not None and item.data(Qt.ItemDataRole.UserRole) is not None:
             self._component_inspector.set_component(None)
             return
         tc_components = self._entity.tc_components

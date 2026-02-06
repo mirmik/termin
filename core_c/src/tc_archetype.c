@@ -16,16 +16,32 @@
 // SoA Type Registry
 // ============================================================================
 
+static tc_soa_type_registry g_soa_registry;
+
+tc_soa_type_registry* tc_soa_global_registry(void) {
+    return &g_soa_registry;
+}
+
 tc_soa_type_id tc_soa_register_type(tc_soa_type_registry* reg, const tc_soa_type_desc* desc) {
     if (!reg || !desc) return TC_SOA_TYPE_INVALID;
-    if (reg->count >= TC_SOA_MAX_TYPES) {
-        tc_log_error("[tc_soa] Cannot register type '%s': max %d types reached",
-                     desc->name ? desc->name : "?", TC_SOA_MAX_TYPES);
-        return TC_SOA_TYPE_INVALID;
-    }
     if (desc->element_size == 0) {
         tc_log_error("[tc_soa] Cannot register type '%s': element_size is 0",
                      desc->name ? desc->name : "?");
+        return TC_SOA_TYPE_INVALID;
+    }
+
+    // Dedup: if a type with the same name already exists, return its id
+    if (desc->name) {
+        for (size_t i = 0; i < reg->count; i++) {
+            if (reg->types[i].name && strcmp(reg->types[i].name, desc->name) == 0) {
+                return (tc_soa_type_id)i;
+            }
+        }
+    }
+
+    if (reg->count >= TC_SOA_MAX_TYPES) {
+        tc_log_error("[tc_soa] Cannot register type '%s': max %d types reached",
+                     desc->name ? desc->name : "?", TC_SOA_MAX_TYPES);
         return TC_SOA_TYPE_INVALID;
     }
 

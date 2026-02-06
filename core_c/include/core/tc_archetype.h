@@ -20,7 +20,7 @@ typedef uint8_t tc_soa_type_id;
 #define TC_SOA_MAX_TYPES 64
 
 // Descriptor for registering a SoA component type
-typedef struct {
+typedef struct tc_soa_type_desc {
     const char* name;              // type name (copied on register)
     size_t element_size;           // sizeof one element
     size_t alignment;              // alignof one element (0 = default)
@@ -35,10 +35,14 @@ typedef struct {
 } tc_soa_type_registry;
 
 // Register a new SoA type. Returns type id (0..63) or TC_SOA_TYPE_INVALID if full.
+// If a type with the same name is already registered, returns the existing id.
 TC_POOL_API tc_soa_type_id tc_soa_register_type(tc_soa_type_registry* reg, const tc_soa_type_desc* desc);
 
 // Get type descriptor by id. Returns NULL if invalid.
 TC_POOL_API const tc_soa_type_desc* tc_soa_get_type(const tc_soa_type_registry* reg, tc_soa_type_id id);
+
+// Global SoA type registry (singleton, zero-initialized).
+TC_POOL_API tc_soa_type_registry* tc_soa_global_registry(void);
 
 // ============================================================================
 // Archetype - dense storage for entities sharing same SoA component set

@@ -28,9 +28,24 @@
 #include "../../material/tc_material_handle.hpp"
 #include "../../collision/collision_world.hpp"
 
+extern "C" {
+#include "core/tc_archetype.h"
+}
+
 namespace nb = nanobind;
 
 namespace termin {
+
+// Look up SoA type id by name in global registry. Returns TC_SOA_TYPE_INVALID if not found.
+static tc_soa_type_id soa_type_id_by_name(const std::string& name) {
+    tc_soa_type_registry* reg = tc_soa_global_registry();
+    for (size_t i = 0; i < reg->count; i++) {
+        if (reg->types[i].name && name == reg->types[i].name) {
+            return (tc_soa_type_id)i;
+        }
+    }
+    return TC_SOA_TYPE_INVALID;
+}
 
 // component_to_python and tc_component_to_python are defined in entity_helpers.hpp
 
@@ -604,6 +619,42 @@ void bind_entity_class(nb::module_& m) {
                 tc_component* tc = e.component_at(i);
                 if (tc) {
                     result.append(TcComponentRef(tc));
+                }
+            }
+            return result;
+        })
+
+        // --- SoA component management (by name) ---
+        .def("add_soa_by_name", [](Entity& e, const std::string& name) {
+            tc_soa_type_id id = soa_type_id_by_name(name);
+            if (id == TC_SOA_TYPE_INVALID) {
+                throw std::runtime_error("Unknown SoA type: " + name);
+            }
+            tc_entity_add_soa(e._h, id);
+        }, nb::arg("name"), "Add SoA component by type name.")
+
+        .def("remove_soa_by_name", [](Entity& e, const std::string& name) {
+            tc_soa_type_id id = soa_type_id_by_name(name);
+            if (id == TC_SOA_TYPE_INVALID) {
+                throw std::runtime_error("Unknown SoA type: " + name);
+            }
+            tc_entity_remove_soa(e._h, id);
+        }, nb::arg("name"), "Remove SoA component by type name.")
+
+        .def("has_soa_by_name", [](Entity& e, const std::string& name) -> bool {
+            tc_soa_type_id id = soa_type_id_by_name(name);
+            if (id == TC_SOA_TYPE_INVALID) return false;
+            return tc_entity_has_soa(e._h, id);
+        }, nb::arg("name"), "Check if entity has SoA component by type name.")
+
+        .def_prop_ro("soa_component_names", [](Entity& e) {
+            nb::list result;
+            uint64_t mask = tc_entity_soa_mask(e._h);
+            if (mask == 0) return result;
+            tc_soa_type_registry* reg = tc_soa_global_registry();
+            for (size_t i = 0; i < reg->count; i++) {
+                if (mask & (1ULL << i)) {
+                    result.append(reg->types[i].name ? reg->types[i].name : "(unnamed)");
                 }
             }
             return result;

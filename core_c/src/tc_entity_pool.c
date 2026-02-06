@@ -112,8 +112,7 @@ struct tc_entity_pool {
     // Owner scene (for component registration)
     tc_scene_handle scene;
 
-    // SoA archetype storage
-    tc_soa_type_registry soa_registry;
+    // SoA archetype storage (type registry is global — tc_soa_global_registry())
     tc_archetype** archetypes;
     size_t archetype_count;
     size_t archetype_capacity;
@@ -294,7 +293,6 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->scene = TC_SCENE_HANDLE_INVALID;
 
     // SoA archetype storage
-    memset(&pool->soa_registry, 0, sizeof(tc_soa_type_registry));
     pool->archetypes = NULL;
     pool->archetype_count = 0;
     pool->archetype_capacity = 0;
@@ -372,17 +370,13 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
 
     // Free SoA archetype storage
     for (size_t i = 0; i < pool->archetype_count; i++) {
-        tc_archetype_destroy(pool->archetypes[i], &pool->soa_registry);
+        tc_archetype_destroy(pool->archetypes[i], tc_soa_global_registry());
     }
     free(pool->archetypes);
     tc_u64_map_free(pool->archetype_by_mask);
     free(pool->soa_archetype_ids);
     free(pool->soa_archetype_rows);
     free(pool->soa_type_masks);
-    // Free interned type names
-    for (size_t i = 0; i < pool->soa_registry.count; i++) {
-        free((char*)pool->soa_registry.types[i].name);
-    }
 
     free(pool);
 }
@@ -639,7 +633,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
         uint32_t row = pool->soa_archetype_rows[idx];
         tc_archetype* arch = pool->archetypes[arch_id];
 
-        tc_entity_id swapped = tc_archetype_free_row(arch, row, &pool->soa_registry);
+        tc_entity_id swapped = tc_archetype_free_row(arch, row, tc_soa_global_registry());
         if (tc_entity_id_valid(swapped)) {
             pool->soa_archetype_rows[swapped.index] = row;
         }
@@ -1437,8 +1431,9 @@ void tc_entity_pool_foreach_input_handler_subtree(
 // ============================================================================
 
 tc_soa_type_id tc_entity_pool_register_soa_type(tc_entity_pool* pool, const tc_soa_type_desc* desc) {
-    if (!pool || !desc) return TC_SOA_TYPE_INVALID;
-    return tc_soa_register_type(&pool->soa_registry, desc);
+    (void)pool;
+    if (!desc) return TC_SOA_TYPE_INVALID;
+    return tc_soa_register_type(tc_soa_global_registry(), desc);
 }
 
 // Find or create archetype for the given type mask
@@ -1458,7 +1453,7 @@ static tc_archetype* pool_get_or_create_archetype(tc_entity_pool* pool, uint64_t
         }
     }
 
-    tc_archetype* arch = tc_archetype_create(mask, type_ids, type_count, &pool->soa_registry);
+    tc_archetype* arch = tc_archetype_create(mask, type_ids, type_count, tc_soa_global_registry());
     if (!arch) return NULL;
 
     // Grow archetypes array if needed
@@ -1486,7 +1481,7 @@ static void pool_move_entity_archetype(
     tc_entity_id entity = {entity_idx, pool->generations[entity_idx]};
 
     // Allocate row in new archetype (init called for all types)
-    uint32_t new_row = tc_archetype_alloc_row(new_arch, entity, &pool->soa_registry);
+    uint32_t new_row = tc_archetype_alloc_row(new_arch, entity, tc_soa_global_registry());
 
     // Copy data for types that exist in both archetypes
     if (old_arch) {
@@ -1495,7 +1490,7 @@ static void pool_move_entity_archetype(
             void* src = tc_archetype_get_array(old_arch, tid);
             if (!src) continue; // type not in old archetype
 
-            const tc_soa_type_desc* desc = tc_soa_get_type(&pool->soa_registry, tid);
+            const tc_soa_type_desc* desc = tc_soa_get_type(tc_soa_global_registry(), tid);
             void* dst = (char*)new_arch->data[i] + new_row * desc->element_size;
             // Find source row element
             void* src_elem = NULL;
@@ -1511,7 +1506,7 @@ static void pool_move_entity_archetype(
         }
 
         // Swap-remove from old archetype without destroy — data was already copied
-        tc_entity_id swapped = tc_archetype_detach_row(old_arch, old_row, &pool->soa_registry);
+        tc_entity_id swapped = tc_archetype_detach_row(old_arch, old_row, tc_soa_global_registry());
         if (tc_entity_id_valid(swapped)) {
             pool->soa_archetype_rows[swapped.index] = old_row;
         }
@@ -1527,7 +1522,7 @@ static void pool_move_entity_archetype(
 
 void tc_entity_pool_add_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
     if (!pool || !tc_entity_pool_alive(pool, id)) return;
-    if (type >= pool->soa_registry.count) {
+    if (type >= tc_soa_global_registry()->count) {
         tc_log_error("[tc_entity_pool] add_soa: invalid type_id %d", type);
         return;
     }
@@ -1558,7 +1553,7 @@ void tc_entity_pool_add_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_i
 
 void tc_entity_pool_remove_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
     if (!pool || !tc_entity_pool_alive(pool, id)) return;
-    if (type >= pool->soa_registry.count) return;
+    if (type >= tc_soa_global_registry()->count) return;
 
     uint32_t idx = id.index;
     uint64_t old_mask = pool->soa_type_masks[idx];
@@ -1571,7 +1566,7 @@ void tc_entity_pool_remove_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_typ
 
     if (new_mask == 0) {
         // Entity has no more SoA components — just remove from archetype
-        tc_entity_id swapped = tc_archetype_free_row(old_arch, old_row, &pool->soa_registry);
+        tc_entity_id swapped = tc_archetype_free_row(old_arch, old_row, tc_soa_global_registry());
         if (tc_entity_id_valid(swapped)) {
             pool->soa_archetype_rows[swapped.index] = old_row;
         }
@@ -1600,7 +1595,7 @@ bool tc_entity_pool_has_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa_
 
 void* tc_entity_pool_get_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
     if (!pool || !tc_entity_pool_alive(pool, id)) return NULL;
-    if (type >= pool->soa_registry.count) return NULL;
+    if (type >= tc_soa_global_registry()->count) return NULL;
 
     uint32_t idx = id.index;
     if (pool->soa_archetype_ids[idx] == UINT32_MAX) return NULL;
@@ -1609,7 +1604,7 @@ void* tc_entity_pool_get_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa
     tc_archetype* arch = pool->archetypes[pool->soa_archetype_ids[idx]];
     uint32_t row = pool->soa_archetype_rows[idx];
 
-    return tc_archetype_get_element(arch, row, type, &pool->soa_registry);
+    return tc_archetype_get_element(arch, row, type, tc_soa_global_registry());
 }
 
 uint64_t tc_entity_pool_soa_mask(const tc_entity_pool* pool, tc_entity_id id) {

@@ -22,6 +22,7 @@
 
 extern "C" {
 #include "inspect/tc_binding.h"
+#include "core/tc_archetype.h"
 }
 #include "entity_bindings.hpp"
 #include "../camera/camera_bindings.hpp"
@@ -312,6 +313,27 @@ NB_MODULE(_entity_native, m) {
 
     m.def("component_registry_type_count", []() {
         return tc_component_registry_type_count();
+    });
+
+    // --- SoA type registry info (for CoreRegistryViewer) ---
+    m.def("soa_registry_get_all_info", []() {
+        nb::list result;
+        tc_soa_type_registry* reg = tc_soa_global_registry();
+        for (size_t i = 0; i < reg->count; i++) {
+            nb::dict info;
+            info["id"] = (int)i;
+            info["name"] = reg->types[i].name ? reg->types[i].name : "(unnamed)";
+            info["element_size"] = (int)reg->types[i].element_size;
+            info["alignment"] = (int)reg->types[i].alignment;
+            info["has_init"] = reg->types[i].init != nullptr;
+            info["has_destroy"] = reg->types[i].destroy != nullptr;
+            result.append(info);
+        }
+        return result;
+    });
+
+    m.def("soa_registry_type_count", []() {
+        return (int)tc_soa_global_registry()->count;
     });
 
     // --- ModuleLoader (hot-reload system for C++ modules) ---
