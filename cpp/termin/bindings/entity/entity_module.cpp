@@ -24,6 +24,7 @@ extern "C" {
 #include "inspect/tc_binding.h"
 #include "core/tc_archetype.h"
 }
+#include "termin/soa/soa_components.hpp"
 #include "entity_bindings.hpp"
 #include "../camera/camera_bindings.hpp"
 #include "../camera/orbit_camera_bindings.hpp"

@@ -47,9 +47,9 @@ struct SoaRegistrar {
 
 } // namespace termin
 
-// Place after struct definition in header file.
+// Place after struct definition at global scope (outside any namespace).
 // Registers the type in the global SoA type registry at static init time.
 // Safe to include in multiple translation units (dedup by name in registry).
 #define SOA_COMPONENT(T) \
-    template<> inline tc_soa_type_id ::termin::SoaTypeId<T>::id = TC_SOA_TYPE_INVALID; \
-    static ::termin::SoaRegistrar<T> _soa_reg_##T(#T)
+    template<> inline tc_soa_type_id termin::SoaTypeId<T>::id = TC_SOA_TYPE_INVALID; \
+    static termin::SoaRegistrar<T> _soa_reg_##T(#T)
