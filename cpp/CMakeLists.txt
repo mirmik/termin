@@ -151,6 +151,7 @@ set(ENTITY_LIB_SOURCES
     ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_engine_core_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_scene_manager_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_editor_interaction_instance.cpp
     termin/inspect/tc_kind_cpp.cpp
     termin/modules/module_loader.cpp
     termin/render/tc_value_trent.cpp

@@ -175,8 +175,11 @@ nanobind_add_module(_native
     termin/bindings/render/render_engine.cpp
     termin/bindings/render/rendering_manager_bindings.cpp
     termin/bindings/editor/gizmo_bindings.cpp
+    termin/bindings/editor/editor_interaction_bindings.cpp
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
+    termin/editor/editor_display_input_manager.cpp
+    termin/editor/editor_interaction_system.cpp
     ${_NATIVE_SDL_SOURCES}
     termin/scene/scene_manager_bindings.cpp
     termin/engine/engine_core.cpp
