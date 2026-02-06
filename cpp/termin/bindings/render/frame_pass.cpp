@@ -13,6 +13,7 @@ extern "C" {
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/editor/frame_graph_debugger_core.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/render.hpp"
 #include "termin/render/color_pass.hpp"
@@ -417,6 +418,10 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_debug_internal_point", &CxxFramePass::get_debug_internal_point)
         .def("required_resources", &CxxFramePass::required_resources)
         .def("destroy", &CxxFramePass::destroy)
+        // Debug capture
+        .def("set_debug_capture", &CxxFramePass::set_debug_capture, nb::arg("capture"))
+        .def("clear_debug_capture", &CxxFramePass::clear_debug_capture)
+        .def("get_debug_capture", &CxxFramePass::debug_capture, nb::rv_policy::reference)
         // Debugger integration
         .def("set_debugger_window", [](CxxFramePass& self, nb::object window,
                                        nb::object depth_callback, nb::object error_callback) {

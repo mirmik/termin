@@ -27,24 +27,23 @@ class RenderFramePass(FramePass):
 
     def required_resources(self) -> set[str]:
         """
-        Возвращает множество ресурсов, которые должны быть доступны пассу.
+        Returns set of resources that must be available to this pass.
 
-        По умолчанию это объединение reads и writes, но конкретные пассы
-        могут переопределить метод, если набор зависимостей меняется
-        динамически (например, BlitPass с переключаемым источником).
+        By default: union of reads and writes. Subclasses may override
+        if dependencies change dynamically.
         """
         return set(self.reads) | set(self.writes)
 
     def get_resource_specs(self) -> list["ResourceSpec"]:
         """
-        Возвращает список спецификаций требований к ресурсам.
+        Returns list of resource spec requirements.
 
-        Пассы могут переопределить этот метод для объявления:
-        - Фиксированного размера ресурса (например, shadow map 1024x1024)
-        - Параметров очистки (цвет, глубина)
-        - Формата attachment'ов (в будущем)
+        Subclasses may override to declare:
+        - Fixed resource size (e.g., shadow map 1024x1024)
+        - Clear parameters (color, depth)
+        - Attachment format
 
-        По умолчанию возвращает пустой список (нет специальных требований).
+        Returns empty list by default (no special requirements).
         """
         return []
 
@@ -60,55 +59,12 @@ class RenderFramePass(FramePass):
         self, graphics: "GraphicsBackend", src_fbo: "FramebufferHandle"
     ) -> None:
         """
-        Блитит текущее состояние FBO в окно дебаггера.
+        Blit current FBO state into debugger's capture FBO.
 
-        Используется для режима "внутри пасса" — отображение промежуточного
-        состояния после отрисовки конкретной сущности.
+        Used for "inside pass" mode — capturing intermediate state
+        after rendering a specific entity.
         """
-        if self._debugger_window is None:
+        cap = self._tc_pass.get_debug_capture()
+        if cap is None:
             return
-
-        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
-        from sdl2 import video as sdl_video
-
-        tex = src_fbo.color_texture()
-        if tex is None:
-            return
-
-        try:
-            saved_context = sdl_video.SDL_GL_GetCurrentContext()
-            saved_window = sdl_video.SDL_GL_GetCurrentWindow()
-
-            self._debugger_window.make_current()
-
-            dst_w, dst_h = self._debugger_window.framebuffer_size()
-
-            graphics.bind_framebuffer(None)
-            graphics.set_viewport(0, 0, dst_w, dst_h)
-
-            graphics.set_depth_test(False)
-            graphics.set_depth_mask(False)
-
-            shader = PresentToScreenPass._get_shader()
-            shader.ensure_ready()  # debugger has its own context
-            shader.use()
-            shader.set_uniform_int("u_tex", 0)
-            tex.bind(0)
-            graphics.draw_ui_textured_quad()
-
-            self._debugger_window.swap_buffers()
-
-        except Exception as e:
-            from termin._native import log
-            log.error(f"[RenderFramePass] blit_to_debugger failed: {e}")
-
-        finally:
-            if saved_window and saved_context:
-                sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
-
-            # Восстанавливаем состояние для продолжения рендеринга
-            graphics.bind_framebuffer(src_fbo)
-            w, h = src_fbo.get_size()
-            graphics.set_viewport(0, 0, w, h)
-            graphics.set_depth_test(True)
-            graphics.set_depth_mask(True)
+        cap.capture_direct(src_fbo, graphics)

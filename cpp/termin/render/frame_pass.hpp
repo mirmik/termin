@@ -33,6 +33,7 @@ class GraphicsBackend;
 class Scene;
 class Camera;
 class Light;
+class FrameGraphCapture;
 struct ExecuteContext;
 
 // Viewport rectangle in pixels
@@ -288,6 +289,17 @@ public:
 
     std::string get_debug_internal_point() const {
         return debug_internal_symbol_get();
+    }
+
+    // Debug capture (FrameGraphCapture* stored in tc_pass)
+    FrameGraphCapture* debug_capture() const {
+        return static_cast<FrameGraphCapture*>(_c.debug_capture);
+    }
+    void set_debug_capture(FrameGraphCapture* c) {
+        _c.debug_capture = c;
+    }
+    void clear_debug_capture() {
+        _c.debug_capture = nullptr;
     }
 
     std::set<const char*> required_resources() const {

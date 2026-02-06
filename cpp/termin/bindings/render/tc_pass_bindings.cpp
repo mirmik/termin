@@ -27,6 +27,7 @@ extern "C" {
 #include "termin/render/execute_context.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/resource_spec.hpp"
+#include "termin/editor/frame_graph_debugger_core.hpp"
 
 namespace termin {
 
@@ -494,6 +495,18 @@ void bind_tc_pass(nb::module_& m) {
                 p->debug_internal_symbol = nullptr;
             }
         })
+        .def("set_debug_capture", [](TcPassRef& self, FrameGraphCapture* c) {
+            tc_pass* p = self.ptr();
+            if (p) p->debug_capture = c;
+        }, nb::arg("capture"))
+        .def("clear_debug_capture", [](TcPassRef& self) {
+            tc_pass* p = self.ptr();
+            if (p) p->debug_capture = nullptr;
+        })
+        .def("get_debug_capture", [](TcPassRef& self) -> FrameGraphCapture* {
+            tc_pass* p = self.ptr();
+            return p ? static_cast<FrameGraphCapture*>(p->debug_capture) : nullptr;
+        }, nb::rv_policy::reference)
         .def("set_debugger_window", [](TcPassRef& self, nb::object window,
                                        nb::object depth_callback, nb::object error_callback) {
             // Delegate to Python body

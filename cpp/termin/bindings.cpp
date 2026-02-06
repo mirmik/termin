@@ -29,6 +29,7 @@ namespace nb = nanobind;
 namespace termin {
 void bind_gizmo(nb::module_& m);
 void bind_editor_interaction(nb::module_& m);
+void bind_frame_graph_debugger(nb::module_& m);
 void cleanup_pass_classes();  // Cleanup function from tc_pass_bindings.cpp (in _native)
 }
 
@@ -90,6 +91,7 @@ NB_MODULE(_native, m) {
     termin::bind_render(render_module);
     termin::bind_gizmo(editor_module);
     termin::bind_editor_interaction(editor_module);
+    termin::bind_frame_graph_debugger(editor_module);
     termin::bind_tc_render_surface(render_module);
     termin::bind_tc_input_manager(render_module);
     termin::bind_tc_display(render_module);

@@ -269,6 +269,7 @@ set(RENDER_LIB_SOURCES
     termin/render/opengl/opengl_backend_singleton.cpp
     termin/render/opengl/opengl_framebuffer.cpp
     termin/render/glad/src/glad.c
+    termin/editor/frame_graph_debugger_core.cpp
 )
 if(BUILD_CSHARP_BINDINGS)
     add_library(render_lib STATIC ${RENDER_LIB_SOURCES})

@@ -2,6 +2,7 @@
 #include "tc_shader_handle.hpp"
 #include "tc_log.hpp"
 #include "termin/lighting/lighting_upload.hpp"
+#include "termin/editor/frame_graph_debugger_core.hpp"
 extern "C" {
 #include "resources/tc_shader.h"
 #include "resources/tc_shader_registry.h"
@@ -785,6 +786,14 @@ void ColorPass::maybe_blit_to_debugger(
     int width,
     int height
 ) {
+    // New path: FrameGraphCapture (no context switch needed)
+    auto* cap = debug_capture();
+    if (cap) {
+        cap->capture(this, fb, graphics);
+        return;
+    }
+
+    // Old path: callback-based (for backward compatibility)
     if (!debugger_callbacks.is_set()) {
         return;
     }

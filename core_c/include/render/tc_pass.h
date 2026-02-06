@@ -106,6 +106,7 @@ struct tc_pass {
 
     // Debug
     char* debug_internal_symbol;
+    void* debug_capture;  // FrameGraphCapture* (opaque, set by debugger)
 
     // Language support
     tc_pass_kind kind;
@@ -139,6 +140,7 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->passthrough = false;
     p->viewport_name = NULL;
     p->debug_internal_symbol = NULL;
+    p->debug_capture = NULL;
     p->kind = TC_NATIVE_PASS;
     p->native_language = TC_LANGUAGE_CXX;
     p->externally_managed = false;

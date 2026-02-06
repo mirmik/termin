@@ -13,6 +13,7 @@
 #include "termin/render/render_context.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/render_state.hpp"
+#include "termin/editor/frame_graph_debugger_core.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/entity/entity.hpp"
@@ -210,6 +211,14 @@ protected:
         int width,
         int height
     ) {
+        // New path: FrameGraphCapture (no context switch needed)
+        auto* cap = debug_capture();
+        if (cap) {
+            cap->capture(this, fb, graphics);
+            return;
+        }
+
+        // Old path: callback-based (for backward compatibility)
         if (!debugger_callbacks.is_set()) {
             return;
         }
