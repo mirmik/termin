@@ -64,6 +64,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         # FrameDebuggerPass for "between passes" mode (created dynamically)
         self._frame_debugger_pass = None
+        # Pipeline we connected to (stored so _disconnect always works
+        # even if _get_current_pipeline() returns None at close time)
+        self._connected_pipeline = None
 
         # Channel mode and HDR
         self._channel_mode: int = 0  # 0=RGB, 1=R, 2=G, 3=B, 4=A
@@ -321,7 +324,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _disconnect(self) -> None:
         """Unconditionally clear ALL debug state from pipeline."""
-        pipeline = self._get_current_pipeline()
+        # Use stored pipeline reference — _get_current_pipeline() may return
+        # None if viewport is already gone (e.g. during closeEvent).
+        pipeline = self._connected_pipeline or self._get_current_pipeline()
 
         # Remove FrameDebuggerPass
         if pipeline is not None:
@@ -337,6 +342,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 except AttributeError:
                     pass
 
+        self._connected_pipeline = None
+
         # Reset capture state
         self._core.capture.reset_capture()
 
@@ -347,6 +354,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         pipeline = self._get_current_pipeline()
         if pipeline is None:
             return
+
+        self._connected_pipeline = pipeline
 
         if self._mode == "between":
             if not self._debug_source_res:
