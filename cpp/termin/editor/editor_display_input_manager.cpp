@@ -164,6 +164,12 @@ void EditorDisplayInputManager::on_scroll(double xoffset, double yoffset, int mo
         _dispatch_to_editor_components(viewport, &event);
         _dispatch_to_camera(viewport, &event);
     }
+
+    // Request render update (zoom changes camera, needs redraw)
+    auto* sys = EditorInteractionSystem::instance();
+    if (sys && sys->on_request_update) {
+        sys->on_request_update();
+    }
 }
 
 void EditorDisplayInputManager::on_key(int key, int scancode, int action, int mods) {

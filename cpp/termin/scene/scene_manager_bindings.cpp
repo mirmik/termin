@@ -11,6 +11,7 @@
 extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
+#include "core/tc_entity_pool.h"
 }
 
 namespace nb = nanobind;
@@ -296,6 +297,85 @@ void bind_scene_manager(nb::module_& m) {
         .def("invoke_before_scene_close", &SceneManager::invoke_before_scene_close, nb::arg("name"),
              "Invoke before_scene_close callback (if set).")
         ;
+
+    // Scene pool query functions (used by CoreRegistryViewer)
+
+    m.def("tc_scene_registry_count", []() -> size_t {
+        return tc_scene_pool_count();
+    });
+
+    m.def("tc_scene_registry_get_all_info", []() {
+        size_t count = 0;
+        tc_scene_info* infos = tc_scene_pool_get_all_info(&count);
+        nb::list result;
+        for (size_t i = 0; i < count; ++i) {
+            nb::dict d;
+            d["handle"] = nb::make_tuple(infos[i].handle.index, infos[i].handle.generation);
+            d["name"] = infos[i].name ? nb::str(infos[i].name) : nb::none();
+            d["entity_count"] = infos[i].entity_count;
+            d["pending_count"] = infos[i].pending_count;
+            d["update_count"] = infos[i].update_count;
+            d["fixed_update_count"] = infos[i].fixed_update_count;
+            result.append(d);
+        }
+        free(infos);
+        return result;
+    });
+
+    m.def("tc_scene_get_entities", [](nb::tuple handle_tuple) {
+        tc_scene_handle h;
+        h.index = nb::cast<uint32_t>(handle_tuple[0]);
+        h.generation = nb::cast<uint32_t>(handle_tuple[1]);
+
+        if (!tc_scene_pool_alive(h)) {
+            return nb::list();
+        }
+
+        tc_entity_pool* pool = tc_scene_entity_pool(h);
+        if (!pool) {
+            return nb::list();
+        }
+
+        struct CollectCtx {
+            tc_entity_pool* pool;
+            nb::list result;
+        };
+        CollectCtx ctx{pool, nb::list()};
+
+        tc_entity_pool_foreach(pool, [](tc_entity_pool* p, tc_entity_id id, void* ud) -> bool {
+            auto* c = static_cast<CollectCtx*>(ud);
+            nb::dict d;
+            const char* name = tc_entity_pool_name(c->pool, id);
+            const char* uuid = tc_entity_pool_uuid(c->pool, id);
+            d["name"] = name ? nb::str(name) : nb::none();
+            d["uuid"] = uuid ? nb::str(uuid) : nb::str("");
+            d["enabled"] = tc_entity_pool_enabled(c->pool, id);
+            d["visible"] = tc_entity_pool_visible(c->pool, id);
+            d["component_count"] = tc_entity_pool_component_count(c->pool, id);
+            c->result.append(d);
+            return true;
+        }, &ctx);
+
+        return ctx.result;
+    }, nb::arg("handle"));
+
+    m.def("tc_scene_get_component_types", [](nb::tuple handle_tuple) {
+        tc_scene_handle h;
+        h.index = nb::cast<uint32_t>(handle_tuple[0]);
+        h.generation = nb::cast<uint32_t>(handle_tuple[1]);
+
+        size_t count = 0;
+        tc_scene_component_type* types = tc_scene_get_all_component_types(h, &count);
+        nb::list result;
+        for (size_t i = 0; i < count; ++i) {
+            nb::dict d;
+            d["type_name"] = types[i].type_name ? nb::str(types[i].type_name) : nb::str("unknown");
+            d["count"] = types[i].count;
+            result.append(d);
+        }
+        free(types);
+        return result;
+    }, nb::arg("handle"));
 }
 
 } // namespace termin
