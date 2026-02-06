@@ -672,7 +672,7 @@ class ResourceManagerViewer(QDialog):
             asset = self._resource_manager.get_scene_pipeline_asset(name)
             if asset:
                 # ScenePipelineAsset stores graph data (nodes, connections), not serialized pipeline
-                graph_data = asset.data if asset.is_loaded else None
+                graph_data = asset.graph_data if asset.is_loaded else None
                 if graph_data:
                     # Count pass nodes (nodes that are not ViewportFrame, ResourceNode, etc.)
                     nodes = graph_data.get("nodes", [])
