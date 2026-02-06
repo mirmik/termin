@@ -5,9 +5,6 @@ Handles:
 - Creating/destroying EditorEntities in the scene
 - Creating/removing editor viewport
 - Saving/restoring editor state (camera position, UI state)
-
-Does NOT own EditorViewportFeatures — that's managed by EditorWindow
-and updated via set_scene/set_camera when attachment changes.
 """
 
 from __future__ import annotations
@@ -24,7 +21,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.editor.rendering_controller import RenderingController
     from termin.editor.editor_camera import EditorCameraManager
-    from termin.editor.editor_viewport_features import EditorViewportFeatures
+
 
 
 class EditorSceneAttachment:

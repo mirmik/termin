@@ -665,7 +665,7 @@ class RenderingController:
         self._display_tabs[display_id] = (container, surface, qwindow)
         self._editor_display_ptr = display_id
 
-        # Add to displays list (editor display input is managed by EditorViewportFeatures)
+        # Add to displays list
         self.add_display(display, "Editor")
 
         return display, surface
@@ -1017,7 +1017,7 @@ class RenderingController:
         if display.viewports:
             is_blocked = display.viewports[0].block_input_in_editor
 
-        # Remove old input manager (if managed here, not by EditorViewportFeatures)
+        # Remove old input manager
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
@@ -1045,7 +1045,7 @@ class RenderingController:
             surface.set_input_manager(input_manager.tc_input_manager_ptr)
         elif mode == "editor":
             # Editor mode is handled by EditorWindow via callback
-            # It will create EditorViewportFeatures which owns EditorDisplayInputManager
+            # EditorWindow handles C++ EditorDisplayInputManager creation
             pass
 
         # Update viewport input_mode
