@@ -212,9 +212,11 @@ protected:
         int height
     ) {
         // New path: FrameGraphCapture (no context switch needed)
+        // debug_internal_symbol already filters which entity to capture,
+        // so we use capture_direct (no caller check needed)
         auto* cap = debug_capture();
         if (cap) {
-            cap->capture(this, fb, graphics);
+            cap->capture_direct(fb, graphics);
             return;
         }
 

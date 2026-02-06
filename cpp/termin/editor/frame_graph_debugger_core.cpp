@@ -53,15 +53,37 @@ void FrameGraphCapture::do_blit(FramebufferHandle* src, GraphicsBackend* graphic
     int w = src->get_width();
     int h = src->get_height();
 
-    // blit_framebuffer handles MSAA resolve automatically when
-    // src is MSAA and dst is non-MSAA
-    graphics->blit_framebuffer(
-        src, capture_fbo_.get(),
-        0, 0, w, h,
-        0, 0, w, h,
-        true,  // blit_color
-        true   // blit_depth
-    );
+    if (src->is_msaa()) {
+        // MSAA resolve: blit color and depth separately.
+        // Some drivers reject combined color+depth MSAA resolve in a single call.
+        graphics->blit_framebuffer(
+            src, capture_fbo_.get(),
+            0, 0, w, h,
+            0, 0, w, h,
+            true,   // blit_color
+            false   // no depth
+        );
+        graphics->blit_framebuffer(
+            src, capture_fbo_.get(),
+            0, 0, w, h,
+            0, 0, w, h,
+            false,  // no color
+            true    // blit_depth
+        );
+    } else {
+        graphics->blit_framebuffer(
+            src, capture_fbo_.get(),
+            0, 0, w, h,
+            0, 0, w, h,
+            true,  // blit_color
+            true   // blit_depth
+        );
+    }
+
+    // Restore src as the active draw target.
+    // blit_framebuffer resets to FBO 0 — the caller (render pass)
+    // is still rendering into src, so we must rebind it.
+    graphics->bind_framebuffer(src);
 }
 
 // ============================================================

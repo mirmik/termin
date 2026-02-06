@@ -81,7 +81,10 @@ class FrameDebuggerPass(RenderFramePass):
         return None
 
     def execute(self, ctx: "ExecuteContext") -> None:
+        from termin._native import log
+
         if self._capture is None:
+            log.debug("[FrameDebuggerPass] execute: no capture set")
             return
 
         if self._get_source_res is None:
@@ -93,11 +96,15 @@ class FrameDebuggerPass(RenderFramePass):
 
         src_fb = ctx.reads_fbos.get(src_name)
         if src_fb is None:
+            log.debug(f"[FrameDebuggerPass] execute: resource '{src_name}' not in reads_fbos. Keys: {list(ctx.reads_fbos.keys())}")
             return
 
         fbo = self._get_fbo_from_resource(src_fb)
         if fbo is None:
+            log.debug(f"[FrameDebuggerPass] execute: could not extract FBO from resource '{src_name}' (type: {type(src_fb).__name__})")
             return
 
+        log.debug(f"[FrameDebuggerPass] execute: capturing '{src_name}', fbo size={fbo.get_size()}")
         # Capture phase: blit into offscreen FBO (same GL context, no switch)
         self._capture.capture_direct(fbo, ctx.graphics)
+        log.debug(f"[FrameDebuggerPass] execute: has_capture={self._capture.has_capture()}")

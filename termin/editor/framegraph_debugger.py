@@ -317,27 +317,94 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_render_stats()
         self._sync_initial_resource()
 
+    # ============ Centralized connection management ============
+
+    def _disconnect(self) -> None:
+        """Unconditionally clear ALL debug state from pipeline."""
+        pipeline = self._get_current_pipeline()
+
+        # Remove FrameDebuggerPass
+        if pipeline is not None:
+            pipeline.remove_passes_by_name("FrameDebugger")
+        self._frame_debugger_pass = None
+
+        # Clear debug symbols and capture from all passes
+        if pipeline is not None:
+            for p in pipeline.passes:
+                try:
+                    p.set_debug_internal_point("")
+                    p.clear_debug_capture()
+                except AttributeError:
+                    pass
+
+        # Reset capture state
+        self._core.capture.reset_capture()
+
+    def _connect(self) -> None:
+        """Set up connection based on current mode and UI state."""
+        from termin._native import log
+
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            return
+
+        if self._mode == "between":
+            if not self._debug_source_res:
+                return
+
+            from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
+            def get_source():
+                if self._debug_paused:
+                    return None
+                return self._debug_source_res
+
+            self._frame_debugger_pass = FrameDebuggerPass(
+                get_source_res=get_source,
+                pass_name="FrameDebugger",
+            )
+            self._frame_debugger_pass.set_capture(self._core.capture)
+            pipeline.add_pass(self._frame_debugger_pass)
+            log.info(f"[FrameDebugger] Connected: between mode, resource='{self._debug_source_res}'")
+
+        elif self._mode == "inside":
+            if not self._selected_pass or not self._selected_symbol:
+                return
+
+            for p in pipeline.passes:
+                if p.pass_name == self._selected_pass:
+                    p.set_debug_internal_point(self._selected_symbol)
+                    p.set_debug_capture(self._core.capture)
+                    log.info(f"[FrameDebugger] Connected: inside mode, pass='{self._selected_pass}', symbol='{self._selected_symbol}'")
+                    return
+
+            log.warn(f"[FrameDebugger] Pass '{self._selected_pass}' not found")
+
+    def _reconnect(self) -> None:
+        """Full disconnect + connect cycle. Call when any connection parameter changes."""
+        self._disconnect()
+        self._connect()
+        if self._on_request_update is not None:
+            self._on_request_update()
+
     # ============ Viewport selection ============
 
     def _on_viewport_selected(self, index: int) -> None:
-        self._detach_frame_debugger_pass()
-
         if index < 0 or index >= len(self._viewports_list):
             self._current_viewport = None
-            return
-        self._current_viewport = self._viewports_list[index][0]
-
+        else:
+            self._current_viewport = self._viewports_list[index][0]
         self._update_resource_list()
         self._update_passes_list()
         self._sync_initial_resource()
-
-        if self._mode == "between":
-            self._attach_frame_debugger_pass()
+        self._reconnect()
 
     def _sync_initial_resource(self) -> None:
         if self._resource_combo.count() == 0:
             return
+        self._resource_combo.blockSignals(True)
         self._resource_combo.setCurrentIndex(0)
+        self._resource_combo.blockSignals(False)
         first_resource = self._resource_combo.currentText()
         if first_resource:
             self._debug_source_res = first_resource
@@ -528,12 +595,18 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _present_capture(self) -> None:
         """Present phase: render capture FBO into SDL debug window."""
+        from termin._native import log
+
         if not self._core.capture.has_capture():
+            log.debug("[FramegraphDebugger] _present_capture: no capture")
             return
 
         capture_fbo = self._core.capture_fbo
         if capture_fbo is None:
+            log.warn("[FramegraphDebugger] _present_capture: capture_fbo is None")
             return
+
+        log.debug("[FramegraphDebugger] _present_capture: presenting")
 
         from sdl2 import video as sdl_video
 
@@ -630,68 +703,20 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 )
             self._depth_label.setPixmap(pixmap)
 
-    # ============ Mode switching ============
+    # ============ UI event handlers ============
 
     def _on_mode_changed(self, checked: bool) -> None:
         if self._radio_inside.isChecked():
             self._mode = "inside"
             self._between_panel.hide()
             self._inside_panel.show()
-            self._clear_internal_symbol()
-            self._detach_frame_debugger_pass()
             self._update_passes_list()
             self._update_pass_serialization()
-            self._clear_debug_window()
         else:
             self._mode = "between"
             self._between_panel.show()
             self._inside_panel.hide()
-            self._clear_internal_symbol()
-            self._attach_frame_debugger_pass()
-
-    def _attach_frame_debugger_pass(self) -> None:
-        from termin._native import log
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            log.warn("[FrameDebugger] _attach: no pipeline")
-            return
-
-        self._detach_frame_debugger_pass()
-
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
-        def get_source():
-            if self._debug_paused:
-                return None
-            return self._debug_source_res
-
-        self._frame_debugger_pass = FrameDebuggerPass(
-            get_source_res=get_source,
-            pass_name="FrameDebugger",
-        )
-
-        # Pass FrameGraphCapture for blit during render
-        self._frame_debugger_pass.set_capture(self._core.capture)
-
-        pipeline.add_pass(self._frame_debugger_pass)
-        log.info(f"[FrameDebugger] Attached FrameDebuggerPass, pipeline has {len(pipeline.passes)} passes")
-
-        if self._on_request_update is not None:
-            self._on_request_update()
-
-    def _detach_frame_debugger_pass(self) -> None:
-        pipeline = self._get_current_pipeline()
-        if pipeline is not None:
-            removed = pipeline.remove_passes_by_name("FrameDebugger")
-            if removed > 0:
-                from termin._native import log
-                log.info(f"[FrameDebugger] Removed {removed} FrameDebuggerPass(es), pipeline has {len(pipeline.passes)} passes")
-
-        self._frame_debugger_pass = None
-
-        if self._on_request_update is not None:
-            self._on_request_update()
+        self._reconnect()
 
     def _on_resource_selected(self, name: str) -> None:
         if not name:
@@ -702,9 +727,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_writer_pass_label()
         self._update_pipeline_info()
         self._hdr_stats_label.setText("")
+        self._reconnect()
 
     def _on_hdr_highlight_toggled(self, checked: bool) -> None:
         self._highlight_hdr = checked
+        if self._on_request_update is not None:
+            self._on_request_update()
 
     def _on_analyze_hdr_clicked(self) -> None:
         capture_fbo = self._core.capture_fbo
@@ -731,30 +759,33 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     def _on_pass_selected(self, name: str) -> None:
         if not name:
             return
-        self._clear_internal_symbol()
         idx = self._pass_combo.currentIndex()
         if idx >= 0:
             self._selected_pass = self._pass_combo.itemData(idx)
         self._selected_symbol = None
         self._update_symbols_list()
         self._update_pass_serialization()
+        # Auto-select last symbol if available
         if self._symbol_combo.count() > 0:
             last_index = self._symbol_combo.count() - 1
+            self._symbol_combo.blockSignals(True)
             self._symbol_combo.setCurrentIndex(last_index)
-            last_symbol = self._symbol_combo.itemText(last_index)
-            self._on_symbol_selected(last_symbol)
+            self._symbol_combo.blockSignals(False)
+            self._selected_symbol = self._symbol_combo.itemText(last_index)
+        if self._selected_symbol:
+            self._timing_label.show()
+            self._update_timing_label()
+        else:
+            self._timing_label.hide()
+        self._reconnect()
 
     def _on_symbol_selected(self, name: str) -> None:
-        if not name:
+        if not name or self._selected_pass is None:
             return
-        if self._selected_pass is None:
-            return
-
         self._selected_symbol = name
-        self._detach_frame_debugger_pass()
-        self._set_pass_internal_symbol(self._selected_pass, name)
         self._timing_label.show()
         self._update_timing_label()
+        self._reconnect()
 
     def _update_timing_label(self) -> None:
         if self._timing_label is None:
@@ -787,60 +818,15 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _on_pause_toggled(self, checked: bool) -> None:
         self._debug_paused = bool(checked)
-        if self._on_request_update is not None:
-            self._on_request_update()
+        self._reconnect()
 
     def _on_channel_changed(self, index: int) -> None:
         self._channel_mode = index
+        if self._on_request_update is not None:
+            self._on_request_update()
 
     def _on_refresh_depth_clicked(self) -> None:
         self._update_depth_image()
-
-    def _clear_internal_symbol(self) -> None:
-        from termin._native import log
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            return
-
-        cleared_count = 0
-        for p in pipeline.passes:
-            try:
-                p.set_debug_internal_point("")
-                p.clear_debug_capture()
-                cleared_count += 1
-            except AttributeError:
-                log.warn(f"[FrameDebugger] Pass '{p.pass_name}' does not support debug symbols")
-
-        log.info(f"[FrameDebugger] _clear_internal_symbol: cleared {cleared_count} passes")
-
-    def _set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
-        from termin._native import log
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            log.warn(f"[FrameDebugger] _set_pass_internal_symbol: no pipeline")
-            return
-
-        for p in pipeline.passes:
-            if p.pass_name == pass_name:
-                pass_type = type(p).__name__
-                if symbol is None or symbol == "":
-                    p.set_debug_internal_point("")
-                    p.clear_debug_capture()
-                    log.info(f"[FrameDebugger] Cleared debug symbol for pass '{pass_name}' ({pass_type})")
-                else:
-                    p.set_debug_internal_point(symbol)
-                    # Set FrameGraphCapture on tc_pass so the pass can blit during render
-                    p.set_debug_capture(self._core.capture)
-                    # Set target so capture knows which pass is allowed to capture
-                    log.info(f"[FrameDebugger] Set debug symbol '{symbol}' for pass '{pass_name}' ({pass_type})")
-
-                if self._on_request_update is not None:
-                    self._on_request_update()
-                return
-
-        log.warn(f"[FrameDebugger] Pass '{pass_name}' not found in pipeline")
 
     def _build_schedule(self, exclude_debugger: bool = False) -> list:
         pipeline = self._get_current_pipeline()
@@ -1059,29 +1045,32 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._clear_debug_window()
 
     def refresh_for_new_scene(self) -> None:
-        saved_mode = self._mode
         saved_resource = self._debug_source_res
         saved_pass = self._selected_pass
         saved_symbol = self._selected_symbol
 
-        self._detach_frame_debugger_pass()
-        self._clear_internal_symbol()
+        self._disconnect()
 
         self._update_viewport_list()
         self._update_resource_list()
         self._update_passes_list()
 
+        # Restore selections (without triggering signals)
         if saved_resource:
             index = self._resource_combo.findText(saved_resource)
             if index >= 0:
+                self._resource_combo.blockSignals(True)
                 self._resource_combo.setCurrentIndex(index)
+                self._resource_combo.blockSignals(False)
                 self._debug_source_res = saved_resource
                 self._resource_name = saved_resource
 
         if saved_pass:
             for i in range(self._pass_combo.count()):
                 if self._pass_combo.itemData(i) == saved_pass:
+                    self._pass_combo.blockSignals(True)
                     self._pass_combo.setCurrentIndex(i)
+                    self._pass_combo.blockSignals(False)
                     self._selected_pass = saved_pass
                     self._update_symbols_list()
                     break
@@ -1089,34 +1078,28 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if saved_symbol and self._selected_pass:
             index = self._symbol_combo.findText(saved_symbol)
             if index >= 0:
+                self._symbol_combo.blockSignals(True)
                 self._symbol_combo.setCurrentIndex(index)
+                self._symbol_combo.blockSignals(False)
                 self._selected_symbol = saved_symbol
-                if saved_mode == "inside":
-                    self._set_pass_internal_symbol(self._selected_pass, saved_symbol)
 
-        if saved_mode == "between":
-            self._attach_frame_debugger_pass()
-
+        self._reconnect()
         self._update_fbo_info()
         self._update_writer_pass_label()
         self._update_pipeline_info()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        if self._mode == "between":
-            self._attach_frame_debugger_pass()
-        else:
-            self._update_passes_list()
-            self._update_pass_serialization()
+        self._update_passes_list()
+        self._update_pass_serialization()
+        self._reconnect()
 
     def hideEvent(self, event) -> None:
-        self._detach_frame_debugger_pass()
-        self._clear_internal_symbol()
+        self._disconnect()
         super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
-        self._detach_frame_debugger_pass()
-        self._clear_internal_symbol()
+        self._disconnect()
         if self._sdl_window is not None:
             self._window_backend.remove_window(self._sdl_window)
             self._sdl_window.close()
