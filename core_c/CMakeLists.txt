@@ -16,6 +16,7 @@ option(TC_BUILD_TESTS "Build tests" ON)
 # in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
     src/tc_animation_registry.c
+    src/tc_archetype.c
     src/tc_collision_world.c
     src/tc_component.c
     src/tc_core.c
@@ -63,6 +64,7 @@ set(TC_HEADERS
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
     include/physics/tc_collision.h
+    include/core/tc_archetype.h
     include/core/tc_component.h
     include/core/tc_entity_pool.h
     include/core/tc_entity_pool_registry.h
@@ -162,6 +164,16 @@ if(TC_BUILD_TESTS)
     add_executable(termin_data_structures_test tests/test_data_structures.c)
     target_link_libraries(termin_data_structures_test PRIVATE termin_core)
     add_test(NAME termin_data_structures_test COMMAND termin_data_structures_test)
+
+    add_executable(termin_archetype_test tests/test_archetype.c)
+    target_link_libraries(termin_archetype_test PRIVATE termin_core)
+    add_test(NAME termin_archetype_test COMMAND termin_archetype_test)
+
+    # Put test executables next to the DLL so they can find it
+    set_target_properties(
+        termin_core_test termin_mesh_test termin_data_structures_test termin_archetype_test
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
 endif()
 
 # Install

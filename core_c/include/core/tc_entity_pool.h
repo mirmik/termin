@@ -276,6 +276,33 @@ static inline void tc_entity_foreach_input_handler_subtree(
 }
 
 // ============================================================================
+// SoA Archetype Components
+// ============================================================================
+
+// Forward declarations (full definitions in tc_archetype.h)
+typedef uint8_t tc_soa_type_id;
+struct tc_soa_type_desc;
+
+// Register a SoA component type with the pool's registry.
+// Returns type id (0..63) or TC_SOA_TYPE_INVALID (0xFF) if full.
+TC_POOL_API tc_soa_type_id tc_entity_pool_register_soa_type(tc_entity_pool* pool, const struct tc_soa_type_desc* desc);
+
+// Add a SoA component to entity. Moves entity to a new archetype.
+TC_POOL_API void tc_entity_pool_add_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type);
+
+// Remove a SoA component from entity. Moves entity to a new archetype.
+TC_POOL_API void tc_entity_pool_remove_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type);
+
+// Check if entity has a SoA component.
+TC_POOL_API bool tc_entity_pool_has_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type);
+
+// Get pointer to entity's SoA component data. Returns NULL if not present.
+TC_POOL_API void* tc_entity_pool_get_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type);
+
+// Get SoA type mask for entity (bitmask of which SoA types are present).
+TC_POOL_API uint64_t tc_entity_pool_soa_mask(const tc_entity_pool* pool, tc_entity_id id);
+
+// ============================================================================
 // Entity Handle API (unified access via tc_entity_handle)
 // ============================================================================
 
@@ -489,6 +516,32 @@ static inline size_t tc_entity_component_count(tc_entity_handle h) {
 static inline tc_component* tc_entity_component_at(tc_entity_handle h, size_t index) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     return pool ? tc_entity_pool_component_at(pool, h.id, index) : NULL;
+}
+
+// SoA Components (handle-based)
+static inline void tc_entity_add_soa(tc_entity_handle h, tc_soa_type_id type) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_add_soa(pool, h.id, type);
+}
+
+static inline void tc_entity_remove_soa(tc_entity_handle h, tc_soa_type_id type) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (pool) tc_entity_pool_remove_soa(pool, h.id, type);
+}
+
+static inline bool tc_entity_has_soa(tc_entity_handle h, tc_soa_type_id type) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_has_soa(pool, h.id, type) : false;
+}
+
+static inline void* tc_entity_get_soa(tc_entity_handle h, tc_soa_type_id type) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_get_soa(pool, h.id, type) : NULL;
+}
+
+static inline uint64_t tc_entity_soa_mask(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_soa_mask(pool, h.id) : 0;
 }
 
 #ifdef __cplusplus
