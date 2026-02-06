@@ -10,6 +10,9 @@ Debug prints are allowed for investigating issues.
 ### No Speculative Code
 No fallbacks, backwards compatibility, or special cases "just in case". Add them only when there is a proven, specific need. If something doesn't work, find the root cause instead of adding workarounds.
 
+## Architecture & Implementation Principles
+When proposing solutions, follow existing codebase patterns and architectural conventions. Never propose shortcuts or band-aid fixes — always aim for the proper architectural solution. If unsure about the pattern, ask before implementing.
+
 ### Attribute Access
 Methods `getattr`, `hasattr`, and `setattr` are only allowed in contexts where the algorithm explicitly requires reflection (e.g., serialization, deserialization, dynamic dispatch).
 
