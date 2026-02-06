@@ -60,6 +60,11 @@ void EngineCore::run() {
     }
 
     tc_log(TC_LOG_INFO, "[EngineCore] Main loop stopped");
+
+    // Shutdown callback (cleanup)
+    if (_on_shutdown_callback) {
+        _on_shutdown_callback();
+    }
 }
 
 } // namespace termin

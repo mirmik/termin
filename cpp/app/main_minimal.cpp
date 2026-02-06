@@ -126,37 +126,41 @@ int main(int argc, char* argv[]) {
     }
 
     // Set Python path
-    std::string init_code;
+    std::string path_code;
     if (bundled_python) {
         fs::path site_packages = python_stdlib / "site-packages";
-        init_code =
+        path_code =
             "import sys\n"
             "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n"
             "sys.path.insert(0, r'" + site_packages.string() + "')\n";
     } else {
-        init_code =
+        path_code =
             "import sys\n"
             "sys.path.insert(0, r'" + termin_path.string() + "')\n";
     }
 
-    if (PyRun_SimpleString(init_code.c_str()) != 0) {
+    if (PyRun_SimpleString(path_code.c_str()) != 0) {
         std::cerr << "Failed to set Python path" << std::endl;
         Py_Finalize();
         return 1;
     }
 
-    // Initialize editor (creates Qt app, SDL, EditorWindow)
-    // Then run main loop via engine.run()
-    const char* run_code = R"(
-from termin.editor.run_editor import init_and_run_editor
-init_and_run_editor()
+    // Initialize editor (creates Qt app, SDL, EditorWindow, sets up callbacks)
+    const char* init_code = R"(
+from termin.editor.run_editor import init_editor
+init_editor()
 )";
 
-    int result = PyRun_SimpleString(run_code);
+    int result = PyRun_SimpleString(init_code);
     if (result != 0) {
         PyErr_Print();
+        Py_Finalize();
+        return 1;
     }
 
+    // Run main loop in C++
+    engine.run();
+
     Py_Finalize();
-    return result;
+    return 0;
 }

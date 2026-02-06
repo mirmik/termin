@@ -29,6 +29,7 @@ private:
     // Callbacks for external integration (set from Python)
     std::function<void()> _poll_events_callback;
     std::function<bool()> _should_continue_callback;
+    std::function<void()> _on_shutdown_callback;
 
 public:
     EngineCore();
@@ -53,6 +54,9 @@ public:
 
     // Called each frame to check if loop should continue
     void set_should_continue_callback(std::function<bool()> cb) { _should_continue_callback = std::move(cb); }
+
+    // Called after main loop ends (for cleanup)
+    void set_on_shutdown_callback(std::function<void()> cb) { _on_shutdown_callback = std::move(cb); }
 
     // --- Main loop ---
     // Run blocking main loop. Calls poll_events, tick_and_render at target_fps.

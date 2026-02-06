@@ -60,6 +60,19 @@ void bind_engine_core(nb::module_& m) {
         }, nb::arg("callback"),
            "Set callback to check if loop should continue. Return False to stop.")
 
+        .def("set_on_shutdown_callback", [](EngineCore& self, nb::object callback) {
+            if (callback.is_none()) {
+                self.set_on_shutdown_callback(nullptr);
+            } else {
+                auto cb = std::make_shared<nb::object>(callback);
+                self.set_on_shutdown_callback([cb]() {
+                    nb::gil_scoped_acquire guard;
+                    (*cb)();
+                });
+            }
+        }, nb::arg("callback"),
+           "Set callback for cleanup after main loop ends.")
+
         // Main loop
         .def("run", &EngineCore::run,
              "Run blocking main loop. Returns when should_continue returns False or stop() called.")

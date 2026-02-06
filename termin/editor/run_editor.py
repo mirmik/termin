@@ -56,11 +56,11 @@ def apply_dark_palette(app: QApplication):
     app.setPalette(palette)
 
 
-def init_and_run_editor(debug_resource: str | None = None, no_scene: bool = False):
+def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     """
-    Initialize editor and run main loop.
-    Called from C++ after EngineCore is created.
-    Main loop runs in C++ (EngineCore.run()).
+    Initialize editor and setup callbacks.
+    Called from C++ before EngineCore.run().
+    Does NOT call engine.run() - that's done in C++.
     """
     from termin._native import EngineCore
 
@@ -119,36 +119,31 @@ def init_and_run_editor(debug_resource: str | None = None, no_scene: bool = Fals
     def should_continue():
         return not win.should_close()
 
+    def on_shutdown():
+        sdl_backend.terminate()
+        sdl2.SDL_Quit()
+
     engine.set_poll_events_callback(poll_events)
     engine.set_should_continue_callback(should_continue)
-
-    # Run main loop (blocking, in C++)
-    engine.run()
-
-    # Cleanup
-    sdl_backend.terminate()
-    sdl2.SDL_Quit()
+    engine.set_on_shutdown_callback(on_shutdown)
 
 
 def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     """
     Run the editor (legacy entry point).
-    Creates EngineCore in Python for backwards compatibility.
+    Must be called from C++ entry point.
     """
     from termin._native import EngineCore
 
-    # Check if EngineCore already exists (called from C++)
     engine = EngineCore.instance()
-    if engine is not None:
-        init_and_run_editor(debug_resource=debug_resource, no_scene=no_scene)
-        return
+    if engine is None:
+        raise RuntimeError(
+            "run_editor() must be called from C++ entry point (termin_editor). "
+            "EngineCore is created in C++."
+        )
 
-    # Legacy mode: create EngineCore in Python
-    # This won't work anymore since EngineCore() is not exposed
-    raise RuntimeError(
-        "run_editor() must be called from C++ entry point (termin_editor). "
-        "EngineCore is created in C++."
-    )
+    init_editor(debug_resource=debug_resource, no_scene=no_scene)
+    engine.run()
 
 
 if __name__ == "__main__":
