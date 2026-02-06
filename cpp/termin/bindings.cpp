@@ -15,6 +15,7 @@ extern "C" {
 #include "bindings/input/simple_display_input_manager_bindings.hpp"
 // scene_bindings.hpp - TcScene bindings moved to _entity_native
 #include "scene/scene_manager_bindings.hpp"
+#include "bindings/engine/engine_core_bindings.hpp"
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -96,6 +97,7 @@ NB_MODULE(_native, m) {
 #endif
     // TcScene and TcSceneLighting are now in _entity_native module
     termin::bind_scene_manager(scene_module);
+    termin::bind_engine_core(m);  // EngineCore in root module
     // TcViewport is now in separate _viewport_native module
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);

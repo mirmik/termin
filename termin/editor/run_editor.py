@@ -1,22 +1,13 @@
 import sys
-import time
 import warnings
 
 # Suppress SDL2 informational warning about using pysdl2-dll binaries (Windows)
 warnings.filterwarnings("ignore", message="Using SDL2 binaries from pysdl2-dll")
 
-import numpy as np
 from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import QApplication
-from PyQt6 import QtCore
 
 from termin.editor.editor_window import EditorWindow
-from termin.geombase import Pose3
-from termin.geombase import GeneralPose3
-from termin.mesh.mesh import CubeMesh, CylinderMesh, Mesh3
-from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
-from termin.visualization.core.entity import Entity
-from termin.visualization.core.material import Material
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.world import VisualizationWorld
 from termin.visualization.platform.backends import (
@@ -24,30 +15,23 @@ from termin.visualization.platform.backends import (
     set_default_graphics_backend,
 )
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.components.light_component import LightComponent
-from termin.lighting import LightType, LightShadowParams
 
 
 def build_scene(world):
-    from termin.voxels.voxel_mesh import create_voxel_mesh
-
     scene = Scene.create(name="default")
     world.add_scene(scene)
-
     return scene
 
 
 def apply_dark_palette(app: QApplication):
-    app.setStyle("Fusion")  # более аккуратный стиль, чем дефолтный
+    app.setStyle("Fusion")
 
     palette = QPalette()
 
-    # Базовые цвета
-    bg      = QColor(30, 30, 30)
-    window  = QColor(37, 37, 38)
-    base    = QColor(45, 45, 48)
-    text    = QColor(220, 220, 220)
+    bg = QColor(30, 30, 30)
+    window = QColor(37, 37, 38)
+    base = QColor(45, 45, 48)
+    text = QColor(220, 220, 220)
     disabled_text = QColor(128, 128, 128)
     highlight = QColor(0, 120, 215)
 
@@ -65,7 +49,6 @@ def apply_dark_palette(app: QApplication):
     palette.setColor(QPalette.ColorRole.Highlight, highlight)
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
 
-    # Отключённые элементы
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_text)
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)
@@ -73,29 +56,37 @@ def apply_dark_palette(app: QApplication):
     app.setPalette(palette)
 
 
-def run_editor(debug_resource: str | None = None, no_scene: bool = False):
+def init_and_run_editor(debug_resource: str | None = None, no_scene: bool = False):
     """
-    Run the editor.
+    Initialize editor and run main loop.
+    Called from C++ after EngineCore is created.
+    Main loop runs in C++ (EngineCore.run()).
+    """
+    from termin._native import EngineCore
 
-    Args:
-        debug_resource: If set, open framegraph debugger with this resource
-                       (e.g., "shadow_maps", "color") from the first frame.
-        no_scene: If True, start editor without any scene (no-scene mode).
-    """
+    # Get EngineCore instance (created in C++)
+    engine = EngineCore.instance()
+    if engine is None:
+        raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
+
     # Create Qt application
     app = QApplication(sys.argv)
 
-    # Initialize SDL once at startup
+    # Initialize SDL
     import sdl2
     if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
         raise RuntimeError(f"Failed to initialize SDL: {sdl2.SDL_GetError()}")
 
-    # Setup graphics backend (singleton)
+    # Setup graphics backend
     graphics = OpenGLGraphicsBackend.get_instance()
     set_default_graphics_backend(graphics)
 
-    # Create SDL embedded backend for viewport rendering
+    # Create SDL embedded backend
     sdl_backend = SDLEmbeddedWindowBackend(graphics=graphics)
+
+    # Configure RenderingManager
+    engine.rendering_manager.set_graphics(graphics._backend)
+    engine.rendering_manager.set_make_current_callback(graphics.make_current)
 
     # Create world and scene
     world = VisualizationWorld()
@@ -107,50 +98,61 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     # Apply dark theme
     apply_dark_palette(app)
 
-    # Create editor window with SDL backend
-    win = EditorWindow(world, scene, sdl_backend)
+    # Create editor window with scene_manager from EngineCore
+    win = EditorWindow(world, scene, sdl_backend, engine.scene_manager)
     win.showMaximized()
 
     # Process events to ensure window is visible
     app.processEvents()
 
-    # Open debugger with specific resource if requested
+    # Open debugger if requested
     if debug_resource:
         win.open_framegraph_debugger(initial_resource=debug_resource)
-        app.processEvents()  # Process debugger show event
-
-    # Render first frame immediately to avoid showing uninitialized buffer
-    sdl_backend.poll_events()
-    win.scene_manager.request_render()
-    win.scene_manager.tick_and_render(0.016)  # Render first frame
-
-    # Main render loop
-    target_fps = 60
-    target_frame_time = 1.0 / target_fps
-    last_time = time.perf_counter()
-
-    while not win.should_close():
-        current_time = time.perf_counter()
-        dt = current_time - last_time
-        last_time = current_time
-
-        # Process Qt events (UI, menus, dialogs, etc.)
         app.processEvents()
 
-        # Process SDL events (viewport input)
+    # Render first frame
+    sdl_backend.poll_events()
+    engine.scene_manager.request_render()
+    engine.scene_manager.tick_and_render(0.016)
+
+    # Setup callbacks for main loop
+    def poll_events():
+        app.processEvents()
         sdl_backend.poll_events()
 
-        # Tick editor (game mode update + render if needed)
-        win.scene_manager.tick_and_render(dt)
+    def should_continue():
+        return not win.should_close()
 
-        # Frame limiting - sleep if we're ahead of schedule
-        elapsed = time.perf_counter() - current_time
-        if elapsed < target_frame_time:
-            time.sleep(target_frame_time - elapsed)
+    engine.set_poll_events_callback(poll_events)
+    engine.set_should_continue_callback(should_continue)
+
+    # Run main loop (blocking, in C++)
+    engine.run()
 
     # Cleanup
     sdl_backend.terminate()
     sdl2.SDL_Quit()
+
+
+def run_editor(debug_resource: str | None = None, no_scene: bool = False):
+    """
+    Run the editor (legacy entry point).
+    Creates EngineCore in Python for backwards compatibility.
+    """
+    from termin._native import EngineCore
+
+    # Check if EngineCore already exists (called from C++)
+    engine = EngineCore.instance()
+    if engine is not None:
+        init_and_run_editor(debug_resource=debug_resource, no_scene=no_scene)
+        return
+
+    # Legacy mode: create EngineCore in Python
+    # This won't work anymore since EngineCore() is not exposed
+    raise RuntimeError(
+        "run_editor() must be called from C++ entry point (termin_editor). "
+        "EngineCore is created in C++."
+    )
 
 
 if __name__ == "__main__":

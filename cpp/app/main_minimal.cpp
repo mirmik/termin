@@ -1,18 +1,12 @@
-// Termin Editor - Minimal C++ entry point
+// Termin Editor - C++ entry point with EngineCore
 //
-// This version doesn't require Qt C++ SDK - it just initializes Python
-// and lets PyQt6 handle everything including QApplication creation.
-//
-// Directory structure (standalone install):
-//   install/
-//     bin/termin_editor
-//     lib/
-//       libpython3.10.so
-//       python3.10/          (stdlib + site-packages)
-//       python/termin/       (our modules)
+// Creates EngineCore in C++, initializes Python/Qt/SDL via Python,
+// runs main loop in C++ (EngineCore.run()).
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+
+#include "termin/engine/engine_core.hpp"
 
 #include <iostream>
 #include <filesystem>
@@ -29,7 +23,6 @@
 
 namespace fs = std::filesystem;
 
-// Get executable directory (not cwd)
 static fs::path get_executable_dir() {
 #ifdef _WIN32
     char path[MAX_PATH];
@@ -48,23 +41,17 @@ static fs::path get_executable_dir() {
 #endif
 }
 
-// Find bundled Python stdlib directory
-// Linux: {install_root}/lib/python3.x/
-// Windows: {install_root}/Lib/
 static fs::path find_python_stdlib(const fs::path& install_root) {
 #ifdef _WIN32
-    // Windows: stdlib is in {prefix}/Lib/
     fs::path lib_dir = install_root / "Lib";
     if (fs::exists(lib_dir) && fs::exists(lib_dir / "os.py")) {
         return lib_dir;
     }
     return {};
 #else
-    // Linux: stdlib is in {prefix}/lib/python3.x/
     fs::path lib_dir = install_root / "lib";
     if (!fs::exists(lib_dir)) return {};
 
-    // Look for python3.x directory
     for (const auto& entry : fs::directory_iterator(lib_dir)) {
         if (entry.is_directory()) {
             std::string name = entry.path().filename().string();
@@ -74,7 +61,6 @@ static fs::path find_python_stdlib(const fs::path& install_root) {
         }
     }
 
-    // Fallback: look for any python3.x
     for (const auto& entry : fs::directory_iterator(lib_dir)) {
         if (entry.is_directory()) {
             std::string name = entry.path().filename().string();
@@ -96,28 +82,22 @@ int main(int argc, char* argv[]) {
     fs::path install_root = exe_dir.parent_path();
     bool bundled_python = false;
 
-    // Check for bundled Python (standalone mode)
     fs::path python_stdlib = find_python_stdlib(install_root);
     fs::path termin_path;
 
     if (!python_stdlib.empty()) {
-        // Bundled Python found
         bundled_python = true;
         termin_path = install_root / "lib" / "python" / "termin";
 
         std::cout << "Using bundled Python: " << python_stdlib << std::endl;
 
-        // Set PYTHONHOME before Py_Initialize
-        // PYTHONHOME should point to the prefix (parent of Lib/ on Windows, parent of lib/python3.x/ on Linux)
         static std::string python_home_str = install_root.string();
         static std::wstring python_home_wstr(python_home_str.begin(), python_home_str.end());
         Py_SetPythonHome(python_home_wstr.c_str());
 
-        // Disable site module customizations that might interfere
         Py_NoSiteFlag = 0;
         Py_IgnoreEnvironmentFlag = 1;
     } else {
-        // Development mode - search for project root
         fs::path project_root = exe_dir;
         while (!project_root.empty()) {
             if (fs::exists(project_root / "termin" / "__init__.py")) {
@@ -134,6 +114,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Development mode, project root: " << termin_path << std::endl;
     }
 
+    // Create EngineCore BEFORE Python init
+    // This sets up RenderingManager::instance()
+    termin::EngineCore engine;
+
     // Initialize Python
     Py_Initialize();
     if (!Py_IsInitialized()) {
@@ -144,7 +128,6 @@ int main(int argc, char* argv[]) {
     // Set Python path
     std::string init_code;
     if (bundled_python) {
-        // For bundled: add both termin path and site-packages
         fs::path site_packages = python_stdlib / "site-packages";
         init_code =
             "import sys\n"
@@ -162,10 +145,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Run the editor (PyQt6 creates QApplication)
+    // Initialize editor (creates Qt app, SDL, EditorWindow)
+    // Then run main loop via engine.run()
     const char* run_code = R"(
-from termin.editor.run_editor import run_editor
-run_editor()
+from termin.editor.run_editor import init_and_run_editor
+init_and_run_editor()
 )";
 
     int result = PyRun_SimpleString(run_code);

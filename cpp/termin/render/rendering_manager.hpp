@@ -42,19 +42,22 @@ using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<RenderPipeline*(const std::string& name)>;
 using MakeCurrentCallback = std::function<void()>;
 
-// RenderingManager - Global singleton for managing displays and rendering
+// RenderingManager - manages displays and rendering
 //
+// Owned by EngineCore. Global instance() returns the one set by EngineCore.
 // Thread safety: NOT thread-safe. All calls must be from main/render thread.
 class RenderingManager {
 public:
-    // Singleton access
+    // Global instance access (set by EngineCore)
     static RenderingManager& instance();
+    static void set_instance(RenderingManager* instance);
     static void reset_for_testing();
 
-private:
-    // Singleton
     RenderingManager();
     ~RenderingManager();
+
+private:
+    // Disable copy
     RenderingManager(const RenderingManager&) = delete;
     RenderingManager& operator=(const RenderingManager&) = delete;
 

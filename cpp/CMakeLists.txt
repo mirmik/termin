@@ -238,6 +238,7 @@ set(RENDER_LIB_SOURCES
     termin/render/render_engine.cpp
     termin/render/render_pipeline.cpp
     termin/render/rendering_manager.cpp
+    termin/scene/scene_manager.cpp
     termin/render/pull_rendering_manager.cpp
     termin/render/wireframe_renderer.cpp
     termin/render/color_pass.cpp
@@ -289,6 +290,26 @@ endif()
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
+# ============== Engine library ==============
+# Core engine runtime - owns SceneManager and RenderingManager
+add_library(engine_lib SHARED
+    termin/engine/engine_core.cpp
+)
+target_include_directories(engine_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
+target_link_libraries(engine_lib PUBLIC render_lib)
+target_compile_options(engine_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(engine_lib PRIVATE termin/pch.hpp)
+set_target_properties(engine_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -393,7 +414,7 @@ if(BUILD_EDITOR_MINIMAL)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${Python_INCLUDE_DIRS}
     )
-    target_link_libraries(termin_editor PRIVATE Python::Python)
+    target_link_libraries(termin_editor PRIVATE Python::Python engine_lib)
     target_compile_options(termin_editor PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     set_target_properties(termin_editor PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
@@ -479,7 +500,7 @@ if(BUILD_TESTS)
 endif()
 
 # ============== Install shared libraries ==============
-install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
+install(TARGETS trent entity_lib termin_core render_lib engine_lib navmesh_lib Recast
     EXPORT terminTargets
     RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}
     LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}

@@ -27,39 +27,48 @@ static inline uint64_t viewport_key(tc_viewport_handle h) {
 }
 
 // ============================================================================
-// Singleton - uses C API to ensure single instance across all DLLs
+// Global instance - set by EngineCore, accessed via C API for cross-DLL safety
 // ============================================================================
 
 RenderingManager* RenderingManager::s_instance = nullptr;
 
 RenderingManager& RenderingManager::instance() {
-    // Check global storage in entity_lib first
+    // Check global storage (cross-DLL safe)
     RenderingManager* global = reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
     if (global) {
-        s_instance = global;  // Cache locally
+        s_instance = global;
         return *global;
     }
 
-    // Create new instance and store globally
-    if (!s_instance) {
-        s_instance = new RenderingManager();
-        tc_rendering_manager_set_instance(reinterpret_cast<tc_rendering_manager*>(s_instance));
+    // Fallback to local static (legacy, will be removed)
+    if (s_instance) {
+        return *s_instance;
     }
-    return *s_instance;
+
+    tc_log(TC_LOG_ERROR, "[RenderingManager] instance() called but no instance set. Create EngineCore first.");
+    static RenderingManager fallback;
+    return fallback;
+}
+
+void RenderingManager::set_instance(RenderingManager* instance) {
+    s_instance = instance;
+    tc_rendering_manager_set_instance(reinterpret_cast<tc_rendering_manager*>(instance));
 }
 
 void RenderingManager::reset_for_testing() {
-    if (s_instance) {
-        delete s_instance;
-        s_instance = nullptr;
-        tc_rendering_manager_set_instance(nullptr);
-    }
+    s_instance = nullptr;
+    tc_rendering_manager_set_instance(nullptr);
 }
 
-RenderingManager::RenderingManager() = default;
+RenderingManager::RenderingManager() {
+    set_instance(this);
+}
 
 RenderingManager::~RenderingManager() {
     shutdown();
+    if (s_instance == this) {
+        set_instance(nullptr);
+    }
 }
 
 // ============================================================================

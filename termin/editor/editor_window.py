@@ -68,7 +68,7 @@ class EditorWindow(QMainWindow):
     def instance(cls) -> "EditorWindow | None":
         return cls._instance
 
-    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend):
+    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager):
         super().__init__()
         EditorWindow._instance = self
         self.undo_stack = UndoStack()
@@ -85,9 +85,8 @@ class EditorWindow(QMainWindow):
         self.resource_manager.register_builtin_frame_passes()
         self.resource_manager.register_builtin_post_effects()
 
-        # --- SceneManager - владеет всеми сценами ---
-        # Создаётся ПЕРВЫМ, до всех контроллеров
-        self.scene_manager = SceneManager()
+        # --- SceneManager - получаем от EngineCore ---
+        self.scene_manager = scene_manager
         self.scene_manager.set_on_before_scene_close(self._on_before_scene_close)
 
         # Editor data storage (extracted from scene files on load)

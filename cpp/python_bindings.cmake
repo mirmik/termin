@@ -178,8 +178,9 @@ nanobind_add_module(_native
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
     ${_NATIVE_SDL_SOURCES}
-    termin/scene/scene_manager.cpp
     termin/scene/scene_manager_bindings.cpp
+    termin/engine/engine_core.cpp
+    termin/bindings/engine/engine_core_bindings.cpp
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/profiler_bindings.cpp
