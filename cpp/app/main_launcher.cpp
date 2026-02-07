@@ -1,8 +1,7 @@
-// Termin Launcher — standalone test for UIRenderer widget system.
+// Termin Launcher — project selection and creation UI.
 //
-// Initializes Python and runs termin.launcher.test_ui which creates
-// an SDL window with OpenGL context and renders UI widgets.
-// No EngineCore, no Qt — pure SDL + OpenGL + Python widget UI.
+// Initializes Python and runs termin.launcher.app which creates
+// an SDL window with OpenGL context and renders the launcher UI.
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -132,7 +131,7 @@ int main(int argc, char* argv[]) {
 
     // Run launcher
     const char* launcher_code = R"(
-from termin.launcher.test_ui import run
+from termin.launcher.app import run
 run()
 )";
 
