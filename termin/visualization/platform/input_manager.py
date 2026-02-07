@@ -26,6 +26,8 @@ class BasicDisplayInputManager:
     raycast is not needed.
     """
 
+    _ptr: int = 0
+
     def __init__(self, display_ptr: int):
         """
         Create basic input manager for display.
@@ -38,7 +40,7 @@ class BasicDisplayInputManager:
             raise RuntimeError("Failed to create BasicDisplayInputManager")
 
     def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
+        if self._ptr:
             _simple_input_manager_free(self._ptr)
             self._ptr = 0
 
