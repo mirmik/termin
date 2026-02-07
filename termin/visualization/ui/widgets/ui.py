@@ -154,6 +154,10 @@ class UI:
                 hit.on_mouse_enter()
             self._hovered_widget = hit
 
+        # Send coordinates to hovered widget for internal hover tracking
+        if self._hovered_widget:
+            self._hovered_widget.on_mouse_move(x, y)
+
         return False
 
     def set_focus(self, widget: Widget | None):

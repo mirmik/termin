@@ -14,7 +14,7 @@ from sdl2 import video
 from termin.graphics import OpenGLGraphicsBackend
 from termin.visualization.platform.backends import set_default_graphics_backend
 from termin.visualization.ui.widgets.ui import UI
-from termin.visualization.ui.widgets.basic import Label, Button, TextInput, Separator
+from termin.visualization.ui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
 from termin.visualization.ui.widgets.containers import HStack, VStack, Panel
 from termin.visualization.ui.widgets.units import px, pct
 from termin.visualization.platform.backends.base import Key
@@ -160,12 +160,26 @@ def _find_editor_executable() -> str | None:
 class LauncherApp:
     """Manages launcher state and screen switching."""
 
+    # Button color presets
+    _BTN_PRIMARY = (0.2, 0.45, 0.8, 1.0)
+    _BTN_PRIMARY_HOVER = (0.25, 0.55, 0.9, 1.0)
+    _BTN_PRIMARY_PRESSED = (0.15, 0.35, 0.7, 1.0)
+    _BTN_NORMAL = (0.25, 0.25, 0.3, 1.0)
+    _BTN_NORMAL_HOVER = (0.35, 0.35, 0.4, 1.0)
+    _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
+    _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
+
     def __init__(self, graphics: OpenGLGraphicsBackend):
         self.graphics = graphics
         self.ui = UI(graphics)
         self.recent = RecentProjects()
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
         self.should_quit: bool = False
+
+        # Selection-dependent buttons (updated when selection changes)
+        self._open_btn: Button | None = None
+        self._remove_btn: Button | None = None
+        self._project_list: ListWidget | None = None
 
         self.show_main_screen()
 
@@ -177,90 +191,124 @@ class LauncherApp:
 
         panel = Panel()
         panel.background_color = (0.12, 0.12, 0.16, 0.90)
-        panel.padding = 36
+        panel.padding = 30
         panel.anchor = "center"
         panel.border_radius = 12
 
-        stack = VStack()
-        stack.spacing = 16
-        stack.alignment = "left"
+        outer = VStack()
+        outer.spacing = 16
+        outer.alignment = "left"
 
         # Title
         title = Label()
         title.text = "Termin Engine"
-        title.font_size = 32
+        title.font_size = 28
         title.color = (1.0, 1.0, 1.0, 1.0)
 
         subtitle = Label()
         subtitle.text = "Project Launcher"
-        subtitle.font_size = 16
+        subtitle.font_size = 14
         subtitle.color = (0.55, 0.6, 0.7, 1.0)
 
-        stack.add_child(title)
-        stack.add_child(subtitle)
+        sep_top = Separator()
+        sep_top.orientation = "horizontal"
+        sep_top.color = (0.3, 0.3, 0.35, 1.0)
 
-        # Separator
-        sep1 = Separator()
-        sep1.orientation = "horizontal"
-        sep1.color = (0.3, 0.3, 0.35, 1.0)
-        stack.add_child(sep1)
+        outer.add_child(title)
+        outer.add_child(subtitle)
+        outer.add_child(sep_top)
 
-        # Recent projects header
+        # --- Two-column layout ---
+        columns = HStack()
+        columns.spacing = 20
+        columns.alignment = "top"
+
+        # Left column: project list
+        left_col = VStack()
+        left_col.spacing = 8
+        left_col.alignment = "left"
+
         recent_header = Label()
         recent_header.text = "Recent Projects"
-        recent_header.font_size = 14
+        recent_header.font_size = 13
         recent_header.color = (0.6, 0.6, 0.65, 1.0)
-        stack.add_child(recent_header)
 
-        # Recent projects list
-        projects = self.recent.list()
-        if projects:
-            for entry in projects[:8]:
-                row = self._make_project_row(entry)
-                stack.add_child(row)
-        else:
-            empty_label = Label()
-            empty_label.text = "No recent projects"
-            empty_label.font_size = 14
-            empty_label.color = (0.4, 0.4, 0.45, 1.0)
-            stack.add_child(empty_label)
+        project_list = ListWidget()
+        project_list.preferred_width = px(420)
+        project_list.empty_text = "No recent projects"
+        project_list.on_select = self._on_project_select
+        project_list.on_activate = self._on_project_activate
+        self._project_list = project_list
 
-        # Separator
-        sep2 = Separator()
-        sep2.orientation = "horizontal"
-        sep2.color = (0.3, 0.3, 0.35, 1.0)
-        stack.add_child(sep2)
+        # Populate list
+        items = []
+        for entry in self.recent.list()[:10]:
+            items.append({
+                "text": entry.get("name", "???"),
+                "subtitle": os.path.dirname(entry["path"]),
+                "data": entry["path"],
+            })
+        project_list.set_items(items)
 
-        # Action buttons
-        btn_row = HStack()
-        btn_row.spacing = 12
-        btn_row.alignment = "center"
+        left_col.add_child(recent_header)
+        left_col.add_child(project_list)
 
-        new_btn = Button()
-        new_btn.text = "New Project"
-        new_btn.font_size = 15
-        new_btn.padding = 12
-        new_btn.background_color = (0.2, 0.45, 0.8, 1.0)
-        new_btn.hover_color = (0.25, 0.55, 0.9, 1.0)
-        new_btn.pressed_color = (0.15, 0.35, 0.7, 1.0)
-        new_btn.border_radius = 6
+        # Vertical separator
+        vsep = Separator()
+        vsep.orientation = "vertical"
+        vsep.color = (0.3, 0.3, 0.35, 1.0)
+
+        # Right column: action buttons
+        right_col = VStack()
+        right_col.spacing = 8
+        right_col.alignment = "left"
+
+        actions_header = Label()
+        actions_header.text = "Actions"
+        actions_header.font_size = 13
+        actions_header.color = (0.6, 0.6, 0.65, 1.0)
+
+        new_btn = self._make_button("New Project", self._BTN_PRIMARY,
+                                     self._BTN_PRIMARY_HOVER, self._BTN_PRIMARY_PRESSED)
         new_btn.on_click = self.show_new_project_screen
+        new_btn.preferred_width = px(180)
 
-        open_btn = Button()
-        open_btn.text = "Open Project"
-        open_btn.font_size = 15
-        open_btn.padding = 12
-        open_btn.background_color = (0.25, 0.25, 0.3, 1.0)
-        open_btn.hover_color = (0.35, 0.35, 0.4, 1.0)
-        open_btn.pressed_color = (0.18, 0.18, 0.22, 1.0)
-        open_btn.border_radius = 6
-        open_btn.on_click = self._on_open_project
+        open_btn = self._make_button("Open Project", self._BTN_DISABLED,
+                                      self._BTN_DISABLED, self._BTN_DISABLED)
+        open_btn.text_color = (0.5, 0.5, 0.5, 1.0)
+        open_btn.preferred_width = px(180)
+        open_btn.on_click = self._on_open_selected
+        self._open_btn = open_btn
 
-        btn_row.add_child(new_btn)
-        btn_row.add_child(open_btn)
-        stack.add_child(btn_row)
+        sep_btns = Separator()
+        sep_btns.orientation = "horizontal"
+        sep_btns.color = (0.3, 0.3, 0.35, 1.0)
 
-        panel.add_child(stack)
+        browse_btn = self._make_button("Open Existing...", self._BTN_NORMAL,
+                                        self._BTN_NORMAL_HOVER, self._BTN_NORMAL_PRESSED)
+        browse_btn.on_click = self._on_open_project
+        browse_btn.preferred_width = px(180)
+
+        remove_btn = self._make_button("Remove from List", self._BTN_DISABLED,
+                                        self._BTN_DISABLED, self._BTN_DISABLED)
+        remove_btn.text_color = (0.5, 0.5, 0.5, 1.0)
+        remove_btn.preferred_width = px(180)
+        remove_btn.on_click = self._on_remove_selected
+        self._remove_btn = remove_btn
+
+        right_col.add_child(actions_header)
+        right_col.add_child(new_btn)
+        right_col.add_child(open_btn)
+        right_col.add_child(sep_btns)
+        right_col.add_child(browse_btn)
+        right_col.add_child(remove_btn)
+
+        columns.add_child(left_col)
+        columns.add_child(vsep)
+        columns.add_child(right_col)
+        outer.add_child(columns)
+
+        panel.add_child(outer)
         bg.add_child(panel)
         self.ui.root = bg
 
@@ -397,55 +445,66 @@ class LauncherApp:
             bg.background_image = self._bg_image_path
         return bg
 
-    def _make_project_row(self, entry: dict) -> Panel:
-        """Create a clickable row for a recent project entry."""
-        project_path = entry["path"]
-        project_name = entry.get("name", "???")
-        project_dir = os.path.dirname(project_path)
-
-        row = Panel()
-        row.background_color = (0.18, 0.18, 0.22, 0.8)
-        row.border_radius = 6
-        row.padding = 10
-
-        content = HStack()
-        content.spacing = 16
-        content.alignment = "center"
-
-        name_lbl = Label()
-        name_lbl.text = project_name
-        name_lbl.font_size = 15
-        name_lbl.color = (0.95, 0.95, 1.0, 1.0)
-
-        path_lbl = Label()
-        path_lbl.text = project_dir
-        path_lbl.font_size = 12
-        path_lbl.color = (0.45, 0.45, 0.5, 1.0)
-
-        content.add_child(name_lbl)
-        content.add_child(path_lbl)
-        row.add_child(content)
-
-        # Make the whole row clickable via a transparent button overlay
+    def _make_button(self, text: str, bg: tuple, hover: tuple, pressed: tuple) -> Button:
+        """Create a styled button."""
         btn = Button()
-        btn.text = ""
-        btn.preferred_width = pct(100)
-        btn.preferred_height = pct(100)
-        btn.background_color = (0, 0, 0, 0)
-        btn.hover_color = (0.3, 0.5, 0.8, 0.15)
-        btn.pressed_color = (0.2, 0.4, 0.7, 0.25)
+        btn.text = text
+        btn.font_size = 14
+        btn.padding = 10
+        btn.background_color = bg
+        btn.hover_color = hover
+        btn.pressed_color = pressed
         btn.border_radius = 6
-        btn.anchor = "top-left"
+        return btn
 
-        def on_click(p=project_path):
-            self._launch_editor(p)
+    def _set_button_enabled(self, btn: Button, enabled: bool) -> None:
+        """Update button appearance based on enabled state."""
+        btn.enabled = enabled
+        if enabled:
+            btn.background_color = self._BTN_NORMAL
+            btn.hover_color = self._BTN_NORMAL_HOVER
+            btn.pressed_color = self._BTN_NORMAL_PRESSED
+            btn.text_color = (1.0, 1.0, 1.0, 1.0)
+        else:
+            btn.background_color = self._BTN_DISABLED
+            btn.hover_color = self._BTN_DISABLED
+            btn.pressed_color = self._BTN_DISABLED
+            btn.text_color = (0.5, 0.5, 0.5, 1.0)
 
-        btn.on_click = on_click
-        row.add_child(btn)
+    # --- Project list callbacks ---
 
-        return row
+    def _on_project_select(self, index: int, item: dict) -> None:
+        """Single click — select project, enable Open/Remove buttons."""
+        if self._open_btn is not None:
+            self._set_button_enabled(self._open_btn, True)
+        if self._remove_btn is not None:
+            self._set_button_enabled(self._remove_btn, True)
 
-    def _launch_editor(self, project_path: str):
+    def _on_project_activate(self, index: int, item: dict) -> None:
+        """Double click — open project."""
+        self._launch_editor(item["data"])
+
+    def _on_open_selected(self) -> None:
+        """Open the currently selected project."""
+        if self._project_list is None:
+            return
+        item = self._project_list.selected_item
+        if item is None:
+            return
+        self._launch_editor(item["data"])
+
+    def _on_remove_selected(self) -> None:
+        """Remove the currently selected project from the recent list."""
+        if self._project_list is None:
+            return
+        item = self._project_list.selected_item
+        if item is None:
+            return
+        self.recent.remove(item["data"])
+        # Rebuild screen
+        self.show_main_screen()
+
+    def _launch_editor(self, project_path: str) -> None:
         """Launch termin_editor with the given project and quit the launcher."""
         editor_exe = _find_editor_executable()
         if editor_exe is None:
@@ -459,8 +518,8 @@ class LauncherApp:
         subprocess.Popen([editor_exe])
         self.should_quit = True
 
-    def _on_open_project(self):
-        """Handle 'Open Project' button."""
+    def _on_open_project(self) -> None:
+        """Handle 'Open Existing...' button — file dialog for .terminproj."""
         path = _ask_open_project()
         if path:
             self._launch_editor(path)
