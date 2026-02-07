@@ -8,6 +8,7 @@ import numpy as np
 from termin.visualization.core.python_component import PythonComponent
 from termin.fem.multibody3d_3 import RevoluteJoint3D
 from termin.editor.inspect_field import InspectField
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -99,30 +100,30 @@ class FEMRevoluteJointComponent(PythonComponent):
         # Найти тело A
         entity_a = self._find_entity_by_name(scene, self.body_a_entity_name)
         if entity_a is None:
-            print(f"FEMRevoluteJointComponent: body A '{self.body_a_entity_name}' not found")
+            log.error(f"FEMRevoluteJointComponent: body A '{self.body_a_entity_name}' not found")
             return
 
         self._body_a_component = entity_a.get_component(FEMRigidBodyComponent)
         if self._body_a_component is None:
-            print(f"FEMRevoluteJointComponent: entity '{self.body_a_entity_name}' has no FEMRigidBodyComponent")
+            log.error(f"FEMRevoluteJointComponent: entity '{self.body_a_entity_name}' has no FEMRigidBodyComponent")
             return
 
         # Найти тело B
         entity_b = self._find_entity_by_name(scene, self.body_b_entity_name)
         if entity_b is None:
-            print(f"FEMRevoluteJointComponent: body B '{self.body_b_entity_name}' not found")
+            log.error(f"FEMRevoluteJointComponent: body B '{self.body_b_entity_name}' not found")
             return
 
         self._body_b_component = entity_b.get_component(FEMRigidBodyComponent)
         if self._body_b_component is None:
-            print(f"FEMRevoluteJointComponent: entity '{self.body_b_entity_name}' has no FEMRigidBodyComponent")
+            log.error(f"FEMRevoluteJointComponent: entity '{self.body_b_entity_name}' has no FEMRigidBodyComponent")
             return
 
         fem_body_a = self._body_a_component.fem_body
         fem_body_b = self._body_b_component.fem_body
 
         if fem_body_a is None or fem_body_b is None:
-            print("FEMRevoluteJointComponent: FEM bodies not initialized")
+            log.error("FEMRevoluteJointComponent: FEM bodies not initialized")
             return
 
         # Вычислить точку шарнира из позиции тела A и смещения

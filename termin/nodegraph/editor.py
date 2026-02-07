@@ -21,6 +21,7 @@ from termin.nodegraph.scene import NodeGraphScene
 from termin.nodegraph.view import NodeGraphView
 from termin.nodegraph.nodes import create_node
 from termin.nodegraph.serialization import serialize_graph, deserialize_graph
+from termin._native import log
 from termin.nodegraph.compiler import compile_graph_to_dict, CompileError
 
 if TYPE_CHECKING:
@@ -214,18 +215,18 @@ class PipelineGraphEditor(QMainWindow):
             )
 
             # Pretty print the serialized pipeline
-            print("\n" + "=" * 60)
-            print("COMPILED PIPELINE")
-            print("=" * 60)
-            print(json.dumps(pipeline_dict, indent=2, default=str))
-            print("=" * 60 + "\n")
+            log.warning("\n" + "=" * 60)
+            log.warning("COMPILED PIPELINE")
+            log.warning("=" * 60)
+            log.warning(json.dumps(pipeline_dict, indent=2, default=str))
+            log.warning("=" * 60 + "\n")
 
         except CompileError as e:
             self._status_bar.showMessage(f"Compilation error: {e}")
-            print(f"\nCompilation error: {e}\n")
+            log.error(f"\nCompilation error: {e}\n")
         except Exception as e:
             self._status_bar.showMessage(f"Unexpected error: {e}")
-            print(f"\nUnexpected error during compilation: {e}\n")
+            log.error(f"\nUnexpected error during compilation: {e}\n")
             import traceback
             traceback.print_exc()
 

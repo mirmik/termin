@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from termin._native import log
 from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 from termin.voxels.grid import VoxelGrid
 
@@ -220,7 +221,7 @@ class PolygonBuilder:
                     new_regions.append((sub_voxels, region_normal.copy()))
                 if len(ws_result.sub_regions) > 1:
                     total_split += len(ws_result.sub_regions) - 1
-            print(f"PolygonBuilder: watershed split {len(regions)} regions into {len(new_regions)} (+{total_split})")
+            log.warning(f"PolygonBuilder: watershed split {len(regions)} regions into {len(new_regions)} (+{total_split})")
             self._last_watershed_regions = new_regions
             regions = new_regions
         else:
@@ -265,7 +266,7 @@ class PolygonBuilder:
                 if filtered_voxels:
                     eroded_regions.append((filtered_voxels, region_normal))
 
-            print(f"PolygonBuilder: erosion removed {total_removed} voxels (agent_radius={self.config.agent_radius}, min_distance={min_distance:.2f})")
+            log.warning(f"PolygonBuilder: erosion removed {total_removed} voxels (agent_radius={self.config.agent_radius}, min_distance={min_distance:.2f})")
             regions = eroded_regions
 
             # Обновляем watershed regions если они были
@@ -366,7 +367,7 @@ class PolygonBuilder:
             else:
                 stats["build_failed"] += 1
 
-        print(f"NavMesh build stats: {stats}, final polygons: {len(polygons)}")
+        log.warning(f"NavMesh build stats: {stats}, final polygons: {len(polygons)}")
 
         return NavMesh(
             polygons=polygons,

@@ -22,6 +22,7 @@ from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 from termin.navmesh.settings import NavigationSettingsManager
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -322,7 +323,7 @@ class NavMeshBuilderComponent(PythonComponent):
         # Cached NavMesh (loaded from cache or built)
         self._navmesh: Optional["NavMesh"] = None
 
-        print ("NavMeshBuilderComponent: " + str(self))
+        log.warning("NavMeshBuilderComponent: " + str(self))
 
     # --- Lifecycle ---
 
@@ -351,7 +352,7 @@ class NavMeshBuilderComponent(PythonComponent):
 
         # Scene must have name or uuid for cache
 
-        print("NavMeshBuilderComponent::_try_load_from_cache " + "ptr:" + str(self) + " scene:" + str(self.scene))
+        log.warning("NavMeshBuilderComponent::_try_load_from_cache " + "ptr:" + str(self) + " scene:" + str(self.scene))
         if not self.scene.name and not self.scene.uuid:
             return False
 
@@ -374,10 +375,10 @@ class NavMeshBuilderComponent(PythonComponent):
             registry = NavMeshRegistry.for_scene(self.scene)
             registry.register(self.agent_type_name, navmesh, self.entity)
 
-            print(f"NavMeshBuilderComponent: loaded from cache ({navmesh.polygon_count()} polygons)")
+            log.warning(f"NavMeshBuilderComponent: loaded from cache ({navmesh.polygon_count()} polygons)")
             return True
         except Exception as e:
-            print(f"NavMeshBuilderComponent: failed to load from cache: {e}")
+            log.error(f"NavMeshBuilderComponent: failed to load from cache: {e}")
             return False
 
     def _save_to_cache(self, navmesh: "NavMesh") -> bool:
@@ -392,7 +393,7 @@ class NavMeshBuilderComponent(PythonComponent):
 
         # Scene must have name or uuid for cache
         if not self.scene.name and not self.scene.uuid:
-            print("NavMeshBuilderComponent: cannot save to cache - scene has no name or uuid")
+            log.error("NavMeshBuilderComponent: cannot save to cache - scene has no name or uuid")
             return False
 
         from termin.cache import SceneCache
@@ -404,10 +405,10 @@ class NavMeshBuilderComponent(PythonComponent):
         try:
             data = NavMeshPersistence.to_bytes(navmesh)
             cache.put(self.entity.uuid, type(self).__name__, cache_key, data)
-            print(f"NavMeshBuilderComponent: saved to cache ({len(data)} bytes)")
+            log.warning(f"NavMeshBuilderComponent: saved to cache ({len(data)} bytes)")
             return True
         except Exception as e:
-            print(f"NavMeshBuilderComponent: failed to save to cache: {e}")
+            log.error(f"NavMeshBuilderComponent: failed to save to cache: {e}")
             return False
 
     # --- Drawable protocol ---
@@ -752,22 +753,22 @@ void main() {
         from termin.navmesh import PolygonBuilder, NavMeshConfig
         import math
 
-        print("NavMeshBuilderComponent: starting build")
+        log.warning("NavMeshBuilderComponent: starting build")
 
         if self.entity is None:
-            print("NavMeshBuilderComponent: no entity")
+            log.error("NavMeshBuilderComponent: no entity")
             return False
 
         # Get agent type info
         manager = NavigationSettingsManager.instance()
         agent_type = manager.settings.get_agent_type(self.agent_type_name)
         if agent_type is not None:
-            print(f"NavMeshBuilderComponent: using agent type '{agent_type.name}' "
+            log.warning(f"NavMeshBuilderComponent: using agent type '{agent_type.name}' "
                   f"(radius={agent_type.radius}, height={agent_type.height}, max_slope={agent_type.max_slope}°)")
             max_slope_cos = math.cos(math.radians(agent_type.max_slope))
             agent_radius = agent_type.radius
         else:
-            print(f"NavMeshBuilderComponent: agent type '{self.agent_type_name}' not found, using defaults")
+            log.warning(f"NavMeshBuilderComponent: agent type '{self.agent_type_name}' not found, using defaults")
             max_slope_cos = 0.0  # Без фильтрации по наклону
             agent_radius = 0.0  # Без эрозии
 
@@ -779,19 +780,19 @@ void main() {
         meshes = self._collect_meshes_from_entity(self.entity, root_inv, recurse=recurse)
 
         if not meshes:
-            print("NavMeshBuilderComponent: no meshes found")
+            log.error("NavMeshBuilderComponent: no meshes found")
             return False
 
         if len(meshes) > 1:
-            print(f"NavMeshBuilderComponent: found {len(meshes)} meshes")
+            log.warning(f"NavMeshBuilderComponent: found {len(meshes)} meshes")
 
         mesh = self._create_combined_mesh(meshes)
         if mesh is None:
-            print("NavMeshBuilderComponent: failed to create combined mesh")
+            log.error("NavMeshBuilderComponent: failed to create combined mesh")
             return False
 
         # Voxelize (with normals for NavMesh)
-        print("NavMeshBuilderComponent: voxelizing...")
+        log.warning("NavMeshBuilderComponent: voxelizing...")
         grid = voxelize_mesh_native(
             mesh,
             cell_size=self.cell_size,
@@ -808,14 +809,14 @@ void main() {
         grid.name = name
         self._debug_grid = grid
 
-        print(f"NavMeshBuilderComponent: voxelized {grid.voxel_count} voxels")
+        log.warning(f"NavMeshBuilderComponent: voxelized {grid.voxel_count} voxels")
 
         if not grid.surface_normals:
-            print("NavMeshBuilderComponent: voxel grid has no surface normals")
+            log.error("NavMeshBuilderComponent: voxel grid has no surface normals")
             return False
 
         # Build NavMesh
-        print("NavMeshBuilderComponent: building NavMesh...")
+        log.warning("NavMeshBuilderComponent: building NavMesh...")
         normal_threshold = math.cos(math.radians(self.normal_angle))
         contour_epsilon = self.contour_simplify * grid.cell_size
 
@@ -852,15 +853,15 @@ void main() {
         self._debug_watershed_regions = builder._last_watershed_regions
         self._debug_builder = builder
         if self._debug_watershed_regions:
-            print(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions, {len(self._debug_watershed_regions)} watershed regions")
+            log.warning(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions, {len(self._debug_watershed_regions)} watershed regions")
         else:
-            print(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions (watershed disabled)")
+            log.warning(f"NavMeshBuilderComponent: saved {len(self._debug_regions)} regions (watershed disabled)")
 
         # Rebuild debug meshes
         self._rebuild_debug_meshes()
         self._build_debug_mesh_from_navmesh(navmesh)
 
-        print(f"NavMeshBuilderComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
+        log.warning(f"NavMeshBuilderComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
 
         # Set navmesh name
         navmesh.name = name
@@ -874,7 +875,7 @@ void main() {
             from termin.navmesh.registry import NavMeshRegistry
             registry = NavMeshRegistry.for_scene(self.scene)
             registry.register(self.agent_type_name, navmesh, self.entity)
-            print(f"NavMeshBuilderComponent: registered in NavMeshRegistry for agent type '{self.agent_type_name}'")
+            log.warning(f"NavMeshBuilderComponent: registered in NavMeshRegistry for agent type '{self.agent_type_name}'")
 
         return True
 
@@ -936,10 +937,10 @@ void main() {
                 watershed_colors.append((r, g, b))
             self._build_debug_watershed_voxels(grid, cube_size, _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS, VERTS_PER_CUBE, TRIS_PER_CUBE, watershed_colors)
         else:
-            print("NavMeshBuilderComponent: no watershed regions (enable Watershed Split and rebuild)")
+            log.warning("NavMeshBuilderComponent: no watershed regions (enable Watershed Split and rebuild)")
 
         total_voxels = sum(len(voxels) for voxels, _ in self._debug_regions)
-        print(f"NavMeshBuilderComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
+        log.warning(f"NavMeshBuilderComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
 
     def _build_debug_region_voxels(
         self,
@@ -1059,7 +1060,7 @@ void main() {
             name="navmesh_builder_debug_watershed",
         )
 
-        print(f"NavMeshBuilderComponent: watershed mesh built ({len(self._debug_watershed_regions)} regions, {total_voxels} voxels)")
+        log.warning(f"NavMeshBuilderComponent: watershed mesh built ({len(self._debug_watershed_regions)} regions, {total_voxels} voxels)")
 
     def _build_debug_simplified_contours(
         self,
@@ -1173,7 +1174,7 @@ void main() {
         self._cached_plateau_peaks = self._debug_builder._last_peaks
         self._cached_eroded_voxels = self._debug_builder._last_eroded_voxels
 
-        print(f"NavMeshBuilderComponent: using cached peaks: local_maxima={len(self._cached_local_maxima)}, peaks={len(self._cached_plateau_peaks)}, eroded={len(self._cached_eroded_voxels)}")
+        log.warning(f"NavMeshBuilderComponent: using cached peaks: local_maxima={len(self._cached_local_maxima)}, peaks={len(self._cached_plateau_peaks)}, eroded={len(self._cached_eroded_voxels)}")
 
         # Build mesh using cached data
         self._rebuild_distance_field_from_cache()
@@ -1293,7 +1294,7 @@ void main() {
             name="navmesh_builder_debug_distance_field",
         )
 
-        print(f"NavMeshBuilderComponent: distance field mesh rebuilt ({total_voxels} voxels, max_dist={global_max_dist:.1f})")
+        log.warning(f"NavMeshBuilderComponent: distance field mesh rebuilt ({total_voxels} voxels, max_dist={global_max_dist:.1f})")
 
     def _build_debug_mesh_from_navmesh(self, navmesh: "NavMesh") -> None:
         """Build debug mesh from finished NavMesh."""
@@ -1359,4 +1360,4 @@ void main() {
             name="navmesh_builder_debug_triangulated",
         )
 
-        print(f"NavMeshBuilderComponent: triangulated mesh ({len(navmesh.polygons)} polygons, {len(vertices)} vertices, {len(triangles)} triangles)")
+        log.warning(f"NavMeshBuilderComponent: triangulated mesh ({len(navmesh.polygons)} polygons, {len(vertices)} vertices, {len(triangles)} triangles)")

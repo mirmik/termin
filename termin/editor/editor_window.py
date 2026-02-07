@@ -1209,7 +1209,7 @@ class EditorWindow(QMainWindow):
 
         entity = rm.instantiate_prefab(prefab_name, position=position)
         if entity is None:
-            print(f"Failed to instantiate prefab: {prefab_name}")
+            log.error(f"Failed to instantiate prefab: {prefab_name}")
             return
 
         # Добавляем entity в сцену через команду (с поддержкой undo)
@@ -1511,11 +1511,10 @@ class EditorWindow(QMainWindow):
         Activates the scene in SceneManager and sets up all editor UI.
         Uses EditorSceneAttachment for clean attach/detach.
         """
-        print(f"[EditorWindow] Switching to scene: {name}")
+        log.warning(f"[EditorWindow] Switching to scene: {name}")
 
         new_scene = self.scene_manager.get_scene(name)
         if new_scene is None:
-            from termin._native import log
             log.error(f"Cannot switch to scene '{name}': not found")
             return
 

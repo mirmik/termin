@@ -13,6 +13,8 @@ import pkgutil
 import sys
 from typing import Callable, Set
 
+from termin._native import log
+
 
 def scan_paths(
     paths: list[str],
@@ -66,7 +68,7 @@ def _scan_file(
         spec.loader.exec_module(module)
 
     except Exception as e:
-        print(f"Warning: Failed to load {filepath}: {e}")
+        log.warning(f"Failed to load {filepath}: {e}")
         return []
 
     after = set(registry.keys())
@@ -91,10 +93,10 @@ def _scan_module(
                 try:
                     importlib.import_module(name)
                 except Exception as e:
-                    print(f"Warning: Failed to import {name}: {e}")
+                    log.warning(f"Failed to import {name}: {e}")
 
     except Exception as e:
-        print(f"Warning: Failed to import module {module_name}: {e}")
+        log.warning(f"Failed to import module {module_name}: {e}")
         return []
 
     after = set(registry.keys())
@@ -133,7 +135,7 @@ def _scan_directory(
                 spec.loader.exec_module(module)
 
             except Exception as e:
-                print(f"Warning: Failed to load {filepath}: {e}")
+                log.warning(f"Failed to load {filepath}: {e}")
 
     after = set(registry.keys())
     return list(after - before)
@@ -206,7 +208,7 @@ def _scan_file_for_subclasses(
                 registry[attr_name] = attr
 
     except Exception as e:
-        print(f"Warning: Failed to load {filepath}: {e}")
+        log.warning(f"Failed to load {filepath}: {e}")
         return []
 
     after = set(registry.keys())
@@ -274,10 +276,10 @@ def _scan_module_for_subclasses(
                         ):
                             registry[attr_name] = attr
                 except Exception as e:
-                    print(f"Warning: Failed to import {name}: {e}")
+                    log.warning(f"Failed to import {name}: {e}")
 
     except Exception as e:
-        print(f"Warning: Failed to import module {module_name}: {e}")
+        log.warning(f"Failed to import module {module_name}: {e}")
         return []
 
     after = set(registry.keys())

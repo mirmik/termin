@@ -19,6 +19,7 @@ from termin.kinematic.transform import Transform3
 from termin.geombase import Pose3
 from termin.editor.editor_tree import SceneTreeModel
 from termin.visualization.core.resources import ResourceManager
+from termin._native import log
 
 
 class SceneTreeController:
@@ -437,7 +438,7 @@ class SceneTreeController:
 
         entity = rm.instantiate_prefab(prefab_name, parent=parent_transform)
         if entity is None:
-            print(f"Failed to instantiate prefab: {prefab_name}")
+            log.error(f"Failed to instantiate prefab: {prefab_name}")
             return
 
         cmd = AddEntityCommand(self._scene, entity, parent_transform=None)  # Already parented
@@ -461,7 +462,7 @@ class SceneTreeController:
         try:
             entity = instantiate_fbx(Path(fbx_path))
         except Exception as e:
-            print(f"Failed to load FBX: {e}")
+            log.error(f"Failed to load FBX: {e}")
             return
 
         parent_transform = parent_entity.transform if parent_entity else None
@@ -490,13 +491,13 @@ class SceneTreeController:
         glb_asset = rm.get_glb_asset(glb_name)
 
         if glb_asset is None:
-            print(f"Failed to load GLB: GLBAsset '{glb_name}' not found in ResourceManager")
+            log.error(f"Failed to load GLB: GLBAsset '{glb_name}' not found in ResourceManager")
             return
 
         try:
             result = instantiate_glb(glb_asset, scene=self._scene)
         except Exception as e:
-            print(f"Failed to load GLB: {e}")
+            log.error(f"Failed to load GLB: {e}")
             return
 
         entity = result.entity

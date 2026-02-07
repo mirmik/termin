@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import deque
 import numpy as np
 
+from termin._native import log
 from termin.voxels.grid import VoxelGrid
 
 
@@ -274,7 +275,7 @@ def greedy_absorption(
         else:
             empty_count += 1
 
-    print(f"PolygonBuilder: greedy absorption: {len(regions)} regions, "
+    log.warning(f"PolygonBuilder: greedy absorption: {len(regions)} regions, "
           f"absorbed {total_absorbed} voxels, redistributed {total_pruned} hanging, "
           f"removed {empty_count} empty regions, result: {len(result)} regions")
 
@@ -318,7 +319,7 @@ def add_multi_normal_voxels_to_regions(
         for i in range(len(regions))
     ]
 
-    print(f"PolygonBuilder: added {added_count} multi-normal voxels to additional regions")
+    log.warning(f"PolygonBuilder: added {added_count} multi-normal voxels to additional regions")
 
     return result
 
@@ -367,7 +368,7 @@ def expand_all_regions(
         for i in range(len(regions))
     ]
 
-    print(f"PolygonBuilder: expand_all_regions: {iteration} iterations, added {total_added} voxels")
+    log.warning(f"PolygonBuilder: expand_all_regions: {iteration} iterations, added {total_added} voxels")
 
     return result
 
@@ -474,7 +475,7 @@ def decimate_boundary(
             result.discard(voxel)
             changed = True
 
-    print(f"PolygonBuilder: boundary decimation: {len(boundary)} -> {len(result)} ({iteration} iterations)")
+    log.warning(f"PolygonBuilder: boundary decimation: {len(boundary)} -> {len(result)} ({iteration} iterations)")
     return result
 
 
@@ -517,7 +518,7 @@ def share_boundary_voxels(
         new_voxels = set(voxels) | filtered_to_add
         result.append((list(new_voxels), normal))
 
-    print(f"PolygonBuilder: shared {len(boundary_voxels)} boundary voxels between regions")
+    log.warning(f"PolygonBuilder: shared {len(boundary_voxels)} boundary voxels between regions")
     return result, boundary_voxels
 
 
@@ -563,7 +564,7 @@ def find_inter_region_boundaries(
                         break
 
     total_boundary = sum(len(v) for v in result.values())
-    print(f"PolygonBuilder: found {total_boundary} inter-region boundary voxels")
+    log.warning(f"PolygonBuilder: found {total_boundary} inter-region boundary voxels")
 
     return result
 

@@ -13,6 +13,7 @@ import heapq
 import math
 import numpy as np
 
+from termin._native import log
 from termin.navmesh.triangulation import build_2d_basis
 
 
@@ -280,7 +281,7 @@ def find_distance_field_peaks_2d(
                 peak_candidates.add((u, v))
 
     if debug:
-        print(f"    peaks: candidates={len(peak_candidates)}")
+        log.warning(f"    peaks: candidates={len(peak_candidates)}")
 
     if not peak_candidates:
         return set(), []
@@ -322,10 +323,10 @@ def find_distance_field_peaks_2d(
             peaks.append(best)
 
             if debug:
-                print(f"    plateau: size={len(plateau)}, dist={plateau_dist:.2f}, peak={best}")
+                log.warning(f"    plateau: size={len(plateau)}, dist={plateau_dist:.2f}, peak={best}")
 
     if debug:
-        print(f"    peaks: final={len(peaks)}")
+        log.warning(f"    peaks: final={len(peaks)}")
 
     return peak_candidates, peaks
 
@@ -365,11 +366,11 @@ def watershed_split_2d(
     else:
         smoothed_df = distance_field.copy()
 
-    print(f"  watershed: mask {width}x{height}, smoothing={smoothing}")
+    log.warning(f"  watershed: mask {width}x{height}, smoothing={smoothing}")
 
     # Находим пики
     all_local_maxima, peaks = find_distance_field_peaks_2d(smoothed_df)
-    print(f"  watershed: found {len(peaks)} peaks, {len(all_local_maxima)} local maxima")
+    log.warning(f"  watershed: found {len(peaks)} peaks, {len(all_local_maxima)} local maxima")
 
     if not peaks:
         # Нет пиков — весь регион как один
@@ -412,11 +413,11 @@ def watershed_split_2d(
     unique_labels = sorted(set(labels.flat) - {0})
 
     if len(unique_labels) != len(peaks):
-        print(f"  watershed: WARNING peaks={len(peaks)}, but unique_labels={len(unique_labels)}")
+        log.warning(f"  watershed: WARNING peaks={len(peaks)}, but unique_labels={len(unique_labels)}")
         for idx, (pu, pv) in enumerate(peaks):
             label = idx + 1
             count = int(np.sum(labels == label))
-            print(f"    peak {idx}: ({pu}, {pv}) -> label {label}, count={count}")
+            log.warning(f"    peak {idx}: ({pu}, {pv}) -> label {label}, count={count}")
 
     label_remap = {old: new for new, old in enumerate(unique_labels, 1)}
     label_remap[0] = 0
@@ -712,7 +713,7 @@ def find_peaks_for_region(
 
     if debug:
         max_dist = float(np.max(distance_2d))
-        print(f"  region: voxels={len(region_voxels)}, mask={width}x{height}, max_dist={max_dist:.2f}, smoothing={smoothing}")
+        log.warning(f"  region: voxels={len(region_voxels)}, mask={width}x{height}, max_dist={max_dist:.2f}, smoothing={smoothing}")
 
     # Находим пики в 2D
     all_maxima_2d, plateau_peaks_2d = find_distance_field_peaks_2d(distance_2d, debug=debug)

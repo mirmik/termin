@@ -185,7 +185,7 @@ class PathfindingWorldComponent(PythonComponent):
         for navmesh, entity in entries:
             self._navmesh_sources.append((navmesh, entity))
 
-        print(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMesh for agent '{self.agent_type_name}'")
+        log.warning(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMesh for agent '{self.agent_type_name}'")
 
     def _build_graph(self) -> None:
         """Построить NavMeshGraph из собранных NavMesh."""
@@ -219,7 +219,7 @@ class PathfindingWorldComponent(PythonComponent):
                 self._region_navmesh_info[region_id] = (navmesh, poly_idx)
                 region_id += 1
 
-        print(f"[PathfindingWorld] built graph with {region_id} regions")
+        log.warning(f"[PathfindingWorld] built graph with {region_id} regions")
 
         # Вычисляем порталы между регионами
         self._compute_portals()

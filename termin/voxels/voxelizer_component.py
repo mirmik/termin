@@ -19,6 +19,7 @@ from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -680,9 +681,9 @@ void main() {
         from termin.voxels.persistence import VoxelPersistence
         from termin.voxels.native_voxelizer import voxelize_mesh_native
 
-        print("VoxelizerComponent: starting voxelization")
+        log.warning("VoxelizerComponent: starting voxelization")
         if self.entity is None:
-            print("VoxelizerComponent: no entity")
+            log.error("VoxelizerComponent: no entity")
             return False
 
         # Получаем обратную матрицу корневого entity для перевода в локальные координаты
@@ -695,15 +696,15 @@ void main() {
         meshes = self._collect_meshes_from_entity(self.entity, root_inv, recurse=recurse)
 
         if not meshes:
-            print("VoxelizerComponent: no meshes found")
+            log.error("VoxelizerComponent: no meshes found")
             return False
 
         if len(meshes) > 1:
-            print(f"VoxelizerComponent: found {len(meshes)} meshes")
+            log.warning(f"VoxelizerComponent: found {len(meshes)} meshes")
 
         mesh = self._create_combined_mesh(meshes)
         if mesh is None:
-            print("VoxelizerComponent: failed to create mesh")
+            log.error("VoxelizerComponent: failed to create mesh")
             return False
 
         # Определяем имя сетки
@@ -728,7 +729,7 @@ void main() {
             # Режим заполнения всей сетки — вычисляем bounds меша и заполняем
             vertices = mesh.vertices
             if vertices is None or len(vertices) == 0:
-                print("VoxelizerComponent: mesh has no vertices")
+                log.error("VoxelizerComponent: mesh has no vertices")
                 return False
 
             mesh_min = vertices.min(axis=0)
@@ -745,7 +746,7 @@ void main() {
                     for vz in range(voxel_min[2], voxel_max[2] + 1):
                         grid.set(vx, vy, vz, VOXEL_SOLID)
                         fill_count += 1
-            print(f"VoxelizerComponent: filled {fill_count} voxels in bounds")
+            log.warning(f"VoxelizerComponent: filled {fill_count} voxels in bounds")
         else:
             # C++ native voxelization
             grid = voxelize_mesh_native(
@@ -781,11 +782,11 @@ void main() {
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
             VoxelPersistence.save(grid, output_path)
-            print(f"VoxelizerComponent: saved to {output_path.absolute()}")
+            log.warning(f"VoxelizerComponent: saved to {output_path.absolute()}")
 
             return True
         except Exception as e:
-            print(f"VoxelizerComponent: failed to save: {e}")
+            log.error(f"VoxelizerComponent: failed to save: {e}")
             return False
 
     def build_navmesh(self) -> bool:
@@ -814,11 +815,11 @@ void main() {
         grid = rm.get_voxel_grid(name)
 
         if grid is None:
-            print(f"VoxelizerComponent: voxel grid '{name}' not found. Run Voxelize first.")
+            log.error(f"VoxelizerComponent: voxel grid '{name}' not found. Run Voxelize first.")
             return False
 
         if not grid.surface_normals:
-            print("VoxelizerComponent: voxel grid has no surface normals. Use WITH_NORMALS mode.")
+            log.error("VoxelizerComponent: voxel grid has no surface normals. Use WITH_NORMALS mode.")
             return False
 
         # Строим NavMesh
@@ -857,7 +858,7 @@ void main() {
         # Сохраняем регионы и grid для отладочной визуализации
         self._debug_regions = builder._last_regions
         self._debug_grid = grid
-        print(f"VoxelizerComponent: saved {len(self._debug_regions)} regions for debug")
+        log.warning(f"VoxelizerComponent: saved {len(self._debug_regions)} regions for debug")
 
         # Перестраиваем отладочный меш
         self._rebuild_debug_mesh()
@@ -865,7 +866,7 @@ void main() {
         # Строим отладочный меш из NavMesh
         self._build_debug_mesh_from_navmesh(navmesh)
 
-        print(f"VoxelizerComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
+        log.warning(f"VoxelizerComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
 
         # Определяем путь для сохранения
         output = self.navmesh_output_path.strip()
@@ -880,7 +881,7 @@ void main() {
 
         # Регистрируем в ResourceManager
         rm.register_navmesh(name, navmesh)
-        print(f"VoxelizerComponent: registered NavMesh '{name}'")
+        log.warning(f"VoxelizerComponent: registered NavMesh '{name}'")
 
         # Сохраняем в файл
         try:
@@ -898,11 +899,11 @@ void main() {
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
             NavMeshPersistence.save(navmesh, output_path)
-            print(f"VoxelizerComponent: saved NavMesh to {output_path.absolute()}")
+            log.warning(f"VoxelizerComponent: saved NavMesh to {output_path.absolute()}")
 
             return True
         except Exception as e:
-            print(f"VoxelizerComponent: failed to save NavMesh: {e}")
+            log.error(f"VoxelizerComponent: failed to save NavMesh: {e}")
             return False
 
     def _rebuild_voxel_display_mesh(self) -> None:
@@ -981,7 +982,7 @@ void main() {
             name="voxelizer_display_mesh",
         )
 
-        print(f"VoxelizerComponent: display mesh built ({count} voxels)")
+        log.warning(f"VoxelizerComponent: display mesh built ({count} voxels)")
 
     def _rebuild_debug_mesh(self) -> None:
         """Перестроить отладочные меши для регионов."""
@@ -1030,7 +1031,7 @@ void main() {
         self._build_debug_bridged_contours(grid, region_colors)
 
         total_voxels = sum(len(voxels) for voxels, _ in self._debug_regions)
-        print(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
+        log.warning(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
 
     def _build_debug_region_voxels(
         self,
@@ -1085,7 +1086,7 @@ void main() {
             name="voxelizer_debug_regions",
         )
 
-        print(f"VoxelizerComponent: region voxels mesh built ({total_voxels} voxels, {len(self._debug_regions)} regions)")
+        log.warning(f"VoxelizerComponent: region voxels mesh built ({total_voxels} voxels, {len(self._debug_regions)} regions)")
 
     def _build_debug_sparse_boundary(
         self,
@@ -1166,7 +1167,7 @@ void main() {
                 vertex_normals=normals_arr,
                 name="voxelizer_debug_outer_contour",
             )
-            print(f"VoxelizerComponent: {count} outer contour voxels")
+            log.warning(f"VoxelizerComponent: {count} outer contour voxels")
         else:
             self._debug_sparse_boundary_mesh = None
 
@@ -1201,7 +1202,7 @@ void main() {
                 vertex_normals=normals_arr,
                 name="voxelizer_debug_inner_contour",
             )
-            print(f"VoxelizerComponent: {count} inner contour voxels (holes)")
+            log.warning(f"VoxelizerComponent: {count} inner contour voxels (holes)")
         else:
             self._debug_inner_contour_mesh = None
 
@@ -1297,7 +1298,7 @@ void main() {
             name="voxelizer_debug_simplified_contours",
         )
 
-        print(f"VoxelizerComponent: simplified contours built ({len(self._debug_regions)} regions, {len(vertices)} vertices)")
+        log.warning(f"VoxelizerComponent: simplified contours built ({len(self._debug_regions)} regions, {len(vertices)} vertices)")
 
     def _build_debug_bridged_contours(
         self,
@@ -1366,7 +1367,7 @@ void main() {
             name="voxelizer_debug_bridged_contours",
         )
 
-        print(f"VoxelizerComponent: bridged contours built ({len(self._debug_regions)} regions, {len(vertices)} vertices)")
+        log.warning(f"VoxelizerComponent: bridged contours built ({len(self._debug_regions)} regions, {len(vertices)} vertices)")
 
     def _build_debug_mesh_from_navmesh(self, navmesh: "NavMesh") -> None:
         """Построить отладочный меш из готового NavMesh."""
@@ -1431,5 +1432,5 @@ void main() {
             name="voxelizer_debug_triangulated",
         )
 
-        print(f"VoxelizerComponent: triangulated mesh from NavMesh ({len(navmesh.polygons)} polygons, {len(vertices)} vertices, {len(triangles)} triangles)")
+        log.warning(f"VoxelizerComponent: triangulated mesh from NavMesh ({len(navmesh.polygons)} polygons, {len(vertices)} vertices, {len(triangles)} triangles)")
 

@@ -345,7 +345,7 @@ class VoxelDisplayComponent(PythonComponent):
         # Ограничение для производительности
         display_count = len(all_voxels)
         if display_count > MAX_VOXELS:
-            print(f"VoxelDisplayComponent: too many voxels ({display_count}), showing first {MAX_VOXELS}")
+            log.warning(f"VoxelDisplayComponent: too many voxels ({display_count}), showing first {MAX_VOXELS}")
             all_voxels = all_voxels[:MAX_VOXELS]
             display_count = MAX_VOXELS
 
