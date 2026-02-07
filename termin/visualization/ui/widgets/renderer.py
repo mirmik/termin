@@ -154,6 +154,9 @@ class UIRenderer:
         # Scale factor from font atlas size to desired size
         scale = font_size / font.size
 
+        # Ascent from font: distance from glyph image top to baseline
+        ascent = font.ascent if hasattr(font, "ascent") else font.size
+
         cursor_x = x
         for ch in text:
             if ch not in font.glyphs:
@@ -167,8 +170,8 @@ class UIRenderer:
             char_w = gw * scale
             char_h = gh * scale
 
-            # Position (y is baseline, glyph extends downward)
-            glyph_y = y - char_h
+            # Glyph image top is ascent pixels above the baseline
+            glyph_y = y - ascent * scale
 
             # Convert to NDC
             nx, ny = self._px_to_ndc(cursor_x, glyph_y)
