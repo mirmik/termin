@@ -15,11 +15,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QDoubleSpinBox,
-    QSpinBox,
     QCheckBox,
     QComboBox,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox, SpinBox
 from PyQt6.QtCore import Qt, pyqtSignal
 
 if TYPE_CHECKING:
@@ -245,8 +244,8 @@ class MaterialPropertiesEditor(QWidget):
 
     def _create_float_editor(
         self, prop: "MaterialProperty", value: Any
-    ) -> QDoubleSpinBox:
-        spin = QDoubleSpinBox()
+    ) -> DoubleSpinBox:
+        spin = DoubleSpinBox()
         spin.setDecimals(3)
         spin.setSingleStep(0.1)
 
@@ -262,8 +261,8 @@ class MaterialPropertiesEditor(QWidget):
         spin.editingFinished.connect(self._on_editing_finished)
         return spin
 
-    def _create_int_editor(self, prop: "MaterialProperty", value: Any) -> QSpinBox:
-        spin = QSpinBox()
+    def _create_int_editor(self, prop: "MaterialProperty", value: Any) -> SpinBox:
+        spin = SpinBox()
 
         if prop.range_min is not None and prop.range_max is not None:
             spin.setRange(int(prop.range_min), int(prop.range_max))

@@ -15,7 +15,6 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -24,6 +23,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 
 if TYPE_CHECKING:
     from termin.assets.mesh_asset import MeshAsset
@@ -156,7 +156,7 @@ class MeshInspector(QWidget):
         settings_form.setSpacing(4)
 
         # Scale
-        self._scale_spin = QDoubleSpinBox()
+        self._scale_spin = DoubleSpinBox()
         self._scale_spin.setRange(0.0001, 10000.0)
         self._scale_spin.setDecimals(4)
         self._scale_spin.setSingleStep(0.1)

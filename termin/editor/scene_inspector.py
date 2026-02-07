@@ -8,7 +8,6 @@ import numpy as np
 from PyQt6.QtWidgets import (
     QWidget,
     QFormLayout,
-    QDoubleSpinBox,
     QLabel,
     QVBoxLayout,
     QHBoxLayout,
@@ -18,6 +17,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -138,7 +138,7 @@ class SceneInspector(QWidget):
         self._ambient_color_btn = self._create_color_button()
         ambient_layout.addRow(QLabel("Color:"), self._ambient_color_btn)
 
-        self._ambient_intensity_spin = QDoubleSpinBox()
+        self._ambient_intensity_spin = DoubleSpinBox()
         self._ambient_intensity_spin.setDecimals(3)
         self._ambient_intensity_spin.setRange(0.0, 10.0)
         self._ambient_intensity_spin.setSingleStep(0.01)

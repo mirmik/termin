@@ -15,10 +15,10 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QDoubleSpinBox,
     QLabel,
     QFrame,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 from PyQt6.QtCore import pyqtSignal, Qt
 
 
@@ -92,13 +92,13 @@ class Vec3ListWidget(QWidget):
         editor_layout.setContentsMargins(4, 4, 4, 4)
         editor_layout.setSpacing(4)
 
-        self._spinboxes: List[QDoubleSpinBox] = []
+        self._spinboxes: List[DoubleSpinBox] = []
         for axis in ("X", "Y", "Z"):
             label = QLabel(axis)
             label.setFixedWidth(12)
             editor_layout.addWidget(label)
 
-            sb = QDoubleSpinBox()
+            sb = DoubleSpinBox()
             sb.setDecimals(3)
             sb.setRange(-1e6, 1e6)
             sb.setSingleStep(0.1)

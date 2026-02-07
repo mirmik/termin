@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QWidget,
     QFormLayout,
     QHBoxLayout,
-    QDoubleSpinBox,
     QLabel,
     QVBoxLayout,
     QListWidget,
@@ -19,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QComboBox,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -58,9 +58,9 @@ class TransformInspector(QWidget):
 
         def make_vec3_row():
             row = QHBoxLayout()
-            sx = QDoubleSpinBox()
-            sy = QDoubleSpinBox()
-            sz = QDoubleSpinBox()
+            sx = DoubleSpinBox()
+            sy = DoubleSpinBox()
+            sz = DoubleSpinBox()
             for sb in (sx, sy, sz):
                 sb.setRange(-1e6, 1e6)
                 sb.setDecimals(3)

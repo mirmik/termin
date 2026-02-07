@@ -16,14 +16,13 @@ from termin._native import log
 from PyQt6.QtWidgets import (
     QWidget,
     QHBoxLayout,
-    QDoubleSpinBox,
     QCheckBox,
     QLineEdit,
     QComboBox,
     QPushButton,
     QSlider,
-    QSpinBox,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox, SpinBox
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
@@ -125,7 +124,7 @@ class FloatFieldWidget(FieldWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self._spinbox = QDoubleSpinBox()
+        self._spinbox = DoubleSpinBox()
         self._spinbox.setDecimals(0 if is_int else 4)
         self._spinbox.setRange(
             min_val if min_val is not None else -1e9,
@@ -222,9 +221,9 @@ class Vec3FieldWidget(FieldWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
-        self._boxes: list[QDoubleSpinBox] = []
+        self._boxes: list[DoubleSpinBox] = []
         for _ in range(3):
-            sb = QDoubleSpinBox()
+            sb = DoubleSpinBox()
             sb.setDecimals(4)
             sb.setRange(min_val, max_val)
             if step is not None:
@@ -269,7 +268,7 @@ class SliderFieldWidget(FieldWidget):
         self._slider.setRange(min_val, max_val)
         self._slider.setTickPosition(QSlider.TickPosition.NoTicks)
 
-        self._spinbox = QSpinBox()
+        self._spinbox = SpinBox()
         self._spinbox.setRange(min_val, max_val)
         self._spinbox.setFixedWidth(50)
 
@@ -372,7 +371,11 @@ class ButtonFieldWidget(FieldWidget):
 
     def _on_click(self) -> None:
         if self._action is not None and self._target is not None:
-            self._action(self._target)
+            try:
+                self._action(self._target)
+            except Exception as e:
+                from termin._native import log
+                log.error(f"Button action failed: {e}")
 
 
 class ComboFieldWidget(FieldWidget):
