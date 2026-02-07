@@ -153,7 +153,7 @@ void OrbitCameraController::_update_pose() {
         _target.z + r * std::sin(_elevation)              // Z - height
     };
 
-    // Create pose looking at target
+    // Create pose looking at target (always zero-roll, resets fly roll)
     Pose3 pose = Pose3::looking_at(eye, _target);
     entity().transform().relocate(pose);
 
@@ -207,6 +207,83 @@ void OrbitCameraController::pan(double dx, double dy) {
 void OrbitCameraController::center_on(const Vec3& position) {
     _target = position;
     _update_pose();
+}
+
+void OrbitCameraController::fly_move(double right, double forward, double up) {
+    // Translate camera along its local axes. Does not change rotation.
+    if (!entity().valid()) return;
+
+    Quat rot = entity().transform().global_rotation();
+    double rm[9];
+    rot.to_matrix(rm);
+
+    // Local axes from rotation matrix columns
+    Vec3 axis_right{rm[0], rm[3], rm[6]};
+    Vec3 axis_forward{rm[1], rm[4], rm[7]};
+    Vec3 axis_up{rm[2], rm[5], rm[8]};
+
+    Vec3 pos = entity().transform().global_position();
+    pos = pos + axis_right * right + axis_forward * forward + axis_up * up;
+
+    entity().transform().relocate(Pose3{rot, pos});
+    _sync_from_transform();
+}
+
+void OrbitCameraController::fly_forward(double delta) {
+    // Move along forward direction. If horizon_lock, project onto XY plane.
+    if (!entity().valid()) return;
+
+    Quat rot = entity().transform().global_rotation();
+    double rm[9];
+    rot.to_matrix(rm);
+    Vec3 forward{rm[1], rm[4], rm[7]};
+
+    if (horizon_lock) {
+        forward.z = 0.0;
+        double len = forward.norm();
+        if (len < 1e-6) return;
+        forward = forward / len;
+    }
+
+    Vec3 pos = entity().transform().global_position();
+    pos = pos + forward * delta;
+
+    entity().transform().relocate(Pose3{rot, pos});
+    _sync_from_transform();
+}
+
+void OrbitCameraController::fly_rotate(double yaw, double pitch, double roll) {
+    // Rotate camera in place. Yaw around world Z, pitch around local X, roll around local Y.
+    if (!entity().valid()) return;
+
+    Vec3 eye = entity().transform().global_position();
+    Quat rot = entity().transform().global_rotation();
+    double rm[9];
+    rot.to_matrix(rm);
+
+    Vec3 axis_right{rm[0], rm[3], rm[6]};
+    Vec3 axis_forward{rm[1], rm[4], rm[7]};
+
+    // Build incremental rotation quaternions
+    Quat yaw_q = Quat::from_axis_angle(Vec3{0, 0, 1}, yaw * M_PI / 180.0);
+    Quat pitch_q = Quat::from_axis_angle(axis_right, pitch * M_PI / 180.0);
+    Quat roll_q = Quat::from_axis_angle(axis_forward, roll * M_PI / 180.0);
+
+    // Compose: roll * pitch * yaw * current
+    Quat new_rot = roll_q * pitch_q * yaw_q * rot;
+
+    // If horizon_lock, reconstruct rotation from forward direction via looking_at
+    // This removes any accumulated roll, keeping the horizon level
+    if (horizon_lock) {
+        double nm[9];
+        new_rot.to_matrix(nm);
+        Vec3 new_forward{nm[1], nm[4], nm[7]};
+        Pose3 level_pose = Pose3::looking_at(eye, eye + new_forward);
+        new_rot = level_pose.ang;
+    }
+
+    entity().transform().relocate(Pose3{new_rot, eye});
+    _sync_from_transform();
 }
 
 OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state(uintptr_t viewport_id) {

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from termin.editor.audio_debugger import AudioDebugDialog
     from termin.editor.core_registry_viewer import CoreRegistryViewer
     from termin.editor.project_file_watcher import ProjectFileWatcher
+    from termin.editor.spacemouse_controller import SpaceMouseController
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
     from termin.visualization.platform.backends.base import GraphicsBackend
@@ -59,6 +60,7 @@ class DialogManager:
         self._core_registry_viewer: "CoreRegistryViewer | None" = None
         self._inspect_registry_viewer = None
         self._navmesh_registry_viewer = None
+        self._spacemouse_settings_dialog = None
 
     @property
     def framegraph_debugger(self) -> "FramegraphDebugDialog | None":
@@ -276,6 +278,25 @@ class DialogManager:
         dialog.setModal(False)
         dialog.finished.connect(lambda: setattr(self, '_agent_types_dialog', None))
         self._agent_types_dialog = dialog
+        dialog.show()
+
+    def show_spacemouse_settings_dialog(self, spacemouse: "SpaceMouseController") -> None:
+        """Opens SpaceMouse settings dialog (non-modal for live preview)."""
+        from termin.editor.spacemouse_settings_dialog import SpaceMouseSettingsDialog
+
+        if self._spacemouse_settings_dialog is not None:
+            self._spacemouse_settings_dialog.raise_()
+            self._spacemouse_settings_dialog.activateWindow()
+            return
+
+        dialog = SpaceMouseSettingsDialog(
+            spacemouse,
+            self._parent,
+            on_changed=self._request_viewport_update,
+        )
+        dialog.setModal(False)
+        dialog.finished.connect(lambda: setattr(self, '_spacemouse_settings_dialog', None))
+        self._spacemouse_settings_dialog = dialog
         dialog.show()
 
     def show_project_settings_dialog(self) -> None:

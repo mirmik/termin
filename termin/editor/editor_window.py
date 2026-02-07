@@ -480,6 +480,7 @@ class EditorWindow(QMainWindow):
             on_toggle_modules=self._toggle_modules_panel,
             on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
             on_show_agent_types=self._show_agent_types_dialog,
+            on_show_spacemouse_settings=self._show_spacemouse_settings_dialog,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._mode_controller.is_fullscreen,
@@ -557,6 +558,13 @@ class EditorWindow(QMainWindow):
     def _show_agent_types_dialog(self) -> None:
         """Opens agent types configuration dialog."""
         self._dialog_manager.show_agent_types_dialog()
+
+    def _show_spacemouse_settings_dialog(self) -> None:
+        """Opens SpaceMouse settings dialog."""
+        if self._spacemouse is None:
+            self._log_to_console("[SpaceMouse] No device connected")
+            return
+        self._dialog_manager.show_spacemouse_settings_dialog(self._spacemouse)
 
     def _show_pipeline_editor(self) -> None:
         """Opens the visual pipeline graph editor."""

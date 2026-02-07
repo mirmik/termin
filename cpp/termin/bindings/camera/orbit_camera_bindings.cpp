@@ -51,6 +51,16 @@ void bind_orbit_camera_controller(nb::module_& m) {
             }
             c.center_on(pos);
         }, nb::arg("position"), "Center camera on position")
+        .def("fly_move", &OrbitCameraController::fly_move,
+            nb::arg("right"), nb::arg("forward"), nb::arg("up"),
+            "Translate camera along local axes")
+        .def("fly_forward", &OrbitCameraController::fly_forward,
+            nb::arg("delta"),
+            "Move camera forward/backward along view direction")
+        .def("fly_rotate", &OrbitCameraController::fly_rotate,
+            nb::arg("yaw"), nb::arg("pitch"), nb::arg("roll") = 0.0,
+            "Rotate camera in place: yaw (world Z), pitch (local X), roll (local Y)")
+        .def_rw("horizon_lock", &OrbitCameraController::horizon_lock)
 
         // State accessors
         .def_prop_ro("target", [](OrbitCameraController& c) {

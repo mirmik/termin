@@ -58,10 +58,7 @@ def _load_libspnav():
     """Try to load libspnav shared library."""
     lib_path = ctypes.util.find_library("spnav")
     if lib_path is None:
-        log.warn("[SpaceMouse] ctypes.util.find_library('spnav') returned None")
         return None
-
-    log.warn(f"[SpaceMouse] Found libspnav at: {lib_path}")
 
     try:
         lib = ctypes.CDLL(lib_path)
@@ -94,22 +91,35 @@ class SpaceMouseController:
     """
     Controller for 3DConnexion SpaceMouse via libspnav/spacenavd.
 
-    Uses QSocketNotifier for event-driven input — no polling needed.
+    Supports orbit mode (default) and fly mode.
+    Uses QSocketNotifier for event-driven input.
     """
 
     def __init__(self):
         self._is_open: bool = False
-        self._editor_attachment = None  # EditorSceneAttachment — always get fresh orbit_controller
+        self._editor_attachment = None
         self._request_update: Callable[[], None] | None = None
         self._notifier = None  # QSocketNotifier
+
+        # Mode
+        self.fly_mode: bool = True
 
         # Sensitivity (libspnav values are integers, typical range ±350)
         self.pan_sensitivity: float = 0.00002
         self.zoom_sensitivity: float = 0.00005
         self.orbit_sensitivity: float = 0.002
+        self.fly_sensitivity: float = 0.0001
 
         # Deadzone (integer threshold)
         self.deadzone: int = 15
+
+        # Axis inversion (6 physical axes)
+        self.invert_x: bool = False   # Left/Right
+        self.invert_y: bool = False   # Forward/Backward
+        self.invert_z: bool = False   # Up/Down
+        self.invert_rx: bool = False  # Pitch
+        self.invert_ry: bool = False  # Yaw
+        self.invert_rz: bool = False  # Roll
 
     def open(
         self,
@@ -130,32 +140,24 @@ class SpaceMouseController:
             return True
 
         if _libspnav is None:
-            log.warn("[SpaceMouse] libspnav not loaded, cannot open")
             return False
 
-        ret = _libspnav.spnav_open()
-        log.warn(f"[SpaceMouse] spnav_open() returned {ret}")
-        if ret == -1:
-            log.warn("[SpaceMouse] Failed to connect to spacenavd (systemctl start spacenavd)")
+        if _libspnav.spnav_open() == -1:
+            log.warn("[SpaceMouse] Failed to connect to spacenavd")
             return False
 
         self._editor_attachment = editor_attachment
         self._request_update = request_update
         self._is_open = True
 
-        # Set up QSocketNotifier for event-driven input
         fd = _libspnav.spnav_fd()
-        log.warn(f"[SpaceMouse] spnav_fd() returned {fd}")
-
         if fd >= 0:
             from PyQt6.QtCore import QSocketNotifier
             self._notifier = QSocketNotifier(fd, QSocketNotifier.Type.Read)
             self._notifier.activated.connect(self._on_data_ready)
-            log.warn(f"[SpaceMouse] QSocketNotifier created for fd={fd}, enabled={self._notifier.isEnabled()}")
         else:
             log.error(f"[SpaceMouse] spnav_fd() returned invalid fd={fd}")
 
-        log.warn("[SpaceMouse] Device connected")
         return True
 
     def close(self) -> None:
@@ -178,39 +180,37 @@ class SpaceMouseController:
     def is_open(self) -> bool:
         return self._is_open
 
+    @property
+    def horizon_lock(self) -> bool:
+        ctrl = self._get_orbit_controller()
+        return ctrl.horizon_lock if ctrl is not None else True
+
+    @horizon_lock.setter
+    def horizon_lock(self, value: bool) -> None:
+        ctrl = self._get_orbit_controller()
+        if ctrl is not None:
+            ctrl.horizon_lock = value
+
     def _on_data_ready(self, _socket=None) -> None:
         """Called by QSocketNotifier when spacenavd has data."""
-        log.warn("[SpaceMouse] _on_data_ready called")
-
         if _libspnav is None or not self._is_open:
-            log.warn("[SpaceMouse] _on_data_ready: not ready (lib=%s, open=%s)" % (_libspnav is not None, self._is_open))
             return
 
         event = _SpnavEvent()
         moved = False
-        event_count = 0
 
-        # Drain all pending events
         while _libspnav.spnav_poll_event(ctypes.byref(event)) != 0:
-            event_count += 1
             if event.type == SPNAV_EVENT_MOTION:
-                m = event.motion
-                log.warn(f"[SpaceMouse] MOTION x={m.x} y={m.y} z={m.z} rx={m.rx} ry={m.ry} rz={m.rz}")
-                if self._handle_motion(m):
+                if self._handle_motion(event.motion):
                     moved = True
             elif event.type == SPNAV_EVENT_BUTTON:
                 self._handle_button(event.button)
-            else:
-                log.warn(f"[SpaceMouse] Unknown event type: {event.type}")
-
-        if event_count == 0:
-            log.warn("[SpaceMouse] _on_data_ready: no events from spnav_poll_event")
 
         if moved and self._request_update is not None:
             self._request_update()
 
     def _apply_deadzone(self, value: int) -> float:
-        """Apply deadzone and return normalized float."""
+        """Apply deadzone and return float."""
         if abs(value) < self.deadzone:
             return 0.0
         return float(value)
@@ -228,58 +228,97 @@ class SpaceMouseController:
         """Map 6DOF motion to camera controls. Returns True if camera moved."""
         ctrl = self._get_orbit_controller()
         if ctrl is None:
-            log.warn("[SpaceMouse] _handle_motion: no orbit controller")
             return False
 
         tx = self._apply_deadzone(m.x)
         ty = self._apply_deadzone(m.y)
         tz = self._apply_deadzone(m.z)
+        rx = self._apply_deadzone(m.rx)
         ry = self._apply_deadzone(m.ry)
         rz = self._apply_deadzone(m.rz)
 
-        if tx == ty == tz == ry == rz == 0.0:
+        if tx == ty == tz == rx == ry == rz == 0.0:
             return False
 
-        old_az = ctrl.azimuth
-        old_el = ctrl.elevation
-
         moved = False
+        r = ctrl.radius
 
-        # Pan: X → horizontal, Z → vertical
-        if tx != 0.0 or tz != 0.0:
-            pan_x = tx * self.pan_sensitivity * ctrl.radius
-            pan_y = tz * self.pan_sensitivity * ctrl.radius
-            ctrl.pan(-pan_x, pan_y)
-            moved = True
+        if self.fly_mode:
+            # Fly: direct camera movement along local axes
+            # X → strafe, Y → up/down, Z → forward/back
+            right = tx * self.pan_sensitivity * r
+            up = ty * self.pan_sensitivity * r
+            forward = tz * self.fly_sensitivity * r
 
-        # Zoom: Y → push/pull
-        if ty != 0.0:
-            zoom_delta = ty * self.zoom_sensitivity * ctrl.radius
-            ctrl.zoom(-zoom_delta)
-            moved = True
+            # Apply inversion on camera directions
+            if self.invert_x:
+                right = -right
+            if self.invert_y:
+                forward = -forward
+            if self.invert_z:
+                up = -up
+            if right != 0.0 or forward != 0.0 or up != 0.0:
+                ctrl.fly_move(right, forward, up)
+                moved = True
 
-        # Orbit: RY → azimuth, RZ → elevation
-        if rz != 0.0 or ry != 0.0:
-            ctrl.orbit(-ry * self.orbit_sensitivity, -rz * self.orbit_sensitivity)
-            moved = True
+            # Rotation: rx → pitch, ry → yaw, rz → roll
+            pitch = rx * self.orbit_sensitivity
+            yaw = ry * self.orbit_sensitivity
+            roll = rz * self.orbit_sensitivity
 
-        if moved:
-            ctrl._update_pose()
-            # Check entity transform to see if _update_pose() actually worked
-            cm = self._editor_attachment._camera_manager if self._editor_attachment else None
-            cam = cm.camera if cm else None
-            if cam is not None and cam.entity is not None:
-                pos = cam.entity.transform.global_position
-                log.warn(
-                    f"[SpaceMouse] az={old_az:.4f}->{ctrl.azimuth:.4f} r={ctrl.radius:.2f} "
-                    f"entity_pos=({pos.x:.3f},{pos.y:.3f},{pos.z:.3f}) ptr={ctrl.c_component_ptr()}"
-                )
-            else:
-                log.warn("[SpaceMouse] camera or entity is None!")
+            # Apply inversion on camera rotations
+            if self.invert_rx:
+                pitch = -pitch
+            if self.invert_ry:
+                yaw = -yaw
+            if self.invert_rz:
+                roll = -roll
+
+            if yaw != 0.0 or pitch != 0.0 or roll != 0.0:
+                ctrl.fly_rotate(yaw, pitch, roll)
+                moved = True
+        else:
+            # Orbit: X → pan horizontal, Y → pan vertical, Z → zoom
+            pan_x = tx * self.pan_sensitivity * r
+            pan_y = -ty * self.pan_sensitivity * r
+            zoom_val = -tz * self.zoom_sensitivity * r
+
+            # Apply inversion on camera directions
+            if self.invert_x:
+                pan_x = -pan_x
+            if self.invert_z:
+                pan_y = -pan_y
+            if self.invert_y:
+                zoom_val = -zoom_val
+
+            if pan_x != 0.0 or pan_y != 0.0:
+                ctrl.pan(-pan_x, pan_y)
+                moved = True
+
+            if zoom_val != 0.0:
+                ctrl.zoom(zoom_val)
+                moved = True
+
+            # Orbit rotation: rx → elevation (pitch), ry → azimuth (yaw)
+            orbit_yaw = -ry * self.orbit_sensitivity
+            orbit_pitch = -rx * self.orbit_sensitivity
+            if self.invert_rx:
+                orbit_pitch = -orbit_pitch
+            if self.invert_ry:
+                orbit_yaw = -orbit_yaw
+            if orbit_yaw != 0.0 or orbit_pitch != 0.0:
+                ctrl.orbit(orbit_yaw, orbit_pitch)
+                moved = True
 
         return moved
 
     def _handle_button(self, b: _SpnavEventButton) -> None:
         """Handle button press/release."""
-        action = "pressed" if b.press else "released"
-        log.warn(f"[SpaceMouse] Button {b.bnum} {action}")
+        if not b.press:
+            return
+
+        # Button 0: toggle fly/orbit mode
+        if b.bnum == 0:
+            self.fly_mode = not self.fly_mode
+            mode = "Fly" if self.fly_mode else "Orbit"
+            log.warn(f"[SpaceMouse] Mode: {mode}")
