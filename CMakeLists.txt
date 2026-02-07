@@ -125,7 +125,6 @@ if(BUNDLE_PYTHON)
         PATTERN "test" EXCLUDE
         PATTERN "tests" EXCLUDE
         PATTERN "idle_test" EXCLUDE
-        PATTERN "tkinter" EXCLUDE
         PATTERN "turtledemo" EXCLUDE
         PATTERN "lib2to3" EXCLUDE
         PATTERN "ensurepip" EXCLUDE

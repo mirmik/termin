@@ -37,6 +37,9 @@ class UI:
     @root.setter
     def root(self, widget: Widget | None):
         self._root = widget
+        # Force re-layout on next render
+        self._viewport_w = 0
+        self._viewport_h = 0
 
     @property
     def font(self) -> FontTextureAtlas | None:
