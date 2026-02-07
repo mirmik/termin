@@ -1,6 +1,7 @@
-"""Basic widgets: Label, Button, Checkbox, IconButton, Separator."""
+"""Basic widgets: Label, Button, Checkbox, IconButton, Separator, ImageWidget."""
 
 from __future__ import annotations
+import time
 from typing import Callable
 
 from termin.visualization.ui.widgets.widget import Widget
@@ -352,3 +353,272 @@ class Separator(Widget):
                 self.thickness,
                 self.color
             )
+
+
+class ImageWidget(Widget):
+    """Widget that displays an image from a file."""
+
+    def __init__(self):
+        super().__init__()
+        self.image_path: str = ""
+        self.tint: tuple[float, float, float, float] = (1, 1, 1, 1)
+        self._texture = None
+        self._image_w: int = 0
+        self._image_h: int = 0
+
+    def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
+        if self.preferred_width and self.preferred_height:
+            return (
+                self.preferred_width.to_pixels(viewport_w),
+                self.preferred_height.to_pixels(viewport_h)
+            )
+        # Use native image size if loaded
+        if self._image_w > 0 and self._image_h > 0:
+            w = self.preferred_width.to_pixels(viewport_w) if self.preferred_width else float(self._image_w)
+            h = self.preferred_height.to_pixels(viewport_h) if self.preferred_height else float(self._image_h)
+            return (w, h)
+        return (64, 64)
+
+    def _ensure_texture(self, renderer: 'UIRenderer'):
+        if self._texture is None and self.image_path:
+            from PIL import Image
+            img = Image.open(self.image_path)
+            self._image_w, self._image_h = img.size
+            self._texture = renderer.load_image(self.image_path)
+
+    def render(self, renderer: 'UIRenderer'):
+        self._ensure_texture(renderer)
+        if self._texture is not None:
+            renderer.draw_image(
+                self.x, self.y, self.width, self.height,
+                self._texture, self.tint
+            )
+
+
+class TextInput(Widget):
+    """Single-line text input widget."""
+
+    def __init__(self):
+        super().__init__()
+        self.focusable: bool = True
+
+        # Text content
+        self.text: str = ""
+        self.placeholder: str = ""
+        self.cursor_pos: int = 0
+
+        # Visual configuration
+        self.font_size: float = 14
+        self.padding: float = 6
+        self.border_width: float = 1
+        self.border_radius: float = 3
+        self.background_color: tuple[float, float, float, float] = (0.15, 0.15, 0.15, 1.0)
+        self.focused_background_color: tuple[float, float, float, float] = (0.18, 0.18, 0.22, 1.0)
+        self.border_color: tuple[float, float, float, float] = (0.4, 0.4, 0.4, 1.0)
+        self.focused_border_color: tuple[float, float, float, float] = (0.3, 0.5, 0.9, 1.0)
+        self.text_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
+        self.placeholder_color: tuple[float, float, float, float] = (0.5, 0.5, 0.5, 1.0)
+        self.cursor_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
+
+        # State
+        self.focused: bool = False
+        self.hovered: bool = False
+        self._scroll_offset: float = 0.0
+        self._cursor_blink_time: float = 0.0
+        self._cursor_visible: bool = True
+        self._renderer: 'UIRenderer | None' = None
+
+        # Callbacks
+        self.on_change: Callable[[str], None] | None = None
+        self.on_submit: Callable[[str], None] | None = None
+
+    def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
+        if self.preferred_width and self.preferred_height:
+            return (
+                self.preferred_width.to_pixels(viewport_w),
+                self.preferred_height.to_pixels(viewport_h)
+            )
+        w = self.preferred_width.to_pixels(viewport_w) if self.preferred_width else 200
+        h = self.font_size + self.padding * 2 + self.border_width * 2
+        return (w, h)
+
+    def render(self, renderer: 'UIRenderer'):
+        self._renderer = renderer
+        bw = self.border_width
+
+        # Border
+        border_col = self.focused_border_color if self.focused else self.border_color
+        renderer.draw_rect(
+            self.x, self.y, self.width, self.height,
+            border_col, self.border_radius
+        )
+
+        # Background (inset by border)
+        bg_color = self.focused_background_color if self.focused else self.background_color
+        renderer.draw_rect(
+            self.x + bw, self.y + bw,
+            self.width - bw * 2, self.height - bw * 2,
+            bg_color, max(0, self.border_radius - bw)
+        )
+
+        # Text area bounds
+        text_x = self.x + self.padding + bw
+        text_area_width = self.width - (self.padding + bw) * 2
+        text_area_height = self.height - bw * 2
+        baseline_y = self.y + bw + self.padding + self.font_size
+
+        # Clip text and cursor to the inner area
+        renderer.begin_clip(text_x, self.y + bw, text_area_width, text_area_height)
+
+        if self.text:
+            self._update_scroll(renderer, text_area_width)
+            renderer.draw_text(
+                text_x - self._scroll_offset, baseline_y,
+                self.text, self.text_color, self.font_size
+            )
+        elif not self.focused and self.placeholder:
+            renderer.draw_text(
+                text_x, baseline_y,
+                self.placeholder, self.placeholder_color, self.font_size
+            )
+
+        # Cursor
+        if self.focused:
+            self._update_cursor_blink()
+            if self._cursor_visible:
+                cursor_px = self._get_cursor_x(renderer)
+                cursor_screen_x = text_x + cursor_px - self._scroll_offset
+                cursor_y = self.y + bw + self.padding
+                renderer.draw_rect(
+                    cursor_screen_x, cursor_y,
+                    1.5, self.font_size,
+                    self.cursor_color
+                )
+
+        renderer.end_clip()
+
+    # --- Text measurement helpers ---
+
+    def _measure_text_width(self, renderer: 'UIRenderer', text: str) -> float:
+        w, _ = renderer.measure_text(text, self.font_size)
+        return w
+
+    def _get_cursor_x(self, renderer: 'UIRenderer') -> float:
+        return self._measure_text_width(renderer, self.text[:self.cursor_pos])
+
+    def _update_scroll(self, renderer: 'UIRenderer', text_area_width: float):
+        cursor_x = self._get_cursor_x(renderer)
+        if cursor_x - self._scroll_offset > text_area_width:
+            self._scroll_offset = cursor_x - text_area_width
+        if cursor_x - self._scroll_offset < 0:
+            self._scroll_offset = cursor_x
+        if self._scroll_offset < 0:
+            self._scroll_offset = 0
+
+    # --- Cursor blink ---
+
+    def _update_cursor_blink(self):
+        now = time.monotonic()
+        if now - self._cursor_blink_time >= 0.5:
+            self._cursor_visible = not self._cursor_visible
+            self._cursor_blink_time = now
+
+    def _reset_cursor_blink(self):
+        self._cursor_visible = True
+        self._cursor_blink_time = time.monotonic()
+
+    # --- Cursor positioning from click ---
+
+    def _cursor_pos_from_x(self, renderer: 'UIRenderer', click_x: float) -> int:
+        text_start_x = self.x + self.padding + self.border_width
+        relative_x = click_x - text_start_x + self._scroll_offset
+        x_acc = 0.0
+        for i, ch in enumerate(self.text):
+            char_w = self._measure_text_width(renderer, ch)
+            if relative_x < x_acc + char_w / 2:
+                return i
+            x_acc += char_w
+        return len(self.text)
+
+    # --- Mouse events ---
+
+    def on_mouse_enter(self):
+        self.hovered = True
+
+    def on_mouse_leave(self):
+        self.hovered = False
+
+    def on_mouse_down(self, x: float, y: float) -> bool:
+        if self._renderer is not None:
+            self.cursor_pos = self._cursor_pos_from_x(self._renderer, x)
+        self._reset_cursor_blink()
+        return True
+
+    # --- Focus events ---
+
+    def on_focus(self):
+        self.focused = True
+        self._reset_cursor_blink()
+
+    def on_blur(self):
+        self.focused = False
+
+    # --- Keyboard events ---
+
+    def on_key_down(self, key: int, mods: int) -> bool:
+        from termin.visualization.platform.backends.base import Key
+
+        if key == Key.BACKSPACE:
+            if self.cursor_pos > 0:
+                self.text = self.text[:self.cursor_pos - 1] + self.text[self.cursor_pos:]
+                self.cursor_pos -= 1
+                self._fire_on_change()
+            self._reset_cursor_blink()
+            return True
+
+        if key == Key.DELETE:
+            if self.cursor_pos < len(self.text):
+                self.text = self.text[:self.cursor_pos] + self.text[self.cursor_pos + 1:]
+                self._fire_on_change()
+            self._reset_cursor_blink()
+            return True
+
+        if key == Key.LEFT:
+            if self.cursor_pos > 0:
+                self.cursor_pos -= 1
+            self._reset_cursor_blink()
+            return True
+
+        if key == Key.RIGHT:
+            if self.cursor_pos < len(self.text):
+                self.cursor_pos += 1
+            self._reset_cursor_blink()
+            return True
+
+        if key == Key.HOME:
+            self.cursor_pos = 0
+            self._reset_cursor_blink()
+            return True
+
+        if key == Key.END:
+            self.cursor_pos = len(self.text)
+            self._reset_cursor_blink()
+            return True
+
+        if key == Key.ENTER:
+            if self.on_submit is not None:
+                self.on_submit(self.text)
+            return True
+
+        return False
+
+    def on_text_input(self, text: str) -> bool:
+        self.text = self.text[:self.cursor_pos] + text + self.text[self.cursor_pos:]
+        self.cursor_pos += len(text)
+        self._fire_on_change()
+        self._reset_cursor_blink()
+        return True
+
+    def _fire_on_change(self):
+        if self.on_change is not None:
+            self.on_change(self.text)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import time
 
 import sdl2
@@ -11,8 +12,10 @@ from sdl2 import video
 from termin.graphics import OpenGLGraphicsBackend
 from termin.visualization.platform.backends import set_default_graphics_backend
 from termin.visualization.ui.widgets.ui import UI
-from termin.visualization.ui.widgets.basic import Label, Button
+from termin.visualization.ui.widgets.basic import Label, Button, TextInput
 from termin.visualization.ui.widgets.containers import VStack, Panel
+from termin.visualization.ui.widgets.units import px, pct
+from termin.visualization.platform.backends.base import Key
 
 
 def _create_sdl_window(
@@ -54,12 +57,59 @@ def _create_sdl_window(
     return window, gl_context
 
 
+def _translate_sdl_key(scancode: int) -> int:
+    """Translate SDL scancode to Key enum value."""
+    _MAP = {
+        sdl2.SDL_SCANCODE_BACKSPACE: Key.BACKSPACE,
+        sdl2.SDL_SCANCODE_DELETE: Key.DELETE,
+        sdl2.SDL_SCANCODE_LEFT: Key.LEFT,
+        sdl2.SDL_SCANCODE_RIGHT: Key.RIGHT,
+        sdl2.SDL_SCANCODE_HOME: Key.HOME,
+        sdl2.SDL_SCANCODE_END: Key.END,
+        sdl2.SDL_SCANCODE_RETURN: Key.ENTER,
+        sdl2.SDL_SCANCODE_ESCAPE: Key.ESCAPE,
+        sdl2.SDL_SCANCODE_TAB: Key.TAB,
+        sdl2.SDL_SCANCODE_SPACE: Key.SPACE,
+    }
+    if scancode in _MAP:
+        return _MAP[scancode]
+    keycode = sdl2.SDL_GetKeyFromScancode(scancode)
+    if 0 <= keycode < 128:
+        try:
+            return Key(keycode)
+        except ValueError:
+            pass
+    return Key.UNKNOWN
+
+
+def _translate_sdl_mods(sdl_mods: int) -> int:
+    """Translate SDL modifier state to bitmask (shift=1, ctrl=2, alt=4)."""
+    result = 0
+    if sdl_mods & (sdl2.KMOD_LSHIFT | sdl2.KMOD_RSHIFT):
+        result |= 0x0001
+    if sdl_mods & (sdl2.KMOD_LCTRL | sdl2.KMOD_RCTRL):
+        result |= 0x0002
+    if sdl_mods & (sdl2.KMOD_LALT | sdl2.KMOD_RALT):
+        result |= 0x0004
+    return result
+
+
 def _build_ui(graphics: OpenGLGraphicsBackend) -> UI:
     """Build a simple test widget tree."""
     ui = UI(graphics)
 
+    # Full-screen background panel with wallpaper
+    bg = Panel()
+    bg.preferred_width = pct(100)
+    bg.preferred_height = pct(100)
+    bg.background_color = (0, 0, 0, 1)
+    bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
+    if os.path.exists(bg_image_path):
+        bg.background_image = bg_image_path
+
+    # Content panel on top
     panel = Panel()
-    panel.background_color = (0.14, 0.14, 0.18, 0.95)
+    panel.background_color = (0.14, 0.14, 0.18, 0.85)
     panel.padding = 40
     panel.anchor = "center"
     panel.border_radius = 12
@@ -78,16 +128,25 @@ def _build_ui(graphics: OpenGLGraphicsBackend) -> UI:
     subtitle.font_size = 18
     subtitle.color = (0.6, 0.65, 0.75, 1.0)
 
+    text_input = TextInput()
+    text_input.placeholder = "Enter project name..."
+    text_input.preferred_width = px(300)
+    text_input.font_size = 16
+    text_input.on_submit = lambda t: print(f"[test_ui] Submit: {t}")
+    text_input.on_change = lambda t: print(f"[test_ui] Text: {t}")
+
     btn = Button()
     btn.text = "Click me"
     btn.on_click = lambda: print("[test_ui] Button clicked!")
 
     stack.add_child(title)
     stack.add_child(subtitle)
+    stack.add_child(text_input)
     stack.add_child(btn)
     panel.add_child(stack)
+    bg.add_child(panel)
 
-    ui.root = panel
+    ui.root = bg
     return ui
 
 
@@ -109,6 +168,8 @@ def run():
 
     ui = _build_ui(graphics)
 
+    sdl2.SDL_StartTextInput()
+
     event = sdl2.SDL_Event()
     running = True
 
@@ -128,6 +189,14 @@ def run():
                 ui.mouse_down(float(event.button.x), float(event.button.y))
             elif etype == sdl2.SDL_MOUSEBUTTONUP:
                 ui.mouse_up(float(event.button.x), float(event.button.y))
+            elif etype == sdl2.SDL_KEYDOWN:
+                scancode = event.key.keysym.scancode
+                key = _translate_sdl_key(scancode)
+                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+                ui.key_down(key, mods)
+            elif etype == sdl2.SDL_TEXTINPUT:
+                text = event.text.text.decode('utf-8')
+                ui.text_input(text)
 
         # Render
         vw, vh = _get_drawable_size(window)

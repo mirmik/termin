@@ -43,6 +43,7 @@ class Widget:
         # State
         self.visible: bool = True
         self.enabled: bool = True
+        self.focusable: bool = False
 
     def add_child(self, child: Widget) -> Widget:
         """Add a child widget."""
@@ -137,3 +138,19 @@ class Widget:
 
     def on_mouse_up(self, x: float, y: float):
         pass
+
+    # Focus events (override in focusable widgets)
+    def on_focus(self):
+        pass
+
+    def on_blur(self):
+        pass
+
+    # Keyboard events (override in focusable widgets)
+    def on_key_down(self, key: int, mods: int) -> bool:
+        """Handle key down. Return True if handled."""
+        return False
+
+    def on_text_input(self, text: str) -> bool:
+        """Handle text input. Return True if handled."""
+        return False

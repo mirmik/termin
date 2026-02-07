@@ -7,7 +7,7 @@ import yaml
 
 from termin.visualization.ui.widgets.widget import Widget
 from termin.visualization.ui.widgets.containers import HStack, VStack, Panel
-from termin.visualization.ui.widgets.basic import Label, Button, Checkbox, IconButton, Separator
+from termin.visualization.ui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput
 from termin.visualization.ui.widgets.units import Value
 
 
@@ -24,6 +24,8 @@ class UILoader:
         "Checkbox": Checkbox,
         "IconButton": IconButton,
         "Separator": Separator,
+        "Image": ImageWidget,
+        "TextInput": TextInput,
     }
 
     def __init__(self):
@@ -152,6 +154,10 @@ class UILoader:
                 widget.background_color = self._parse_color(data["background_color"])
             if "border_radius" in data:
                 widget.border_radius = float(data["border_radius"])
+            if "background_image" in data:
+                widget.background_image = str(data["background_image"])
+            if "background_tint" in data:
+                widget.background_tint = self._parse_color(data["background_tint"])
 
         # Label attributes
         if isinstance(widget, Label):
@@ -232,6 +238,42 @@ class UILoader:
                 widget.font_size = float(data["font_size"])
             if "active" in data:
                 widget.active = bool(data["active"])
+
+        # TextInput attributes
+        if isinstance(widget, TextInput):
+            if "text" in data:
+                widget.text = str(data["text"])
+            if "placeholder" in data:
+                widget.placeholder = str(data["placeholder"])
+            if "font_size" in data:
+                widget.font_size = float(data["font_size"])
+            if "padding" in data:
+                widget.padding = float(data["padding"])
+            if "background_color" in data:
+                widget.background_color = self._parse_color(data["background_color"])
+            if "focused_background_color" in data:
+                widget.focused_background_color = self._parse_color(data["focused_background_color"])
+            if "border_color" in data:
+                widget.border_color = self._parse_color(data["border_color"])
+            if "focused_border_color" in data:
+                widget.focused_border_color = self._parse_color(data["focused_border_color"])
+            if "text_color" in data:
+                widget.text_color = self._parse_color(data["text_color"])
+            if "placeholder_color" in data:
+                widget.placeholder_color = self._parse_color(data["placeholder_color"])
+            if "cursor_color" in data:
+                widget.cursor_color = self._parse_color(data["cursor_color"])
+            if "border_radius" in data:
+                widget.border_radius = float(data["border_radius"])
+            if "border_width" in data:
+                widget.border_width = float(data["border_width"])
+
+        # ImageWidget attributes
+        if isinstance(widget, ImageWidget):
+            if "image_path" in data:
+                widget.image_path = str(data["image_path"])
+            if "tint" in data:
+                widget.tint = self._parse_color(data["tint"])
 
         # Separator attributes
         if isinstance(widget, Separator):

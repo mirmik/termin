@@ -27,17 +27,23 @@ UI_FRAGMENT_SHADER = """
 #version 330 core
 uniform sampler2D u_texture;
 uniform vec4 u_color;
-uniform bool u_use_texture;
+uniform int u_texture_mode;  // 0=solid color, 1=font atlas (R→alpha), 2=RGBA image
 
 in vec2 v_uv;
 out vec4 FragColor;
 
 void main(){
-    float alpha = u_color.a;
-    if (u_use_texture) {
-        alpha *= texture(u_texture, v_uv).r;
+    if (u_texture_mode == 1) {
+        // Font atlas: R channel as alpha mask, color from uniform
+        float a = texture(u_texture, v_uv).r * u_color.a;
+        FragColor = vec4(u_color.rgb, a);
+    } else if (u_texture_mode == 2) {
+        // RGBA image: full texture color multiplied by tint
+        FragColor = texture(u_texture, v_uv) * u_color;
+    } else {
+        // Solid color
+        FragColor = u_color;
     }
-    FragColor = vec4(u_color.rgb, alpha);
 }
 """
 
@@ -87,6 +93,16 @@ class UIRenderer:
         self._graphics.set_blend(False)
         self._graphics.set_depth_test(True)
 
+    def begin_clip(self, x: float, y: float, w: float, h: float):
+        """Enable scissor clipping at pixel coordinates (top-left origin)."""
+        # glScissor uses bottom-left origin, so flip Y
+        gl_y = self._viewport_h - (y + h)
+        self._graphics.enable_scissor(int(x), int(gl_y), int(w), int(h))
+
+    def end_clip(self):
+        """Disable scissor clipping."""
+        self._graphics.disable_scissor()
+
     def _px_to_ndc(self, x: float, y: float) -> tuple[float, float]:
         """Convert pixel coordinates to NDC (-1..1)."""
         nx = (x / self._viewport_w) * 2.0 - 1.0
@@ -125,7 +141,7 @@ class UIRenderer:
         self._shader.use()
         self._graphics.check_gl_error("UIRenderer: after shader.use")
         self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
-        self._shader.set_uniform_int("u_use_texture", 0)
+        self._shader.set_uniform_int("u_texture_mode", 0)
         self._graphics.check_gl_error("UIRenderer: after set uniforms")
 
         # Draw
@@ -143,7 +159,7 @@ class UIRenderer:
         self._shader.ensure_ready()
         self._shader.use()
         self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
-        self._shader.set_uniform_int("u_use_texture", 1)
+        self._shader.set_uniform_int("u_texture_mode", 1)
 
         # Bind font texture
         texture_handle = font.ensure_texture(self._graphics)
@@ -214,6 +230,45 @@ class UIRenderer:
         y = cy + font_size / 2  # baseline offset
 
         self.draw_text(x, y, text, color, font_size)
+
+    def draw_image(self, x: float, y: float, w: float, h: float,
+                   texture_handle,
+                   tint: tuple[float, float, float, float] = (1, 1, 1, 1)):
+        """Draw an RGBA textured quad at pixel coordinates."""
+        self._shader.ensure_ready()
+        self._shader.use()
+        self._shader.set_uniform_vec4("u_color", float(tint[0]), float(tint[1]), float(tint[2]), float(tint[3]))
+        self._shader.set_uniform_int("u_texture_mode", 2)
+
+        texture_handle.bind(0)
+        self._shader.set_uniform_int("u_texture", 0)
+
+        # Convert to NDC
+        nx, ny = self._px_to_ndc(x, y)
+        nw, nh = self._size_to_ndc(w, h)
+
+        left = nx
+        right = nx + nw
+        top = ny
+        bottom = ny - nh
+
+        # UV flipped vertically: image top-left = (0,0) but GL texture (0,0) is bottom-left
+        vertices = np.array([
+            [left, top, 0, 1],
+            [right, top, 1, 1],
+            [left, bottom, 0, 0],
+            [right, bottom, 1, 0],
+        ], dtype=np.float32)
+
+        self._graphics.draw_ui_textured_quad(vertices)
+
+    def load_image(self, path: str):
+        """Load an image file and upload as GPU texture. Returns a texture handle."""
+        from PIL import Image
+        img = Image.open(path).convert("RGBA")
+        data = np.array(img, dtype=np.uint8)
+        w, h = img.size
+        return self._graphics.create_texture(data, (w, h), channels=4, mipmap=False, clamp=True)
 
     def measure_text(self, text: str, font_size: float = 14) -> tuple[float, float]:
         """Measure text dimensions in pixels."""
