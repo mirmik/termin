@@ -544,33 +544,42 @@ def run():
     event = sdl2.SDL_Event()
     running = True
 
+    def dispatch_event(ev):
+        nonlocal running
+        etype = ev.type
+        if etype == sdl2.SDL_QUIT:
+            running = False
+        elif etype == sdl2.SDL_WINDOWEVENT:
+            if ev.window.event == video.SDL_WINDOWEVENT_CLOSE:
+                running = False
+        elif etype == sdl2.SDL_MOUSEMOTION:
+            app.ui.mouse_move(float(ev.motion.x), float(ev.motion.y))
+        elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
+            app.ui.mouse_down(float(ev.button.x), float(ev.button.y))
+        elif etype == sdl2.SDL_MOUSEBUTTONUP:
+            app.ui.mouse_up(float(ev.button.x), float(ev.button.y))
+        elif etype == sdl2.SDL_KEYDOWN:
+            scancode = ev.key.keysym.scancode
+            key = _translate_sdl_key(scancode)
+            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            app.ui.key_down(key, mods)
+        elif etype == sdl2.SDL_TEXTINPUT:
+            text = ev.text.text.decode('utf-8')
+            app.ui.text_input(text)
+
     while running:
         if app.should_quit:
-            running = False
             break
 
-        while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-            etype = event.type
+        # Block until event arrives or 500ms timeout (for cursor blink)
+        if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 500):
+            dispatch_event(event)
+            # Drain remaining queued events
+            while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
+                dispatch_event(event)
 
-            if etype == sdl2.SDL_QUIT:
-                running = False
-            elif etype == sdl2.SDL_WINDOWEVENT:
-                if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
-                    running = False
-            elif etype == sdl2.SDL_MOUSEMOTION:
-                app.ui.mouse_move(float(event.motion.x), float(event.motion.y))
-            elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
-                app.ui.mouse_down(float(event.button.x), float(event.button.y))
-            elif etype == sdl2.SDL_MOUSEBUTTONUP:
-                app.ui.mouse_up(float(event.button.x), float(event.button.y))
-            elif etype == sdl2.SDL_KEYDOWN:
-                scancode = event.key.keysym.scancode
-                key = _translate_sdl_key(scancode)
-                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
-                app.ui.key_down(key, mods)
-            elif etype == sdl2.SDL_TEXTINPUT:
-                text = event.text.text.decode('utf-8')
-                app.ui.text_input(text)
+        if not running:
+            break
 
         vw, vh = _get_drawable_size(window)
         graphics.bind_framebuffer(None)
