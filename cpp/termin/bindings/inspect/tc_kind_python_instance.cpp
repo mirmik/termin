@@ -122,12 +122,25 @@ nb::object KindRegistryPython::deserialize(const std::string& kind_name, nb::obj
     return nb::none();
 }
 
+void KindRegistryPython::register_type(nb::handle type, const std::string& kind_name) {
+    _type_to_kind.emplace_back(nb::borrow(type), kind_name);
+}
+
+std::string KindRegistryPython::kind_for_object(nb::handle obj) const {
+    PyObject* obj_type = (PyObject*)Py_TYPE(obj.ptr());
+    for (const auto& [type, kind_name] : _type_to_kind) {
+        if (type.ptr() == obj_type) return kind_name;
+    }
+    return "";
+}
+
 void KindRegistryPython::clear() {
     for (auto& [name, kind] : _kinds) {
         kind.serialize = nb::object();
         kind.deserialize = nb::object();
     }
     _kinds.clear();
+    _type_to_kind.clear();
 }
 
 // ============================================================================
@@ -198,6 +211,14 @@ nb::object KindRegistry::serialize_python(const std::string& kind_name, nb::obje
 
 nb::object KindRegistry::deserialize_python(const std::string& kind_name, nb::object data) const {
     return KindRegistryPython::instance().deserialize(kind_name, data);
+}
+
+void KindRegistry::register_type(nb::handle type, const std::string& kind_name) {
+    KindRegistryPython::instance().register_type(type, kind_name);
+}
+
+std::string KindRegistry::kind_for_object(nb::handle obj) const {
+    return KindRegistryPython::instance().kind_for_object(obj);
 }
 
 void KindRegistry::clear_python() {

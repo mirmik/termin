@@ -133,6 +133,14 @@ class QtKeyEventFilter:
         else:
             action = Action.RELEASE
 
+        if self._backend_window._input_manager_ptr:
+            from termin._native.render import _input_manager_on_key
+            _input_manager_on_key(
+                self._backend_window._input_manager_ptr,
+                key.value, scancode, action.value, mods
+            )
+            return True
+
         if self._backend_window._key_callback is not None:
             self._backend_window._key_callback(
                 self._backend_window, key, scancode, action, mods
@@ -186,18 +194,53 @@ def _translate_mouse_button(button: int) -> MouseButton:
     return mapping.get(button, MouseButton.LEFT)
 
 
+_scancode_to_key = {
+    # Letters
+    sdl2.SDL_SCANCODE_A: Key.A, sdl2.SDL_SCANCODE_B: Key.B,
+    sdl2.SDL_SCANCODE_C: Key.C, sdl2.SDL_SCANCODE_D: Key.D,
+    sdl2.SDL_SCANCODE_E: Key.E, sdl2.SDL_SCANCODE_F: Key.F,
+    sdl2.SDL_SCANCODE_G: Key.G, sdl2.SDL_SCANCODE_H: Key.H,
+    sdl2.SDL_SCANCODE_I: Key.I, sdl2.SDL_SCANCODE_J: Key.J,
+    sdl2.SDL_SCANCODE_K: Key.K, sdl2.SDL_SCANCODE_L: Key.L,
+    sdl2.SDL_SCANCODE_M: Key.M, sdl2.SDL_SCANCODE_N: Key.N,
+    sdl2.SDL_SCANCODE_O: Key.O, sdl2.SDL_SCANCODE_P: Key.P,
+    sdl2.SDL_SCANCODE_Q: Key.Q, sdl2.SDL_SCANCODE_R: Key.R,
+    sdl2.SDL_SCANCODE_S: Key.S, sdl2.SDL_SCANCODE_T: Key.T,
+    sdl2.SDL_SCANCODE_U: Key.U, sdl2.SDL_SCANCODE_V: Key.V,
+    sdl2.SDL_SCANCODE_W: Key.W, sdl2.SDL_SCANCODE_X: Key.X,
+    sdl2.SDL_SCANCODE_Y: Key.Y, sdl2.SDL_SCANCODE_Z: Key.Z,
+    # Numbers
+    sdl2.SDL_SCANCODE_0: Key.KEY_0, sdl2.SDL_SCANCODE_1: Key.KEY_1,
+    sdl2.SDL_SCANCODE_2: Key.KEY_2, sdl2.SDL_SCANCODE_3: Key.KEY_3,
+    sdl2.SDL_SCANCODE_4: Key.KEY_4, sdl2.SDL_SCANCODE_5: Key.KEY_5,
+    sdl2.SDL_SCANCODE_6: Key.KEY_6, sdl2.SDL_SCANCODE_7: Key.KEY_7,
+    sdl2.SDL_SCANCODE_8: Key.KEY_8, sdl2.SDL_SCANCODE_9: Key.KEY_9,
+    # Special keys
+    sdl2.SDL_SCANCODE_ESCAPE: Key.ESCAPE,
+    sdl2.SDL_SCANCODE_SPACE: Key.SPACE,
+    sdl2.SDL_SCANCODE_RETURN: Key.ENTER,
+    sdl2.SDL_SCANCODE_TAB: Key.TAB,
+    sdl2.SDL_SCANCODE_BACKSPACE: Key.BACKSPACE,
+    sdl2.SDL_SCANCODE_DELETE: Key.DELETE,
+    sdl2.SDL_SCANCODE_RIGHT: Key.RIGHT,
+    sdl2.SDL_SCANCODE_LEFT: Key.LEFT,
+    sdl2.SDL_SCANCODE_DOWN: Key.DOWN,
+    sdl2.SDL_SCANCODE_UP: Key.UP,
+    sdl2.SDL_SCANCODE_HOME: Key.HOME,
+    sdl2.SDL_SCANCODE_END: Key.END,
+    # Function keys
+    sdl2.SDL_SCANCODE_F1: Key.F1, sdl2.SDL_SCANCODE_F2: Key.F2,
+    sdl2.SDL_SCANCODE_F3: Key.F3, sdl2.SDL_SCANCODE_F4: Key.F4,
+    sdl2.SDL_SCANCODE_F5: Key.F5, sdl2.SDL_SCANCODE_F6: Key.F6,
+    sdl2.SDL_SCANCODE_F7: Key.F7, sdl2.SDL_SCANCODE_F8: Key.F8,
+    sdl2.SDL_SCANCODE_F9: Key.F9, sdl2.SDL_SCANCODE_F10: Key.F10,
+    sdl2.SDL_SCANCODE_F11: Key.F11, sdl2.SDL_SCANCODE_F12: Key.F12,
+}
+
+
 def _translate_key(scancode: int) -> Key:
-    if scancode == sdl2.SDL_SCANCODE_ESCAPE:
-        return Key.ESCAPE
-    if scancode == sdl2.SDL_SCANCODE_SPACE:
-        return Key.SPACE
-    keycode = sdl2.SDL_GetKeyFromScancode(scancode)
-    if 0 <= keycode < 128:
-        try:
-            return Key(keycode)
-        except ValueError:
-            pass
-    return Key.UNKNOWN
+    """Translate SDL scancode to Key enum."""
+    return _scancode_to_key.get(scancode, Key.UNKNOWN)
 
 
 def _translate_sdl_mods(sdl_mods: int) -> int:
@@ -802,7 +845,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             key = _translate_key(event.key.keysym.scancode)
             action = Action.REPEAT if event.key.repeat else Action.PRESS
             mods = _translate_sdl_mods(event.key.keysym.mod)
-            # Route through tc_input_manager if set
             if self._input_manager_ptr:
                 from termin._native.render import _input_manager_on_key
                 _input_manager_on_key(self._input_manager_ptr, key.value, event.key.keysym.scancode, action.value, mods)
@@ -812,7 +854,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         elif event_type == sdl2.SDL_KEYUP:
             key = _translate_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
-            # Route through tc_input_manager if set
             if self._input_manager_ptr:
                 from termin._native.render import _input_manager_on_key
                 _input_manager_on_key(self._input_manager_ptr, key.value, event.key.keysym.scancode, Action.RELEASE.value, mods)
@@ -842,6 +883,7 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         _ensure_sdl()
         self._windows: dict[int, SDLEmbeddedWindowHandle] = {}
         self._primary_window: Optional[SDLEmbeddedWindowHandle] = None
+        self._focused_window_id: int = 0
         self._graphics = graphics
         self._external_share_context = share_context
         self._external_make_current: Optional[Callable[[], None]] = None
@@ -933,8 +975,14 @@ class SDLEmbeddedWindowBackend(WindowBackend):
                 sdl2.SDL_MOUSEWHEEL,
             ):
                 window_id = event.motion.windowID
+                if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
+                    self._focused_window_id = window_id
             elif event.type in (sdl2.SDL_KEYDOWN, sdl2.SDL_KEYUP):
                 window_id = event.key.windowID
+                # SDL may report windowID=0 for key events on embedded windows;
+                # route to the focused window (last one that received mouse input)
+                if window_id not in self._windows and self._focused_window_id in self._windows:
+                    window_id = self._focused_window_id
             elif event.type == sdl2.SDL_QUIT:
                 for win in self._windows.values():
                     win.handle_event(event)

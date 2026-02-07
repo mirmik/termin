@@ -186,6 +186,15 @@ void EditorDisplayInputManager::on_key(int key, int scancode, int action, int mo
         _dispatch_to_editor_components(viewport, &event);
         _dispatch_to_camera(viewport, &event);
     }
+
+    // Delegate to EditorInteractionSystem for editor-level key handling
+    auto* sys = EditorInteractionSystem::instance();
+    if (sys && sys->on_key) {
+        KeyEvent key_event(viewport, key, scancode, action, mods);
+        sys->on_key(key_event);
+    } else {
+        tc_log(TC_LOG_WARN, "EditorDisplayInputManager::on_key: no sys=%p or no on_key callback", (void*)sys);
+    }
 }
 
 // ============================================================================

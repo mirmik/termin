@@ -160,6 +160,8 @@ public:
     Entity parent() const;
     std::vector<Entity> children() const;
     Entity find_child(const std::string& name) const;
+    Entity create_child(const std::string& name = "entity");
+    void destroy_children();
 
     // --- Lifecycle ---
 

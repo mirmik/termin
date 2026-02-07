@@ -195,6 +195,23 @@ Entity Entity::find_child(const std::string& name) const {
     return Entity();
 }
 
+Entity Entity::create_child(const std::string& name) {
+    Entity child = Entity::create(_h.pool, name);
+    child.set_parent(*this);
+    return child;
+}
+
+void Entity::destroy_children() {
+    if (!valid()) return;
+    auto kids = children();
+    for (auto& child : kids) {
+        if (child.valid()) {
+            child.destroy_children();
+            tc_entity_pool_free(child.pool(), child.id());
+        }
+    }
+}
+
 void Entity::update(float dt) {
     if (!valid() || !enabled()) return;
 

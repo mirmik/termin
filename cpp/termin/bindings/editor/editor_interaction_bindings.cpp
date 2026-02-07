@@ -94,6 +94,12 @@ void bind_editor_interaction(nb::module_& m) {
             [](EditorInteractionSystem& s,
                std::function<void(const GeneralPose3&, const GeneralPose3&)> cb) {
                 s.on_transform_end = cb;
+            })
+        .def_prop_rw("on_key",
+            [](EditorInteractionSystem& s) { return s.on_key; },
+            [](EditorInteractionSystem& s,
+               std::function<void(const KeyEvent&)> cb) {
+                s.on_key = cb;
             });
 }
 

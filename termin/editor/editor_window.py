@@ -8,7 +8,6 @@ from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QTreeView, QListView, QLabel, QMenu, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
-
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
@@ -377,6 +376,7 @@ class EditorWindow(QMainWindow):
         self._interaction_system.selection.on_hover_changed = self._on_hover_changed
         self._interaction_system.on_request_update = self._request_viewport_update
         self._interaction_system.on_transform_end = self._on_transform_end
+        self._interaction_system.on_key = self._on_viewport_key
 
         # --- PrefabEditController - режим изоляции для редактирования префабов ---
         self.prefab_edit_controller = PrefabEditController(
@@ -983,9 +983,10 @@ class EditorWindow(QMainWindow):
             on_display_input_mode_changed=self._on_display_input_mode_changed,
         )
 
-        # Register global render update callback
-        from termin.editor.render_request import set_request_update_callback
+        # Register global callbacks
+        from termin.editor.render_request import set_request_update_callback, set_scene_tree_rebuild_callback
         set_request_update_callback(self._request_viewport_update)
+        set_scene_tree_rebuild_callback(self._rebuild_scene_tree)
 
     def _init_spacemouse(self) -> None:
         """Initialize SpaceMouse controller if device available."""
@@ -1090,6 +1091,11 @@ class EditorWindow(QMainWindow):
             surface = self._rendering_controller.editor_surface
             if surface is not None:
                 surface.request_update()
+
+    def _rebuild_scene_tree(self) -> None:
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+        self._request_viewport_update()
 
     def _after_render(self) -> None:
         sys = self._interaction_system
@@ -1314,6 +1320,28 @@ class EditorWindow(QMainWindow):
     def _on_hover_changed(self, entity) -> None:
         """C++ SelectionManager callback — entity hovered."""
         self._request_viewport_update()
+
+    def _delete_selected_entity(self) -> None:
+        """Delete the currently selected entity (called from viewport Delete shortcut)."""
+        ent = self._interaction_system.selection.selected if self._interaction_system else None
+        if ent is not None and ent.valid():
+            cmd = DeleteEntityCommand(self.scene, ent)
+            self.push_undo_command(cmd, merge=False)
+            self._interaction_system.selection.deselect()
+            if self.scene_tree_controller is not None:
+                self.scene_tree_controller.rebuild()
+            self._resync_inspector_from_selection()
+
+    def _on_viewport_key(self, event) -> None:
+        """C++ EditorInteractionSystem key callback (KeyEvent)."""
+        from termin.visualization.core.input_events import Action, Mods
+        from termin.visualization.platform.backends.base import Key
+        if event.action != Action.PRESS:
+            return
+        if event.key == Key.DELETE.value:
+            self._delete_selected_entity()
+        elif event.key == Key.S.value and (event.mods & Mods.CTRL.value):
+            self._save_scene()
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo callback — drag finished."""
