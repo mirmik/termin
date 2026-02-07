@@ -82,6 +82,7 @@ if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]] || [[ $CLEAN -eq 1 ]]; then
         ASAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
         cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
             -DBUILD_EDITOR_MINIMAL=ON \
+            -DBUILD_LAUNCHER=ON \
             -DBUNDLE_PYTHON=ON \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
             -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
@@ -91,6 +92,7 @@ if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]] || [[ $CLEAN -eq 1 ]]; then
     else
         cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
             -DBUILD_EDITOR_MINIMAL=ON \
+            -DBUILD_LAUNCHER=ON \
             -DBUNDLE_PYTHON=ON \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     fi

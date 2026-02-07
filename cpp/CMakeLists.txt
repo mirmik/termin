@@ -434,6 +434,33 @@ if(BUILD_EDITOR_MINIMAL)
     )
 endif()
 
+# ============== Launcher Test Executable ==============
+option(BUILD_LAUNCHER "Build termin_launcher (UIRenderer test, no Qt)" OFF)
+
+if(BUILD_LAUNCHER)
+    add_executable(termin_launcher
+        app/main_launcher.cpp
+    )
+    target_include_directories(termin_launcher PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_launcher PRIVATE Python::Python)
+    target_compile_options(termin_launcher PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    set_target_properties(termin_launcher PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    if(WIN32)
+        set_target_properties(termin_launcher PROPERTIES WIN32_EXECUTABLE FALSE)
+    endif()
+    install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    set_target_properties(termin_launcher PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN"
+        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
+        BUILD_WITH_INSTALL_RPATH FALSE
+    )
+endif()
+
 if(BUILD_EDITOR_EXE)
     find_package(Qt6 COMPONENTS Widgets QUIET)
     if(NOT Qt6_FOUND)
