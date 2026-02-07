@@ -991,7 +991,7 @@ class EditorWindow(QMainWindow):
     def _init_spacemouse(self) -> None:
         """Initialize SpaceMouse controller if device available."""
         spacemouse = SpaceMouseController()
-        if spacemouse.open():
+        if spacemouse.open(self._editor_attachment, self._request_viewport_update):
             self._spacemouse = spacemouse
             self._log_to_console("[SpaceMouse] Device connected")
         else:
