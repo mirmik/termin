@@ -13,6 +13,7 @@ from PyQt6.QtCore import QThread
 from PyQt6.QtWidgets import QApplication
 
 from termin.editor.settings import EditorSettings
+from termin.project.settings import ProjectSettingsManager
 from termin._native import log
 
 if TYPE_CHECKING:
@@ -55,17 +56,54 @@ class SceneFileController:
         self._store_editor_data = store_editor_data
         self._collect_editor_data = collect_editor_data
 
+    def _validate_scene_path(self, file_path: str) -> bool:
+        """Check that scene file is inside the project directory.
+
+        Returns True if valid or no project is open.
+        Shows a warning dialog and returns False if outside project.
+        """
+        import os
+        if self._get_project_path is None:
+            return True
+        project_path = self._get_project_path()
+        if not project_path:
+            return True
+
+        real_file = os.path.realpath(file_path)
+        real_project = os.path.realpath(project_path)
+        if not real_file.startswith(real_project + os.sep) and real_file != real_project:
+            QMessageBox.warning(
+                self._parent,
+                "Scene Outside Project",
+                f"The scene file must be inside the project directory.\n\n"
+                f"Scene: {file_path}\n"
+                f"Project: {project_path}",
+            )
+            return False
+        return True
+
+    def _update_last_scene(self, file_path: str) -> None:
+        """Store last scene path in both project settings and global settings."""
+        EditorSettings.instance().set_last_scene_path(file_path)
+        psm = ProjectSettingsManager.instance()
+        if psm.project_path is not None:
+            psm.set_last_scene(file_path)
+
     def new_scene(self) -> bool:
         """
-        Create new empty scene with confirmation.
+        Create new scene from default template with confirmation.
 
         Returns:
             True if scene was created, False if cancelled.
         """
+        import os
+        import tempfile
+        from termin.default_scene import write_default_scene
+
         reply = QMessageBox.question(
             self._parent,
             "New Scene",
-            "Create a new empty scene?\n\nThis will remove all entities and resources.",
+            "Create a new scene?\n\nThis will remove all entities and resources.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -74,26 +112,37 @@ class SceneFileController:
             return False
 
         sm = self._get_scene_manager()
-        if sm is not None:
-            # Close existing editor scene if any
-            old_scene_name = None
-            if self._get_editor_scene_name is not None:
-                old_scene_name = self._get_editor_scene_name()
-            if old_scene_name and sm.has_scene(old_scene_name):
-                # Notify before closing (unbind UI, set INACTIVE)
-                if self._on_before_close_scene is not None:
-                    self._on_before_close_scene(old_scene_name)
-                sm.close_scene(old_scene_name)
+        if sm is None:
+            return False
 
-            # Create new untitled scene
-            new_scene_name = "untitled"
-            sm.create_scene(new_scene_name)
+        # Close existing editor scene if any
+        old_scene_name = None
+        if self._get_editor_scene_name is not None:
+            old_scene_name = self._get_editor_scene_name()
+        if old_scene_name and sm.has_scene(old_scene_name):
+            if self._on_before_close_scene is not None:
+                self._on_before_close_scene(old_scene_name)
+            sm.close_scene(old_scene_name)
+
+        # Load default scene template via temp file
+        new_scene_name = "untitled"
+        fd, tmp_path = tempfile.mkstemp(suffix=".scene")
+        try:
+            os.close(fd)
+            write_default_scene(tmp_path)
 
             if self._set_editor_scene_name is not None:
                 self._set_editor_scene_name(new_scene_name)
 
-            self._switch_to_scene(new_scene_name)
+            sm.load_scene(new_scene_name, tmp_path)
 
+            if self._store_editor_data is not None:
+                editor_data = self._extract_editor_data(tmp_path)
+                self._store_editor_data(new_scene_name, editor_data)
+        finally:
+            os.unlink(tmp_path)
+
+        self._switch_to_scene(new_scene_name)
         return True
 
     def save_scene(self) -> bool:
@@ -151,6 +200,9 @@ class SceneFileController:
         Returns:
             True if saved, False on error.
         """
+        if not self._validate_scene_path(file_path):
+            return False
+
         try:
             sm = self._get_scene_manager()
             if sm is None:
@@ -168,7 +220,7 @@ class SceneFileController:
                 editor_data = self._collect_editor_data()
 
             sm.save_scene(scene_name, file_path, editor_data)
-            EditorSettings.instance().set_last_scene_path(file_path)
+            self._update_last_scene(file_path)
             log.info(f"Scene saved: {file_path}")
             self._on_after_save()
             return True
@@ -216,6 +268,9 @@ class SceneFileController:
         """
         import os
 
+        if not self._validate_scene_path(file_path):
+            return False
+
         try:
             sm = self._get_scene_manager()
             if sm is None:
@@ -247,7 +302,7 @@ class SceneFileController:
 
             self._switch_to_scene(new_scene_name)
 
-            EditorSettings.instance().set_last_scene_path(file_path)
+            self._update_last_scene(file_path)
             log.info(f"Scene loaded: {file_path}")
             return True
 
@@ -264,13 +319,24 @@ class SceneFileController:
         """
         Load last opened scene on editor startup.
 
+        Checks per-project settings first, falls back to global editor settings.
+
         Returns:
             True if loaded, False if no last scene or error.
         """
         import os
+        from pathlib import Path
 
-        settings = EditorSettings.instance()
-        last_scene_path = settings.get_last_scene_path()
+        # Per-project last scene has priority
+        last_scene_path = None
+        psm = ProjectSettingsManager.instance()
+        project_scene = psm.get_last_scene()
+        if project_scene is not None and os.path.isfile(project_scene):
+            last_scene_path = Path(project_scene)
+
+        # Fallback to global editor settings
+        if last_scene_path is None:
+            last_scene_path = EditorSettings.instance().get_last_scene_path()
 
         if last_scene_path is None:
             return False

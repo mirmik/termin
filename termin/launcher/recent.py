@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import time
-import uuid
 
 from termin._native import log
+from termin.default_scene import write_default_scene
 
 MAX_RECENT = 10
 CONFIG_DIR = os.path.expanduser("~/.config/termin")
@@ -111,124 +111,6 @@ def read_launch_project() -> str | None:
         return None
 
 
-# Built-in asset UUIDs
-_MESH_CUBE = "00000000-0000-0000-0003-000000000001"
-_MESH_PLANE = "00000000-0000-0000-0003-000000000003"
-_MATERIAL_DEFAULT = "00000000-0000-0000-0002-000000000001"
-
-
-def _make_default_scene(name: str) -> dict:
-    """Create a default scene with a cube, a plane, and lighting."""
-    return {
-        "version": "1.0",
-        "scene": {
-            "uuid": str(uuid.uuid4()),
-            "background_color": [0.05, 0.05, 0.08, 1.0],
-            "light_direction": [0.3, 1.0, -0.5],
-            "light_color": [1.0, 1.0, 1.0],
-            "ambient_color": [1.0, 1.0, 1.0],
-            "ambient_intensity": 0.15,
-            "shadow_settings": {
-                "method": 1,
-                "softness": 1.0,
-                "bias": 0.005,
-            },
-            "skybox_type": "gradient",
-            "skybox_color": [0.5, 0.7, 0.9],
-            "skybox_top_color": [0.4, 0.6, 0.9],
-            "skybox_bottom_color": [0.6, 0.5, 0.4],
-            "entities": [
-                {
-                    "uuid": str(uuid.uuid4()),
-                    "name": "Cube",
-                    "priority": 0,
-                    "visible": True,
-                    "enabled": True,
-                    "pickable": True,
-                    "selectable": True,
-                    "layer": 0,
-                    "flags": 0,
-                    "pose": {
-                        "position": [0, 0.5, 0],
-                        "rotation": [0, 0, 0, 1],
-                    },
-                    "scale": [1, 1, 1],
-                    "children": [],
-                    "components": [
-                        {
-                            "type": "MeshRenderer",
-                            "data": {
-                                "mesh": {
-                                    "uuid": _MESH_CUBE,
-                                    "type": "named",
-                                    "name": "Cube",
-                                },
-                                "material": {
-                                    "type": "uuid",
-                                    "uuid": _MATERIAL_DEFAULT,
-                                },
-                                "cast_shadow": True,
-                            },
-                        }
-                    ],
-                },
-                {
-                    "uuid": str(uuid.uuid4()),
-                    "name": "Ground",
-                    "priority": 0,
-                    "visible": True,
-                    "enabled": True,
-                    "pickable": True,
-                    "selectable": True,
-                    "layer": 0,
-                    "flags": 0,
-                    "pose": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1],
-                    },
-                    "scale": [5, 5, 5],
-                    "children": [],
-                    "components": [
-                        {
-                            "type": "MeshRenderer",
-                            "data": {
-                                "mesh": {
-                                    "uuid": _MESH_PLANE,
-                                    "type": "named",
-                                    "name": "Plane",
-                                },
-                                "material": {
-                                    "type": "uuid",
-                                    "uuid": _MATERIAL_DEFAULT,
-                                },
-                                "cast_shadow": False,
-                            },
-                        }
-                    ],
-                },
-            ],
-            "layer_names": {},
-            "flag_names": {},
-            "viewport_configs": [],
-            "scene_pipelines": [],
-        },
-        "editor": {
-            "camera": {
-                "target": [0.0, 0.5, 0.0],
-                "radius": 6.0,
-                "azimuth": 0.8,
-                "elevation": 0.45,
-            },
-            "selected_entity": None,
-            "displays": [],
-            "expanded_entities": [],
-        },
-        "resources": {
-            "textures": {},
-        },
-    }
-
-
 def create_project(name: str, location: str) -> str:
     """Create a new project on disk.
 
@@ -255,8 +137,11 @@ def create_project(name: str, location: str) -> str:
     with open(os.path.join(settings_dir, "project.json"), "w", encoding="utf-8") as f:
         json.dump({"render_sync_mode": "none"}, f, indent=2)
 
+    # Editor state — remember the default scene
+    with open(os.path.join(settings_dir, ".editor_state.json"), "w", encoding="utf-8") as f:
+        json.dump({"last_scene": scene_file}, f, indent=2)
+
     # Default scene
-    with open(scene_file, "w", encoding="utf-8") as f:
-        json.dump(_make_default_scene(name), f, indent=2)
+    write_default_scene(scene_file)
 
     return proj_file

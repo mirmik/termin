@@ -246,28 +246,28 @@ def _subdivide_icosphere(vertices, triangles, radius):
     return vertices.astype(np.float32), np.array(new_triangles, dtype=np.uint32)
 
 
-def PlaneMesh(width: float = 1.0, depth: float = 1.0, segments_w: int = 1, segments_d: int = 1) -> Mesh3:
-    """Create a plane mesh in XZ plane with UV coordinates."""
-    uuid = _primitive_uuid("PlaneMesh", width, depth, segments_w, segments_d)
+def PlaneMesh(width: float = 1.0, height: float = 1.0, segments_w: int = 1, segments_h: int = 1) -> Mesh3:
+    """Create a plane mesh in XY plane with UV coordinates."""
+    uuid = _primitive_uuid("PlaneMesh", width, height, segments_w, segments_h)
     vertices = []
     uvs = []
     triangles = []
-    for d in range(segments_d + 1):
-        z = (d / segments_d - 0.5) * depth
-        v_coord = d / segments_d
+    for h in range(segments_h + 1):
+        y = (h / segments_h - 0.5) * height
+        v_coord = h / segments_h
         for w in range(segments_w + 1):
             x = (w / segments_w - 0.5) * width
             u_coord = w / segments_w
-            vertices.append([x, 0.0, z])
+            vertices.append([x, y, 0.0])
             uvs.append([u_coord, v_coord])
-    for d in range(segments_d):
+    for h in range(segments_h):
         for w in range(segments_w):
-            v0 = d * (segments_w + 1) + w
+            v0 = h * (segments_w + 1) + w
             v1 = v0 + 1
             v2 = v0 + (segments_w + 1)
             v3 = v2 + 1
-            triangles.append([v0, v2, v1])
-            triangles.append([v1, v2, v3])
+            triangles.append([v0, v1, v2])
+            triangles.append([v1, v3, v2])
 
     mesh = Mesh3(
         vertices=np.array(vertices, dtype=np.float32),
