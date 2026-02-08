@@ -109,7 +109,11 @@ set_source_files_properties(
 )
 
 # Core C library
-set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+if(BUILD_TESTS)
+    set(TC_BUILD_TESTS ON CACHE BOOL "" FORCE)
+else()
+    set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+endif()
 add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
 # Recast library only (from recastnavigation, avoids configure_file race conditions)
