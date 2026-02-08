@@ -107,10 +107,10 @@ jobs:
             qt6-base-dev
 
       - name: Install Python dependencies
-        run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6
+        run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2
 
       - name: Build and install
-        run: pip install --no-build-isolation .
+        run: pip install --no-build-isolation -e .
 
       - name: Run Python tests
         run: python -m pytest tests/ -v
