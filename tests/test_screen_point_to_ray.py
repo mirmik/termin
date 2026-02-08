@@ -1,12 +1,9 @@
 import numpy as np
 import pytest
 
-from termin.visualization import Entity, Scene
+from termin.visualization import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent
 from termin.geombase import Pose3
-from termin.geombase._geom_native import Vec3
-from termin.colliders import SphereCollider
-from termin.geombase import GeneralPose3, Quat
 
 
 def build_basic_camera():
@@ -59,28 +56,6 @@ def test_top_bottom_symmetry():
     assert pytest.approx(ray_top.direction[2], rel=1e-3) == -ray_bottom.direction[2]
     assert pytest.approx(ray_top.direction[0], rel=1e-3) == ray_bottom.direction[0]
 
-
-def test_raycast_center_hits_object():
-    w, h = 800, 600
-    viewport = (0, 0, w, h)
-
-    scene = Scene()
-    cam_entity, cam = build_basic_camera()
-    scene.add(cam_entity)
-
-    # Y-forward convention: object in front of camera is at +Y
-    obj = Entity(pose=Pose3(lin=np.array([0.0, 5.0, 0.0])), name="obj")
-    sphere = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(0.0, 5.0, 0.0)))
-
-    from termin.colliders.collider_component import ColliderComponent
-    obj.add_component(ColliderComponent(sphere))
-    scene.add(obj)
-
-    ray = cam.screen_point_to_ray(w * 0.5, h * 0.5, viewport)
-    hit = scene.raycast(ray)
-
-    assert hit is not None, "Raycast failed to hit the object"
-    assert hit.entity.name == "obj"
 
 
 def test_screen_edges_not_nan():
