@@ -31,6 +31,9 @@ jobs:
             libsdl2-dev \
             qt6-base-dev
 
+      - name: Install nanobind
+        run: pip install nanobind
+
       - name: Configure with tests
         run: |
           cmake -S . -B build_test \
@@ -67,6 +70,9 @@ jobs:
             libsdl2-dev \
             qt6-base-dev
 
+      - name: Install nanobind
+        run: pip install nanobind
+
       - name: Build via build.sh
         run: ./build.sh
 
@@ -101,7 +107,7 @@ jobs:
             qt6-base-dev
 
       - name: Install Python dependencies
-        run: pip install numpy pytest Pillow scipy
+        run: pip install nanobind numpy pytest Pillow scipy
 
       - name: Build and install
         run: python setup.py install
