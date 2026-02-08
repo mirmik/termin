@@ -110,7 +110,7 @@ jobs:
         run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6
 
       - name: Build and install
-        run: pip install .
+        run: pip install --no-build-isolation .
 
       - name: Run Python tests
         run: python -m pytest tests/ -v
