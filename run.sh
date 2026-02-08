@@ -24,9 +24,6 @@ if [[ ! -f "$EXE" ]]; then
     exit 1
 fi
 
-cd "$INSTALL_DIR"
-export LD_LIBRARY_PATH="./lib/python/termin:./lib:$LD_LIBRARY_PATH"
-
 case "${1:-}" in
     --gdb|-g)
         shift

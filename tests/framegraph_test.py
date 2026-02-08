@@ -16,11 +16,9 @@ class DummyPass(FramePass):
     """Тестовый пасс без реального исполнения."""
 
     def __init__(self, pass_name, reads=None, writes=None, inplace=False):
-        super().__init__(
-            pass_name=pass_name,
-            reads=set(reads or []),
-            writes=set(writes or []),
-        )
+        super().__init__(pass_name=pass_name)
+        self._reads = set(reads or [])
+        self._writes = set(writes or [])
         # Для inplace храним явную пару алиасов
         self._inplace = inplace
         if inplace and reads and writes:
@@ -30,6 +28,12 @@ class DummyPass(FramePass):
         else:
             self._inplace_src = None
             self._inplace_dst = None
+
+    def compute_reads(self):
+        return self._reads
+
+    def compute_writes(self):
+        return self._writes
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         if self._inplace and self._inplace_src and self._inplace_dst:

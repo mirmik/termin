@@ -94,6 +94,7 @@ set_target_properties(trent PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
+    INSTALL_RPATH "$ORIGIN"
 )
 
 # ============== External dependencies ==============
@@ -200,6 +201,7 @@ set_target_properties(entity_lib PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN"
 )
 
 # ============== Skeleton library ==============
@@ -299,6 +301,7 @@ set_target_properties(render_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN"
 )
 
 # ============== Engine library ==============
@@ -319,6 +322,7 @@ set_target_properties(engine_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN"
 )
 
 # ============== NavMesh library ==============
@@ -345,6 +349,7 @@ set_target_properties(navmesh_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN"
 )
 
 # ============== SDL2 (optional) ==============
@@ -428,7 +433,7 @@ if(BUILD_EDITOR_MINIMAL)
     endif()
     install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     set_target_properties(termin_editor PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN/../lib;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )
@@ -455,7 +460,7 @@ if(BUILD_LAUNCHER)
     endif()
     install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     set_target_properties(termin_launcher PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN/../lib;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )
