@@ -514,6 +514,17 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("component"),
            "Create component by type name and add to entity. Returns TcComponentRef.")
 
+        // Add existing C++ component (CxxComponent subclass)
+        .def("add_component", [](Entity& e, CxxComponent& comp) -> TcComponentRef {
+            tc_component* tc = comp.c_component();
+            if (!tc) {
+                throw std::runtime_error("CxxComponent has no tc_component");
+            }
+            e.add_component_ptr(tc);
+            return TcComponentRef(tc);
+        }, nb::arg("component"),
+           "Add existing C++ component to entity. Returns TcComponentRef.")
+
         // Add existing PythonComponent (uses its tc_component instead of factory)
         .def("add_component", [](Entity& e, nb::object comp) -> TcComponentRef {
             // Get tc_component* from PythonComponent._tc.c_ptr_int()

@@ -14,6 +14,16 @@ from termin.visualization.core.entity import Entity
 from termin.editor.gizmo import TransformGizmo, TransformElement, CylinderGeometry, TorusGeometry
 
 
+def make_camera(position: np.ndarray, look_at: np.ndarray,
+                fov_degrees=60.0, near=0.1, far=100.0, aspect=1.0):
+    """Create a camera entity with PerspectiveCameraComponent and return (entity, camera)."""
+    entity = make_camera_entity(position, look_at)
+    cam = PerspectiveCameraComponent(fov_degrees=fov_degrees, near=near, far=far, aspect=aspect)
+    entity.add_component(cam)
+    camera = entity.get_component(PerspectiveCameraComponent)
+    return entity, camera
+
+
 def make_camera_entity(position: np.ndarray, look_at: np.ndarray) -> Entity:
     """Create a camera entity looking at a target point."""
     # Compute orientation: Y-forward convention
@@ -115,10 +125,7 @@ class TestGizmoPickingBasic:
         camera_pos = np.array([0, -5, 2], dtype=np.float32)
         target_pos = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(1.0)  # Square viewport
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=1.0)
 
         # Target entity at origin
         target_entity = Entity(
@@ -174,10 +181,7 @@ class TestGizmoPickingBasic:
         camera_pos = np.array([0, -5, 0], dtype=np.float32)
         target_pos = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(1.0)
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=1.0)
 
         target_entity = Entity(
             pose=GeneralPose3(lin=target_pos),
@@ -231,10 +235,7 @@ class TestGizmoPickingWithRotation:
         camera_pos = np.array([0, -5, 2], dtype=np.float32)
         target_pos = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(1.0)
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=1.0)
 
         # Rotated target entity (45 degrees around Z)
         angle = np.pi / 4
@@ -298,10 +299,7 @@ class TestMatrixConsistency:
         camera_pos = np.array([2, -5, 3], dtype=np.float32)
         target_pos = np.array([1, 1, 0.5], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(1.0)
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=1.0)
 
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
@@ -395,10 +393,7 @@ class TestAspectRatio:
         camera_pos = np.array([0, -5, 2], dtype=np.float32)
         target_pos = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(aspect)
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=aspect)
 
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
@@ -428,10 +423,7 @@ class TestAspectRatio:
         camera_pos = np.array([0, -5, 0], dtype=np.float32)
         target_pos = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(aspect)
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=aspect)
 
         target_entity = Entity(
             pose=GeneralPose3(lin=target_pos),
@@ -489,10 +481,7 @@ class TestOffCenterObject:
         target_pos = target_offset.copy()
 
         # Camera still looks at origin area
-        camera_entity = make_camera_entity(camera_pos, np.array([0, 0, 0]))
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(16/9)
+        camera_entity, camera = make_camera(camera_pos, np.array([0, 0, 0]), aspect=16/9)
 
         target_entity = Entity(
             pose=GeneralPose3(lin=target_pos),
@@ -556,10 +545,7 @@ class TestScreenEdges:
         camera_pos = np.array([0, -5, 2], dtype=np.float32)
         look_at = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, look_at)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(16/9)
+        camera_entity, camera = make_camera(camera_pos, look_at, aspect=16/9)
 
         width, height = 1920, 1080
         viewport_rect = (0, 0, width, height)
@@ -606,10 +592,7 @@ class TestScreenEdges:
         camera_pos = np.array([0, -5, 2], dtype=np.float32)
         look_at = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, look_at)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(aspect)
+        camera_entity, camera = make_camera(camera_pos, look_at, aspect=aspect)
 
         viewport_rect = (0, 0, width, height)
         view = camera.get_view_matrix()
@@ -659,10 +642,7 @@ class TestCameraAngles:
         """Picking should work from various camera angles."""
         target_pos = np.array([0, 0, 0], dtype=np.float32)
 
-        camera_entity = make_camera_entity(camera_pos, target_pos)
-        camera = PerspectiveCameraComponent(fov_y_degrees=60.0, near=0.1, far=100.0)
-        camera.entity = camera_entity
-        camera.set_aspect(16/9)
+        camera_entity, camera = make_camera(camera_pos, target_pos, aspect=16/9)
 
         target_entity = Entity(
             pose=GeneralPose3(lin=target_pos),
