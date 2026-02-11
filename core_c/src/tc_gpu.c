@@ -362,26 +362,34 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         return 0;
     }
 
-    tc_gpu_mesh_slot* slot = tc_gpu_context_mesh_slot(ctx, mesh->header.pool_index);
-    if (!slot) {
-        tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: failed to get context slot");
+    tc_gpu_share_group* group = ctx->share_group;
+    tc_gpu_mesh_data_slot* shared = tc_gpu_share_group_mesh_data_slot(group, mesh->header.pool_index);
+    tc_gpu_vao_slot* vao_slot = tc_gpu_context_vao_slot(ctx, mesh->header.pool_index);
+    if (!shared || !vao_slot) {
+        tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: failed to get slots");
         return 0;
     }
 
-    bool data_current = (slot->vbo != 0 &&
-                         slot->version == (int32_t)mesh->header.version);
+    bool data_current = (shared->vbo != 0 &&
+                         shared->version == (int32_t)mesh->header.version);
 
     if (data_current) {
-        // VBO/EBO data is up to date. Check if VAO exists.
-        if (slot->vao != 0) {
-            mesh->gpu_vao = slot->vao;
-            return slot->vao;
+        // VBO/EBO data is up to date. Check if VAO exists and is not stale.
+        if (vao_slot->vao != 0 &&
+            vao_slot->bound_vbo == shared->vbo &&
+            vao_slot->bound_ebo == shared->ebo) {
+            mesh->gpu_vao = vao_slot->vao;
+            return vao_slot->vao;
         }
 
-        // Create VAO for this context (reuse VBO/EBO)
+        // VAO missing or stale — (re)create from shared VBO/EBO
+        if (vao_slot->vao != 0 && g_gpu_ops->mesh_delete) {
+            g_gpu_ops->mesh_delete(vao_slot->vao);
+        }
+
         // Write-through needed for mesh_create_vao which reads mesh->gpu_vbo/ebo
-        mesh->gpu_vbo = slot->vbo;
-        mesh->gpu_ebo = slot->ebo;
+        mesh->gpu_vbo = shared->vbo;
+        mesh->gpu_ebo = shared->ebo;
 
         uint32_t vao = 0;
         if (g_gpu_ops->mesh_create_vao) {
@@ -393,28 +401,30 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
             return 0;
         }
 
-        slot->vao = vao;
+        vao_slot->vao = vao;
+        vao_slot->bound_vbo = shared->vbo;
+        vao_slot->bound_ebo = shared->ebo;
         mesh->gpu_vao = vao;
         return vao;
     }
 
     // VBO/EBO data needs upload (first time or version changed).
-    // Delete existing VAO
-    if (slot->vao != 0 && g_gpu_ops->mesh_delete) {
-        g_gpu_ops->mesh_delete(slot->vao);
-        slot->vao = 0;
+    // Delete existing per-context VAO
+    if (vao_slot->vao != 0 && g_gpu_ops->mesh_delete) {
+        g_gpu_ops->mesh_delete(vao_slot->vao);
+        vao_slot->vao = 0;
+        vao_slot->bound_vbo = 0;
+        vao_slot->bound_ebo = 0;
     }
-    // Delete old VBO/EBO if this context owns shared resources
-    if (ctx->owns_shared_resources) {
-        if (slot->vbo != 0 && g_gpu_ops->buffer_delete) {
-            g_gpu_ops->buffer_delete(slot->vbo);
-        }
-        if (slot->ebo != 0 && g_gpu_ops->buffer_delete) {
-            g_gpu_ops->buffer_delete(slot->ebo);
-        }
+    // Delete old shared VBO/EBO
+    if (shared->vbo != 0 && g_gpu_ops->buffer_delete) {
+        g_gpu_ops->buffer_delete(shared->vbo);
     }
-    slot->vbo = 0;
-    slot->ebo = 0;
+    if (shared->ebo != 0 && g_gpu_ops->buffer_delete) {
+        g_gpu_ops->buffer_delete(shared->ebo);
+    }
+    shared->vbo = 0;
+    shared->ebo = 0;
 
     mesh->gpu_vao = 0;
     mesh->gpu_vbo = 0;
@@ -428,11 +438,15 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         return 0;
     }
 
-    // Store in context slot (mesh_upload writes gpu_vbo/gpu_ebo to mesh)
-    slot->vao = vao;
-    slot->vbo = mesh->gpu_vbo;
-    slot->ebo = mesh->gpu_ebo;
-    slot->version = (int32_t)mesh->header.version;
+    // Store shared data (mesh_upload writes gpu_vbo/gpu_ebo to mesh)
+    shared->vbo = mesh->gpu_vbo;
+    shared->ebo = mesh->gpu_ebo;
+    shared->version = (int32_t)mesh->header.version;
+
+    // Store per-context VAO
+    vao_slot->vao = vao;
+    vao_slot->bound_vbo = mesh->gpu_vbo;
+    vao_slot->bound_ebo = mesh->gpu_ebo;
 
     mesh->gpu_vao = vao;
     mesh->gpu_version = (int32_t)mesh->header.version;
@@ -449,26 +463,26 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
         return;
     }
 
-    tc_gpu_mesh_slot* slot = tc_gpu_context_mesh_slot(ctx, mesh->header.pool_index);
-    if (!slot) {
+    tc_gpu_share_group* group = ctx->share_group;
+    tc_gpu_mesh_data_slot* shared = tc_gpu_share_group_mesh_data_slot(group, mesh->header.pool_index);
+    tc_gpu_vao_slot* vao_slot = tc_gpu_context_vao_slot(ctx, mesh->header.pool_index);
+    if (!shared || !vao_slot) {
         return;
     }
 
     // Check if VBO/EBO data is current
-    bool data_stale = (slot->vbo == 0 ||
-                       slot->version != (int32_t)mesh->header.version);
+    bool data_stale = (shared->vbo == 0 ||
+                       shared->version != (int32_t)mesh->header.version);
 
-    if (data_stale) {
-        if (tc_mesh_upload_gpu(mesh) == 0) {
-            return;
-        }
-    } else if (slot->vao == 0) {
-        // Data current but no VAO — create one
+    if (data_stale || vao_slot->vao == 0 ||
+        vao_slot->bound_vbo != shared->vbo ||
+        vao_slot->bound_ebo != shared->ebo) {
+        // Need upload or VAO recreation
         if (tc_mesh_upload_gpu(mesh) == 0) {
             return;
         }
     } else {
-        mesh->gpu_vao = slot->vao;
+        mesh->gpu_vao = vao_slot->vao;
     }
 
     if (g_gpu_ops && g_gpu_ops->mesh_draw) {
@@ -491,25 +505,30 @@ void tc_mesh_delete_gpu(tc_mesh* mesh) {
         return;
     }
 
-    tc_gpu_mesh_slot* slot = tc_gpu_context_mesh_slot(ctx, mesh->header.pool_index);
-    if (slot) {
-        // Delete VAO (per-context)
-        if (slot->vao != 0 && g_gpu_ops && g_gpu_ops->mesh_delete) {
-            g_gpu_ops->mesh_delete(slot->vao);
+    // Delete per-context VAO
+    tc_gpu_vao_slot* vao_slot = tc_gpu_context_vao_slot(ctx, mesh->header.pool_index);
+    if (vao_slot) {
+        if (vao_slot->vao != 0 && g_gpu_ops && g_gpu_ops->mesh_delete) {
+            g_gpu_ops->mesh_delete(vao_slot->vao);
         }
-        // Delete VBO/EBO only if this context owns shared resources
-        if (ctx->owns_shared_resources && g_gpu_ops) {
-            if (slot->vbo != 0 && g_gpu_ops->buffer_delete) {
-                g_gpu_ops->buffer_delete(slot->vbo);
-            }
-            if (slot->ebo != 0 && g_gpu_ops->buffer_delete) {
-                g_gpu_ops->buffer_delete(slot->ebo);
-            }
+        vao_slot->vao = 0;
+        vao_slot->bound_vbo = 0;
+        vao_slot->bound_ebo = 0;
+    }
+
+    // Delete shared VBO/EBO
+    tc_gpu_share_group* group = ctx->share_group;
+    tc_gpu_mesh_data_slot* shared = tc_gpu_share_group_mesh_data_slot(group, mesh->header.pool_index);
+    if (shared && g_gpu_ops) {
+        if (shared->vbo != 0 && g_gpu_ops->buffer_delete) {
+            g_gpu_ops->buffer_delete(shared->vbo);
         }
-        slot->vao = 0;
-        slot->vbo = 0;
-        slot->ebo = 0;
-        slot->version = -1;
+        if (shared->ebo != 0 && g_gpu_ops->buffer_delete) {
+            g_gpu_ops->buffer_delete(shared->ebo);
+        }
+        shared->vbo = 0;
+        shared->ebo = 0;
+        shared->version = -1;
     }
 
     mesh->gpu_vao = 0;

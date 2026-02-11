@@ -574,6 +574,9 @@ public static class TerminCore
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void RenderSurfaceDestroyDelegate(IntPtr surface);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate nuint RenderSurfaceShareGroupKeyDelegate(IntPtr surface);
+
     // VTable structure (must match tc_render_surface_vtable in C)
     [StructLayout(LayoutKind.Sequential)]
     public struct RenderSurfaceVTable
@@ -589,6 +592,7 @@ public static class TerminCore
         public IntPtr set_should_close;
         public IntPtr get_cursor_pos;
         public IntPtr destroy;
+        public IntPtr share_group_key;
     }
 
     [DllImport(DLL, EntryPoint = "tc_render_surface_new_external")]

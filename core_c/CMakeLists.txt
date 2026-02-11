@@ -28,6 +28,7 @@ set(TC_SOURCES
     src/tc_frame_graph.c
     src/tc_gpu.c
     src/tc_gpu_context.c
+    src/tc_gpu_share_group.c
     src/tc_hash_map.c
     src/tc_inspect.c
     src/tc_kind.c

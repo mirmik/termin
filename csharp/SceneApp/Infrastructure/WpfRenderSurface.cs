@@ -27,6 +27,7 @@ public class WpfRenderSurface : IDisposable
     private TerminCore.RenderSurfaceSetShouldCloseDelegate? _setShouldClose;
     private TerminCore.RenderSurfaceGetCursorPosDelegate? _getCursorPos;
     private TerminCore.RenderSurfaceDestroyDelegate? _destroy;
+    private TerminCore.RenderSurfaceShareGroupKeyDelegate? _shareGroupKey;
     private TerminCore.RenderSurfaceVTable _vtable;
 
     public IntPtr SurfacePtr => _surfacePtr;
@@ -53,6 +54,7 @@ public class WpfRenderSurface : IDisposable
         _setShouldClose = SetShouldCloseCallback;
         _getCursorPos = GetCursorPosCallback;
         _destroy = DestroyCallback;
+        _shareGroupKey = ShareGroupKeyCallback;
 
         _vtable = new TerminCore.RenderSurfaceVTable
         {
@@ -67,6 +69,7 @@ public class WpfRenderSurface : IDisposable
             set_should_close = Marshal.GetFunctionPointerForDelegate(_setShouldClose),
             get_cursor_pos = Marshal.GetFunctionPointerForDelegate(_getCursorPos),
             destroy = Marshal.GetFunctionPointerForDelegate(_destroy),
+            share_group_key = Marshal.GetFunctionPointerForDelegate(_shareGroupKey),
         };
 
         _surfacePtr = TerminCore.RenderSurfaceNewExternal(GCHandle.ToIntPtr(_selfHandle), ref _vtable);
@@ -107,6 +110,7 @@ public class WpfRenderSurface : IDisposable
     private static void MakeCurrentCallback(IntPtr surface) { }
     private static void SwapBuffersCallback(IntPtr surface) { }
     private static nuint ContextKeyCallback(IntPtr surface) => (nuint)surface;
+    private static nuint ShareGroupKeyCallback(IntPtr surface) => 1;
     private static void PollEventsCallback(IntPtr surface) { }
     private static void GetWindowSizeCallback(IntPtr surface, out int width, out int height) => GetSizeCallback(surface, out width, out height);
     private static bool ShouldCloseCallback(IntPtr surface) => GetSelf(surface)?._shouldClose ?? false;

@@ -602,7 +602,7 @@ public:
         // but standalone paths (launcher, examples) don't — create a default one.
         if (!tc_gpu_get_context()) {
             if (!default_gpu_context_) {
-                default_gpu_context_ = tc_gpu_context_new(0);
+                default_gpu_context_ = tc_gpu_context_new(0, NULL);
             }
             tc_gpu_set_context(default_gpu_context_);
         }
@@ -1211,19 +1211,25 @@ private:
             return;
         }
 
+        // VAO is per-context
         if (ctx->backend_ui_vao != 0 && glIsVertexArray(ctx->backend_ui_vao)) {
             ui_vao_ = ctx->backend_ui_vao;
-            ui_vbo_ = ctx->backend_ui_vbo;
+            ui_vbo_ = ctx->share_group->backend_ui_vbo;
             return;
         }
 
-        GLuint vao, vbo;
+        GLuint vao;
         glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
         ctx->backend_ui_vao = vao;
-        ctx->backend_ui_vbo = vbo;
         ui_vao_ = vao;
-        ui_vbo_ = vbo;
+
+        // VBO is shared
+        if (ctx->share_group->backend_ui_vbo == 0) {
+            GLuint vbo;
+            glGenBuffers(1, &vbo);
+            ctx->share_group->backend_ui_vbo = vbo;
+        }
+        ui_vbo_ = ctx->share_group->backend_ui_vbo;
     }
 
     void draw_immediate_impl(const float* vertices, int vertex_count, GLenum mode) {
@@ -1248,15 +1254,23 @@ private:
             return;
         }
 
+        // VAO is per-context
         if (ctx->backend_immediate_vao != 0 && glIsVertexArray(ctx->backend_immediate_vao)) {
             immediate_vao_ = ctx->backend_immediate_vao;
-            immediate_vbo_ = ctx->backend_immediate_vbo;
+            immediate_vbo_ = ctx->share_group->backend_immediate_vbo;
             return;
         }
 
-        GLuint vao, vbo;
+        // VBO is shared
+        if (ctx->share_group->backend_immediate_vbo == 0) {
+            GLuint vbo;
+            glGenBuffers(1, &vbo);
+            ctx->share_group->backend_immediate_vbo = vbo;
+        }
+        GLuint vbo = ctx->share_group->backend_immediate_vbo;
+
+        GLuint vao;
         glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
 
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -1271,7 +1285,6 @@ private:
         glBindVertexArray(0);
 
         ctx->backend_immediate_vao = vao;
-        ctx->backend_immediate_vbo = vbo;
         immediate_vao_ = vao;
         immediate_vbo_ = vbo;
     }

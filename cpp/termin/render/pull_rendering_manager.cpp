@@ -146,7 +146,12 @@ void PullRenderingManager::render_display(tc_display* display) {
     // Make display context current and set GPUContext for per-context resource management
     tc_render_surface_make_current(surface);
     if (!surface->gpu_context) {
-        surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface));
+        {
+            uintptr_t sg_key = tc_render_surface_share_group_key(surface);
+            tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
+            surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface), group);
+            tc_gpu_share_group_unref(group);
+        }
     }
     tc_gpu_set_context(surface->gpu_context);
 

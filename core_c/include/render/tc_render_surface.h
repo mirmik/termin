@@ -66,6 +66,10 @@ struct tc_render_surface_vtable {
 
     // Cleanup
     void (*destroy)(tc_render_surface* self);
+
+    // Share group key — surfaces with the same key share GL resources
+    // (textures, shaders, VBO/EBO). NULL = fallback to context_key (no sharing).
+    uintptr_t (*share_group_key)(tc_render_surface* self);
 };
 
 // ============================================================================
@@ -164,6 +168,14 @@ static inline void tc_render_surface_destroy(tc_render_surface* s) {
     if (s && s->vtable && s->vtable->destroy) {
         s->vtable->destroy(s);
     }
+}
+
+static inline uintptr_t tc_render_surface_share_group_key(tc_render_surface* s) {
+    if (s && s->vtable && s->vtable->share_group_key) {
+        return s->vtable->share_group_key(s);
+    }
+    // Fallback: same as context_key (no sharing, each surface = own group)
+    return tc_render_surface_context_key(s);
 }
 
 static inline void tc_render_surface_poll_events(tc_render_surface* s) {
