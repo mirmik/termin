@@ -161,18 +161,27 @@ def build_scene() -> tuple[Scene, PerspectiveCameraComponent, PerspectiveCameraC
     scene.add(sphere)
 
     # Camera 1 — front view
-    cam1_entity = Entity(name="camera1")
+    cam1_entity = Entity(
+        pose=Pose3.looking_at([0, -4, 0], [0, 0, 0]),
+        name="camera1",
+    )
     camera1 = PerspectiveCameraComponent()
     cam1_entity.add_component(camera1)
     cam1_entity.add_component(OrbitCameraController(radius=4.0))
     scene.add(cam1_entity)
 
     # Camera 2 — side view
-    cam2_entity = Entity(name="camera2")
+    cam2_entity = Entity(
+        pose=Pose3.looking_at([4, 0, 0], [0, 0, 0]),
+        name="camera2",
+    )
     camera2 = PerspectiveCameraComponent()
     cam2_entity.add_component(camera2)
-    cam2_entity.add_component(OrbitCameraController(radius=4.0, yaw=1.57))
+    cam2_entity.add_component(OrbitCameraController(radius=4.0))
     scene.add(cam2_entity)
+
+    # Start component lifecycle (on_added, first update)
+    scene.update(0)
 
     return scene, camera1, camera2
 

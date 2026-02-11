@@ -203,40 +203,6 @@ static void external_destroy(tc_pass* p) {
     }
 }
 
-static void external_retain(tc_pass* p) {
-    if (g_external_callbacks.incref && p->body) {
-        g_external_callbacks.incref(p->body);
-    }
-}
-
-static void external_release(tc_pass* p) {
-    if (g_external_callbacks.decref && p->body) {
-        g_external_callbacks.decref(p->body);
-    }
-}
-
-static void external_drop(tc_pass* p) {
-    if (!p) return;
-
-    // Unlink from registry
-    tc_pass_unlink_from_registry(p);
-
-    // Decrement Python refcount
-    if (g_external_callbacks.decref && p->body) {
-        g_external_callbacks.decref(p->body);
-        p->body = NULL;
-    }
-
-    // Free pass_name
-    if (p->pass_name) {
-        free(p->pass_name);
-        p->pass_name = NULL;
-    }
-
-    // Free the tc_pass struct itself
-    free(p);
-}
-
 static const tc_pass_vtable g_external_vtable = {
     .execute = external_execute,
     .get_reads = external_get_reads,
@@ -245,9 +211,6 @@ static const tc_pass_vtable g_external_vtable = {
     .get_resource_specs = external_get_resource_specs,
     .get_internal_symbols = external_get_internal_symbols,
     .destroy = external_destroy,
-    .drop = external_drop,
-    .retain = external_retain,
-    .release = external_release,
     .serialize = NULL,
     .deserialize = NULL,
 };
@@ -258,13 +221,13 @@ void tc_pass_set_external_callbacks(const tc_external_pass_callbacks* callbacks)
     }
 }
 
-tc_pass* tc_pass_new_external(void* body, const char* type_name) {
+tc_pass* tc_pass_new_external(void* body, const char* type_name, const tc_pass_ref_vtable* ref_vtable) {
     tc_pass* p = (tc_pass*)calloc(1, sizeof(tc_pass));
     if (!p) return NULL;
 
     tc_pass_init(p, &g_external_vtable);
     p->body = body;
-    p->externally_managed = true;
+    p->ref_vtable = ref_vtable;
     p->kind = TC_EXTERNAL_PASS;
 
     // Link to type registry for type name and instance tracking
@@ -301,14 +264,3 @@ void tc_pass_free_external(tc_pass* p) {
     }
 }
 
-void tc_pass_body_incref(void* body) {
-    if (g_external_callbacks.incref && body) {
-        g_external_callbacks.incref(body);
-    }
-}
-
-void tc_pass_body_decref(void* body) {
-    if (g_external_callbacks.decref && body) {
-        g_external_callbacks.decref(body);
-    }
-}

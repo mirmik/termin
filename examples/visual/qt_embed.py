@@ -159,11 +159,17 @@ def build_scene() -> tuple[Scene, PerspectiveCameraComponent]:
     scene = Scene.create(name="qt_embed")
     scene.add(sphere)
 
-    cam_entity = Entity(name="camera")
+    cam_entity = Entity(
+        pose=Pose3.looking_at([0, -4, 0], [0, 0, 0]),
+        name="camera",
+    )
     camera = PerspectiveCameraComponent()
     cam_entity.add_component(camera)
     cam_entity.add_component(OrbitCameraController(radius=4.0))
     scene.add(cam_entity)
+
+    # Start component lifecycle (on_added, first update)
+    scene.update(0)
 
     return scene, camera
 

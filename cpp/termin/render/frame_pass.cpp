@@ -16,6 +16,31 @@ extern "C" {
 namespace termin {
 
 // ============================================================================
+// C++ ref_vtable for CxxFramePass
+// ============================================================================
+
+static void cxx_pass_ref_retain(tc_pass* p) {
+    auto* self = CxxFramePass::from_tc(p);
+    if (self) self->retain();
+}
+
+static void cxx_pass_ref_release(tc_pass* p) {
+    auto* self = CxxFramePass::from_tc(p);
+    if (self) self->release();
+}
+
+static void cxx_pass_ref_drop(tc_pass* p) {
+    auto* self = CxxFramePass::from_tc(p);
+    if (self) delete self;
+}
+
+static const tc_pass_ref_vtable g_cxx_pass_ref_vtable = {
+    cxx_pass_ref_retain,
+    cxx_pass_ref_release,
+    cxx_pass_ref_drop,
+};
+
+// ============================================================================
 // Static vtable callbacks - use from_tc() to recover C++ object
 // ============================================================================
 
@@ -114,37 +139,6 @@ void CxxFramePass::_cb_destroy(tc_pass* p) {
     }
 }
 
-void CxxFramePass::_cb_drop(tc_pass* p) {
-    CxxFramePass* self = from_tc(p);
-    if (self && !p->externally_managed) {
-        delete self;
-    }
-}
-
-void CxxFramePass::_cb_retain(tc_pass* p) {
-    if (!p) return;
-    if (p->externally_managed && p->body) {
-        tc_pass_body_incref(p->body);
-    } else {
-        CxxFramePass* self = from_tc(p);
-        if (self) {
-            self->retain();
-        }
-    }
-}
-
-void CxxFramePass::_cb_release(tc_pass* p) {
-    if (!p) return;
-    if (p->externally_managed && p->body) {
-        tc_pass_body_decref(p->body);
-    } else {
-        CxxFramePass* self = from_tc(p);
-        if (self) {
-            self->release();
-        }
-    }
-}
-
 // ============================================================================
 // Static vtable definition
 // ============================================================================
@@ -157,9 +151,6 @@ const tc_pass_vtable CxxFramePass::_cpp_vtable = {
     .get_resource_specs = CxxFramePass::_cb_get_resource_specs,
     .get_internal_symbols = CxxFramePass::_cb_get_internal_symbols,
     .destroy = CxxFramePass::_cb_destroy,
-    .drop = CxxFramePass::_cb_drop,
-    .retain = CxxFramePass::_cb_retain,
-    .release = CxxFramePass::_cb_release,
     .serialize = nullptr,
     .deserialize = nullptr,
 };
@@ -182,6 +173,7 @@ CxxFramePass::~CxxFramePass() {
 
 void CxxFramePass::_init_tc_pass() {
     tc_pass_init(&_c, &_cpp_vtable);
+    _c.ref_vtable = &g_cxx_pass_ref_vtable;
     _c.kind = TC_NATIVE_PASS;
 }
 

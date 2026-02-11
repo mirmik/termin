@@ -64,7 +64,7 @@ class EditorWindow(QMainWindow):
     def instance(cls) -> "EditorWindow | None":
         return cls._instance
 
-    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager):
+    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager, graphics=None):
         super().__init__()
         EditorWindow._instance = self
         self.undo_stack = UndoStack()
@@ -74,6 +74,7 @@ class EditorWindow(QMainWindow):
 
         self.world = world
         self._sdl_backend = sdl_backend
+        self._graphics = graphics
 
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager.instance()
@@ -249,7 +250,7 @@ class EditorWindow(QMainWindow):
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
             window_backend=self._sdl_backend,
-            graphics=self.world.graphics,
+            graphics=self._graphics,
         )
 
         # Для обратной совместимости
@@ -285,7 +286,7 @@ class EditorWindow(QMainWindow):
         from termin._native.editor import EditorInteractionSystem, EditorDisplayInputManager as CppEditorDisplayInputManager
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
-        self._interaction_system.set_graphics(self.world.graphics)
+        self._interaction_system.set_graphics(self._graphics)
         self.gizmo_manager = self._interaction_system.gizmo_manager
 
         # Per-display C++ input managers: tc_display_ptr -> EditorDisplayInputManager
@@ -350,7 +351,7 @@ class EditorWindow(QMainWindow):
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
 
-        RenderingManager.instance().set_graphics(self.world.graphics)
+        RenderingManager.instance().set_graphics(self._graphics)
         self.scene_manager.set_on_after_render(self._after_render)
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
@@ -590,7 +591,7 @@ class EditorWindow(QMainWindow):
         """
         debugger = self._dialog_manager.show_framegraph_debugger(
             window_backend=self._sdl_backend,
-            graphics=self.world.graphics,
+            graphics=self._graphics,
             rendering_controller=self._rendering_controller,
             on_request_update=self._request_viewport_update,
             initial_resource=initial_resource,
@@ -851,13 +852,13 @@ class EditorWindow(QMainWindow):
     def _get_graphics(self):
         """Get GraphicsBackend from world."""
         if self.world is not None:
-            return self.world.graphics
+            return self._graphics
         return None
 
     def _get_window_backend(self):
         """Get WindowBackend from world."""
         if self.world is not None:
-            return self.world.window_backend
+            return self._sdl_backend
         return None
 
     def _get_render_engine(self):

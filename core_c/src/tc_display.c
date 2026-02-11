@@ -1,5 +1,6 @@
 // tc_display.c - Display implementation
 #include "render/tc_display.h"
+#include "tc_gpu.h"
 #include "tc_log.h"
 #include <stdlib.h>
 #include <string.h>
@@ -164,6 +165,7 @@ void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y) 
 void tc_display_make_current(tc_display* display) {
     if (display && display->surface) {
         tc_render_surface_make_current(display->surface);
+        tc_gpu_set_context_key(tc_render_surface_context_key(display->surface));
     }
 }
 

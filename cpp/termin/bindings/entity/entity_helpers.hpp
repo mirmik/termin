@@ -20,6 +20,25 @@ namespace nb = nanobind;
 namespace termin {
 
 // ============================================================================
+// Python ref_vtable for CxxComponents created from Python
+// ============================================================================
+
+// retain = Py_INCREF(body), release = Py_DECREF(body), drop = NULL (Python GC owns object)
+inline void py_component_ref_retain(tc_component* c) {
+    if (c && c->body) Py_INCREF(reinterpret_cast<PyObject*>(c->body));
+}
+
+inline void py_component_ref_release(tc_component* c) {
+    if (c && c->body) Py_DECREF(reinterpret_cast<PyObject*>(c->body));
+}
+
+inline const tc_component_ref_vtable g_py_component_ref_vtable = {
+    py_component_ref_retain,
+    py_component_ref_release,
+    nullptr,  // drop: Python GC owns the object, no forced destroy
+};
+
+// ============================================================================
 // CxxComponent Python init helper
 // ============================================================================
 
@@ -32,6 +51,7 @@ void cxx_component_init(nb::handle self, Args&&... args) {
     new (cpp) T(std::forward<Args>(args)...);
     cpp->c_component()->body = self.ptr();
     cpp->c_component()->native_language = TC_LANGUAGE_PYTHON;
+    cpp->c_component()->ref_vtable = &g_py_component_ref_vtable;
     nb::inst_mark_ready(self);
 }
 

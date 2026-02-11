@@ -85,17 +85,27 @@ static void py_vtable_on_editor_start(tc_component* c) {
     }
 }
 
-static void py_vtable_retain(tc_component* c) {
+// ============================================================================
+// Python ref_vtable for PythonComponent (TC_EXTERNAL_COMPONENT)
+// ============================================================================
+
+static void py_ext_ref_retain(tc_component* c) {
     if (g_py_callbacks.incref && c->body) {
         g_py_callbacks.incref(c->body);
     }
 }
 
-static void py_vtable_release(tc_component* c) {
+static void py_ext_ref_release(tc_component* c) {
     if (g_py_callbacks.decref && c->body) {
         g_py_callbacks.decref(c->body);
     }
 }
+
+static const tc_component_ref_vtable g_py_ext_component_ref_vtable = {
+    py_ext_ref_retain,
+    py_ext_ref_release,
+    NULL,  // drop: Python GC owns the object
+};
 
 // ============================================================================
 // External component vtable (static, shared by all external components)
@@ -115,9 +125,6 @@ static const tc_component_vtable g_python_vtable = {
     .on_scene_active = py_vtable_on_scene_active,
     .on_editor_start = py_vtable_on_editor_start,
     .setup_editor_defaults = NULL,  // External code handles this differently
-    .drop = NULL,  // External code manages its own memory
-    .retain = py_vtable_retain,
-    .release = py_vtable_release,
     .serialize = NULL,
     .deserialize = NULL,
 };
@@ -138,6 +145,7 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
 
     // Initialize with Python vtable
     tc_component_init(c, &g_python_vtable);
+    c->ref_vtable = &g_py_ext_component_ref_vtable;
 
     // Store Python object pointer as body (this is a Python-native component)
     c->body = py_self;

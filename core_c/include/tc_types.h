@@ -65,6 +65,7 @@ typedef struct tc_transform tc_transform;
 typedef struct tc_entity tc_entity;
 typedef struct tc_component tc_component;
 typedef struct tc_component_vtable tc_component_vtable;
+typedef struct tc_component_ref_vtable tc_component_ref_vtable;
 typedef struct tc_drawable_vtable tc_drawable_vtable;
 typedef struct tc_input_vtable tc_input_vtable;
 typedef struct tc_scene tc_scene;

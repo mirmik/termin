@@ -43,16 +43,35 @@ extern "C" {
 
 namespace termin {
 
+// Python ref_vtable for CxxFramePass created from Python (defined in tc_pass_bindings.cpp)
+extern const tc_pass_ref_vtable g_py_pass_ref_vtable;
+
+// Python ref_vtable for CxxFramePass wrappers: retain=Py_INCREF, release=Py_DECREF, drop=NULL
+// (C++ CxxFramePass still owns memory; Python just holds a reference)
+static void py_cxx_pass_ref_retain(tc_pass* p) {
+    if (p && p->body) Py_INCREF(reinterpret_cast<PyObject*>(p->body));
+}
+
+static void py_cxx_pass_ref_release(tc_pass* p) {
+    if (p && p->body) Py_DECREF(reinterpret_cast<PyObject*>(p->body));
+}
+
+static const tc_pass_ref_vtable g_py_cxx_pass_ref_vtable = {
+    py_cxx_pass_ref_retain,
+    py_cxx_pass_ref_release,
+    nullptr,  // drop: C++ owns the CxxFramePass, no forced destroy
+};
+
 // ============================================================================
 // Helper to initialize C++ pass created from Python bindings
-// Combines: link_to_type_registry + set_external_body + Py_INCREF
+// Combines: link_to_type_registry + set_python_ref + Py_INCREF
 // ============================================================================
 
 template<typename T>
 void init_pass_from_python(T* self, const char* type_name) {
     self->link_to_type_registry(type_name);
     nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
-    self->set_external_body(wrapper.ptr());
+    self->set_python_ref(wrapper.ptr(), &g_py_cxx_pass_ref_vtable);
     Py_INCREF(wrapper.ptr());
 }
 
@@ -61,7 +80,7 @@ template<typename T>
 nb::object init_pass_from_deserialize(T* pass, const char* type_name) {
     pass->link_to_type_registry(type_name);
     nb::object wrapper = nb::cast(pass, nb::rv_policy::take_ownership);
-    pass->set_external_body(wrapper.ptr());
+    pass->set_python_ref(wrapper.ptr(), &g_py_cxx_pass_ref_vtable);
     Py_INCREF(wrapper.ptr());
     return wrapper;
 }
@@ -441,7 +460,7 @@ void bind_frame_pass(nb::module_& m) {
                 return TcPassRef(p.tc_pass_ptr());
             })
         .def("_set_py_wrapper", [](CxxFramePass& p, nb::object py_self) {
-            p.set_external_body(py_self.ptr());
+            p.set_python_ref(py_self.ptr(), &g_py_cxx_pass_ref_vtable);
             Py_INCREF(py_self.ptr());
         }, nb::arg("py_self"))
         .def("__repr__", [](const CxxFramePass& p) {

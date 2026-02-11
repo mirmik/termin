@@ -21,6 +21,7 @@ extern "C" {
 // Forward declarations
 typedef struct tc_pass tc_pass;
 typedef struct tc_pass_vtable tc_pass_vtable;
+typedef struct tc_pass_ref_vtable tc_pass_ref_vtable;
 typedef struct tc_execute_context tc_execute_context;
 
 // ============================================================================
@@ -53,6 +54,16 @@ struct tc_execute_context {
 };
 
 // ============================================================================
+// Reference counting VTable - separate from main vtable
+// ============================================================================
+
+struct tc_pass_ref_vtable {
+    void (*retain)(tc_pass* self);
+    void (*release)(tc_pass* self);
+    void (*drop)(tc_pass* self);
+};
+
+// ============================================================================
 // Pass VTable - virtual method table for passes
 // ============================================================================
 
@@ -78,13 +89,6 @@ struct tc_pass_vtable {
     // Cleanup
     void (*destroy)(tc_pass* self);
 
-    // Memory management
-    void (*drop)(tc_pass* self);
-
-    // Reference counting for external wrappers
-    void (*retain)(tc_pass* self);
-    void (*release)(tc_pass* self);
-
     // Serialization (optional)
     void* (*serialize)(const tc_pass* self);
     void (*deserialize)(tc_pass* self, const void* data);
@@ -97,6 +101,9 @@ struct tc_pass_vtable {
 struct tc_pass {
     // Virtual method table
     const tc_pass_vtable* vtable;
+
+    // Reference counting vtable (separate from main vtable)
+    const tc_pass_ref_vtable* ref_vtable;
 
     // Basic fields
     char* pass_name;
@@ -111,7 +118,6 @@ struct tc_pass {
     // Language support
     tc_pass_kind kind;
     tc_language native_language; // Which language the pass type is defined in
-    bool externally_managed;
     void* body;                  // External object (PyObject*, etc.) for TC_EXTERNAL_PASS
 
     // Language bindings - wrappers for accessing this pass from other languages
@@ -135,6 +141,7 @@ struct tc_pass {
 
 static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->vtable = vtable;
+    p->ref_vtable = NULL;
     p->pass_name = NULL;
     p->enabled = true;
     p->passthrough = false;
@@ -143,7 +150,6 @@ static inline void tc_pass_init(tc_pass* p, const tc_pass_vtable* vtable) {
     p->debug_capture = NULL;
     p->kind = TC_NATIVE_PASS;
     p->native_language = TC_LANGUAGE_CXX;
-    p->externally_managed = false;
     p->body = NULL;
     for (int i = 0; i < TC_LANGUAGE_MAX; i++) {
         p->bindings[i] = NULL;
@@ -238,20 +244,20 @@ static inline void tc_pass_destroy(tc_pass* p) {
 }
 
 static inline void tc_pass_drop(tc_pass* p) {
-    if (p && p->vtable && p->vtable->drop) {
-        p->vtable->drop(p);
+    if (p && p->ref_vtable && p->ref_vtable->drop) {
+        p->ref_vtable->drop(p);
     }
 }
 
 static inline void tc_pass_retain(tc_pass* p) {
-    if (p && p->vtable && p->vtable->retain) {
-        p->vtable->retain(p);
+    if (p && p->ref_vtable && p->ref_vtable->retain) {
+        p->ref_vtable->retain(p);
     }
 }
 
 static inline void tc_pass_release(tc_pass* p) {
-    if (p && p->vtable && p->vtable->release) {
-        p->vtable->release(p);
+    if (p && p->ref_vtable && p->ref_vtable->release) {
+        p->ref_vtable->release(p);
     }
 }
 
@@ -311,17 +317,11 @@ typedef struct {
     size_t (*get_resource_specs)(void* body, void* out, size_t max);  // out is ResourceSpec* (C++)
     size_t (*get_internal_symbols)(void* body, const char** out, size_t max);
     void (*destroy)(void* body);
-    void (*incref)(void* body);
-    void (*decref)(void* body);
 } tc_external_pass_callbacks;
 
 TC_API void tc_pass_set_external_callbacks(const tc_external_pass_callbacks* callbacks);
-TC_API tc_pass* tc_pass_new_external(void* body, const char* type_name);
+TC_API tc_pass* tc_pass_new_external(void* body, const char* type_name, const tc_pass_ref_vtable* ref_vtable);
 TC_API void tc_pass_free_external(tc_pass* p);
-
-// Call external incref/decref on body (for externally_managed native passes)
-TC_API void tc_pass_body_incref(void* body);
-TC_API void tc_pass_body_decref(void* body);
 
 #ifdef __cplusplus
 }
