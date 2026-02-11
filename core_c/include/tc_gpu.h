@@ -74,14 +74,19 @@ typedef struct tc_gpu_ops {
     void (*shader_set_block_binding)(uint32_t gpu_id, const char* block_name, int binding_point);
 
     // Mesh operations
-    // Upload mesh to GPU, returns GPU VAO ID (0 on failure)
+    // Upload mesh to GPU (creates VBO+EBO+VAO), returns GPU VAO ID (0 on failure)
     uint32_t (*mesh_upload)(const tc_mesh* mesh);
 
     // Draw mesh (binds VAO and calls glDrawElements with correct index count/mode)
     void (*mesh_draw)(const tc_mesh* mesh);
 
-    // Delete GPU mesh
+    // Delete GPU mesh VAO
     void (*mesh_delete)(uint32_t gpu_id);
+
+    // Create VAO from existing shared VBO/EBO (for additional GL contexts).
+    // mesh->gpu_vbo and gpu_ebo must already be valid.
+    // Returns new VAO ID (0 on failure).
+    uint32_t (*mesh_create_vao)(const tc_mesh* mesh);
 
     // User data (passed to callbacks if needed)
     void* user_data;
@@ -104,6 +109,12 @@ TC_API void tc_gpu_set_shader_preprocess(tc_shader_preprocess_fn fn);
 
 // Check if GPU ops are available
 TC_API bool tc_gpu_available(void);
+
+// Context key for multi-context VAO management (shared GL contexts).
+// Set after make_current() to identify which GL context is active.
+// VAOs are per-context; VBOs/EBOs/textures/shaders are shared.
+TC_API void tc_gpu_set_context_key(uintptr_t key);
+TC_API uintptr_t tc_gpu_get_context_key(void);
 
 // ============================================================================
 // Texture GPU operations

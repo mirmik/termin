@@ -13,6 +13,9 @@ static const tc_gpu_ops* g_gpu_ops = NULL;
 // Separate shader preprocess callback (set from Python after fallback loader is ready)
 static tc_shader_preprocess_fn g_shader_preprocess = NULL;
 
+// Thread-local context key for per-context VAO management
+static _Thread_local uintptr_t g_current_context_key = 0;
+
 // ============================================================================
 // GPU ops registration
 // ============================================================================
@@ -31,6 +34,14 @@ void tc_gpu_set_shader_preprocess(tc_shader_preprocess_fn fn) {
 
 bool tc_gpu_available(void) {
     return g_gpu_ops != NULL;
+}
+
+void tc_gpu_set_context_key(uintptr_t key) {
+    g_current_context_key = key;
+}
+
+uintptr_t tc_gpu_get_context_key(void) {
+    return g_current_context_key;
 }
 
 // ============================================================================
@@ -273,33 +284,60 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         return 0;
     }
 
-    // Already uploaded and up to date?
-    if (mesh->gpu_vao != 0 && mesh->gpu_version == (int32_t)mesh->header.version) {
-        return mesh->gpu_vao;
-    }
-
     if (!g_gpu_ops || !g_gpu_ops->mesh_upload) {
         tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: GPU ops not set");
         return 0;
     }
 
-    // Delete old buffers if exist
-    if (mesh->gpu_vao != 0 && g_gpu_ops->mesh_delete) {
-        g_gpu_ops->mesh_delete(mesh->gpu_vao);
-        mesh->gpu_vao = 0;
-        mesh->gpu_vbo = 0;
-        mesh->gpu_ebo = 0;
+    uintptr_t ctx = g_current_context_key;
+    bool data_current = (mesh->gpu_vbo != 0 &&
+                         mesh->gpu_version == (int32_t)mesh->header.version);
+
+    if (data_current) {
+        // VBO/EBO data is up to date. Check if VAO exists for current context.
+        uint32_t vao = tc_mesh_get_vao(mesh, ctx);
+        if (vao != 0) {
+            mesh->gpu_vao = vao;
+            return vao;
+        }
+
+        // Create VAO for this new context (reuse shared VBO/EBO)
+        if (g_gpu_ops->mesh_create_vao) {
+            vao = g_gpu_ops->mesh_create_vao(mesh);
+        }
+        if (vao == 0) {
+            tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: mesh_create_vao failed for '%s'",
+                   mesh->header.name ? mesh->header.name : mesh->header.uuid);
+            return 0;
+        }
+        tc_mesh_set_vao(mesh, ctx, vao);
+        mesh->gpu_vao = vao;
+        return vao;
     }
 
-    // Upload new mesh
-    uint32_t vao = g_gpu_ops->mesh_upload(mesh);
+    // VBO/EBO data needs upload (first time or version changed).
+    // Delete all existing per-context VAOs.
+    if (g_gpu_ops->mesh_delete) {
+        for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
+            if (mesh->gpu_vaos[i] != 0) {
+                g_gpu_ops->mesh_delete(mesh->gpu_vaos[i]);
+            }
+        }
+    }
+    mesh->gpu_vao_count = 0;
+    mesh->gpu_vao = 0;
+    mesh->gpu_vbo = 0;
+    mesh->gpu_ebo = 0;
 
+    // Full upload: creates VBO + EBO + VAO
+    uint32_t vao = g_gpu_ops->mesh_upload(mesh);
     if (vao == 0) {
         tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: upload failed for '%s'",
                mesh->header.name ? mesh->header.name : mesh->header.uuid);
         return 0;
     }
 
+    tc_mesh_set_vao(mesh, ctx, vao);
     mesh->gpu_vao = vao;
     mesh->gpu_version = (int32_t)mesh->header.version;
     return vao;
@@ -310,11 +348,26 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
         return;
     }
 
-    // Upload if needed
-    if (mesh->gpu_vao == 0 || mesh->gpu_version != (int32_t)mesh->header.version) {
+    uintptr_t ctx = g_current_context_key;
+
+    // Check if VBO/EBO data needs re-upload
+    bool data_stale = (mesh->gpu_vbo == 0 ||
+                       mesh->gpu_version != (int32_t)mesh->header.version);
+
+    if (data_stale) {
         if (tc_mesh_upload_gpu(mesh) == 0) {
             return;
         }
+    } else {
+        // Data is current, ensure VAO exists for this context
+        uint32_t vao = tc_mesh_get_vao(mesh, ctx);
+        if (vao == 0) {
+            if (tc_mesh_upload_gpu(mesh) == 0) {
+                return;
+            }
+            vao = tc_mesh_get_vao(mesh, ctx);
+        }
+        mesh->gpu_vao = vao;
     }
 
     if (g_gpu_ops && g_gpu_ops->mesh_draw) {
@@ -323,14 +376,19 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
 }
 
 void tc_mesh_delete_gpu(tc_mesh* mesh) {
-    if (!mesh || mesh->gpu_vao == 0) {
+    if (!mesh) {
         return;
     }
 
+    // Delete all per-context VAOs
     if (g_gpu_ops && g_gpu_ops->mesh_delete) {
-        g_gpu_ops->mesh_delete(mesh->gpu_vao);
+        for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
+            if (mesh->gpu_vaos[i] != 0) {
+                g_gpu_ops->mesh_delete(mesh->gpu_vaos[i]);
+            }
+        }
     }
-
+    mesh->gpu_vao_count = 0;
     mesh->gpu_vao = 0;
     mesh->gpu_vbo = 0;
     mesh->gpu_ebo = 0;

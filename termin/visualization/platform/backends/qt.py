@@ -12,10 +12,22 @@ from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 from termin.graphics import OpenGLGraphicsBackend
 
 
+class _TcSurfaceWrapper:
+    """Wrapper with .ptr attribute for C interop (same as sdl_embedded.py)."""
+
+    def __init__(self, ptr: int):
+        self.ptr = ptr
+
+
 
 def _qt_app() -> QtWidgets.QApplication:
     app = QtWidgets.QApplication.instance()
     if app is None:
+        # Enable shared GL contexts so VBOs/textures/shaders are shared
+        # between QOpenGLWidgets (VAOs are still per-context)
+        QtWidgets.QApplication.setAttribute(
+            QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts
+        )
         app = QtWidgets.QApplication([])
     return app
 
@@ -134,22 +146,23 @@ class QtGLWindowHandle(BackendWindow):
     ):
         self.app = _qt_app()
 
-        self._widget = _QtGLWidget(self, parent=parent, vsync=vsync)
-        self._widget.setMinimumSize(50, 50)
-        self._widget.resize(width, height)
-        self._widget.show()
-
         self._closed = False
         self._user_ptr = None
         self._graphics = graphics
         self._window_fb_handle = None
+        self._tc_surface_ptr: int = 0
 
-        # Callbacks
+        # Callbacks (must be set before widget creation — Qt calls resizeGL during init)
         self._framebuffer_callback = None
         self._cursor_callback = None
         self._scroll_callback = None
         self._mouse_callback = None
         self._key_callback = None
+
+        self._widget = _QtGLWidget(self, parent=parent, vsync=vsync)
+        self._widget.setMinimumSize(50, 50)
+        self._widget.resize(width, height)
+        self._widget.show()
 
     # --- BackendWindow API ----------------------------------------------
 
@@ -157,6 +170,10 @@ class QtGLWindowHandle(BackendWindow):
         if self._closed:
             return
         self._closed = True
+        if self._tc_surface_ptr:
+            from termin._native.render import _render_surface_free_external
+            _render_surface_free_external(self._tc_surface_ptr)
+            self._tc_surface_ptr = 0
         self._widget.close()
 
     def should_close(self) -> bool:
@@ -230,6 +247,21 @@ class QtGLWindowHandle(BackendWindow):
             self._window_fb_handle.set_external_target(fbo_id, width, height)
 
         return self._window_fb_handle
+
+    def get_framebuffer_id(self) -> int:
+        """Return raw OpenGL FBO id (for C++ vtable dispatch)."""
+        return int(self._widget.defaultFramebufferObject())
+
+    def get_framebuffer(self):
+        """Return FramebufferHandle for rendering (used by Python render path)."""
+        return self.get_window_framebuffer()
+
+    def tc_surface(self) -> _TcSurfaceWrapper:
+        """Create/return tc_render_surface wrapping this handle."""
+        if not self._tc_surface_ptr:
+            from termin._native.render import _render_surface_new_from_python
+            self._tc_surface_ptr = _render_surface_new_from_python(self)
+        return _TcSurfaceWrapper(self._tc_surface_ptr)
 
     def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
         """Set graphics backend for framebuffer creation."""

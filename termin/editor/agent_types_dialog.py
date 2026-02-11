@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QFormLayout,
     QLineEdit,
-    QDoubleSpinBox,
     QDialogButtonBox,
     QGroupBox,
     QListWidget,
@@ -25,6 +24,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QMessageBox,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 
 from termin.navmesh.settings import (
     AgentType,
@@ -57,10 +57,10 @@ class AgentTypesDialog(QDialog):
 
         self._list_widget: Optional[QListWidget] = None
         self._name_edit: Optional[QLineEdit] = None
-        self._radius_spin: Optional[QDoubleSpinBox] = None
-        self._height_spin: Optional[QDoubleSpinBox] = None
-        self._max_slope_spin: Optional[QDoubleSpinBox] = None
-        self._step_height_spin: Optional[QDoubleSpinBox] = None
+        self._radius_spin: Optional[DoubleSpinBox] = None
+        self._height_spin: Optional[DoubleSpinBox] = None
+        self._max_slope_spin: Optional[DoubleSpinBox] = None
+        self._step_height_spin: Optional[DoubleSpinBox] = None
         self._properties_group: Optional[QGroupBox] = None
 
         self._init_ui()
@@ -111,7 +111,7 @@ class AgentTypesDialog(QDialog):
         form.addRow("Name:", self._name_edit)
 
         # Radius
-        self._radius_spin = QDoubleSpinBox()
+        self._radius_spin = DoubleSpinBox()
         self._radius_spin.setRange(0.1, 10.0)
         self._radius_spin.setSingleStep(0.1)
         self._radius_spin.setDecimals(2)
@@ -120,7 +120,7 @@ class AgentTypesDialog(QDialog):
         form.addRow("Radius:", self._radius_spin)
 
         # Height
-        self._height_spin = QDoubleSpinBox()
+        self._height_spin = DoubleSpinBox()
         self._height_spin.setRange(0.1, 20.0)
         self._height_spin.setSingleStep(0.1)
         self._height_spin.setDecimals(2)
@@ -129,7 +129,7 @@ class AgentTypesDialog(QDialog):
         form.addRow("Height:", self._height_spin)
 
         # Max Slope
-        self._max_slope_spin = QDoubleSpinBox()
+        self._max_slope_spin = DoubleSpinBox()
         self._max_slope_spin.setRange(0.0, 90.0)
         self._max_slope_spin.setSingleStep(1.0)
         self._max_slope_spin.setDecimals(1)
@@ -138,7 +138,7 @@ class AgentTypesDialog(QDialog):
         form.addRow("Max Slope:", self._max_slope_spin)
 
         # Step Height
-        self._step_height_spin = QDoubleSpinBox()
+        self._step_height_spin = DoubleSpinBox()
         self._step_height_spin.setRange(0.0, 5.0)
         self._step_height_spin.setSingleStep(0.05)
         self._step_height_spin.setDecimals(2)

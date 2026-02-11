@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/pair.h>
 
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"
@@ -116,6 +117,9 @@ void bind_sdl(nb::module_& m) {
         .def("tc_surface", [](SDLWindowRenderSurface& self) {
             return self.tc_surface();
         }, nb::rv_policy::reference)
+        .def("tc_surface_ptr", [](SDLWindowRenderSurface& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(self.tc_surface());
+        })
         .def("set_input_manager", &SDLWindowRenderSurface::set_input_manager,
             nb::arg("manager"), nb::keep_alive<1, 2>())
         .def("input_manager", &SDLWindowRenderSurface::input_manager,

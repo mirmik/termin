@@ -168,3 +168,39 @@ class ProjectSettingsManager:
         self._settings.render_sync_mode = mode
         c_set_render_sync_mode(mode.to_c())
         self.save()
+
+    def _get_editor_state_path(self) -> Optional[Path]:
+        """Get path to .editor_state.json (per-user, not committed)."""
+        if self._project_path is None:
+            return None
+        return self._project_path / "project_settings" / ".editor_state.json"
+
+    def get_last_scene(self) -> str | None:
+        """Get the last opened scene path for this project."""
+        path = self._get_editor_state_path()
+        if path is None or not path.exists():
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("last_scene")
+        except Exception as e:
+            log.error(f"[ProjectSettings] Failed to read editor state: {e}")
+            return None
+
+    def set_last_scene(self, scene_path: str | None) -> None:
+        """Set the last opened scene path (stored in .editor_state.json)."""
+        path = self._get_editor_state_path()
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data: dict = {}
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            data["last_scene"] = scene_path
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            log.error(f"[ProjectSettings] Failed to save editor state: {e}")

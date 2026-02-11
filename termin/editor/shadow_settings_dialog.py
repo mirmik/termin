@@ -13,10 +13,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QFormLayout,
     QComboBox,
-    QDoubleSpinBox,
     QDialogButtonBox,
     QGroupBox,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -47,8 +47,8 @@ class ShadowSettingsDialog(QDialog):
         self.setMinimumWidth(300)
 
         self._method_combo: QComboBox | None = None
-        self._softness_spin: QDoubleSpinBox | None = None
-        self._bias_spin: QDoubleSpinBox | None = None
+        self._softness_spin: DoubleSpinBox | None = None
+        self._bias_spin: DoubleSpinBox | None = None
 
         self._init_ui()
         self._load_from_scene()
@@ -70,7 +70,7 @@ class ShadowSettingsDialog(QDialog):
         form.addRow("Method:", self._method_combo)
 
         # Softness spin
-        self._softness_spin = QDoubleSpinBox()
+        self._softness_spin = DoubleSpinBox()
         self._softness_spin.setRange(0.0, 10.0)
         self._softness_spin.setSingleStep(0.1)
         self._softness_spin.setDecimals(2)
@@ -83,7 +83,7 @@ class ShadowSettingsDialog(QDialog):
         form.addRow("Softness:", self._softness_spin)
 
         # Bias spin
-        self._bias_spin = QDoubleSpinBox()
+        self._bias_spin = DoubleSpinBox()
         self._bias_spin.setRange(0.0, 0.1)
         self._bias_spin.setSingleStep(0.001)
         self._bias_spin.setDecimals(4)

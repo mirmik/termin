@@ -39,6 +39,9 @@ class PythonComponent:
     # Override to True in drawable subclasses (that have phase_marks)
     is_drawable: bool = False
 
+    # Override to True in input handler subclasses
+    is_input_handler: bool = False
+
     def __init__(self, enabled: bool = True, display_name: str = ""):
         # Custom display name for this component instance
         self.display_name = display_name
@@ -99,11 +102,11 @@ class PythonComponent:
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
 
         # Mark as drawable if class has is_drawable = True
-        if getattr(cls, 'is_drawable', False):
+        if cls.is_drawable:
             ComponentRegistry.set_drawable(cls.__name__, True)
 
         # Mark as input handler if class has is_input_handler = True
-        if getattr(cls, 'is_input_handler', False):
+        if cls.is_input_handler:
             ComponentRegistry.set_input_handler(cls.__name__, True)
 
     # =========================================================================

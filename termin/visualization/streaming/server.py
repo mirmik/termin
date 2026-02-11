@@ -28,6 +28,8 @@ import threading
 from typing import TYPE_CHECKING, Optional, Set, Callable
 from weakref import WeakSet
 
+from termin._native import log
+
 from termin.visualization.core.input_events import (
     MouseButtonEvent,
     MouseMoveEvent,
@@ -88,6 +90,8 @@ class WebStreamServer:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Для обработки ввода
+        self._surface = None
+
         self._mouse_x = 0
         self._mouse_y = 0
         self._mouse_buttons = set()
@@ -225,7 +229,7 @@ class WebStreamServer:
                         self._loop,
                     )
             except Exception as e:
-                print(f"Render error: {e}")
+                log.error(f"Render error: {e}")
 
             # Ждём до следующего кадра
             elapsed = time.perf_counter() - start
@@ -261,7 +265,8 @@ class WebStreamServer:
                 for client in self._clients:
                     try:
                         await client.send(message)
-                    except Exception:
+                    except Exception as e:
+                        log.warning(f"Client send failed, disconnecting: {e}")
                         disconnected.add(client)
 
                 self._clients -= disconnected
@@ -269,21 +274,21 @@ class WebStreamServer:
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
-                print(f"Broadcast error: {e}")
+                log.error(f"Broadcast error: {e}")
 
     async def _handle_client(self, websocket):
         """Обрабатывает подключение клиента."""
         self._clients.add(websocket)
-        print(f"Client connected. Total: {len(self._clients)}")
+        log.warning(f"Client connected. Total: {len(self._clients)}")
 
         try:
             async for message in websocket:
                 await self._process_message(message)
         except Exception as e:
-            print(f"Client error: {e}")
+            log.error(f"Client error: {e}")
         finally:
             self._clients.discard(websocket)
-            print(f"Client disconnected. Total: {len(self._clients)}")
+            log.warning(f"Client disconnected. Total: {len(self._clients)}")
 
     async def _process_message(self, raw_message: str):
         """Обрабатывает входящее сообщение от клиента."""
@@ -399,7 +404,7 @@ class WebStreamServer:
         """Изменяет размер рендера."""
         self.width = width
         self.height = height
-        if hasattr(self, "_surface"):
+        if self._surface is not None:
             self._surface.resize(width, height)
 
     async def run_async(self, host: str = "localhost", port: int = 8765):
@@ -423,8 +428,8 @@ class WebStreamServer:
         # Запускаем broadcast корутину
         broadcast_task = asyncio.create_task(self._broadcast_frames())
 
-        print(f"WebStream server starting at ws://{host}:{port}")
-        print(f"Open http://{host}:{port + 1} in browser (serve HTML separately)")
+        log.warning(f"WebStream server starting at ws://{host}:{port}")
+        log.warning(f"Open http://{host}:{port + 1} in browser (serve HTML separately)")
 
         async with websockets.serve(self._handle_client, host, port):
             try:
@@ -488,10 +493,10 @@ class WebStreamServer:
         # Запускаем broadcast корутину
         broadcast_task = asyncio.create_task(self._broadcast_frames())
 
-        print(f"WebStream server running:")
-        print(f"  WebSocket: ws://{host}:{ws_port}")
-        print(f"  HTTP:      http://{host}:{http_port}")
-        print(f"\nOpen http://{host}:{http_port} in your browser")
+        log.warning(f"WebStream server running:")
+        log.warning(f"  WebSocket: ws://{host}:{ws_port}")
+        log.warning(f"  HTTP:      http://{host}:{http_port}")
+        log.warning(f"Open http://{host}:{http_port} in your browser")
 
         async with websockets.serve(self._handle_client, host, ws_port):
             try:

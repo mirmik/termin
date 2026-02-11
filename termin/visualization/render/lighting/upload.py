@@ -35,10 +35,6 @@ def _attenuation_vector(light: Light) -> np.ndarray:
     )
 
 
-_DEBUG_LIGHTS = False  # TODO: убрать после отладки
-_debug_frame_counter = 0
-
-
 def upload_lights_to_shader(shader: TcShader, lights: Sequence[Light]) -> None:
     """
     Передать массив источников в uniform-пакет.
@@ -46,19 +42,10 @@ def upload_lights_to_shader(shader: TcShader, lights: Sequence[Light]) -> None:
     Геометрия источников задаётся явными векторами ``position`` и ``direction`` —
     никаких getattr и магии, только строгие поля.
     """
-    global _debug_frame_counter
-
     count = min(len(lights), MAX_LIGHTS)
     shader.set_uniform_int("u_light_count", count)
 
     prefix = "u_light_"
-
-    # Debug: выводим первые 10 вызовов
-    should_debug = _DEBUG_LIGHTS and (_debug_frame_counter <= 10)
-    if should_debug:
-        print(f"\n=== upload_lights_to_shader (call #{_debug_frame_counter}) ===")
-        print(f"  shader: {shader}")
-        print(f"  light_count: {count}")
 
     for index in range(count):
         light = lights[index]
@@ -80,21 +67,6 @@ def upload_lights_to_shader(shader: TcShader, lights: Sequence[Light]) -> None:
         shader.set_uniform_vec3(f"{prefix}attenuation[{index}]", float(attn[0]), float(attn[1]), float(attn[2]))
         shader.set_uniform_float(f"{prefix}inner_angle[{index}]", float(light.inner_angle))
         shader.set_uniform_float(f"{prefix}outer_angle[{index}]", float(light.outer_angle))
-
-        if should_debug:
-            print(f"  Light[{index}]:")
-            print(f"    type: {light.type} -> int={light_type_int} (0=DIR, 1=POINT, 2=SPOT)")
-            print(f"    color: {light.color}")
-            print(f"    intensity: {light.intensity}")
-            print(f"    direction: {light.direction}")
-            print(f"    position: {light.position}")
-            print(f"    range: {light_range}")
-            print(f"    attenuation: {_attenuation_vector(light)}")
-
-    if should_debug:
-        print(f"=== end ===\n")
-
-    _debug_frame_counter += 1
 
 
 def upload_ambient_to_shader(

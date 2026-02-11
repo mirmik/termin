@@ -62,6 +62,7 @@ class MenuBarController:
         on_toggle_modules: Callable,
         on_toggle_fullscreen: Callable,
         on_show_agent_types: Callable,
+        on_show_spacemouse_settings: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
@@ -118,6 +119,7 @@ class MenuBarController:
             on_toggle_modules=on_toggle_modules,
             on_toggle_fullscreen=on_toggle_fullscreen,
             on_show_agent_types=on_show_agent_types,
+            on_show_spacemouse_settings=on_show_spacemouse_settings,
         )
 
     def _setup_menu_bar(
@@ -157,6 +159,7 @@ class MenuBarController:
         on_toggle_modules: Callable,
         on_toggle_fullscreen: Callable,
         on_show_agent_types: Callable,
+        on_show_spacemouse_settings: Callable,
     ) -> None:
         """Create menu bar structure and connect actions."""
         file_menu = menu_bar.addMenu("File")
@@ -242,6 +245,11 @@ class MenuBarController:
         self._action_fullscreen.setShortcut("F11")
         self._action_fullscreen.setCheckable(True)
         self._action_fullscreen.triggered.connect(on_toggle_fullscreen)
+
+        view_menu.addSeparator()
+
+        spacemouse_action = view_menu.addAction("SpaceMouse Settings...")
+        spacemouse_action.triggered.connect(on_show_spacemouse_settings)
 
         # Scene menu
         scene_properties_action = scene_menu.addAction("Scene Properties...")

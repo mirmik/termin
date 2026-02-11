@@ -133,6 +133,9 @@ void bind_transform(nb::module_& m) {
         .def("set_local_scale", [](GeneralTransform3& self, const Vec3& scale) {
             self.set_local_scale(scale);
         }, nb::arg("scale"))
+        .def("set_local_scale", [](GeneralTransform3& self, float x, float y, float z) {
+            self.set_local_scale(Vec3(x, y, z));
+        }, nb::arg("x"), nb::arg("y"), nb::arg("z"))
 
         // Global (world) position/rotation/scale - read-only properties
         .def_prop_ro("global_position", &GeneralTransform3::global_position)

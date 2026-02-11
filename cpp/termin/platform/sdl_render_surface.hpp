@@ -13,7 +13,6 @@ class SDLWindowRenderSurface {
 private:
     SDLWindow* window_;
     tc_render_surface surface_;
-    tc_input_manager* input_manager_;
     SDLWindowBackend* backend_;
     bool needs_render_;
     int last_width_;
@@ -40,7 +39,7 @@ public:
 
     // Input manager
     void set_input_manager(tc_input_manager* manager);
-    tc_input_manager* input_manager() const { return input_manager_; }
+    tc_input_manager* input_manager() const { return surface_.input_manager; }
 
     // Window access
     SDLWindow* window() { return window_; }

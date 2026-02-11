@@ -411,6 +411,9 @@ void bind_tc_material(nb::module_& m) {
                     );
                 }
             })
+        .def("set_color", [](TcMaterial& self, const Vec4& c) {
+            self.set_color(c.x, c.y, c.z, c.w);
+        }, nb::arg("color"))
         .def("set_color", [](TcMaterial& self, float r, float g, float b, float a) {
             self.set_color(r, g, b, a);
         }, nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("a") = 1.0f)
@@ -733,6 +736,9 @@ void bind_tc_material(nb::module_& m) {
 void register_material_kind_handlers() {
     // C++ handler for C++ fields
     tc::register_cpp_handle_kind<TcMaterial>("tc_material");
+
+    // Register TcMaterial Python type → "tc_material" kind mapping
+    tc::KindRegistry::instance().register_type(nb::type<TcMaterial>(), "tc_material");
 
     // Python handler for Python fields
     tc::KindRegistry::instance().register_python(

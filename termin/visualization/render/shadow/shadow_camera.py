@@ -55,7 +55,7 @@ def _limit_projection_far(
         far = near + 1.0
 
     # Check projection type
-    projection_type = getattr(camera, 'projection_type', 'perspective')
+    projection_type = camera.projection_type
 
     if projection_type == "orthographic":
         # For Y-forward orthographic projection:

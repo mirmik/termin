@@ -184,8 +184,8 @@ class ModuleScanner:
                     module_name = data.get("name", os.path.basename(module_path))
                     log.info(f"[ModuleScanner] Skipping ignored module: {module_name}")
                     return True  # Treat as success (intentionally skipped)
-        except Exception:
-            pass  # Continue with load attempt
+        except Exception as e:
+            log.warning(f"[ModuleScanner] Failed to read {module_path}: {e}")
 
         from termin.entity._entity_native import ModuleLoader
 
@@ -201,9 +201,8 @@ class ModuleScanner:
         try:
             watcher.enable()
             watcher.watch_module(module_path)
-        except Exception:
-            # ModuleWatcher requires Qt which may not be available in Player
-            pass
+        except Exception as e:
+            log.warning(f"[ModuleScanner] ModuleWatcher not available: {e}")
 
         if success:
             if self._on_module_loaded:

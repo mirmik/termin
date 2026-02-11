@@ -28,6 +28,11 @@ option(BUILD_TESTS "Build C++ tests" OFF)
 option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings" OFF)
 option(BUNDLE_PYTHON "Bundle Python runtime for standalone distribution" OFF)
 
+# Enable CTest at top level so tests from subdirectories are discoverable
+if(BUILD_TESTS)
+    enable_testing()
+endif()
+
 # Set project root for subprojects
 set(TERMIN_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -125,7 +130,6 @@ if(BUNDLE_PYTHON)
         PATTERN "test" EXCLUDE
         PATTERN "tests" EXCLUDE
         PATTERN "idle_test" EXCLUDE
-        PATTERN "tkinter" EXCLUDE
         PATTERN "turtledemo" EXCLUDE
         PATTERN "lib2to3" EXCLUDE
         PATTERN "ensurepip" EXCLUDE

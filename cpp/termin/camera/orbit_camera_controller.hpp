@@ -43,6 +43,7 @@ public:
     double radius = 5.0;
     double min_radius = 1.0;
     double max_radius = 100.0;
+    bool horizon_lock = true;  // Z always up, clamp roll
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(OrbitCameraController, radius, "Radius", "double", 0.1, 100.0, 0.1)
@@ -87,6 +88,21 @@ public:
      * @param position New target position
      */
     void center_on(const Vec3& position);
+
+    // === Fly mode (direct transform manipulation) ===
+    // These methods modify the camera transform directly.
+    // After each call, _sync_from_transform() updates azimuth/elevation.
+    // Roll is preserved between fly calls but resets on orbit/_update_pose.
+
+    // Translate camera along its local axes (right, forward, up).
+    void fly_move(double right, double forward, double up);
+
+    // Move forward/backward. If horizon_lock, projected onto XY plane.
+    void fly_forward(double delta);
+
+    // Rotate camera in place: yaw (world Z), pitch (local X), roll (local Y).
+    // All angles in degrees.
+    void fly_rotate(double yaw, double pitch, double roll = 0.0);
 
     /**
      * Set whether camera movement is prevented.
@@ -152,6 +168,7 @@ private:
 
     // === Internal methods ===
 
+    void _ensure_camera();
     ViewportState& _get_viewport_state(uintptr_t viewport_id);
 
     // Clamp value to range

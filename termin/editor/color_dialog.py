@@ -36,10 +36,10 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QWidget,
-    QDoubleSpinBox,
     QFrame,
     QGridLayout,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox
 from PyQt6.QtGui import (
     QColor,
     QPainter,
@@ -374,7 +374,7 @@ class ColorDialog(QDialog):
         self._h_slider = QSlider(Qt.Orientation.Horizontal)
         self._h_slider.setRange(0, 360)
         hsv_layout.addWidget(self._h_slider, 0, 1)
-        self._h_spin = QDoubleSpinBox()
+        self._h_spin = DoubleSpinBox()
         self._h_spin.setRange(0.0, 360.0)
         self._h_spin.setDecimals(1)
         self._h_spin.setSingleStep(1.0)
@@ -386,7 +386,7 @@ class ColorDialog(QDialog):
         self._s_slider = QSlider(Qt.Orientation.Horizontal)
         self._s_slider.setRange(0, 1000)
         hsv_layout.addWidget(self._s_slider, 1, 1)
-        self._s_spin = QDoubleSpinBox()
+        self._s_spin = DoubleSpinBox()
         self._s_spin.setRange(0.0, 1.0)
         self._s_spin.setDecimals(3)
         self._s_spin.setSingleStep(0.01)
@@ -398,7 +398,7 @@ class ColorDialog(QDialog):
         self._v_slider = QSlider(Qt.Orientation.Horizontal)
         self._v_slider.setRange(0, 1000)
         hsv_layout.addWidget(self._v_slider, 2, 1)
-        self._v_spin = QDoubleSpinBox()
+        self._v_spin = DoubleSpinBox()
         self._v_spin.setRange(0.0, 1.0)
         self._v_spin.setDecimals(3)
         self._v_spin.setSingleStep(0.01)
@@ -422,7 +422,7 @@ class ColorDialog(QDialog):
         self._r_slider = QSlider(Qt.Orientation.Horizontal)
         self._r_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._r_slider, 0, 1)
-        self._r_spin = QDoubleSpinBox()
+        self._r_spin = DoubleSpinBox()
         self._r_spin.setRange(0.0, 1.0)
         self._r_spin.setDecimals(3)
         self._r_spin.setSingleStep(0.01)
@@ -434,7 +434,7 @@ class ColorDialog(QDialog):
         self._g_slider = QSlider(Qt.Orientation.Horizontal)
         self._g_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._g_slider, 1, 1)
-        self._g_spin = QDoubleSpinBox()
+        self._g_spin = DoubleSpinBox()
         self._g_spin.setRange(0.0, 1.0)
         self._g_spin.setDecimals(3)
         self._g_spin.setSingleStep(0.01)
@@ -446,7 +446,7 @@ class ColorDialog(QDialog):
         self._b_slider = QSlider(Qt.Orientation.Horizontal)
         self._b_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._b_slider, 2, 1)
-        self._b_spin = QDoubleSpinBox()
+        self._b_spin = DoubleSpinBox()
         self._b_spin.setRange(0.0, 1.0)
         self._b_spin.setDecimals(3)
         self._b_spin.setSingleStep(0.01)
@@ -458,7 +458,7 @@ class ColorDialog(QDialog):
         self._a_slider = QSlider(Qt.Orientation.Horizontal)
         self._a_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._a_slider, 3, 1)
-        self._a_spin = QDoubleSpinBox()
+        self._a_spin = DoubleSpinBox()
         self._a_spin.setRange(0.0, 1.0)
         self._a_spin.setDecimals(3)
         self._a_spin.setSingleStep(0.01)

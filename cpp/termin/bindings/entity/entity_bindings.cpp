@@ -21,6 +21,7 @@
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
+#include "termin/bindings/inspect/tc_kind_python.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
 #include "termin/tc_scene.hpp"
 #include "../../viewport/tc_viewport_ref.hpp"
@@ -226,8 +227,18 @@ public:
     void set_field(const std::string& field_name, nb::object value, TcSceneRef scene = TcSceneRef()) {
         if (!_c || value.is_none()) return;
 
-        // Use C API which handles both C++ and Python components via InspectRegistry::set_tc_value
-        tc_value v = py_to_tc_value(value);
+        nb::object to_convert = value;
+
+        // Check if value type is registered in kind system (e.g. TcMesh → "tc_mesh")
+        std::string kind = tc::KindRegistry::instance().kind_for_object(value);
+        if (!kind.empty()) {
+            nb::object serialized = tc::KindRegistry::instance().serialize_python(kind, value);
+            if (!serialized.is_none()) {
+                to_convert = serialized;
+            }
+        }
+
+        tc_value v = py_to_tc_value(to_convert);
         tc_component_inspect_set(_c, field_name.c_str(), v, scene.handle());
         tc_value_free(&v);
     }
@@ -492,6 +503,28 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("type_name"),
            "Create component by type name and add to entity. Returns TcComponentRef.")
 
+        // Add component by type name string
+        .def("add_component", [](Entity& e, const std::string& type_name) -> TcComponentRef {
+            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+            if (!tc) {
+                throw std::runtime_error("Failed to create component: " + type_name);
+            }
+            e.add_component_ptr(tc);
+            return TcComponentRef(tc);
+        }, nb::arg("component"),
+           "Create component by type name and add to entity. Returns TcComponentRef.")
+
+        // Add existing C++ component (CxxComponent subclass)
+        .def("add_component", [](Entity& e, CxxComponent& comp) -> TcComponentRef {
+            tc_component* tc = comp.c_component();
+            if (!tc) {
+                throw std::runtime_error("CxxComponent has no tc_component");
+            }
+            e.add_component_ptr(tc);
+            return TcComponentRef(tc);
+        }, nb::arg("component"),
+           "Add existing C++ component to entity. Returns TcComponentRef.")
+
         // Add existing PythonComponent (uses its tc_component instead of factory)
         .def("add_component", [](Entity& e, nb::object comp) -> TcComponentRef {
             // Get tc_component* from PythonComponent._tc.c_ptr_int()
@@ -704,6 +737,8 @@ void bind_entity_class(nb::module_& m) {
             return nb::none();
         })
         .def("children", &Entity::children)
+        .def("create_child", &Entity::create_child, nb::arg("name") = "entity")
+        .def("destroy_children", &Entity::destroy_children)
         .def("find_child", &Entity::find_child, nb::arg("name"),
              "Find a child entity by name. Returns invalid Entity if not found.")
         .def("ancestors", [](Entity& e) {

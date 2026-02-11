@@ -10,6 +10,7 @@ import os
 from typing import TYPE_CHECKING, Callable
 
 from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager
@@ -50,7 +51,7 @@ class ResourceLoader:
         ]
         loaded = self._resource_manager.scan_components(builtin_modules)
         if loaded:
-            print(f"Loaded components: {loaded}")
+            log.warning(f"Loaded components: {loaded}")
 
     def init_resources_from_scene(self) -> None:
         """

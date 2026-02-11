@@ -15,14 +15,13 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox, SpinBox
 
 if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
@@ -144,7 +143,7 @@ class ViewportInspector(QWidget):
         form.addRow(wh_widget)
 
         # Depth (render priority)
-        self._depth_spin = QSpinBox()
+        self._depth_spin = SpinBox()
         self._depth_spin.setRange(-1000, 1000)
         self._depth_spin.setValue(0)
         self._depth_spin.setToolTip("Render priority: lower values render first")
@@ -178,9 +177,9 @@ class ViewportInspector(QWidget):
         layout.addLayout(form)
         layout.addStretch()
 
-    def _create_rect_spinbox(self) -> QDoubleSpinBox:
+    def _create_rect_spinbox(self) -> DoubleSpinBox:
         """Create a spinbox for rect values (0..1)."""
-        spin = QDoubleSpinBox()
+        spin = DoubleSpinBox()
         spin.setRange(0.0, 1.0)
         spin.setSingleStep(0.05)
         spin.setDecimals(3)

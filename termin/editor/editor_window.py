@@ -8,7 +8,6 @@ from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QTreeView, QListView, QLabel, QMenu, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
-
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
@@ -65,7 +64,7 @@ class EditorWindow(QMainWindow):
     def instance(cls) -> "EditorWindow | None":
         return cls._instance
 
-    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager):
+    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager, graphics=None):
         super().__init__()
         EditorWindow._instance = self
         self.undo_stack = UndoStack()
@@ -75,6 +74,7 @@ class EditorWindow(QMainWindow):
 
         self.world = world
         self._sdl_backend = sdl_backend
+        self._graphics = graphics
 
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager.instance()
@@ -250,7 +250,7 @@ class EditorWindow(QMainWindow):
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
             window_backend=self._sdl_backend,
-            graphics=self.world.graphics,
+            graphics=self._graphics,
         )
 
         # Для обратной совместимости
@@ -286,7 +286,7 @@ class EditorWindow(QMainWindow):
         from termin._native.editor import EditorInteractionSystem, EditorDisplayInputManager as CppEditorDisplayInputManager
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
-        self._interaction_system.set_graphics(self.world.graphics)
+        self._interaction_system.set_graphics(self._graphics)
         self.gizmo_manager = self._interaction_system.gizmo_manager
 
         # Per-display C++ input managers: tc_display_ptr -> EditorDisplayInputManager
@@ -351,7 +351,7 @@ class EditorWindow(QMainWindow):
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
 
-        RenderingManager.instance().set_graphics(self.world.graphics)
+        RenderingManager.instance().set_graphics(self._graphics)
         self.scene_manager.set_on_after_render(self._after_render)
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
@@ -377,6 +377,7 @@ class EditorWindow(QMainWindow):
         self._interaction_system.selection.on_hover_changed = self._on_hover_changed
         self._interaction_system.on_request_update = self._request_viewport_update
         self._interaction_system.on_transform_end = self._on_transform_end
+        self._interaction_system.on_key = self._on_viewport_key
 
         # --- PrefabEditController - режим изоляции для редактирования префабов ---
         self.prefab_edit_controller = PrefabEditController(
@@ -480,6 +481,7 @@ class EditorWindow(QMainWindow):
             on_toggle_modules=self._toggle_modules_panel,
             on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
             on_show_agent_types=self._show_agent_types_dialog,
+            on_show_spacemouse_settings=self._show_spacemouse_settings_dialog,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._mode_controller.is_fullscreen,
@@ -558,6 +560,13 @@ class EditorWindow(QMainWindow):
         """Opens agent types configuration dialog."""
         self._dialog_manager.show_agent_types_dialog()
 
+    def _show_spacemouse_settings_dialog(self) -> None:
+        """Opens SpaceMouse settings dialog."""
+        if self._spacemouse is None:
+            self._log_to_console("[SpaceMouse] No device connected")
+            return
+        self._dialog_manager.show_spacemouse_settings_dialog(self._spacemouse)
+
     def _show_pipeline_editor(self) -> None:
         """Opens the visual pipeline graph editor."""
         from termin.nodegraph import PipelineGraphEditor
@@ -582,7 +591,7 @@ class EditorWindow(QMainWindow):
         """
         debugger = self._dialog_manager.show_framegraph_debugger(
             window_backend=self._sdl_backend,
-            graphics=self.world.graphics,
+            graphics=self._graphics,
             rendering_controller=self._rendering_controller,
             on_request_update=self._request_viewport_update,
             initial_resource=initial_resource,
@@ -843,13 +852,13 @@ class EditorWindow(QMainWindow):
     def _get_graphics(self):
         """Get GraphicsBackend from world."""
         if self.world is not None:
-            return self.world.graphics
+            return self._graphics
         return None
 
     def _get_window_backend(self):
         """Get WindowBackend from world."""
         if self.world is not None:
-            return self.world.window_backend
+            return self._sdl_backend
         return None
 
     def _get_render_engine(self):
@@ -983,14 +992,15 @@ class EditorWindow(QMainWindow):
             on_display_input_mode_changed=self._on_display_input_mode_changed,
         )
 
-        # Register global render update callback
-        from termin.editor.render_request import set_request_update_callback
+        # Register global callbacks
+        from termin.editor.render_request import set_request_update_callback, set_scene_tree_rebuild_callback
         set_request_update_callback(self._request_viewport_update)
+        set_scene_tree_rebuild_callback(self._rebuild_scene_tree)
 
     def _init_spacemouse(self) -> None:
         """Initialize SpaceMouse controller if device available."""
         spacemouse = SpaceMouseController()
-        if spacemouse.open():
+        if spacemouse.open(self._editor_attachment, self._request_viewport_update):
             self._spacemouse = spacemouse
             self._log_to_console("[SpaceMouse] Device connected")
         else:
@@ -1090,6 +1100,11 @@ class EditorWindow(QMainWindow):
             surface = self._rendering_controller.editor_surface
             if surface is not None:
                 surface.request_update()
+
+    def _rebuild_scene_tree(self) -> None:
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+        self._request_viewport_update()
 
     def _after_render(self) -> None:
         sys = self._interaction_system
@@ -1209,7 +1224,7 @@ class EditorWindow(QMainWindow):
 
         entity = rm.instantiate_prefab(prefab_name, position=position)
         if entity is None:
-            print(f"Failed to instantiate prefab: {prefab_name}")
+            log.error(f"Failed to instantiate prefab: {prefab_name}")
             return
 
         # Добавляем entity в сцену через команду (с поддержкой undo)
@@ -1314,6 +1329,28 @@ class EditorWindow(QMainWindow):
     def _on_hover_changed(self, entity) -> None:
         """C++ SelectionManager callback — entity hovered."""
         self._request_viewport_update()
+
+    def _delete_selected_entity(self) -> None:
+        """Delete the currently selected entity (called from viewport Delete shortcut)."""
+        ent = self._interaction_system.selection.selected if self._interaction_system else None
+        if ent is not None and ent.valid():
+            cmd = DeleteEntityCommand(self.scene, ent)
+            self.push_undo_command(cmd, merge=False)
+            self._interaction_system.selection.deselect()
+            if self.scene_tree_controller is not None:
+                self.scene_tree_controller.rebuild()
+            self._resync_inspector_from_selection()
+
+    def _on_viewport_key(self, event) -> None:
+        """C++ EditorInteractionSystem key callback (KeyEvent)."""
+        from termin.visualization.core.input_events import Action, Mods
+        from termin.visualization.platform.backends.base import Key
+        if event.action != Action.PRESS:
+            return
+        if event.key == Key.DELETE.value:
+            self._delete_selected_entity()
+        elif event.key == Key.S.value and (event.mods & Mods.CTRL.value):
+            self._save_scene()
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo callback — drag finished."""
@@ -1511,11 +1548,10 @@ class EditorWindow(QMainWindow):
         Activates the scene in SceneManager and sets up all editor UI.
         Uses EditorSceneAttachment for clean attach/detach.
         """
-        print(f"[EditorWindow] Switching to scene: {name}")
+        log.warning(f"[EditorWindow] Switching to scene: {name}")
 
         new_scene = self.scene_manager.get_scene(name)
         if new_scene is None:
-            from termin._native import log
             log.error(f"Cannot switch to scene '{name}': not found")
             return
 

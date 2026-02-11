@@ -113,9 +113,6 @@ private:
     static size_t _cb_get_resource_specs(tc_pass* p, void* out, size_t max);
     static size_t _cb_get_internal_symbols(tc_pass* p, const char** out, size_t max);
     static void _cb_destroy(tc_pass* p);
-    static void _cb_drop(tc_pass* p);
-    static void _cb_retain(tc_pass* p);
-    static void _cb_release(tc_pass* p);
 
 public:
     CxxFramePass();
@@ -161,11 +158,11 @@ public:
         }
     }
 
-    // Setup external wrapper (for Python/other bindings)
-    // Caller is responsible for preventing wrapper from being GC'd
-    void set_external_body(void* body) {
+    // Setup Python wrapper reference
+    // Sets body pointer and switches ref_vtable to Python ref counting
+    void set_python_ref(void* body, const tc_pass_ref_vtable* ref_vt) {
         _c.body = body;
-        _c.externally_managed = true;
+        _c.ref_vtable = ref_vt;
     }
 
     // ========================================================================
@@ -219,7 +216,7 @@ public:
     void retain() { ++_ref_count; }
     void release() {
         int prev = _ref_count.fetch_sub(1);
-        if (prev <= 1 && !_c.externally_managed) {
+        if (prev <= 1) {
             delete this;
         }
     }

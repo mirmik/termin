@@ -33,8 +33,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QFormLayout,
     QLabel,
-    QDoubleSpinBox,
-    QSpinBox,
     QCheckBox,
     QComboBox,
     QPushButton,
@@ -47,6 +45,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QSizePolicy,
 )
+from termin.editor.widgets.spinbox import DoubleSpinBox, SpinBox
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QColor, QImage, QPixmap
 
@@ -143,13 +142,13 @@ class Vec2Editor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self._spins: List[QDoubleSpinBox] = []
+        self._spins: List[DoubleSpinBox] = []
         for i, label in enumerate(["X", "Y"]):
             lbl = QLabel(label)
             lbl.setFixedWidth(12)
             layout.addWidget(lbl)
 
-            spin = QDoubleSpinBox()
+            spin = DoubleSpinBox()
             spin.setRange(-9999.0, 9999.0)
             spin.setDecimals(3)
             spin.setSingleStep(0.1)
@@ -187,13 +186,13 @@ class Vec3Editor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self._spins: List[QDoubleSpinBox] = []
+        self._spins: List[DoubleSpinBox] = []
         for i, label in enumerate(["X", "Y", "Z"]):
             lbl = QLabel(label)
             lbl.setFixedWidth(12)
             layout.addWidget(lbl)
 
-            spin = QDoubleSpinBox()
+            spin = DoubleSpinBox()
             spin.setRange(-9999.0, 9999.0)
             spin.setDecimals(3)
             spin.setSingleStep(0.1)
@@ -231,13 +230,13 @@ class Vec4Editor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self._spins: List[QDoubleSpinBox] = []
+        self._spins: List[DoubleSpinBox] = []
         for i, label in enumerate(["X", "Y", "Z", "W"]):
             lbl = QLabel(label)
             lbl.setFixedWidth(12)
             layout.addWidget(lbl)
 
-            spin = QDoubleSpinBox()
+            spin = DoubleSpinBox()
             spin.setRange(-9999.0, 9999.0)
             spin.setDecimals(3)
             spin.setSingleStep(0.1)
@@ -764,8 +763,8 @@ class MaterialInspector(QWidget):
             row_widget
         )
 
-    def _create_float_editor(self, prop: MaterialProperty, value: Any) -> QDoubleSpinBox:
-        spin = QDoubleSpinBox()
+    def _create_float_editor(self, prop: MaterialProperty, value: Any) -> DoubleSpinBox:
+        spin = DoubleSpinBox()
         spin.setDecimals(3)
         spin.setSingleStep(0.1)
 
@@ -781,8 +780,8 @@ class MaterialInspector(QWidget):
         spin.editingFinished.connect(self._on_editing_finished)
         return spin
 
-    def _create_int_editor(self, prop: MaterialProperty, value: Any) -> QSpinBox:
-        spin = QSpinBox()
+    def _create_int_editor(self, prop: MaterialProperty, value: Any) -> SpinBox:
+        spin = SpinBox()
 
         if prop.range_min is not None and prop.range_max is not None:
             spin.setRange(int(prop.range_min), int(prop.range_max))

@@ -153,6 +153,9 @@ class Panel(Widget):
         self.padding: float = 0  # pixels
         self.background_color: tuple[float, float, float, float] = (0.2, 0.2, 0.2, 0.9)
         self.border_radius: float = 0
+        self.background_image: str = ""  # path to background image
+        self.background_tint: tuple[float, float, float, float] = (1, 1, 1, 1)
+        self._bg_texture = None
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
         if self.preferred_width and self.preferred_height:
@@ -213,6 +216,10 @@ class Panel(Widget):
 
             child.layout(cx, cy, cw, ch, viewport_w, viewport_h)
 
+    def _ensure_bg_texture(self, renderer: 'UIRenderer'):
+        if self._bg_texture is None and self.background_image:
+            self._bg_texture = renderer.load_image(self.background_image)
+
     def render(self, renderer: 'UIRenderer'):
         # Draw background only if not fully transparent
         if self.background_color[3] > 0:
@@ -221,5 +228,13 @@ class Panel(Widget):
                 self.background_color,
                 self.border_radius
             )
+        # Draw background image on top of color
+        if self.background_image:
+            self._ensure_bg_texture(renderer)
+            if self._bg_texture is not None:
+                renderer.draw_image(
+                    self.x, self.y, self.width, self.height,
+                    self._bg_texture, self.background_tint
+                )
         # Render children
         super().render(renderer)

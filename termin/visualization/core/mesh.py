@@ -12,10 +12,9 @@ from termin.visualization.platform.backends.base import MeshHandle as GPUMeshHan
 
 
 class MeshDrawable:
-    """
-    Рендер-ресурс для 3D-меша.
+    """DEAD CODE. Use TcMesh + MeshRenderer directly.
 
-    Обёртка над MeshAsset. GPU upload/draw через TcMesh.draw_gpu().
+    Kept for import compatibility. Do not use in new code.
     """
 
     RESOURCE_KIND = "mesh"

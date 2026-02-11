@@ -39,6 +39,7 @@ struct KindPython {
 // Works alongside KindRegistryCpp.
 class TC_KIND_PYTHON_API KindRegistryPython {
     std::unordered_map<std::string, KindPython> _kinds;
+    std::vector<std::pair<nb::object, std::string>> _type_to_kind;
 
 public:
     // Singleton - defined in tc_kind_python_instance.cpp (entity_lib)
@@ -46,6 +47,12 @@ public:
 
     // Register Python handler
     void register_kind(const std::string& name, nb::object serialize, nb::object deserialize);
+
+    // Register Python type → kind name mapping
+    void register_type(nb::handle type, const std::string& kind_name);
+
+    // Find kind name for a Python object by its type (returns "" if not found)
+    std::string kind_for_object(nb::handle obj) const;
 
     // Get handler (returns nullptr if not found)
     KindPython* get(const std::string& name);
@@ -92,6 +99,12 @@ public:
     // Register Python handler (delegates to KindRegistryPython)
     void register_python(const std::string& name, nb::object serialize, nb::object deserialize);
 
+    // Register Python type → kind name mapping
+    void register_type(nb::handle type, const std::string& kind_name);
+
+    // Find kind name for a Python object by its type
+    std::string kind_for_object(nb::handle obj) const;
+
     // Serialize using C++ handler (caller owns returned tc_value)
     tc_value serialize_cpp(const std::string& kind_name, const std::any& value) const;
 
@@ -124,6 +137,11 @@ inline void bind_kind_registry(nb::module_& m) {
         .def("has_python", &KindRegistry::has_python, nb::arg("name"))
         .def("register_python", &KindRegistry::register_python,
              nb::arg("name"), nb::arg("serialize"), nb::arg("deserialize"))
+        .def("register_type", [](KindRegistry& self, nb::handle type, const std::string& kind_name) {
+            self.register_type(type, kind_name);
+        }, nb::arg("type"), nb::arg("kind_name"))
+        .def("kind_for_object", &KindRegistry::kind_for_object,
+             nb::arg("obj"))
         .def("serialize", &KindRegistry::serialize_python,
              nb::arg("kind"), nb::arg("obj"))
         .def("deserialize", &KindRegistry::deserialize_python,

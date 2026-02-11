@@ -10,6 +10,7 @@ import numpy as np
 from termin.mesh import TcMesh
 from termin.visualization.core.material import Material
 from termin.visualization.render.components import MeshRenderer
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
@@ -116,7 +117,7 @@ class VoxelVisualizer:
         # Ограничение для производительности
         max_voxels = 100_000
         if voxel_count > max_voxels:
-            print(f"VoxelVisualizer: too many voxels ({voxel_count}), showing first {max_voxels}")
+            log.warning(f"VoxelVisualizer: too many voxels ({voxel_count}), showing first {max_voxels}")
             voxel_count = max_voxels
 
         # Выделяем массивы

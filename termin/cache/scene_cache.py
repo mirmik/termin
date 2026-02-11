@@ -116,7 +116,7 @@ class FilesystemSceneCache(SceneCache):
         if not self._scene_name:
             raise ValueError("SceneCache: scene must have name or uuid")
         self._root = self._get_cache_root(self._scene_name)
-        print(f"SceneCache: root={self._root}")
+        log.warning(f"SceneCache: root={self._root}")
 
     def _get_cache_root(self, scene_name: str) -> Path:
         """Get cache root directory for scene."""

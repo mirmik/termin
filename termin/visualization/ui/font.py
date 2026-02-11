@@ -77,8 +77,11 @@ class FontTextureAtlas:
     def ensure_texture(self, graphics: GraphicsBackend) -> GPUTextureHandle:
         """Uploads atlas into the current graphics backend if not done yet."""
         if self._handle is not None:
-            # Check if texture is still valid
+            # Check if texture is still valid.
+            # Drain stale GL errors first so glIsTexture doesn't pick them up.
             import OpenGL.GL as gl
+            while gl.glGetError() != gl.GL_NO_ERROR:
+                pass
             if not gl.glIsTexture(self._handle.get_id()):
                 log.warn(f"ensure_texture: texture {self._handle.get_id()} invalid, recreating")
                 self._handle = None
@@ -92,41 +95,37 @@ class FontTextureAtlas:
 
         ascent, descent = self.font.getmetrics()
         line_height = ascent + descent
+        self.ascent = ascent
 
         max_w = 0
-        max_h = 0
 
         glyph_images = []
         for ch in chars:
             try:
                 bbox = self.font.getbbox(ch)
                 w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
             except (TypeError, AttributeError, ValueError):
                 continue
 
-            # создаём глиф высотой всей строки
+            # Each glyph image is full line_height tall.
+            # Drawing at y=0 puts baseline at y=ascent automatically.
             img = Image.new("L", (w, line_height))
             draw = ImageDraw.Draw(img)
+            draw.text((-bbox[0], 0), ch, fill=255, font=self.font)
 
-            # вертикальное смещение так, чтобы bbox правильно лег на baseline
-            offset_x = -bbox[0]
-            offset_y = ascent - bbox[3]
-
-            draw.text((offset_x, offset_y), ch, fill=255, font=self.font)
             glyph_images.append((ch, img))
             max_w = max(max_w, w)
-            max_h = max(max_h, h)
 
         cols = 16
-        rows = (len(chars) + cols - 1) // cols
-        atlas_w = cols * (max_w + padding)
-        atlas_h = rows * (max_h + padding)
+        rows = (len(glyph_images) + cols - 1) // cols
+        cell_w = max_w + padding
+        cell_h = line_height + padding
+        atlas_w = cols * cell_w
+        atlas_h = rows * cell_h
         self.tex_w = atlas_w
         self.tex_h = atlas_h
 
         atlas = Image.new("L", (atlas_w, atlas_h))
-        draw = ImageDraw.Draw(atlas)
 
         x = y = 0
         for i, (ch, img) in enumerate(glyph_images):
@@ -141,10 +140,10 @@ class FontTextureAtlas:
                 ),
                 "size": (w, h)
             }
-            x += max_w + padding
+            x += cell_w
             if (i + 1) % cols == 0:
                 x = 0
-                y += max_h + padding
+                y += cell_h
 
         # Keep CPU-side atlas; upload to GPU later when a graphics context is guaranteed.
         self._atlas_data = np.array(atlas, dtype=np.uint8)

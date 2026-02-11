@@ -76,6 +76,16 @@ struct tc_input_vtable {
 };
 
 // ============================================================================
+// Reference counting VTable - separate from main vtable
+// ============================================================================
+
+struct tc_component_ref_vtable {
+    void (*retain)(tc_component* self);
+    void (*release)(tc_component* self);
+    void (*drop)(tc_component* self);
+};
+
+// ============================================================================
 // Component VTable - virtual method table for components
 // ============================================================================
 
@@ -107,17 +117,6 @@ struct tc_component_vtable {
     void (*on_editor_start)(tc_component* self);
     void (*setup_editor_defaults)(tc_component* self);
 
-    // Memory management - called to free component data
-    // If NULL, component data is not freed (external ownership)
-    void (*drop)(tc_component* self);
-
-    // Reference counting for external wrapper objects
-    // retain: called when component gets a new wrapper reference (INCREF equivalent)
-    // release: called when wrapper reference is released (DECREF equivalent)
-    // These allow language-agnostic reference management
-    void (*retain)(tc_component* self);
-    void (*release)(tc_component* self);
-
     // Serialization (optional)
     // serialize returns opaque data pointer, deserialize consumes it
     void* (*serialize)(const tc_component* self);
@@ -131,6 +130,9 @@ struct tc_component_vtable {
 struct tc_component {
     // Virtual method table
     const tc_component_vtable* vtable;
+
+    // Reference counting vtable (separate from main vtable)
+    const tc_component_ref_vtable* ref_vtable;
 
     // Drawable vtable (NULL if component is not drawable)
     const tc_drawable_vtable* drawable_vtable;
@@ -172,11 +174,6 @@ struct tc_component {
     // Factory sets this to true after doing its own retain.
     bool factory_retained;
 
-    // If true, component is managed by external language (C#, etc.)
-    // When externally_managed: retain/release call body incref/decref
-    // When not: retain/release use internal ref_count
-    bool externally_managed;
-
     // Intrusive list for scene's type-based component lists
     // Linked when registered with scene, unlinked on unregister
     // Note: uses raw pointers (not tc_dlist) because head is stored externally
@@ -198,6 +195,7 @@ struct tc_component {
 
 static inline void tc_component_init(tc_component* c, const tc_component_vtable* vtable) {
     c->vtable = vtable;
+    c->ref_vtable = NULL;
     c->drawable_vtable = NULL;
     c->drawable_ptr = NULL;
     c->input_vtable = NULL;
@@ -212,7 +210,6 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
     c->has_before_render = (vtable && vtable->before_render != NULL);
     c->factory_retained = false;
-    c->externally_managed = false;
     c->type_prev = NULL;
     c->type_next = NULL;
     c->type_entry = NULL;
@@ -304,20 +301,20 @@ static inline void tc_component_on_render_detach(tc_component* c) {
 }
 
 static inline void tc_component_drop(tc_component* c) {
-    if (c && c->vtable && c->vtable->drop) {
-        c->vtable->drop(c);
+    if (c && c->ref_vtable && c->ref_vtable->drop) {
+        c->ref_vtable->drop(c);
     }
 }
 
 static inline void tc_component_retain(tc_component* c) {
-    if (c && c->vtable && c->vtable->retain) {
-        c->vtable->retain(c);
+    if (c && c->ref_vtable && c->ref_vtable->retain) {
+        c->ref_vtable->retain(c);
     }
 }
 
 static inline void tc_component_release(tc_component* c) {
-    if (c && c->vtable && c->vtable->release) {
-        c->vtable->release(c);
+    if (c && c->ref_vtable && c->ref_vtable->release) {
+        c->ref_vtable->release(c);
     }
 }
 
@@ -484,35 +481,6 @@ TC_API void tc_component_unlink_from_registry(tc_component* c);
 static inline bool tc_component_is_language(tc_component* c, tc_language lang) {
     if (!c) return false;
     return c->native_language == lang;
-}
-
-// ============================================================================
-// External body management (for C#, Rust, etc.)
-// When externally_managed=true, retain/release call these on body
-// ============================================================================
-
-// Callbacks for external language reference counting
-typedef void (*tc_component_body_incref_fn)(void* body);
-typedef void (*tc_component_body_decref_fn)(void* body);
-
-// Global callbacks for external body management
-typedef struct {
-    tc_component_body_incref_fn incref;
-    tc_component_body_decref_fn decref;
-} tc_component_external_callbacks;
-
-// Set global external callbacks (call once at startup)
-TC_API void tc_component_set_external_callbacks(const tc_component_external_callbacks* callbacks);
-
-// Call external incref/decref on body (for externally_managed native components)
-TC_API void tc_component_body_incref(void* body);
-TC_API void tc_component_body_decref(void* body);
-
-// Set component as externally managed with body pointer
-static inline void tc_component_set_external_body(tc_component* c, void* body) {
-    if (!c) return;
-    c->body = body;
-    c->externally_managed = true;
 }
 
 // ============================================================================

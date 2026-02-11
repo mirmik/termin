@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QFileDialog, QListView, QTreeView
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
 from termin.editor.external_editor import open_in_text_editor
+from termin.launcher.recent import read_launch_project
 
 if TYPE_CHECKING:
     from termin.editor.inspector_controller import InspectorController
@@ -68,8 +69,17 @@ class EditorProjectController:
         if project_dir_tree is None or project_file_list is None:
             return None
 
-        # Загружаем последний открытый проект (если есть валидный .terminproj)
-        project_file = self._settings.get_last_project_file()
+        # Check if launched from launcher with a specific project
+        project_file: Path | None = None
+        launch_path = read_launch_project()
+        if launch_path is not None:
+            lp = Path(launch_path)
+            if lp.exists() and lp.is_file() and lp.suffix == ".terminproj":
+                project_file = lp
+
+        # Fallback: last opened project from editor settings
+        if project_file is None:
+            project_file = self._settings.get_last_project_file()
 
         project_root: Path | None = None
         if project_file is not None:

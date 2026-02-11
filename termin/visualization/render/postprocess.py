@@ -62,8 +62,9 @@ class PostEffect:
 
             if parent_name:
                 registry.set_type_parent(cls.__name__, parent_name)
-        except ImportError:
-            pass
+        except ImportError as e:
+            import logging
+            logging.getLogger(__name__).warning(f"InspectRegistry not available for {cls.__name__}: {e}")
 
     # ---- Сериализация ---------------------------------------------
 
@@ -273,7 +274,8 @@ class PostProcessPass(RenderFramePass):
                 eff = PostEffect.deserialize(eff_data, resource_manager)
                 effects.append(eff)
             except ValueError as e:
-                print(f"Warning: Failed to deserialize PostEffect: {e}")
+                from termin._native import log
+                log.error(f"Failed to deserialize PostEffect: {e}")
 
         return cls(
             effects=effects,
@@ -290,7 +292,7 @@ class PostProcessPass(RenderFramePass):
         Добавляем индекс в цепочке, чтобы одинаковые эффекты (например,
         два Highlight) можно было различать.
         """
-        effect_name = effect.name if hasattr(effect, "name") else effect.__class__.__name__
+        effect_name = effect.name or effect.__class__.__name__
         if not effect_name:
             effect_name = effect.__class__.__name__
         return f"{index:02d}:{effect_name}"
@@ -360,9 +362,7 @@ class PostProcessPass(RenderFramePass):
         # --- extra textures ---
         required_resources: set[str] = set()
         for eff in self.effects:
-            req = getattr(eff, "required_resources", None)
-            if callable(req):
-                required_resources |= set(req())
+            required_resources |= set(eff.required_resources())
 
         extra_textures: dict[str, "GPUTextureHandle"] = {}
         for res_name in required_resources:
@@ -406,7 +406,7 @@ class PostProcessPass(RenderFramePass):
                 ctx.graphics.set_viewport(0, 0, pw, ph)
 
                 effect.draw(ctx.graphics, current_tex, extra_textures, size, fb_target)
-                ctx.graphics.check_gl_error(f"PostFX: {effect.name if hasattr(effect, 'name') else effect.__class__.__name__}")
+                ctx.graphics.check_gl_error(f"PostFX: {effect.name}")
 
                 # Debugger: блит после применения эффекта если выбран его символ
                 if debug_symbol == self._effect_symbol(i, effect):

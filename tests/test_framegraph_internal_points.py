@@ -11,11 +11,9 @@ class DummyPass(FramePass):
             reads = set()
         if writes is None:
             writes = set()
-        super().__init__(
-            pass_name=name,
-            reads=set(reads),
-            writes=set(writes),
-        )
+        super().__init__(pass_name=name)
+        self._reads = set(reads)
+        self._writes = set(writes)
         self._internal_symbols = ["a", "b", "c"]
         # Для inplace храним явную пару алиасов
         self._inplace = inplace
@@ -25,6 +23,12 @@ class DummyPass(FramePass):
         else:
             self._inplace_src = None
             self._inplace_dst = None
+
+    def compute_reads(self):
+        return self._reads
+
+    def compute_writes(self):
+        return self._writes
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         if self._inplace and self._inplace_src and self._inplace_dst:
@@ -46,7 +50,7 @@ def test_custom_pass_can_expose_internal_symbols():
 
 
 def test_debug_internal_point_configuration_is_mutable():
-    p = FramePass(pass_name="p", reads={"in"}, writes={"out"})
+    p = DummyPass(name="p", reads={"in"}, writes={"out"})
     # по умолчанию точки дебага не заданы
     assert p.debug_internal_symbol is None
     assert p.get_debug_internal_point() is None
@@ -88,7 +92,7 @@ def test_framegraph_builds_with_and_without_debug_internal_point():
       но точка дебага не выбрана;
     * так же корректно строиться, когда точка дебага выбрана.
     """
-    p1 = FramePass(pass_name="A", reads=set(), writes={"a"})
+    p1 = DummyPass(name="A", reads=set(), writes={"a"})
     p2 = DummyPass(name="B", reads={"a"}, writes={"b"})
 
     # 1) Без конфигурации точки дебага
@@ -134,7 +138,7 @@ def test_inplace_pass_with_debug_internal_point():
     assert len(p_inplace.writes) == 1
 
     # Граф должен корректно строиться
-    p_source = FramePass(pass_name="Source", writes={"input"})
+    p_source = DummyPass(name="Source", writes={"input"})
     graph = FrameGraph([p_source, p_inplace])
     schedule = [p.pass_name for p in graph.build_schedule()]
     assert schedule == ["Source", "InplaceWithDebug"]
@@ -155,9 +159,9 @@ def test_framepass_enabled_by_default():
 
 def test_disabled_pass_not_in_schedule():
     """Отключённый пасс не попадает в расписание."""
-    p1 = FramePass(pass_name="A", writes={"a"})
-    p2 = FramePass(pass_name="B", reads={"a"}, writes={"b"})
-    p3 = FramePass(pass_name="C", reads={"b"}, writes={"c"})
+    p1 = DummyPass(name="A", writes={"a"})
+    p2 = DummyPass(name="B", reads={"a"}, writes={"b"})
+    p3 = DummyPass(name="C", reads={"b"}, writes={"c"})
 
     # Все пассы включены — все в расписании
     graph1 = FrameGraph([p1, p2, p3])
@@ -181,8 +185,8 @@ def test_disabled_pass_does_not_conflict_writes():
     Отключённый пасс не участвует в проверке конфликтов writes.
     Два пасса могут писать в один ресурс, если один из них отключён.
     """
-    p1 = FramePass(pass_name="Writer1", writes={"shared"})
-    p2 = FramePass(pass_name="Writer2", writes={"shared"})
+    p1 = DummyPass(name="Writer1", writes={"shared"})
+    p2 = DummyPass(name="Writer2", writes={"shared"})
 
     # Оба включены — конфликт
     from termin.visualization.render.framegraph.core import FrameGraphMultiWriterError
@@ -200,8 +204,9 @@ def test_disabled_pass_does_not_conflict_writes():
 
 def test_disabled_pass_not_in_alias_groups():
     """Отключённый пасс не добавляет свои ресурсы в alias-группы."""
-    p1 = FramePass(pass_name="A", writes={"a"})
-    p2 = FramePass(pass_name="B", writes={"b"}, enabled=False)
+    p1 = DummyPass(name="A", writes={"a"})
+    p2 = DummyPass(name="B", writes={"b"})
+    p2.enabled = False
 
     graph = FrameGraph([p1, p2])
     graph.build_schedule()  # нужно вызвать для построения canonical_resources

@@ -102,7 +102,7 @@ class DataAsset(Asset, Generic[T]):
             spec_data: Spec dictionary or None
         """
         if spec_data is None:
-            return
+            spec_data = {}
 
         # Extract UUID from spec (if present)
         spec_uuid = spec_data.get("uuid")

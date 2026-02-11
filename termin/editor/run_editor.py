@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication
 
 from termin.editor.editor_window import EditorWindow
 from termin.visualization.core.scene import Scene
-from termin.visualization.core.world import VisualizationWorld
+from termin.visualization.core.world import World
 from termin.visualization.platform.backends import (
     OpenGLGraphicsBackend,
     set_default_graphics_backend,
@@ -85,7 +85,7 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     sdl_backend = SDLEmbeddedWindowBackend(graphics=graphics)
 
     # Create world and scene
-    world = VisualizationWorld()
+    world = World()
     if no_scene:
         scene = None
     else:
@@ -95,7 +95,7 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     apply_dark_palette(app)
 
     # Create editor window with scene_manager from EngineCore
-    win = EditorWindow(world, scene, sdl_backend, engine.scene_manager)
+    win = EditorWindow(world, scene, sdl_backend, engine.scene_manager, graphics=graphics)
     win.showMaximized()
 
     # Process events to ensure window is visible

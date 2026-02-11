@@ -45,6 +45,9 @@ void register_tc_mesh_kind() {
         }
     );
 
+    // Register TcMesh Python type → "tc_mesh" kind mapping
+    tc::KindRegistry::instance().register_type(nb::type<termin::TcMesh>(), "tc_mesh");
+
     // Python handler for tc_mesh kind
     tc::KindRegistry::instance().register_python("tc_mesh",
         // serialize

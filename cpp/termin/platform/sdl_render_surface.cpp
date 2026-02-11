@@ -1,5 +1,6 @@
 #include "sdl_render_surface.hpp"
 #include "render/tc_input_manager.h"
+#include "tc_log.h"
 #include <SDL2/SDL_syswm.h>
 
 namespace termin {
@@ -173,7 +174,6 @@ SDLWindowRenderSurface::SDLWindowRenderSurface(
     SDLWindowRenderSurface* share
 )
     : window_(nullptr)
-    , input_manager_(nullptr)
     , backend_(backend)
     , needs_render_(true)
     , last_width_(width)
@@ -206,7 +206,6 @@ SDLWindowRenderSurface::~SDLWindowRenderSurface() {
 }
 
 void SDLWindowRenderSurface::set_input_manager(tc_input_manager* manager) {
-    input_manager_ = manager;
     tc_render_surface_set_input_manager(&surface_, manager);
 }
 

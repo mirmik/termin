@@ -24,6 +24,7 @@ class UI:
         self._root: Widget | None = None
         self._hovered_widget: Widget | None = None
         self._pressed_widget: Widget | None = None
+        self._focused_widget: Widget | None = None
 
         # Viewport dimensions
         self._viewport_w: int = 0
@@ -36,6 +37,9 @@ class UI:
     @root.setter
     def root(self, widget: Widget | None):
         self._root = widget
+        # Force re-layout on next render
+        self._viewport_w = 0
+        self._viewport_h = 0
 
     @property
     def font(self) -> FontTextureAtlas | None:
@@ -150,6 +154,32 @@ class UI:
                 hit.on_mouse_enter()
             self._hovered_widget = hit
 
+        # Send coordinates to hovered widget for internal hover tracking
+        if self._hovered_widget:
+            self._hovered_widget.on_mouse_move(x, y)
+
+        return False
+
+    def set_focus(self, widget: Widget | None):
+        """Set the focused widget. Pass None to clear focus."""
+        if self._focused_widget is widget:
+            return
+        if self._focused_widget is not None:
+            self._focused_widget.on_blur()
+        self._focused_widget = widget
+        if self._focused_widget is not None:
+            self._focused_widget.on_focus()
+
+    def key_down(self, key: int, mods: int) -> bool:
+        """Dispatch key down to the focused widget."""
+        if self._focused_widget is not None:
+            return self._focused_widget.on_key_down(key, mods)
+        return False
+
+    def text_input(self, text: str) -> bool:
+        """Dispatch text input to the focused widget."""
+        if self._focused_widget is not None:
+            return self._focused_widget.on_text_input(text)
         return False
 
     def mouse_down(self, x: float, y: float) -> bool:
@@ -162,6 +192,13 @@ class UI:
             return False
 
         hit = self._root.hit_test(x, y)
+
+        # Focus management
+        if hit is not None and hit.focusable:
+            self.set_focus(hit)
+        else:
+            self.set_focus(None)
+
         if hit:
             if hit.on_mouse_down(x, y):
                 self._pressed_widget = hit

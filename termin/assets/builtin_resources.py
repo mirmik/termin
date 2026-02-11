@@ -222,7 +222,7 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
     # Plane
     if "Plane" not in rm._mesh_assets:
         plane = MeshAsset.from_mesh3(
-            PlaneMesh(width=1.0, depth=1.0), name="Plane", uuid=BUILTIN_UUIDS["Plane"]
+            PlaneMesh(width=1.0, height=1.0), name="Plane", uuid=BUILTIN_UUIDS["Plane"]
         )
         rm.register_mesh_asset("Plane", plane, uuid=BUILTIN_UUIDS["Plane"])
         registered.append("Plane")

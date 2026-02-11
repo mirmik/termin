@@ -8,6 +8,7 @@ import numpy as np
 from termin.visualization.core.python_component import PythonComponent
 from termin.fem.multibody3d_3 import FixedRotationJoint3D
 from termin.editor.inspect_field import InspectField
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -83,7 +84,7 @@ class FEMFixedJointComponent(PythonComponent):
         # Найти тело
         body_entity = self._find_body_entity(scene)
         if body_entity is None:
-            print(f"FEMFixedJointComponent: body entity '{self.body_entity_name}' not found")
+            log.error(f"FEMFixedJointComponent: body entity '{self.body_entity_name}' not found")
             return
 
         # Найти компонент тела
@@ -91,12 +92,12 @@ class FEMFixedJointComponent(PythonComponent):
 
         self._body_component = body_entity.get_component(FEMRigidBodyComponent)
         if self._body_component is None:
-            print(f"FEMFixedJointComponent: entity '{self.body_entity_name}' has no FEMRigidBodyComponent")
+            log.error(f"FEMFixedJointComponent: entity '{self.body_entity_name}' has no FEMRigidBodyComponent")
             return
 
         fem_body = self._body_component.fem_body
         if fem_body is None:
-            print(f"FEMFixedJointComponent: FEMRigidBodyComponent not initialized")
+            log.error(f"FEMFixedJointComponent: FEMRigidBodyComponent not initialized")
             return
 
         # Создать joint

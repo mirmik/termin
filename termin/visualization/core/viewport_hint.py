@@ -122,7 +122,7 @@ class ViewportHintComponent(PythonComponent):
             return None
 
         for eff in pp.effects:
-            if hasattr(eff, "name") and eff.name == effect_name:
+            if eff.name == effect_name:
                 return eff
 
         return None

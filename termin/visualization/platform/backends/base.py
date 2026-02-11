@@ -64,6 +64,8 @@ class Key(IntEnum):
     LEFT = 263
     DOWN = 264
     UP = 265
+    HOME = 268
+    END = 269
 
     # Function keys
     F1 = 290

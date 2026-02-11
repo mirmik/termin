@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 
+from termin._native import log
+
 # Try to import native module
 try:
     from termin.voxels import _voxels_native
@@ -75,27 +77,27 @@ def voxelize_mesh_native(
 
     # Voxelize
     voxel_count = native_grid.voxelize_mesh(vertices, triangles, VOXEL_SOLID)
-    print(f"Native voxelization: {voxel_count} surface voxels")
+    log.warning(f"Native voxelization: {voxel_count} surface voxels")
 
     # Fill interior
     if fill_interior:
         filled = native_grid.fill_interior(VOXEL_SOLID)
-        print(f"Native fill_interior: {filled} voxels")
+        log.warning(f"Native fill_interior: {filled} voxels")
 
     # Mark surface
     if mark_surface:
         marked = native_grid.mark_surface(VOXEL_SURFACE)
-        print(f"Native mark_surface: {marked} voxels")
+        log.warning(f"Native mark_surface: {marked} voxels")
 
     # Clear interior
     if clear_interior:
         cleared = native_grid.clear_by_type(VOXEL_SOLID)
-        print(f"Native clear_by_type: {cleared} voxels")
+        log.warning(f"Native clear_by_type: {cleared} voxels")
 
     # Compute normals
     if compute_normals:
         normals_count = native_grid.compute_surface_normals(vertices, triangles)
-        print(f"Native compute_surface_normals: {normals_count} normals")
+        log.warning(f"Native compute_surface_normals: {normals_count} normals")
 
     # Convert to Python VoxelGrid
     py_grid = VoxelGrid(origin=(0, 0, 0), cell_size=cell_size)

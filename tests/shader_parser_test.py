@@ -238,7 +238,7 @@ def test_shader_phase_from_tree_with_properties():
     assert phase.uniforms[0].default == 0.7
 
 
-def test_property_requires_phase():
-    """@property вне @phase должен бросить ошибку."""
-    with pytest.raises(RuntimeError, match="@property outside @phase"):
-        parse_shader_text("@property Float u_value = 0.5")
+def test_property_outside_phase_accepted():
+    """@property вне @phase принимается без ошибки (глобальное свойство)."""
+    result = parse_shader_text("@property Float u_value = 0.5")
+    assert len(result.phases) == 0

@@ -7,6 +7,7 @@
 #include "termin/editor/transform_gizmo.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/geom/general_pose3.hpp"
+#include "termin/input/input_events.hpp"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 
@@ -54,6 +55,7 @@ public:
     // Callbacks to Python
     std::function<void()> on_request_update;
     std::function<void(const GeneralPose3&, const GeneralPose3&)> on_transform_end;
+    std::function<void(const KeyEvent&)> on_key;
 
 public:
     EditorInteractionSystem();

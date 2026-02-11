@@ -105,7 +105,7 @@ def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, Perspec
     mesh_tc = create_voxel_mesh(
         vertices=mesh.vertices,
         triangles=mesh.triangles,
-        vertex_normals=mesh.vertex_normals if hasattr(mesh, 'vertex_normals') else None,
+        vertex_normals=mesh.vertex_normals,
         name="mesh",
     )
     shader_prog = TcShader.from_sources(vert, frag, "", "MeshViewerShader")

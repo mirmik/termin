@@ -8,6 +8,7 @@ The callback is set by EditorWindow on startup.
 from typing import Callable
 
 _request_update_callback: Callable[[], None] | None = None
+_scene_tree_rebuild_callback: Callable[[], None] | None = None
 
 
 def set_request_update_callback(callback: Callable[[], None] | None) -> None:
@@ -16,7 +17,19 @@ def set_request_update_callback(callback: Callable[[], None] | None) -> None:
     _request_update_callback = callback
 
 
+def set_scene_tree_rebuild_callback(callback: Callable[[], None] | None) -> None:
+    """Set the global scene tree rebuild callback. Called by EditorWindow."""
+    global _scene_tree_rebuild_callback
+    _scene_tree_rebuild_callback = callback
+
+
 def request_render_update() -> None:
     """Request viewport redraw. Can be called from anywhere."""
     if _request_update_callback is not None:
         _request_update_callback()
+
+
+def request_scene_tree_rebuild() -> None:
+    """Request scene tree rebuild. Can be called from anywhere."""
+    if _scene_tree_rebuild_callback is not None:
+        _scene_tree_rebuild_callback()

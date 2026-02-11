@@ -4,6 +4,28 @@
 
 namespace termin {
 
+// C++ ref_vtable: retain/release use internal _ref_count, drop deletes
+static void cxx_ref_retain(tc_component* c) {
+    auto* self = CxxComponent::from_tc(c);
+    if (self) self->retain();
+}
+
+static void cxx_ref_release(tc_component* c) {
+    auto* self = CxxComponent::from_tc(c);
+    if (self) self->release();
+}
+
+static void cxx_ref_drop(tc_component* c) {
+    auto* self = CxxComponent::from_tc(c);
+    if (self) delete self;
+}
+
+const tc_component_ref_vtable g_cxx_component_ref_vtable = {
+    cxx_ref_retain,
+    cxx_ref_release,
+    cxx_ref_drop,
+};
+
 // Static vtable for C++ components - dispatches to virtual methods
 const tc_component_vtable CxxComponent::_cxx_vtable = {
     // Lifecycle
@@ -26,11 +48,6 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     // Editor
     CxxComponent::_cb_on_editor_start,
     CxxComponent::_cb_setup_editor_defaults,
-    // Memory management
-    CxxComponent::_cb_drop,
-    // Reference counting - for Python wrapper
-    CxxComponent::_cb_retain,
-    CxxComponent::_cb_release,
     // Serialization - NULL, handled by InspectRegistry
     nullptr,
     nullptr
@@ -39,9 +56,10 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
 CxxComponent::CxxComponent() {
     // Initialize the C component structure
     tc_component_init(&_c, &_cxx_vtable);
+    _c.ref_vtable = &g_cxx_component_ref_vtable;
     _c.kind = TC_CXX_COMPONENT;
     // Default: C++ owns this component, body points to self
-    // If created from Python, Python bindings will override body and native_language
+    // If created from Python, Python bindings will override body, native_language, and ref_vtable
     _c.body = this;
     _c.native_language = TC_LANGUAGE_CXX;
     // Note: type_entry is set by the registry when component is created via factory
@@ -179,41 +197,6 @@ void CxxComponent::_cb_setup_editor_defaults(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->setup_editor_defaults();
-    }
-}
-
-// Memory management callbacks
-void CxxComponent::_cb_drop(tc_component* c) {
-    auto* self = from_tc(c);
-    // Don't delete if externally managed - external language owns the object
-    if (self && !c->externally_managed) {
-        delete self;
-    }
-}
-
-void CxxComponent::_cb_retain(tc_component* c) {
-    if (!c) return;
-    // If externally managed, incref the body (C#/Rust wrapper)
-    if (c->externally_managed && c->body) {
-        tc_component_body_incref(c->body);
-    } else {
-        auto* self = from_tc(c);
-        if (self) {
-            self->retain();
-        }
-    }
-}
-
-void CxxComponent::_cb_release(tc_component* c) {
-    if (!c) return;
-    // If externally managed, decref the body (C#/Rust wrapper)
-    if (c->externally_managed && c->body) {
-        tc_component_body_decref(c->body);
-    } else {
-        auto* self = from_tc(c);
-        if (self) {
-            self->release();  // May delete self if ref_count reaches 0
-        }
     }
 }
 

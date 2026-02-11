@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from termin._native import log
+
 
 def signed_area_2d(polygon: np.ndarray) -> float:
     """Вычислить знаковую площадь полигона (положительная для CCW)."""
@@ -171,7 +173,7 @@ def ear_clip(polygon: np.ndarray) -> list[tuple[int, int, int]]:
                 break
 
         if not found_ear:
-            print(f"[ear_clip] no ear found! remaining={len(indices)}, convex={convex_count}, reflex={reflex_count}, triangles={len(triangles)}")
+            log.error(f"[ear_clip] no ear found! remaining={len(indices)}, convex={convex_count}, reflex={reflex_count}, triangles={len(triangles)}")
             break
 
     # Добавляем последний треугольник
@@ -666,7 +668,7 @@ def delaunay_flip(
             break
 
     if flip_count > 0:
-        print(f"[delaunay_flip] {flip_count} flips")
+        log.warning(f"[delaunay_flip] {flip_count} flips")
 
     return triangles
 
@@ -788,7 +790,7 @@ def valence_flip(
 
     if flip_count > 0:
         final_max_valence = max(compute_valence().values()) if triangles else 0
-        print(f"[valence_flip] {flip_count} flips, max valence: {initial_max_valence} -> {final_max_valence}")
+        log.warning(f"[valence_flip] {flip_count} flips, max valence: {initial_max_valence} -> {final_max_valence}")
 
     return triangles
 
@@ -907,7 +909,7 @@ def angle_flip(
             break
 
     if flip_count > 0:
-        print(f"[angle_flip] {flip_count} flips")
+        log.warning(f"[angle_flip] {flip_count} flips")
 
     return triangles
 
@@ -1041,7 +1043,7 @@ def cvt_smoothing(
     if interior_count > 0:
         final_area = compute_total_area()
         area_change = (final_area - area_before) / area_before * 100
-        print(f"[cvt_smoothing] {iterations} iterations, {interior_count} interior vertices, "
+        log.warning(f"[cvt_smoothing] {iterations} iterations, {interior_count} interior vertices, "
               f"boundary: {len(boundary_vertices)}, area change: {area_change:.2f}%"
               f"{f', BOUNDARY MOVED: {boundary_moved}!' if boundary_moved else ''}")
 
@@ -1114,9 +1116,9 @@ def edge_collapse(
                 if min_edge_length > 0 and length < min_edge_length:
                     interior_collapsible += 1
 
-        print(f"[edge_collapse] interior_threshold={min_edge_length:.3f}, contour_threshold={min_contour_edge_length:.3f}")
-        print(f"[edge_collapse] edges={len(all_edges)}, lengths: min={min_len:.3f}, max={max_len:.3f}, avg={avg_len:.3f}")
-        print(f"[edge_collapse] interior_collapsible={interior_collapsible}, contour_collapsible={contour_collapsible}")
+        log.warning(f"[edge_collapse] interior_threshold={min_edge_length:.3f}, contour_threshold={min_contour_edge_length:.3f}")
+        log.warning(f"[edge_collapse] edges={len(all_edges)}, lengths: min={min_len:.3f}, max={max_len:.3f}, avg={avg_len:.3f}")
+        log.warning(f"[edge_collapse] interior_collapsible={interior_collapsible}, contour_collapsible={contour_collapsible}")
 
     collapse_count = 0
     min_len_sq = min_edge_length * min_edge_length
@@ -1243,9 +1245,9 @@ def edge_collapse(
             ]
             vertices = new_vertices
 
-        print(f"[edge_collapse] {collapse_count} collapses, {len(vertices)} vertices, {len(triangles)} triangles")
+        log.warning(f"[edge_collapse] {collapse_count} collapses, {len(vertices)} vertices, {len(triangles)} triangles")
     else:
-        print(f"[edge_collapse] no collapses performed")
+        log.warning(f"[edge_collapse] no collapses performed")
 
     return np.array(vertices, dtype=np.float32), triangles
 
@@ -1476,7 +1478,7 @@ def ear_clipping_refined(
 
     # Второй проход (после edge collapse)
     if use_second_pass and len(refined_tris) >= 2:
-        print("[second_pass] Starting...")
+        log.warning("[second_pass] Starting...")
 
         # Пересчитываем граничные рёбра после collapse
         edge_map = build_edge_map(refined_tris)
@@ -1508,7 +1510,7 @@ def ear_clipping_refined(
                 refined_verts, refined_tris, boundary_vertices
             )
 
-        print("[second_pass] Done")
+        log.warning("[second_pass] Done")
 
     return refined_verts, np.array(refined_tris, dtype=np.int32)
 

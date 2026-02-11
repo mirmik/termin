@@ -13,6 +13,8 @@ import pkgutil
 import sys
 from typing import Callable, Set
 
+from termin._native import log
+
 
 def scan_paths(
     paths: list[str],
@@ -45,32 +47,81 @@ def scan_paths(
     return loaded
 
 
+_filepath_to_module: dict[str, str] = {}
+
+
 def _scan_file(
     filepath: str,
     registry: dict[str, type],
     module_prefix: str,
 ) -> list[str]:
-    """Load classes from a single .py file."""
+    """Load or reload classes from a single .py file."""
     before = set(registry.keys())
+    real_path = os.path.realpath(filepath)
 
-    filename = os.path.basename(filepath)
-    module_name = f"{module_prefix}.{os.path.splitext(filename)[0]}_{id(filepath)}"
+    # Check if module was already loaded from this file
+    existing_module_name = _filepath_to_module.get(real_path)
 
-    try:
-        spec = importlib.util.spec_from_file_location(module_name, filepath)
-        if spec is None or spec.loader is None:
+    if existing_module_name and existing_module_name in sys.modules:
+        # Reload by re-executing into the same module object
+        old_module = sys.modules[existing_module_name]
+        old_classes = {
+            name: cls for name, cls in registry.items()
+            if getattr(cls, "__module__", None) == existing_module_name
+        }
+        try:
+            spec = importlib.util.spec_from_file_location(existing_module_name, filepath)
+            if spec is None or spec.loader is None:
+                return []
+            spec.loader.exec_module(old_module)
+        except Exception as e:
+            log.warn(f"Failed to reload {filepath}: {e}")
             return []
 
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        new_classes = {
+            name: cls for name, cls in registry.items()
+            if getattr(cls, "__module__", None) == existing_module_name
+        }
+        _update_living_instances(old_classes, new_classes)
+    else:
+        # First load — flat name (no dots) so reload works without parent package
+        filename = os.path.basename(filepath)
+        module_name = f"{module_prefix}_{os.path.splitext(filename)[0]}_{hash(real_path) & 0xFFFFFFFF:08x}"
 
-    except Exception as e:
-        print(f"Warning: Failed to load {filepath}: {e}")
-        return []
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, filepath)
+            if spec is None or spec.loader is None:
+                return []
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+            _filepath_to_module[real_path] = module_name
+
+        except Exception as e:
+            log.warn(f"Failed to load {filepath}: {e}")
+            return []
 
     after = set(registry.keys())
     return list(after - before)
+
+
+def _update_living_instances(
+    old_classes: dict[str, type],
+    new_classes: dict[str, type],
+) -> None:
+    """Swap __class__ on living component instances after reload."""
+    import gc
+    for name, old_cls in old_classes.items():
+        new_cls = new_classes.get(name)
+        if new_cls is None or new_cls is old_cls:
+            continue
+        for obj in gc.get_referrers(old_cls):
+            if isinstance(obj, old_cls) and type(obj) is old_cls:
+                try:
+                    obj.__class__ = new_cls
+                except Exception as e:
+                    log.warn(f"Failed to update instance of {name}: {e}")
 
 
 def _scan_module(
@@ -91,10 +142,10 @@ def _scan_module(
                 try:
                     importlib.import_module(name)
                 except Exception as e:
-                    print(f"Warning: Failed to import {name}: {e}")
+                    log.warning(f"Failed to import {name}: {e}")
 
     except Exception as e:
-        print(f"Warning: Failed to import module {module_name}: {e}")
+        log.warning(f"Failed to import module {module_name}: {e}")
         return []
 
     after = set(registry.keys())
@@ -133,7 +184,7 @@ def _scan_directory(
                 spec.loader.exec_module(module)
 
             except Exception as e:
-                print(f"Warning: Failed to load {filepath}: {e}")
+                log.warning(f"Failed to load {filepath}: {e}")
 
     after = set(registry.keys())
     return list(after - before)
@@ -206,7 +257,7 @@ def _scan_file_for_subclasses(
                 registry[attr_name] = attr
 
     except Exception as e:
-        print(f"Warning: Failed to load {filepath}: {e}")
+        log.warning(f"Failed to load {filepath}: {e}")
         return []
 
     after = set(registry.keys())
@@ -274,10 +325,10 @@ def _scan_module_for_subclasses(
                         ):
                             registry[attr_name] = attr
                 except Exception as e:
-                    print(f"Warning: Failed to import {name}: {e}")
+                    log.warning(f"Failed to import {name}: {e}")
 
     except Exception as e:
-        print(f"Warning: Failed to import module {module_name}: {e}")
+        log.warning(f"Failed to import module {module_name}: {e}")
         return []
 
     after = set(registry.keys())

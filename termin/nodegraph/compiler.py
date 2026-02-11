@@ -407,7 +407,8 @@ def create_pass_instance(
             try:
                 setattr(instance, key, value)
             except AttributeError as e:
-                print(f"[compiler] setattr({class_name}, {key}, {value!r}) failed: {e}")
+                from termin._native import log
+                log.warning(f"[compiler] setattr({class_name}, {key}, {value!r}) failed: {e}")
         else:
             # Dynamic input - add as extra texture if supported
             if hasattr(instance, "add_extra_texture"):
@@ -419,8 +420,9 @@ def create_pass_instance(
         if value is not None and param.name not in resource_params:
             try:
                 setattr(instance, param.name, value)
-            except AttributeError:
-                pass  # Ignore unknown attributes
+            except AttributeError as e:
+                from termin._native import log
+                log.warning(f"[compiler] Cannot set param {param.name} on {class_name}: {e}")
 
     # Set viewport_name
     if viewport_name:
@@ -531,7 +533,8 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
             for res_name in resource_params.values():
                 resource_to_passes.setdefault(res_name, []).append(class_name)
         except CompileError as e:
-            print(f"Warning: {e}")
+            from termin._native import log
+            log.error(f"[compiler] Failed to create pass: {e}")
             continue
 
     # Use FrameGraph for topological sort
@@ -542,7 +545,8 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
         # Get canonical resource names from FrameGraph
         canonical_map = frame_graph._canonical_resources
     except Exception as e:
-        print(f"Warning: Topological sort failed: {e}, using original order")
+        from termin._native import log
+        log.error(f"[compiler] Topological sort failed: {e}, using original order")
         sorted_passes = passes
         # Build our own canonical map
         canonical_map = build_canonical_resource_map(passes)

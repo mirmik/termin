@@ -88,7 +88,7 @@ static tc_pass* python_pass_factory(void* userdata) {
 
 // Convert tc_pass to Python object
 // For Python-native passes: returns body directly
-// For C++-native passes with externally_managed: returns body (Python wrapper)
+// For C++-native passes with Python wrapper: returns body
 // For C++-native passes without wrapper: creates nanobind wrapper
 inline nb::object tc_pass_to_python(tc_pass* p) {
     if (!p) {
@@ -103,7 +103,7 @@ inline nb::object tc_pass_to_python(tc_pass* p) {
     }
 
     // External pass (Python) or native pass with Python wrapper - return body directly
-    if (p->body && p->externally_managed) {
+    if (p->body && p->native_language == TC_LANGUAGE_PYTHON) {
         return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
     }
 
@@ -350,18 +350,6 @@ static void py_pass_destroy(void* wrapper) {
     }
 }
 
-static void py_pass_incref(void* wrapper) {
-    nb::gil_scoped_acquire gil;
-    PyObject* obj = static_cast<PyObject*>(wrapper);
-    Py_INCREF(obj);
-}
-
-static void py_pass_decref(void* wrapper) {
-    nb::gil_scoped_acquire gil;
-    PyObject* obj = static_cast<PyObject*>(wrapper);
-    Py_DECREF(obj);
-}
-
 static tc_external_pass_callbacks g_py_pass_callbacks = {
     .execute = py_pass_execute,
     .get_reads = py_pass_get_reads,
@@ -370,8 +358,33 @@ static tc_external_pass_callbacks g_py_pass_callbacks = {
     .get_resource_specs = py_pass_get_resource_specs,
     .get_internal_symbols = py_pass_get_internal_symbols,
     .destroy = py_pass_destroy,
-    .incref = py_pass_incref,
-    .decref = py_pass_decref,
+};
+
+// Python ref_vtable for passes: retain=Py_INCREF, release=Py_DECREF, drop=free C struct + Py_DECREF
+static void py_pass_ref_retain(tc_pass* p) {
+    if (p && p->body) {
+        nb::gil_scoped_acquire gil;
+        Py_INCREF(reinterpret_cast<PyObject*>(p->body));
+    }
+}
+
+static void py_pass_ref_release(tc_pass* p) {
+    if (p && p->body) {
+        nb::gil_scoped_acquire gil;
+        Py_DECREF(reinterpret_cast<PyObject*>(p->body));
+    }
+}
+
+static void py_pass_ref_drop(tc_pass* p) {
+    if (!p) return;
+    // Free the C-allocated external pass struct
+    tc_pass_free_external(p);
+}
+
+static const tc_pass_ref_vtable g_py_pass_ref_vtable = {
+    py_pass_ref_retain,
+    py_pass_ref_release,
+    py_pass_ref_drop,
 };
 
 static bool g_py_callbacks_registered = false;
@@ -551,7 +564,7 @@ void bind_tc_pass(nb::module_& m) {
             if (!p) return nb::none();
 
             // For Python passes, check if they have a custom serialize method
-            if (p->kind == TC_EXTERNAL_PASS && p->body && p->externally_managed) {
+            if (p->kind == TC_EXTERNAL_PASS && p->body && p->native_language == TC_LANGUAGE_PYTHON) {
                 nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(p->body));
                 if (nb::hasattr(py_obj, "serialize")) {
                     nb::object result = py_obj.attr("serialize")();
@@ -652,7 +665,7 @@ void bind_tc_pass(nb::module_& m) {
     nb::class_<TcPass>(m, "TcPass")
         .def("__init__", [](TcPass* self, nb::object py_self, const std::string& type_name) {
             ensure_py_callbacks_registered();
-            tc_pass* c = tc_pass_new_external(py_self.ptr(), type_name.c_str());
+            tc_pass* c = tc_pass_new_external(py_self.ptr(), type_name.c_str(), &g_py_pass_ref_vtable);
             new (self) TcPass(c);
         }, nb::arg("py_self"), nb::arg("type_name"))
         .def("ref", &TcPass::ref)

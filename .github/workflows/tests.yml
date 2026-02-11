@@ -1,0 +1,116 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  cpp-tests:
+    name: C/C++ Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            python3-dev \
+            libgl1-mesa-dev \
+            libsdl2-dev \
+            qt6-base-dev
+
+      - name: Install nanobind
+        run: pip install nanobind
+
+      - name: Configure with tests
+        run: |
+          cmake -S . -B build_test \
+            -DBUILD_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build_test --parallel
+
+      - name: Run C/C++ tests
+        run: ctest --output-on-failure --test-dir build_test
+
+  standalone-build:
+    name: Standalone Build (build.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            python3-dev \
+            libgl1-mesa-dev \
+            libsdl2-dev \
+            qt6-base-dev
+
+      - name: Install nanobind
+        run: pip install nanobind
+
+      - name: Build via build.sh
+        run: ./build.sh
+
+      - name: Verify install directory
+        run: |
+          test -f install/bin/termin_editor
+          test -f install/bin/termin_launcher
+          ldd install/bin/termin_editor
+
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            python3-dev \
+            libgl1-mesa-dev \
+            libsdl2-dev \
+            qt6-base-dev
+
+      - name: Install Python dependencies
+        run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2
+
+      - name: Build and install
+        run: pip install --no-build-isolation -e .
+
+      - name: Run Python tests
+        run: python -m pytest tests/ -v

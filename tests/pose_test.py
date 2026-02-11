@@ -190,7 +190,8 @@ class TestPose3(unittest.TestCase):
         pose = Pose3.from_euler(roll, pitch, yaw)
 
         # Convert back to Euler angles
-        result_roll, result_pitch, result_yaw = pose.to_euler('xyz')
+        euler = pose.to_euler()
+        result_roll, result_pitch, result_yaw = euler.x, euler.y, euler.z
 
         # Check that we get the same angles back
         self.assertAlmostEqual(result_roll, roll, places=6)
