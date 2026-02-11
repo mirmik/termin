@@ -539,7 +539,7 @@ void RenderingManager::render_all_offscreen() {
 
     // Set offscreen GPU context (lazy-create)
     if (!offscreen_gpu_context_) {
-        offscreen_gpu_context_ = tc_gpu_context_new(tc_gpu_get_context_key());
+        offscreen_gpu_context_ = tc_gpu_context_new(0);
     }
     tc_gpu_set_context(offscreen_gpu_context_);
 

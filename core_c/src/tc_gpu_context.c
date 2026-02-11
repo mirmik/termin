@@ -8,9 +8,6 @@
 // Thread-local current GPU context
 static _Thread_local tc_gpu_context* g_current_gpu_context = NULL;
 
-// Defined in tc_gpu.c — we update it for backward compatibility
-extern _Thread_local uintptr_t g_current_context_key;
-
 // ============================================================================
 // Internal: grow array to fit index
 // ============================================================================
@@ -141,8 +138,6 @@ void tc_gpu_context_free(tc_gpu_context* ctx) {
 
 void tc_gpu_set_context(tc_gpu_context* ctx) {
     g_current_gpu_context = ctx;
-    // Backward compatibility: update legacy context key
-    g_current_context_key = ctx ? ctx->key : 0;
 }
 
 tc_gpu_context* tc_gpu_get_context(void) {

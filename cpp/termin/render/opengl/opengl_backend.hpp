@@ -561,7 +561,10 @@ public:
     static OpenGLGraphicsBackend& get_instance();
 
     ~OpenGLGraphicsBackend() override {
-        // GPU resources are now owned by GPUContext - no manual cleanup here
+        if (default_gpu_context_) {
+            tc_gpu_context_free(default_gpu_context_);
+            default_gpu_context_ = nullptr;
+        }
     }
 
     void test_method() {
@@ -592,6 +595,16 @@ public:
                 tc::Log::info("OpenGL debug output enabled");
             }
             #endif
+        }
+
+        // Ensure a GPUContext exists for the current GL context.
+        // Display/render manager paths set their own context via tc_display_make_current,
+        // but standalone paths (launcher, examples) don't — create a default one.
+        if (!tc_gpu_get_context()) {
+            if (!default_gpu_context_) {
+                default_gpu_context_ = tc_gpu_context_new(0);
+            }
+            tc_gpu_set_context(default_gpu_context_);
         }
 
         glEnable(GL_DEPTH_TEST);
@@ -1193,38 +1206,24 @@ private:
 
     void ensure_ui_buffers() {
         tc_gpu_context* ctx = tc_gpu_get_context();
-        if (ctx) {
-            // Use per-context backend slots
-            if (ctx->backend_ui_vao != 0 && glIsVertexArray(ctx->backend_ui_vao)) {
-                ui_vao_ = ctx->backend_ui_vao;
-                ui_vbo_ = ctx->backend_ui_vbo;
-                return;
-            }
-            // Create new VAO (per-context) and VBO (shared if primary)
-            GLuint vao, vbo;
-            glGenVertexArrays(1, &vao);
-            glGenBuffers(1, &vbo);
-            ctx->backend_ui_vao = vao;
-            ctx->backend_ui_vbo = vbo;
-            ui_vao_ = vao;
-            ui_vbo_ = vbo;
+        if (!ctx) {
+            tc::Log::error("[ensure_ui_buffers] no GPUContext set");
             return;
         }
 
-        // Legacy path (no GPUContext)
-        if (ui_vao_ != 0) {
-            if (glIsVertexArray && glIsVertexArray(ui_vao_)) {
-                return;
-            }
-            tc::Log::warn("ensure_ui_buffers: VAO %u invalid, recreating", ui_vao_);
+        if (ctx->backend_ui_vao != 0 && glIsVertexArray(ctx->backend_ui_vao)) {
+            ui_vao_ = ctx->backend_ui_vao;
+            ui_vbo_ = ctx->backend_ui_vbo;
+            return;
         }
 
-        if (glGenVertexArrays) {
-            glGenVertexArrays(1, &ui_vao_);
-            glGenBuffers(1, &ui_vbo_);
-        } else {
-            tc::Log::error("[ensure_ui_buffers] glGenVertexArrays is NULL!");
-        }
+        GLuint vao, vbo;
+        glGenVertexArrays(1, &vao);
+        glGenBuffers(1, &vbo);
+        ctx->backend_ui_vao = vao;
+        ctx->backend_ui_vbo = vbo;
+        ui_vao_ = vao;
+        ui_vbo_ = vbo;
     }
 
     void draw_immediate_impl(const float* vertices, int vertex_count, GLenum mode) {
@@ -1244,50 +1243,23 @@ private:
 
     void ensure_immediate_buffers() {
         tc_gpu_context* ctx = tc_gpu_get_context();
-        if (ctx) {
-            // Use per-context backend slots
-            if (ctx->backend_immediate_vao != 0 && glIsVertexArray(ctx->backend_immediate_vao)) {
-                immediate_vao_ = ctx->backend_immediate_vao;
-                immediate_vbo_ = ctx->backend_immediate_vbo;
-                return;
-            }
-            // Create new VAO and VBO for this context
-            GLuint vao, vbo;
-            glGenVertexArrays(1, &vao);
-            glGenBuffers(1, &vbo);
-
-            glBindVertexArray(vao);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-            constexpr GLsizei stride = 7 * sizeof(float);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, nullptr);
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(3 * sizeof(float)));
-
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-            glBindVertexArray(0);
-
-            ctx->backend_immediate_vao = vao;
-            ctx->backend_immediate_vbo = vbo;
-            immediate_vao_ = vao;
-            immediate_vbo_ = vbo;
+        if (!ctx) {
+            tc::Log::error("[ensure_immediate_buffers] no GPUContext set");
             return;
         }
 
-        // Legacy path (no GPUContext)
-        if (immediate_vao_ != 0) {
-            if (glIsVertexArray(immediate_vao_)) {
-                return;
-            }
-            tc::Log::warn("ensure_immediate_buffers: VAO %u invalid, recreating", immediate_vao_);
+        if (ctx->backend_immediate_vao != 0 && glIsVertexArray(ctx->backend_immediate_vao)) {
+            immediate_vao_ = ctx->backend_immediate_vao;
+            immediate_vbo_ = ctx->backend_immediate_vbo;
+            return;
         }
 
-        glGenVertexArrays(1, &immediate_vao_);
-        glGenBuffers(1, &immediate_vbo_);
+        GLuint vao, vbo;
+        glGenVertexArrays(1, &vao);
+        glGenBuffers(1, &vbo);
 
-        glBindVertexArray(immediate_vao_);
-        glBindBuffer(GL_ARRAY_BUFFER, immediate_vbo_);
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
         constexpr GLsizei stride = 7 * sizeof(float);
         glEnableVertexAttribArray(0);
@@ -1297,9 +1269,17 @@ private:
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+
+        ctx->backend_immediate_vao = vao;
+        ctx->backend_immediate_vbo = vbo;
+        immediate_vao_ = vao;
+        immediate_vbo_ = vbo;
     }
 
     bool initialized_;
+
+    // Default GPUContext for standalone rendering paths (launcher, examples)
+    tc_gpu_context* default_gpu_context_ = nullptr;
 
     // UI drawing resources
     GLuint ui_vao_ = 0;

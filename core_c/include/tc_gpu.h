@@ -114,11 +114,6 @@ TC_API void tc_gpu_set_shader_preprocess(tc_shader_preprocess_fn fn);
 // Check if GPU ops are available
 TC_API bool tc_gpu_available(void);
 
-// Context key for multi-context VAO management (shared GL contexts).
-// Set after make_current() to identify which GL context is active.
-// VAOs are per-context; VBOs/EBOs/textures/shaders are shared.
-TC_API void tc_gpu_set_context_key(uintptr_t key);
-TC_API uintptr_t tc_gpu_get_context_key(void);
 
 // ============================================================================
 // Texture GPU operations

@@ -173,9 +173,7 @@ void tc_display_make_current(tc_display* display) {
             s->gpu_context = tc_gpu_context_new(key);
         }
 
-        // Set both new GPUContext and legacy context key
         tc_gpu_set_context(s->gpu_context);
-        tc_gpu_set_context_key(tc_render_surface_context_key(s));
     }
 }
 

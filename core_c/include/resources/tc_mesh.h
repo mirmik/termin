@@ -76,9 +76,6 @@ typedef bool (*tc_mesh_load_fn)(struct tc_mesh* mesh, void* user_data);
 // Mesh data
 // ============================================================================
 
-// Max number of GL contexts that can have separate VAOs for one mesh
-#define TC_MESH_MAX_CONTEXTS 8
-
 typedef struct tc_mesh {
     tc_resource_header header;   // common resource fields (uuid, name, version, etc.)
     void* vertices;              // raw vertex data blob
@@ -89,51 +86,15 @@ typedef struct tc_mesh {
     uint8_t draw_mode;           // tc_draw_mode (TC_DRAW_TRIANGLES or TC_DRAW_LINES)
     uint8_t _pad2[3];
 
-    // GPU state (managed by tc_gpu)
+    // GPU state write-through cache (managed by tc_gpu via GPUContext)
+    // These are updated by tc_gpu functions for the current context.
+    // Actual per-context state lives in tc_gpu_context.
     uint32_t gpu_vao;            // active VAO for current context (set before draw)
-    uint32_t gpu_vbo;            // shared VBO (valid across shared GL contexts)
-    uint32_t gpu_ebo;            // shared EBO (valid across shared GL contexts)
+    uint32_t gpu_vbo;            // VBO (write-through from GPUContext)
+    uint32_t gpu_ebo;            // EBO (write-through from GPUContext)
     int32_t gpu_version;         // version at last VBO/EBO upload (-1 = never)
-
-    // Per-context VAO storage (VAOs are NOT shared between GL contexts)
-    uintptr_t gpu_vao_keys[TC_MESH_MAX_CONTEXTS];
-    uint32_t gpu_vaos[TC_MESH_MAX_CONTEXTS];
-    uint32_t gpu_vao_count;
 } tc_mesh;
 
-
-// ============================================================================
-// Per-context VAO helpers
-// ============================================================================
-
-// Look up VAO for a given context key. Returns 0 if not found.
-static inline uint32_t tc_mesh_get_vao(const tc_mesh* mesh, uintptr_t context_key) {
-    for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
-        if (mesh->gpu_vao_keys[i] == context_key) {
-            return mesh->gpu_vaos[i];
-        }
-    }
-    return 0;
-}
-
-// Store VAO for a given context key. Returns false if full.
-static inline bool tc_mesh_set_vao(tc_mesh* mesh, uintptr_t context_key, uint32_t vao) {
-    // Update existing entry
-    for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
-        if (mesh->gpu_vao_keys[i] == context_key) {
-            mesh->gpu_vaos[i] = vao;
-            return true;
-        }
-    }
-    // Add new entry
-    if (mesh->gpu_vao_count >= TC_MESH_MAX_CONTEXTS) {
-        return false;
-    }
-    mesh->gpu_vao_keys[mesh->gpu_vao_count] = context_key;
-    mesh->gpu_vaos[mesh->gpu_vao_count] = vao;
-    mesh->gpu_vao_count++;
-    return true;
-}
 
 // ============================================================================
 // Mesh helper functions
