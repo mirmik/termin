@@ -356,6 +356,7 @@ nos::trent nos::json::parser::parse_dict()
 
     if (onebuf == '}')
     {
+        onebuf = 0;
         return js;
     }
 

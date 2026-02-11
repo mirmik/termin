@@ -23,6 +23,7 @@
 #include "termin/colliders/collider_component.hpp"
 #include "termin/kinematic/rotator_component.hpp"
 #include "termin/kinematic/actuator_component.hpp"
+#include "termin/tc_scene.hpp"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "tc_opengl.h"
@@ -601,6 +602,10 @@ public:
 
 class RenderingManager {
 public:
+    // Construction (registers as global instance via set_instance)
+    RenderingManager();
+    ~RenderingManager();
+
     // Singleton access
     static RenderingManager& instance();
     static void reset_for_testing();
@@ -624,10 +629,6 @@ public:
 
     // Shutdown
     void shutdown();
-
-private:
-    RenderingManager();
-    ~RenderingManager();
 };
 
 // ============================================================================
@@ -970,6 +971,30 @@ void* tc_opengl_get_graphics(void);
 namespace termin {
     GraphicsBackend* get_opengl_graphics() {
         return static_cast<GraphicsBackend*>(tc_opengl_get_graphics());
+    }
+}
+%}
+
+// ============================================================================
+// Scene Serialization (via TcSceneRef C++ wrapper)
+// ============================================================================
+
+%inline %{
+namespace termin {
+    // Serialize scene to JSON string (all entities, components, settings)
+    std::string scene_to_json(tc_scene_handle h) {
+        TcSceneRef scene(h);
+        if (!scene.valid()) return "{}";
+        return scene.to_json_string();
+    }
+
+    // Load entities and settings from JSON into existing scene
+    // Returns number of loaded entities
+    int scene_from_json(tc_scene_handle h, const std::string& json) {
+        TcSceneRef scene(h);
+        if (!scene.valid()) return -1;
+        scene.from_json_string(json);
+        return static_cast<int>(scene.entity_count());
     }
 }
 %}

@@ -466,9 +466,12 @@ void ColorPass::execute_with_data(
     if (detailed) tc_profiler_end_section();
 
     // Bind shadow textures to texture units (once per frame)
+    // Skip entirely when no shadow resource — no shader expects sampler2DShadow
     if (detailed) tc_profiler_begin_section("ShadowBind");
-    bind_shadow_textures(shadow_maps);
-    graphics->check_gl_error("ColorPass: after bind_shadow_textures");
+    if (!shadow_res.empty()) {
+        bind_shadow_textures(shadow_maps);
+        graphics->check_gl_error("ColorPass: after bind_shadow_textures");
+    }
     if (detailed) tc_profiler_end_section();
 
     // Render each draw call

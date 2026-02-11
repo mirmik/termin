@@ -67,4 +67,15 @@ public static class SwigHelpers
     {
         return SWIGTYPE_p_tc_pipeline.getCPtr(obj).Handle;
     }
+
+    /// <summary>
+    /// Convert TcSceneHandle (P/Invoke struct) to SWIG tc_scene_handle (class).
+    /// </summary>
+    public static tc_scene_handle ToSwigSceneHandle(TcSceneHandle handle)
+    {
+        var swigHandle = new tc_scene_handle();
+        swigHandle.index = handle.Index;
+        swigHandle.generation = handle.Generation;
+        return swigHandle;
+    }
 }

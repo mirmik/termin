@@ -17,6 +17,14 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_init")]
     public static extern void Init();
 
+    /// <summary>
+    /// Full initialization: core registries + inspect system + kind handlers.
+    /// Call this instead of Init() to enable serialization/deserialization and SetField.
+    /// Exported from entity_lib.dll.
+    /// </summary>
+    [DllImport("entity_lib", EntryPoint = "tc_init_full")]
+    public static extern void InitFull();
+
     [DllImport(DLL, EntryPoint = "tc_shutdown")]
     public static extern void Shutdown();
 
@@ -883,6 +891,27 @@ public static class TerminCore
     /// </summary>
     [DllImport(DLL, EntryPoint = "tc_scene_get_collision_world")]
     public static extern IntPtr SceneGetCollisionWorld(TcSceneHandle scene);
+
+    // ========================================================================
+    // Logging
+    // ========================================================================
+
+    public enum TcLogLevel
+    {
+        Debug = 0,
+        Info = 1,
+        Warn = 2,
+        Error = 3
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void TcLogCallback(TcLogLevel level, [MarshalAs(UnmanagedType.LPUTF8Str)] string message);
+
+    [DllImport(DLL, EntryPoint = "tc_log_set_callback")]
+    public static extern void LogSetCallback(TcLogCallback? callback);
+
+    [DllImport(DLL, EntryPoint = "tc_log_set_level")]
+    public static extern void LogSetLevel(TcLogLevel level);
 }
 
 /// <summary>

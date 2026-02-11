@@ -93,7 +93,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
         Console.WriteLine("[SceneViewer] InitializeTermin starting...");
 
         // Initialize core library (scene pool, viewport pool, etc.)
-        TerminCore.Init();
+        TerminCore.InitFull();
         Console.WriteLine("[SceneViewer] tc_init OK");
 
         // Initialize termin OpenGL backend

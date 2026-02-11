@@ -12,6 +12,8 @@
 #include "resources/tc_mesh_registry.h"
 #include "resources/tc_material_registry.h"
 #include "tc_log.hpp"
+#include "termin_core.h"
+#include "../../cpp/termin/inspect/tc_kind_cpp.hpp"
 
 // For CxxFramePass::from_tc in pass inspect functions
 #include "../../cpp/termin/render/frame_pass.hpp"
@@ -298,6 +300,24 @@ const char* tc_component_get_field_string(tc_component* c, const char* path) {
     }
     tc_value_free(&v);
     return g_field_string_result.c_str();
+}
+
+// ============================================================================
+// Full initialization (core + inspect + kinds) — single entry point for FFI
+// ============================================================================
+
+void tc_init_full(void) {
+    // 1. Core registries (scene pool, mesh, shader, material, etc.)
+    tc_init();
+
+    // 2. Connect C++ InspectRegistry to C dispatcher
+    tc::init_cpp_inspect_vtable();
+
+    // 3. Register builtin kind handlers (bool, int, float, tc_mesh, tc_material, etc.)
+    //    KindRegistryCpp::instance() triggers registration on first access
+    (void)tc::KindRegistryCpp::instance();
+
+    tc_log(TC_LOG_INFO, "[tc_init_full] Core + inspect + kinds initialized");
 }
 
 } // extern "C"

@@ -56,6 +56,26 @@ public class Scene : IDisposable
     public int EntityCount => (int)TerminCore.SceneEntityCount(_handle);
 
     /// <summary>
+    /// Serializes scene to JSON string (entities, components, settings).
+    /// Uses the native engine's inspect-based serialization.
+    /// </summary>
+    public string ToJson()
+    {
+        var swigHandle = SwigHelpers.ToSwigSceneHandle(_handle);
+        return termin.scene_to_json(swigHandle);
+    }
+
+    /// <summary>
+    /// Loads entities and settings from JSON into this scene.
+    /// Returns number of loaded entities.
+    /// </summary>
+    public int FromJson(string json)
+    {
+        var swigHandle = SwigHelpers.ToSwigSceneHandle(_handle);
+        return termin.scene_from_json(swigHandle, json);
+    }
+
+    /// <summary>
     /// Gets the collision world pointer (for debugging).
     /// </summary>
     public IntPtr CollisionWorldPtr => _collisionWorld;
