@@ -4,6 +4,7 @@
 #include "tc_kind_cpp.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/material/tc_material_handle.hpp"
+#include <cstring>
 
 extern "C" {
 #include "inspect/tc_kind.h"
@@ -31,10 +32,36 @@ static tc_value cpp_serialize(const char* kind_name, const tc_value* input, void
 
 static tc_value cpp_deserialize(const char* kind_name, const tc_value* input, tc_scene_handle scene, void* ctx) {
     (void)ctx;
-    (void)scene;
-    // For C++ kinds, actual deserialization is done via KindRegistryCpp::deserialize()
-    // which works with std::any. This callback is pass-through.
-    if (!input) return tc_value_nil();
+    if (!input || !kind_name) return tc_value_nil();
+
+    // vec3: list [x, y, z] → TC_VALUE_VEC3
+    if (strcmp(kind_name, "vec3") == 0) {
+        if (input->type == TC_VALUE_VEC3) return tc_value_copy(input);
+        if (input->type == TC_VALUE_LIST && input->data.list.count >= 3) {
+            tc_vec3 v;
+            v.x = tc_value_to_double(&input->data.list.items[0]);
+            v.y = tc_value_to_double(&input->data.list.items[1]);
+            v.z = tc_value_to_double(&input->data.list.items[2]);
+            return tc_value_vec3(v);
+        }
+        return tc_value_nil();
+    }
+
+    // quat: list [w, x, y, z] → TC_VALUE_QUAT
+    if (strcmp(kind_name, "quat") == 0) {
+        if (input->type == TC_VALUE_QUAT) return tc_value_copy(input);
+        if (input->type == TC_VALUE_LIST && input->data.list.count >= 4) {
+            tc_quat q;
+            q.w = tc_value_to_double(&input->data.list.items[0]);
+            q.x = tc_value_to_double(&input->data.list.items[1]);
+            q.y = tc_value_to_double(&input->data.list.items[2]);
+            q.z = tc_value_to_double(&input->data.list.items[3]);
+            return tc_value_quat(q);
+        }
+        return tc_value_nil();
+    }
+
+    // Default: pass-through
     return tc_value_copy(input);
 }
 

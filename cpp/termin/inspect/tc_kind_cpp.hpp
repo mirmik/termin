@@ -166,6 +166,38 @@ inline void register_builtin_cpp_kinds() {
         [](const std::any& v) { return tc_value_string(std::any_cast<std::string>(v).c_str()); },
         [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_string(v); }
     );
+
+    // vec3 - serialized as list [x, y, z], deserialized to TC_VALUE_VEC3
+    reg.register_kind("vec3",
+        [](const std::any& v) -> tc_value {
+            // Serialize: vec3 → tc_value_vec3 (tc_value_to_trent will convert to list)
+            auto vec = std::any_cast<tc_vec3>(v);
+            return tc_value_vec3(vec);
+        },
+        [](const tc_value* v, tc_scene_handle) -> std::any {
+            // Not used by C API path (cpp_deserialize is pass-through)
+            tc_vec3 result = {0, 0, 0};
+            if (v->type == TC_VALUE_VEC3) {
+                result = v->data.v3;
+            }
+            return result;
+        }
+    );
+
+    // quat - serialized as list [w, x, y, z], deserialized to TC_VALUE_QUAT
+    reg.register_kind("quat",
+        [](const std::any& v) -> tc_value {
+            auto q = std::any_cast<tc_quat>(v);
+            return tc_value_quat(q);
+        },
+        [](const tc_value* v, tc_scene_handle) -> std::any {
+            tc_quat result = {0, 0, 0, 1};
+            if (v->type == TC_VALUE_QUAT) {
+                result = v->data.q;
+            }
+            return result;
+        }
+    );
 }
 
 // Helper to register handle types that have serialize_to_value() and deserialize_from() methods
