@@ -1,14 +1,15 @@
-"""Embed termin 3D view inside a PyQt6 application.
+"""Two QOpenGLWidgets sharing the same scene with separate GL contexts.
 
 Uses Display + RenderEngine directly (no Visualization wrapper).
-The QOpenGLWidget drives rendering via paintGL().
+Tests multi-context VAO support: VBOs/EBOs/textures/shaders are shared
+between widgets, but each widget has its own VAO per mesh.
 """
 
 from __future__ import annotations
 
 import sys
 import numpy as np
-from PyQt6 import QtWidgets, QtCore
+from PyQt6 import QtWidgets
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity
@@ -81,10 +82,10 @@ def make_preview_pipeline():
             pass_name="Present",
         ),
     ]
-    return RenderPipeline(name="qt_embed", _init_passes=passes)
+    return RenderPipeline(name="qt_multicontext", _init_passes=passes)
 
 
-class QtEmbedRenderer:
+class MultiCtxRenderer:
     """Render callback installed as user_ptr on QtGLWindowHandle.
 
     paintGL() calls self.render(from_backend=True).
@@ -141,70 +142,88 @@ class QtEmbedRenderer:
         self.display.present()
 
 
-def build_scene() -> tuple[Scene, PerspectiveCameraComponent]:
-    """Create a simple scene with a sphere and orbit camera."""
-    shader = TcShader.from_sources(VERT, FRAG, "", "QtEmbedShader")
+def build_scene() -> tuple[Scene, PerspectiveCameraComponent, PerspectiveCameraComponent]:
+    """Build scene with one sphere and two cameras at different angles."""
+    shader = TcShader.from_sources(VERT, FRAG, "", "MultiCtxShader")
     material = Material(
-        name="QtEmbedMaterial",
+        name="MultiCtxMaterial",
         shader=shader,
         color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32),
     )
 
     mesh3 = UVSphereMesh(radius=1.0, n_meridians=32, n_parallels=16)
-    tc_mesh = TcMesh.from_mesh3(mesh3, "QtEmbedSphere")
+    tc_mesh = TcMesh.from_mesh3(mesh3, "MultiCtxSphere")
 
     sphere = Entity(pose=Pose3.identity(), name="sphere")
     sphere.add_component(MeshRenderer(tc_mesh, material))
 
-    scene = Scene.create(name="qt_embed")
+    scene = Scene.create(name="qt_multicontext")
     scene.add(sphere)
 
-    cam_entity = Entity(name="camera")
-    camera = PerspectiveCameraComponent()
-    cam_entity.add_component(camera)
-    cam_entity.add_component(OrbitCameraController(radius=4.0))
-    scene.add(cam_entity)
+    # Camera 1 — front view
+    cam1_entity = Entity(name="camera1")
+    camera1 = PerspectiveCameraComponent()
+    cam1_entity.add_component(camera1)
+    cam1_entity.add_component(OrbitCameraController(radius=4.0))
+    scene.add(cam1_entity)
 
-    return scene, camera
+    # Camera 2 — side view
+    cam2_entity = Entity(name="camera2")
+    camera2 = PerspectiveCameraComponent()
+    cam2_entity.add_component(camera2)
+    cam2_entity.add_component(OrbitCameraController(radius=4.0, yaw=1.57))
+    scene.add(cam2_entity)
+
+    return scene, camera1, camera2
 
 
 def main():
     graphics = OpenGLGraphicsBackend.get_instance()
     qt_backend = QtWindowBackend(graphics=graphics)
 
-    scene, camera = build_scene()
+    scene, camera1, camera2 = build_scene()
 
-    # Build Qt UI first — widget must be created with correct parent
+    # Build Qt UI first — widgets must be created with correct parent
     # to avoid reparenting (which destroys/recreates the GL context)
     main_window = QtWidgets.QMainWindow()
     central = QtWidgets.QWidget()
-    layout = QtWidgets.QVBoxLayout(central)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(6)
+    layout = QtWidgets.QHBoxLayout(central)
+    layout.setContentsMargins(4, 4, 4, 4)
+    layout.setSpacing(4)
 
-    # Create QOpenGLWidget with parent so it's never reparented
-    handle = qt_backend.create_window(
-        width=800, height=600, title="termin Qt embed", parent=central
+    # Create widgets with parent so they're never reparented
+    handle1 = qt_backend.create_window(
+        width=400, height=400, title="View 1 (front)", parent=central
     )
-    layout.addWidget(handle.widget)
+    layout.addWidget(handle1.widget)
 
-    quit_btn = QtWidgets.QPushButton("Close")
-    quit_btn.clicked.connect(main_window.close)
-    layout.addWidget(quit_btn)
+    handle2 = qt_backend.create_window(
+        width=400, height=400, title="View 2 (side)", parent=central
+    )
+    layout.addWidget(handle2.widget)
 
     main_window.setCentralWidget(central)
-    main_window.resize(900, 700)
-    main_window.setWindowTitle("Qt + termin visualization")
+    main_window.resize(900, 500)
+    main_window.setWindowTitle("Multi-Context Test (2 GL contexts, shared VBO/EBO)")
 
-    # Create Display + RenderEngine after widget has its final parent
-    display = Display(handle)
-    viewport = display.create_viewport(scene=scene, camera=camera, name="main")
-    viewport.pipeline = make_preview_pipeline()
+    # Create shared render engine
     engine = RenderEngine(graphics)
 
-    # Install render callback
-    renderer = QtEmbedRenderer(handle, display, engine, graphics, viewport, scene, camera)
-    handle.set_user_pointer(renderer)
+    # --- Widget 1: front view ---
+    display1 = Display(handle1)
+    viewport1 = display1.create_viewport(scene=scene, camera=camera1, name="front")
+    viewport1.pipeline = make_preview_pipeline()
+
+    renderer1 = MultiCtxRenderer(handle1, display1, engine, graphics, viewport1, scene, camera1)
+    handle1.set_user_pointer(renderer1)
+
+    # --- Widget 2: side view (separate GL context, shared resources) ---
+    display2 = Display(handle2)
+    viewport2 = display2.create_viewport(scene=scene, camera=camera2, name="side")
+    viewport2.pipeline = make_preview_pipeline()
+
+    renderer2 = MultiCtxRenderer(handle2, display2, engine, graphics, viewport2, scene, camera2)
+    handle2.set_user_pointer(renderer2)
 
     main_window.show()
 

@@ -1,31 +1,13 @@
-"""World and Visualization classes for scene management and rendering."""
+"""World class for scene management."""
 
 from __future__ import annotations
 
 import json
-import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from termin.visualization.core.scene import Scene
-from termin.visualization.core.viewport import Viewport, make_default_pipeline
 from termin.visualization.core.resources import ResourceManager
-from termin.visualization.core.entity import Entity
-from termin.visualization.platform.window import Window
-from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend
-from termin.visualization.platform.backends import (
-    get_default_graphics_backend,
-    get_default_window_backend,
-    set_default_graphics_backend,
-    set_default_window_backend,
-)
-from termin.visualization.render import (
-    RenderEngine,
-    RenderView,
-    ViewportRenderState,
-)
-
-# For testing purposes, set this to True to close the world after the first frame.
-CLOSE_AFTER_FIRST_FRAME = False
+from termin._native import log
 
 
 class World:
@@ -126,254 +108,33 @@ class World:
         return cls.deserialize(data)
 
 
+# ===========================================================================
+# DEAD CODE: Visualization / VisualizationWorld
+#
+# This class is broken and unused. Problems:
+# - create_window() passes wrong parameter name (window_backend vs backend)
+# - run() accesses non-existent .handle and .render_surface properties
+# - Nobody uses it: editor uses C++ EngineCore, player uses RenderingManager
+#
+# For working Qt examples, use Display + RenderEngine directly.
+# See examples/visual/qt_embed.py and mesh_preview_widget.py.
+# ===========================================================================
+
+
 class Visualization:
-    """
-    Оркестратор рендеринга для простых приложений.
+    """DEAD CODE. Kept for import compatibility. Do not use.
 
-    Управляет:
-    - Созданием окон (Window фасадов)
-    - Основным циклом (run)
-    - Рендерингом всех окон через RenderEngine
-
-    Для редактора используйте World + Display + EditorDisplayInputManager напрямую.
+    Use Display + RenderEngine directly instead.
     """
 
-    def __init__(
-        self,
-        world: Optional[World] = None,
-        graphics_backend: Optional[GraphicsBackend] = None,
-        window_backend: Optional[WindowBackend] = None,
-    ):
-        """
-        Создаёт Visualization.
+    def __init__(self, **kwargs):
+        log.warn("[Visualization] DEAD CODE instantiated. Use Display + RenderEngine directly.")
 
-        Параметры:
-            world: World с сценами (создаётся новый если не указан).
-            graphics_backend: Графический бэкенд.
-            window_backend: Оконный бэкенд.
-        """
-        self.graphics = graphics_backend or get_default_graphics_backend()
-        self.window_backend = window_backend or get_default_window_backend()
-        set_default_graphics_backend(self.graphics)
-        set_default_window_backend(self.window_backend)
-
-        self.world = world or World()
-        self.windows: List[Window] = []
-        self._running = False
-
-        # RenderEngine и состояния viewport'ов
-        self._render_engine = RenderEngine(self.graphics)
-        self._viewport_states: Dict[int, ViewportRenderState] = {}
-
-        self.fps = 0
-
-    @property
-    def scenes(self) -> List[Scene]:
-        """Сцены из World (для совместимости)."""
-        return self.world.scenes
-
-    def add_scene(self, scene: Scene) -> Scene:
-        """Добавляет сцену (делегирует в World)."""
-        return self.world.add_scene(scene)
-
-    def remove_scene(self, scene: Scene) -> None:
-        """Удаляет сцену (делегирует в World)."""
-        self.world.remove_scene(scene)
-
-    def create_window(
-        self,
-        width: int = 1280,
-        height: int = 720,
-        title: str = "termin viewer",
-        **backend_kwargs,
-    ) -> Window:
-        """
-        Создаёт новое окно.
-
-        Параметры:
-            width: Ширина окна.
-            height: Высота окна.
-            title: Заголовок окна.
-            **backend_kwargs: Дополнительные параметры для бэкенда.
-
-        Возвращает:
-            Созданный Window.
-        """
-        share = self.windows[0] if self.windows else None
-        window = Window(
-            width=width,
-            height=height,
-            title=title,
-            graphics=self.graphics,
-            window_backend=self.window_backend,
-            share=share,
-            **backend_kwargs,
+    def __getattr__(self, name):
+        raise NotImplementedError(
+            f"Visualization.{name}: this class is dead code. "
+            "Use Display + RenderEngine directly."
         )
-        self.windows.append(window)
-        return window
-
-    def add_window(self, window: Window) -> None:
-        """Добавляет существующее окно."""
-        self.windows.append(window)
-
-    def get_viewport_state(self, viewport: Viewport) -> ViewportRenderState:
-        """
-        Возвращает ViewportRenderState для viewport'а.
-
-        Если состояние не существует, создаёт его с дефолтным pipeline.
-
-        Параметры:
-            viewport: Viewport для которого нужно состояние.
-
-        Возвращает:
-            ViewportRenderState с pipeline и FBO пулом.
-        """
-        key = id(viewport)
-        if key not in self._viewport_states:
-            pipeline = make_default_pipeline()
-            self._viewport_states[key] = ViewportRenderState(pipeline=pipeline)
-        return self._viewport_states[key]
-
-    def find_render_pass(self, viewport: Viewport, pass_name: str):
-        """
-        Находит render pass по имени в pipeline viewport'а.
-
-        Параметры:
-            viewport: Viewport для которого ищем pass.
-            pass_name: Имя pass'а (например, "PostFX", "Color").
-
-        Возвращает:
-            RenderFramePass или None, если не найден.
-        """
-        state = self.get_viewport_state(viewport)
-        if state.pipeline is None:
-            return None
-        for render_pass in state.pipeline.passes:
-            if render_pass.pass_name == pass_name:
-                return render_pass
-        return None
-
-    def _render_window(self, window: Window) -> None:
-        """
-        Рендерит все viewport'ы окна через RenderEngine.
-
-        Для каждого viewport создаёт RenderView и использует
-        соответствующий ViewportRenderState.
-
-        Параметры:
-            window: Окно для рендеринга.
-        """
-        if window.handle is None:
-            return
-
-        # Собираем views для всех viewport'ов
-        views = []
-        for viewport in window.viewports:
-            view = RenderView(
-                scene=viewport.scene,
-                camera=viewport.camera,
-                rect=viewport.rect,
-                canvas=None,
-                viewport=viewport,
-            )
-            state = self.get_viewport_state(viewport)
-            views.append((view, state))
-
-        # Рендерим все views на surface окна
-        if views:
-            self._render_engine.render_views(
-                surface=window.render_surface,
-                views=views,
-                present=True,
-            )
-
-        # Вызываем after_render_handler если есть
-        if window.after_render_handler is not None:
-            window.after_render_handler(window)
-
-    def update_fps(self, dt: float) -> None:
-        """Обновляет счётчик FPS."""
-        if dt > 0:
-            self.fps = int(1.0 / dt)
-        else:
-            self.fps = 0
-
-    def run(self) -> None:
-        """Запускает основной цикл."""
-        if self._running:
-            return
-        self._running = True
-        last = time.perf_counter()
-
-        while self.windows:
-            now = time.perf_counter()
-            dt = now - last
-            last = now
-
-            # Обновляем все сцены
-            self.world.update(dt)
-
-            # Вызываем before_render для всех сцен (например, SkeletonController обновляет матрицы костей)
-            for scene in self.scenes:
-                scene.before_render()
-
-            alive = []
-            for window in list(self.windows):
-                if window.should_close:
-                    window.close()
-                    continue
-                window.update(dt)
-                # Qt-виджеты управляют рендером сами
-                if window.handle.drives_render():
-                    window.handle.widget.update()
-                else:
-                    # GLFW и другие бэкенды — рендерим через RenderEngine
-                    self._render_window(window)
-                alive.append(window)
-            self.windows = alive
-            self.window_backend.poll_events()
-            self.update_fps(dt)
-
-            if CLOSE_AFTER_FIRST_FRAME:
-                break
-
-        for window in self.windows:
-            window.close()
-        self.window_backend.terminate()
-        self._running = False
-
-    # --- Сериализация (делегирует в World) ---
-
-    def serialize(self, resource_manager: Optional[ResourceManager] = None) -> dict:
-        """Сериализует мир (делегирует в World)."""
-        return self.world.serialize(resource_manager)
-
-    def save_to_file(self, path: str, resource_manager: Optional[ResourceManager] = None) -> None:
-        """Сохраняет мир в файл (делегирует в World)."""
-        self.world.save_to_file(path, resource_manager)
-
-    @classmethod
-    def deserialize(
-        cls,
-        data: dict,
-        graphics_backend: Optional[GraphicsBackend] = None,
-        window_backend: Optional[WindowBackend] = None,
-    ) -> "Visualization":
-        """Восстанавливает Visualization из сериализованных данных."""
-        world = World.deserialize(data)
-        return cls(world=world, graphics_backend=graphics_backend, window_backend=window_backend)
-
-    @classmethod
-    def load_from_file(
-        cls,
-        path: str,
-        graphics_backend: Optional[GraphicsBackend] = None,
-        window_backend: Optional[WindowBackend] = None,
-    ) -> "Visualization":
-        """Загружает Visualization из JSON файла."""
-        world = World.load_from_file(path)
-        return cls(world=world, graphics_backend=graphics_backend, window_backend=window_backend)
 
 
-# Алиас для обратной совместимости
 VisualizationWorld = Visualization

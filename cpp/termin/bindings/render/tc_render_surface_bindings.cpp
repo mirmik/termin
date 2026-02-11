@@ -4,23 +4,35 @@
 #include <nanobind/stl/tuple.h>
 
 #include "render/tc_render_surface.h"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 
 namespace termin {
 
 // ============================================================================
-// VTable for SDLEmbeddedWindowHandle (Python class)
-// One vtable shared by all instances of this type.
-// Each function calls the corresponding method on the Python object (body).
+// Generic VTable for Python render surface objects.
+// Works with any Python object that implements the required methods:
+//   framebuffer_size(), make_current(), swap_buffers(), window_size(),
+//   should_close(), get_cursor_pos(), get_framebuffer() (optional).
+// Used by SDLEmbeddedWindowHandle, QtGLWindowHandle, etc.
 // ============================================================================
 
-static uint32_t sdl_window_get_framebuffer(tc_render_surface* s) {
-    // Window framebuffer is always 0
+static uint32_t pysurface_get_framebuffer(tc_render_surface* s) {
+    if (!s->body) return 0;
+    nb::gil_scoped_acquire gil;
+    try {
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        // get_framebuffer_id() returns raw OpenGL FBO id (uint32_t).
+        // Separate from get_framebuffer() which returns FramebufferHandle for Python.
+        return nb::cast<uint32_t>(py_obj.attr("get_framebuffer_id")());
+    } catch (const std::exception& e) {
+        tc::Log::error("pysurface_get_framebuffer failed: %s", e.what());
+    }
     return 0;
 }
 
-static void sdl_window_get_size(tc_render_surface* s, int* width, int* height) {
+static void pysurface_get_size(tc_render_surface* s, int* width, int* height) {
     if (!s->body) {
         if (width) *width = 0;
         if (height) *height = 0;
@@ -39,7 +51,7 @@ static void sdl_window_get_size(tc_render_surface* s, int* width, int* height) {
     }
 }
 
-static void sdl_window_make_current(tc_render_surface* s) {
+static void pysurface_make_current(tc_render_surface* s) {
     if (!s->body) return;
     nb::gil_scoped_acquire gil;
     try {
@@ -50,7 +62,7 @@ static void sdl_window_make_current(tc_render_surface* s) {
     }
 }
 
-static void sdl_window_swap_buffers(tc_render_surface* s) {
+static void pysurface_swap_buffers(tc_render_surface* s) {
     if (!s->body) return;
     nb::gil_scoped_acquire gil;
     try {
@@ -61,16 +73,16 @@ static void sdl_window_swap_buffers(tc_render_surface* s) {
     }
 }
 
-static uintptr_t sdl_window_context_key(tc_render_surface* s) {
+static uintptr_t pysurface_context_key(tc_render_surface* s) {
     // Use body pointer as context key
     return reinterpret_cast<uintptr_t>(s->body);
 }
 
-static void sdl_window_poll_events(tc_render_surface* s) {
-    // No-op - events are polled via SDLEmbeddedWindowBackend
+static void pysurface_poll_events(tc_render_surface* s) {
+    // No-op - events are polled by the backend
 }
 
-static void sdl_window_get_window_size(tc_render_surface* s, int* width, int* height) {
+static void pysurface_get_window_size(tc_render_surface* s, int* width, int* height) {
     if (!s->body) {
         if (width) *width = 0;
         if (height) *height = 0;
@@ -89,7 +101,7 @@ static void sdl_window_get_window_size(tc_render_surface* s, int* width, int* he
     }
 }
 
-static bool sdl_window_should_close(tc_render_surface* s) {
+static bool pysurface_should_close(tc_render_surface* s) {
     if (!s->body) return true;
     nb::gil_scoped_acquire gil;
     try {
@@ -101,18 +113,18 @@ static bool sdl_window_should_close(tc_render_surface* s) {
     }
 }
 
-static void sdl_window_set_should_close(tc_render_surface* s, bool value) {
+static void pysurface_set_should_close(tc_render_surface* s, bool value) {
     if (!s->body) return;
     nb::gil_scoped_acquire gil;
     try {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
-        py_obj.attr("_should_close") = value;
+        py_obj.attr("set_should_close")(value);
     } catch (const std::exception& e) {
         // Ignore
     }
 }
 
-static void sdl_window_get_cursor_pos(tc_render_surface* s, double* x, double* y) {
+static void pysurface_get_cursor_pos(tc_render_surface* s, double* x, double* y) {
     if (!s->body) {
         if (x) *x = 0.0;
         if (y) *y = 0.0;
@@ -131,23 +143,23 @@ static void sdl_window_get_cursor_pos(tc_render_surface* s, double* x, double* y
     }
 }
 
-static void sdl_window_destroy(tc_render_surface* s) {
+static void pysurface_destroy(tc_render_surface* s) {
     // No-op: Python owns the surface and will free it
 }
 
-// Static vtable for SDLEmbeddedWindowHandle
-static const tc_render_surface_vtable g_sdl_window_vtable = {
-    .get_framebuffer = sdl_window_get_framebuffer,
-    .get_size = sdl_window_get_size,
-    .make_current = sdl_window_make_current,
-    .swap_buffers = sdl_window_swap_buffers,
-    .context_key = sdl_window_context_key,
-    .poll_events = sdl_window_poll_events,
-    .get_window_size = sdl_window_get_window_size,
-    .should_close = sdl_window_should_close,
-    .set_should_close = sdl_window_set_should_close,
-    .get_cursor_pos = sdl_window_get_cursor_pos,
-    .destroy = sdl_window_destroy,
+// Generic vtable for Python render surface objects
+static const tc_render_surface_vtable g_python_surface_vtable = {
+    .get_framebuffer = pysurface_get_framebuffer,
+    .get_size = pysurface_get_size,
+    .make_current = pysurface_make_current,
+    .swap_buffers = pysurface_swap_buffers,
+    .context_key = pysurface_context_key,
+    .poll_events = pysurface_poll_events,
+    .get_window_size = pysurface_get_window_size,
+    .should_close = pysurface_should_close,
+    .set_should_close = pysurface_set_should_close,
+    .get_cursor_pos = pysurface_get_cursor_pos,
+    .destroy = pysurface_destroy,
 };
 
 // ============================================================================
@@ -155,10 +167,10 @@ static const tc_render_surface_vtable g_sdl_window_vtable = {
 // ============================================================================
 
 void bind_tc_render_surface(nb::module_& m) {
-    // Create tc_render_surface for SDLEmbeddedWindowHandle
-    m.def("_render_surface_new_sdl_window", [](nb::object py_surface) -> uintptr_t {
+    // Create tc_render_surface from any Python object with the required methods
+    m.def("_render_surface_new_from_python", [](nb::object py_surface) -> uintptr_t {
         PyObject* ptr = py_surface.ptr();
-        tc_render_surface* surface = tc_render_surface_new_external(ptr, &g_sdl_window_vtable);
+        tc_render_surface* surface = tc_render_surface_new_external(ptr, &g_python_surface_vtable);
         return reinterpret_cast<uintptr_t>(surface);
     });
 

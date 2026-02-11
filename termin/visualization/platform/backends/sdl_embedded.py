@@ -32,8 +32,8 @@ class _TcSurfaceWrapper:
 
 def _create_tc_render_surface(surface: "SDLEmbeddedWindowHandle") -> int:
     """Create tc_render_surface for SDLEmbeddedWindowHandle."""
-    from termin._native.render import _render_surface_new_sdl_window
-    return _render_surface_new_sdl_window(surface)
+    from termin._native.render import _render_surface_new_from_python
+    return _render_surface_new_from_python(surface)
 
 
 def _translate_qt_key(qt_key: int) -> Key:
@@ -495,6 +495,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
     def get_size(self) -> Tuple[int, int]:
         """Alias for framebuffer_size (for tc_render_surface compatibility)."""
         return self.framebuffer_size()
+
+    def get_framebuffer_id(self) -> int:
+        """Return raw OpenGL FBO id (for C++ vtable dispatch). SDL window is always 0."""
+        return 0
 
     def get_framebuffer(self) -> Any:
         """Return FramebufferHandle for window (wraps FBO 0)."""

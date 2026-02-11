@@ -432,9 +432,69 @@ inline void mesh_draw(const tc_mesh* mesh) {
 }
 
 inline void mesh_delete(uint32_t vao_id) {
-    // Note: we need VBO/EBO stored somewhere to delete them
-    // For now just delete VAO
     glDeleteVertexArrays(1, &vao_id);
+}
+
+// Create VAO from existing shared VBO/EBO (for additional GL contexts in shared mode)
+inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
+    if (!mesh || mesh->gpu_vbo == 0) {
+        return 0;
+    }
+
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    // Bind existing shared VBO
+    glBindBuffer(GL_ARRAY_BUFFER, mesh->gpu_vbo);
+
+    // Setup vertex attributes (same as mesh_upload)
+    for (uint8_t i = 0; i < mesh->layout.attrib_count; ++i) {
+        const tc_vertex_attrib& attr = mesh->layout.attribs[i];
+
+        GLenum gl_type = GL_FLOAT;
+        bool is_integer = false;
+        switch (attr.type) {
+            case TC_ATTRIB_FLOAT32: gl_type = GL_FLOAT; break;
+            case TC_ATTRIB_INT32: gl_type = GL_INT; is_integer = true; break;
+            case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; is_integer = true; break;
+            case TC_ATTRIB_INT16: gl_type = GL_SHORT; is_integer = true; break;
+            case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; is_integer = true; break;
+            case TC_ATTRIB_INT8: gl_type = GL_BYTE; is_integer = true; break;
+            case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; is_integer = true; break;
+        }
+
+        glEnableVertexAttribArray(attr.location);
+
+        if (is_integer) {
+            glVertexAttribIPointer(
+                attr.location,
+                attr.size,
+                gl_type,
+                mesh->layout.stride,
+                reinterpret_cast<void*>(static_cast<size_t>(attr.offset))
+            );
+        } else {
+            glVertexAttribPointer(
+                attr.location,
+                attr.size,
+                gl_type,
+                GL_FALSE,
+                mesh->layout.stride,
+                reinterpret_cast<void*>(static_cast<size_t>(attr.offset))
+            );
+        }
+    }
+
+    // Bind existing shared EBO
+    if (mesh->gpu_ebo != 0) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->gpu_ebo);
+    }
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    return vao;
 }
 
 inline void register_gpu_ops() {
@@ -463,6 +523,7 @@ inline void register_gpu_ops() {
         mesh_upload,
         mesh_draw,
         mesh_delete,
+        mesh_create_vao,
         // User data
         nullptr
     };

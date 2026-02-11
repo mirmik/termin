@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "tc_log.h"
+#include "tc_gpu.h"
 #include "render/tc_viewport_pool.h"
 }
 
@@ -142,8 +143,9 @@ void PullRenderingManager::render_display(tc_display* display) {
         return;
     }
 
-    // Make display context current
+    // Make display context current and set context key for per-context VAO management
     tc_render_surface_make_current(surface);
+    tc_gpu_set_context_key(tc_render_surface_context_key(surface));
 
     int width, height;
     tc_render_surface_get_size(surface, &width, &height);
