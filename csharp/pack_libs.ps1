@@ -22,11 +22,11 @@ Write-Host "=== Pack Termin Libraries ===" -ForegroundColor Cyan
 
 # Source paths
 $BuildDir = "$ProjectRoot\build_csharp"
-$ManagedDll = "$PSScriptRoot\Termin.Native\bin\Debug\net8.0\Termin.Native.dll"
+$ManagedDll = "$PSScriptRoot\Termin.Native\bin\Debug\netstandard2.1\Termin.Native.dll"
 
 # Fallback to Release if Debug not found
 if (-not (Test-Path $ManagedDll)) {
-    $ManagedDll = "$PSScriptRoot\Termin.Native\bin\Release\net8.0\Termin.Native.dll"
+    $ManagedDll = "$PSScriptRoot\Termin.Native\bin\Release\netstandard2.1\Termin.Native.dll"
 }
 
 $NativeDlls = @(

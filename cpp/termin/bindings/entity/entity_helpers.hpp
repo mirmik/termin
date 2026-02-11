@@ -92,7 +92,7 @@ inline nb::object tc_component_to_python(tc_component* c) {
     }
 
     // Component is native C++ - create Python wrapper
-    if (c->kind == TC_NATIVE_COMPONENT) {
+    if (c->kind == TC_CXX_COMPONENT) {
         CxxComponent* cxx = CxxComponent::from_tc(c);
         if (!cxx) return nb::none();
         return component_to_python(cxx);

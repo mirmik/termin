@@ -15,7 +15,8 @@ typedef enum {
     TC_KIND_LANG_CPP = 1,
     TC_KIND_LANG_PYTHON = 2,
     TC_KIND_LANG_RUST = 3,
-    TC_KIND_LANG_COUNT = 4
+    TC_KIND_LANG_CSHARP = 4,
+    TC_KIND_LANG_COUNT = 5
 } tc_kind_lang;
 
 // ============================================================================

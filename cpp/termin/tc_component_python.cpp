@@ -86,7 +86,7 @@ static void py_vtable_on_editor_start(tc_component* c) {
 }
 
 // ============================================================================
-// Python ref_vtable for PythonComponent (TC_EXTERNAL_COMPONENT)
+// Python ref_vtable for Python components (TC_PYTHON_COMPONENT)
 // ============================================================================
 
 static void py_ext_ref_retain(tc_component* c) {
@@ -152,7 +152,7 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
     c->native_language = TC_LANGUAGE_PYTHON;
 
     // Python components
-    c->kind = TC_EXTERNAL_COMPONENT;
+    c->kind = TC_PYTHON_COMPONENT;
 
     // Link to type registry for type name and instance tracking
     if (type_name) {

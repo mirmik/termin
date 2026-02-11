@@ -8,8 +8,9 @@ namespace Termin.Native;
 /// </summary>
 public enum ComponentKind
 {
-    Native = 0,
-    External = 1
+    Cxx = 0,
+    Python = 1,
+    CSharp = 2
 }
 
 /// <summary>
@@ -95,7 +96,7 @@ public readonly struct ComponentRef
     {
         get
         {
-            if (_ptr == IntPtr.Zero) return ComponentKind.Native;
+            if (_ptr == IntPtr.Zero) return ComponentKind.Cxx;
             return (ComponentKind)TerminCore.ComponentGetKind(_ptr);
         }
     }
@@ -107,8 +108,8 @@ public readonly struct ComponentRef
     public Entity GetEntity(EntityPool pool)
     {
         if (_ptr == IntPtr.Zero) return default;
-        var entityId = TerminCore.ComponentGetOwnerEntityId(_ptr);
-        return new Entity(pool, entityId);
+        var owner = TerminCore.ComponentGetOwner(_ptr);
+        return new Entity(pool, owner.Id);
     }
 
     /// <summary>
@@ -119,8 +120,8 @@ public readonly struct ComponentRef
         get
         {
             if (_ptr == IntPtr.Zero)
-                return new TcEntityId { Index = 0xFFFFFFFF, Generation = 0 };
-            return TerminCore.ComponentGetOwnerEntityId(_ptr);
+                return TcEntityId.Invalid;
+            return TerminCore.ComponentGetOwner(_ptr).Id;
         }
     }
 

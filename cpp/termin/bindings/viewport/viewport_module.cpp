@@ -157,7 +157,7 @@ void bind_tc_viewport_class(nb::module_& m) {
                 }
 
                 // For native (C++) components, create Python binding wrapper
-                if (c->kind == TC_NATIVE_COMPONENT) {
+                if (c->kind == TC_CXX_COMPONENT) {
                     CxxComponent* cxx = CxxComponent::from_tc(c);
                     if (cxx) {
                         // Cast to CameraComponent (the only camera type we have)

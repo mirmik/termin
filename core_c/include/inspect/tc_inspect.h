@@ -22,7 +22,8 @@ typedef enum tc_inspect_lang {
     TC_INSPECT_LANG_C = 0,
     TC_INSPECT_LANG_CPP = 1,
     TC_INSPECT_LANG_PYTHON = 2,
-    TC_INSPECT_LANG_COUNT = 3
+    TC_INSPECT_LANG_CSHARP = 3,
+    TC_INSPECT_LANG_COUNT = 4
 } tc_inspect_lang;
 
 // ============================================================================

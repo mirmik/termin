@@ -369,11 +369,8 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_component_get_kind")]
     public static extern int ComponentGetKind(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_owner_entity_id")]
-    public static extern TcEntityId ComponentGetOwnerEntityId(IntPtr component);
-
-    [DllImport(DLL, EntryPoint = "tc_component_get_owner_pool")]
-    public static extern IntPtr ComponentGetOwnerPool(IntPtr component);
+    [DllImport(DLL, EntryPoint = "tc_component_get_owner")]
+    public static extern TcEntityHandle ComponentGetOwner(IntPtr component);
 
     // ========================================================================
     // Component Field Access (Inspect) - in entity_lib
@@ -863,6 +860,62 @@ public static class TerminCore
     /// </summary>
     [DllImport(DLL, EntryPoint = "tc_scene_get_collision_world")]
     public static extern IntPtr SceneGetCollisionWorld(TcSceneHandle scene);
+
+    // ========================================================================
+    // C# Component Lifecycle (in termin.dll)
+    // ========================================================================
+
+    private const string TERMIN_DLL = "termin";
+
+    /// <summary>
+    /// Callback table for C# component lifecycle dispatch.
+    /// Must match tc_csharp_callbacks in tc_component_csharp.h.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CSharpCallbacks
+    {
+        public IntPtr Start;
+        public IntPtr Update;
+        public IntPtr FixedUpdate;
+        public IntPtr BeforeRender;
+        public IntPtr OnDestroy;
+        public IntPtr OnAddedToEntity;
+        public IntPtr OnRemovedFromEntity;
+        public IntPtr OnAdded;
+        public IntPtr OnRemoved;
+        public IntPtr OnSceneInactive;
+        public IntPtr OnSceneActive;
+        public IntPtr RefAdd;
+        public IntPtr RefRelease;
+    }
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_component_set_csharp_callbacks")]
+    public static extern void ComponentSetCSharpCallbacks(ref CSharpCallbacks callbacks);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_component_new_csharp", CharSet = CharSet.Ansi)]
+    public static extern IntPtr ComponentNewCSharp(IntPtr csSelf, string typeName);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_component_free_csharp")]
+    public static extern void ComponentFreeCSharp(IntPtr component);
+
+    // Component registry — register factory for a type
+    [DllImport(DLL, EntryPoint = "tc_component_registry_register", CharSet = CharSet.Ansi)]
+    public static extern void ComponentRegistryRegister(string typeName, IntPtr factory, IntPtr factoryUserdata, int kind);
+
+    // ========================================================================
+    // C# Inspect Registration (in termin.dll)
+    // ========================================================================
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_inspect_csharp_register_type", CharSet = CharSet.Ansi)]
+    public static extern void InspectCSharpRegisterType(string typeName);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_inspect_csharp_register_field", CharSet = CharSet.Ansi)]
+    public static extern void InspectCSharpRegisterField(
+        string typeName, string path, string label, string kind,
+        double min, double max, double step);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_inspect_set_csharp_callbacks")]
+    public static extern void InspectSetCSharpCallbacks(IntPtr getter, IntPtr setter);
 
     // ========================================================================
     // Logging

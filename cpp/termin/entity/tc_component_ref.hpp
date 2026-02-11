@@ -40,7 +40,7 @@ public:
     bool is_input_handler() const { return tc_component_is_input_handler(_c); }
 
     tc_component_kind kind() const {
-        return _c ? _c->kind : TC_NATIVE_COMPONENT;
+        return _c ? _c->kind : TC_CXX_COMPONENT;
     }
 
     // Get owner entity handle
@@ -54,7 +54,7 @@ public:
         if (!_c) return nos::trent();
 
         void* obj_ptr = nullptr;
-        if (_c->kind == TC_NATIVE_COMPONENT || _c->kind == TC_CXX_COMPONENT) {
+        if (_c->kind == TC_CXX_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
             obj_ptr = _c->body;
@@ -105,7 +105,7 @@ public:
         if (!_c || data.is_nil()) return;
 
         void* obj_ptr = nullptr;
-        if (_c->kind == TC_NATIVE_COMPONENT || _c->kind == TC_CXX_COMPONENT) {
+        if (_c->kind == TC_CXX_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
             obj_ptr = _c->body;

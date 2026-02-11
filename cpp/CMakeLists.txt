@@ -583,6 +583,8 @@ if(BUILD_CSHARP_BINDINGS)
         ${TERMIN_ROOT}/csharp/termin_wrap.cxx
         termin/render/opengl/tc_opengl.cpp
         termin/tc_scene.cpp
+        termin/tc_component_csharp.cpp
+        termin/tc_inspect_csharp.cpp
     )
     target_include_directories(termin PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

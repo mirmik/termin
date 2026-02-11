@@ -153,10 +153,10 @@ const char* tc_component_registry_get_parent(const char* type_name) {
 }
 
 tc_component_kind tc_component_registry_get_kind(const char* type_name) {
-    if (!type_name || !g_component_registry) return TC_EXTERNAL_COMPONENT;
+    if (!type_name || !g_component_registry) return TC_CXX_COMPONENT;
 
     tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
-    if (!entry) return TC_EXTERNAL_COMPONENT;
+    if (!entry) return TC_CXX_COMPONENT;
 
     return (tc_component_kind)entry->kind;
 }
@@ -297,7 +297,7 @@ bool tc_component_get_is_input_handler(const tc_component* c) {
 }
 
 tc_component_kind tc_component_get_kind(const tc_component* c) {
-    return c ? c->kind : TC_NATIVE_COMPONENT;
+    return c ? c->kind : TC_CXX_COMPONENT;
 }
 
 tc_entity_handle tc_component_get_owner(const tc_component* c) {

@@ -97,7 +97,7 @@ public:
     }
 
     tc_component_kind kind() const {
-        return _c ? _c->kind : TC_NATIVE_COMPONENT;
+        return _c ? _c->kind : TC_CXX_COMPONENT;
     }
 
     // Try to get typed Python object (may return None if no bindings available)
@@ -117,7 +117,7 @@ public:
         if (!_c) return nb::none();
 
         void* obj_ptr = nullptr;
-        if (_c->kind == TC_NATIVE_COMPONENT) {
+        if (_c->kind == TC_CXX_COMPONENT) {
             // For C++ components, get CxxComponent pointer
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
@@ -188,7 +188,7 @@ public:
         }
 
         void* obj_ptr = nullptr;
-        if (_c->kind == TC_NATIVE_COMPONENT) {
+        if (_c->kind == TC_CXX_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
             obj_ptr = _c->body;
@@ -208,7 +208,7 @@ public:
         if (!_c) return nb::none();
 
         void* obj_ptr = nullptr;
-        if (_c->kind == TC_NATIVE_COMPONENT) {
+        if (_c->kind == TC_CXX_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
         } else {
             obj_ptr = _c->body;

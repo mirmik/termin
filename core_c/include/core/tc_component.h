@@ -15,17 +15,14 @@ extern "C" {
 #endif
 
 // ============================================================================
-// Component Kind - distinguishes native vs external (scripted) components
+// Component Kind - which language owns the component
 // ============================================================================
 
 typedef enum tc_component_kind {
-    TC_NATIVE_COMPONENT = 0,    // Native component (C/C++)
-    TC_EXTERNAL_COMPONENT = 1   // External component (scripting language, e.g. Python)
+    TC_CXX_COMPONENT = 0,       // C++ component
+    TC_PYTHON_COMPONENT = 1,    // Python component
+    TC_CSHARP_COMPONENT = 2     // C# component
 } tc_component_kind;
-
-// Backwards compatibility aliases
-#define TC_CXX_COMPONENT TC_NATIVE_COMPONENT
-#define TC_PYTHON_COMPONENT TC_EXTERNAL_COMPONENT
 
 // Language enum
 #include "inspect/tc_binding.h"
@@ -200,7 +197,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->drawable_ptr = NULL;
     c->input_vtable = NULL;
     c->owner = TC_ENTITY_HANDLE_INVALID;
-    c->kind = TC_NATIVE_COMPONENT;
+    c->kind = TC_CXX_COMPONENT;
     c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
     c->enabled = true;

@@ -110,7 +110,7 @@ void init_cpp_inspect_vtable() {
 
 static void* get_inspect_object(tc_component* c) {
     if (!c) return nullptr;
-    if (c->kind == TC_NATIVE_COMPONENT) {
+    if (c->kind == TC_CXX_COMPONENT) {
         return termin::CxxComponent::from_tc(c);
     } else {
         // For external components, body holds the Python object

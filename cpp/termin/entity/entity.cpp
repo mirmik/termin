@@ -572,7 +572,7 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
         // Deserialize data
         if (comp_data.contains("data")) {
             void* obj_ptr = nullptr;
-            if (tc->kind == TC_CXX_COMPONENT || tc->kind == TC_NATIVE_COMPONENT) {
+            if (tc->kind == TC_CXX_COMPONENT) {
                 obj_ptr = CxxComponent::from_tc(tc);
             } else {
                 obj_ptr = tc->body;

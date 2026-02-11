@@ -1,5 +1,8 @@
 # Project Rules
 
+## Язык
+Предпочтительный язык общения Русский.
+
 ## Debugging
 
 Debug prints are allowed for investigating issues.
