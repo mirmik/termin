@@ -10,21 +10,22 @@ namespace termin {
 /**
  * ActuatorComponent - moves entity along a specified axis.
  *
- * The coordinate represents the displacement along the axis.
- * When coordinate changes, the entity moves along the axis.
+ * The axis vector direction defines the movement axis, and its length
+ * serves as a scale factor for the coordinate. Actual displacement
+ * = axis * coordinate (no normalization).
  *
  * Usage:
- *   actuator.set_axis(Vec3{1, 0, 0});  // X axis
- *   actuator.set_coordinate(2.5);       // Move 2.5 units along X
+ *   actuator.set_axis(Vec3{0.01, 0, 0});  // X axis, cm scale
+ *   actuator.set_coordinate(100);           // Move 1.0 scene unit along X
  */
 class ENTITY_API ActuatorComponent : public CxxComponent {
 public:
-    // Movement axis (normalized internally)
+    // Movement axis (direction + scale: |axis| is the coordinate scale factor)
     double axis_x = 1.0;
     double axis_y = 0.0;
     double axis_z = 0.0;
 
-    // Current displacement along axis
+    // Current coordinate (actual displacement = axis * coordinate)
     double coordinate = 0.0;
 
 private:

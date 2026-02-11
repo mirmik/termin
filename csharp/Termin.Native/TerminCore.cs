@@ -402,6 +402,12 @@ public static class TerminCore
     [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_material", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldMaterial(IntPtr component, string path, TcMaterialHandle handle, IntPtr scene);
 
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_vec3", CharSet = CharSet.Ansi)]
+    public static extern void ComponentSetFieldVec3(IntPtr component, string path, TcVec3 value, IntPtr scene);
+
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_vec3", CharSet = CharSet.Ansi)]
+    public static extern TcVec3 ComponentGetFieldVec3(IntPtr component, string path);
+
     [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_int", CharSet = CharSet.Ansi)]
     public static extern long ComponentGetFieldInt(IntPtr component, string path);
 

@@ -165,6 +165,9 @@ public readonly struct ComponentRef
             case TcMaterialHandle matH:
                 TerminCore.ComponentSetFieldMaterial(_ptr, path, matH, scenePtr);
                 break;
+            case TcVec3 v3:
+                TerminCore.ComponentSetFieldVec3(_ptr, path, v3, scenePtr);
+                break;
             default:
                 throw new ArgumentException($"Unsupported field type: {value.GetType().Name}");
         }
@@ -188,6 +191,24 @@ public readonly struct ComponentRef
         if (_ptr == IntPtr.Zero) return;
         // Entity_lib functions still use IntPtr for scene, pass zero for now
         TerminCore.ComponentSetFieldMaterial(_ptr, path, handle, IntPtr.Zero);
+    }
+
+    /// <summary>
+    /// Get a vec3 field value.
+    /// </summary>
+    public TcVec3 GetFieldVec3(string path)
+    {
+        if (_ptr == IntPtr.Zero) return new TcVec3(0, 0, 0);
+        return TerminCore.ComponentGetFieldVec3(_ptr, path);
+    }
+
+    /// <summary>
+    /// Set a vec3 field value.
+    /// </summary>
+    public void SetFieldVec3(string path, TcVec3 value, Scene? scene = null)
+    {
+        if (_ptr == IntPtr.Zero) return;
+        TerminCore.ComponentSetFieldVec3(_ptr, path, value, IntPtr.Zero);
     }
 
     /// <summary>

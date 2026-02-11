@@ -11,21 +11,22 @@ namespace termin {
 /**
  * RotatorComponent - rotates entity around a specified axis.
  *
- * The coordinate represents the rotation angle in radians.
- * When coordinate changes, the entity rotates around the axis.
+ * The axis vector direction defines the rotation axis, and its length
+ * serves as a scale factor for the coordinate. Actual rotation angle
+ * = coordinate * |axis|.
  *
  * Usage:
- *   rotator.set_axis(Vec3{0, 0, 1});  // Z axis
- *   rotator.set_coordinate(M_PI / 2); // 90 degrees
+ *   rotator.set_axis(Vec3{0, 0, M_PI/180});  // Z axis, degrees scale
+ *   rotator.set_coordinate(90);                // 90 degrees
  */
 class ENTITY_API RotatorComponent : public CxxComponent {
 public:
-    // Rotation axis (normalized internally)
+    // Rotation axis (direction + scale: |axis| is the coordinate scale factor)
     double axis_x = 0.0;
     double axis_y = 0.0;
     double axis_z = 1.0;
 
-    // Current rotation angle in radians
+    // Current coordinate (actual angle = coordinate * |axis|)
     double coordinate = 0.0;
 
 private:

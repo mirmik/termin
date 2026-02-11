@@ -13,9 +13,9 @@ static struct _ActuatorAxisFieldRegistrar {
         info.path = "axis";
         info.label = "Axis";
         info.kind = "vec3";
-        info.min = -1.0;
-        info.max = 1.0;
-        info.step = 0.1;
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<ActuatorComponent*>(obj);
@@ -107,10 +107,10 @@ void ActuatorComponent::_apply_movement() {
     Entity ent = entity();
     if (!ent.valid()) return;
 
-    Vec3 axis = _normalized_axis();
-
-    // Calculate new position: base + axis * coordinate
-    Vec3 new_position = _base_position + axis * coordinate;
+    // Axis vector length serves as scale factor:
+    // displacement = axis * coordinate (no normalization)
+    Vec3 raw_axis{axis_x, axis_y, axis_z};
+    Vec3 new_position = _base_position + raw_axis * coordinate;
 
     // Set position via Entity API
     double xyz[3] = {new_position.x, new_position.y, new_position.z};

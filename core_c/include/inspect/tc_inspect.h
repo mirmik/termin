@@ -174,6 +174,10 @@ TC_API void tc_component_set_field_string(tc_component* c, const char* path, con
 TC_API void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene_handle scene);
 TC_API void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene_handle scene);
 
+// Vec3 field access
+TC_API void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, tc_scene_handle scene);
+TC_API tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path);
+
 // Simplified field getters
 TC_API int64_t tc_component_get_field_int(tc_component* c, const char* path);
 TC_API float tc_component_get_field_float(tc_component* c, const char* path);

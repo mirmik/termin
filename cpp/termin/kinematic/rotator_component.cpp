@@ -13,9 +13,9 @@ static struct _RotatorAxisFieldRegistrar {
         info.path = "axis";
         info.label = "Axis";
         info.kind = "vec3";
-        info.min = -1.0;
-        info.max = 1.0;
-        info.step = 0.1;
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<RotatorComponent*>(obj);
@@ -107,10 +107,16 @@ void RotatorComponent::_apply_rotation() {
     Entity ent = entity();
     if (!ent.valid()) return;
 
-    Vec3 axis = _normalized_axis();
+    Vec3 raw_axis{axis_x, axis_y, axis_z};
+    double len = std::sqrt(raw_axis.x*raw_axis.x + raw_axis.y*raw_axis.y + raw_axis.z*raw_axis.z);
+    if (len < 1e-9) return;
+
+    // Normalize axis for quaternion, but use axis length as scale factor for coordinate
+    Vec3 dir{raw_axis.x / len, raw_axis.y / len, raw_axis.z / len};
+    double angle = coordinate * len;
 
     // Create rotation quaternion from axis-angle
-    Quat rotation = Quat::from_axis_angle(axis, coordinate);
+    Quat rotation = Quat::from_axis_angle(dir, angle);
 
     // Apply: final = rotation * base
     Quat final_rotation = rotation * _base_rotation;

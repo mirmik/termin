@@ -184,6 +184,26 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_
 }
 
 // ============================================================================
+// Vec3 field access for FFI
+// ============================================================================
+
+void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, tc_scene_handle scene) {
+    tc_value v = tc_value_vec3(value);
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    tc_vec3 result = {0.0, 0.0, 0.0};
+    if (v.type == TC_VALUE_VEC3) {
+        result = v.data.v3;
+    }
+    tc_value_free(&v);
+    return result;
+}
+
+// ============================================================================
 // Simplified field setters for FFI
 // ============================================================================
 
