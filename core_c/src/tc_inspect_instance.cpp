@@ -131,7 +131,8 @@ tc_value tc_component_inspect_get(tc_component* c, const char* path) {
     void* obj = tc::get_inspect_object(c);
     if (!obj) return tc_value_nil();
 
-    return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
+    // Dispatch through lang vtable system (handles C++, Python, C# etc.)
+    return tc_inspect_get(obj, type_name, path);
 }
 
 void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene_handle scene) {
@@ -143,7 +144,8 @@ void tc_component_inspect_set(tc_component* c, const char* path, tc_value value,
     void* obj = tc::get_inspect_object(c);
     if (!obj) return;
 
-    tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+    // Dispatch through lang vtable system (handles C++, Python, C# etc.)
+    tc_inspect_set(obj, type_name, path, value, scene);
 }
 
 tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
@@ -161,7 +163,8 @@ tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
     }
     if (!obj) return tc_value_nil();
 
-    return tc::InspectRegistry::instance().get_tc_value(obj, type_name, path);
+    // Dispatch through lang vtable system
+    return tc_inspect_get(obj, type_name, path);
 }
 
 void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_handle scene) {
@@ -179,8 +182,8 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_
     }
     if (!obj) return;
 
-    // Use set_tc_value which properly handles both C++ and Python fields
-    tc::InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+    // Dispatch through lang vtable system
+    tc_inspect_set(obj, type_name, path, value, scene);
 }
 
 // ============================================================================
