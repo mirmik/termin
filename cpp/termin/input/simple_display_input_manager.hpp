@@ -2,6 +2,7 @@
 #pragma once
 
 #include "input_events.hpp"
+#include "tc_log.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -32,6 +33,11 @@ public:
     {
         tc_input_manager_init(&tc_im, &vtable_);
         tc_im.userdata = this;
+
+        // Auto-attach to display's surface
+        if (display_ && display_->surface) {
+            tc_render_surface_set_input_manager(display_->surface, &tc_im);
+        }
     }
 
     ~SimpleDisplayInputManager() = default;
@@ -64,6 +70,9 @@ public:
         get_cursor_pos(&x, &y);
 
         tc_viewport_handle viewport = viewport_at_screen(x, y);
+
+        tc_log(TC_LOG_DEBUG, "[SimpleDisplayInputManager] on_mouse_button btn=%d action=%d cursor=(%.1f, %.1f) viewport=(%u,%u) valid=%d",
+            button, action, x, y, viewport.index, viewport.generation, tc_viewport_handle_valid(viewport));
 
         // Track active viewport for drag operations
         if (action == TC_INPUT_PRESS) {
@@ -98,7 +107,8 @@ public:
         has_cursor_ = true;
 
         tc_viewport_handle viewport = active_viewport_;
-        if (!tc_viewport_handle_valid(viewport)) {
+        bool used_active = tc_viewport_handle_valid(viewport);
+        if (!used_active) {
             viewport = viewport_at_screen(x, y);
         }
 
@@ -108,7 +118,11 @@ public:
             if (tc_scene_handle_valid(scene)) {
                 MouseMoveEvent event(viewport, x, y, dx, dy);
                 dispatch_mouse_move(scene, &event);
+            } else {
+                tc_log(TC_LOG_DEBUG, "[SimpleDisplayInputManager] on_mouse_move: viewport valid but scene INVALID");
             }
+        } else {
+            tc_log(TC_LOG_DEBUG, "[SimpleDisplayInputManager] on_mouse_move: no viewport (active=%d)", used_active);
         }
     }
 
@@ -117,6 +131,10 @@ public:
         double y = last_cursor_y_;
 
         tc_viewport_handle viewport = viewport_at_screen(x, y);
+
+        tc_log(TC_LOG_DEBUG, "[SimpleDisplayInputManager] on_scroll last_cursor=(%.1f, %.1f) viewport=(%u,%u) valid=%d",
+            x, y, viewport.index, viewport.generation, tc_viewport_handle_valid(viewport));
+
         if (!tc_viewport_handle_valid(viewport)) {
             viewport = active_viewport_;
         }

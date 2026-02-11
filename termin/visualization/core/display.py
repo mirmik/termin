@@ -42,6 +42,7 @@ class Display(CppDisplay):
         """
         # Store Python surface reference to prevent GC
         self._surface = surface
+        self._input_manager = None
 
         # Get tc_render_surface pointer from surface
         tc_surface_obj = surface.tc_surface()
@@ -66,6 +67,15 @@ class Display(CppDisplay):
     def surface(self) -> "RenderSurface":
         """Render surface."""
         return self._surface
+
+    def connect_input(self) -> None:
+        """Create and attach SimpleDisplayInputManager.
+
+        Events from the surface will be dispatched to scene InputComponents
+        (e.g. OrbitCameraController).
+        """
+        from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+        self._input_manager = SimpleDisplayInputManager(self.tc_display_ptr)
 
     def viewport_rect_to_pixels(self, viewport) -> tuple[int, int, int, int]:
         """

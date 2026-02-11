@@ -33,6 +33,14 @@ OrbitCameraController::OrbitCameraController(
     install_input_vtable(&_c);
 }
 
+void OrbitCameraController::_ensure_camera() {
+    // Re-resolve camera if entity handle became stale
+    // (happens when entity moves between pools, e.g. standalone → scene)
+    if (!_camera.valid() && entity().valid()) {
+        _camera.reset(entity().get_component<CameraComponent>());
+    }
+}
+
 void OrbitCameraController::on_added() {
     CxxComponent::on_added();
 
@@ -294,6 +302,7 @@ OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state
 // Events are C struct pointers (tc_mouse_button_event*, etc.)
 
 void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
+    _ensure_camera();
     if (!_camera.valid() || !e) {
         return;
     }
@@ -319,6 +328,7 @@ void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
 
 void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
     if (_prevent_moving) return;
+    _ensure_camera();
     if (!_camera.valid() || !e) return;
 
     uintptr_t vp_key = viewport_key(e->viewport);

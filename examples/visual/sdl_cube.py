@@ -114,6 +114,8 @@ def main():
     viewport.pipeline = make_preview_pipeline()
     engine = RenderEngine(graphics)
 
+    display.connect_input()
+
     while not handle.should_close():
         sdl_backend.poll_events()
 
