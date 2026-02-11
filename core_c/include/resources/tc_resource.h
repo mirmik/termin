@@ -30,6 +30,7 @@ typedef struct tc_resource_header {
     const char* name;               // human-readable name (interned string)
     uint32_t version;               // incremented on data change (for GPU sync)
     uint32_t ref_count;             // reference count for ownership
+    uint32_t pool_index;            // index in resource pool (for GPUContext lookup)
     uint8_t is_loaded;              // true if data is loaded
     uint8_t _pad[3];
     tc_resource_load_fn load_callback;  // callback to load data (NULL if no lazy loading)
@@ -53,6 +54,7 @@ static inline void tc_resource_header_init(tc_resource_header* header, const cha
     header->name = NULL;
     header->version = 1;
     header->ref_count = 0;
+    header->pool_index = 0;
     header->is_loaded = 0;
     header->load_callback = NULL;
     header->load_user_data = NULL;

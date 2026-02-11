@@ -3,6 +3,7 @@
 #pragma once
 
 #include "tc_types.h"
+#include "tc_gpu_context.h"
 #include "resources/tc_texture.h"
 #include "resources/tc_shader.h"
 #include "resources/tc_mesh.h"
@@ -87,6 +88,9 @@ typedef struct tc_gpu_ops {
     // mesh->gpu_vbo and gpu_ebo must already be valid.
     // Returns new VAO ID (0 on failure).
     uint32_t (*mesh_create_vao)(const tc_mesh* mesh);
+
+    // Delete a GL buffer object (VBO/EBO/UBO)
+    void (*buffer_delete)(uint32_t buffer_id);
 
     // User data (passed to callbacks if needed)
     void* user_data;

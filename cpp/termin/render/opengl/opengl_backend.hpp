@@ -435,6 +435,10 @@ inline void mesh_delete(uint32_t vao_id) {
     glDeleteVertexArrays(1, &vao_id);
 }
 
+inline void buffer_delete(uint32_t buffer_id) {
+    glDeleteBuffers(1, &buffer_id);
+}
+
 // Create VAO from existing shared VBO/EBO (for additional GL contexts in shared mode)
 inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
     if (!mesh || mesh->gpu_vbo == 0) {
@@ -524,6 +528,8 @@ inline void register_gpu_ops() {
         mesh_draw,
         mesh_delete,
         mesh_create_vao,
+        // Buffer operations
+        buffer_delete,
         // User data
         nullptr
     };
@@ -555,10 +561,7 @@ public:
     static OpenGLGraphicsBackend& get_instance();
 
     ~OpenGLGraphicsBackend() override {
-        if (ui_vao_ != 0) {
-            glDeleteVertexArrays(1, &ui_vao_);
-            glDeleteBuffers(1, &ui_vbo_);
-        }
+        // GPU resources are now owned by GPUContext - no manual cleanup here
     }
 
     void test_method() {
@@ -1189,6 +1192,26 @@ private:
     }
 
     void ensure_ui_buffers() {
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (ctx) {
+            // Use per-context backend slots
+            if (ctx->backend_ui_vao != 0 && glIsVertexArray(ctx->backend_ui_vao)) {
+                ui_vao_ = ctx->backend_ui_vao;
+                ui_vbo_ = ctx->backend_ui_vbo;
+                return;
+            }
+            // Create new VAO (per-context) and VBO (shared if primary)
+            GLuint vao, vbo;
+            glGenVertexArrays(1, &vao);
+            glGenBuffers(1, &vbo);
+            ctx->backend_ui_vao = vao;
+            ctx->backend_ui_vbo = vbo;
+            ui_vao_ = vao;
+            ui_vbo_ = vbo;
+            return;
+        }
+
+        // Legacy path (no GPUContext)
         if (ui_vao_ != 0) {
             if (glIsVertexArray && glIsVertexArray(ui_vao_)) {
                 return;
@@ -1220,7 +1243,39 @@ private:
     }
 
     void ensure_immediate_buffers() {
-        // Check if VAO exists and is still valid (may be invalid after context change)
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (ctx) {
+            // Use per-context backend slots
+            if (ctx->backend_immediate_vao != 0 && glIsVertexArray(ctx->backend_immediate_vao)) {
+                immediate_vao_ = ctx->backend_immediate_vao;
+                immediate_vbo_ = ctx->backend_immediate_vbo;
+                return;
+            }
+            // Create new VAO and VBO for this context
+            GLuint vao, vbo;
+            glGenVertexArrays(1, &vao);
+            glGenBuffers(1, &vbo);
+
+            glBindVertexArray(vao);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+            constexpr GLsizei stride = 7 * sizeof(float);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, nullptr);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(3 * sizeof(float)));
+
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+
+            ctx->backend_immediate_vao = vao;
+            ctx->backend_immediate_vbo = vbo;
+            immediate_vao_ = vao;
+            immediate_vbo_ = vbo;
+            return;
+        }
+
+        // Legacy path (no GPUContext)
         if (immediate_vao_ != 0) {
             if (glIsVertexArray(immediate_vao_)) {
                 return;

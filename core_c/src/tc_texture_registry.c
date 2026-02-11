@@ -102,6 +102,7 @@ tc_texture_handle tc_texture_create(const char* uuid) {
     tex->header.uuid[sizeof(tex->header.uuid) - 1] = '\0';
     tex->header.version = 1;
     tex->header.ref_count = 0;
+    tex->header.pool_index = h.index;
     tex->flip_y = 1;  // Default for OpenGL
 
     if (!tc_resource_map_add(g_uuid_to_index, tex->header.uuid, tc_pack_index(h.index))) {

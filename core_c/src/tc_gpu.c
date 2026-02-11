@@ -14,7 +14,8 @@ static const tc_gpu_ops* g_gpu_ops = NULL;
 static tc_shader_preprocess_fn g_shader_preprocess = NULL;
 
 // Thread-local context key for per-context VAO management
-static _Thread_local uintptr_t g_current_context_key = 0;
+// Not static: also accessed from tc_gpu_context.c via extern
+_Thread_local uintptr_t g_current_context_key = 0;
 
 // ============================================================================
 // GPU ops registration
@@ -50,6 +51,13 @@ uintptr_t tc_gpu_get_context_key(void) {
 
 bool tc_texture_needs_upload(const tc_texture* tex) {
     if (!tex) return false;
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    if (ctx) {
+        tc_gpu_slot* slot = tc_gpu_context_texture_slot(ctx, tex->header.pool_index);
+        if (slot) {
+            return slot->gl_id == 0 || slot->version != (int32_t)tex->header.version;
+        }
+    }
     return tex->gpu_id == 0 || tex->gpu_version != (int32_t)tex->header.version;
 }
 
@@ -63,10 +71,29 @@ bool tc_texture_upload_gpu(tc_texture* tex) {
         return false;
     }
 
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_slot* slot = NULL;
+    uint32_t current_id = tex->gpu_id;
+    int32_t current_version = tex->gpu_version;
+
+    if (ctx) {
+        slot = tc_gpu_context_texture_slot(ctx, tex->header.pool_index);
+        if (slot) {
+            current_id = slot->gl_id;
+            current_version = slot->version;
+        }
+    }
+
+    // Already up to date?
+    if (current_id != 0 && current_version == (int32_t)tex->header.version) {
+        tex->gpu_id = current_id;
+        tex->gpu_version = current_version;
+        return true;
+    }
+
     // Delete old GPU texture if exists
-    if (tex->gpu_id != 0 && g_gpu_ops->texture_delete) {
-        g_gpu_ops->texture_delete(tex->gpu_id);
-        tex->gpu_id = 0;
+    if (current_id != 0 && g_gpu_ops->texture_delete) {
+        g_gpu_ops->texture_delete(current_id);
     }
 
     uint32_t gpu_id = 0;
@@ -104,6 +131,13 @@ bool tc_texture_upload_gpu(tc_texture* tex) {
         return false;
     }
 
+    // Store in context slot
+    if (slot) {
+        slot->gl_id = gpu_id;
+        slot->version = (int32_t)tex->header.version;
+    }
+
+    // Write-through cache
     tex->gpu_id = gpu_id;
     tex->gpu_version = (int32_t)tex->header.version;
     return true;
@@ -144,12 +178,26 @@ bool tc_texture_bind_gpu(tc_texture* tex, int unit) {
 }
 
 void tc_texture_delete_gpu(tc_texture* tex) {
-    if (!tex || tex->gpu_id == 0) {
-        return;
+    if (!tex) return;
+
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_slot* slot = NULL;
+    uint32_t id_to_delete = tex->gpu_id;
+
+    if (ctx) {
+        slot = tc_gpu_context_texture_slot(ctx, tex->header.pool_index);
+        if (slot) {
+            id_to_delete = slot->gl_id;
+        }
     }
 
-    if (g_gpu_ops && g_gpu_ops->texture_delete) {
-        g_gpu_ops->texture_delete(tex->gpu_id);
+    if (id_to_delete != 0 && g_gpu_ops && g_gpu_ops->texture_delete) {
+        g_gpu_ops->texture_delete(id_to_delete);
+    }
+
+    if (slot) {
+        slot->gl_id = 0;
+        slot->version = -1;
     }
 
     tex->gpu_id = 0;
@@ -166,9 +214,24 @@ uint32_t tc_shader_compile_gpu(tc_shader* shader) {
         return 0;
     }
 
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_slot* slot = NULL;
+    uint32_t current_program = shader->gpu_program;
+    int32_t current_version = shader->gpu_version;
+
+    if (ctx) {
+        slot = tc_gpu_context_shader_slot(ctx, shader->pool_index);
+        if (slot) {
+            current_program = slot->gl_id;
+            current_version = slot->version;
+        }
+    }
+
     // Already compiled and up to date?
-    if (shader->gpu_program != 0 && shader->gpu_version == (int32_t)shader->version) {
-        return shader->gpu_program;
+    if (current_program != 0 && current_version == (int32_t)shader->version) {
+        shader->gpu_program = current_program;
+        shader->gpu_version = current_version;
+        return current_program;
     }
 
     if (!g_gpu_ops || !g_gpu_ops->shader_compile) {
@@ -185,9 +248,8 @@ uint32_t tc_shader_compile_gpu(tc_shader* shader) {
     }
 
     // Delete old program if exists
-    if (shader->gpu_program != 0 && g_gpu_ops->shader_delete) {
-        g_gpu_ops->shader_delete(shader->gpu_program);
-        shader->gpu_program = 0;
+    if (current_program != 0 && g_gpu_ops->shader_delete) {
+        g_gpu_ops->shader_delete(current_program);
     }
 
     // Preprocess sources if preprocessor is available
@@ -240,6 +302,13 @@ uint32_t tc_shader_compile_gpu(tc_shader* shader) {
         return 0;
     }
 
+    // Store in context slot
+    if (slot) {
+        slot->gl_id = program;
+        slot->version = (int32_t)shader->version;
+    }
+
+    // Write-through cache
     shader->gpu_program = program;
     shader->gpu_version = (int32_t)shader->version;
     return program;
@@ -250,25 +319,50 @@ void tc_shader_use_gpu(tc_shader* shader) {
         return;
     }
 
-    // Compile if needed
-    if (shader->gpu_program == 0 || shader->gpu_version != (int32_t)shader->version) {
-        if (tc_shader_compile_gpu(shader) == 0) {
+    // Compile if needed (this also updates write-through cache)
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    uint32_t program = shader->gpu_program;
+
+    if (ctx) {
+        tc_gpu_slot* slot = tc_gpu_context_shader_slot(ctx, shader->pool_index);
+        if (slot) {
+            program = slot->gl_id;
+        }
+    }
+
+    if (program == 0 || shader->gpu_version != (int32_t)shader->version) {
+        program = tc_shader_compile_gpu(shader);
+        if (program == 0) {
             return;
         }
     }
 
     if (g_gpu_ops && g_gpu_ops->shader_use) {
-        g_gpu_ops->shader_use(shader->gpu_program);
+        g_gpu_ops->shader_use(program);
     }
 }
 
 void tc_shader_delete_gpu(tc_shader* shader) {
-    if (!shader || shader->gpu_program == 0) {
-        return;
+    if (!shader) return;
+
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_slot* slot = NULL;
+    uint32_t id_to_delete = shader->gpu_program;
+
+    if (ctx) {
+        slot = tc_gpu_context_shader_slot(ctx, shader->pool_index);
+        if (slot) {
+            id_to_delete = slot->gl_id;
+        }
     }
 
-    if (g_gpu_ops && g_gpu_ops->shader_delete) {
-        g_gpu_ops->shader_delete(shader->gpu_program);
+    if (id_to_delete != 0 && g_gpu_ops && g_gpu_ops->shader_delete) {
+        g_gpu_ops->shader_delete(id_to_delete);
+    }
+
+    if (slot) {
+        slot->gl_id = 0;
+        slot->version = -1;
     }
 
     shader->gpu_program = 0;
@@ -289,19 +383,40 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         return 0;
     }
 
-    uintptr_t ctx = g_current_context_key;
-    bool data_current = (mesh->gpu_vbo != 0 &&
-                         mesh->gpu_version == (int32_t)mesh->header.version);
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_mesh_slot* slot = NULL;
+
+    if (ctx) {
+        slot = tc_gpu_context_mesh_slot(ctx, mesh->header.pool_index);
+    }
+
+    // Determine current VBO/EBO state from slot or legacy fields
+    uint32_t current_vbo = slot ? slot->vbo : mesh->gpu_vbo;
+    int32_t current_version = slot ? slot->version : mesh->gpu_version;
+
+    bool data_current = (current_vbo != 0 &&
+                         current_version == (int32_t)mesh->header.version);
 
     if (data_current) {
         // VBO/EBO data is up to date. Check if VAO exists for current context.
-        uint32_t vao = tc_mesh_get_vao(mesh, ctx);
+        uint32_t vao = slot ? slot->vao : 0;
+
+        // Fallback to legacy VAO lookup if no GPUContext
+        if (!slot) {
+            vao = tc_mesh_get_vao(mesh, g_current_context_key);
+        }
+
         if (vao != 0) {
             mesh->gpu_vao = vao;
             return vao;
         }
 
-        // Create VAO for this new context (reuse shared VBO/EBO)
+        // Create VAO for this context (reuse shared VBO/EBO)
+        // Write-through needed for mesh_create_vao which reads mesh->gpu_vbo/ebo
+        mesh->gpu_vbo = current_vbo;
+        mesh->gpu_ebo = slot ? slot->ebo : mesh->gpu_ebo;
+
+        vao = 0;
         if (g_gpu_ops->mesh_create_vao) {
             vao = g_gpu_ops->mesh_create_vao(mesh);
         }
@@ -310,21 +425,46 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
                    mesh->header.name ? mesh->header.name : mesh->header.uuid);
             return 0;
         }
-        tc_mesh_set_vao(mesh, ctx, vao);
+
+        if (slot) {
+            slot->vao = vao;
+        } else {
+            tc_mesh_set_vao(mesh, g_current_context_key, vao);
+        }
         mesh->gpu_vao = vao;
         return vao;
     }
 
     // VBO/EBO data needs upload (first time or version changed).
-    // Delete all existing per-context VAOs.
-    if (g_gpu_ops->mesh_delete) {
-        for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
-            if (mesh->gpu_vaos[i] != 0) {
-                g_gpu_ops->mesh_delete(mesh->gpu_vaos[i]);
+    // Delete existing VAO for this context.
+    if (slot) {
+        if (slot->vao != 0 && g_gpu_ops->mesh_delete) {
+            g_gpu_ops->mesh_delete(slot->vao);
+            slot->vao = 0;
+        }
+        // Delete old VBO/EBO if this context owns shared resources
+        if (ctx->owns_shared_resources) {
+            if (slot->vbo != 0 && g_gpu_ops->buffer_delete) {
+                g_gpu_ops->buffer_delete(slot->vbo);
+            }
+            if (slot->ebo != 0 && g_gpu_ops->buffer_delete) {
+                g_gpu_ops->buffer_delete(slot->ebo);
             }
         }
+        slot->vbo = 0;
+        slot->ebo = 0;
+    } else {
+        // Legacy path: delete all per-context VAOs
+        if (g_gpu_ops->mesh_delete) {
+            for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
+                if (mesh->gpu_vaos[i] != 0) {
+                    g_gpu_ops->mesh_delete(mesh->gpu_vaos[i]);
+                }
+            }
+        }
+        mesh->gpu_vao_count = 0;
     }
-    mesh->gpu_vao_count = 0;
+
     mesh->gpu_vao = 0;
     mesh->gpu_vbo = 0;
     mesh->gpu_ebo = 0;
@@ -337,7 +477,16 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         return 0;
     }
 
-    tc_mesh_set_vao(mesh, ctx, vao);
+    // Store in context slot
+    if (slot) {
+        slot->vao = vao;
+        slot->vbo = mesh->gpu_vbo;  // mesh_upload sets these
+        slot->ebo = mesh->gpu_ebo;
+        slot->version = (int32_t)mesh->header.version;
+    } else {
+        tc_mesh_set_vao(mesh, g_current_context_key, vao);
+    }
+
     mesh->gpu_vao = vao;
     mesh->gpu_version = (int32_t)mesh->header.version;
     return vao;
@@ -348,11 +497,19 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
         return;
     }
 
-    uintptr_t ctx = g_current_context_key;
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_mesh_slot* slot = NULL;
 
-    // Check if VBO/EBO data needs re-upload
-    bool data_stale = (mesh->gpu_vbo == 0 ||
-                       mesh->gpu_version != (int32_t)mesh->header.version);
+    if (ctx) {
+        slot = tc_gpu_context_mesh_slot(ctx, mesh->header.pool_index);
+    }
+
+    // Check if VBO/EBO data is current
+    uint32_t current_vbo = slot ? slot->vbo : mesh->gpu_vbo;
+    int32_t current_version = slot ? slot->version : mesh->gpu_version;
+
+    bool data_stale = (current_vbo == 0 ||
+                       current_version != (int32_t)mesh->header.version);
 
     if (data_stale) {
         if (tc_mesh_upload_gpu(mesh) == 0) {
@@ -360,14 +517,17 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
         }
     } else {
         // Data is current, ensure VAO exists for this context
-        uint32_t vao = tc_mesh_get_vao(mesh, ctx);
+        uint32_t vao = slot ? slot->vao : 0;
+        if (!slot) {
+            vao = tc_mesh_get_vao(mesh, g_current_context_key);
+        }
         if (vao == 0) {
             if (tc_mesh_upload_gpu(mesh) == 0) {
                 return;
             }
-            vao = tc_mesh_get_vao(mesh, ctx);
+        } else {
+            mesh->gpu_vao = vao;
         }
-        mesh->gpu_vao = vao;
     }
 
     if (g_gpu_ops && g_gpu_ops->mesh_draw) {
@@ -380,15 +540,43 @@ void tc_mesh_delete_gpu(tc_mesh* mesh) {
         return;
     }
 
-    // Delete all per-context VAOs
-    if (g_gpu_ops && g_gpu_ops->mesh_delete) {
-        for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
-            if (mesh->gpu_vaos[i] != 0) {
-                g_gpu_ops->mesh_delete(mesh->gpu_vaos[i]);
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    tc_gpu_mesh_slot* slot = NULL;
+
+    if (ctx) {
+        slot = tc_gpu_context_mesh_slot(ctx, mesh->header.pool_index);
+    }
+
+    if (slot) {
+        // Delete VAO (per-context)
+        if (slot->vao != 0 && g_gpu_ops && g_gpu_ops->mesh_delete) {
+            g_gpu_ops->mesh_delete(slot->vao);
+        }
+        // Delete VBO/EBO only if this context owns shared resources
+        if (ctx->owns_shared_resources && g_gpu_ops) {
+            if (slot->vbo != 0 && g_gpu_ops->buffer_delete) {
+                g_gpu_ops->buffer_delete(slot->vbo);
+            }
+            if (slot->ebo != 0 && g_gpu_ops->buffer_delete) {
+                g_gpu_ops->buffer_delete(slot->ebo);
             }
         }
+        slot->vao = 0;
+        slot->vbo = 0;
+        slot->ebo = 0;
+        slot->version = -1;
+    } else {
+        // Legacy path: delete all per-context VAOs
+        if (g_gpu_ops && g_gpu_ops->mesh_delete) {
+            for (uint32_t i = 0; i < mesh->gpu_vao_count; i++) {
+                if (mesh->gpu_vaos[i] != 0) {
+                    g_gpu_ops->mesh_delete(mesh->gpu_vaos[i]);
+                }
+            }
+        }
+        mesh->gpu_vao_count = 0;
     }
-    mesh->gpu_vao_count = 0;
+
     mesh->gpu_vao = 0;
     mesh->gpu_vbo = 0;
     mesh->gpu_ebo = 0;

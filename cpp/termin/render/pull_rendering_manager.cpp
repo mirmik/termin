@@ -143,8 +143,12 @@ void PullRenderingManager::render_display(tc_display* display) {
         return;
     }
 
-    // Make display context current and set context key for per-context VAO management
+    // Make display context current and set GPUContext for per-context resource management
     tc_render_surface_make_current(surface);
+    if (!surface->gpu_context) {
+        surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface));
+    }
+    tc_gpu_set_context(surface->gpu_context);
     tc_gpu_set_context_key(tc_render_surface_context_key(surface));
 
     int width, height;

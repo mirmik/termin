@@ -174,6 +174,7 @@ tc_shader_handle tc_shader_create(const char* uuid) {
     shader->uuid[sizeof(shader->uuid) - 1] = '\0';
     shader->version = 1;
     shader->ref_count = 0;
+    shader->pool_index = h.index;
     shader->original_handle = tc_shader_handle_invalid();
 
     // Add to UUID map
