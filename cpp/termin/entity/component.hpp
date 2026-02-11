@@ -69,6 +69,15 @@ public:
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
 
+    // Set owner and reference counting vtable.
+    // owner: opaque pointer to the object that owns this component
+    //   (CxxComponent* for C++, PyObject* for Python, GCHandle for C#)
+    // ref_vt: vtable for reference counting (retain/release/drop)
+    void set_owner_ref(void* owner, const tc_component_ref_vtable* ref_vt) {
+        _c.body = owner;
+        if (ref_vt) _c.ref_vtable = ref_vt;
+    }
+
     // Type identification (for serialization) - uses type_entry from registry
     const char* type_name() const {
         return tc_component_type_name(&_c);

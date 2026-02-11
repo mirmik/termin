@@ -158,11 +158,17 @@ public:
         }
     }
 
-    // Setup Python wrapper reference
-    // Sets body pointer and switches ref_vtable to Python ref counting
+    // Set owner and reference counting vtable.
+    // owner: opaque pointer to the object that owns this pass
+    // ref_vt: vtable for reference counting (retain/release/drop)
+    void set_owner_ref(void* owner, const tc_pass_ref_vtable* ref_vt) {
+        _c.body = owner;
+        if (ref_vt) _c.ref_vtable = ref_vt;
+    }
+
+    // Legacy alias for Python bindings
     void set_python_ref(void* body, const tc_pass_ref_vtable* ref_vt) {
-        _c.body = body;
-        _c.ref_vtable = ref_vt;
+        set_owner_ref(body, ref_vt);
     }
 
     // ========================================================================

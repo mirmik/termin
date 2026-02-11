@@ -520,51 +520,17 @@ public static class TerminCore
     public static extern void PassInspectSet(IntPtr pass, string path, TcValue value, IntPtr scene);
 
     // ========================================================================
-    // Component External Body Management (for C# prevent-GC mechanism)
+    // C# Owner Ref — P/Invoke for SWIG-generated helpers in termin_wrap.cpp
     // ========================================================================
 
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void ComponentBodyIncrefDelegate(IntPtr body);
+    [DllImport("termin", EntryPoint = "CSharp_csharp_owner_ref_init", CallingConvention = CallingConvention.StdCall)]
+    public static extern void OwnerRefInit(IntPtr releaseFn);
 
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void ComponentBodyDecrefDelegate(IntPtr body);
+    [DllImport("termin", EntryPoint = "CSharp_csharp_component_setup_owner_ref", CallingConvention = CallingConvention.StdCall)]
+    public static extern void ComponentSetupOwnerRef(IntPtr tcComponent, IntPtr gcHandle);
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct ComponentExternalCallbacks
-    {
-        public IntPtr incref;
-        public IntPtr decref;
-    }
-
-    [DllImport(DLL, EntryPoint = "tc_component_set_external_callbacks")]
-    public static extern void ComponentSetExternalCallbacks(ref ComponentExternalCallbacks callbacks);
-
-    [DllImport(DLL, EntryPoint = "tc_component_body_incref")]
-    public static extern void ComponentBodyIncref(IntPtr body);
-
-    [DllImport(DLL, EntryPoint = "tc_component_body_decref")]
-    public static extern void ComponentBodyDecref(IntPtr body);
-
-    // ========================================================================
-    // Pass External Body Management (for C# prevent-GC mechanism)
-    // ========================================================================
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct PassExternalCallbacks
-    {
-        public IntPtr execute;           // not used for C++ passes
-        public IntPtr get_reads;         // not used for C++ passes
-        public IntPtr get_writes;        // not used for C++ passes
-        public IntPtr get_inplace_aliases; // not used for C++ passes
-        public IntPtr get_resource_specs;  // not used for C++ passes
-        public IntPtr get_internal_symbols; // not used for C++ passes
-        public IntPtr destroy;           // not used for C++ passes
-        public IntPtr incref;
-        public IntPtr decref;
-    }
-
-    [DllImport(DLL, EntryPoint = "tc_pass_set_external_callbacks")]
-    public static extern void PassSetExternalCallbacks(ref PassExternalCallbacks callbacks);
+    [DllImport("termin", EntryPoint = "CSharp_csharp_pass_setup_owner_ref", CallingConvention = CallingConvention.StdCall)]
+    public static extern void PassSetupOwnerRef(IntPtr tcPass, IntPtr gcHandle);
 
     // ========================================================================
     // Render Surface (tc_render_surface)
@@ -915,45 +881,50 @@ public static class TerminCore
 }
 
 /// <summary>
-/// Manages external body for C++ components created from C#.
-/// Prevents GC from collecting the C# wrapper while C++ holds a reference.
+/// Manages C# owner references for components and passes.
+/// When C++ retains a component/pass, the GCHandle prevents GC collection.
+/// When C++ releases it, the GCHandle is freed and C# GC can collect.
 /// </summary>
-public static class ComponentExternalBody
+public static class CSharpOwnerRef
 {
-    private static TerminCore.ComponentBodyIncrefDelegate? _increfDelegate;
-    private static TerminCore.ComponentBodyDecrefDelegate? _decrefDelegate;
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate void ReleaseBodyDelegate(IntPtr body);
+
+    private static ReleaseBodyDelegate? _releaseDelegate;
     private static bool _initialized;
 
     /// <summary>
-    /// Initialize the external body callbacks. Call once at startup.
+    /// Initialize the release callback. Called automatically by SWIG-generated constructors.
     /// </summary>
-    public static void Initialize()
+    public static void EnsureInitialized()
     {
         if (_initialized) return;
 
-        _increfDelegate = IncrefCallback;
-        _decrefDelegate = DecrefCallback;
+        _releaseDelegate = ReleaseBody;
+        IntPtr releasePtr = Marshal.GetFunctionPointerForDelegate(_releaseDelegate);
+        TerminCore.OwnerRefInit(releasePtr);
 
-        var callbacks = new TerminCore.ComponentExternalCallbacks
-        {
-            incref = Marshal.GetFunctionPointerForDelegate(_increfDelegate),
-            decref = Marshal.GetFunctionPointerForDelegate(_decrefDelegate)
-        };
-
-        TerminCore.ComponentSetExternalCallbacks(ref callbacks);
         _initialized = true;
     }
 
-    private static void IncrefCallback(IntPtr body)
+    /// <summary>
+    /// Set GCHandle as owner on a tc_component. Called from SWIG constructor typemaps.
+    /// </summary>
+    public static void SetupComponentOwnerRef(IntPtr tcComponent, IntPtr gcHandle)
     {
-        // body is a GCHandle - incref means allocate another Normal handle
-        // But since we use Normal handle which prevents GC, incref is no-op
-        // The C++ side will call decref when done
+        TerminCore.ComponentSetupOwnerRef(tcComponent, gcHandle);
     }
 
-    private static void DecrefCallback(IntPtr body)
+    /// <summary>
+    /// Set GCHandle as owner on a tc_pass. Called from SWIG constructor typemaps.
+    /// </summary>
+    public static void SetupPassOwnerRef(IntPtr tcPass, IntPtr gcHandle)
     {
-        // body is a GCHandle - free it to allow GC
+        TerminCore.PassSetupOwnerRef(tcPass, gcHandle);
+    }
+
+    private static void ReleaseBody(IntPtr body)
+    {
         if (body != IntPtr.Zero)
         {
             var handle = GCHandle.FromIntPtr(body);
@@ -962,95 +933,5 @@ public static class ComponentExternalBody
                 handle.Free();
             }
         }
-    }
-
-    /// <summary>
-    /// Register a C# object as external body for a component.
-    /// Returns the GCHandle IntPtr to pass to set_external_body().
-    /// </summary>
-    public static IntPtr Register(object obj)
-    {
-        var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
-        return GCHandle.ToIntPtr(handle);
-    }
-
-    /// <summary>
-    /// Get the C# object from an external body IntPtr.
-    /// </summary>
-    public static object? GetObject(IntPtr body)
-    {
-        if (body == IntPtr.Zero) return null;
-        var handle = GCHandle.FromIntPtr(body);
-        return handle.IsAllocated ? handle.Target : null;
-    }
-}
-
-/// <summary>
-/// Manages external body for C++ passes created from C#.
-/// Prevents GC from collecting the C# wrapper while C++ holds a reference.
-/// Same pattern as ComponentExternalBody but for passes.
-/// </summary>
-public static class PassExternalBody
-{
-    private static TerminCore.ComponentBodyIncrefDelegate? _increfDelegate;
-    private static TerminCore.ComponentBodyDecrefDelegate? _decrefDelegate;
-    private static bool _initialized;
-
-    /// <summary>
-    /// Initialize the external body callbacks for passes. Call once at startup.
-    /// </summary>
-    public static void Initialize()
-    {
-        if (_initialized) return;
-
-        _increfDelegate = IncrefCallback;
-        _decrefDelegate = DecrefCallback;
-
-        var callbacks = new TerminCore.PassExternalCallbacks
-        {
-            incref = Marshal.GetFunctionPointerForDelegate(_increfDelegate),
-            decref = Marshal.GetFunctionPointerForDelegate(_decrefDelegate)
-        };
-
-        TerminCore.PassSetExternalCallbacks(ref callbacks);
-        _initialized = true;
-    }
-
-    private static void IncrefCallback(IntPtr body)
-    {
-        // body is a GCHandle - incref is no-op since Normal handle prevents GC
-    }
-
-    private static void DecrefCallback(IntPtr body)
-    {
-        // body is a GCHandle - free it to allow GC
-        if (body != IntPtr.Zero)
-        {
-            var handle = GCHandle.FromIntPtr(body);
-            if (handle.IsAllocated)
-            {
-                handle.Free();
-            }
-        }
-    }
-
-    /// <summary>
-    /// Register a C# object as external body for a pass.
-    /// Returns the GCHandle IntPtr to pass to set_external_body().
-    /// </summary>
-    public static IntPtr Register(object obj)
-    {
-        var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
-        return GCHandle.ToIntPtr(handle);
-    }
-
-    /// <summary>
-    /// Get the C# object from an external body IntPtr.
-    /// </summary>
-    public static object? GetObject(IntPtr body)
-    {
-        if (body == IntPtr.Zero) return null;
-        var handle = GCHandle.FromIntPtr(body);
-        return handle.IsAllocated ? handle.Target : null;
     }
 }

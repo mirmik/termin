@@ -34,93 +34,150 @@
 %include "std_string.i"
 
 // ============================================================================
-// C# Component External Body Support - Auto-registration
+// C# Owner Ref Support — prevent GC while C++ holds a reference
+//
+// Flow:
+//   1. C# calls CSharpOwnerRef.Initialize() once → registers retain/release
+//      callbacks via csharp_owner_ref_init()
+//   2. Each SWIG-generated constructor calls csharp_component_setup_owner_ref()
+//      or csharp_pass_setup_owner_ref() with (tc_component*, GCHandle)
+//   3. On retain → no-op (GCHandle.Normal already prevents GC)
+//   4. On release → C# frees the GCHandle → object eligible for GC
 // ============================================================================
 
-// Ignore C API functions - accessed via direct P/Invoke in TerminCore.cs
-%ignore tc_component_set_external_callbacks;
-%ignore tc_component_body_incref;
-%ignore tc_component_body_decref;
+// Raw C code — goes into termin_wrap.cpp, NOT wrapped by SWIG
+%{
+#include "core/tc_component.h"
+#include "render/tc_pass.h"
+
+// Shared callback: release GCHandle from C# side
+typedef void (SWIGSTDCALL *csharp_body_release_fn)(void* body);
+static csharp_body_release_fn _csharp_release_body = NULL;
+
+// --- Component ref vtable ---
+static void _cs_comp_retain(tc_component* c) {
+    (void)c; // no-op: GCHandle.Normal prevents GC
+}
+static void _cs_comp_release(tc_component* c) {
+    if (c && c->body && _csharp_release_body) {
+        _csharp_release_body(c->body);
+        c->body = NULL;
+    }
+}
+static tc_component_ref_vtable _cs_comp_ref_vtable = {
+    _cs_comp_retain, _cs_comp_release, NULL
+};
+
+// --- Pass ref vtable ---
+static void _cs_pass_retain(tc_pass* p) {
+    (void)p; // no-op
+}
+static void _cs_pass_release(tc_pass* p) {
+    if (p && p->body && _csharp_release_body) {
+        _csharp_release_body(p->body);
+        p->body = NULL;
+    }
+}
+static tc_pass_ref_vtable _cs_pass_ref_vtable = {
+    _cs_pass_retain, _cs_pass_release, NULL
+};
+
+// --- Exported functions (called via P/Invoke from C#) ---
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// One-time init: register the release callback
+SWIGEXPORT void SWIGSTDCALL CSharp_csharp_owner_ref_init(void* release_fn) {
+    _csharp_release_body = (csharp_body_release_fn)release_fn;
+}
+
+// Per-component: set GCHandle as owner + install C# ref vtable
+SWIGEXPORT void SWIGSTDCALL CSharp_csharp_component_setup_owner_ref(void* tc_comp, void* gc_handle) {
+    tc_component* c = (tc_component*)tc_comp;
+    if (!c) return;
+    c->body = gc_handle;
+    c->ref_vtable = &_cs_comp_ref_vtable;
+}
+
+// Per-pass: set GCHandle as owner + install C# ref vtable
+SWIGEXPORT void SWIGSTDCALL CSharp_csharp_pass_setup_owner_ref(void* tc_pass_ptr, void* gc_handle) {
+    tc_pass* p = (tc_pass*)tc_pass_ptr;
+    if (!p) return;
+    p->body = gc_handle;
+    p->ref_vtable = &_cs_pass_ref_vtable;
+}
+
+#ifdef __cplusplus
+}
+#endif
+%}
 
 // ============================================================================
-// Macro: Add auto external body registration to Component classes
-// Usage: CSHARP_COMPONENT_EXTERNAL_BODY(termin::CameraComponent)
+// Macro: auto owner-ref registration for Component classes
 // ============================================================================
-%define CSHARP_COMPONENT_EXTERNAL_BODY(CTYPE)
+%define CSHARP_COMPONENT_OWNER_REF(CTYPE)
 
-// Add private field and initialization method to the class
 %typemap(cscode) CTYPE %{
-    // GCHandle prevents GC from collecting this object while C++ holds a reference
-    private System.Runtime.InteropServices.GCHandle _externalBodyHandle;
+    private System.Runtime.InteropServices.GCHandle _ownerHandle;
 
-    private void InitExternalBody() {
-        // Initialize callbacks once (safe to call multiple times)
-        ComponentExternalBody.Initialize();
-        // Allocate GCHandle to prevent GC collection
-        _externalBodyHandle = System.Runtime.InteropServices.GCHandle.Alloc(this);
-        // Tell C++ about our handle so it can prevent GC while holding reference
-        set_external_body(System.Runtime.InteropServices.GCHandle.ToIntPtr(_externalBodyHandle));
+    private void InitOwnerRef() {
+        CSharpOwnerRef.EnsureInitialized();
+        _ownerHandle = System.Runtime.InteropServices.GCHandle.Alloc(this);
+        CSharpOwnerRef.SetupComponentOwnerRef(
+            tc_component_ptr(),
+            System.Runtime.InteropServices.GCHandle.ToIntPtr(_ownerHandle));
     }
 %}
 
-// Modify constructor to call InitExternalBody after creation
 %typemap(csconstruct) CTYPE %{: this($imcall, true) {
     if (terminPINVOKE.SWIGPendingException.Pending) throw terminPINVOKE.SWIGPendingException.Retrieve();
-    InitExternalBody();
+    InitOwnerRef();
   }%}
 
 %enddef
 
 // ============================================================================
-// Macro: Add auto external body registration to Pass classes
-// Usage: CSHARP_PASS_EXTERNAL_BODY(termin::ColorPass)
+// Macro: auto owner-ref registration for Pass classes
 // ============================================================================
-%define CSHARP_PASS_EXTERNAL_BODY(CTYPE)
+%define CSHARP_PASS_OWNER_REF(CTYPE)
 
-// Add private field and initialization method to the class
 %typemap(cscode) CTYPE %{
-    // GCHandle prevents GC from collecting this object while C++ holds a reference
-    private System.Runtime.InteropServices.GCHandle _externalBodyHandle;
+    private System.Runtime.InteropServices.GCHandle _ownerHandle;
 
-    private void InitExternalBody() {
-        // Initialize callbacks once (safe to call multiple times)
-        PassExternalBody.Initialize();
-        // Allocate GCHandle to prevent GC collection
-        _externalBodyHandle = System.Runtime.InteropServices.GCHandle.Alloc(this);
-        // Tell C++ about our handle so it can prevent GC while holding reference
-        set_external_body(System.Runtime.InteropServices.GCHandle.ToIntPtr(_externalBodyHandle));
+    private void InitOwnerRef() {
+        CSharpOwnerRef.EnsureInitialized();
+        _ownerHandle = System.Runtime.InteropServices.GCHandle.Alloc(this);
+        CSharpOwnerRef.SetupPassOwnerRef(
+            SWIGTYPE_p_tc_pass.getCPtr(tc_pass_ptr()).Handle,
+            System.Runtime.InteropServices.GCHandle.ToIntPtr(_ownerHandle));
     }
 %}
 
-// Modify constructor to call InitExternalBody after creation
 %typemap(csconstruct) CTYPE %{: this($imcall, true) {
     if (terminPINVOKE.SWIGPendingException.Pending) throw terminPINVOKE.SWIGPendingException.Retrieve();
-    InitExternalBody();
+    InitOwnerRef();
   }%}
 
 %enddef
 
-// Apply macros to component classes (must be before class declarations)
-CSHARP_COMPONENT_EXTERNAL_BODY(termin::CameraComponent)
-CSHARP_COMPONENT_EXTERNAL_BODY(termin::OrbitCameraController)
-CSHARP_COMPONENT_EXTERNAL_BODY(termin::MeshRenderer)
-CSHARP_COMPONENT_EXTERNAL_BODY(termin::ColliderComponent)
-CSHARP_COMPONENT_EXTERNAL_BODY(termin::RotatorComponent)
-CSHARP_COMPONENT_EXTERNAL_BODY(termin::ActuatorComponent)
+// Apply to component classes (must be before class declarations)
+CSHARP_COMPONENT_OWNER_REF(termin::CameraComponent)
+CSHARP_COMPONENT_OWNER_REF(termin::OrbitCameraController)
+CSHARP_COMPONENT_OWNER_REF(termin::MeshRenderer)
+CSHARP_COMPONENT_OWNER_REF(termin::ColliderComponent)
+CSHARP_COMPONENT_OWNER_REF(termin::RotatorComponent)
+CSHARP_COMPONENT_OWNER_REF(termin::ActuatorComponent)
 
-// Apply macros to pass classes
-CSHARP_PASS_EXTERNAL_BODY(termin::ColorPass)
-CSHARP_PASS_EXTERNAL_BODY(termin::PresentToScreenPass)
-CSHARP_PASS_EXTERNAL_BODY(termin::DepthPass)
-CSHARP_PASS_EXTERNAL_BODY(termin::ColliderGizmoPass)
+// Apply to pass classes
+CSHARP_PASS_OWNER_REF(termin::ColorPass)
+CSHARP_PASS_OWNER_REF(termin::PresentToScreenPass)
+CSHARP_PASS_OWNER_REF(termin::DepthPass)
+CSHARP_PASS_OWNER_REF(termin::ColliderGizmoPass)
 
 // Opaque type for tc_component
 typedef struct tc_component tc_component;
-
-// Typemap for void* as IntPtr (for set_external_body)
-%typemap(cstype) void* body "System.IntPtr"
-%typemap(csin) void* body "$csinput"
-%typemap(imtype) void* body "System.IntPtr"
 
 // Typemap for tc_component* as IntPtr
 %typemap(cstype) tc_component* "System.IntPtr"
@@ -700,8 +757,6 @@ public:
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -739,8 +794,6 @@ public:
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
 
-    // External body management
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -767,8 +820,6 @@ public:
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -794,8 +845,6 @@ public:
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -819,8 +868,6 @@ public:
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -844,8 +891,6 @@ public:
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -879,8 +924,6 @@ public:
     // Get tc_pass pointer for adding to pipeline
     tc_pass* tc_pass_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -901,8 +944,6 @@ public:
 
     tc_pass* tc_pass_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -922,8 +963,6 @@ public:
 
     tc_pass* tc_pass_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 // ============================================================================
@@ -946,8 +985,6 @@ public:
 
     tc_pass* tc_pass_ptr();
 
-    // External body management (for C# prevent-GC mechanism)
-    void set_external_body(void* body);
 };
 
 } // namespace termin
