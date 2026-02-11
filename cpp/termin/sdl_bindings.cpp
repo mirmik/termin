@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/pair.h>
 
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"

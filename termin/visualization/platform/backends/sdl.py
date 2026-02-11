@@ -61,12 +61,15 @@ class SDLWindowHandle(BackendWindow):
         title: str,
         share: Optional[BackendWindow] = None,
         graphics: Optional[OpenGLGraphicsBackend] = None,
+        _cpp_window: Optional[Any] = None,
     ):
-        share_win = None
-        if share is not None and isinstance(share, SDLWindowHandle):
-            share_win = share._window
-
-        self._window = SDLWindow(width, height, title, share_win)
+        if _cpp_window is not None:
+            self._window = _cpp_window
+        else:
+            share_win = None
+            if share is not None and isinstance(share, SDLWindowHandle):
+                share_win = share._window
+            self._window = SDLWindow(width, height, title, share_win)
 
         if graphics is not None:
             self._window.set_graphics(graphics)
@@ -79,8 +82,13 @@ class SDLWindowHandle(BackendWindow):
         self._py_key_callback: Optional[Callable] = None
 
         self._user_pointer: Any = None
+        self._tc_surface_ptr: int = 0
 
     def close(self) -> None:
+        if self._tc_surface_ptr:
+            from termin._native.render import _render_surface_free_external
+            _render_surface_free_external(self._tc_surface_ptr)
+            self._tc_surface_ptr = 0
         self._window.close()
 
     def should_close(self) -> bool:
@@ -166,6 +174,25 @@ class SDLWindowHandle(BackendWindow):
     def get_window_framebuffer(self) -> Any:
         return self._window.get_window_framebuffer()
 
+    def get_framebuffer(self):
+        """Return FramebufferHandle for rendering."""
+        return self.get_window_framebuffer()
+
+    def get_framebuffer_id(self) -> int:
+        """Return raw OpenGL FBO id (0 for default framebuffer)."""
+        return 0
+
+    def tc_surface(self):
+        """Create/return tc_render_surface wrapping this handle."""
+        if not self._tc_surface_ptr:
+            from termin._native.render import _render_surface_new_from_python
+            self._tc_surface_ptr = _render_surface_new_from_python(self)
+
+        class _Wrapper:
+            def __init__(self, ptr):
+                self.ptr = ptr
+        return _Wrapper(self._tc_surface_ptr)
+
     def get_window_id(self) -> int:
         return self._window.get_window_id()
 
@@ -189,10 +216,14 @@ class SDLWindowBackend(WindowBackend):
         title: str,
         share: Optional[BackendWindow] = None,
     ) -> SDLWindowHandle:
+        share_win = None
+        if share is not None and isinstance(share, SDLWindowHandle):
+            share_win = share._window
+        cpp_window = self._backend.create_window(width, height, title, share_win)
         window = SDLWindowHandle(
             width, height, title,
-            share=share,
             graphics=self._graphics,
+            _cpp_window=cpp_window,
         )
         self._windows[window.get_window_id()] = window
         return window
