@@ -445,6 +445,11 @@ void tc_material_phase_set_color(
     tc_material_phase_set_uniform(phase, "u_color", TC_UNIFORM_VEC4, color);
 }
 
+void tc_material_phase_make_transparent(tc_material_phase* phase) {
+    if (!phase) return;
+    phase->state = tc_render_state_transparent();
+}
+
 // ============================================================================
 // Material uniform/texture operations
 // ============================================================================

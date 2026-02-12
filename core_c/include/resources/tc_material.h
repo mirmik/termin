@@ -242,6 +242,9 @@ TC_API void tc_material_phase_set_color(
     float r, float g, float b, float a
 );
 
+// Set transparent render state (blend=ON, depth_write=OFF) on phase
+TC_API void tc_material_phase_make_transparent(tc_material_phase* phase);
+
 // ============================================================================
 // Material helpers
 // ============================================================================

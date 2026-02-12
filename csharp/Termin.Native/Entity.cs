@@ -114,6 +114,19 @@ public readonly struct Entity
     }
 
     // ========================================================================
+    // Layer
+    // ========================================================================
+
+    /// <summary>
+    /// Get or set the entity layer bitmask.
+    /// </summary>
+    public ulong Layer
+    {
+        get => _pool?.GetLayer(_id) ?? 0;
+        set => _pool?.SetLayer(_id, value);
+    }
+
+    // ========================================================================
     // Hierarchy
     // ========================================================================
 
@@ -137,6 +150,16 @@ public readonly struct Entity
     {
         _pool?.SetParent(_id, parent._id);
     }
+
+    /// <summary>
+    /// Get direct children of this entity.
+    /// </summary>
+    public List<Entity> Children => _pool?.GetDirectChildren(_id) ?? new List<Entity>();
+
+    /// <summary>
+    /// Number of direct children.
+    /// </summary>
+    public int ChildCount => _pool?.GetChildrenCount(_id) ?? 0;
 
     // ========================================================================
     // Components

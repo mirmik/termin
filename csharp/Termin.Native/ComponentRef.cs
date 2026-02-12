@@ -259,6 +259,22 @@ public readonly struct ComponentRef
     }
 
     // ========================================================================
+    // Field Copy (via inspect round-trip)
+    // ========================================================================
+
+    /// <summary>
+    /// Copy a field value from another component via the inspect system.
+    /// Works for all field types including mesh and material handles.
+    /// </summary>
+    public void CopyFieldFrom(ComponentRef source, string path)
+    {
+        if (_ptr == IntPtr.Zero || source._ptr == IntPtr.Zero) return;
+        var value = TerminCore.ComponentInspectGet(source._ptr, path);
+        TerminCore.ComponentInspectSet(_ptr, path, value, IntPtr.Zero);
+        TerminCore.ValueFree(ref value);
+    }
+
+    // ========================================================================
     // Equality
     // ========================================================================
 

@@ -144,6 +144,20 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_entity_pool_set_parent")]
     public static extern void EntityPoolSetParent(IntPtr pool, TcEntityId id, TcEntityId parent);
 
+    // Layer
+    [DllImport(DLL, EntryPoint = "tc_entity_pool_layer")]
+    public static extern ulong EntityPoolLayer(IntPtr pool, TcEntityId id);
+
+    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_layer")]
+    public static extern void EntityPoolSetLayer(IntPtr pool, TcEntityId id, ulong layer);
+
+    // Children
+    [DllImport(DLL, EntryPoint = "tc_entity_pool_children_count")]
+    public static extern nuint EntityPoolChildrenCount(IntPtr pool, TcEntityId id);
+
+    [DllImport(DLL, EntryPoint = "tc_entity_pool_child_at")]
+    public static extern TcEntityId EntityPoolChildAt(IntPtr pool, TcEntityId id, nuint index);
+
     // Components
     [DllImport(DLL, EntryPoint = "tc_entity_pool_component_count")]
     public static extern nuint EntityPoolComponentCount(IntPtr pool, TcEntityId id);
@@ -319,6 +333,12 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_material_set_color")]
     public static extern void MaterialSetColor(IntPtr material, float r, float g, float b, float a);
 
+    [DllImport(DLL, EntryPoint = "tc_material_phase_set_color")]
+    public static extern void MaterialPhaseSetColor(IntPtr phase, float r, float g, float b, float a);
+
+    [DllImport(DLL, EntryPoint = "tc_material_phase_make_transparent")]
+    public static extern void MaterialPhaseMakeTransparent(IntPtr phase);
+
     [DllImport(DLL, EntryPoint = "tc_material_phase_apply_gpu")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool MaterialPhaseApplyGpu(IntPtr phase);
@@ -377,6 +397,12 @@ public static class TerminCore
     // ========================================================================
 
     private const string ENTITY_DLL = "entity_lib";
+
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_inspect_get", CharSet = CharSet.Ansi)]
+    public static extern TcValue ComponentInspectGet(IntPtr component, string path);
+
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_inspect_set", CharSet = CharSet.Ansi)]
+    public static extern void ComponentInspectSet(IntPtr component, string path, TcValue value, IntPtr scene);
 
     [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_int", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldInt(IntPtr component, string path, long value, IntPtr scene);
