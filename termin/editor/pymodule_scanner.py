@@ -7,8 +7,10 @@ Scans project directory for .pymodule files and loads them automatically.
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import json
 import os
+import subprocess
 import sys
 from typing import Callable
 
@@ -27,7 +29,8 @@ class PyModuleScanner:
         "name": "module_name",           # Name for logging/UI
         "root": ".",                      # Directory to add to sys.path (relative to .pymodule)
         "packages": ["core", "scripts"], # Packages to import
-        "components": []                  # Optional: explicit component class paths
+        "components": [],                # Optional: explicit component class paths
+        "requirements": ["numpy", "python-chess"]  # Optional: pip packages to install
     }
     """
 
@@ -130,10 +133,15 @@ class PyModuleScanner:
 
         root = data.get("root", ".")
         packages = data.get("packages", [])
+        requirements = data.get("requirements", [])
 
         # Resolve root path relative to .pymodule file
         pymodule_dir = os.path.dirname(pymodule_path)
         root_path = os.path.normpath(os.path.join(pymodule_dir, root))
+
+        # Install requirements if specified
+        if requirements:
+            self._install_requirements(name, requirements)
 
         # Add root to sys.path if not already there
         if root_path not in sys.path:
@@ -161,6 +169,54 @@ class PyModuleScanner:
             self._on_module_loaded(name, True, "")
 
         return True
+
+    def _install_requirements(self, module_name: str, requirements: list[str]) -> None:
+        """
+        Install pip requirements for a module, skipping already-installed packages.
+
+        Args:
+            module_name: Name of the module (for logging)
+            requirements: List of pip package specifiers (e.g. ["python-chess", "numpy>=1.20"])
+        """
+        missing = []
+        for req in requirements:
+            # Extract package name from specifier (e.g. "numpy>=1.20" -> "numpy")
+            pkg_name = req.split(">=")[0].split("<=")[0].split("==")[0].split("!=")[0].split("<")[0].split(">")[0].strip()
+            try:
+                importlib.metadata.distribution(pkg_name)
+            except importlib.metadata.PackageNotFoundError:
+                missing.append(req)
+
+        if not missing:
+            log.info(f"[PyModuleScanner] Module '{module_name}': all requirements satisfied")
+            return
+
+        log.info(f"[PyModuleScanner] Module '{module_name}': installing missing requirements: {missing}")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", *missing],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                log.info(f"[PyModuleScanner] Successfully installed: {missing}")
+                # Ask the same Python where pip installs packages
+                sp_result = subprocess.run(
+                    [sys.executable, "-c",
+                     "import sysconfig; print(sysconfig.get_path('purelib')); print(sysconfig.get_path('platlib'))"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                for line in sp_result.stdout.strip().splitlines():
+                    line = line.strip()
+                    if line and line not in sys.path:
+                        sys.path.insert(0, line)
+                        log.info(f"[PyModuleScanner] Added site-packages to sys.path: {line}")
+                importlib.invalidate_caches()
+            else:
+                log.error(f"[PyModuleScanner] pip install failed (code {result.returncode}): {result.stderr}")
+        except Exception as e:
+            log.error(f"[PyModuleScanner] Failed to run pip: {e}")
 
     def cleanup(self) -> None:
         """Remove added paths from sys.path."""
