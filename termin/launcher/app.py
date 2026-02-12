@@ -529,8 +529,57 @@ class LauncherApp:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _parse_launcher_args() -> str | None:
+    """Parse command-line arguments. Returns project path or None."""
+    import sys
+    from termin.launcher.recent import resolve_project_path
+
+    args = sys.argv[1:]
+
+    if '-h' in args or '--help' in args:
+        print("Usage: termin_launcher [PROJECT]")
+        print()
+        print("Termin project launcher.")
+        print()
+        print("Arguments:")
+        print("  PROJECT     Path to .terminproj file or project directory")
+        print()
+        print("Without PROJECT, opens the launcher UI.")
+        print()
+        print("Options:")
+        print("  -h, --help  Show this help message and exit")
+        return "__help__"
+
+    positional = [a for a in args if not a.startswith('-')]
+    if positional:
+        resolved = resolve_project_path(positional[0])
+        if resolved is None:
+            print(f"Error: cannot find .terminproj at '{positional[0]}'", flush=True)
+            return "__error__"
+        return resolved
+
+    return None
+
+
 def run():
     """Entry point: create window, build UI, run event loop."""
+    project = _parse_launcher_args()
+    if project == "__help__":
+        return
+    if project == "__error__":
+        return
+    if project is not None:
+        # Direct launch: skip UI, open editor with given project
+        write_launch_project(project)
+        RecentProjects().add(project)
+        editor_exe = _find_editor_executable()
+        if editor_exe is None:
+            log.error("Cannot find termin_editor executable")
+            return
+        log.info(f"Launching editor: {editor_exe} for project {project}")
+        subprocess.Popen([editor_exe])
+        return
+
     window, gl_context = _create_sdl_window("Termin Launcher", 1024, 640)
 
     graphics = OpenGLGraphicsBackend.get_instance()

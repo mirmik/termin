@@ -90,6 +90,31 @@ class RecentProjects:
         return os.path.basename(os.path.dirname(project_path))
 
 
+def resolve_project_path(path_str: str) -> str | None:
+    """Resolve a CLI argument to an absolute .terminproj path.
+
+    Accepts:
+    - Path to .terminproj file
+    - Path to directory containing a single .terminproj file
+
+    Returns absolute path or None.
+    """
+    p = os.path.abspath(path_str)
+    if os.path.isfile(p) and p.endswith(".terminproj"):
+        return p
+    if os.path.isdir(p):
+        proj_files = [
+            f for f in os.listdir(p)
+            if f.endswith(".terminproj") and os.path.isfile(os.path.join(p, f))
+        ]
+        if len(proj_files) == 1:
+            return os.path.join(p, proj_files[0])
+        if len(proj_files) > 1:
+            print(f"Error: multiple .terminproj files in '{p}'", flush=True)
+            return None
+    return None
+
+
 def write_launch_project(project_path: str) -> None:
     """Write a project path for the editor to pick up on startup."""
     os.makedirs(CONFIG_DIR, exist_ok=True)

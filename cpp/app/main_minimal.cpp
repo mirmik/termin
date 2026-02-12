@@ -74,10 +74,19 @@ static fs::path find_python_stdlib(const fs::path& install_root) {
 #endif
 }
 
-int main(int argc, char* argv[]) {
-    (void)argc;
-    (void)argv;
+static void set_python_argv(int argc, char* argv[]) {
+    wchar_t** wargv = new wchar_t*[argc];
+    for (int i = 0; i < argc; i++) {
+        wargv[i] = Py_DecodeLocale(argv[i], nullptr);
+    }
+    PySys_SetArgvEx(argc, wargv, 0);
+    for (int i = 0; i < argc; i++) {
+        PyMem_RawFree(wargv[i]);
+    }
+    delete[] wargv;
+}
 
+int main(int argc, char* argv[]) {
     fs::path exe_dir = get_executable_dir();
     fs::path install_root = exe_dir.parent_path();
     bool bundled_python = false;
@@ -124,6 +133,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to initialize Python" << std::endl;
         return 1;
     }
+    set_python_argv(argc, argv);
 
     // Set Python path
     std::string path_code;

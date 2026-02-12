@@ -56,12 +56,63 @@ def apply_dark_palette(app: QApplication):
     app.setPalette(palette)
 
 
+def _parse_editor_args():
+    """Parse command-line arguments for the editor. Returns (project, debug_resource) or exits."""
+    args = sys.argv[1:]
+
+    if '-h' in args or '--help' in args:
+        print("Usage: termin_editor [OPTIONS] [PROJECT]")
+        print()
+        print("Termin scene editor.")
+        print()
+        print("Arguments:")
+        print("  PROJECT              Path to .terminproj file or project directory")
+        print()
+        print("Options:")
+        print("  --debug-resource RES Open framegraph debugger with this resource")
+        print("  -h, --help           Show this help message and exit")
+        return "__help__", None
+
+    debug_resource = None
+    positional = []
+    i = 0
+    while i < len(args):
+        if args[i] == '--debug-resource' and i + 1 < len(args):
+            debug_resource = args[i + 1]
+            i += 2
+        elif not args[i].startswith('-'):
+            positional.append(args[i])
+            i += 1
+        else:
+            i += 1
+
+    project = None
+    if positional:
+        from termin.launcher.recent import resolve_project_path
+        project = resolve_project_path(positional[0])
+        if project is None:
+            print(f"Error: cannot find .terminproj at '{positional[0]}'", flush=True)
+            return "__error__", None
+
+    return project, debug_resource
+
+
 def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     """
     Initialize editor and setup callbacks.
     Called from C++ before EngineCore.run().
     Does NOT call engine.run() - that's done in C++.
     """
+    # Parse CLI args (project path, --debug-resource)
+    cli_project, cli_debug = _parse_editor_args()
+    if cli_project in ("__help__", "__error__"):
+        sys.exit(0 if cli_project == "__help__" else 1)
+    if cli_debug is not None:
+        debug_resource = cli_debug
+    if cli_project is not None:
+        from termin.launcher.recent import write_launch_project
+        write_launch_project(cli_project)
+
     from termin._native import EngineCore
 
     # Get EngineCore instance (created in C++)
@@ -147,18 +198,5 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Run termin editor")
-    parser.add_argument(
-        "--debug-resource",
-        type=str,
-        default=None,
-        help="Open framegraph debugger with this resource (e.g., shadow_maps, color)"
-    )
-    parser.add_argument(
-        "--no-scene",
-        action="store_true",
-        help="Start editor without opening a scene"
-    )
-    args = parser.parse_args()
-    run_editor(debug_resource=args.debug_resource, no_scene=args.no_scene)
+    # Args parsed inside init_editor/_parse_editor_args
+    run_editor()

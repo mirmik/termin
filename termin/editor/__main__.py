@@ -1,6 +1,5 @@
 """Запуск редактора через ``python -m termin.editor``."""
 
-import argparse
 import warnings
 import faulthandler
 import gc
@@ -35,15 +34,8 @@ from .run_editor import run_editor
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run termin editor")
-    parser.add_argument(
-        "--debug-resource",
-        type=str,
-        default=None,
-        help="Open framegraph debugger with this resource (e.g., shadow_maps, color)"
-    )
-    args = parser.parse_args()
-    run_editor(debug_resource=args.debug_resource)
+    # Args parsed inside init_editor/_parse_editor_args
+    run_editor()
 
 
 if __name__ == "__main__":
