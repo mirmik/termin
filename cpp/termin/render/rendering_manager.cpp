@@ -925,8 +925,8 @@ void RenderingManager::present_display(tc_display* display) {
 void RenderingManager::attach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
 
-    // Clear existing pipelines first (calls notify_render_detach)
-    detach_scene(scene);
+    // Clear existing pipelines (without notify_render_detach — attach will notify attach)
+    clear_scene_pipelines(scene);
 
     size_t template_count = tc_scene_pipeline_template_count(scene);
     uint64_t key = scene_key(scene);
@@ -963,6 +963,7 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
 
 void RenderingManager::detach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
+    tc_scene_notify_render_detach(scene);
     clear_scene_pipelines(scene);
 }
 

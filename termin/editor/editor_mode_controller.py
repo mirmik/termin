@@ -258,6 +258,11 @@ class EditorModeController:
             self._game_scene_name,
         )
 
+        # Detach editor scene from RenderingManager BEFORE attaching game scene
+        # (иначе editor scene's CameraViewportComponent обнулит камеру при detach)
+        if self._window._rendering_controller is not None:
+            self._window._rendering_controller.detach_scene(editor_scene)
+
         # Detach from editor_scene, attach to game_scene with same camera state
         if self._window._editor_attachment is not None:
             self._window._editor_attachment.attach(game_scene, transfer_camera_state=True)
@@ -266,10 +271,6 @@ class EditorModeController:
         # Устанавливаем режимы (таймер запустится автоматически)
         self._window.scene_manager.set_mode(self._window._editor_scene_name, SceneMode.INACTIVE)
         self._window.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-
-        # Detach editor scene from RenderingManager before attaching game scene
-        if self._window._rendering_controller is not None:
-            self._window._rendering_controller.detach_scene(editor_scene)
 
         self._on_game_mode_changed(True, game_scene, self._saved_tree_expanded_uuids)
 

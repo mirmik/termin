@@ -63,6 +63,10 @@ void CameraViewportComponent::on_render_attach() {
 }
 
 void CameraViewportComponent::on_render_detach() {
+    Entity ent = entity();
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] on_render_detach entity='%s' viewport_valid=%d",
+           ent.valid() ? (ent.name() ? ent.name() : "?") : "invalid",
+           viewport_.is_valid() ? 1 : 0);
     // Clear camera on viewport so renderer skips it until next attach
     if (viewport_.is_valid()) {
         tc_viewport_set_camera(viewport_.handle_, nullptr);
@@ -88,7 +92,10 @@ CameraComponent* CameraViewportComponent::find_camera() const {
 }
 
 void CameraViewportComponent::setup_viewport() {
-    if (viewport_.is_valid()) return;  // already set up
+    if (viewport_.is_valid()) {
+        tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: already valid, skip");
+        return;
+    }
 
     CameraComponent* camera = find_camera();
     if (!camera) {
@@ -96,6 +103,7 @@ void CameraViewportComponent::setup_viewport() {
                "[CameraViewportComponent] No CameraComponent found on entity");
         return;
     }
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: camera found");
 
     // Find or create display via RenderingManager
     RenderingManager& rm = RenderingManager::instance();
@@ -107,6 +115,7 @@ void CameraViewportComponent::setup_viewport() {
         return;
     }
     display_ = display;
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: display '%s' found", target_display.c_str());
 
     // Build viewport name from entity
     std::string vp_name = "CameraViewport";
@@ -129,24 +138,31 @@ void CameraViewportComponent::setup_viewport() {
 
     // Try to reuse existing viewport by name (survives editor→game mode transitions)
     size_t vp_count = tc_display_get_viewport_count(display);
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: display has %zu viewports, looking for '%s'",
+           vp_count, vp_name.c_str());
     for (size_t i = 0; i < vp_count; ++i) {
         tc_viewport_handle vh = tc_display_get_viewport_at_index(display, i);
         if (!tc_viewport_alive(vh)) continue;
         const char* name = tc_viewport_get_name(vh);
+        tc_log(TC_LOG_INFO, "[CameraViewportComponent]   viewport[%zu] name='%s'", i, name ? name : "(null)");
         if (name && vp_name == name) {
             viewport_ = TcViewport(vh);
             // Update camera and scene to point to current instances
             tc_viewport_set_camera(vh, camera->tc_component_ptr());
             tc_viewport_set_scene(vh, scene);
             apply_settings();
+            tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: reused existing viewport '%s'", name);
             return;
         }
     }
 
     // Resolve pipeline via factory
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: creating new viewport '%s'", vp_name.c_str());
     RenderPipeline* pipeline = nullptr;
     if (!pipeline_name.empty()) {
         pipeline = rm.create_pipeline(pipeline_name);
+        tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: pipeline '%s' -> %p",
+               pipeline_name.c_str(), (void*)pipeline);
     }
 
     tc_viewport_handle vh = rm.mount_scene(
@@ -162,6 +178,7 @@ void CameraViewportComponent::setup_viewport() {
 
     viewport_ = TcViewport(vh);
     apply_settings();
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] setup_viewport: created viewport '%s' OK", vp_name.c_str());
 }
 
 void CameraViewportComponent::apply_settings() {
