@@ -81,6 +81,14 @@ class EditorProjectController:
         if project_file is None:
             project_file = self._settings.get_last_project_file()
 
+        # Fallback: most recent project from recent.json
+        if project_file is None:
+            project_file = self._find_recent_project_file()
+
+        # Save to QSettings so next direct launch remembers
+        if project_file is not None:
+            self._settings.set_last_project_file(project_file)
+
         project_root: Path | None = None
         if project_file is not None:
             project_root = project_file.parent
@@ -110,6 +118,25 @@ class EditorProjectController:
         self._update_window_title()
 
         return self._project_browser
+
+    def _find_recent_project_file(self) -> Path | None:
+        """Find the most recent .terminproj from recent.json."""
+        from termin.launcher.recent import RecentProjects
+
+        recent = RecentProjects()
+        for entry in recent.list():
+            rp = Path(entry["path"])
+            if not rp.exists():
+                continue
+            # Entry is a .terminproj file directly
+            if rp.is_file() and rp.suffix == ".terminproj":
+                return rp
+            # Entry is a project directory — find .terminproj inside
+            if rp.is_dir():
+                for f in rp.iterdir():
+                    if f.suffix == ".terminproj" and f.is_file():
+                        return f
+        return None
 
     def new_project(self) -> None:
         """Создать новый проект (.terminproj файл)."""
