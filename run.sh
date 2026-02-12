@@ -1,9 +1,9 @@
 #!/bin/bash
 # Termin run script
 # Usage:
-#   ./run.sh                # Run editor
-#   ./run.sh --launcher     # Run launcher (UIRenderer test)
-#   ./run.sh --gdb          # Run editor under gdb
+#   ./run.sh                # Run launcher
+#   ./run.sh --editor       # Run editor directly
+#   ./run.sh --gdb          # Run launcher under gdb
 #   ./run.sh --valgrind     # Run under valgrind
 
 set -e
@@ -12,9 +12,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$SCRIPT_DIR/install"
 
 # Select executable
-EXE="$INSTALL_DIR/bin/termin_editor"
-if [[ "${1:-}" == "--launcher" || "${1:-}" == "-l" ]]; then
-    EXE="$INSTALL_DIR/bin/termin_launcher"
+EXE="$INSTALL_DIR/bin/termin_launcher"
+if [[ "${1:-}" == "--editor" || "${1:-}" == "-e" ]]; then
+    EXE="$INSTALL_DIR/bin/termin_editor"
     shift
 fi
 
