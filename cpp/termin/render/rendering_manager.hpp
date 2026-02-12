@@ -17,6 +17,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/graphics_backend.hpp"
+#include "termin/input/display_input_router.hpp"
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -117,6 +118,10 @@ public:
     // Check if display should be auto-removed (empty + auto_remove_when_empty flag)
     // Returns true if display was removed.
     bool try_auto_remove_display(tc_display* display);
+
+    // Ensure display has a DisplayInputRouter (creates one if missing).
+    // Returns the router's tc_input_manager pointer.
+    tc_input_manager* ensure_display_router(tc_display* display);
 
     // ========================================================================
     // Viewport State Management
@@ -254,6 +259,9 @@ private:
 private:
     // Managed displays
     std::vector<tc_display*> displays_;
+
+    // Per-display input routers (owned)
+    std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;
 
     // Viewport render states (key = viewport handle as uint64)
     std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;

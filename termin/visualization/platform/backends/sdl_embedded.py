@@ -432,18 +432,22 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         # Create tc_render_surface for C interop
         self._tc_surface_ptr = _create_tc_render_surface(self)
 
-        # Input manager pointer (set via set_input_manager)
-        self._input_manager_ptr: int = 0
+        # Input manager pointer — read from C surface directly via property
 
     def tc_surface(self) -> "_TcSurfaceWrapper":
         """Return wrapper with .ptr attribute for C interop."""
         return _TcSurfaceWrapper(self._tc_surface_ptr)
 
+    @property
+    def _input_manager_ptr(self) -> int:
+        """Read input_manager pointer directly from C surface."""
+        from termin._native.render import _render_surface_get_input_manager
+        return _render_surface_get_input_manager(self._tc_surface_ptr)
+
     def set_input_manager(self, input_manager_ptr: int) -> None:
         """Set input manager for this render surface."""
         from termin._native.render import _render_surface_set_input_manager
         _render_surface_set_input_manager(self._tc_surface_ptr, input_manager_ptr)
-        self._input_manager_ptr = input_manager_ptr
 
     @property
     def native_handle(self) -> int:

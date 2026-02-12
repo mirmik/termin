@@ -6,6 +6,8 @@
 #include "render/tc_display_input_router.h"
 #include "render/tc_viewport_input_manager.h"
 #include "render/tc_render_surface.h"
+#include "render/tc_display.h"
+#include "render/tc_viewport.h"
 
 namespace nb = nanobind;
 
@@ -248,6 +250,30 @@ void bind_tc_input_manager(nb::module_& m) {
     m.def("_viewport_input_manager_free", [](uintptr_t ptr) {
         tc_viewport_input_manager* m = reinterpret_cast<tc_viewport_input_manager*>(ptr);
         tc_viewport_input_manager_free(m);
+    });
+
+    // ========================================================================
+    // Debug: query input manager state
+    // ========================================================================
+
+    // Get input_manager pointer from render surface
+    m.def("_render_surface_get_input_manager", [](uintptr_t surface_ptr) -> uintptr_t {
+        tc_render_surface* s = reinterpret_cast<tc_render_surface*>(surface_ptr);
+        return reinterpret_cast<uintptr_t>(tc_render_surface_get_input_manager(s));
+    });
+
+    // Get input_manager pointer from viewport
+    m.def("_viewport_get_input_manager", [](uint32_t vp_index, uint32_t vp_generation) -> uintptr_t {
+        tc_viewport_handle vh;
+        vh.index = vp_index;
+        vh.generation = vp_generation;
+        return reinterpret_cast<uintptr_t>(tc_viewport_get_input_manager(vh));
+    });
+
+    // Get surface pointer from display
+    m.def("_display_get_surface_ptr", [](uintptr_t display_ptr) -> uintptr_t {
+        tc_display* d = reinterpret_cast<tc_display*>(display_ptr);
+        return reinterpret_cast<uintptr_t>(tc_display_get_surface(d));
     });
 }
 

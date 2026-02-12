@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -127,6 +127,18 @@ class DisplayInspector(QWidget):
         form.addRow("Block in Editor:", self._block_input_in_editor_checkbox)
 
         layout.addLayout(form)
+
+        # Debug info section
+        debug_header = QLabel("Native State")
+        debug_header.setStyleSheet("font-weight: bold; font-size: 12px; margin-top: 8px;")
+        layout.addWidget(debug_header)
+
+        self._debug_label = QLabel("-")
+        self._debug_label.setStyleSheet("font-family: monospace; font-size: 11px; color: #aaa;")
+        self._debug_label.setWordWrap(True)
+        self._debug_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._debug_label)
+
         layout.addStretch()
 
     def set_display(self, display: Optional["Display"], name: str = "") -> None:
@@ -164,6 +176,9 @@ class DisplayInspector(QWidget):
         self._editor_only_checkbox.setChecked(display.editor_only)
         self._editor_only_checkbox.blockSignals(False)
 
+        # Debug info
+        self._update_debug_info(display)
+
     def _clear(self) -> None:
         """Clear all fields."""
         self._name_edit.setText("")
@@ -180,6 +195,7 @@ class DisplayInspector(QWidget):
         self._input_mode_combo.setCurrentIndex(0)
         self._current_input_mode = "none"
         self._updating = False
+        self._debug_label.setText("-")
 
     def _on_name_changed(self) -> None:
         """Handle name edit finished."""
@@ -230,6 +246,38 @@ class DisplayInspector(QWidget):
         self._updating = True
         self._block_input_in_editor_checkbox.setChecked(blocked)
         self._updating = False
+
+    def _update_debug_info(self, display: "Display") -> None:
+        """Update debug info label with native state."""
+        try:
+            from termin._native.render import (
+                _render_surface_get_input_manager,
+                _display_get_surface_ptr,
+            )
+            display_ptr = display.tc_display_ptr
+            surface_ptr = _display_get_surface_ptr(display_ptr)
+            surface_im_ptr = _render_surface_get_input_manager(surface_ptr) if surface_ptr else 0
+
+            lines = [
+                f"display:    0x{display_ptr:X}",
+                f"surface:    0x{surface_ptr:X}",
+                f"surface.im: 0x{surface_im_ptr:X}" + (" (NULL)" if surface_im_ptr == 0 else ""),
+            ]
+
+            # Viewport input managers
+            from termin._native.render import _viewport_get_input_manager
+            for i, vp in enumerate(display.viewports):
+                try:
+                    vp_index, vp_generation = vp._viewport_handle()
+                except Exception:
+                    continue
+                vp_im = _viewport_get_input_manager(vp_index, vp_generation)
+                vp_name = vp.name or f"vp[{i}]"
+                lines.append(f"  {vp_name}: im=0x{vp_im:X}" + (" (NULL)" if vp_im == 0 else ""))
+
+            self._debug_label.setText("\n".join(lines))
+        except Exception as e:
+            self._debug_label.setText(f"Error: {e}")
 
     def refresh(self) -> None:
         """Refresh display info."""

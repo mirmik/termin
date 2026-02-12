@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -175,6 +175,18 @@ class ViewportInspector(QWidget):
         form.addRow(self._scene_pipeline_label)
 
         layout.addLayout(form)
+
+        # Debug info section
+        debug_header = QLabel("Native State")
+        debug_header.setStyleSheet("font-weight: bold; font-size: 12px; margin-top: 8px;")
+        layout.addWidget(debug_header)
+
+        self._debug_label = QLabel("-")
+        self._debug_label.setStyleSheet("font-family: monospace; font-size: 11px; color: #aaa;")
+        self._debug_label.setWordWrap(True)
+        self._debug_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._debug_label)
+
         layout.addStretch()
 
     def _create_rect_spinbox(self) -> DoubleSpinBox:
@@ -271,6 +283,9 @@ class ViewportInspector(QWidget):
 
             # Check if viewport is managed by scene pipeline
             self._update_scene_pipeline_state(viewport)
+
+            # Debug info
+            self._update_debug_info(viewport)
         finally:
             self._updating = False
 
@@ -358,6 +373,7 @@ class ViewportInspector(QWidget):
             self._hint_label.hide()
             self._scene_pipeline_label.hide()
             self._current_pipeline_name = None
+            self._debug_label.setText("-")
         finally:
             self._updating = False
 
@@ -541,6 +557,29 @@ class ViewportInspector(QWidget):
                         break
         finally:
             self._updating = False
+
+    def _update_debug_info(self, viewport: "Viewport") -> None:
+        """Update debug info label with native state."""
+        try:
+            from termin._native.render import _viewport_get_input_manager
+
+            vh = viewport._viewport_handle()
+            vp_index, vp_generation = vh
+            vp_im = _viewport_get_input_manager(vp_index, vp_generation)
+
+            lines = [
+                f"handle: idx={vp_index} gen={vp_generation}",
+                f"name:   {viewport.name}",
+                f"im:     0x{vp_im:X}" + (" (NULL)" if vp_im == 0 else ""),
+            ]
+
+            # Show input_mode field
+            input_mode = viewport.input_mode
+            lines.append(f"input_mode: {input_mode!r}")
+
+            self._debug_label.setText("\n".join(lines))
+        except Exception as e:
+            self._debug_label.setText(f"Error: {e}")
 
     def refresh(self) -> None:
         """Refresh all data from current viewport."""

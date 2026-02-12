@@ -45,6 +45,11 @@ public:
     /// Layer mask for rendering
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
 
+    /// Input manager type: "simple" (default), "none"
+    /// "simple" — creates tc_viewport_input_manager (dispatches to scene)
+    /// "none"   — no input manager on viewport
+    std::string input_manager_type = "simple";
+
     // --- INSPECT_FIELD registrations ---
     INSPECT_FIELD(CameraViewportComponent, target_display, "Display", "string")
     INSPECT_FIELD(CameraViewportComponent, pipeline_name, "Pipeline", "pipeline_selector")
@@ -53,6 +58,8 @@ public:
     INSPECT_FIELD(CameraViewportComponent, rect_w, "Rect W", "float", 0.0, 1.0, 0.01)
     INSPECT_FIELD(CameraViewportComponent, rect_h, "Rect H", "float", 0.0, 1.0, 0.01)
     INSPECT_FIELD(CameraViewportComponent, depth, "Depth", "int", -100, 100, 1)
+    INSPECT_FIELD_CHOICES(CameraViewportComponent, input_manager_type, "Input Manager", "string",
+        {"simple", "Simple"}, {"none", "None"})
 
     // layer_mask is registered manually via InspectFieldInfo (needs kind="layer_mask")
 

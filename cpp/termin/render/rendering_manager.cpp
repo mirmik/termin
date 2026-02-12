@@ -231,6 +231,9 @@ void RenderingManager::remove_display(tc_display* display) {
         vp = tc_viewport_get_display_next(vp);
     }
 
+    // Remove display router if exists
+    display_routers_.erase(display);
+
     displays_.erase(it);
 
     // Notify callback (e.g., editor cleanup of Qt tabs)
@@ -246,6 +249,20 @@ bool RenderingManager::try_auto_remove_display(tc_display* display) {
 
     remove_display(display);
     return true;
+}
+
+tc_input_manager* RenderingManager::ensure_display_router(tc_display* display) {
+    if (!display) return nullptr;
+
+    auto it = display_routers_.find(display);
+    if (it != display_routers_.end()) {
+        return it->second->input_manager_ptr();
+    }
+
+    auto router = std::make_unique<DisplayInputRouter>(display);
+    tc_input_manager* im = router->input_manager_ptr();
+    display_routers_[display] = std::move(router);
+    return im;
 }
 
 tc_display* RenderingManager::get_display_by_name(const std::string& name) const {
@@ -1094,6 +1111,9 @@ void RenderingManager::shutdown() {
 
     // Clear scene pipelines (deletes owned pipelines)
     clear_all_scene_pipelines();
+
+    // Clear display routers (before displays, since routers reference displays)
+    display_routers_.clear();
 
     // Clear displays (don't free them - we don't own them)
     displays_.clear();

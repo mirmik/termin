@@ -112,6 +112,9 @@ void CameraViewportComponent::setup_viewport() {
     }
     display_ = display;
 
+    // Ensure display has a router for event routing to viewports
+    rm.ensure_display_router(display);
+
     // Build viewport name from entity
     std::string vp_name = "CameraViewport";
     Entity ent = entity();
@@ -144,7 +147,7 @@ void CameraViewportComponent::setup_viewport() {
             tc_viewport_set_scene(vh, scene);
             apply_settings();
             // Attach input manager if not already set
-            if (!tc_viewport_get_input_manager(vh)) {
+            if (!tc_viewport_get_input_manager(vh) && input_manager_type == "simple") {
                 viewport_input_manager_ = tc_viewport_input_manager_new(vh);
             }
             return;
@@ -171,8 +174,10 @@ void CameraViewportComponent::setup_viewport() {
     viewport_ = TcViewport(vh);
     apply_settings();
 
-    // Attach default input manager to viewport
-    viewport_input_manager_ = tc_viewport_input_manager_new(vh);
+    // Attach input manager based on type
+    if (input_manager_type == "simple") {
+        viewport_input_manager_ = tc_viewport_input_manager_new(vh);
+    }
 }
 
 void CameraViewportComponent::apply_settings() {
