@@ -487,9 +487,9 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
             const auto& p = pose["position"].as_list();
             if (p.size() >= 3) {
                 double xyz[3] = {
-                    p[0].as_numer_default(0),
-                    p[1].as_numer_default(0),
-                    p[2].as_numer_default(0)
+                    static_cast<double>(p[0].as_numer_default(0)),
+                    static_cast<double>(p[1].as_numer_default(0)),
+                    static_cast<double>(p[2].as_numer_default(0))
                 };
                 ent.set_local_position(xyz);
             }
@@ -498,10 +498,10 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
             const auto& r = pose["rotation"].as_list();
             if (r.size() >= 4) {
                 double xyzw[4] = {
-                    r[0].as_numer_default(0),
-                    r[1].as_numer_default(0),
-                    r[2].as_numer_default(0),
-                    r[3].as_numer_default(1)
+                    static_cast<double>(r[0].as_numer_default(0)),
+                    static_cast<double>(r[1].as_numer_default(0)),
+                    static_cast<double>(r[2].as_numer_default(0)),
+                    static_cast<double>(r[3].as_numer_default(1))
                 };
                 ent.set_local_rotation(xyzw);
             }
@@ -513,9 +513,9 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
         const auto& s = data["scale"].as_list();
         if (s.size() >= 3) {
             double xyz[3] = {
-                s[0].as_numer_default(1),
-                s[1].as_numer_default(1),
-                s[2].as_numer_default(1)
+                static_cast<double>(s[0].as_numer_default(1)),
+                static_cast<double>(s[1].as_numer_default(1)),
+                static_cast<double>(s[2].as_numer_default(1))
             };
             ent.set_local_scale(xyz);
         }

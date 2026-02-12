@@ -144,7 +144,7 @@ endif()
 if(MSVC)
     target_compile_options(termin_core PRIVATE /W3)
 else()
-    target_compile_options(termin_core PRIVATE -Wall -Wextra)
+    target_compile_options(termin_core PRIVATE -Wall -Wextra -Wno-stringop-truncation)
 endif()
 
 # Tests

@@ -334,8 +334,6 @@ bool tc_shader_set_sources(
         return false;  // No change
     }
 
-    uint32_t old_version = shader->version;
-
     // Remove from old hash mapping
     if (shader->source_hash[0] != '\0') {
         tc_resource_map_remove(g_hash_to_index, shader->source_hash);

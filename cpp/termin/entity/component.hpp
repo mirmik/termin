@@ -51,9 +51,16 @@ public:
     // Returns nullptr if c is not a CxxComponent (e.g., Python component)
     static CxxComponent* from_tc(tc_component* c) {
         if (!c || c->kind != TC_CXX_COMPONENT) return nullptr;
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
         return reinterpret_cast<CxxComponent*>(
             reinterpret_cast<char*>(c) - offsetof(CxxComponent, _c)
         );
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
 
     // Reference counting for lifetime management

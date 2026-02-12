@@ -130,16 +130,30 @@ public:
     // Returns nullptr if p is not a native pass (e.g., Python pass)
     static CxxFramePass* from_tc(tc_pass* p) {
         if (!p || p->kind != TC_NATIVE_PASS) return nullptr;
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
         return reinterpret_cast<CxxFramePass*>(
             reinterpret_cast<char*>(p) - offsetof(CxxFramePass, _c)
         );
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
 
     static const CxxFramePass* from_tc(const tc_pass* p) {
         if (!p || p->kind != TC_NATIVE_PASS) return nullptr;
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
         return reinterpret_cast<const CxxFramePass*>(
             reinterpret_cast<const char*>(p) - offsetof(CxxFramePass, _c)
         );
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
 
     // Link to type registry (call after construction if not created via factory)

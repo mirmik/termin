@@ -25,7 +25,11 @@ namespace nb = nanobind;
 namespace tc {
 
 // Python kind handler - uses nb::object for Python callables
+#ifdef _WIN32
 struct KindPython {
+#else
+struct __attribute__((visibility("hidden"))) KindPython {
+#endif
     std::string name;
     nb::object serialize;    // callable(obj) -> dict
     nb::object deserialize;  // callable(dict) -> obj
