@@ -566,10 +566,8 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
             continue;
         }
 
-        // Add to entity
-        add_component_ptr(tc);
-
-        // Deserialize data
+        // Deserialize data BEFORE adding to entity,
+        // so fields are ready when on_added() fires
         if (comp_data.contains("data")) {
             void* obj_ptr = nullptr;
             if (tc->kind == TC_CXX_COMPONENT) {
@@ -584,6 +582,9 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
                 tc_value_free(&v);
             }
         }
+
+        // Add to entity (triggers on_added with deserialized fields)
+        add_component_ptr(tc);
     }
 }
 
