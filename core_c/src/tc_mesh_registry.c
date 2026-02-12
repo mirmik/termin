@@ -110,6 +110,7 @@ tc_mesh_handle tc_mesh_create(const char* uuid) {
     mesh->header.uuid[sizeof(mesh->header.uuid) - 1] = '\0';
     mesh->header.version = 1;
     mesh->header.ref_count = 0;
+    mesh->header.pool_index = h.index;
     mesh->header.is_loaded = 1;  // Created meshes are considered loaded (data will be set)
 
     // Add to UUID map
@@ -210,6 +211,7 @@ tc_mesh_handle tc_mesh_declare(const char* uuid, const char* name) {
     mesh->header.uuid[sizeof(mesh->header.uuid) - 1] = '\0';
     mesh->header.version = 0;
     mesh->header.ref_count = 0;
+    mesh->header.pool_index = h.index;
     mesh->header.is_loaded = 0;  // NOT loaded yet
     mesh->header.load_callback = NULL;
     mesh->header.load_user_data = NULL;

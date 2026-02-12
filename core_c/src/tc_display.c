@@ -174,7 +174,18 @@ void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y) 
 void tc_display_make_current(tc_display* display) {
     if (display && display->surface) {
         tc_render_surface_make_current(display->surface);
-        tc_gpu_set_context_key(tc_render_surface_context_key(display->surface));
+
+        // Lazy-create GPUContext for this surface
+        tc_render_surface* s = display->surface;
+        if (!s->gpu_context) {
+            uintptr_t ctx_key = tc_render_surface_context_key(s);
+            uintptr_t sg_key = tc_render_surface_share_group_key(s);
+            tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
+            s->gpu_context = tc_gpu_context_new(ctx_key, group);
+            tc_gpu_share_group_unref(group);
+        }
+
+        tc_gpu_set_context(s->gpu_context);
     }
 }
 

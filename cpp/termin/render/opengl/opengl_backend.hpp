@@ -343,7 +343,7 @@ inline void shader_set_block_binding(uint32_t gpu_id, const char* block_name, in
     }
 }
 
-inline uint32_t mesh_upload(const tc_mesh* mesh) {
+inline uint32_t mesh_upload(const tc_mesh* mesh, uint32_t* out_vbo, uint32_t* out_ebo) {
     if (!mesh || !mesh->vertices || mesh->vertex_count == 0) {
         return 0;
     }
@@ -413,19 +413,18 @@ inline uint32_t mesh_upload(const tc_mesh* mesh) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    // Store VBO and EBO in mesh (for later deletion)
-    // Note: This is a bit hacky - we store them in the mesh struct
-    const_cast<tc_mesh*>(mesh)->gpu_vbo = vbo;
-    const_cast<tc_mesh*>(mesh)->gpu_ebo = ebo;
+    // Output VBO/EBO IDs to caller (stored in share_group by tc_gpu.c)
+    if (out_vbo) *out_vbo = vbo;
+    if (out_ebo) *out_ebo = ebo;
 
     return vao;
 }
 
-inline void mesh_draw(const tc_mesh* mesh) {
-    if (!mesh || mesh->gpu_vao == 0) {
+inline void mesh_draw(const tc_mesh* mesh, uint32_t vao) {
+    if (!mesh || vao == 0) {
         return;
     }
-    glBindVertexArray(mesh->gpu_vao);
+    glBindVertexArray(vao);
     GLenum gl_mode = (mesh->draw_mode == TC_DRAW_LINES) ? GL_LINES : GL_TRIANGLES;
     glDrawElements(gl_mode, static_cast<GLsizei>(mesh->index_count), GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
@@ -435,9 +434,13 @@ inline void mesh_delete(uint32_t vao_id) {
     glDeleteVertexArrays(1, &vao_id);
 }
 
-// Create VAO from existing shared VBO/EBO (for additional GL contexts in shared mode)
-inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
-    if (!mesh || mesh->gpu_vbo == 0) {
+inline void buffer_delete(uint32_t buffer_id) {
+    glDeleteBuffers(1, &buffer_id);
+}
+
+// Create VAO from existing shared VBO/EBO (for additional GL contexts)
+inline uint32_t mesh_create_vao(const tc_mesh* mesh, uint32_t vbo, uint32_t ebo) {
+    if (!mesh || vbo == 0) {
         return 0;
     }
 
@@ -446,7 +449,7 @@ inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
     glBindVertexArray(vao);
 
     // Bind existing shared VBO
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->gpu_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
     // Setup vertex attributes (same as mesh_upload)
     for (uint8_t i = 0; i < mesh->layout.attrib_count; ++i) {
@@ -487,8 +490,8 @@ inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
     }
 
     // Bind existing shared EBO
-    if (mesh->gpu_ebo != 0) {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->gpu_ebo);
+    if (ebo != 0) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     }
 
     glBindVertexArray(0);
@@ -524,6 +527,8 @@ inline void register_gpu_ops() {
         mesh_draw,
         mesh_delete,
         mesh_create_vao,
+        // Buffer operations
+        buffer_delete,
         // User data
         nullptr
     };
@@ -555,9 +560,9 @@ public:
     static OpenGLGraphicsBackend& get_instance();
 
     ~OpenGLGraphicsBackend() override {
-        if (ui_vao_ != 0) {
-            glDeleteVertexArrays(1, &ui_vao_);
-            glDeleteBuffers(1, &ui_vbo_);
+        if (default_gpu_context_) {
+            tc_gpu_context_free(default_gpu_context_);
+            default_gpu_context_ = nullptr;
         }
     }
 
@@ -589,6 +594,16 @@ public:
                 tc::Log::info("OpenGL debug output enabled");
             }
             #endif
+        }
+
+        // Ensure a GPUContext exists for the current GL context.
+        // Display/render manager paths set their own context via tc_display_make_current,
+        // but standalone paths (launcher, examples) don't — create a default one.
+        if (!tc_gpu_get_context()) {
+            if (!default_gpu_context_) {
+                default_gpu_context_ = tc_gpu_context_new(0, NULL);
+            }
+            tc_gpu_set_context(default_gpu_context_);
         }
 
         glEnable(GL_DEPTH_TEST);
@@ -1189,19 +1204,31 @@ private:
     }
 
     void ensure_ui_buffers() {
-        if (ui_vao_ != 0) {
-            if (glIsVertexArray && glIsVertexArray(ui_vao_)) {
-                return;
-            }
-            tc::Log::warn("ensure_ui_buffers: VAO %u invalid, recreating", ui_vao_);
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (!ctx) {
+            tc::Log::error("[ensure_ui_buffers] no GPUContext set");
+            return;
         }
 
-        if (glGenVertexArrays) {
-            glGenVertexArrays(1, &ui_vao_);
-            glGenBuffers(1, &ui_vbo_);
-        } else {
-            tc::Log::error("[ensure_ui_buffers] glGenVertexArrays is NULL!");
+        // VAO is per-context
+        if (ctx->backend_ui_vao != 0 && glIsVertexArray(ctx->backend_ui_vao)) {
+            ui_vao_ = ctx->backend_ui_vao;
+            ui_vbo_ = ctx->share_group->backend_ui_vbo;
+            return;
         }
+
+        GLuint vao;
+        glGenVertexArrays(1, &vao);
+        ctx->backend_ui_vao = vao;
+        ui_vao_ = vao;
+
+        // VBO is shared
+        if (ctx->share_group->backend_ui_vbo == 0) {
+            GLuint vbo;
+            glGenBuffers(1, &vbo);
+            ctx->share_group->backend_ui_vbo = vbo;
+        }
+        ui_vbo_ = ctx->share_group->backend_ui_vbo;
     }
 
     void draw_immediate_impl(const float* vertices, int vertex_count, GLenum mode) {
@@ -1220,19 +1247,32 @@ private:
     }
 
     void ensure_immediate_buffers() {
-        // Check if VAO exists and is still valid (may be invalid after context change)
-        if (immediate_vao_ != 0) {
-            if (glIsVertexArray(immediate_vao_)) {
-                return;
-            }
-            tc::Log::warn("ensure_immediate_buffers: VAO %u invalid, recreating", immediate_vao_);
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (!ctx) {
+            tc::Log::error("[ensure_immediate_buffers] no GPUContext set");
+            return;
         }
 
-        glGenVertexArrays(1, &immediate_vao_);
-        glGenBuffers(1, &immediate_vbo_);
+        // VAO is per-context
+        if (ctx->backend_immediate_vao != 0 && glIsVertexArray(ctx->backend_immediate_vao)) {
+            immediate_vao_ = ctx->backend_immediate_vao;
+            immediate_vbo_ = ctx->share_group->backend_immediate_vbo;
+            return;
+        }
 
-        glBindVertexArray(immediate_vao_);
-        glBindBuffer(GL_ARRAY_BUFFER, immediate_vbo_);
+        // VBO is shared
+        if (ctx->share_group->backend_immediate_vbo == 0) {
+            GLuint vbo;
+            glGenBuffers(1, &vbo);
+            ctx->share_group->backend_immediate_vbo = vbo;
+        }
+        GLuint vbo = ctx->share_group->backend_immediate_vbo;
+
+        GLuint vao;
+        glGenVertexArrays(1, &vao);
+
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
         constexpr GLsizei stride = 7 * sizeof(float);
         glEnableVertexAttribArray(0);
@@ -1242,9 +1282,16 @@ private:
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+
+        ctx->backend_immediate_vao = vao;
+        immediate_vao_ = vao;
+        immediate_vbo_ = vbo;
     }
 
     bool initialized_;
+
+    // Default GPUContext for standalone rendering paths (launcher, examples)
+    tc_gpu_context* default_gpu_context_ = nullptr;
 
     // UI drawing resources
     GLuint ui_vao_ = 0;

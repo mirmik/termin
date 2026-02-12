@@ -263,6 +263,10 @@ class QtGLWindowHandle(BackendWindow):
             self._tc_surface_ptr = _render_surface_new_from_python(self)
         return _TcSurfaceWrapper(self._tc_surface_ptr)
 
+    def share_group_key(self) -> int:
+        """All Qt widgets share GL resources via AA_ShareOpenGLContexts."""
+        return 1
+
     def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
         """Set graphics backend for framebuffer creation."""
         self._graphics = graphics

@@ -38,6 +38,7 @@ public class WpfRenderSurface : IDisposable
     private TerminCore.RenderSurfaceSetShouldCloseDelegate? _setShouldClose;
     private TerminCore.RenderSurfaceGetCursorPosDelegate? _getCursorPos;
     private TerminCore.RenderSurfaceDestroyDelegate? _destroy;
+    private TerminCore.RenderSurfaceShareGroupKeyDelegate? _shareGroupKey;
 
     // VTable must be kept alive
     private TerminCore.RenderSurfaceVTable _vtable;
@@ -75,6 +76,7 @@ public class WpfRenderSurface : IDisposable
         _setShouldClose = SetShouldCloseCallback;
         _getCursorPos = GetCursorPosCallback;
         _destroy = DestroyCallback;
+        _shareGroupKey = ShareGroupKeyCallback;
 
         // Build vtable
         _vtable = new TerminCore.RenderSurfaceVTable
@@ -90,6 +92,7 @@ public class WpfRenderSurface : IDisposable
             set_should_close = Marshal.GetFunctionPointerForDelegate(_setShouldClose),
             get_cursor_pos = Marshal.GetFunctionPointerForDelegate(_getCursorPos),
             destroy = Marshal.GetFunctionPointerForDelegate(_destroy),
+            share_group_key = Marshal.GetFunctionPointerForDelegate(_shareGroupKey),
         };
 
         // Create native surface
@@ -168,6 +171,12 @@ public class WpfRenderSurface : IDisposable
     {
         // Use surface pointer as unique context key
         return (nuint)surface;
+    }
+
+    private static nuint ShareGroupKeyCallback(IntPtr surface)
+    {
+        // All WPF controls share one GL context
+        return 1;
     }
 
     private static void PollEventsCallback(IntPtr surface)

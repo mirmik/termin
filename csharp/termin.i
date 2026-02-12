@@ -17,6 +17,7 @@
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/render/collider_gizmo_pass.hpp"
+#include "termin/render/ground_grid_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/entity/component.hpp"
@@ -175,6 +176,7 @@ CSHARP_PASS_OWNER_REF(termin::ColorPass)
 CSHARP_PASS_OWNER_REF(termin::PresentToScreenPass)
 CSHARP_PASS_OWNER_REF(termin::DepthPass)
 CSHARP_PASS_OWNER_REF(termin::ColliderGizmoPass)
+CSHARP_PASS_OWNER_REF(termin::GroundGridPass)
 
 // Opaque type for tc_component
 typedef struct tc_component tc_component;
@@ -982,6 +984,26 @@ public:
         bool depth_test = false
     );
     virtual ~ColliderGizmoPass();
+
+    tc_pass* tc_pass_ptr();
+
+};
+
+// ============================================================================
+// GroundGridPass - renders infinite ground grid on z=0 plane
+// ============================================================================
+
+class GroundGridPass {
+public:
+    std::string input_res;
+    std::string output_res;
+
+    GroundGridPass(
+        const std::string& input_res = "color",
+        const std::string& output_res = "color",
+        const std::string& pass_name = "GroundGrid"
+    );
+    virtual ~GroundGridPass();
 
     tc_pass* tc_pass_ptr();
 

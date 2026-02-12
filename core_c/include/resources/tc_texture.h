@@ -47,10 +47,6 @@ typedef struct tc_texture {
     uint8_t clamp;              // use clamp wrapping (vs repeat)
     uint8_t compare_mode;       // enable depth comparison for sampler2DShadow
     const char* source_path;    // optional source file path (interned string)
-
-    // GPU state (managed by tc_gpu)
-    uint32_t gpu_id;            // OpenGL texture ID (0 = not uploaded)
-    int32_t gpu_version;        // version at last GPU upload (-1 = never)
 } tc_texture;
 
 

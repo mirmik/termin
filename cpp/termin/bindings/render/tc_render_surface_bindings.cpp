@@ -147,6 +147,21 @@ static void pysurface_destroy(tc_render_surface* s) {
     // No-op: Python owns the surface and will free it
 }
 
+static uintptr_t pysurface_share_group_key(tc_render_surface* s) {
+    if (!s->body) return reinterpret_cast<uintptr_t>(s->body);
+    nb::gil_scoped_acquire gil;
+    try {
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        if (nb::hasattr(py_obj, "share_group_key")) {
+            return nb::cast<uintptr_t>(py_obj.attr("share_group_key")());
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error("pysurface_share_group_key failed: %s", e.what());
+    }
+    // Fallback: same as context_key (no sharing)
+    return pysurface_context_key(s);
+}
+
 // Generic vtable for Python render surface objects
 static const tc_render_surface_vtable g_python_surface_vtable = {
     .get_framebuffer = pysurface_get_framebuffer,
@@ -160,6 +175,7 @@ static const tc_render_surface_vtable g_python_surface_vtable = {
     .set_should_close = pysurface_set_should_close,
     .get_cursor_pos = pysurface_get_cursor_pos,
     .destroy = pysurface_destroy,
+    .share_group_key = pysurface_share_group_key,
 };
 
 // ============================================================================

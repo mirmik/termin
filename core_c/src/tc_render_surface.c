@@ -43,6 +43,11 @@ tc_render_surface* tc_render_surface_new_external(
 
 void tc_render_surface_free_external(tc_render_surface* s) {
     if (!s) return;
+    // Free GPU context if it was created
+    if (s->gpu_context) {
+        tc_gpu_context_free(s->gpu_context);
+        s->gpu_context = NULL;
+    }
     // Free the copied vtable
     if (s->vtable) {
         free((void*)s->vtable);

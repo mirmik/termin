@@ -3,6 +3,7 @@
 #pragma once
 
 #include "tc_types.h"
+#include "tc_gpu_context.h"
 #include "resources/tc_texture.h"
 #include "resources/tc_shader.h"
 #include "resources/tc_mesh.h"
@@ -75,18 +76,21 @@ typedef struct tc_gpu_ops {
 
     // Mesh operations
     // Upload mesh to GPU (creates VBO+EBO+VAO), returns GPU VAO ID (0 on failure)
-    uint32_t (*mesh_upload)(const tc_mesh* mesh);
+    // Outputs VBO/EBO IDs through out_vbo/out_ebo pointers.
+    uint32_t (*mesh_upload)(const tc_mesh* mesh, uint32_t* out_vbo, uint32_t* out_ebo);
 
-    // Draw mesh (binds VAO and calls glDrawElements with correct index count/mode)
-    void (*mesh_draw)(const tc_mesh* mesh);
+    // Draw mesh (binds given VAO and calls glDrawElements with correct index count/mode)
+    void (*mesh_draw)(const tc_mesh* mesh, uint32_t vao);
 
     // Delete GPU mesh VAO
     void (*mesh_delete)(uint32_t gpu_id);
 
     // Create VAO from existing shared VBO/EBO (for additional GL contexts).
-    // mesh->gpu_vbo and gpu_ebo must already be valid.
     // Returns new VAO ID (0 on failure).
-    uint32_t (*mesh_create_vao)(const tc_mesh* mesh);
+    uint32_t (*mesh_create_vao)(const tc_mesh* mesh, uint32_t vbo, uint32_t ebo);
+
+    // Delete a GL buffer object (VBO/EBO/UBO)
+    void (*buffer_delete)(uint32_t buffer_id);
 
     // User data (passed to callbacks if needed)
     void* user_data;
@@ -110,11 +114,6 @@ TC_API void tc_gpu_set_shader_preprocess(tc_shader_preprocess_fn fn);
 // Check if GPU ops are available
 TC_API bool tc_gpu_available(void);
 
-// Context key for multi-context VAO management (shared GL contexts).
-// Set after make_current() to identify which GL context is active.
-// VAOs are per-context; VBOs/EBOs/textures/shaders are shared.
-TC_API void tc_gpu_set_context_key(uintptr_t key);
-TC_API uintptr_t tc_gpu_get_context_key(void);
 
 // ============================================================================
 // Texture GPU operations

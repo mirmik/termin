@@ -164,6 +164,7 @@ const tc_render_surface_vtable SDLWindowRenderSurface::s_vtable = {
     .set_should_close = &SDLWindowRenderSurface::vtable_set_should_close,
     .get_cursor_pos = &SDLWindowRenderSurface::vtable_get_cursor_pos,
     .destroy = &SDLWindowRenderSurface::vtable_destroy,
+    .share_group_key = nullptr,
 };
 
 SDLWindowRenderSurface::SDLWindowRenderSurface(

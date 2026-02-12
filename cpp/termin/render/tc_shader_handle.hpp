@@ -301,10 +301,14 @@ public:
         return tc_shader_compile_gpu(s) != 0;
     }
 
-    // Get GPU program ID (0 if not compiled)
+    // Get GPU program ID for current context (0 if not compiled)
     uint32_t gpu_program() const {
         tc_shader* s = get();
-        return s ? s->gpu_program : 0;
+        if (!s) return 0;
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (!ctx) return 0;
+        tc_gpu_slot* slot = tc_gpu_context_shader_slot(ctx, s->pool_index);
+        return slot ? slot->gl_id : 0;
     }
 
     // Uniform setters (shader must be in use)

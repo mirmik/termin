@@ -8,6 +8,7 @@
 
 extern "C" {
 #include "tc_log.h"
+#include "tc_gpu.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
@@ -615,6 +616,9 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
         if (make_current_callback_) {
             make_current_callback_();
         }
+        if (offscreen_gpu_context_) {
+            tc_gpu_set_context(offscreen_gpu_context_);
+        }
         it->second->clear_all();
         viewport_states_.erase(it);
     }
@@ -641,6 +645,12 @@ void RenderingManager::render_all_offscreen() {
     if (make_current_callback_) {
         make_current_callback_();
     }
+
+    // Set offscreen GPU context (lazy-create)
+    if (!offscreen_gpu_context_) {
+        offscreen_gpu_context_ = tc_gpu_context_new(0, NULL);
+    }
+    tc_gpu_set_context(offscreen_gpu_context_);
 
     RenderEngine* engine = render_engine();
     if (!engine) {
@@ -863,8 +873,17 @@ void RenderingManager::present_display(tc_display* display) {
         return;
     }
 
-    // Make display context current
+    // Make display context current and set GPUContext
     tc_render_surface_make_current(surface);
+    if (!surface->gpu_context) {
+        {
+            uintptr_t sg_key = tc_render_surface_share_group_key(surface);
+            tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
+            surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface), group);
+            tc_gpu_share_group_unref(group);
+        }
+    }
+    tc_gpu_set_context(surface->gpu_context);
 
     int width, height;
     tc_render_surface_get_size(surface, &width, &height);
@@ -1060,6 +1079,9 @@ void RenderingManager::shutdown() {
     if (make_current_callback_) {
         make_current_callback_();
     }
+    if (offscreen_gpu_context_) {
+        tc_gpu_set_context(offscreen_gpu_context_);
+    }
 
     // Clear viewport states
     for (auto& pair : viewport_states_) {
@@ -1075,6 +1097,12 @@ void RenderingManager::shutdown() {
 
     // Clear displays (don't free them - we don't own them)
     displays_.clear();
+
+    // Free offscreen GPU context
+    if (offscreen_gpu_context_) {
+        tc_gpu_context_free(offscreen_gpu_context_);
+        offscreen_gpu_context_ = nullptr;
+    }
 
     // Clear callbacks
     make_current_callback_ = nullptr;

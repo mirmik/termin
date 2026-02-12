@@ -194,6 +194,27 @@ public class EntityPool : IDisposable
         TerminCore.EntityPoolFree(_handle, id);
     }
 
+    // Layer
+    public ulong GetLayer(TcEntityId id) => TerminCore.EntityPoolLayer(_handle, id);
+    public void SetLayer(TcEntityId id, ulong layer) => TerminCore.EntityPoolSetLayer(_handle, id, layer);
+
+    // Children
+    public int GetChildrenCount(TcEntityId id) => (int)TerminCore.EntityPoolChildrenCount(_handle, id);
+    public TcEntityId GetChildAt(TcEntityId id, int index) => TerminCore.EntityPoolChildAt(_handle, id, (nuint)index);
+
+    public List<Entity> GetDirectChildren(TcEntityId parentId)
+    {
+        var children = new List<Entity>();
+        int count = GetChildrenCount(parentId);
+        for (int i = 0; i < count; i++)
+        {
+            var childId = GetChildAt(parentId, i);
+            if (IsAlive(childId))
+                children.Add(new Entity(this, childId));
+        }
+        return children;
+    }
+
     // Flags
     public bool IsVisible(TcEntityId id) => TerminCore.EntityPoolVisible(_handle, id);
     public void SetVisible(TcEntityId id, bool v) => TerminCore.EntityPoolSetVisible(_handle, id, v);

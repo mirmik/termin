@@ -252,16 +252,24 @@ public:
         return t ? tc_texture_needs_upload(t) : false;
     }
 
-    // Get GPU texture ID (0 = not uploaded)
+    // Get GPU texture ID for current context (0 = not uploaded)
     uint32_t gpu_id() const {
         tc_texture* t = get();
-        return t ? t->gpu_id : 0;
+        if (!t) return 0;
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (!ctx) return 0;
+        tc_gpu_slot* slot = tc_gpu_context_texture_slot(ctx, t->header.pool_index);
+        return slot ? slot->gl_id : 0;
     }
 
-    // Get GPU version (-1 = never uploaded)
+    // Get GPU version for current context (-1 = never uploaded)
     int32_t gpu_version() const {
         tc_texture* t = get();
-        return t ? t->gpu_version : -1;
+        if (!t) return -1;
+        tc_gpu_context* ctx = tc_gpu_get_context();
+        if (!ctx) return -1;
+        tc_gpu_slot* slot = tc_gpu_context_texture_slot(ctx, t->header.pool_index);
+        return slot ? slot->version : -1;
     }
 
     // Set mipmap flag (affects next upload)
