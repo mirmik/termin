@@ -343,7 +343,7 @@ inline void shader_set_block_binding(uint32_t gpu_id, const char* block_name, in
     }
 }
 
-inline uint32_t mesh_upload(const tc_mesh* mesh) {
+inline uint32_t mesh_upload(const tc_mesh* mesh, uint32_t* out_vbo, uint32_t* out_ebo) {
     if (!mesh || !mesh->vertices || mesh->vertex_count == 0) {
         return 0;
     }
@@ -413,19 +413,18 @@ inline uint32_t mesh_upload(const tc_mesh* mesh) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    // Store VBO and EBO in mesh (for later deletion)
-    // Note: This is a bit hacky - we store them in the mesh struct
-    const_cast<tc_mesh*>(mesh)->gpu_vbo = vbo;
-    const_cast<tc_mesh*>(mesh)->gpu_ebo = ebo;
+    // Output VBO/EBO IDs to caller (stored in share_group by tc_gpu.c)
+    if (out_vbo) *out_vbo = vbo;
+    if (out_ebo) *out_ebo = ebo;
 
     return vao;
 }
 
-inline void mesh_draw(const tc_mesh* mesh) {
-    if (!mesh || mesh->gpu_vao == 0) {
+inline void mesh_draw(const tc_mesh* mesh, uint32_t vao) {
+    if (!mesh || vao == 0) {
         return;
     }
-    glBindVertexArray(mesh->gpu_vao);
+    glBindVertexArray(vao);
     GLenum gl_mode = (mesh->draw_mode == TC_DRAW_LINES) ? GL_LINES : GL_TRIANGLES;
     glDrawElements(gl_mode, static_cast<GLsizei>(mesh->index_count), GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
@@ -439,9 +438,9 @@ inline void buffer_delete(uint32_t buffer_id) {
     glDeleteBuffers(1, &buffer_id);
 }
 
-// Create VAO from existing shared VBO/EBO (for additional GL contexts in shared mode)
-inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
-    if (!mesh || mesh->gpu_vbo == 0) {
+// Create VAO from existing shared VBO/EBO (for additional GL contexts)
+inline uint32_t mesh_create_vao(const tc_mesh* mesh, uint32_t vbo, uint32_t ebo) {
+    if (!mesh || vbo == 0) {
         return 0;
     }
 
@@ -450,7 +449,7 @@ inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
     glBindVertexArray(vao);
 
     // Bind existing shared VBO
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->gpu_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
     // Setup vertex attributes (same as mesh_upload)
     for (uint8_t i = 0; i < mesh->layout.attrib_count; ++i) {
@@ -491,8 +490,8 @@ inline uint32_t mesh_create_vao(const tc_mesh* mesh) {
     }
 
     // Bind existing shared EBO
-    if (mesh->gpu_ebo != 0) {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->gpu_ebo);
+    if (ebo != 0) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     }
 
     glBindVertexArray(0);

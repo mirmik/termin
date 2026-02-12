@@ -85,14 +85,6 @@ typedef struct tc_mesh {
     tc_vertex_layout layout;
     uint8_t draw_mode;           // tc_draw_mode (TC_DRAW_TRIANGLES or TC_DRAW_LINES)
     uint8_t _pad2[3];
-
-    // GPU state write-through cache (managed by tc_gpu via GPUContext)
-    // These are updated by tc_gpu functions for the current context.
-    // Actual per-context state lives in tc_gpu_context.
-    uint32_t gpu_vao;            // active VAO for current context (set before draw)
-    uint32_t gpu_vbo;            // VBO (write-through from GPUContext)
-    uint32_t gpu_ebo;            // EBO (write-through from GPUContext)
-    int32_t gpu_version;         // version at last VBO/EBO upload (-1 = never)
 } tc_mesh;
 
 

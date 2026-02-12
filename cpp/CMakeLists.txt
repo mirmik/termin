@@ -252,6 +252,7 @@ set(RENDER_LIB_SOURCES
     termin/render/wireframe_renderer.cpp
     termin/render/color_pass.cpp
     termin/render/collider_gizmo_pass.cpp
+    termin/render/ground_grid_pass.cpp
     termin/render/present_pass.cpp
     termin/render/depth_pass.cpp
     termin/render/normal_pass.cpp

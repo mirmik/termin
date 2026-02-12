@@ -76,18 +76,18 @@ typedef struct tc_gpu_ops {
 
     // Mesh operations
     // Upload mesh to GPU (creates VBO+EBO+VAO), returns GPU VAO ID (0 on failure)
-    uint32_t (*mesh_upload)(const tc_mesh* mesh);
+    // Outputs VBO/EBO IDs through out_vbo/out_ebo pointers.
+    uint32_t (*mesh_upload)(const tc_mesh* mesh, uint32_t* out_vbo, uint32_t* out_ebo);
 
-    // Draw mesh (binds VAO and calls glDrawElements with correct index count/mode)
-    void (*mesh_draw)(const tc_mesh* mesh);
+    // Draw mesh (binds given VAO and calls glDrawElements with correct index count/mode)
+    void (*mesh_draw)(const tc_mesh* mesh, uint32_t vao);
 
     // Delete GPU mesh VAO
     void (*mesh_delete)(uint32_t gpu_id);
 
     // Create VAO from existing shared VBO/EBO (for additional GL contexts).
-    // mesh->gpu_vbo and gpu_ebo must already be valid.
     // Returns new VAO ID (0 on failure).
-    uint32_t (*mesh_create_vao)(const tc_mesh* mesh);
+    uint32_t (*mesh_create_vao)(const tc_mesh* mesh, uint32_t vbo, uint32_t ebo);
 
     // Delete a GL buffer object (VBO/EBO/UBO)
     void (*buffer_delete)(uint32_t buffer_id);

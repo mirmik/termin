@@ -34,15 +34,31 @@ bool tc_gpu_available(void) {
 }
 
 // ============================================================================
+// Helpers: get GL IDs from current GPU context
+// ============================================================================
+
+static uint32_t shader_current_program(const tc_shader* shader) {
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    if (!ctx) return 0;
+    tc_gpu_slot* slot = tc_gpu_context_shader_slot(ctx, shader->pool_index);
+    return slot ? slot->gl_id : 0;
+}
+
+static uint32_t texture_current_gpu_id(const tc_texture* tex) {
+    tc_gpu_context* ctx = tc_gpu_get_context();
+    if (!ctx) return 0;
+    tc_gpu_slot* slot = tc_gpu_context_texture_slot(ctx, tex->header.pool_index);
+    return slot ? slot->gl_id : 0;
+}
+
+// ============================================================================
 // Texture GPU operations
 // ============================================================================
 
 bool tc_texture_needs_upload(const tc_texture* tex) {
     if (!tex) return false;
     tc_gpu_context* ctx = tc_gpu_get_context();
-    if (!ctx) {
-        return tex->gpu_id == 0 || tex->gpu_version != (int32_t)tex->header.version;
-    }
+    if (!ctx) return true;
     tc_gpu_slot* slot = tc_gpu_context_texture_slot(ctx, tex->header.pool_index);
     if (!slot) return true;
     return slot->gl_id == 0 || slot->version != (int32_t)tex->header.version;
@@ -72,8 +88,6 @@ bool tc_texture_upload_gpu(tc_texture* tex) {
 
     // Already up to date?
     if (slot->gl_id != 0 && slot->version == (int32_t)tex->header.version) {
-        tex->gpu_id = slot->gl_id;
-        tex->gpu_version = slot->version;
         return true;
     }
 
@@ -120,10 +134,6 @@ bool tc_texture_upload_gpu(tc_texture* tex) {
     // Store in context slot
     slot->gl_id = gpu_id;
     slot->version = (int32_t)tex->header.version;
-
-    // Write-through cache
-    tex->gpu_id = gpu_id;
-    tex->gpu_version = (int32_t)tex->header.version;
     return true;
 }
 
@@ -144,19 +154,22 @@ bool tc_texture_bind_gpu(tc_texture* tex, int unit) {
         }
     }
 
+    uint32_t gpu_id = texture_current_gpu_id(tex);
+    if (gpu_id == 0) return false;
+
     // Bind using appropriate function for texture type
     if (tex->format == TC_TEXTURE_DEPTH24) {
         if (!g_gpu_ops->depth_texture_bind) {
             tc_log(TC_LOG_ERROR, "tc_texture_bind_gpu: depth_texture_bind not set");
             return false;
         }
-        g_gpu_ops->depth_texture_bind(tex->gpu_id, unit);
+        g_gpu_ops->depth_texture_bind(gpu_id, unit);
     } else {
         if (!g_gpu_ops->texture_bind) {
             tc_log(TC_LOG_ERROR, "tc_texture_bind_gpu: texture_bind not set");
             return false;
         }
-        g_gpu_ops->texture_bind(tex->gpu_id, unit);
+        g_gpu_ops->texture_bind(gpu_id, unit);
     }
     return true;
 }
@@ -166,10 +179,6 @@ void tc_texture_delete_gpu(tc_texture* tex) {
 
     tc_gpu_context* ctx = tc_gpu_get_context();
     if (!ctx) {
-        // No context — just clear cache. GPU resources will be cleaned up
-        // when the owning GPUContext is freed.
-        tex->gpu_id = 0;
-        tex->gpu_version = -1;
         return;
     }
 
@@ -181,9 +190,6 @@ void tc_texture_delete_gpu(tc_texture* tex) {
         slot->gl_id = 0;
         slot->version = -1;
     }
-
-    tex->gpu_id = 0;
-    tex->gpu_version = -1;
 }
 
 // ============================================================================
@@ -215,8 +221,6 @@ uint32_t tc_shader_compile_gpu(tc_shader* shader) {
 
     // Already compiled and up to date?
     if (slot->gl_id != 0 && slot->version == (int32_t)shader->version) {
-        shader->gpu_program = slot->gl_id;
-        shader->gpu_version = slot->version;
         return slot->gl_id;
     }
 
@@ -286,10 +290,6 @@ uint32_t tc_shader_compile_gpu(tc_shader* shader) {
     // Store in context slot
     slot->gl_id = program;
     slot->version = (int32_t)shader->version;
-
-    // Write-through cache
-    shader->gpu_program = program;
-    shader->gpu_version = (int32_t)shader->version;
     return program;
 }
 
@@ -323,9 +323,6 @@ void tc_shader_delete_gpu(tc_shader* shader) {
 
     tc_gpu_context* ctx = tc_gpu_get_context();
     if (!ctx) {
-        // No context — just clear cache.
-        shader->gpu_program = 0;
-        shader->gpu_version = -1;
         return;
     }
 
@@ -337,9 +334,6 @@ void tc_shader_delete_gpu(tc_shader* shader) {
         slot->gl_id = 0;
         slot->version = -1;
     }
-
-    shader->gpu_program = 0;
-    shader->gpu_version = -1;
 }
 
 // ============================================================================
@@ -378,7 +372,6 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         if (vao_slot->vao != 0 &&
             vao_slot->bound_vbo == shared->vbo &&
             vao_slot->bound_ebo == shared->ebo) {
-            mesh->gpu_vao = vao_slot->vao;
             return vao_slot->vao;
         }
 
@@ -387,13 +380,9 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
             g_gpu_ops->mesh_delete(vao_slot->vao);
         }
 
-        // Write-through needed for mesh_create_vao which reads mesh->gpu_vbo/ebo
-        mesh->gpu_vbo = shared->vbo;
-        mesh->gpu_ebo = shared->ebo;
-
         uint32_t vao = 0;
         if (g_gpu_ops->mesh_create_vao) {
-            vao = g_gpu_ops->mesh_create_vao(mesh);
+            vao = g_gpu_ops->mesh_create_vao(mesh, shared->vbo, shared->ebo);
         }
         if (vao == 0) {
             tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: mesh_create_vao failed for '%s'",
@@ -404,7 +393,6 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
         vao_slot->vao = vao;
         vao_slot->bound_vbo = shared->vbo;
         vao_slot->bound_ebo = shared->ebo;
-        mesh->gpu_vao = vao;
         return vao;
     }
 
@@ -426,30 +414,25 @@ uint32_t tc_mesh_upload_gpu(tc_mesh* mesh) {
     shared->vbo = 0;
     shared->ebo = 0;
 
-    mesh->gpu_vao = 0;
-    mesh->gpu_vbo = 0;
-    mesh->gpu_ebo = 0;
-
-    // Full upload: creates VBO + EBO + VAO
-    uint32_t vao = g_gpu_ops->mesh_upload(mesh);
+    // Full upload: creates VBO + EBO + VAO, outputs VBO/EBO through pointers
+    uint32_t out_vbo = 0, out_ebo = 0;
+    uint32_t vao = g_gpu_ops->mesh_upload(mesh, &out_vbo, &out_ebo);
     if (vao == 0) {
         tc_log(TC_LOG_ERROR, "tc_mesh_upload_gpu: upload failed for '%s'",
                mesh->header.name ? mesh->header.name : mesh->header.uuid);
         return 0;
     }
 
-    // Store shared data (mesh_upload writes gpu_vbo/gpu_ebo to mesh)
-    shared->vbo = mesh->gpu_vbo;
-    shared->ebo = mesh->gpu_ebo;
+    // Store shared data
+    shared->vbo = out_vbo;
+    shared->ebo = out_ebo;
     shared->version = (int32_t)mesh->header.version;
 
     // Store per-context VAO
     vao_slot->vao = vao;
-    vao_slot->bound_vbo = mesh->gpu_vbo;
-    vao_slot->bound_ebo = mesh->gpu_ebo;
+    vao_slot->bound_vbo = out_vbo;
+    vao_slot->bound_ebo = out_ebo;
 
-    mesh->gpu_vao = vao;
-    mesh->gpu_version = (int32_t)mesh->header.version;
     return vao;
 }
 
@@ -481,12 +464,13 @@ void tc_mesh_draw_gpu(tc_mesh* mesh) {
         if (tc_mesh_upload_gpu(mesh) == 0) {
             return;
         }
-    } else {
-        mesh->gpu_vao = vao_slot->vao;
     }
 
+    uint32_t vao = vao_slot->vao;
+    if (vao == 0) return;
+
     if (g_gpu_ops && g_gpu_ops->mesh_draw) {
-        g_gpu_ops->mesh_draw(mesh);
+        g_gpu_ops->mesh_draw(mesh, vao);
     }
 }
 
@@ -497,11 +481,6 @@ void tc_mesh_delete_gpu(tc_mesh* mesh) {
 
     tc_gpu_context* ctx = tc_gpu_get_context();
     if (!ctx) {
-        // No context — just clear cache.
-        mesh->gpu_vao = 0;
-        mesh->gpu_vbo = 0;
-        mesh->gpu_ebo = 0;
-        mesh->gpu_version = -1;
         return;
     }
 
@@ -530,11 +509,6 @@ void tc_mesh_delete_gpu(tc_mesh* mesh) {
         shared->ebo = 0;
         shared->version = -1;
     }
-
-    mesh->gpu_vao = 0;
-    mesh->gpu_vbo = 0;
-    mesh->gpu_ebo = 0;
-    mesh->gpu_version = -1;
 }
 
 // ============================================================================
@@ -542,58 +516,74 @@ void tc_mesh_delete_gpu(tc_mesh* mesh) {
 // ============================================================================
 
 void tc_shader_set_int(tc_shader* shader, const char* name, int value) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_int) {
-        g_gpu_ops->shader_set_int(shader->gpu_program, name, value);
+        g_gpu_ops->shader_set_int(program, name, value);
     }
 }
 
 void tc_shader_set_float(tc_shader* shader, const char* name, float value) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_float) {
-        g_gpu_ops->shader_set_float(shader->gpu_program, name, value);
+        g_gpu_ops->shader_set_float(program, name, value);
     }
 }
 
 void tc_shader_set_vec2(tc_shader* shader, const char* name, float x, float y) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_vec2) {
-        g_gpu_ops->shader_set_vec2(shader->gpu_program, name, x, y);
+        g_gpu_ops->shader_set_vec2(program, name, x, y);
     }
 }
 
 void tc_shader_set_vec3(tc_shader* shader, const char* name, float x, float y, float z) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_vec3) {
-        g_gpu_ops->shader_set_vec3(shader->gpu_program, name, x, y, z);
+        g_gpu_ops->shader_set_vec3(program, name, x, y, z);
     }
 }
 
 void tc_shader_set_vec4(tc_shader* shader, const char* name, float x, float y, float z, float w) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_vec4) {
-        g_gpu_ops->shader_set_vec4(shader->gpu_program, name, x, y, z, w);
+        g_gpu_ops->shader_set_vec4(program, name, x, y, z, w);
     }
 }
 
 void tc_shader_set_mat4(tc_shader* shader, const char* name, const float* data, bool transpose) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_mat4) {
-        g_gpu_ops->shader_set_mat4(shader->gpu_program, name, data, transpose);
+        g_gpu_ops->shader_set_mat4(program, name, data, transpose);
     }
 }
 
 void tc_shader_set_mat4_array(tc_shader* shader, const char* name, const float* data, int count, bool transpose) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_mat4_array) {
-        g_gpu_ops->shader_set_mat4_array(shader->gpu_program, name, data, count, transpose);
+        g_gpu_ops->shader_set_mat4_array(program, name, data, count, transpose);
     }
 }
 
 void tc_shader_set_block_binding(tc_shader* shader, const char* block_name, int binding_point) {
-    if (!shader || shader->gpu_program == 0) return;
+    if (!shader) return;
+    uint32_t program = shader_current_program(shader);
+    if (program == 0) return;
     if (g_gpu_ops && g_gpu_ops->shader_set_block_binding) {
-        g_gpu_ops->shader_set_block_binding(shader->gpu_program, block_name, binding_point);
+        g_gpu_ops->shader_set_block_binding(program, block_name, binding_point);
     }
 }
 
@@ -685,9 +675,8 @@ void tc_material_phase_apply_with_mvp(
 ) {
     if (!phase || !shader) return;
 
-    if (shader->gpu_program != 0) {
-        tc_shader_use_gpu(shader);
-    }
+    // Always ensure shader is compiled and bound for current context
+    tc_shader_use_gpu(shader);
 
     tc_shader_set_mat4(shader, "u_model", model, false);
     tc_shader_set_mat4(shader, "u_view", view, false);

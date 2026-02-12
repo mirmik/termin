@@ -59,10 +59,6 @@ typedef struct tc_shader {
     uint32_t original_version;   // version of original when variant was created
     uint32_t features;           // tc_shader_feature bitflags
     uint32_t pool_index;         // index in shader pool (for GPUContext lookup)
-
-    // GPU state (managed by tc_gpu)
-    uint32_t gpu_program;        // OpenGL program ID (0 = not compiled)
-    int32_t gpu_version;         // version at last GPU compile (-1 = never)
 } tc_shader;
 
 // ============================================================================
