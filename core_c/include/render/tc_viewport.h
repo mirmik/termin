@@ -7,6 +7,7 @@
 #include "core/tc_scene_pool.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_pipeline_pool.h"
+#include "render/tc_input_manager.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,6 +67,14 @@ TC_API const char* tc_viewport_get_managed_by(tc_viewport_handle h);
 
 TC_API void tc_viewport_set_block_input_in_editor(tc_viewport_handle h, bool block);
 TC_API bool tc_viewport_get_block_input_in_editor(tc_viewport_handle h);
+
+// ============================================================================
+// Input Manager
+// ============================================================================
+
+// Set per-viewport input manager (ownership is external)
+TC_API void tc_viewport_set_input_manager(tc_viewport_handle h, tc_input_manager* manager);
+TC_API tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h);
 
 // ============================================================================
 // Pixel Rect Calculation

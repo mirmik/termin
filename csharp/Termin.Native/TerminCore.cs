@@ -681,17 +681,27 @@ public static class TerminCore
     public static extern void InputManagerDispatchChar(IntPtr manager, uint codepoint);
 
     // ========================================================================
-    // Simple Input Manager (tc_simple_input_manager)
+    // Display Input Router (tc_display_input_router)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_simple_input_manager_new")]
-    public static extern IntPtr SimpleInputManagerNew(IntPtr display);
+    [DllImport(DLL, EntryPoint = "tc_display_input_router_new")]
+    public static extern IntPtr DisplayInputRouterNew(IntPtr display);
 
-    [DllImport(DLL, EntryPoint = "tc_simple_input_manager_free")]
-    public static extern void SimpleInputManagerFree(IntPtr manager);
+    [DllImport(DLL, EntryPoint = "tc_display_input_router_free")]
+    public static extern void DisplayInputRouterFree(IntPtr router);
 
-    [DllImport(DLL, EntryPoint = "tc_simple_input_manager_base")]
-    public static extern IntPtr SimpleInputManagerBase(IntPtr manager);
+    [DllImport(DLL, EntryPoint = "tc_display_input_router_base")]
+    public static extern IntPtr DisplayInputRouterBase(IntPtr router);
+
+    // ========================================================================
+    // Viewport Input Manager (tc_viewport_input_manager)
+    // ========================================================================
+
+    [DllImport(DLL, EntryPoint = "tc_viewport_input_manager_new")]
+    public static extern IntPtr ViewportInputManagerNew(uint vpIndex, uint vpGeneration);
+
+    [DllImport(DLL, EntryPoint = "tc_viewport_input_manager_free")]
+    public static extern void ViewportInputManagerFree(IntPtr manager);
 
     // ========================================================================
     // Viewport (tc_viewport) - handle-based API

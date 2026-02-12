@@ -7,6 +7,7 @@
 extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_input_manager.h"
 }
 
 namespace termin {
@@ -60,6 +61,12 @@ void CameraViewportComponent::on_render_attach() {
 }
 
 void CameraViewportComponent::on_render_detach() {
+    // Free viewport input manager
+    if (viewport_input_manager_) {
+        tc_viewport_input_manager_free(viewport_input_manager_);
+        viewport_input_manager_ = nullptr;
+    }
+
     // Clear camera on viewport so renderer skips it until next attach
     if (viewport_.is_valid()) {
         tc_viewport_set_camera(viewport_.handle_, nullptr);
@@ -136,6 +143,10 @@ void CameraViewportComponent::setup_viewport() {
             tc_viewport_set_camera(vh, camera->tc_component_ptr());
             tc_viewport_set_scene(vh, scene);
             apply_settings();
+            // Attach input manager if not already set
+            if (!tc_viewport_get_input_manager(vh)) {
+                viewport_input_manager_ = tc_viewport_input_manager_new(vh);
+            }
             return;
         }
     }
@@ -159,6 +170,9 @@ void CameraViewportComponent::setup_viewport() {
 
     viewport_ = TcViewport(vh);
     apply_settings();
+
+    // Attach default input manager to viewport
+    viewport_input_manager_ = tc_viewport_input_manager_new(vh);
 }
 
 void CameraViewportComponent::apply_settings() {
@@ -201,6 +215,12 @@ void CameraViewportComponent::set_target_display(const std::string& new_name) {
 }
 
 void CameraViewportComponent::teardown_viewport() {
+    // Free viewport input manager
+    if (viewport_input_manager_) {
+        tc_viewport_input_manager_free(viewport_input_manager_);
+        viewport_input_manager_ = nullptr;
+    }
+
     if (viewport_.is_valid() && display_) {
         // Remove from camera
         CameraComponent* camera = find_camera();

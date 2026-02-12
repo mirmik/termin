@@ -1,6 +1,6 @@
-// editor_display_input_manager.cpp - Per-display input manager for editor mode
+// editor_viewport_input_manager.cpp - Per-viewport input manager for editor mode
 
-#include "termin/editor/editor_display_input_manager.hpp"
+#include "termin/editor/editor_viewport_input_manager.hpp"
 #include "termin/editor/editor_interaction_system.hpp"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -12,25 +12,25 @@ namespace termin {
 // Vtable callback wrappers
 static void editor_on_mouse_button(tc_input_manager* m, int button, int action, int mods) {
     if (m && m->userdata) {
-        static_cast<EditorDisplayInputManager*>(m->userdata)->on_mouse_button(button, action, mods);
+        static_cast<EditorViewportInputManager*>(m->userdata)->on_mouse_button(button, action, mods);
     }
 }
 
 static void editor_on_mouse_move(tc_input_manager* m, double x, double y) {
     if (m && m->userdata) {
-        static_cast<EditorDisplayInputManager*>(m->userdata)->on_mouse_move(x, y);
+        static_cast<EditorViewportInputManager*>(m->userdata)->on_mouse_move(x, y);
     }
 }
 
 static void editor_on_scroll(tc_input_manager* m, double x, double y, int mods) {
     if (m && m->userdata) {
-        static_cast<EditorDisplayInputManager*>(m->userdata)->on_scroll(x, y, mods);
+        static_cast<EditorViewportInputManager*>(m->userdata)->on_scroll(x, y, mods);
     }
 }
 
 static void editor_on_key(tc_input_manager* m, int key, int scancode, int action, int mods) {
     if (m && m->userdata) {
-        static_cast<EditorDisplayInputManager*>(m->userdata)->on_key(key, scancode, action, mods);
+        static_cast<EditorViewportInputManager*>(m->userdata)->on_key(key, scancode, action, mods);
     }
 }
 
@@ -43,7 +43,7 @@ static void editor_destroy(tc_input_manager* m) {
     (void)m;
 }
 
-tc_input_manager_vtable EditorDisplayInputManager::_vtable = {
+tc_input_manager_vtable EditorViewportInputManager::_vtable = {
     editor_on_mouse_button,
     editor_on_mouse_move,
     editor_on_scroll,
@@ -56,68 +56,43 @@ tc_input_manager_vtable EditorDisplayInputManager::_vtable = {
 // Constructor
 // ============================================================================
 
-EditorDisplayInputManager::EditorDisplayInputManager(tc_display* display)
-    : _display(display)
+EditorViewportInputManager::EditorViewportInputManager(tc_viewport_handle viewport, tc_display* display)
+    : _viewport(viewport)
+    , _display(display)
 {
     tc_input_manager_init(&_tc_im, &_vtable);
     _tc_im.userdata = this;
-}
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-void EditorDisplayInputManager::get_cursor_pos(double* x, double* y) const {
-    if (_display && _display->surface) {
-        tc_render_surface_get_cursor_pos(_display->surface, x, y);
-    } else {
-        *x = _last_cursor_x;
-        *y = _last_cursor_y;
-    }
-}
-
-tc_viewport_handle EditorDisplayInputManager::viewport_under_cursor(double x, double y) const {
-    if (!_display) return TC_VIEWPORT_HANDLE_INVALID;
-    return tc_display_viewport_at_screen(_display, (float)x, (float)y);
+    // Auto-attach to viewport
+    tc_viewport_set_input_manager(viewport, &_tc_im);
 }
 
 // ============================================================================
 // Event Handlers
 // ============================================================================
 
-void EditorDisplayInputManager::on_mouse_button(int button, int action, int mods) {
-    double x, y;
-    get_cursor_pos(&x, &y);
-    tc_viewport_handle viewport = viewport_under_cursor(x, y);
+void EditorViewportInputManager::on_mouse_button(int button, int action, int mods) {
+    if (!tc_viewport_alive(_viewport)) return;
 
-    // Track active viewport
-    if (action == TC_INPUT_PRESS) {
-        _active_viewport = viewport;
-    }
-    if (action == TC_INPUT_RELEASE) {
-        _has_cursor = false;
-        if (!tc_viewport_handle_valid(viewport)) {
-            viewport = _active_viewport;
-        }
-        _active_viewport = TC_VIEWPORT_HANDLE_INVALID;
-    }
+    double x = _last_cursor_x;
+    double y = _last_cursor_y;
 
     // Dispatch to camera, internal entities, and editor components
-    if (tc_viewport_handle_valid(viewport)) {
-        MouseButtonEvent event(viewport, x, y, button, action, mods);
-        _dispatch_to_internal_entities(viewport, &event);
-        _dispatch_to_editor_components(viewport, &event);
-        _dispatch_to_camera(viewport, &event);
-    }
+    MouseButtonEvent event(_viewport, x, y, button, action, mods);
+    _dispatch_to_internal_entities(&event);
+    _dispatch_to_editor_components(&event);
+    _dispatch_to_camera(&event);
 
     // Delegate to EditorInteractionSystem for picking/gizmo
     auto* sys = EditorInteractionSystem::instance();
     if (sys) {
-        sys->on_mouse_button(button, action, mods, (float)x, (float)y, viewport, _display);
+        sys->on_mouse_button(button, action, mods, (float)x, (float)y, _viewport, _display);
     }
 }
 
-void EditorDisplayInputManager::on_mouse_move(double x, double y) {
+void EditorViewportInputManager::on_mouse_move(double x, double y) {
+    if (!tc_viewport_alive(_viewport)) return;
+
     double dx = 0.0, dy = 0.0;
     if (_has_cursor) {
         dx = x - _last_cursor_x;
@@ -127,43 +102,31 @@ void EditorDisplayInputManager::on_mouse_move(double x, double y) {
     _last_cursor_y = y;
     _has_cursor = true;
 
-    tc_viewport_handle viewport = _active_viewport;
-    if (!tc_viewport_handle_valid(viewport)) {
-        viewport = viewport_under_cursor(x, y);
-    }
-
-    if (tc_viewport_handle_valid(viewport)) {
-        MouseMoveEvent event(viewport, x, y, dx, dy);
-        _dispatch_to_internal_entities(viewport, &event);
-        _dispatch_to_editor_components(viewport, &event);
-        _dispatch_to_camera(viewport, &event);
-    }
+    MouseMoveEvent event(_viewport, x, y, dx, dy);
+    _dispatch_to_internal_entities(&event);
+    _dispatch_to_editor_components(&event);
+    _dispatch_to_camera(&event);
 
     // Delegate to EditorInteractionSystem for hover/gizmo
     auto* sys = EditorInteractionSystem::instance();
     if (sys) {
-        sys->on_mouse_move((float)x, (float)y, (float)dx, (float)dy, viewport, _display);
+        sys->on_mouse_move((float)x, (float)y, (float)dx, (float)dy, _viewport, _display);
     }
 }
 
-void EditorDisplayInputManager::on_scroll(double xoffset, double yoffset, int mods) {
+void EditorViewportInputManager::on_scroll(double xoffset, double yoffset, int mods) {
+    if (!tc_viewport_alive(_viewport)) return;
+
     double x = _last_cursor_x;
     double y = _last_cursor_y;
 
     // Use mods from parameter if provided, otherwise fall back to tracked mods
     int actual_mods = mods != 0 ? mods : _current_mods;
 
-    tc_viewport_handle viewport = viewport_under_cursor(x, y);
-    if (!tc_viewport_handle_valid(viewport)) {
-        viewport = _active_viewport;
-    }
-
-    if (tc_viewport_handle_valid(viewport)) {
-        ScrollEvent event(viewport, x, y, xoffset, yoffset, actual_mods);
-        _dispatch_to_internal_entities(viewport, &event);
-        _dispatch_to_editor_components(viewport, &event);
-        _dispatch_to_camera(viewport, &event);
-    }
+    ScrollEvent event(_viewport, x, y, xoffset, yoffset, actual_mods);
+    _dispatch_to_internal_entities(&event);
+    _dispatch_to_editor_components(&event);
+    _dispatch_to_camera(&event);
 
     // Request render update (zoom changes camera, needs redraw)
     auto* sys = EditorInteractionSystem::instance();
@@ -172,28 +135,23 @@ void EditorDisplayInputManager::on_scroll(double xoffset, double yoffset, int mo
     }
 }
 
-void EditorDisplayInputManager::on_key(int key, int scancode, int action, int mods) {
+void EditorViewportInputManager::on_key(int key, int scancode, int action, int mods) {
+    if (!tc_viewport_alive(_viewport)) return;
+
     _current_mods = mods;
 
-    tc_viewport_handle viewport = _active_viewport;
-    if (!tc_viewport_handle_valid(viewport) && _display) {
-        viewport = tc_display_get_first_viewport(_display);
-    }
-
-    if (tc_viewport_handle_valid(viewport)) {
-        KeyEvent event(viewport, key, scancode, action, mods);
-        _dispatch_to_internal_entities(viewport, &event);
-        _dispatch_to_editor_components(viewport, &event);
-        _dispatch_to_camera(viewport, &event);
-    }
+    KeyEvent event(_viewport, key, scancode, action, mods);
+    _dispatch_to_internal_entities(&event);
+    _dispatch_to_editor_components(&event);
+    _dispatch_to_camera(&event);
 
     // Delegate to EditorInteractionSystem for editor-level key handling
     auto* sys = EditorInteractionSystem::instance();
     if (sys && sys->on_key) {
-        KeyEvent key_event(viewport, key, scancode, action, mods);
+        KeyEvent key_event(_viewport, key, scancode, action, mods);
         sys->on_key(key_event);
     } else {
-        tc_log(TC_LOG_WARN, "EditorDisplayInputManager::on_key: no sys=%p or no on_key callback", (void*)sys);
+        tc_log(TC_LOG_WARN, "EditorViewportInputManager::on_key: no sys=%p or no on_key callback", (void*)sys);
     }
 }
 
@@ -215,26 +173,26 @@ static void _dispatch_camera_components(tc_viewport_handle vp, auto dispatch_fn)
     );
 }
 
-void EditorDisplayInputManager::_dispatch_to_camera(tc_viewport_handle vp, tc_mouse_button_event* ev) {
-    _dispatch_camera_components(vp, [ev](tc_component* c) {
+void EditorViewportInputManager::_dispatch_to_camera(tc_mouse_button_event* ev) {
+    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
         tc_component_on_mouse_button(c, ev);
     });
 }
 
-void EditorDisplayInputManager::_dispatch_to_camera(tc_viewport_handle vp, tc_mouse_move_event* ev) {
-    _dispatch_camera_components(vp, [ev](tc_component* c) {
+void EditorViewportInputManager::_dispatch_to_camera(tc_mouse_move_event* ev) {
+    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
         tc_component_on_mouse_move(c, ev);
     });
 }
 
-void EditorDisplayInputManager::_dispatch_to_camera(tc_viewport_handle vp, tc_scroll_event* ev) {
-    _dispatch_camera_components(vp, [ev](tc_component* c) {
+void EditorViewportInputManager::_dispatch_to_camera(tc_scroll_event* ev) {
+    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
         tc_component_on_scroll(c, ev);
     });
 }
 
-void EditorDisplayInputManager::_dispatch_to_camera(tc_viewport_handle vp, tc_key_event* ev) {
-    _dispatch_camera_components(vp, [ev](tc_component* c) {
+void EditorViewportInputManager::_dispatch_to_camera(tc_key_event* ev) {
+    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
         tc_component_on_key(c, ev);
     });
 }
@@ -243,8 +201,8 @@ void EditorDisplayInputManager::_dispatch_to_camera(tc_viewport_handle vp, tc_ke
 // Dispatch helpers - Editor components (active_in_editor=true)
 // ============================================================================
 
-void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handle vp, tc_mouse_button_event* ev) {
-    tc_scene_handle scene = tc_viewport_get_scene(vp);
+void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_button_event* ev) {
+    tc_scene_handle scene = tc_viewport_get_scene(_viewport);
     if (!tc_scene_handle_valid(scene)) return;
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
@@ -255,8 +213,8 @@ void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handl
         TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
 }
 
-void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handle vp, tc_mouse_move_event* ev) {
-    tc_scene_handle scene = tc_viewport_get_scene(vp);
+void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_move_event* ev) {
+    tc_scene_handle scene = tc_viewport_get_scene(_viewport);
     if (!tc_scene_handle_valid(scene)) return;
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
@@ -267,8 +225,8 @@ void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handl
         TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
 }
 
-void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handle vp, tc_scroll_event* ev) {
-    tc_scene_handle scene = tc_viewport_get_scene(vp);
+void EditorViewportInputManager::_dispatch_to_editor_components(tc_scroll_event* ev) {
+    tc_scene_handle scene = tc_viewport_get_scene(_viewport);
     if (!tc_scene_handle_valid(scene)) return;
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
@@ -279,8 +237,8 @@ void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handl
         TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
 }
 
-void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handle vp, tc_key_event* ev) {
-    tc_scene_handle scene = tc_viewport_get_scene(vp);
+void EditorViewportInputManager::_dispatch_to_editor_components(tc_key_event* ev) {
+    tc_scene_handle scene = tc_viewport_get_scene(_viewport);
     if (!tc_scene_handle_valid(scene)) return;
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
@@ -295,8 +253,8 @@ void EditorDisplayInputManager::_dispatch_to_editor_components(tc_viewport_handl
 // Dispatch helpers - Internal entities
 // ============================================================================
 
-void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handle vp, tc_mouse_button_event* ev) {
-    tc_entity_handle ent = tc_viewport_get_internal_entities(vp);
+void EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_button_event* ev) {
+    tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
     if (!tc_entity_handle_valid(ent)) return;
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
@@ -305,8 +263,8 @@ void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handl
         }, ev);
 }
 
-void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handle vp, tc_mouse_move_event* ev) {
-    tc_entity_handle ent = tc_viewport_get_internal_entities(vp);
+void EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_move_event* ev) {
+    tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
     if (!tc_entity_handle_valid(ent)) return;
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
@@ -315,8 +273,8 @@ void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handl
         }, ev);
 }
 
-void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handle vp, tc_scroll_event* ev) {
-    tc_entity_handle ent = tc_viewport_get_internal_entities(vp);
+void EditorViewportInputManager::_dispatch_to_internal_entities(tc_scroll_event* ev) {
+    tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
     if (!tc_entity_handle_valid(ent)) return;
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
@@ -325,8 +283,8 @@ void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handl
         }, ev);
 }
 
-void EditorDisplayInputManager::_dispatch_to_internal_entities(tc_viewport_handle vp, tc_key_event* ev) {
-    tc_entity_handle ent = tc_viewport_get_internal_entities(vp);
+void EditorViewportInputManager::_dispatch_to_internal_entities(tc_key_event* ev) {
+    tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
     if (!tc_entity_handle_valid(ent)) return;
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {

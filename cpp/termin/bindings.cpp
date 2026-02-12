@@ -12,7 +12,7 @@ extern "C" {
 #include "bindings/render/tc_render_surface_bindings.hpp"
 #include "bindings/render/tc_input_manager_bindings.hpp"
 #include "bindings/render/tc_display_bindings.hpp"
-#include "bindings/input/simple_display_input_manager_bindings.hpp"
+#include "bindings/input/display_input_router_bindings.hpp"
 // scene_bindings.hpp - TcScene bindings moved to _entity_native
 #include "scene/scene_manager_bindings.hpp"
 #include "bindings/engine/engine_core_bindings.hpp"
@@ -95,7 +95,7 @@ NB_MODULE(_native, m) {
     termin::bind_tc_render_surface(render_module);
     termin::bind_tc_input_manager(render_module);
     termin::bind_tc_display(render_module);
-    termin::bind_simple_display_input_manager(render_module);
+    termin::bind_display_input_router(render_module);
 #ifdef TERMIN_HAS_SDL2
     termin::bind_sdl(platform_module);
 #endif

@@ -3,7 +3,8 @@
 #include <nanobind/stl/string.h>
 
 #include "render/tc_input_manager.h"
-#include "render/tc_simple_input_manager.h"
+#include "render/tc_display_input_router.h"
+#include "render/tc_viewport_input_manager.h"
 #include "render/tc_render_surface.h"
 
 namespace nb = nanobind;
@@ -209,28 +210,44 @@ void bind_tc_input_manager(nb::module_& m) {
     m.attr("TC_MOD_SUPER") = TC_MOD_SUPER;
 
     // ========================================================================
-    // tc_simple_input_manager - C implementation of SimpleDisplayInputManager
+    // tc_display_input_router - routes events from display to viewports
     // ========================================================================
 
-    // Create simple input manager for display
-    m.def("_simple_input_manager_new", [](uintptr_t display_ptr) -> uintptr_t {
+    m.def("_display_input_router_new", [](uintptr_t display_ptr) -> uintptr_t {
         tc_display* display = reinterpret_cast<tc_display*>(display_ptr);
-        tc_simple_input_manager* m = tc_simple_input_manager_new(display);
-        return reinterpret_cast<uintptr_t>(m);
+        tc_display_input_router* r = tc_display_input_router_new(display);
+        return reinterpret_cast<uintptr_t>(r);
     }, nb::arg("display_ptr"),
-       "Create simple input manager for display.\n"
+       "Create display input router.\n"
        "Auto-attaches to display's surface.");
 
-    // Free simple input manager
-    m.def("_simple_input_manager_free", [](uintptr_t ptr) {
-        tc_simple_input_manager* m = reinterpret_cast<tc_simple_input_manager*>(ptr);
-        tc_simple_input_manager_free(m);
+    m.def("_display_input_router_free", [](uintptr_t ptr) {
+        tc_display_input_router* r = reinterpret_cast<tc_display_input_router*>(ptr);
+        tc_display_input_router_free(r);
     });
 
-    // Get tc_input_manager pointer (for manual event dispatch)
-    m.def("_simple_input_manager_get_input_manager", [](uintptr_t ptr) -> uintptr_t {
-        tc_simple_input_manager* m = reinterpret_cast<tc_simple_input_manager*>(ptr);
-        return reinterpret_cast<uintptr_t>(tc_simple_input_manager_get_input_manager(m));
+    m.def("_display_input_router_base", [](uintptr_t ptr) -> uintptr_t {
+        tc_display_input_router* r = reinterpret_cast<tc_display_input_router*>(ptr);
+        return reinterpret_cast<uintptr_t>(tc_display_input_router_base(r));
+    });
+
+    // ========================================================================
+    // tc_viewport_input_manager - per-viewport scene dispatch
+    // ========================================================================
+
+    m.def("_viewport_input_manager_new", [](uint32_t vp_index, uint32_t vp_generation) -> uintptr_t {
+        tc_viewport_handle vh;
+        vh.index = vp_index;
+        vh.generation = vp_generation;
+        tc_viewport_input_manager* m = tc_viewport_input_manager_new(vh);
+        return reinterpret_cast<uintptr_t>(m);
+    }, nb::arg("vp_index"), nb::arg("vp_generation"),
+       "Create viewport input manager.\n"
+       "Auto-attaches to viewport.");
+
+    m.def("_viewport_input_manager_free", [](uintptr_t ptr) {
+        tc_viewport_input_manager* m = reinterpret_cast<tc_viewport_input_manager*>(ptr);
+        tc_viewport_input_manager_free(m);
     });
 }
 

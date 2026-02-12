@@ -4,12 +4,12 @@ using WpfInput = Termin.WpfTest.Input;
 namespace Termin.WpfTest;
 
 /// <summary>
-/// Manages tc_display and tc_simple_input_manager for WPF.
+/// Manages tc_display and tc_display_input_router for WPF.
 ///
 /// Flow:
 /// 1. WpfRenderSurface wraps GLWpfControl as tc_render_surface
 /// 2. tc_display owns the surface and viewport list
-/// 3. tc_simple_input_manager routes events to scene InputComponents
+/// 3. tc_display_input_router routes events to viewport input managers
 /// 4. GlWpfBackend events are forwarded to tc_input_manager_dispatch_*
 /// </summary>
 public class NativeDisplayManager : IDisposable
@@ -17,7 +17,7 @@ public class NativeDisplayManager : IDisposable
     private readonly WpfRenderSurface _renderSurface;
     private readonly GlWpfBackend _backend;
     private IntPtr _displayPtr;
-    private IntPtr _simpleInputManagerPtr;
+    private IntPtr _routerPtr;
     private IntPtr _inputManagerPtr;
     private bool _disposed;
 
@@ -43,17 +43,17 @@ public class NativeDisplayManager : IDisposable
             throw new Exception("Failed to create tc_display");
         }
 
-        // Create tc_simple_input_manager
-        _simpleInputManagerPtr = TerminCore.SimpleInputManagerNew(_displayPtr);
-        if (_simpleInputManagerPtr == IntPtr.Zero)
+        // Create tc_display_input_router (auto-attaches to surface)
+        _routerPtr = TerminCore.DisplayInputRouterNew(_displayPtr);
+        if (_routerPtr == IntPtr.Zero)
         {
             TerminCore.DisplayFree(_displayPtr);
             _displayPtr = IntPtr.Zero;
-            throw new Exception("Failed to create tc_simple_input_manager");
+            throw new Exception("Failed to create tc_display_input_router");
         }
 
         // Get tc_input_manager pointer
-        _inputManagerPtr = TerminCore.SimpleInputManagerBase(_simpleInputManagerPtr);
+        _inputManagerPtr = TerminCore.DisplayInputRouterBase(_routerPtr);
 
         // Subscribe to backend events
         _backend.OnMouseButton += OnMouseButton;
@@ -136,11 +136,11 @@ public class NativeDisplayManager : IDisposable
         _backend.OnScroll -= OnScroll;
         _backend.OnKey -= OnKey;
 
-        // Free simple input manager first (it detaches from surface)
-        if (_simpleInputManagerPtr != IntPtr.Zero)
+        // Free router first (it detaches from surface)
+        if (_routerPtr != IntPtr.Zero)
         {
-            TerminCore.SimpleInputManagerFree(_simpleInputManagerPtr);
-            _simpleInputManagerPtr = IntPtr.Zero;
+            TerminCore.DisplayInputRouterFree(_routerPtr);
+            _routerPtr = IntPtr.Zero;
             _inputManagerPtr = IntPtr.Zero;
         }
 

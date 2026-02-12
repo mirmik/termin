@@ -1,6 +1,7 @@
 // tc_viewport.c - Viewport implementation using pool with generational indices
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_input_manager.h"
 #include "core/tc_component.h"
 #include "tc_log.h"
 #include <stdlib.h>
@@ -35,6 +36,9 @@ typedef struct {
 
     // Internal entities
     tc_entity_handle* internal_entities;
+
+    // Per-viewport input managers (ownership is external)
+    tc_input_manager** input_managers;
 
     // Display linked list (handles instead of pointers)
     tc_viewport_handle* display_prevs;
@@ -99,6 +103,7 @@ void tc_viewport_pool_init(void) {
     g_pool->input_modes = (char**)calloc(cap, sizeof(char*));
     g_pool->block_input_in_editor = (bool*)calloc(cap, sizeof(bool));
     g_pool->managed_by = (char**)calloc(cap, sizeof(char*));
+    g_pool->input_managers = (tc_input_manager**)calloc(cap, sizeof(tc_input_manager*));
     g_pool->internal_entities = (tc_entity_handle*)calloc(cap, sizeof(tc_entity_handle));
     g_pool->display_prevs = (tc_viewport_handle*)calloc(cap, sizeof(tc_viewport_handle));
     g_pool->display_nexts = (tc_viewport_handle*)calloc(cap, sizeof(tc_viewport_handle));
@@ -147,6 +152,7 @@ void tc_viewport_pool_shutdown(void) {
     free(g_pool->input_modes);
     free(g_pool->block_input_in_editor);
     free(g_pool->managed_by);
+    free(g_pool->input_managers);
     free(g_pool->internal_entities);
     free(g_pool->display_prevs);
     free(g_pool->display_nexts);
@@ -183,6 +189,7 @@ static void pool_grow(void) {
     g_pool->input_modes = realloc(g_pool->input_modes, new_cap * sizeof(char*));
     g_pool->block_input_in_editor = realloc(g_pool->block_input_in_editor, new_cap * sizeof(bool));
     g_pool->managed_by = realloc(g_pool->managed_by, new_cap * sizeof(char*));
+    g_pool->input_managers = realloc(g_pool->input_managers, new_cap * sizeof(tc_input_manager*));
     g_pool->internal_entities = realloc(g_pool->internal_entities, new_cap * sizeof(tc_entity_handle));
     g_pool->display_prevs = realloc(g_pool->display_prevs, new_cap * sizeof(tc_viewport_handle));
     g_pool->display_nexts = realloc(g_pool->display_nexts, new_cap * sizeof(tc_viewport_handle));
@@ -204,6 +211,7 @@ static void pool_grow(void) {
     memset(g_pool->input_modes + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
     memset(g_pool->block_input_in_editor + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->managed_by + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
+    memset(g_pool->input_managers + old_cap, 0, (new_cap - old_cap) * sizeof(tc_input_manager*));
 
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
@@ -287,6 +295,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->block_input_in_editor[idx] = false;
     g_pool->managed_by[idx] = NULL;
 
+    g_pool->input_managers[idx] = NULL;
     g_pool->internal_entities[idx] = TC_ENTITY_HANDLE_INVALID;
 
     g_pool->display_prevs[idx] = TC_VIEWPORT_HANDLE_INVALID;
@@ -324,6 +333,7 @@ void tc_viewport_free(tc_viewport_handle h) {
     g_pool->names[idx] = NULL;
     g_pool->input_modes[idx] = NULL;
     g_pool->managed_by[idx] = NULL;
+    g_pool->input_managers[idx] = NULL;
 
     // Mark as dead
     g_pool->alive[idx] = false;
@@ -550,6 +560,20 @@ tc_entity_handle tc_viewport_get_internal_entities(tc_viewport_handle h) {
 bool tc_viewport_has_internal_entities(tc_viewport_handle h) {
     if (!handle_alive(h)) return false;
     return tc_entity_handle_valid(g_pool->internal_entities[h.index]);
+}
+
+// ============================================================================
+// Input Manager
+// ============================================================================
+
+void tc_viewport_set_input_manager(tc_viewport_handle h, tc_input_manager* manager) {
+    if (!handle_alive(h)) return;
+    g_pool->input_managers[h.index] = manager;
+}
+
+tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h) {
+    if (!handle_alive(h)) return NULL;
+    return g_pool->input_managers[h.index];
 }
 
 // ============================================================================

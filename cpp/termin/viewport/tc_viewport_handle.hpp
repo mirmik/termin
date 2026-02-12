@@ -86,6 +86,15 @@ public:
         if (is_valid()) tc_viewport_set_pipeline(handle_, pipeline);
     }
 
+    // Input manager
+    void set_input_manager(tc_input_manager* manager) {
+        if (is_valid()) tc_viewport_set_input_manager(handle_, manager);
+    }
+
+    tc_input_manager* input_manager() const {
+        return is_valid() ? tc_viewport_get_input_manager(handle_) : nullptr;
+    }
+
     // Rect access
     void get_rect(float& x, float& y, float& w, float& h) const {
         if (is_valid()) {

@@ -69,7 +69,7 @@ void EditorInteractionSystem::set_gizmo_target(Entity entity) {
 }
 
 // ============================================================================
-// Events from EditorDisplayInputManager
+// Events from EditorViewportInputManager
 // ============================================================================
 
 void EditorInteractionSystem::on_mouse_button(

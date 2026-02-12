@@ -456,7 +456,7 @@ public partial class MainWindow : Window
         // Create WpfRenderSurface
         _renderSurface = new WpfRenderSurface(GlControl);
 
-        // Create NativeDisplayManager with tc_display and tc_simple_input_manager
+        // Create NativeDisplayManager with tc_display and tc_display_input_router
         _nativeDisplayManager = new NativeDisplayManager(_renderSurface, _backend, "WpfDisplay");
 
         // Add display to RenderingManager
@@ -497,7 +497,7 @@ public partial class MainWindow : Window
         // Create WpfRenderSurface for second control
         _renderSurface2 = new WpfRenderSurface(GlControl2);
 
-        // Create NativeDisplayManager with tc_display and tc_simple_input_manager
+        // Create NativeDisplayManager with tc_display and tc_display_input_router
         _nativeDisplayManager2 = new NativeDisplayManager(_renderSurface2, _backend2, "WpfDisplay2");
 
         // Add display to RenderingManager

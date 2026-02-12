@@ -386,22 +386,13 @@ class RenderingController:
 
         if input_mode == "none":
             pass
-        elif input_mode == "simple":
-            from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+        elif input_mode in ("simple", "basic"):
+            from termin.visualization.platform.input_manager import DisplayInputRouter
 
-            input_manager = SimpleDisplayInputManager(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_manager
-
-            # Connect input manager to surface
-            surface.set_input_manager(input_manager.tc_input_manager_ptr)
-        elif input_mode == "basic":
-            # Basic C input manager (no raycast, cross-language compatible)
-            from termin.visualization.platform.input_manager import BasicDisplayInputManager
-
-            input_manager = BasicDisplayInputManager(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_manager
-
-            surface.set_input_manager(input_manager.tc_input_manager_ptr)
+            input_router = DisplayInputRouter(display.tc_display_ptr)
+            self._display_input_managers[display_id] = input_router
+            # Sync Python-cached input_manager_ptr
+            surface.set_input_manager(input_router.tc_input_manager_ptr)
         elif input_mode == "editor":
             # Editor mode is handled by EditorWindow via callback
             if self._on_display_input_mode_changed_callback is not None:
@@ -954,15 +945,14 @@ class RenderingController:
         display_id = display.tc_display_ptr
         self._display_tabs[display_id] = (tab_container, surface, qwindow)
 
-        # Create input manager for this display (default: simple mode)
-        from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+        # Create input router for this display (default: simple mode)
+        from termin.visualization.platform.input_manager import DisplayInputRouter
 
-        input_manager = SimpleDisplayInputManager(display.tc_display_ptr)
-        # Store input manager to prevent GC
-        self._display_input_managers[display_id] = input_manager
-
-        # Connect input manager to surface
-        surface.set_input_manager(input_manager.tc_input_manager_ptr)
+        input_router = DisplayInputRouter(display.tc_display_ptr)
+        # Store input router to prevent GC
+        self._display_input_managers[display_id] = input_router
+        # Sync Python-cached input_manager_ptr
+        surface.set_input_manager(input_router.tc_input_manager_ptr)
 
         # Add display (this will call _update_center_tabs)
         self.add_display(display, name)
@@ -1066,24 +1056,16 @@ class RenderingController:
         if mode == "none" or (mode == "editor" and is_blocked):
             # No input handling - input manager already cleared
             pass
-        elif mode == "simple":
-            from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+        elif mode in ("simple", "basic"):
+            from termin.visualization.platform.input_manager import DisplayInputRouter
 
-            input_manager = SimpleDisplayInputManager(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_manager
-
-            # Connect input manager to surface
-            surface.set_input_manager(input_manager.tc_input_manager_ptr)
-        elif mode == "basic":
-            from termin.visualization.platform.input_manager import BasicDisplayInputManager
-
-            input_manager = BasicDisplayInputManager(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_manager
-
-            surface.set_input_manager(input_manager.tc_input_manager_ptr)
+            input_router = DisplayInputRouter(display.tc_display_ptr)
+            self._display_input_managers[display_id] = input_router
+            # Sync Python-cached input_manager_ptr
+            surface.set_input_manager(input_router.tc_input_manager_ptr)
         elif mode == "editor":
             # Editor mode is handled by EditorWindow via callback
-            # EditorWindow handles C++ EditorDisplayInputManager creation
+            # EditorWindow creates DisplayInputRouter + EditorViewportInputManager
             pass
 
         # Update viewport input_mode

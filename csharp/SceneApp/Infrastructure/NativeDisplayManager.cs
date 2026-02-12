@@ -8,7 +8,7 @@ public class NativeDisplayManager : IDisposable
     private readonly WpfRenderSurface _renderSurface;
     private readonly GlWpfBackend _backend;
     private IntPtr _displayPtr;
-    private IntPtr _simpleInputManagerPtr;
+    private IntPtr _routerPtr;
     private IntPtr _inputManagerPtr;
     private bool _disposed;
 
@@ -24,15 +24,15 @@ public class NativeDisplayManager : IDisposable
         if (_displayPtr == IntPtr.Zero)
             throw new Exception("Failed to create tc_display");
 
-        _simpleInputManagerPtr = TerminCore.SimpleInputManagerNew(_displayPtr);
-        if (_simpleInputManagerPtr == IntPtr.Zero)
+        _routerPtr = TerminCore.DisplayInputRouterNew(_displayPtr);
+        if (_routerPtr == IntPtr.Zero)
         {
             TerminCore.DisplayFree(_displayPtr);
             _displayPtr = IntPtr.Zero;
-            throw new Exception("Failed to create tc_simple_input_manager");
+            throw new Exception("Failed to create tc_display_input_router");
         }
 
-        _inputManagerPtr = TerminCore.SimpleInputManagerBase(_simpleInputManagerPtr);
+        _inputManagerPtr = TerminCore.DisplayInputRouterBase(_routerPtr);
 
         _backend.OnMouseButton += OnMouseButton;
         _backend.OnMouseMove += OnMouseMove;
@@ -86,10 +86,10 @@ public class NativeDisplayManager : IDisposable
         _backend.OnScroll -= OnScroll;
         _backend.OnKey -= OnKey;
 
-        if (_simpleInputManagerPtr != IntPtr.Zero)
+        if (_routerPtr != IntPtr.Zero)
         {
-            TerminCore.SimpleInputManagerFree(_simpleInputManagerPtr);
-            _simpleInputManagerPtr = IntPtr.Zero;
+            TerminCore.DisplayInputRouterFree(_routerPtr);
+            _routerPtr = IntPtr.Zero;
             _inputManagerPtr = IntPtr.Zero;
         }
 

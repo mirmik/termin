@@ -69,13 +69,13 @@ class Display(CppDisplay):
         return self._surface
 
     def connect_input(self) -> None:
-        """Create and attach SimpleDisplayInputManager.
+        """Create and attach DisplayInputRouter.
 
-        Events from the surface will be dispatched to scene InputComponents
-        (e.g. OrbitCameraController).
+        Routes events from the surface to each viewport's input manager,
+        which dispatches to scene InputComponents (e.g. OrbitCameraController).
         """
-        from termin.visualization.platform.input_manager import SimpleDisplayInputManager
-        self._input_manager = SimpleDisplayInputManager(self.tc_display_ptr)
+        from termin.visualization.platform.input_manager import DisplayInputRouter
+        self._input_router = DisplayInputRouter(self.tc_display_ptr)
 
     def viewport_rect_to_pixels(self, viewport) -> tuple[int, int, int, int]:
         """

@@ -1,7 +1,7 @@
 """
 Window — фасад для совместимости со старым API.
 
-Объединяет Display и SimpleDisplayInputManager в один класс,
+Объединяет Display и DisplayInputRouter в один класс,
 предоставляя старый API Window для examples и простых приложений.
 """
 
@@ -15,7 +15,7 @@ from termin.visualization.platform.backends.base import (
     Action,
     MouseButton,
 )
-from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+from termin.visualization.platform.input_manager import DisplayInputRouter
 
 if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
@@ -26,13 +26,13 @@ if TYPE_CHECKING:
 
 class Window:
     """
-    Фасад, объединяющий Display и SimpleDisplayInputManager.
+    Фасад, объединяющий Display и DisplayInputRouter.
 
     Предоставляет старый API Window для совместимости с examples.
     Внутри создаёт:
     - SDLWindowRenderSurface (C++ окно + поверхность рендеринга)
     - Display (управление viewport'ами)
-    - SimpleDisplayInputManager (обработка ввода)
+    - DisplayInputRouter (маршрутизация ввода на viewport'ы)
     """
 
     def __init__(
@@ -76,11 +76,8 @@ class Window:
         # Создаём Display
         self._display = Display(self._surface)
 
-        # Создаём input manager
-        self._input_manager = SimpleDisplayInputManager(self._display.tc_display_ptr)
-
-        # Connect input manager to surface
-        self._surface.set_input_manager(self._input_manager.tc_input_manager_ptr)
+        # Создаём input router (auto-attaches to display's surface)
+        self._input_router = DisplayInputRouter(self._display.tc_display_ptr)
 
         # Колбэки для внешнего кода (совместимость)
         self.on_mouse_button_event: Optional[

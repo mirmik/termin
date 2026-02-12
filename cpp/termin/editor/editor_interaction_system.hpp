@@ -1,5 +1,5 @@
 // editor_interaction_system.hpp - Singleton editor interaction coordinator
-// Owns selection state, gizmo manager. Receives events from EditorDisplayInputManager.
+// Owns selection state, gizmo manager. Receives events from EditorViewportInputManager.
 #pragma once
 
 #include "termin/editor/selection_manager.hpp"
@@ -79,7 +79,7 @@ public:
     // Post-render processing - call once per frame after rendering
     void after_render();
 
-    // Called by EditorDisplayInputManager instances
+    // Called by EditorViewportInputManager instances
     void on_mouse_button(int button, int action, int mods,
                          float x, float y, tc_viewport_handle vp, tc_display* display);
     void on_mouse_move(float x, float y, float dx, float dy,

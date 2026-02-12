@@ -274,14 +274,10 @@ class PlayerRuntime:
 
     def _setup_input(self):
         """Set up input handling."""
-        from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+        from termin.visualization.platform.input_manager import DisplayInputRouter
 
-        self._input_manager = SimpleDisplayInputManager(self._display.tc_display_ptr)
-
-        # Connect input manager to surface
-        surface = self._display.surface
-        if hasattr(surface, "set_input_manager"):
-            surface.set_input_manager(self._input_manager.tc_input_manager_ptr)
+        # Router auto-attaches to display's surface
+        self._input_router = DisplayInputRouter(self._display.tc_display_ptr)
 
     def run(self):
         """Run the game loop."""

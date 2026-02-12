@@ -5,7 +5,7 @@
 #include <nanobind/stl/function.h>
 
 #include "termin/editor/editor_interaction_system.hpp"
-#include "termin/editor/editor_display_input_manager.hpp"
+#include "termin/editor/editor_viewport_input_manager.hpp"
 #include "termin/editor/selection_manager.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/render/graphics_backend.hpp"
@@ -40,13 +40,18 @@ void bind_editor_interaction(nb::module_& m) {
                 s.on_hover_changed = cb;
             });
 
-    // EditorDisplayInputManager (per-display)
-    nb::class_<EditorDisplayInputManager>(m, "EditorDisplayInputManager")
-        .def("__init__", [](EditorDisplayInputManager* self, uintptr_t display_ptr) {
-            new (self) EditorDisplayInputManager(
-                reinterpret_cast<tc_display*>(display_ptr));
-        }, nb::arg("display_ptr"))
-        .def("tc_input_manager_ptr", [](EditorDisplayInputManager& s) {
+    // EditorViewportInputManager (per-viewport)
+    nb::class_<EditorViewportInputManager>(m, "EditorViewportInputManager")
+        .def("__init__", [](EditorViewportInputManager* self,
+                           uint32_t vp_index, uint32_t vp_generation,
+                           uintptr_t display_ptr) {
+            tc_viewport_handle vh;
+            vh.index = vp_index;
+            vh.generation = vp_generation;
+            new (self) EditorViewportInputManager(
+                vh, reinterpret_cast<tc_display*>(display_ptr));
+        }, nb::arg("vp_index"), nb::arg("vp_generation"), nb::arg("display_ptr"))
+        .def("tc_input_manager_ptr", [](EditorViewportInputManager& s) {
             return reinterpret_cast<uintptr_t>(s.tc_input_manager_ptr());
         });
 

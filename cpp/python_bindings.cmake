@@ -165,7 +165,7 @@ nanobind_add_module(_native
     termin/bindings/render/tc_render_surface_bindings.cpp
     termin/bindings/render/tc_input_manager_bindings.cpp
     termin/bindings/render/tc_display_bindings.cpp
-    termin/bindings/input/simple_display_input_manager_bindings.cpp
+    termin/bindings/input/display_input_router_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
     termin/bindings/render/scene_pipeline_template_bindings.cpp
     termin/bindings/render/material.cpp
@@ -180,7 +180,7 @@ nanobind_add_module(_native
     termin/editor/frame_graph_debugger_core.cpp
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
-    termin/editor/editor_display_input_manager.cpp
+    termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
     ${_NATIVE_SDL_SOURCES}
     termin/scene/scene_manager_bindings.cpp

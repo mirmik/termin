@@ -8,6 +8,7 @@
 #include <cstdint>
 
 struct tc_display;
+struct tc_viewport_input_manager;
 
 namespace termin {
 
@@ -85,6 +86,7 @@ public:
 private:
     TcViewport viewport_;
     tc_display* display_ = nullptr;
+    tc_viewport_input_manager* viewport_input_manager_ = nullptr;
 
     CameraComponent* find_camera() const;
     void setup_viewport();

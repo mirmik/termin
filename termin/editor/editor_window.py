@@ -283,14 +283,16 @@ class EditorWindow(QMainWindow):
         self._spacemouse: SpaceMouseController | None = None
 
         # --- C++ EditorInteractionSystem (singleton) ---
-        from termin._native.editor import EditorInteractionSystem, EditorDisplayInputManager as CppEditorDisplayInputManager
+        from termin._native.editor import EditorInteractionSystem, EditorViewportInputManager as CppEditorViewportInputManager
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
         self._interaction_system.set_graphics(self._graphics)
         self.gizmo_manager = self._interaction_system.gizmo_manager
 
-        # Per-display C++ input managers: tc_display_ptr -> EditorDisplayInputManager
-        self._editor_input_managers: dict[int, CppEditorDisplayInputManager] = {}
+        # Per-display routers and per-viewport editor input managers
+        from termin._native.render import DisplayInputRouter
+        self._display_routers: dict[int, DisplayInputRouter] = {}
+        self._editor_viewport_input_managers: list[CppEditorViewportInputManager] = []
 
         # --- дерево сцены ---
         self.scene_tree_controller = SceneTreeController(
@@ -341,10 +343,13 @@ class EditorWindow(QMainWindow):
         self.editorViewportTab.setAcceptDrops(True)
         self.editorViewportTab.installEventFilter(self)
 
-        # --- C++ EditorDisplayInputManager for editor display ---
-        input_mgr = CppEditorDisplayInputManager(editor_display.tc_display_ptr)
-        editor_surface.set_input_manager(input_mgr.tc_input_manager_ptr())
-        self._editor_input_managers[editor_display.tc_display_ptr] = input_mgr
+        # --- DisplayInputRouter for editor display ---
+        router = DisplayInputRouter(editor_display.tc_display_ptr)
+        self._display_routers[editor_display.tc_display_ptr] = router
+        # Sync Python-cached input_manager_ptr on SDL surface
+        # (C auto-attach sets display->surface->input_manager, but SDL backend
+        # dispatches via its own _input_manager_ptr cache)
+        editor_surface.set_input_manager(router.tc_input_manager_ptr)
 
         # --- Debug features (from former EditorViewportFeatures) ---
         self._framegraph_debugger = None
@@ -368,6 +373,9 @@ class EditorWindow(QMainWindow):
 
         # Attach to initial scene (creates EditorEntities and viewport)
         self._editor_attachment.attach(self.scene, restore_state=False)
+
+        # Create EditorViewportInputManager for the editor viewport
+        self._setup_editor_viewport_input_managers(editor_display)
 
         # Sync backward-compatible references from attachment
         self._sync_attachment_refs()
@@ -1569,6 +1577,10 @@ class EditorWindow(QMainWindow):
         # Attach to new scene (transfers camera state from previous scene)
         self._editor_attachment.attach(new_scene, transfer_camera_state=True)
 
+        # Recreate EditorViewportInputManagers for new viewport
+        editor_display = self._editor_attachment._display
+        self._setup_editor_viewport_input_managers(editor_display)
+
         # Update backward-compatible references
         self._sync_attachment_refs()
 
@@ -1797,12 +1809,28 @@ class EditorWindow(QMainWindow):
 
     # ----------- display input mode -----------
 
+    def _setup_editor_viewport_input_managers(self, display) -> None:
+        """Create EditorViewportInputManager for each viewport on the display.
+
+        Clears old managers first (viewport handles may have changed).
+        """
+        from termin._native.editor import EditorViewportInputManager as CppEditorViewportInputManager
+
+        # Clear old managers (they hold stale viewport handles after scene switch)
+        self._editor_viewport_input_managers.clear()
+
+        display_id = display.tc_display_ptr
+        for vp in display.viewports:
+            vp_idx, vp_gen = vp._viewport_handle()
+            editor_im = CppEditorViewportInputManager(vp_idx, vp_gen, display_id)
+            self._editor_viewport_input_managers.append(editor_im)
+
     def _on_display_input_mode_changed(self, display, mode: str) -> None:
         """
         Handle display input mode change from RenderingController.
 
-        When a display switches to "editor" mode, creates C++ EditorDisplayInputManager
-        for that display. When switching away, removes it.
+        When a display switches to "editor" mode, creates DisplayInputRouter +
+        EditorViewportInputManager per viewport. When switching away, removes them.
 
         Args:
             display: Display that changed mode.
@@ -1814,17 +1842,26 @@ class EditorWindow(QMainWindow):
         display_id = display.tc_display_ptr
 
         if mode == "editor":
-            if display_id in self._editor_input_managers:
+            if display_id in self._display_routers:
                 return
 
+            from termin._native.render import DisplayInputRouter
+            from termin._native.editor import EditorViewportInputManager as CppEditorViewportInputManager
+
+            # Create router for display
+            router = DisplayInputRouter(display_id)
+            self._display_routers[display_id] = router
+
+            # Sync Python-cached input_manager_ptr on SDL surface
             surface = self._rendering_controller.get_display_sfc(display)
-            if surface is None:
-                return
+            if surface is not None:
+                surface.set_input_manager(router.tc_input_manager_ptr)
 
-            from termin._native.editor import EditorDisplayInputManager as CppEditorDisplayInputManager
-            input_mgr = CppEditorDisplayInputManager(display_id)
-            surface.set_input_manager(input_mgr.tc_input_manager_ptr())
-            self._editor_input_managers[display_id] = input_mgr
+            # Create EditorViewportInputManager for each viewport
+            for vp in display.viewports:
+                vp_idx, vp_gen = vp._viewport_handle()
+                editor_im = CppEditorViewportInputManager(vp_idx, vp_gen, display_id)
+                self._editor_viewport_input_managers.append(editor_im)
 
             # Set editor pipeline for the viewport (if it has viewports)
             if display.viewports:
@@ -1835,9 +1872,9 @@ class EditorWindow(QMainWindow):
                     editor_pipeline,
                 )
         else:
-            # Remove C++ input manager for this display
-            if display_id in self._editor_input_managers:
-                del self._editor_input_managers[display_id]
+            # Remove router for this display
+            if display_id in self._display_routers:
+                del self._display_routers[display_id]
                 surface = self._rendering_controller.get_display_sfc(display)
                 if surface is not None:
                     surface.set_input_manager(0)
