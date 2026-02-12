@@ -374,10 +374,8 @@ class EditorWindow(QMainWindow):
         # Attach to initial scene (creates EditorEntities and viewport)
         self._editor_attachment.attach(self.scene, restore_state=False)
 
-        # Create EditorViewportInputManager for the editor viewport
-        self._setup_editor_viewport_input_managers(editor_display)
-
         # Sync backward-compatible references from attachment
+        # (also recreates EditorViewportInputManagers for the new viewport)
         self._sync_attachment_refs()
 
         # --- C++ SelectionManager callbacks ---
@@ -699,6 +697,7 @@ class EditorWindow(QMainWindow):
         Sync backward-compatible references from EditorSceneAttachment.
 
         Updates self.camera, self.editor_entities, self.viewport from attachment.
+        Recreates EditorViewportInputManagers for the new viewport.
         Call this after any attachment.attach() call.
         """
         if self._editor_attachment is None:
@@ -709,6 +708,10 @@ class EditorWindow(QMainWindow):
             self.camera = self._editor_attachment.camera
             self.editor_entities = self._editor_attachment.editor_entities
             self.viewport = self._editor_attachment.viewport
+
+            # Recreate EditorViewportInputManagers for new viewport
+            display = self._editor_attachment._display
+            self._setup_editor_viewport_input_managers(display)
 
     def _get_editor_camera_data(self) -> dict | None:
         """Get editor camera data for serialization."""
@@ -1577,11 +1580,8 @@ class EditorWindow(QMainWindow):
         # Attach to new scene (transfers camera state from previous scene)
         self._editor_attachment.attach(new_scene, transfer_camera_state=True)
 
-        # Recreate EditorViewportInputManagers for new viewport
-        editor_display = self._editor_attachment._display
-        self._setup_editor_viewport_input_managers(editor_display)
-
         # Update backward-compatible references
+        # (also recreates EditorViewportInputManagers for the new viewport)
         self._sync_attachment_refs()
 
         # Clear undo stack
