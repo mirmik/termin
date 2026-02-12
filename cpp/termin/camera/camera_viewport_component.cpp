@@ -56,11 +56,24 @@ CameraViewportComponent::CameraViewportComponent() {
 // ---------------------------------------------------------------------------
 
 void CameraViewportComponent::on_render_attach() {
-    tc_log(TC_LOG_INFO, "[CameraViewportComponent] on_render_attach called");
+    Entity ent = entity();
+    tc_log(TC_LOG_INFO, "[CameraViewportComponent] on_render_attach entity='%s'",
+           ent.valid() ? (ent.name() ? ent.name() : "?") : "invalid");
     setup_viewport();
 }
 
 void CameraViewportComponent::on_render_detach() {
+    // Clear camera on viewport so renderer skips it until next attach
+    if (viewport_.is_valid()) {
+        tc_viewport_set_camera(viewport_.handle_, nullptr);
+    }
+    // Release reference without destroying — viewport persists on display
+    // for reuse on next on_render_attach (e.g. editor→game mode transition)
+    viewport_ = TcViewport();
+    display_ = nullptr;
+}
+
+void CameraViewportComponent::on_destroy() {
     teardown_viewport();
 }
 
@@ -95,20 +108,17 @@ void CameraViewportComponent::setup_viewport() {
     }
     display_ = display;
 
-    // Check if there's already a viewport on this display for our camera
-    tc_component* cam_tc = camera->tc_component_ptr();
-    size_t vp_count = tc_display_get_viewport_count(display);
-    for (size_t i = 0; i < vp_count; ++i) {
-        tc_viewport_handle vh = tc_display_get_viewport_at_index(display, i);
-        if (tc_viewport_alive(vh) && tc_viewport_get_camera(vh) == cam_tc) {
-            viewport_ = TcViewport(vh);
-            apply_settings();
-            return;
+    // Build viewport name from entity
+    std::string vp_name = "CameraViewport";
+    Entity ent = entity();
+    if (ent.valid()) {
+        const char* ename = ent.name();
+        if (ename && ename[0]) {
+            vp_name = std::string("CameraViewport_") + ename;
         }
     }
 
     // Get scene from entity's pool
-    Entity ent = entity();
     tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
     if (ent.valid()) {
         tc_entity_pool* pool = ent.pool_ptr();
@@ -117,20 +127,26 @@ void CameraViewportComponent::setup_viewport() {
         }
     }
 
+    // Try to reuse existing viewport by name (survives editor→game mode transitions)
+    size_t vp_count = tc_display_get_viewport_count(display);
+    for (size_t i = 0; i < vp_count; ++i) {
+        tc_viewport_handle vh = tc_display_get_viewport_at_index(display, i);
+        if (!tc_viewport_alive(vh)) continue;
+        const char* name = tc_viewport_get_name(vh);
+        if (name && vp_name == name) {
+            viewport_ = TcViewport(vh);
+            // Update camera and scene to point to current instances
+            tc_viewport_set_camera(vh, camera->tc_component_ptr());
+            tc_viewport_set_scene(vh, scene);
+            apply_settings();
+            return;
+        }
+    }
+
     // Resolve pipeline via factory
     RenderPipeline* pipeline = nullptr;
     if (!pipeline_name.empty()) {
         pipeline = rm.create_pipeline(pipeline_name);
-    }
-
-    // Create viewport via RenderingManager::mount_scene
-    std::string vp_name = "CameraViewport";
-    Entity e = entity();
-    if (e.valid()) {
-        const char* ename = e.name();
-        if (ename && ename[0]) {
-            vp_name = std::string("CameraViewport_") + ename;
-        }
     }
 
     tc_viewport_handle vh = rm.mount_scene(

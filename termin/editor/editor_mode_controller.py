@@ -329,11 +329,8 @@ class EditorModeController:
         if self._window._rendering_controller is None:
             return
 
-        # Обычные дисплеи (не Editor) - через attach_scene (читает scene.viewport_configs)
-        self._window._rendering_controller.attach_scene(scene)
-
-        # Editor display - viewport уже создан через EditorSceneAttachment.attach()
-        # C++ EditorDisplayInputManager handles both modes
+        # attach_scene уже вызван из EditorSceneAttachment.attach()
+        # (создаёт viewports из viewport_configs, вызывает notify_render_attach)
 
         # Обновляем scene tree на новую сцену
         if self._window.scene_tree_controller is not None:

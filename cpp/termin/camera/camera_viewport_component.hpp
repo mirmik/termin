@@ -60,6 +60,7 @@ public:
     // --- Lifecycle ---
     void on_render_attach() override;
     void on_render_detach() override;
+    void on_destroy() override;
 
     // --- Public API ---
 
