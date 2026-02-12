@@ -105,6 +105,14 @@ public:
         if (ptr_) tc_display_set_enabled(ptr_, value);
     }
 
+    bool auto_remove_when_empty() const {
+        return ptr_ ? tc_display_get_auto_remove_when_empty(ptr_) : false;
+    }
+
+    void set_auto_remove_when_empty(bool value) {
+        if (ptr_) tc_display_set_auto_remove_when_empty(ptr_, value);
+    }
+
     tc_render_surface* surface() const {
         return ptr_ ? tc_display_get_surface(ptr_) : nullptr;
     }

@@ -80,6 +80,11 @@ void bind_tc_display(nb::module_& m) {
             &TcDisplay::set_enabled,
             "If True, display is rendered. If False, display is skipped")
 
+        .def_prop_rw("auto_remove_when_empty",
+            &TcDisplay::auto_remove_when_empty,
+            &TcDisplay::set_auto_remove_when_empty,
+            "If True, display is auto-removed when last viewport is removed")
+
         .def_prop_ro("surface_ptr", [](TcDisplay& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self.surface());
         }, "Raw pointer to tc_render_surface")

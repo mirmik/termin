@@ -105,28 +105,24 @@ class LayersDialog(QDialog):
 
     def _load_from_scene(self) -> None:
         """Загружает текущие имена из сцены."""
+        layer_names = self._scene.layer_names
         for i, edit in enumerate(self._layer_edits):
-            name = self._scene.layer_names.get(i, "")
+            name = layer_names.get(i, "")
             edit.setText(name)
 
+        flag_names = self._scene.flag_names
         for i, edit in enumerate(self._flag_edits):
-            name = self._scene.flag_names.get(i, "")
+            name = flag_names.get(i, "")
             edit.setText(name)
 
     def _save_and_accept(self) -> None:
         """Сохраняет имена в сцену и закрывает диалог."""
-        # Clear and rebuild layer names
-        self._scene.layer_names.clear()
         for i, edit in enumerate(self._layer_edits):
             name = edit.text().strip()
-            if name:
-                self._scene.layer_names[i] = name
+            self._scene.set_layer_name(i, name)
 
-        # Clear and rebuild flag names
-        self._scene.flag_names.clear()
         for i, edit in enumerate(self._flag_edits):
             name = edit.text().strip()
-            if name:
-                self._scene.flag_names[i] = name
+            self._scene.set_flag_name(i, name)
 
         self.accept()

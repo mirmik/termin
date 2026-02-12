@@ -14,6 +14,8 @@
 
 #include "../../cpp/termin/inspect/tc_kind_cpp.hpp"
 
+struct tc_component;  // Forward declaration
+
 namespace tc {
 
 // ============================================================================
@@ -50,8 +52,10 @@ struct InspectFieldInfo {
     bool is_serializable = true;
     bool is_inspectable = true;
     std::vector<EnumChoice> choices;
-    void (*cpp_action)(void*) = nullptr;
-    void* py_action = nullptr;  // Opaque pointer for Python action (nb::object*)
+    // Unified action callback — always expects tc_component*.
+    // For C++ buttons: two-level callback wraps tc_component* → CxxComponent* → C*.
+    // For Python buttons: wraps tc_component* → tc->body (PyObject*) → callable.
+    std::function<void(tc_component*)> action;
 
     // Unified getter/setter via tc_value
     std::function<tc_value(void*)> getter;
@@ -321,10 +325,8 @@ public:
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
-    using ButtonActionFn = void (*)(void* component);
-
-    void add_button_cpp(const std::string& type_name, const std::string& path,
-                        const std::string& label, ButtonActionFn action_fn) {
+    void add_button(const std::string& type_name, const std::string& path,
+                    const std::string& label, std::function<void(tc_component*)> action_fn) {
         InspectFieldInfo info;
         info.type_name = type_name;
         info.path = path;
@@ -332,7 +334,7 @@ public:
         info.kind = "button";
         info.is_serializable = false;
         info.is_inspectable = true;
-        info.cpp_action = action_fn;
+        info.action = std::move(action_fn);
 
         _fields[type_name].push_back(std::move(info));
     }
@@ -435,12 +437,10 @@ public:
         f->setter(obj, value, scene);
     }
 
-    void action_field(void* obj, const std::string& type_name, const std::string& field_path) {
+    void action_field(tc_component* tc, const std::string& type_name, const std::string& field_path) {
         const InspectFieldInfo* f = find_field(type_name, field_path);
-        if (!f) return;
-        if (f->cpp_action) {
-            f->cpp_action(obj);
-        }
+        if (!f || !f->action) return;
+        f->action(tc);
     }
 
     // ========================================================================
@@ -589,27 +589,14 @@ struct SerializableFieldRegistrar {
     }
 };
 
-using ButtonActionFn = void (*)(void* component);
-
-template<typename C>
 struct InspectButtonRegistrar {
-    template<typename Method>
     InspectButtonRegistrar(
         const char* type_name,
         const char* path,
         const char* label,
-        Method method
+        std::function<void(tc_component*)> action_fn
     ) {
-        static Method stored_method = method;
-
-        ButtonActionFn action_fn = [](void* component) {
-            C* ptr = static_cast<C*>(component);
-            if (ptr) {
-                (ptr->*stored_method)();
-            }
-        };
-
-        InspectRegistry::instance().add_button_cpp(type_name, path, label, action_fn);
+        InspectRegistry::instance().add_button(type_name, path, label, std::move(action_fn));
     }
 };
 
@@ -642,5 +629,9 @@ struct InspectButtonRegistrar {
         _inspect_reg_##cls##_##field{&cls::field, #cls, #field, label, kind, {__VA_ARGS__}};
 
 #define INSPECT_BUTTON(cls, name, label, method) \
-    inline static ::tc::InspectButtonRegistrar<cls> \
-        _inspect_btn_##cls##_##name{#cls, #name, label, method};
+    inline static ::tc::InspectButtonRegistrar \
+        _inspect_btn_##cls##_##name{#cls, #name, label, \
+            [](tc_component* tc) { \
+                auto* self = static_cast<cls*>(CxxComponent::from_tc(tc)); \
+                if (self) (self->*method)(); \
+            }};

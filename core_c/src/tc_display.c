@@ -37,6 +37,7 @@ tc_display* tc_display_new(const char* name, tc_render_surface* surface) {
     display->uuid = NULL;
     display->editor_only = false;
     display->enabled = true;
+    display->auto_remove_when_empty = false;
     display->surface = surface;
     display->first_viewport = TC_VIEWPORT_HANDLE_INVALID;
     display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
@@ -107,6 +108,14 @@ void tc_display_set_enabled(tc_display* display, bool enabled) {
 
 bool tc_display_get_enabled(const tc_display* display) {
     return display ? display->enabled : false;
+}
+
+void tc_display_set_auto_remove_when_empty(tc_display* display, bool value) {
+    if (display) display->auto_remove_when_empty = value;
+}
+
+bool tc_display_get_auto_remove_when_empty(const tc_display* display) {
+    return display ? display->auto_remove_when_empty : false;
 }
 
 void tc_display_set_surface(tc_display* display, tc_render_surface* surface) {

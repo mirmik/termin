@@ -5,6 +5,10 @@
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
+
+extern "C" {
+#include "core/tc_component.h"
+}
 #include "render/frame_pass.hpp"
 #include "inspect/tc_kind.hpp"
 #include "inspect_bindings.hpp"
@@ -182,24 +186,16 @@ void bind_inspect(nb::module_& m) {
         .def_ro("is_inspectable", &InspectFieldInfo::is_inspectable)
         .def_ro("choices", &InspectFieldInfo::choices)
         .def_prop_ro("action", [](InspectFieldInfo& self) -> nb::object {
-            // If we have a Python action (stored as void* -> nb::object*), return it
-            if (self.py_action != nullptr) {
-                nb::object* py_obj = static_cast<nb::object*>(self.py_action);
-                if (py_obj->ptr() != nullptr && !py_obj->is_none()) {
-                    return *py_obj;
+            if (!self.action) return nb::none();
+            // Wrap unified action: extract tc_component* from TcComponentRef, call action
+            auto action_fn = self.action;
+            return nb::cpp_function([action_fn](nb::object obj) {
+                uintptr_t c_ptr = nb::cast<uintptr_t>(obj.attr("tc_component_ptr"));
+                tc_component* tc = reinterpret_cast<tc_component*>(c_ptr);
+                if (tc) {
+                    action_fn(tc);
                 }
-            }
-            // If we have a C++ action callback, wrap it as nb::cpp_function
-            if (self.cpp_action) {
-                auto cpp_fn = self.cpp_action;
-                return nb::cpp_function([cpp_fn](nb::object obj) {
-                    void* ptr = static_cast<void*>(nb::cast<Component*>(obj));
-                    if (ptr) {
-                        cpp_fn(ptr);
-                    }
-                });
-            }
-            return nb::none();
+            });
         });
 
     // InspectRegistry singleton

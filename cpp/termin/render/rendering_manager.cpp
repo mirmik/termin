@@ -15,6 +15,9 @@ extern "C" {
 #include "tc_viewport_config.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_rendering_manager.h"
+#include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
+#include "inspect/tc_inspect.h"
 }
 
 #include <algorithm>
@@ -108,6 +111,98 @@ void RenderingManager::set_pipeline_factory(PipelineFactory factory) {
     pipeline_factory_ = std::move(factory);
 }
 
+RenderPipeline* RenderingManager::create_pipeline(const std::string& name) {
+    if (name == "(Default)" || name == "Default" || name.empty()) {
+        return make_default_pipeline();
+    }
+    if (pipeline_factory_) {
+        return pipeline_factory_(name);
+    }
+    return nullptr;
+}
+
+// Helper: create pass by type name, set pass_name and string fields via inspect
+static tc_pass* create_and_configure_pass(
+    const char* type_name,
+    const char* pass_name,
+    std::initializer_list<std::pair<const char*, const char*>> fields
+) {
+    tc_pass* pass = tc_pass_registry_create(type_name);
+    if (!pass) {
+        tc_log(TC_LOG_WARN, "[make_default_pipeline] Failed to create pass '%s'", type_name);
+        return nullptr;
+    }
+    tc_pass_set_name(pass, pass_name);
+    for (auto& [field, value] : fields) {
+        tc_value v = tc_value_string(value);
+        tc_pass_inspect_set(pass, field, v, TC_SCENE_HANDLE_INVALID);
+        tc_value_free(&v);
+    }
+    return pass;
+}
+
+RenderPipeline* RenderingManager::make_default_pipeline() {
+    auto* pipeline = new RenderPipeline("Default");
+    tc_pipeline_handle ph = pipeline->handle();
+
+    // 1. ShadowPass
+    if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {
+            {"output_res", "shadow_maps"}
+        })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    // 2. SkyBoxPass
+    if (tc_pass* p = create_and_configure_pass("SkyBoxPass", "Skybox", {
+            {"input_res", "empty"},
+            {"output_res", "skybox"}
+        })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    // 3. ColorPass (opaque)
+    if (tc_pass* p = create_and_configure_pass("ColorPass", "Color", {
+            {"input_res", "skybox"},
+            {"output_res", "color_opaque"},
+            {"shadow_res", "shadow_maps"},
+            {"phase_mark", "opaque"}
+        })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    // 4. ColorPass (transparent)
+    if (tc_pass* p = create_and_configure_pass("ColorPass", "Transparent", {
+            {"input_res", "color_opaque"},
+            {"output_res", "color"},
+            {"shadow_res", ""},
+            {"phase_mark", "transparent"},
+            {"sort_mode", "far_to_near"}
+        })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    // 5. UIWidgetPass
+    if (tc_pass* p = create_and_configure_pass("UIWidgetPass", "UIWidgets", {
+            {"input_res", "color"},
+            {"output_res", "color+widgets"}
+        })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    // 7. PresentToScreenPass
+    if (tc_pass* p = create_and_configure_pass("PresentToScreenPass", "Present", {
+            {"input_res", "color+widgets"}
+        })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    return pipeline;
+}
+
+void RenderingManager::set_display_removed_callback(DisplayRemovedCallback callback) {
+    display_removed_callback_ = std::move(callback);
+}
+
 // ============================================================================
 // Display Management
 // ============================================================================
@@ -136,6 +231,20 @@ void RenderingManager::remove_display(tc_display* display) {
     }
 
     displays_.erase(it);
+
+    // Notify callback (e.g., editor cleanup of Qt tabs)
+    if (display_removed_callback_) {
+        display_removed_callback_(display);
+    }
+}
+
+bool RenderingManager::try_auto_remove_display(tc_display* display) {
+    if (!display) return false;
+    if (!tc_display_get_auto_remove_when_empty(display)) return false;
+    if (tc_display_get_viewport_count(display) > 0) return false;
+
+    remove_display(display);
+    return true;
 }
 
 tc_display* RenderingManager::get_display_by_name(const std::string& name) const {
@@ -970,6 +1079,7 @@ void RenderingManager::shutdown() {
     make_current_callback_ = nullptr;
     display_factory_ = nullptr;
     pipeline_factory_ = nullptr;
+    display_removed_callback_ = nullptr;
 
     // Release owned render engine
     owned_render_engine_.reset();

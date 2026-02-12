@@ -902,10 +902,17 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
 
     def _on_component_field_changed(self, component, field_key: str, new_value):
-        """Handle component field changes, particularly ViewportHintComponent."""
+        """Handle component field changes for ViewportHintComponent and CameraViewportComponent."""
         from termin.visualization.core.viewport_hint import ViewportHintComponent
+        from termin.entity import TcComponentRef
 
-        if not isinstance(component, ViewportHintComponent):
+        is_viewport_hint = isinstance(component, ViewportHintComponent)
+        is_camera_viewport = (
+            isinstance(component, TcComponentRef)
+            and component.type_name == "CameraViewportComponent"
+        )
+
+        if not is_viewport_hint and not is_camera_viewport:
             return
 
         if field_key != "pipeline_name":
@@ -938,7 +945,7 @@ class EditorWindow(QMainWindow):
             from termin.editor.editor_pipeline import make_editor_pipeline
             return make_editor_pipeline()
 
-        if not pipeline_name:
+        if not pipeline_name or pipeline_name == "(Default)":
             pipeline_name = "Default"
 
         # Lookup pipeline from ResourceManager

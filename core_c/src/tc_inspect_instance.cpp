@@ -80,7 +80,10 @@ static void cpp_set(void* obj, const char* type_name, const char* path, tc_value
 
 static void cpp_action(void* obj, const char* type_name, const char* path, void* ctx) {
     (void)ctx;
-    InspectRegistry::instance().action_field(obj, type_name, path);
+    // obj is CxxComponent* (from get_inspect_object). Get tc_component* from it.
+    termin::CxxComponent* cxx = static_cast<termin::CxxComponent*>(obj);
+    tc_component* tc = cxx ? cxx->tc_component_ptr() : nullptr;
+    InspectRegistry::instance().action_field(tc, type_name, path);
 }
 
 static bool g_cpp_vtable_initialized = false;

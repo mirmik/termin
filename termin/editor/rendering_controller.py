@@ -123,6 +123,9 @@ class RenderingController:
         # Register pipeline factory with RenderingManager
         self._manager.set_pipeline_factory(self._create_pipeline_for_name)
 
+        # Register display removed callback for Qt tab cleanup
+        self._manager.set_display_removed_callback(self._on_display_removed)
+
         # Create dedicated GL context for rendering, shared by all displays
         from termin.visualization.render.offscreen_context import OffscreenContext
         self._offscreen_context: OffscreenContext = OffscreenContext()
@@ -184,10 +187,10 @@ class RenderingController:
         """
         Factory callback for RenderingManager.
 
-        Creates a pipeline by special name (e.g., "(Editor)").
+        Creates a pipeline by name (e.g., "(Editor)", "(Default)", "Default", etc.).
 
         Args:
-            name: Pipeline special name.
+            name: Pipeline name.
 
         Returns:
             Created RenderPipeline or None if unknown name.
@@ -195,6 +198,20 @@ class RenderingController:
         if name == "(Editor)":
             if self._make_editor_pipeline is not None:
                 return self._make_editor_pipeline()
+            return None
+
+        from termin.assets.resources import ResourceManager
+        rm = ResourceManager.instance()
+
+        # Resolve "(Default)" to "Default"
+        lookup_name = "Default" if (not name or name == "(Default)") else name
+        pipeline = rm.get_pipeline(lookup_name)
+        if pipeline is not None:
+            return pipeline
+
+        # Fallback to Default
+        if lookup_name != "Default":
+            return rm.get_pipeline("Default")
         return None
 
     def _create_display_for_name(self, name: str) -> Optional["Display"]:
@@ -252,6 +269,7 @@ class RenderingController:
         from termin.visualization.core.display import Display
 
         display = Display(surface, name=name)
+        display.auto_remove_when_empty = True
 
         # Store mapping (include qwindow to prevent GC)
         display_id = display.tc_display_ptr
@@ -526,6 +544,35 @@ class RenderingController:
         self._viewport_list.add_display(display, self._manager.get_display_name(display))
         self._update_center_tabs()
 
+    def _on_display_removed(self, display: "Display") -> None:
+        """
+        Callback from RenderingManager when a display is removed (e.g., auto-remove).
+
+        Cleans up Qt tabs, input managers, viewport list, and selection state.
+
+        Args:
+            display: Display that was just removed from RenderingManager.
+        """
+        display_id = display.tc_display_ptr
+
+        # Remove from viewport list widget
+        self._viewport_list.remove_display(display)
+
+        # Clean up tab resources
+        if display_id in self._display_tabs:
+            tab_container, surface, _qwindow = self._display_tabs.pop(display_id)
+
+        # Clean up input manager
+        if display_id in self._display_input_managers:
+            del self._display_input_managers[display_id]
+
+        # Clear selection if it was on this display
+        if self._selected_display is not None and self._selected_display.tc_display_ptr == display_id:
+            self._selected_display = None
+            self._selected_viewport = None
+
+        self._update_center_tabs()
+
     def remove_display(self, display: "Display") -> None:
         """
         Remove a display from management.
@@ -538,17 +585,8 @@ class RenderingController:
 
         display_id = display.tc_display_ptr
 
+        # remove_display will trigger _on_display_removed callback
         self._manager.remove_display(display)
-        self._viewport_list.remove_display(display)
-
-        # Clean up tab resources
-        if display_id in self._display_tabs:
-            tab_container, surface, _qwindow = self._display_tabs.pop(display_id)
-            # Surface cleanup is handled by C++ destructor
-
-        if self._selected_display is display:
-            self._selected_display = None
-            self._selected_viewport = None
 
         self._update_center_tabs()
 

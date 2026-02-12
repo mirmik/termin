@@ -302,6 +302,28 @@ void bind_tc_scene(nb::module_& m) {
         .def("set_flag_name", &TcSceneRef::set_flag_name, nb::arg("index"), nb::arg("name"),
              "Set flag name by index (0-63), empty string removes")
 
+        // Layer and flag names as dict properties (read-only snapshots)
+        .def_prop_ro("layer_names", [](TcSceneRef& self) -> nb::dict {
+            nb::dict result;
+            for (int i = 0; i < 64; i++) {
+                std::string name = self.get_layer_name(i);
+                if (!name.empty()) {
+                    result[nb::int_(i)] = nb::str(name.c_str(), name.size());
+                }
+            }
+            return result;
+        }, "Dict of {index: name} for all named layers")
+        .def_prop_ro("flag_names", [](TcSceneRef& self) -> nb::dict {
+            nb::dict result;
+            for (int i = 0; i < 64; i++) {
+                std::string name = self.get_flag_name(i);
+                if (!name.empty()) {
+                    result[nb::int_(i)] = nb::str(name.c_str(), name.size());
+                }
+            }
+            return result;
+        }, "Dict of {index: name} for all named flags")
+
         // Background color (RGBA)
         .def("get_background_color", &TcSceneRef::get_background_color,
              "Get background color as (r, g, b, a) tuple")
@@ -563,6 +585,14 @@ void bind_tc_scene(nb::module_& m) {
         })
         .def("notify_scene_active", [](TcSceneRef& self) {
             tc_scene_notify_scene_active(self._h);
+        })
+
+        .def("notify_render_attach", [](TcSceneRef& self) {
+            tc_scene_notify_render_attach(self._h);
+        })
+
+        .def("notify_render_detach", [](TcSceneRef& self) {
+            tc_scene_notify_render_detach(self._h);
         })
 
         // Input dispatch

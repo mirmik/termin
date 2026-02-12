@@ -22,6 +22,7 @@ typedef struct tc_display {
     char* uuid;
     bool editor_only;
     bool enabled;
+    bool auto_remove_when_empty;
 
     // Underlying render surface
     tc_render_surface* surface;
@@ -54,6 +55,9 @@ TC_API bool tc_display_get_editor_only(const tc_display* display);
 
 TC_API void tc_display_set_enabled(tc_display* display, bool enabled);
 TC_API bool tc_display_get_enabled(const tc_display* display);
+
+TC_API void tc_display_set_auto_remove_when_empty(tc_display* display, bool value);
+TC_API bool tc_display_get_auto_remove_when_empty(const tc_display* display);
 
 TC_API void tc_display_set_surface(tc_display* display, tc_render_surface* surface);
 TC_API tc_render_surface* tc_display_get_surface(const tc_display* display);

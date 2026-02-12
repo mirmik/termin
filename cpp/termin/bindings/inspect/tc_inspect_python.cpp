@@ -4,6 +4,11 @@
 #include "tc_inspect_python.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"
+
+extern "C" {
+#include "core/tc_component.h"
+}
+
 #include <iostream>
 
 namespace tc {
@@ -18,7 +23,16 @@ void InspectRegistryPythonExt::add_button(InspectRegistry& reg, const std::strin
     info.kind = "button";
     info.is_serializable = false;
     info.is_inspectable = true;
-    info.py_action = new nb::object(std::move(action));
+
+    // Wrap Python callable into unified action: tc_component* → body (PyObject*) → callable
+    nb::object py_action = std::move(action);
+    py_action.inc_ref();  // prevent GC
+    info.action = [py_action](tc_component* tc) {
+        if (!tc || !tc->body) return;
+        nb::object py_obj = nb::borrow<nb::object>(
+            nb::handle(static_cast<PyObject*>(tc->body)));
+        py_action(py_obj);
+    };
 
     reg._fields[type_name].push_back(std::move(info));
 }
@@ -94,9 +108,16 @@ void InspectRegistryPythonExt::register_python_fields(InspectRegistry& reg, cons
             }
         }
 
-        // Action for button
+        // Action for button — wrap Python callable into unified action
         if (nb::hasattr(field_obj, "action") && !field_obj.attr("action").is_none()) {
-            info.py_action = new nb::object(field_obj.attr("action"));
+            nb::object py_action = field_obj.attr("action");
+            py_action.inc_ref();  // prevent GC
+            info.action = [py_action](tc_component* tc) {
+                if (!tc || !tc->body) return;
+                nb::object py_obj = nb::borrow<nb::object>(
+                    nb::handle(static_cast<PyObject*>(tc->body)));
+                py_action(py_obj);
+            };
         }
 
         // Custom getter/setter from Python InspectField

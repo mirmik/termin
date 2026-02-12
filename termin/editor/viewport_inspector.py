@@ -303,18 +303,23 @@ class ViewportInspector(QWidget):
             self._pipeline_combo.setEnabled(True)
 
     def _update_hint_state_for_camera(self, camera: "CameraComponent") -> None:
-        """Update hint label visibility based on camera's ViewportHintComponent."""
+        """Update hint label visibility based on ViewportHintComponent or CameraViewportComponent."""
         from termin.visualization.core.viewport_hint import ViewportHintComponent
 
-        has_hint = False
+        controlled_by = None
         camera_name = ""
         if camera is not None and camera.entity is not None:
-            hint = camera.entity.get_component(ViewportHintComponent)
-            has_hint = hint is not None
             camera_name = camera.entity.name or "unnamed"
+            hint = camera.entity.get_component(ViewportHintComponent)
+            if hint is not None:
+                controlled_by = "ViewportHint"
+            else:
+                cvp = camera.entity.get_tc_component("CameraViewportComponent")
+                if cvp and cvp.valid:
+                    controlled_by = "CameraViewportComponent"
 
-        if has_hint:
-            self._hint_label.setText(f"Controlled by ViewportHint on {camera_name}")
+        if controlled_by:
+            self._hint_label.setText(f"Controlled by {controlled_by} on {camera_name}")
             self._hint_label.show()
             self._pipeline_combo.setEnabled(False)
         else:

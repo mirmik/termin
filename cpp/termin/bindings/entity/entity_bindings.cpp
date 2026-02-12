@@ -291,6 +291,9 @@ void bind_entity_class(nb::module_& m) {
         .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
         .def_prop_ro("is_drawable", &TcComponentRef::is_drawable)
         .def_prop_ro("is_input_handler", &TcComponentRef::is_input_handler)
+        .def_prop_ro("tc_component_ptr", [](TcComponentRef& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(self._c);
+        })
         .def("on_destroy", &TcComponentRef::on_destroy, "Call on_destroy lifecycle method")
         .def_prop_ro("kind", &TcComponentRef::kind)
         .def_prop_ro("entity", &TcComponentRef::entity)

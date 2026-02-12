@@ -276,6 +276,7 @@ set(RENDER_LIB_SOURCES
     termin/render/opengl/opengl_framebuffer.cpp
     termin/render/glad/src/glad.c
     termin/editor/frame_graph_debugger_core.cpp
+    termin/camera/camera_viewport_component.cpp
 )
 if(BUILD_CSHARP_BINDINGS)
     add_library(render_lib STATIC ${RENDER_LIB_SOURCES})

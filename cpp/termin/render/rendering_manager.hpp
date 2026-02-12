@@ -41,6 +41,7 @@ class CameraComponent;
 using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<RenderPipeline*(const std::string& name)>;
 using MakeCurrentCallback = std::function<void()>;
+using DisplayRemovedCallback = std::function<void(tc_display*)>;
 
 // RenderingManager - manages displays and rendering
 //
@@ -85,6 +86,15 @@ public:
     // Set factory for creating pipelines by special name (e.g., "(Editor)")
     void set_pipeline_factory(PipelineFactory factory);
 
+    // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
+    RenderPipeline* create_pipeline(const std::string& name);
+
+    // Create default render pipeline (Shadow, Skybox, Color, Transparent, PostFX, UIWidgets, Present)
+    static RenderPipeline* make_default_pipeline();
+
+    // Set callback called when a display is removed (for cleanup in editor)
+    void set_display_removed_callback(DisplayRemovedCallback callback);
+
     // ========================================================================
     // Display Management
     // ========================================================================
@@ -103,6 +113,10 @@ public:
 
     // Get existing display or create via factory
     tc_display* get_or_create_display(const std::string& name);
+
+    // Check if display should be auto-removed (empty + auto_remove_when_empty flag)
+    // Returns true if display was removed.
+    bool try_auto_remove_display(tc_display* display);
 
     // ========================================================================
     // Viewport State Management
@@ -259,6 +273,9 @@ private:
 
     // Factory for creating pipelines by special name
     PipelineFactory pipeline_factory_;
+
+    // Callback when a display is removed
+    DisplayRemovedCallback display_removed_callback_;
 
     // Attached scenes (for scene pipeline execution)
     std::vector<tc_scene_handle> attached_scenes_;

@@ -135,6 +135,25 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("factory").none(),
            "Set factory for creating pipelines by special name")
 
+        .def("set_display_removed_callback", [](RenderingManager& self, nb::callable callback) {
+            if (callback.is_none()) {
+                self.set_display_removed_callback(nullptr);
+            } else {
+                nb::callable stored = callback;
+                self.set_display_removed_callback([stored](tc_display* display) {
+                    nb::gil_scoped_acquire gil;
+                    // Wrap in non-owning TcDisplay for Python
+                    stored(TcDisplay::from_ptr(display, false));
+                });
+            }
+        }, nb::arg("callback").none(),
+           "Set callback called when a display is removed (for editor cleanup)")
+
+        .def("try_auto_remove_display", [](RenderingManager& self, TcDisplay& display) -> bool {
+            return self.try_auto_remove_display(display.ptr());
+        }, nb::arg("display"),
+           "Check if display should be auto-removed (empty + flag set). Returns true if removed.")
+
         // ================================================================
         // Display Management
         // ================================================================

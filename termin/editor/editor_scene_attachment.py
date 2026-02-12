@@ -165,6 +165,9 @@ class EditorSceneAttachment:
         # Notify components that scene is active
         scene.notify_scene_active()
 
+        # Attach scene to rendering (creates viewports from configs, notifies on_render_attach)
+        self._rendering_controller.attach_scene(scene)
+
         # Refresh viewport list
         self._rendering_controller._viewport_list.refresh()
 
