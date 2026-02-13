@@ -30,7 +30,7 @@ public:
 
 private:
     // Base position (entity position when component was added)
-    Vec3 _base_position = Vec3::zero();
+    // Vec3 _base_position = Vec3::zero();
 
 public:
     ActuatorComponent();

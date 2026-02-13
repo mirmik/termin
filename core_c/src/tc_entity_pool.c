@@ -662,6 +662,13 @@ size_t tc_entity_pool_capacity(const tc_entity_pool* pool) {
     return pool ? pool->capacity : 0;
 }
 
+tc_entity_id tc_entity_pool_id_at(const tc_entity_pool* pool, uint32_t index) {
+    if (!pool || index >= pool->capacity || !pool->alive[index]) {
+        return TC_ENTITY_ID_INVALID;
+    }
+    return (tc_entity_id){index, pool->generations[index]};
+}
+
 // ============================================================================
 // Data access
 // ============================================================================

@@ -31,7 +31,7 @@ public:
 
 private:
     // Base rotation (entity rotation when component was added)
-    Quat _base_rotation = Quat::identity();
+    // Quat _base_rotation = Quat::identity();
 
 public:
     RotatorComponent();

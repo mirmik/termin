@@ -91,6 +91,12 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_entity_pool_count")]
     public static extern nuint EntityPoolCount(IntPtr pool);
 
+    [DllImport(DLL, EntryPoint = "tc_entity_pool_capacity")]
+    public static extern nuint EntityPoolCapacity(IntPtr pool);
+
+    [DllImport(DLL, EntryPoint = "tc_entity_pool_id_at")]
+    public static extern TcEntityId EntityPoolIdAt(IntPtr pool, uint index);
+
     [DllImport(DLL, EntryPoint = "tc_entity_pool_name", CharSet = CharSet.Ansi)]
     public static extern IntPtr EntityPoolName(IntPtr pool, TcEntityId id);
 

@@ -164,24 +164,17 @@ public class EntityPool : IDisposable
 
     /// <summary>
     /// Get all entities as Entity wrappers.
+    /// Uses native iteration to correctly handle any generation value.
     /// </summary>
     public IEnumerable<Entity> GetAllEntities()
     {
-        // For now, iterate through possible indices. This is a simplified approach.
-        // A proper implementation would query the pool for valid entity IDs.
-        var count = (int)Count;
-        for (uint i = 0; i < count * 2 && count > 0; i++) // scan up to 2x count to find all
+        var capacity = (uint)TerminCore.EntityPoolCapacity(_handle);
+        for (uint i = 0; i < capacity; i++)
         {
-            var id = new TcEntityId { Index = i, Generation = 0 };
-            // Try different generations
-            for (uint gen = 0; gen < 4; gen++)
+            var id = TerminCore.EntityPoolIdAt(_handle, i);
+            if (id.IsValid)
             {
-                id.Generation = gen;
-                if (IsAlive(id))
-                {
-                    yield return new Entity(this, id);
-                    break;
-                }
+                yield return new Entity(this, id);
             }
         }
     }

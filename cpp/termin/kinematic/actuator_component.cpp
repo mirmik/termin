@@ -80,7 +80,7 @@ void ActuatorComponent::on_added() {
     // Store base position
     double xyz[3];
     ent.get_local_position(xyz);
-    _base_position = Vec3{xyz[0], xyz[1], xyz[2]};
+    // _base_position = Vec3{xyz[0], xyz[1], xyz[2]};
 }
 
 void ActuatorComponent::set_axis(double x, double y, double z) {
@@ -110,7 +110,8 @@ void ActuatorComponent::_apply_movement() {
     // Axis vector length serves as scale factor:
     // displacement = axis * coordinate (no normalization)
     Vec3 raw_axis{axis_x, axis_y, axis_z};
-    Vec3 new_position = _base_position + raw_axis * coordinate;
+    //Vec3 new_position = _base_position + raw_axis * coordinate;
+    Vec3 new_position = raw_axis * coordinate;  // Move relative to origin, not base position
 
     // Set position via Entity API
     double xyz[3] = {new_position.x, new_position.y, new_position.z};

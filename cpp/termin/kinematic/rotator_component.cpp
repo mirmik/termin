@@ -80,7 +80,7 @@ void RotatorComponent::on_added() {
     // Store base rotation
     double xyzw[4];
     ent.get_local_rotation(xyzw);
-    _base_rotation = Quat(xyzw[0], xyzw[1], xyzw[2], xyzw[3]);
+    // _base_rotation = Quat(xyzw[0], xyzw[1], xyzw[2], xyzw[3]);
 }
 
 void RotatorComponent::set_axis(double x, double y, double z) {
@@ -119,7 +119,7 @@ void RotatorComponent::_apply_rotation() {
     Quat rotation = Quat::from_axis_angle(dir, angle);
 
     // Apply: final = rotation * base
-    Quat final_rotation = rotation * _base_rotation;
+    Quat final_rotation = rotation; // * _base_rotation;
 
     // Set rotation via Entity API
     double xyzw[4] = {final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w};

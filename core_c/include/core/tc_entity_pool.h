@@ -119,6 +119,10 @@ static inline tc_entity_handle tc_entity_handle_make(tc_entity_pool_handle pool,
 TC_POOL_API size_t tc_entity_pool_count(const tc_entity_pool* pool);
 TC_POOL_API size_t tc_entity_pool_capacity(const tc_entity_pool* pool);
 
+// Returns the entity ID at the given slot index if alive, or INVALID if dead/out of range.
+// Use with tc_entity_pool_capacity() for complete iteration without generation guessing.
+TC_POOL_API tc_entity_id tc_entity_pool_id_at(const tc_entity_pool* pool, uint32_t index);
+
 // ============================================================================
 // Entity data access
 // ============================================================================
