@@ -49,6 +49,17 @@ tc_shader_handle Drawable::_cb_override_shader(tc_component* c, const char* phas
     return result.handle;
 }
 
+// Default model matrix: entity world transform
+Mat44f Drawable::get_model_matrix(const Entity& entity) const {
+    double m[16];
+    entity.transform().world_matrix(m);
+    Mat44f result;
+    for (int i = 0; i < 16; ++i) {
+        result.data[i] = static_cast<float>(m[i]);
+    }
+    return result;
+}
+
 // Static vtable instance
 const tc_drawable_vtable Drawable::cxx_drawable_vtable = {
     &Drawable::_cb_has_phase,

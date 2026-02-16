@@ -14,22 +14,6 @@ extern "C" {
 
 namespace termin {
 
-namespace {
-
-// Get model matrix from Entity as Mat44f
-// world_matrix outputs column-major, same as Mat44f
-Mat44f get_model_matrix(const Entity& entity) {
-    double m[16];
-    entity.transform().world_matrix(m);
-
-    Mat44f result;
-    for (int i = 0; i < 16; ++i) {
-        result.data[i] = static_cast<float>(m[i]);
-    }
-    return result;
-}
-
-} // anonymous namespace
 
 
 ShadowPass::ShadowPass(
@@ -324,7 +308,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             tc_shader_handle last_shader = tc_shader_handle_invalid();
 
             for (const auto& dc : cached_draw_calls_) {
-                Mat44f model = get_model_matrix(dc.entity);
+                Mat44f model = static_cast<Drawable*>(dc.component->drawable_ptr)->get_model_matrix(dc.entity);
                 context.model = model;
 
                 // Use final shader (override already applied during collect)

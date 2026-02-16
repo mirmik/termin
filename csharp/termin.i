@@ -535,6 +535,10 @@ public:
 %ignore termin::MeshRenderer::get_override_data;
 %ignore termin::MeshRenderer::set_override_data;
 %ignore termin::MeshRenderer::try_create_override_material;
+%ignore termin::MeshRenderer::mesh_offset_position;
+%ignore termin::MeshRenderer::mesh_offset_euler;
+%ignore termin::MeshRenderer::mesh_offset_scale;
+%ignore termin::MeshRenderer::get_model_matrix;
 
 %ignore termin::CameraComponent::viewports_;
 %ignore termin::CameraComponent::set_aspect;  // Conflicts with property setter
@@ -805,6 +809,7 @@ public:
 class MeshRenderer {
 public:
     bool cast_shadow;
+    bool mesh_offset_enabled;
 
     MeshRenderer();
     virtual ~MeshRenderer();

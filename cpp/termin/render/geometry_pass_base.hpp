@@ -172,18 +172,6 @@ protected:
         return _shader;
     }
 
-    // world_matrix outputs column-major, same as Mat44f
-    static Mat44f get_model_matrix(const Entity& entity) {
-        double m[16];
-        entity.transform().world_matrix(m);
-
-        Mat44f result;
-        for (int i = 0; i < 16; ++i) {
-            result.data[i] = static_cast<float>(m[i]);
-        }
-        return result;
-    }
-
     void bind_and_clear(
         GraphicsBackend* graphics,
         FramebufferHandle* fb,
@@ -344,7 +332,7 @@ protected:
         std::set<std::string> seen_entities;
 
         for (const auto& dc : cached_draw_calls_) {
-            Mat44f model = get_model_matrix(dc.entity);
+            Mat44f model = static_cast<Drawable*>(dc.component->drawable_ptr)->get_model_matrix(dc.entity);
             context.model = model;
 
             const char* name = dc.entity.name();

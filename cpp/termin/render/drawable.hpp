@@ -12,6 +12,7 @@ extern "C" {
 #include "termin/render/render_export.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/tc_shader_handle.hpp"
+#include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 #include "core/tc_component.h"
@@ -108,6 +109,12 @@ public:
     ) {
         return original_shader;  // Default: no override
     }
+
+    /**
+     * Get model matrix for this drawable.
+     * Default: entity world matrix. Override to apply mesh offset etc.
+     */
+    virtual Mat44f get_model_matrix(const Entity& entity) const;
 
     /**
      * Check if this drawable participates in a given phase.

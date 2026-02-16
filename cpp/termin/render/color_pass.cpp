@@ -48,19 +48,6 @@ inline RenderState convert_render_state(const tc_render_state& s) {
     return rs;
 }
 
-// Get model matrix from Entity as Mat44f.
-// GeneralTransform3::world_matrix outputs column-major double[16], same as Mat44f.
-Mat44f get_model_matrix(const Entity& entity) {
-    double m[16];
-    entity.transform().world_matrix(m);
-
-    Mat44f result;
-    for (int i = 0; i < 16; ++i) {
-        result.data[i] = static_cast<float>(m[i]);
-    }
-    return result;
-}
-
 // Get global position from Entity.
 inline Vec3 get_global_position(const Entity& entity) {
     return entity.transform().global_pose().lin;
@@ -500,7 +487,7 @@ void ColorPass::execute_with_data(
         entity_names.push_back(ename ? ename : "");
 
         // Get model matrix
-        Mat44f model = get_model_matrix(dc.entity);
+        Mat44f model = static_cast<Drawable*>(dc.component->drawable_ptr)->get_model_matrix(dc.entity);
         context.model = model;
 
         if (detailed) {

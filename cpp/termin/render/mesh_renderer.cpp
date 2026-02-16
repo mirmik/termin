@@ -229,6 +229,24 @@ std::set<std::string> MeshRenderer::get_phase_marks() const {
     return marks;
 }
 
+Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
+    Mat44f model = Drawable::get_model_matrix(entity);
+
+    if (!mesh_offset_enabled) return model;
+
+    // Euler (degrees) -> Quat
+    constexpr double deg2rad = 3.14159265358979323846 / 180.0;
+    Quat rx = Quat::from_axis_angle(Vec3(1,0,0), mesh_offset_euler.x * deg2rad);
+    Quat ry = Quat::from_axis_angle(Vec3(0,1,0), mesh_offset_euler.y * deg2rad);
+    Quat rz = Quat::from_axis_angle(Vec3(0,0,1), mesh_offset_euler.z * deg2rad);
+    Quat rotation = rz * ry * rx;
+
+    Vec3 pos(mesh_offset_position.x, mesh_offset_position.y, mesh_offset_position.z);
+    Vec3 scl(mesh_offset_scale.x, mesh_offset_scale.y, mesh_offset_scale.z);
+    Mat44f offset = Mat44f::compose(pos, rotation, scl);
+    return model * offset;
+}
+
 void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     tc_mesh* m = mesh.get();
     if (!m) {

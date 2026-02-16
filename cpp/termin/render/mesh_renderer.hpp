@@ -10,6 +10,8 @@
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/geom/mat44.hpp"
+#include "termin/geom/quat.hpp"
 #include <memory>
 
 extern "C" {
@@ -40,11 +42,21 @@ public:
     TcMaterial _overridden_material;
     tc_value _pending_override_data = {TC_VALUE_NIL, {}};
 
+    // Mesh offset (optional per-instance transform in local space)
+    bool mesh_offset_enabled = false;
+    tc_vec3 mesh_offset_position = {0, 0, 0};
+    tc_vec3 mesh_offset_euler = {0, 0, 0};     // Euler degrees (XYZ)
+    tc_vec3 mesh_offset_scale = {1.0, 1.0, 1.0};
+
     // INSPECT_FIELD registrations
     INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
     INSPECT_FIELD(MeshRenderer, material, "Material", "tc_material")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
     INSPECT_FIELD(MeshRenderer, _override_material, "Override Material", "bool")
+    INSPECT_FIELD(MeshRenderer, mesh_offset_enabled,  "Mesh Offset",     "bool")
+    INSPECT_FIELD(MeshRenderer, mesh_offset_position, "Offset Position", "vec3")
+    INSPECT_FIELD(MeshRenderer, mesh_offset_euler,    "Offset Rotation", "vec3")
+    INSPECT_FIELD(MeshRenderer, mesh_offset_scale,    "Offset Scale",    "vec3")
 
     MeshRenderer();
     virtual ~MeshRenderer();
@@ -134,6 +146,11 @@ public:
      * Shader is already bound by the pass.
      */
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
+
+    /**
+     * Get model matrix with optional mesh offset applied.
+     */
+    Mat44f get_model_matrix(const Entity& entity) const override;
 
     /**
      * Get material phases for given phase mark.
