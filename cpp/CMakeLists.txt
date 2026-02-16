@@ -145,6 +145,7 @@ set(ENTITY_LIB_SOURCES
     termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
     termin/colliders/collider_component.cpp
+    termin/kinematic/kinematic_unit_component.cpp
     termin/kinematic/rotator_component.cpp
     termin/kinematic/actuator_component.cpp
     termin/lighting/light_component.cpp

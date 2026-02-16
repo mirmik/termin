@@ -27,6 +27,9 @@ public:
     // C++ component registration - registers directly in C registry
     void register_native(const std::string& name, tc_component_factory factory, void* userdata, const char* parent = nullptr);
 
+    // Register abstract component (no factory, can't be instantiated)
+    void register_abstract(const std::string& name, const char* parent = nullptr);
+
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
@@ -138,6 +141,21 @@ struct ComponentRegistrar {
 //   REGISTER_COMPONENT(ChildComponent, ParentComponent);
 #define REGISTER_COMPONENT(ClassName, Parent) \
     static ::termin::ComponentRegistrar<ClassName> \
+        _component_registrar_##ClassName(#ClassName, #Parent)
+
+// Registration for abstract component types (no factory, can't be instantiated).
+// Used for base classes that define shared inspect fields for subclasses.
+struct AbstractComponentRegistrar {
+    AbstractComponentRegistrar(const char* name, const char* parent = nullptr) {
+        ComponentRegistry::instance().register_abstract(name, parent);
+        if (parent) {
+            tc::InspectRegistry::instance().set_type_parent(name, parent);
+        }
+    }
+};
+
+#define REGISTER_ABSTRACT_COMPONENT(ClassName, Parent) \
+    static ::termin::AbstractComponentRegistrar \
         _component_registrar_##ClassName(#ClassName, #Parent)
 
 } // namespace termin

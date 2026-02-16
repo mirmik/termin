@@ -411,6 +411,13 @@ TC_API void tc_component_registry_register_with_parent(
     const char* parent_type_name
 );
 
+// Register abstract component type (no factory, can't be instantiated)
+TC_API void tc_component_registry_register_abstract(
+    const char* type_name,
+    tc_component_kind kind,
+    const char* parent_type_name
+);
+
 TC_API void tc_component_registry_unregister(const char* type_name);
 TC_API bool tc_component_registry_has(const char* type_name);
 TC_API tc_component* tc_component_registry_create(const char* type_name);

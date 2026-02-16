@@ -540,17 +540,16 @@ public:
 %ignore termin::MeshRenderer::mesh_offset_scale;
 %ignore termin::MeshRenderer::get_model_matrix;
 
-// ActuatorComponent - base fields + capture_base hidden from SWIG
-%ignore termin::ActuatorComponent::base_position;
-%ignore termin::ActuatorComponent::base_rotation;
-%ignore termin::ActuatorComponent::base_scale;
-%ignore termin::ActuatorComponent::capture_base;
-
-// RotatorComponent - base fields + capture_base hidden from SWIG
-%ignore termin::RotatorComponent::base_position;
-%ignore termin::RotatorComponent::base_rotation;
-%ignore termin::RotatorComponent::base_scale;
-%ignore termin::RotatorComponent::capture_base;
+// KinematicUnitComponent - base fields hidden from SWIG (accessed via inspect system)
+%ignore termin::KinematicUnitComponent::base_position;
+%ignore termin::KinematicUnitComponent::base_rotation;
+%ignore termin::KinematicUnitComponent::base_scale;
+%ignore termin::KinematicUnitComponent::capture_base;
+%ignore termin::KinematicUnitComponent::apply;
+%ignore termin::KinematicUnitComponent::normalized_axis;
+%ignore termin::KinematicUnitComponent::read_entity_transform;
+%ignore termin::KinematicUnitComponent::write_base_transform;
+%ignore termin::KinematicUnitComponent::on_added;
 
 %ignore termin::CameraComponent::viewports_;
 %ignore termin::CameraComponent::set_aspect;  // Conflicts with property setter
@@ -867,49 +866,39 @@ public:
 };
 
 // ============================================================================
-// RotatorComponent - rotates entity around an axis
+// KinematicUnitComponent - abstract base for 1-DOF kinematic components
 // ============================================================================
 
-class RotatorComponent {
+class KinematicUnitComponent {
 public:
-    // Fields hidden - use get/set methods
-
-    RotatorComponent();
-
-    // Set rotation axis (normalized internally)
+    // Set DOF axis
     void set_axis(double x, double y, double z);
     Vec3 get_axis() const;
 
-    // Set coordinate (rotation angle in radians)
+    // Set coordinate
     void set_coordinate(double value);
     double get_coordinate() const;
 
     // Component pointer for C API interop
     tc_component* tc_component_ptr();
+};
 
+// ============================================================================
+// RotatorComponent - rotates entity around an axis
+// ============================================================================
+
+class RotatorComponent : public KinematicUnitComponent {
+public:
+    RotatorComponent();
 };
 
 // ============================================================================
 // ActuatorComponent - moves entity along an axis
 // ============================================================================
 
-class ActuatorComponent {
+class ActuatorComponent : public KinematicUnitComponent {
 public:
-    // Fields hidden - use get/set methods
-
     ActuatorComponent();
-
-    // Set movement axis (normalized internally)
-    void set_axis(double x, double y, double z);
-    Vec3 get_axis() const;
-
-    // Set coordinate (displacement along axis)
-    void set_coordinate(double value);
-    double get_coordinate() const;
-
-    // Component pointer for C API interop
-    tc_component* tc_component_ptr();
-
 };
 
 // ============================================================================

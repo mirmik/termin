@@ -26,6 +26,10 @@ void ComponentRegistry::register_native(const std::string& name, tc_component_fa
     tc_component_registry_register_with_parent(name.c_str(), factory, userdata, TC_CXX_COMPONENT, parent);
 }
 
+void ComponentRegistry::register_abstract(const std::string& name, const char* parent) {
+    tc_component_registry_register_abstract(name.c_str(), TC_CXX_COMPONENT, parent);
+}
+
 void ComponentRegistry::unregister(const std::string& name) {
     tc_component_registry_unregister(name.c_str());
 }

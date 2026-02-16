@@ -19,6 +19,7 @@ extern "C" {
 
 #define TC_TYPE_FLAG_DRAWABLE       (1 << 0)
 #define TC_TYPE_FLAG_INPUT_HANDLER  (1 << 1)
+#define TC_TYPE_FLAG_ABSTRACT       (1 << 2)
 
 // ============================================================================
 // Type Entry - shared structure for component and pass types

@@ -60,6 +60,28 @@ void tc_component_registry_register_with_parent(
     );
 }
 
+void tc_component_registry_register_abstract(
+    const char* type_name,
+    tc_component_kind kind,
+    const char* parent_type_name
+) {
+    if (!type_name) return;
+
+    ensure_registry_initialized();
+
+    tc_type_entry* entry = tc_type_registry_register_with_parent(
+        g_component_registry,
+        type_name,
+        NULL,  // no factory
+        NULL,
+        (int)kind,
+        parent_type_name
+    );
+    if (entry) {
+        tc_type_entry_set_flag(entry, TC_TYPE_FLAG_ABSTRACT, true);
+    }
+}
+
 void tc_component_registry_unregister(const char* type_name) {
     if (!type_name || !g_component_registry) return;
     tc_type_registry_unregister(g_component_registry, type_name);
