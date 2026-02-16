@@ -10,6 +10,10 @@
 #include <memory>
 #include <string>
 
+extern "C" {
+#include "tc_types.h"
+}
+
 namespace termin {
 
 // ColliderComponent - attaches a collider primitive to an entity.
@@ -29,6 +33,11 @@ public:
     double box_size_y = 1.0;
     double box_size_z = 1.0;
 
+    // Collider offset (local space, relative to entity origin)
+    bool collider_offset_enabled = false;
+    tc_vec3 collider_offset_position = {0, 0, 0};
+    tc_vec3 collider_offset_euler = {0, 0, 0};  // Euler degrees (XYZ)
+
 private:
     // Owned collider primitive
     std::unique_ptr<colliders::ColliderPrimitive> _collider;
@@ -46,6 +55,7 @@ public:
     // INSPECT_FIELD registrations
     // Note: collider_type and box_size are registered manually in .cpp with choices/vec3
     // Sphere and Capsule sizes are determined by entity scale (no separate fields)
+    // collider_offset fields are registered manually in .cpp (need rebuild_collider on set)
 
     ColliderComponent();
     ~ColliderComponent() override;

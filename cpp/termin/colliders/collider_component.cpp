@@ -77,6 +77,87 @@ static struct _BoxSizeFieldRegistrar {
     }
 } _box_size_registrar;
 
+// Register collider_offset_enabled field
+static struct _ColliderOffsetEnabledRegistrar {
+    _ColliderOffsetEnabledRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "ColliderComponent";
+        info.path = "collider_offset_enabled";
+        info.label = "Collider Offset";
+        info.kind = "bool";
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            return tc_value_bool(c->collider_offset_enabled);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            bool v = false;
+            if (value.type == TC_VALUE_BOOL) v = value.data.b;
+            else if (value.type == TC_VALUE_INT) v = value.data.i != 0;
+            if (v != c->collider_offset_enabled) {
+                c->collider_offset_enabled = v;
+                c->rebuild_collider();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
+    }
+} _collider_offset_enabled_registrar;
+
+// Register collider_offset_position field
+static struct _ColliderOffsetPositionRegistrar {
+    _ColliderOffsetPositionRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "ColliderComponent";
+        info.path = "collider_offset_position";
+        info.label = "Offset Position";
+        info.kind = "vec3";
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            return tc_value_vec3(c->collider_offset_position);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->collider_offset_position = value.data.v3;
+                c->rebuild_collider();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
+    }
+} _collider_offset_position_registrar;
+
+// Register collider_offset_euler field
+static struct _ColliderOffsetEulerRegistrar {
+    _ColliderOffsetEulerRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "ColliderComponent";
+        info.path = "collider_offset_euler";
+        info.label = "Offset Rotation";
+        info.kind = "vec3";
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            return tc_value_vec3(c->collider_offset_euler);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->collider_offset_euler = value.data.v3;
+                c->rebuild_collider();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
+    }
+} _collider_offset_euler_registrar;
+
 ColliderComponent::ColliderComponent() {
     link_type_entry("ColliderComponent");
 }
@@ -128,6 +209,21 @@ void ColliderComponent::rebuild_collider() {
     if (!_collider) {
         tc::Log::error("ColliderComponent::rebuild_collider: failed to create collider");
         return;
+    }
+
+    // Apply collider offset if enabled
+    if (collider_offset_enabled) {
+        _collider->transform.lin = Vec3(
+            collider_offset_position.x,
+            collider_offset_position.y,
+            collider_offset_position.z
+        );
+
+        constexpr double deg2rad = 3.14159265358979323846 / 180.0;
+        Quat rx = Quat::from_axis_angle(Vec3(1,0,0), collider_offset_euler.x * deg2rad);
+        Quat ry = Quat::from_axis_angle(Vec3(0,1,0), collider_offset_euler.y * deg2rad);
+        Quat rz = Quat::from_axis_angle(Vec3(0,0,1), collider_offset_euler.z * deg2rad);
+        _collider->transform.ang = rz * ry * rx;
     }
 
     // Create attached collider if transform is valid

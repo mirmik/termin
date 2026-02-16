@@ -2,13 +2,14 @@
 #include "termin/render/handles.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/colliders/collider_component.hpp"
+#include "termin/geom/quat.hpp"
+#include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
 
 extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_component.h"
-#include "inspect/tc_inspect.h"
-#include "tc_value.h"
 }
 
 #include <algorithm>
@@ -59,34 +60,6 @@ struct ColliderDrawData {
     WireframeRenderer* renderer;
 };
 
-// Helper to read box_size from component
-bool read_box_size(tc_component* c, float* out_size) {
-    tc_value size_val = tc_component_inspect_get(c, "box_size");
-
-    if (size_val.type == TC_VALUE_VEC3) {
-        out_size[0] = static_cast<float>(size_val.data.v3.x);
-        out_size[1] = static_cast<float>(size_val.data.v3.y);
-        out_size[2] = static_cast<float>(size_val.data.v3.z);
-        return true;
-    }
-    else if (size_val.type == TC_VALUE_LIST && size_val.data.list.count >= 3) {
-        for (int i = 0; i < 3; ++i) {
-            tc_value& item = size_val.data.list.items[i];
-            if (item.type == TC_VALUE_FLOAT) {
-                out_size[i] = item.data.f;
-            } else if (item.type == TC_VALUE_DOUBLE) {
-                out_size[i] = static_cast<float>(item.data.d);
-            } else if (item.type == TC_VALUE_INT) {
-                out_size[i] = static_cast<float>(item.data.i);
-            }
-        }
-        return true;
-    }
-
-    out_size[0] = out_size[1] = out_size[2] = 1.0f;
-    return false;
-}
-
 // Callback for tc_scene_foreach_component_of_type
 bool draw_collider_callback(tc_component* c, void* user_data) {
     auto* data = static_cast<ColliderDrawData*>(user_data);
@@ -95,26 +68,43 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
         return true;
     }
 
-    const char* collider_type = tc_component_get_field_string(c, "collider_type");
-    if (!collider_type) {
-        return true;
-    }
+    CxxComponent* cxx = CxxComponent::from_tc(c);
+    if (!cxx) return true;
+    auto* col = static_cast<ColliderComponent*>(cxx);
 
     Mat44f world = get_entity_world_matrix(c);
 
-    // Read size (used by all collider types)
-    float size[3];
-    read_box_size(c, size);
+    // Apply collider offset if enabled
+    if (col->collider_offset_enabled) {
+        const auto& pos = col->collider_offset_position;
+        const auto& euler = col->collider_offset_euler;
 
-    // Extract entity scale from world matrix
+        constexpr double deg2rad = 3.14159265358979323846 / 180.0;
+        Quat rx = Quat::from_axis_angle(Vec3(1,0,0), euler.x * deg2rad);
+        Quat ry = Quat::from_axis_angle(Vec3(0,1,0), euler.y * deg2rad);
+        Quat rz = Quat::from_axis_angle(Vec3(0,0,1), euler.z * deg2rad);
+        Quat rotation = rz * ry * rx;
+
+        Mat44f offset = Mat44f::compose(Vec3(pos.x, pos.y, pos.z), rotation, Vec3(1,1,1));
+        world = world * offset;
+    }
+
+    float size[3] = {
+        static_cast<float>(col->box_size_x),
+        static_cast<float>(col->box_size_y),
+        static_cast<float>(col->box_size_z)
+    };
+
+    // Extract scale from world matrix
     float sx, sy, sz;
     extract_scale_from_matrix(world, sx, sy, sz);
 
-    if (strcmp(collider_type, "Box") == 0) {
+    const auto& type = col->collider_type;
+
+    if (type == "Box") {
         data->pass->_draw_box_internal(data->renderer, world, size);
     }
-    else if (strcmp(collider_type, "Sphere") == 0) {
-        // Sphere: radius = min(size) / 2 * uniform_scale
+    else if (type == "Sphere") {
         float uniform_size = std::min({size[0], size[1], size[2]});
         float uniform_scale = std::min({sx, sy, sz});
         float radius = (uniform_size / 2.0f) * uniform_scale;
@@ -122,8 +112,7 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
             data->pass->_draw_sphere_internal(data->renderer, world, radius);
         }
     }
-    else if (strcmp(collider_type, "Capsule") == 0) {
-        // Capsule: height = size.z * scale.z, radius = min(size.x, size.y) / 2 * min(scale.x, scale.y)
+    else if (type == "Capsule") {
         float height = size[2] * sz;
         float radius = (std::min(size[0], size[1]) / 2.0f) * std::min(sx, sy);
         if (radius > 0) {
