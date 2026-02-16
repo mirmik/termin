@@ -6,6 +6,10 @@
 #include "../geom/vec3.hpp"
 #include "../geom/quat.hpp"
 
+extern "C" {
+#include "tc_types.h"
+}
+
 namespace termin {
 
 /**
@@ -29,9 +33,10 @@ public:
     // Current coordinate (actual angle = coordinate * |axis|)
     double coordinate = 0.0;
 
-private:
-    // Base rotation (entity rotation when component was added)
-    // Quat _base_rotation = Quat::identity();
+    // Base pose (full GeneralPose3, set by capture_base())
+    tc_vec3 base_position = {0, 0, 0};
+    tc_quat base_rotation = {0, 0, 0, 1};
+    tc_vec3 base_scale = {1, 1, 1};
 
 public:
     RotatorComponent();
@@ -48,10 +53,13 @@ public:
     void set_coordinate(double value);
     double get_coordinate() const { return coordinate; }
 
-private:
+    // Capture current entity transform as base (reverse calculation)
+    void capture_base();
+
     // Apply rotation based on current coordinate
     void _apply_rotation();
 
+private:
     // Get normalized axis
     Vec3 _normalized_axis() const;
 };

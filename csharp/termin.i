@@ -540,6 +540,18 @@ public:
 %ignore termin::MeshRenderer::mesh_offset_scale;
 %ignore termin::MeshRenderer::get_model_matrix;
 
+// ActuatorComponent - base fields + capture_base hidden from SWIG
+%ignore termin::ActuatorComponent::base_position;
+%ignore termin::ActuatorComponent::base_rotation;
+%ignore termin::ActuatorComponent::base_scale;
+%ignore termin::ActuatorComponent::capture_base;
+
+// RotatorComponent - base fields + capture_base hidden from SWIG
+%ignore termin::RotatorComponent::base_position;
+%ignore termin::RotatorComponent::base_rotation;
+%ignore termin::RotatorComponent::base_scale;
+%ignore termin::RotatorComponent::capture_base;
+
 %ignore termin::CameraComponent::viewports_;
 %ignore termin::CameraComponent::set_aspect;  // Conflicts with property setter
 %ignore termin::CameraComponent::add_viewport;

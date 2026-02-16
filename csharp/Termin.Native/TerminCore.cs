@@ -437,6 +437,12 @@ public static class TerminCore
     [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_vec3", CharSet = CharSet.Ansi)]
     public static extern TcVec3 ComponentGetFieldVec3(IntPtr component, string path);
 
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_quat", CharSet = CharSet.Ansi)]
+    public static extern void ComponentSetFieldQuat(IntPtr component, string path, TcQuat value, IntPtr scene);
+
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_quat", CharSet = CharSet.Ansi)]
+    public static extern TcQuat ComponentGetFieldQuat(IntPtr component, string path);
+
     [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_int", CharSet = CharSet.Ansi)]
     public static extern long ComponentGetFieldInt(IntPtr component, string path);
 

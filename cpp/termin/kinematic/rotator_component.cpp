@@ -64,23 +64,120 @@ static struct _RotatorCoordinateFieldRegistrar {
     }
 } _rotator_coordinate_registrar;
 
+// Register base_position field (vec3)
+static struct _RotatorBasePositionRegistrar {
+    _RotatorBasePositionRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "RotatorComponent";
+        info.path = "base_position";
+        info.label = "Base Position";
+        info.kind = "vec3";
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<RotatorComponent*>(obj);
+            return tc_value_vec3(c->base_position);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            auto* c = static_cast<RotatorComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->base_position = value.data.v3;
+                c->_apply_rotation();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
+    }
+} _rotator_base_position_registrar;
+
+// Register base_rotation field (quat)
+static struct _RotatorBaseRotationRegistrar {
+    _RotatorBaseRotationRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "RotatorComponent";
+        info.path = "base_rotation";
+        info.label = "Base Rotation";
+        info.kind = "quat";
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<RotatorComponent*>(obj);
+            return tc_value_quat(c->base_rotation);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            auto* c = static_cast<RotatorComponent*>(obj);
+            if (value.type == TC_VALUE_QUAT) {
+                c->base_rotation = value.data.q;
+                c->_apply_rotation();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
+    }
+} _rotator_base_rotation_registrar;
+
+// Register base_scale field (vec3)
+static struct _RotatorBaseScaleRegistrar {
+    _RotatorBaseScaleRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "RotatorComponent";
+        info.path = "base_scale";
+        info.label = "Base Scale";
+        info.kind = "vec3";
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<RotatorComponent*>(obj);
+            return tc_value_vec3(c->base_scale);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            auto* c = static_cast<RotatorComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->base_scale = value.data.v3;
+                c->_apply_rotation();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
+    }
+} _rotator_base_scale_registrar;
+
+// Register capture_base trigger (bool: set true to capture)
+static struct _RotatorCaptureBaseRegistrar {
+    _RotatorCaptureBaseRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "RotatorComponent";
+        info.path = "capture_base";
+        info.label = "Capture Base";
+        info.kind = "bool";
+
+        info.getter = [](void* obj) -> tc_value {
+            return tc_value_bool(false);
+        };
+
+        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            if (value.type == TC_VALUE_BOOL && value.data.b) {
+                auto* c = static_cast<RotatorComponent*>(obj);
+                c->capture_base();
+            }
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
+    }
+} _rotator_capture_base_registrar;
+
 RotatorComponent::RotatorComponent() {
     link_type_entry("RotatorComponent");
 }
 
 void RotatorComponent::on_added() {
     CxxComponent::on_added();
-
-    Entity ent = entity();
-    if (!ent.valid()) {
-        tc::Log::error("RotatorComponent::on_added: entity is invalid");
-        return;
-    }
-
-    // Store base rotation
-    double xyzw[4];
-    ent.get_local_rotation(xyzw);
-    // _base_rotation = Quat(xyzw[0], xyzw[1], xyzw[2], xyzw[3]);
 }
 
 void RotatorComponent::set_axis(double x, double y, double z) {
@@ -111,19 +208,55 @@ void RotatorComponent::_apply_rotation() {
     double len = std::sqrt(raw_axis.x*raw_axis.x + raw_axis.y*raw_axis.y + raw_axis.z*raw_axis.z);
     if (len < 1e-9) return;
 
-    // Normalize axis for quaternion, but use axis length as scale factor for coordinate
     Vec3 dir{raw_axis.x / len, raw_axis.y / len, raw_axis.z / len};
     double angle = coordinate * len;
 
-    // Create rotation quaternion from axis-angle
-    Quat rotation = Quat::from_axis_angle(dir, angle);
+    // local = base * Rotation(axis, angle)
+    Quat coord_rot = Quat::from_axis_angle(dir, angle);
+    Quat base{base_rotation.x, base_rotation.y, base_rotation.z, base_rotation.w};
+    Vec3 bp{base_position.x, base_position.y, base_position.z};
+    Vec3 bs{base_scale.x, base_scale.y, base_scale.z};
 
-    // Apply: final = rotation * base
-    Quat final_rotation = rotation; // * _base_rotation;
+    Quat final_rotation = base * coord_rot;
 
-    // Set rotation via Entity API
+    // Set full local transform
     double xyzw[4] = {final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w};
     ent.set_local_rotation(xyzw);
+
+    double xyz[3] = {bp.x, bp.y, bp.z};
+    ent.set_local_position(xyz);
+
+    double scl[3] = {bs.x, bs.y, bs.z};
+    ent.set_local_scale(scl);
+}
+
+void RotatorComponent::capture_base() {
+    Entity ent = entity();
+    if (!ent.valid()) return;
+
+    double pos[3], rot[4], scl[3];
+    ent.get_local_position(pos);
+    ent.get_local_rotation(rot);
+    ent.get_local_scale(scl);
+
+    // base_position = current_pos, base_scale = current_scale
+    base_position = {pos[0], pos[1], pos[2]};
+    base_scale = {scl[0], scl[1], scl[2]};
+
+    // Reverse: base_rot = current_rot * coord_rot.inverse()
+    // Since current_rot = base_rot * coord_rot
+    Vec3 raw_axis{axis_x, axis_y, axis_z};
+    double len = std::sqrt(raw_axis.x*raw_axis.x + raw_axis.y*raw_axis.y + raw_axis.z*raw_axis.z);
+
+    Quat coord_rot = Quat::identity();
+    if (len > 1e-9) {
+        Vec3 dir{raw_axis.x / len, raw_axis.y / len, raw_axis.z / len};
+        coord_rot = Quat::from_axis_angle(dir, coordinate * len);
+    }
+
+    Quat current_rot{rot[0], rot[1], rot[2], rot[3]};
+    Quat base = current_rot * coord_rot.inverse();
+    base_rotation = {base.x, base.y, base.z, base.w};
 }
 
 } // namespace termin

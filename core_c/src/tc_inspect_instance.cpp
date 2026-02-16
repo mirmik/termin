@@ -210,6 +210,26 @@ tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path) {
 }
 
 // ============================================================================
+// Quat field access for FFI
+// ============================================================================
+
+void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat value, tc_scene_handle scene) {
+    tc_value v = tc_value_quat(value);
+    tc_component_inspect_set(c, path, v, scene);
+    tc_value_free(&v);
+}
+
+tc_quat tc_component_get_field_quat(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    tc_quat result = {0, 0, 0, 1};
+    if (v.type == TC_VALUE_QUAT) {
+        result = v.data.q;
+    }
+    tc_value_free(&v);
+    return result;
+}
+
+// ============================================================================
 // Simplified field setters for FFI
 // ============================================================================
 

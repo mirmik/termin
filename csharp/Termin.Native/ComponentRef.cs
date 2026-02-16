@@ -169,6 +169,9 @@ public readonly struct ComponentRef
             case TcVec3 v3:
                 TerminCore.ComponentSetFieldVec3(_ptr, path, v3, scenePtr);
                 break;
+            case TcQuat q:
+                TerminCore.ComponentSetFieldQuat(_ptr, path, q, scenePtr);
+                break;
             default:
                 throw new ArgumentException($"Unsupported field type: {value.GetType().Name}");
         }
@@ -210,6 +213,24 @@ public readonly struct ComponentRef
     {
         if (_ptr == IntPtr.Zero) return;
         TerminCore.ComponentSetFieldVec3(_ptr, path, value, IntPtr.Zero);
+    }
+
+    /// <summary>
+    /// Get a quaternion field value.
+    /// </summary>
+    public TcQuat GetFieldQuat(string path)
+    {
+        if (_ptr == IntPtr.Zero) return new TcQuat(0, 0, 0, 1);
+        return TerminCore.ComponentGetFieldQuat(_ptr, path);
+    }
+
+    /// <summary>
+    /// Set a quaternion field value.
+    /// </summary>
+    public void SetFieldQuat(string path, TcQuat value, Scene? scene = null)
+    {
+        if (_ptr == IntPtr.Zero) return;
+        TerminCore.ComponentSetFieldQuat(_ptr, path, value, IntPtr.Zero);
     }
 
     /// <summary>
