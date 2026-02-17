@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "tc_value.h"
+#include "tc_log.h"
 }
 
 namespace nb = nanobind;
@@ -29,7 +30,7 @@ inline tc_value py_to_tc_value(nb::object obj) {
     if (nb::isinstance<nb::str>(obj)) {
         return tc_value_string(nb::cast<std::string>(obj).c_str());
     }
-    if (nb::isinstance<nb::list>(obj)) {
+    if (nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) {
         tc_value result = tc_value_list_new();
         for (auto item : obj) {
             tc_value child = py_to_tc_value(nb::borrow<nb::object>(item));
@@ -47,6 +48,15 @@ inline tc_value py_to_tc_value(nb::object obj) {
             // Note: dict_set takes ownership, don't free child
         }
         return result;
+    }
+
+    // numpy arrays / numpy scalars and similar sequence-like objects
+    try {
+        return py_to_tc_value(obj.attr("tolist")());
+    } catch (const std::exception& e) {
+        tc_log(TC_LOG_DEBUG, "[py_to_tc_value] tolist() conversion failed: %s", e.what());
+    } catch (...) {
+        tc_log(TC_LOG_DEBUG, "[py_to_tc_value] tolist() conversion failed with unknown exception");
     }
     return tc_value_nil();
 }

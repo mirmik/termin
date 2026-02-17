@@ -77,20 +77,7 @@ def _resolve_path_set(obj, path: str, value):
     for part in parts[:-1]:
         cur = getattr(cur, part)
     last = parts[-1]
-
-    # небольшой хак: если там numpy-вектор, обновляем по месту
-    try:
-        import numpy as np
-        arr = getattr(cur, last)
-        if isinstance(arr, np.ndarray):
-            arr[...] = value
-            return
-    except Exception as e:
-        log.debug(f"[InspectField] numpy in-place update failed for '{path}': {e}")
-
     setattr(cur, last, value)
-
-
 class InspectAttr:
     """
     Дескриптор: хранит значение на инстансе и регистрирует себя как InspectField
@@ -171,3 +158,4 @@ def inspect(default: Any = None, **meta) -> InspectAttr:
     meta → параметры для InspectField (label, kind, min, max, step, is_serializable, is_inspectable, ...)
     """
     return InspectAttr(default, **meta)
+

@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, List
 
-import numpy as np
-
 from termin._native import log
 
 from PyQt6.QtWidgets import (
@@ -38,7 +36,7 @@ def to_qcolor(value: Any) -> QColor:
     Supports:
     - QColor
     - tuple/list (r, g, b) or (r, g, b, a) in range 0..1
-    - numpy array
+    - sequence-like objects
     """
     if isinstance(value, QColor):
         return value
@@ -54,12 +52,12 @@ def to_qcolor(value: Any) -> QColor:
             max(0.0, min(1.0, a)),
         )
     try:
-        arr = np.asarray(value).reshape(-1)
-        if arr.size >= 3:
-            r = float(arr[0])
-            g = float(arr[1])
-            b = float(arr[2])
-            a = float(arr[3]) if arr.size > 3 else 1.0
+        seq = list(value)
+        if len(seq) >= 3:
+            r = float(seq[0])
+            g = float(seq[1])
+            b = float(seq[2])
+            a = float(seq[3]) if len(seq) > 3 else 1.0
             return QColor.fromRgbF(
                 max(0.0, min(1.0, r)),
                 max(0.0, min(1.0, g)),
@@ -86,18 +84,28 @@ class FieldWidget(QWidget):
 
     @staticmethod
     def _values_equal(a: Any, b: Any) -> bool:
-        """Safe comparison that handles numpy arrays and mixed int/string types."""
+        """Safe comparison for scalars and sequence-like values."""
         try:
-            if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-                a_arr = np.asarray(a)
-                b_arr = np.asarray(b)
-                if a_arr.shape != b_arr.shape:
+            a_seq = list(a) if isinstance(a, (tuple, list)) else None
+            b_seq = list(b) if isinstance(b, (tuple, list)) else None
+            if a_seq is None:
+                try:
+                    a_seq = list(a)
+                except Exception:
+                    a_seq = None
+            if b_seq is None:
+                try:
+                    b_seq = list(b)
+                except Exception:
+                    b_seq = None
+            if a_seq is not None or b_seq is not None:
+                if a_seq is None:
+                    a_seq = [a]
+                if b_seq is None:
+                    b_seq = [b]
+                if len(a_seq) != len(b_seq):
                     return False
-                return bool(np.allclose(a_arr, b_arr))
-            if isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)):
-                if len(a) != len(b):
-                    return False
-                return all(FieldWidget._values_equal(x, y) for x, y in zip(a, b))
+                return all(FieldWidget._values_equal(x, y) for x, y in zip(a_seq, b_seq))
             if a == b:
                 return True
             # Fallback: compare as strings (for enum choices where value is "1" but field is int 1)
@@ -232,12 +240,12 @@ class Vec3FieldWidget(FieldWidget):
             layout.addWidget(sb)
             self._boxes.append(sb)
 
-    def get_value(self) -> np.ndarray:
-        return np.array([sb.value() for sb in self._boxes], dtype=float)
+    def get_value(self) -> list[float]:
+        return [float(sb.value()) for sb in self._boxes]
 
     def set_value(self, value: Any) -> None:
         if value is not None:
-            arr = np.asarray(value).reshape(-1)
+            arr = list(value)
             for sb, v in zip(self._boxes, arr):
                 sb.blockSignals(True)
                 sb.setValue(float(v))
