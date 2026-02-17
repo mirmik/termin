@@ -116,6 +116,12 @@ if(BUNDLE_PYTHON)
                 DESTINATION ${CMAKE_INSTALL_PREFIX}
             )
         endif()
+        # Windows: Install Tcl/Tk runtime for tkinter dialogs
+        if(EXISTS "${PYTHON_PREFIX}/tcl")
+            install(DIRECTORY "${PYTHON_PREFIX}/tcl"
+                DESTINATION ${CMAKE_INSTALL_PREFIX}
+            )
+        endif()
         # Windows expects stdlib in {prefix}/Lib/ (capital L, no version)
         set(STDLIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/Lib")
         set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")

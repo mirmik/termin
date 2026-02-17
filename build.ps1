@@ -59,7 +59,18 @@ if (-not (Test-Path $BuildDirWin)) {
 
 # Configure
 $CacheFile = "$BuildDir/CMakeCache.txt"
-if (-not (Test-Path $CacheFile) -or $Clean) {
+$NeedsConfigure = $Clean -or -not (Test-Path $CacheFile)
+if (-not $NeedsConfigure) {
+    $cacheText = Get-Content $CacheFile -Raw
+    $desiredBundle = if ($BundlePython) { "ON" } else { "OFF" }
+    if ($cacheText -notmatch "BUILD_LAUNCHER:BOOL=ON" -or
+        $cacheText -notmatch "BUILD_EDITOR_MINIMAL:BOOL=ON" -or
+        $cacheText -notmatch "BUNDLE_PYTHON:BOOL=$desiredBundle") {
+        Write-Host "CMake cache options changed, reconfiguring..."
+        $NeedsConfigure = $true
+    }
+}
+if ($NeedsConfigure) {
     Write-Host "Configuring CMake..."
     $BundlePythonValue = if ($BundlePython) { "ON" } else { "OFF" }
     Write-Host "BUNDLE_PYTHON=$BundlePythonValue"

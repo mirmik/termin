@@ -49,6 +49,19 @@ try {
     $TerminDir = Join-Path $InstallDir "lib\python\termin"
     $env:PATH = "$BinDir;$TerminDir;$env:PATH"
 
+    # Help tkinter find bundled Tcl/Tk runtime
+    $TclRoot = Join-Path $InstallDir "tcl"
+    if (Test-Path $TclRoot) {
+        $TclLibDir = Get-ChildItem -Path $TclRoot -Directory -Filter "tcl*" | Select-Object -First 1
+        $TkLibDir = Get-ChildItem -Path $TclRoot -Directory -Filter "tk*" | Select-Object -First 1
+        if ($null -ne $TclLibDir) {
+            $env:TCL_LIBRARY = $TclLibDir.FullName
+        }
+        if ($null -ne $TkLibDir) {
+            $env:TK_LIBRARY = $TkLibDir.FullName
+        }
+    }
+
     if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "--gdb" -or $RemainingArgs[0] -eq "-g")) {
         if ($RemainingArgs.Count -gt 1) {
             $RemainingArgs = $RemainingArgs[1..($RemainingArgs.Count - 1)]
