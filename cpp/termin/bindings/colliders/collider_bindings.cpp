@@ -25,7 +25,7 @@ void bind_collider_component(nb::module_& m) {
         // Only applies to Box type - Sphere/Capsule use entity scale
         .def_prop_rw("box_size",
             [](ColliderComponent& c) {
-                return nb::make_tuple(c.box_size_x, c.box_size_y, c.box_size_z);
+                return nb::make_tuple(c.box_size.x, c.box_size.y, c.box_size.z);
             },
             [](ColliderComponent& c, nb::tuple v) {
                 double x = nb::cast<double>(v[0]);

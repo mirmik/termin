@@ -175,10 +175,13 @@ inline void register_builtin_cpp_kinds() {
             return tc_value_vec3(vec);
         },
         [](const tc_value* v, tc_scene_handle) -> std::any {
-            // Not used by C API path (cpp_deserialize is pass-through)
             tc_vec3 result = {0, 0, 0};
             if (v->type == TC_VALUE_VEC3) {
                 result = v->data.v3;
+            } else if (v->type == TC_VALUE_LIST && v->data.list.count >= 3) {
+                result.x = tc_value_to_double(&v->data.list.items[0]);
+                result.y = tc_value_to_double(&v->data.list.items[1]);
+                result.z = tc_value_to_double(&v->data.list.items[2]);
             }
             return result;
         }

@@ -29,9 +29,7 @@ public:
     std::string collider_type = "Box";
 
     // Box size in local coordinates (multiplied by entity scale)
-    double box_size_x = 1.0;
-    double box_size_y = 1.0;
-    double box_size_z = 1.0;
+    tc_vec3 box_size = {1.0, 1.0, 1.0};
 
     // Collider offset (local space, relative to entity origin)
     bool collider_offset_enabled = false;
@@ -53,9 +51,8 @@ private:
 
 public:
     // INSPECT_FIELD registrations
-    // Note: collider_type and box_size are registered manually in .cpp with choices/vec3
+    // Note: collider_type is registered manually in .cpp with choices.
     // Sphere and Capsule sizes are determined by entity scale (no separate fields)
-    // collider_offset fields are registered manually in .cpp (need rebuild_collider on set)
 
     ColliderComponent();
     ~ColliderComponent() override;
@@ -75,8 +72,9 @@ public:
     void set_collider_type(const std::string& type);
 
     // Set box size (full size, not half-size)
-    void set_box_size(double x, double y, double z);
-    Vec3 get_box_size() const { return Vec3{box_size_x, box_size_y, box_size_z}; }
+    void set_box_size(const tc_vec3& size);
+    void set_box_size(double x, double y, double z) { set_box_size(tc_vec3{x, y, z}); }
+    Vec3 get_box_size() const { return Vec3{box_size.x, box_size.y, box_size.z}; }
 
 private:
     // Create collider primitive based on current type and parameters
@@ -91,6 +89,35 @@ private:
     // Add attached collider to collision world
     void _add_to_collision_world();
 };
+
+// Field registrations (outside class - callbacks trigger rebuild_collider)
+INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, box_size, "Size", "vec3",
+    [](ColliderComponent* c) -> tc_vec3& { return c->box_size; },
+    [](ColliderComponent* c, const tc_vec3& value) { c->set_box_size(value); },
+    0.001, 1000.0, 0.1)
+
+INSPECT_FIELD_CALLBACK(ColliderComponent, bool, collider_offset_enabled, "Collider Offset", "bool",
+    [](ColliderComponent* c) -> bool& { return c->collider_offset_enabled; },
+    [](ColliderComponent* c, const bool& value) {
+        if (c->collider_offset_enabled != value) {
+            c->collider_offset_enabled = value;
+            c->rebuild_collider();
+        }
+    })
+
+INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, collider_offset_position, "Offset Position", "vec3",
+    [](ColliderComponent* c) -> tc_vec3& { return c->collider_offset_position; },
+    [](ColliderComponent* c, const tc_vec3& value) {
+        c->collider_offset_position = value;
+        c->rebuild_collider();
+    })
+
+INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, collider_offset_euler, "Offset Rotation", "vec3",
+    [](ColliderComponent* c) -> tc_vec3& { return c->collider_offset_euler; },
+    [](ColliderComponent* c, const tc_vec3& value) {
+        c->collider_offset_euler = value;
+        c->rebuild_collider();
+    })
 
 REGISTER_COMPONENT(ColliderComponent, Component);
 

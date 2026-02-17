@@ -1,26 +1,41 @@
-# Termin run script (Windows) - for bundled builds
+# Termin run script (Windows)
 # Usage:
-#   .\run.ps1           # Run editor (requires -BundlePython build)
-#
-# For development, use .\run_dev.ps1 instead
+#   .\run.ps1                # Run launcher
+#   .\run.ps1 --editor       # Run editor directly
+#   .\run.ps1 --gdb          # Run launcher under gdb
+#   .\run.ps1 --valgrind     # Run under valgrind
 
 param(
-    [switch]$Help
+    [switch]$Help,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$RemainingArgs
 )
 
 if ($Help) {
-    Write-Host "Usage: .\run.ps1"
+    Write-Host "Usage: .\run.ps1 [--editor|-e] [--gdb|-g|--valgrind|-v] [args...]"
     Write-Host ""
-    Write-Host "Runs the termin editor from the install directory."
+    Write-Host "Runs termin_launcher by default from install_win/bin."
     exit 0
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $InstallDir = Join-Path $ScriptDir "install_win"
+$Launcher = Join-Path $InstallDir "bin" | Join-Path -ChildPath "termin_launcher.exe"
 $Editor = Join-Path $InstallDir "bin" | Join-Path -ChildPath "termin_editor.exe"
 
-if (-not (Test-Path $Editor)) {
-    Write-Host "Editor not found at $Editor" -ForegroundColor Red
+# Select executable
+$Exe = $Launcher
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "--editor" -or $RemainingArgs[0] -eq "-e")) {
+    $Exe = $Editor
+    if ($RemainingArgs.Count -gt 1) {
+        $RemainingArgs = $RemainingArgs[1..($RemainingArgs.Count - 1)]
+    } else {
+        $RemainingArgs = @()
+    }
+}
+
+if (-not (Test-Path $Exe)) {
+    Write-Host "Not found: $Exe" -ForegroundColor Red
     Write-Host "Run .\build.ps1 first"
     exit 1
 }
@@ -34,8 +49,25 @@ try {
     $TerminDir = Join-Path $InstallDir "lib\python\termin"
     $env:PATH = "$BinDir;$TerminDir;$env:PATH"
 
-    # Run editor
-    & $Editor $args
+    if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "--gdb" -or $RemainingArgs[0] -eq "-g")) {
+        if ($RemainingArgs.Count -gt 1) {
+            $RemainingArgs = $RemainingArgs[1..($RemainingArgs.Count - 1)]
+        } else {
+            $RemainingArgs = @()
+        }
+        & gdb --args $Exe @RemainingArgs
+    }
+    elseif ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "--valgrind" -or $RemainingArgs[0] -eq "-v")) {
+        if ($RemainingArgs.Count -gt 1) {
+            $RemainingArgs = $RemainingArgs[1..($RemainingArgs.Count - 1)]
+        } else {
+            $RemainingArgs = @()
+        }
+        & valgrind --leak-check=full $Exe @RemainingArgs
+    }
+    else {
+        & $Exe @RemainingArgs
+    }
 }
 finally {
     Pop-Location

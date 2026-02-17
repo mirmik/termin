@@ -35,129 +35,6 @@ static struct _ColliderTypeFieldRegistrar {
     }
 } _collider_type_registrar;
 
-// Register box_size field as vec3
-static struct _BoxSizeFieldRegistrar {
-    _BoxSizeFieldRegistrar() {
-        tc::InspectFieldInfo info;
-        info.type_name = "ColliderComponent";
-        info.path = "box_size";
-        info.label = "Size";
-        info.kind = "vec3";
-        info.min = 0.001;
-        info.max = 1000.0;
-        info.step = 0.1;
-
-        info.getter = [](void* obj) -> tc_value {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            tc_vec3 v = {c->box_size_x, c->box_size_y, c->box_size_z};
-            return tc_value_vec3(v);
-        };
-
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->set_box_size(value.data.v3.x, value.data.v3.y, value.data.v3.z);
-            } else if (value.type == TC_VALUE_LIST && tc_value_list_size(&value) >= 3) {
-                // JSON/Python stores as [x, y, z] list
-                tc_value* x = tc_value_list_get(&value, 0);
-                tc_value* y = tc_value_list_get(&value, 1);
-                tc_value* z = tc_value_list_get(&value, 2);
-                auto get_double = [](tc_value* v) -> double {
-                    if (!v) return 1.0;
-                    if (v->type == TC_VALUE_DOUBLE) return v->data.d;
-                    if (v->type == TC_VALUE_FLOAT) return v->data.f;
-                    if (v->type == TC_VALUE_INT) return static_cast<double>(v->data.i);
-                    return 1.0;
-                };
-                c->set_box_size(get_double(x), get_double(y), get_double(z));
-            }
-        };
-
-        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
-    }
-} _box_size_registrar;
-
-// Register collider_offset_enabled field
-static struct _ColliderOffsetEnabledRegistrar {
-    _ColliderOffsetEnabledRegistrar() {
-        tc::InspectFieldInfo info;
-        info.type_name = "ColliderComponent";
-        info.path = "collider_offset_enabled";
-        info.label = "Collider Offset";
-        info.kind = "bool";
-
-        info.getter = [](void* obj) -> tc_value {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            return tc_value_bool(c->collider_offset_enabled);
-        };
-
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            bool v = false;
-            if (value.type == TC_VALUE_BOOL) v = value.data.b;
-            else if (value.type == TC_VALUE_INT) v = value.data.i != 0;
-            if (v != c->collider_offset_enabled) {
-                c->collider_offset_enabled = v;
-                c->rebuild_collider();
-            }
-        };
-
-        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
-    }
-} _collider_offset_enabled_registrar;
-
-// Register collider_offset_position field
-static struct _ColliderOffsetPositionRegistrar {
-    _ColliderOffsetPositionRegistrar() {
-        tc::InspectFieldInfo info;
-        info.type_name = "ColliderComponent";
-        info.path = "collider_offset_position";
-        info.label = "Offset Position";
-        info.kind = "vec3";
-
-        info.getter = [](void* obj) -> tc_value {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            return tc_value_vec3(c->collider_offset_position);
-        };
-
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->collider_offset_position = value.data.v3;
-                c->rebuild_collider();
-            }
-        };
-
-        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
-    }
-} _collider_offset_position_registrar;
-
-// Register collider_offset_euler field
-static struct _ColliderOffsetEulerRegistrar {
-    _ColliderOffsetEulerRegistrar() {
-        tc::InspectFieldInfo info;
-        info.type_name = "ColliderComponent";
-        info.path = "collider_offset_euler";
-        info.label = "Offset Rotation";
-        info.kind = "vec3";
-
-        info.getter = [](void* obj) -> tc_value {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            return tc_value_vec3(c->collider_offset_euler);
-        };
-
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
-            auto* c = static_cast<ColliderComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->collider_offset_euler = value.data.v3;
-                c->rebuild_collider();
-            }
-        };
-
-        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
-    }
-} _collider_offset_euler_registrar;
-
 ColliderComponent::ColliderComponent() {
     link_type_entry("ColliderComponent");
 }
@@ -250,29 +127,27 @@ void ColliderComponent::set_collider_type(const std::string& type) {
     }
 }
 
-void ColliderComponent::set_box_size(double x, double y, double z) {
-    box_size_x = x;
-    box_size_y = y;
-    box_size_z = z;
+void ColliderComponent::set_box_size(const tc_vec3& size) {
+    box_size = size;
     rebuild_collider();
 }
 
 std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collider() const {
     if (collider_type == "Box") {
         // Box uses box_size as local size (entity scale applied via transform)
-        Vec3 half_size{box_size_x / 2.0, box_size_y / 2.0, box_size_z / 2.0};
+        Vec3 half_size{box_size.x / 2.0, box_size.y / 2.0, box_size.z / 2.0};
         return std::make_unique<colliders::BoxCollider>(half_size);
     }
     else if (collider_type == "Sphere") {
         // Sphere uses uniform component of size as diameter
         // radius = min(size.x, size.y, size.z) / 2
-        double uniform_size = std::min({box_size_x, box_size_y, box_size_z});
+        double uniform_size = std::min({box_size.x, box_size.y, box_size.z});
         return std::make_unique<colliders::SphereCollider>(uniform_size / 2.0);
     }
     else if (collider_type == "Capsule") {
         // Capsule: height = size.z, radius = min(size.x, size.y) / 2
-        double radius = std::min(box_size_x, box_size_y) / 2.0;
-        double half_height = box_size_z / 2.0;
+        double radius = std::min(box_size.x, box_size.y) / 2.0;
+        double half_height = box_size.z / 2.0;
         return std::make_unique<colliders::CapsuleCollider>(radius, half_height);
     }
     else {

@@ -90,9 +90,9 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
     }
 
     float size[3] = {
-        static_cast<float>(col->box_size_x),
-        static_cast<float>(col->box_size_y),
-        static_cast<float>(col->box_size_z)
+        static_cast<float>(col->box_size.x),
+        static_cast<float>(col->box_size.y),
+        static_cast<float>(col->box_size.z)
     };
 
     // Extract scale from world matrix
