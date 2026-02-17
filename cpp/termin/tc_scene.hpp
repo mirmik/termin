@@ -245,4 +245,7 @@ public:
     void from_json_string(const std::string& json);
 };
 
+// Serialize a single entity and its subtree to trent (recursive)
+nos::trent serialize_entity_recursive(const Entity& e);
+
 } // namespace termin

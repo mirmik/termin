@@ -1,3 +1,165 @@
-Библиотека геометрических алгоритмов и линейной алгебры.
-По возможности следует сопровождать код сопутствующими формулами и давать краткие пояснения к происходящему в вычислениях.
-Стараться не использовать в коде динамическую магию пайтона вроде getattr. Код должен быть написан так, словно автора с++ в жопу ужалил.
+# Project Rules
+
+## Язык
+Предпочтительный язык общения Русский.
+
+## Debugging
+
+Debug prints are allowed for investigating issues.
+Когда удаляешь логи - удаляй DEBUG и INFO. WARN и ERROR трогать не надо. Чем их больше, тем лучше. 
+
+## Code Style
+
+### No Speculative Code
+No fallbacks, backwards compatibility, or special cases "just in case". Add them only when there is a proven, specific need. If something doesn't work, find the root cause instead of adding workarounds.
+
+## Architecture & Implementation Principles
+When proposing solutions, follow existing codebase patterns and architectural conventions. Never propose shortcuts or band-aid fixes — always aim for the proper architectural solution. If unsure about the pattern, ask before implementing.
+
+### Attribute Access
+Methods `getattr`, `hasattr`, and `setattr` are only allowed in contexts where the algorithm explicitly requires reflection (e.g., serialization, deserialization, dynamic dispatch).
+
+In all other cases, all required fields must be explicitly declared in the class. Write code as if this were C++, not Python — all attributes must exist and be initialized in `__init__` or as class-level defaults.
+
+Bad:
+```python
+value = getattr(obj, 'foo', None) or default
+if hasattr(obj, 'bar'):
+    do_something(obj.bar)
+```
+
+Good:
+```python
+class MyClass:
+    foo: str = "default"
+    bar: int = 0
+
+    def __init__(self, foo: str = "default", bar: int = 0):
+        self.foo = foo
+        self.bar = bar
+
+# Then simply:
+value = obj.foo
+do_something(obj.bar)
+```
+
+### C++ Comments
+
+Use single-line comments (`//`). Replace multi-line comments (`/* */`) with single-line comments when encountered.
+
+```cpp
+// Good
+// This function does something important.
+// It takes two parameters and returns a result.
+void do_something();
+
+// Bad
+/*
+ * This function does something important.
+ * It takes two parameters and returns a result.
+ */
+void do_something();
+```
+
+### C++ Class Layout
+
+All fields (public, protected, private) must be declared at the top of the class, before any methods. Group fields first, then methods.
+
+```cpp
+class MyClass {
+public:
+    // Public fields first
+    int public_field = 0;
+    std::string name;
+
+private:
+    // Private fields
+    int _private_field = 0;
+    bool _initialized = false;
+
+public:
+    // Then methods
+    MyClass();
+    void do_something();
+
+private:
+    void _helper();
+};
+```
+
+### C++ Migration
+
+When migrating Python classes to C++, do not leave Python wrappers. Python modules should contain only re-exports from `termin._native`.
+
+Bad:
+```python
+# Don't wrap C++ classes in Python
+from termin._native import _CppClass
+
+class MyClass:
+    def __init__(self):
+        self._impl = _CppClass()
+
+    def method(self):
+        return self._impl.method()
+```
+
+Good:
+```python
+# Just re-export
+from termin._native import MyClass
+
+__all__ = ["MyClass"]
+```
+
+If additional Python-only functionality is needed (e.g., exception classes), keep it minimal alongside the re-exports.
+
+### Exception Handling and Logging
+
+Never silently swallow exceptions. Exceptions must either:
+1. Crash the program (let it propagate), or
+2. Log an error message before returning a fallback value
+
+Use the proper logging functions:
+- **C**: `tc_log(TC_LOG_ERROR, "message")` from `tc_log.h`
+- **C++**: `tc::Log::error("message")` from `tc_log.hpp`
+- **Python**: `from termin._native import log; log.error("message")`
+
+Bad:
+```cpp
+try {
+    do_something();
+    return result;
+} catch (const std::exception&) {
+    return default_value;  // Silent failure - impossible to debug
+}
+```
+
+Good:
+```cpp
+try {
+    do_something();
+    return result;
+} catch (const std::exception& e) {
+    tc::Log::error("do_something failed: %s", e.what());
+    return default_value;
+}
+```
+
+Same applies to Python:
+```python
+# Bad
+try:
+    result = do_something()
+except Exception:
+    result = None
+
+# Good
+from termin._native import log
+
+try:
+    result = do_something()
+except Exception as e:
+    log.error(f"do_something failed: {e}")
+    result = None
+```

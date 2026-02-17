@@ -1061,5 +1061,27 @@ namespace termin {
         scene.from_json_string(json);
         return static_cast<int>(scene.entity_count());
     }
+
+    // Serialize a single entity subtree to JSON string
+    // entity_index + entity_generation identify the entity in the scene's pool
+    std::string entity_subtree_to_json(tc_scene_handle h,
+                                       unsigned int entity_index,
+                                       unsigned int entity_generation) {
+        TcSceneRef scene(h);
+        if (!scene.valid()) return "{}";
+
+        tc_entity_id eid;
+        eid.index = entity_index;
+        eid.generation = entity_generation;
+
+        tc_entity_pool* pool = tc_scene_entity_pool(scene.handle());
+        if (!pool) return "{}";
+
+        Entity e(pool, eid);
+        if (!e.valid()) return "{}";
+
+        nos::trent data = serialize_entity_recursive(e);
+        return nos::json::dump(data, 2);
+    }
 }
 %}

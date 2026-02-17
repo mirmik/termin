@@ -688,6 +688,8 @@ void deserialize_shadow_settings(tc_scene_lighting* lighting, const nos::trent& 
     }
 }
 
+} // anonymous namespace
+
 nos::trent serialize_entity_recursive(const Entity& e) {
     if (!e.valid() || !e.serializable()) {
         return nos::trent();
@@ -734,8 +736,6 @@ nos::trent serialize_entity_recursive(const Entity& e) {
 
     return data;
 }
-
-} // anonymous namespace
 
 // --- TcSceneRef serialization ---
 

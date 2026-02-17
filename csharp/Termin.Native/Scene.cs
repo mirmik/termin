@@ -76,6 +76,15 @@ public class Scene : IDisposable
     }
 
     /// <summary>
+    /// Serializes a single entity and its entire subtree to JSON string.
+    /// </summary>
+    public string SubtreeToJson(Entity entity)
+    {
+        var swigHandle = SwigHelpers.ToSwigSceneHandle(_handle);
+        return termin.entity_subtree_to_json(swigHandle, entity.Id.Index, entity.Id.Generation);
+    }
+
+    /// <summary>
     /// Gets the collision world pointer (for debugging).
     /// </summary>
     public IntPtr CollisionWorldPtr => _collisionWorld;
