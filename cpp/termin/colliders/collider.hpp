@@ -49,7 +49,8 @@ struct ColliderHit {
 enum class ColliderType {
     Box,
     Sphere,
-    Capsule
+    Capsule,
+    ConvexHull
 };
 
 // ==================== Forward declarations ====================
@@ -58,6 +59,7 @@ class Collider;
 class BoxCollider;
 class SphereCollider;
 class CapsuleCollider;
+class ConvexHullCollider;
 
 using ColliderPtr = std::shared_ptr<Collider>;
 

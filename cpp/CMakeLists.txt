@@ -50,8 +50,8 @@ endif()
 
 # Platform-specific optimization flags
 if(MSVC)
-    set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG")
-    set(CMAKE_C_FLAGS_DEBUG "/Zi /Od /DEBUG")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
+    set(CMAKE_C_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
     set(OPTIMIZE_FLAGS /O2 /fp:fast)
 else()
@@ -527,6 +527,9 @@ if(BUILD_TESTS)
         tests/tests_general_pose3.cpp
         tests/tests_colliders.cpp
         tests/tests_collision.cpp
+        tests/tests_gjk.cpp
+        tests/tests_quickhull.cpp
+        tests/tests_convex_hull_collider.cpp
     )
     target_include_directories(termin_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

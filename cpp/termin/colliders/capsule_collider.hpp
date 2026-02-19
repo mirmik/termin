@@ -95,6 +95,19 @@ public:
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
 
+    std::unique_ptr<ColliderPrimitive> clone_at(const GeneralPose3& pose) const override {
+        return std::make_unique<CapsuleCollider>(half_height, radius, pose);
+    }
+
+    Vec3 support(const Vec3& direction) const override {
+        Vec3 a = world_a();
+        Vec3 b = world_b();
+        Vec3 base = (direction.dot(b - a) >= 0) ? b : a;
+        double len = direction.norm();
+        if (len < 1e-12) return base;
+        return base + direction * (effective_radius() / len);
+    }
+
     // Double dispatch implementations
     ColliderHit closest_to_box_impl(const BoxCollider& box) const override;
     ColliderHit closest_to_sphere_impl(const SphereCollider& sphere) const override;

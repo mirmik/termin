@@ -7,6 +7,7 @@
 #include "termin/geom/mat44.hpp"
 
 namespace termin {
+namespace colliders { class ConvexHullCollider; }
 
 // Collider wireframe color (green) - defined in cpp file
 extern const Color4 COLLIDER_GIZMO_COLOR;
@@ -50,6 +51,7 @@ public:
     void _draw_box_internal(WireframeRenderer* renderer, const Mat44f& entity_world, const float* box_size);
     void _draw_sphere_internal(WireframeRenderer* renderer, const Mat44f& entity_world, float radius);
     void _draw_capsule_internal(WireframeRenderer* renderer, const Mat44f& entity_world, float height, float radius);
+    void _draw_convex_hull_internal(WireframeRenderer* renderer, const Mat44f& entity_world, const colliders::ConvexHullCollider* hull);
 
 private:
     WireframeRenderer _renderer;

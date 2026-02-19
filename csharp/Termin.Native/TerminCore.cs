@@ -245,6 +245,79 @@ public static class TerminCore
     public static extern void MeshDrawGpu(IntPtr mesh);
 
     // ========================================================================
+    // Mesh data export
+    // ========================================================================
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_uuid_str", CharSet = CharSet.Ansi)]
+    public static extern IntPtr MeshGetUuidStr(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_name_str", CharSet = CharSet.Ansi)]
+    public static extern IntPtr MeshGetNameStr(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_vertices")]
+    public static extern IntPtr MeshGetVertices(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_vertex_count")]
+    public static extern nuint MeshGetVertexCount(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_indices")]
+    public static extern IntPtr MeshGetIndices(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_index_count")]
+    public static extern nuint MeshGetIndexCount(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_layout")]
+    public static extern TcVertexLayout MeshGetLayout(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_draw_mode")]
+    public static extern byte MeshGetDrawMode(TcMeshHandle handle);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_compute_uuid", CharSet = CharSet.Ansi)]
+    public static extern void MeshComputeUuid(
+        IntPtr vertices, nuint vertexSize,
+        IntPtr indices, nuint indexCount,
+        [MarshalAs(UnmanagedType.LPStr)] System.Text.StringBuilder uuidOut
+    );
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_find", CharSet = CharSet.Ansi)]
+    public static extern TcMeshHandle MeshFind(string uuid);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_find_by_name", CharSet = CharSet.Ansi)]
+    public static extern TcMeshHandle MeshFindByName(string name);
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_count")]
+    public static extern nuint MeshCount();
+
+    [DllImport(DLL, EntryPoint = "tc_mesh_get_all_info")]
+    public static extern IntPtr MeshGetAllInfo(out nuint count);
+
+    /// <summary>
+    /// Frees memory allocated by the C library (e.g. tc_mesh_get_all_info result).
+    /// </summary>
+    [DllImport("msvcrt", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void CrtFree(IntPtr ptr);
+
+    /// <summary>
+    /// Gets all mesh infos as a managed array. Caller does not need to free.
+    /// </summary>
+    public static unsafe TcMeshInfo[] GetAllMeshInfos()
+    {
+        var ptr = MeshGetAllInfo(out var count);
+        if (ptr == IntPtr.Zero || count == 0)
+            return Array.Empty<TcMeshInfo>();
+
+        int structSize = Marshal.SizeOf<TcMeshInfo>();
+        var result = new TcMeshInfo[(int)count];
+        for (int i = 0; i < (int)count; i++)
+        {
+            result[i] = Marshal.PtrToStructure<TcMeshInfo>(ptr + i * structSize);
+        }
+
+        CrtFree(ptr);
+        return result;
+    }
+
+    // ========================================================================
     // Vertex Layout
     // ========================================================================
 

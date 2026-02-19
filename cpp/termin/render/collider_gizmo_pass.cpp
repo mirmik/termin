@@ -3,6 +3,7 @@
 #include "termin/camera/camera_component.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/colliders/collider_component.hpp"
+#include "termin/colliders/convex_hull_collider.hpp"
 #include "termin/geom/quat.hpp"
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
@@ -117,6 +118,13 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
         float radius = (std::min(size[0], size[1]) / 2.0f) * std::min(sx, sy);
         if (radius > 0) {
             data->pass->_draw_capsule_internal(data->renderer, world, height, radius);
+        }
+    }
+    else if (type == "ConvexHull") {
+        auto* primitive = col->collider();
+        if (primitive && primitive->type() == colliders::ColliderType::ConvexHull) {
+            auto* hull = static_cast<const colliders::ConvexHullCollider*>(primitive);
+            data->pass->_draw_convex_hull_internal(data->renderer, world, hull);
         }
     }
 
@@ -368,6 +376,42 @@ void ColliderGizmoPass::_draw_capsule_internal(WireframeRenderer* renderer, cons
                            * mat4_from_rotation_matrix(arc_rot_b)
                            * mat4_scale_uniform(radius);
         renderer->draw_arc(model_arc_b, COLLIDER_GIZMO_COLOR);
+    }
+}
+
+void ColliderGizmoPass::_draw_convex_hull_internal(
+    WireframeRenderer* renderer, const Mat44f& entity_world,
+    const colliders::ConvexHullCollider* hull)
+{
+    if (!hull || hull->edges.empty() || hull->vertices.empty()) return;
+
+    // Draw each precomputed edge as a line
+    for (const auto& [i, j] : hull->edges) {
+        const Vec3& va = hull->vertices[i];
+        const Vec3& vb = hull->vertices[j];
+
+        // Transform local vertices by entity world matrix
+        // world * [x, y, z, 1]
+        float ax = entity_world.data[0] * (float)va.x + entity_world.data[4] * (float)va.y + entity_world.data[8]  * (float)va.z + entity_world.data[12];
+        float ay = entity_world.data[1] * (float)va.x + entity_world.data[5] * (float)va.y + entity_world.data[9]  * (float)va.z + entity_world.data[13];
+        float az = entity_world.data[2] * (float)va.x + entity_world.data[6] * (float)va.y + entity_world.data[10] * (float)va.z + entity_world.data[14];
+
+        float bx = entity_world.data[0] * (float)vb.x + entity_world.data[4] * (float)vb.y + entity_world.data[8]  * (float)vb.z + entity_world.data[12];
+        float by = entity_world.data[1] * (float)vb.x + entity_world.data[5] * (float)vb.y + entity_world.data[9]  * (float)vb.z + entity_world.data[13];
+        float bz = entity_world.data[2] * (float)vb.x + entity_world.data[6] * (float)vb.y + entity_world.data[10] * (float)vb.z + entity_world.data[14];
+
+        float dx = bx - ax, dy = by - ay, dz = bz - az;
+        float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (len < 1e-6f) continue;
+
+        float dir[3] = {dx / len, dy / len, dz / len};
+        float rot[9];
+        rotation_matrix_align_z_to_axis(dir, rot);
+
+        Mat44f model = mat4_translate(ax, ay, az)
+                     * mat4_from_rotation_matrix(rot)
+                     * mat4_scale(1, 1, len);
+        renderer->draw_line(model, COLLIDER_GIZMO_COLOR);
     }
 }
 

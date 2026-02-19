@@ -17,6 +17,7 @@
 
 #include "collider.hpp"
 #include "../geom/general_pose3.hpp"
+#include <memory>
 
 namespace termin {
 namespace colliders {
@@ -56,6 +57,13 @@ public:
     Pose3 pose() const {
         return transform.to_pose3();
     }
+
+    // Создать копию примитива с другим трансформом.
+    // Используется AttachedCollider для создания world-space копий.
+    virtual std::unique_ptr<ColliderPrimitive> clone_at(const GeneralPose3& pose) const = 0;
+
+    // Support function для GJK: самая дальняя точка в направлении direction (world space).
+    virtual Vec3 support(const Vec3& direction) const = 0;
 };
 
 } // namespace colliders

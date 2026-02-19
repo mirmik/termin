@@ -310,6 +310,53 @@ size_t tc_mesh_count(void) {
 }
 
 // ============================================================================
+// Mesh data export
+// ============================================================================
+
+const char* tc_mesh_get_uuid_str(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->header.uuid : NULL;
+}
+
+const char* tc_mesh_get_name_str(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->header.name : NULL;
+}
+
+const void* tc_mesh_get_vertices(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->vertices : NULL;
+}
+
+size_t tc_mesh_get_vertex_count(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->vertex_count : 0;
+}
+
+const uint32_t* tc_mesh_get_indices(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? (const uint32_t*)m->indices : NULL;
+}
+
+size_t tc_mesh_get_index_count(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->index_count : 0;
+}
+
+tc_vertex_layout tc_mesh_get_layout(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    if (m) return m->layout;
+    tc_vertex_layout empty;
+    memset(&empty, 0, sizeof(empty));
+    return empty;
+}
+
+uint8_t tc_mesh_get_draw_mode(tc_mesh_handle h) {
+    tc_mesh* m = tc_mesh_get(h);
+    return m ? m->draw_mode : 0;
+}
+
+// ============================================================================
 // Legacy pointer-based API
 // ============================================================================
 

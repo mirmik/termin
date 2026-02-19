@@ -162,6 +162,37 @@ public enum TcAttribType : byte
 }
 
 /// <summary>
+/// Mesh info matching tc_mesh_info in C. Used by MeshGetAllInfo.
+/// </summary>
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+public unsafe struct TcMeshInfo
+{
+    public TcMeshHandle Handle;
+    public fixed byte Uuid[40];
+    public IntPtr Name; // const char*
+    public uint RefCount;
+    public uint Version;
+    public nuint VertexCount;
+    public nuint IndexCount;
+    public nuint Stride;
+    public nuint MemoryBytes;
+    public byte IsLoaded;
+    public byte HasLoadCallback;
+    public fixed byte Pad[6];
+
+    public string GetUuid()
+    {
+        fixed (byte* p = Uuid)
+            return Marshal.PtrToStringAnsi((IntPtr)p) ?? string.Empty;
+    }
+
+    public string GetName()
+    {
+        return Name != IntPtr.Zero ? Marshal.PtrToStringAnsi(Name) ?? string.Empty : string.Empty;
+    }
+}
+
+/// <summary>
 /// Vertex attribute matching tc_vertex_attrib in C.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]

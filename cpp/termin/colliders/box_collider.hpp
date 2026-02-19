@@ -67,6 +67,24 @@ public:
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
 
+    std::unique_ptr<ColliderPrimitive> clone_at(const GeneralPose3& pose) const override {
+        return std::make_unique<BoxCollider>(half_size, pose);
+    }
+
+    Vec3 support(const Vec3& direction) const override {
+        // Трансформируем direction в локальное пространство (без scale)
+        Vec3 local_dir = transform.ang.inverse().rotate(direction);
+        Vec3 hs = effective_half_size();
+        // Выбираем знак каждой оси по проекции direction
+        Vec3 local_point(
+            local_dir.x >= 0 ? hs.x : -hs.x,
+            local_dir.y >= 0 ? hs.y : -hs.y,
+            local_dir.z >= 0 ? hs.z : -hs.z
+        );
+        // Трансформируем обратно в world (rotation + translation, без scale — она уже в hs)
+        return transform.ang.rotate(local_point) + transform.lin;
+    }
+
     // ==================== Геометрия ====================
 
     /**

@@ -147,6 +147,34 @@ static inline void tc_mesh_bump_version(tc_mesh* mesh) {
 }
 
 // ============================================================================
+// Mesh data export (for serialization to binary)
+// ============================================================================
+
+// Get mesh UUID string (returns NULL if invalid)
+TC_API const char* tc_mesh_get_uuid_str(tc_mesh_handle h);
+
+// Get mesh name string (returns NULL if invalid)
+TC_API const char* tc_mesh_get_name_str(tc_mesh_handle h);
+
+// Get pointer to raw vertex data (returns NULL if invalid or no data)
+TC_API const void* tc_mesh_get_vertices(tc_mesh_handle h);
+
+// Get vertex count
+TC_API size_t tc_mesh_get_vertex_count(tc_mesh_handle h);
+
+// Get pointer to raw index data (returns NULL if invalid or no data)
+TC_API const uint32_t* tc_mesh_get_indices(tc_mesh_handle h);
+
+// Get index count
+TC_API size_t tc_mesh_get_index_count(tc_mesh_handle h);
+
+// Get vertex layout (returns zeroed layout if invalid)
+TC_API tc_vertex_layout tc_mesh_get_layout(tc_mesh_handle h);
+
+// Get draw mode (TC_DRAW_TRIANGLES or TC_DRAW_LINES)
+TC_API uint8_t tc_mesh_get_draw_mode(tc_mesh_handle h);
+
+// ============================================================================
 // Legacy API (deprecated - use handle-based API)
 // ============================================================================
 

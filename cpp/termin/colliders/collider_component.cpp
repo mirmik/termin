@@ -6,6 +6,9 @@
 
 namespace termin {
 
+// Static mesh provider (set by render_lib)
+ColliderComponent::MeshProviderFn ColliderComponent::mesh_provider = nullptr;
+
 // Register collider_type field with enum choices
 static struct _ColliderTypeFieldRegistrar {
     _ColliderTypeFieldRegistrar() {
@@ -30,6 +33,7 @@ static struct _ColliderTypeFieldRegistrar {
         info.choices.push_back({"Box", "Box"});
         info.choices.push_back({"Sphere", "Sphere"});
         info.choices.push_back({"Capsule", "Capsule"});
+        info.choices.push_back({"ConvexHull", "ConvexHull"});
 
         tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
     }
@@ -149,6 +153,50 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
         double radius = std::min(box_size.x, box_size.y) / 2.0;
         double half_height = box_size.z / 2.0;
         return std::make_unique<colliders::CapsuleCollider>(radius, half_height);
+    }
+    else if (collider_type == "ConvexHull") {
+        // Extract vertices from MeshRenderer on same entity via callback
+        if (!mesh_provider) {
+            tc::Log::error("ColliderComponent: ConvexHull mesh_provider not registered (render_lib not loaded?)");
+            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+        }
+
+        Entity ent = entity();
+        if (!ent.valid()) {
+            tc::Log::error("ColliderComponent: ConvexHull requires a valid entity");
+            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+        }
+
+        tc_mesh* m = mesh_provider(ent);
+        if (!m || !m->vertices || m->vertex_count == 0) {
+            tc::Log::error("ColliderComponent: ConvexHull requires MeshRenderer with a loaded mesh on same entity");
+            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+        }
+
+        // Find "position" attribute in vertex layout
+        const tc_vertex_attrib* pos_attrib = tc_vertex_layout_find(&m->layout, "position");
+        if (!pos_attrib || pos_attrib->size < 3) {
+            tc::Log::error("ColliderComponent: mesh has no position attribute (or size < 3)");
+            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+        }
+
+        // Extract position data from interleaved vertex buffer
+        std::vector<Vec3> points;
+        points.reserve(m->vertex_count);
+        const char* raw = static_cast<const char*>(m->vertices);
+        uint16_t stride = m->layout.stride;
+        uint16_t offset = pos_attrib->offset;
+
+        for (size_t i = 0; i < m->vertex_count; ++i) {
+            const float* pos = reinterpret_cast<const float*>(raw + i * stride + offset);
+            points.push_back(Vec3(
+                pos[0] * box_size.x,
+                pos[1] * box_size.y,
+                pos[2] * box_size.z));
+        }
+
+        return std::make_unique<colliders::ConvexHullCollider>(
+            colliders::ConvexHullCollider::from_points(points));
     }
     else {
         tc::Log::warn("ColliderComponent: unknown collider type '%s', defaulting to Box", collider_type.c_str());

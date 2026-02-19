@@ -53,6 +53,16 @@ public:
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
 
+    std::unique_ptr<ColliderPrimitive> clone_at(const GeneralPose3& pose) const override {
+        return std::make_unique<SphereCollider>(radius, pose);
+    }
+
+    Vec3 support(const Vec3& direction) const override {
+        double len = direction.norm();
+        if (len < 1e-12) return center();
+        return center() + direction * (effective_radius() / len);
+    }
+
     // ==================== Специфичные методы ====================
 
     /**

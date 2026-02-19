@@ -1,10 +1,22 @@
 #include "mesh_renderer.hpp"
+#include "termin/colliders/collider_component.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include "tc_log.hpp"
 
 namespace termin {
+
+// Register mesh provider for ColliderComponent ConvexHull support
+static struct _MeshProviderRegistrar {
+    _MeshProviderRegistrar() {
+        ColliderComponent::mesh_provider = [](Entity& ent) -> tc_mesh* {
+            auto* mr = ent.get_component<MeshRenderer>();
+            if (!mr) return nullptr;
+            return mr->mesh.get();
+        };
+    }
+} _mesh_provider_registrar;
 
 MeshRenderer::MeshRenderer() {
     // Link to type registry for proper type identification

@@ -9,9 +9,11 @@
 #include "core/tc_scene.h"
 #include <memory>
 #include <string>
+#include <functional>
 
 extern "C" {
 #include "tc_types.h"
+#include "resources/tc_mesh.h"
 }
 
 namespace termin {
@@ -25,7 +27,7 @@ namespace termin {
 // - Capsule: height scaled by scale.z, radius by min(scale.x, scale.y)
 class ENTITY_API ColliderComponent : public CxxComponent {
 public:
-    // Collider type: "Box", "Sphere", "Capsule"
+    // Collider type: "Box", "Sphere", "Capsule", "ConvexHull"
     std::string collider_type = "Box";
 
     // Box size in local coordinates (multiplied by entity scale)
@@ -75,6 +77,11 @@ public:
     void set_box_size(const tc_vec3& size);
     void set_box_size(double x, double y, double z) { set_box_size(tc_vec3{x, y, z}); }
     Vec3 get_box_size() const { return Vec3{box_size.x, box_size.y, box_size.z}; }
+
+    // Mesh provider callback (set by render_lib to avoid circular dependency)
+    // Given an entity, returns tc_mesh* from its MeshRenderer (or nullptr)
+    using MeshProviderFn = std::function<tc_mesh*(Entity&)>;
+    static MeshProviderFn mesh_provider;
 
 private:
     // Create collider primitive based on current type and parameters
