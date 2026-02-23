@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.camera import CameraComponent
 from termin.visualization.ui.widgets.component import UIComponent
-from termin.visualization.ui.widgets.basic import IconButton
+from tcgui.widgets.basic import IconButton
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:

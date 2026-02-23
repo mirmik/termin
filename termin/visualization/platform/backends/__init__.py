@@ -3,18 +3,15 @@
 from __future__ import annotations
 from typing import Optional
 
-from .base import (
-    Action,
-    BackendWindow,
+from tcbase import Action, Key, MouseButton
+from tgfx import (
     GraphicsBackend,
     GPUTextureHandle,
-    Key,
-    MeshHandle,
-    MouseButton,
+    GPUMeshHandle as MeshHandle,
     ShaderHandle,
-    WindowBackend,
     FramebufferHandle,
 )
+from tgfx.window import BackendWindow, WindowBackend
 from .nop_graphics import NOPGraphicsBackend
 from .nop_window import NOPWindowBackend
 from .qt import QtGLWindowHandle, QtWindowBackend

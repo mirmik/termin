@@ -26,7 +26,7 @@ from termin._native.render import (
 )
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import FramebufferHandle, GPUTextureHandle
+    from tgfx import FramebufferHandle, GPUTextureHandle
 
 __all__ = [
     "FrameGraphResource",

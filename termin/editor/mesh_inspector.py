@@ -28,7 +28,7 @@ from termin.editor.widgets.spinbox import DoubleSpinBox
 if TYPE_CHECKING:
     from termin.assets.mesh_asset import MeshAsset
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
 
 
 class MeshInspector(QWidget):

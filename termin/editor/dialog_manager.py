@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from termin.editor.spacemouse_controller import SpaceMouseController
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
 
 
 class DialogManager:

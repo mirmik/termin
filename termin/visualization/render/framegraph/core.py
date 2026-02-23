@@ -11,7 +11,7 @@ from termin._native.render import (
 )
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import FramebufferHandle
+    from tgfx import FramebufferHandle
 
 
 class FramePass:

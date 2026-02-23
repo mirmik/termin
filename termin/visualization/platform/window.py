@@ -11,7 +11,7 @@ from typing import Callable, List, Optional, Tuple, TYPE_CHECKING
 
 from termin.visualization.core.display import Display
 from termin.visualization.core.viewport import Viewport
-from termin.visualization.platform.backends.base import (
+from tcbase import (
     Action,
     MouseButton,
 )
@@ -20,7 +20,7 @@ from termin.visualization.platform.input_manager import DisplayInputRouter
 if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.scene import Scene
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
     from termin._native.platform import SDLWindowBackend, SDLWindowRenderSurface
 
 

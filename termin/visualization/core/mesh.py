@@ -8,7 +8,7 @@ from termin.mesh.mesh import Mesh2, Mesh3
 from termin.mesh import TcMesh
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.mesh_asset import MeshAsset
-from termin.visualization.platform.backends.base import MeshHandle as GPUMeshHandle  # GPU backend mesh handle
+from tgfx import GPUMeshHandle  # GPU backend mesh handle
 
 
 class MeshDrawable:

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import FramebufferHandle, GraphicsBackend
+    from tgfx import FramebufferHandle, GraphicsBackend
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 

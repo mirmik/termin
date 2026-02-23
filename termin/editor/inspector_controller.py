@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
     from termin.editor.editor_inspector import EntityInspector
     from termin.editor.material_inspector import MaterialInspector
     from termin.editor.display_inspector import DisplayInspector

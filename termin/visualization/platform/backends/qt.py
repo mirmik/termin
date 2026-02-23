@@ -7,7 +7,8 @@ from typing import Callable, Optional, Any
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
-from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
+from tcbase import Action, Key, MouseButton
+from tgfx.window import BackendWindow, WindowBackend
 
 from termin.graphics import OpenGLGraphicsBackend
 

@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING
 
 from termin.visualization.core.component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent
-from termin.visualization.platform.backends.base import Action
-from termin.visualization.ui.widgets.ui import UI
-from termin.visualization.ui.widgets.widget import Widget
-from termin.visualization.ui.font import FontTextureAtlas
+from tcbase import Action
+from tcgui.widgets.ui import UI
+from tcgui.widgets.widget import Widget
+from tcgui.font import FontTextureAtlas
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
     from termin.assets.ui_handle import UIHandle
 
 
@@ -35,7 +35,7 @@ class UIComponent(InputComponent):
         ui_comp.load("ui/main_menu.yaml")
 
         # Or build programmatically
-        from termin.visualization.ui.widgets import Panel, Button, VStack
+        from tcgui.widgets import Panel, Button, VStack
 
         panel = Panel()
         panel.padding = 10

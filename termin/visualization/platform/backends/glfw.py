@@ -6,7 +6,8 @@ from typing import Callable, Optional
 
 import glfw
 
-from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
+from tcbase import Action, Key, MouseButton
+from tgfx.window import BackendWindow, WindowBackend
 
 from termin.graphics import OpenGLGraphicsBackend
 

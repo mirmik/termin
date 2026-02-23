@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.entity import Entity
-    from termin.visualization.platform.backends.base import BackendWindow
+    from tgfx.window import BackendWindow
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.editor.rendering_controller import RenderingController
     from termin.editor.editor_camera import EditorCameraManager

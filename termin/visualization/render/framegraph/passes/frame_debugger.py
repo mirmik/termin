@@ -10,7 +10,7 @@ from typing import Set, TYPE_CHECKING, Callable
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import FramebufferHandle
+    from tgfx import FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 

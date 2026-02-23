@@ -23,7 +23,8 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.entity import Entity
-    from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend, WindowBackend
+    from tgfx import GraphicsBackend
+    from tgfx.window import BackendWindow, WindowBackend
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.render import RenderEngine, ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline

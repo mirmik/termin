@@ -10,8 +10,7 @@ from termin.editor.inspect_field import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
-    from tgfx import TcShader
+    from tgfx import GraphicsBackend, GPUTextureHandle, TcShader
 
 # Callback type: (shader) -> None
 BeforeDrawCallback = Callable[["TcShader"], None]

@@ -348,7 +348,7 @@ class WebStreamServer:
         """Передаёт событие кнопки мыши в сцену."""
         if self.scene is None:
             return
-        from termin.visualization.platform.backends.base import MouseButton, Action
+        from tcbase import MouseButton, Action
 
         # Маппинг browser button -> MouseButton
         button_map = {
@@ -374,7 +374,7 @@ class WebStreamServer:
         """Передаёт событие клавиатуры в сцену."""
         if self.scene is None:
             return
-        from termin.visualization.platform.backends.base import Key, Action
+        from tcbase import Key, Action
 
         # Базовый маппинг клавиш
         key_map = {

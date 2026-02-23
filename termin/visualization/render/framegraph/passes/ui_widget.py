@@ -8,7 +8,7 @@ from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from tgfx import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 

@@ -5,7 +5,7 @@ from typing import Optional, Callable, List, Tuple, TYPE_CHECKING
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtGui import QWindow
 
-from termin.visualization.platform.backends.base import GraphicsBackend
+from tgfx import GraphicsBackend
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend

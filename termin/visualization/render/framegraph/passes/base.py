@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from termin.visualization.render.framegraph.core import FramePass
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from tgfx import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 

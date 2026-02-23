@@ -5,7 +5,7 @@ from typing import Dict, Set, Tuple, List, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.platform.backends.base import (
+from tgfx import (
     FramebufferHandle,
     GraphicsBackend,
     GPUTextureHandle,

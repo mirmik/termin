@@ -160,6 +160,7 @@ if(BUNDLE_PYTHON)
         yaml
         tgfx
         tcbase
+        tcgui
     )
 
     # Install each package

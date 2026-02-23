@@ -1,5 +1,5 @@
 from typing import Any, Optional, Tuple
-from .base import BackendWindow, WindowBackend
+from tgfx.window import BackendWindow, WindowBackend
 
 class NOPWindowHandle(BackendWindow):
     """

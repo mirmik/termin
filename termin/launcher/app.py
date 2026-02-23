@@ -13,12 +13,11 @@ from sdl2 import video
 
 from termin.graphics import OpenGLGraphicsBackend
 from termin.visualization.platform.backends import set_default_graphics_backend
-from termin.visualization.ui.widgets.ui import UI
-from termin.visualization.ui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
-from termin.visualization.ui.widgets.containers import HStack, VStack, Panel
-from termin.visualization.ui.widgets.units import px, pct
-from termin.visualization.platform.backends.base import Key
-from tcbase import log
+from tcgui.widgets.ui import UI
+from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
+from tcgui.widgets.containers import HStack, VStack, Panel
+from tcgui.widgets.units import px, pct
+from tcbase import Key, log
 from termin.launcher.recent import RecentProjects, create_project, write_launch_project
 
 

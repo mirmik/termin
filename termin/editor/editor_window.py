@@ -1362,7 +1362,7 @@ class EditorWindow(QMainWindow):
     def _on_viewport_key(self, event) -> None:
         """C++ EditorInteractionSystem key callback (KeyEvent)."""
         from termin.visualization.core.input_events import Action, Mods
-        from termin.visualization.platform.backends.base import Key
+        from tcbase import Key
         if event.action != Action.PRESS:
             return
         if event.key == Key.DELETE.value:

@@ -3,18 +3,15 @@ from __future__ import annotations
 
 from typing import Any, Optional, Tuple
 
-from .base import (
-    Action,
-    BackendWindow,
+from tcbase import Action, Key, MouseButton
+from tgfx import (
     FramebufferHandle,
     GraphicsBackend,
-    Key,
-    MeshHandle,
-    MouseButton,
+    GPUMeshHandle as MeshHandle,
     ShaderHandle,
     GPUTextureHandle,
-    WindowBackend,
 )
+from tgfx.window import BackendWindow, WindowBackend
 
 
 # --- NOP-обёртки для GPU-ресурсов ---------------------------------------

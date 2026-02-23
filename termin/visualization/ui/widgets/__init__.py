@@ -1,12 +1,12 @@
 """Widget-based UI system with YAML layout support."""
 
-from termin.visualization.ui.widgets.units import Value, Unit, px, ndc, pct
-from termin.visualization.ui.widgets.widget import Widget
-from termin.visualization.ui.widgets.containers import HStack, VStack, Panel
-from termin.visualization.ui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput, ListWidget
-from termin.visualization.ui.widgets.renderer import UIRenderer
-from termin.visualization.ui.widgets.loader import UILoader
-from termin.visualization.ui.widgets.ui import UI
+from tcgui.widgets.units import Value, Unit, px, ndc, pct
+from tcgui.widgets.widget import Widget
+from tcgui.widgets.containers import HStack, VStack, Panel
+from tcgui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput, ListWidget
+from tcgui.widgets.renderer import UIRenderer
+from tcgui.widgets.loader import UILoader
+from tcgui.widgets.ui import UI
 from termin.visualization.ui.widgets.component import UIComponent
 
 __all__ = [

@@ -16,7 +16,7 @@ from termin.visualization.render.immediate import ImmediateRenderer
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
 
 
 def closest_point_on_axis_from_ray(axis_point, axis_dir, ray_origin, ray_dir):

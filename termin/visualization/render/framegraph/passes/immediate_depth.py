@@ -15,7 +15,7 @@ from termin.visualization.render.immediate import ImmediateRenderer
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
     from termin.visualization.render.framebuffer import FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 

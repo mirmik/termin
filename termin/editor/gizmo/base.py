@@ -19,7 +19,7 @@ import numpy as np
 if TYPE_CHECKING:
     from termin.visualization.render.immediate import ImmediateRenderer
     from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
 
 
 # ============================================================

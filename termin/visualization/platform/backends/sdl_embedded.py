@@ -13,7 +13,8 @@ from typing import Any, Callable, Optional, Tuple, TYPE_CHECKING
 import sdl2
 from sdl2 import video
 
-from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
+from tcbase import Action, Key, MouseButton
+from tgfx.window import BackendWindow, WindowBackend
 
 from termin.graphics import OpenGLGraphicsBackend
 

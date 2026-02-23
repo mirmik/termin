@@ -17,7 +17,7 @@ from termin.visualization import (
 )
 from termin.visualization.render.components import MeshRenderer
 from tgfx import TcShader
-from termin.visualization.ui.widgets import (
+from tcgui.widgets import (
     UIComponent,
     Panel,
     VStack,
@@ -28,7 +28,7 @@ from termin.visualization.ui.widgets import (
     px,
     pct,
 )
-from termin.visualization.ui.font import FontTextureAtlas
+from tcgui.font import FontTextureAtlas
 
 
 # 3D shader

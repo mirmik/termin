@@ -15,7 +15,7 @@ from termin.visualization import (
     OrbitCameraController,
     InputComponent,
 )
-from termin.visualization.platform.backends.base import Action, Key
+from tcbase import Action, Key
 from termin.visualization.render.components import MeshRenderer, LightComponent
 from tgfx import TcShader
 

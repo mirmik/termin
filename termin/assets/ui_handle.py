@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from termin.assets.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
-    from termin.visualization.ui.widgets.widget import Widget
+    from tcgui.widgets.widget import Widget
     from termin.assets.ui_asset import UIAsset
 
 

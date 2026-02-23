@@ -15,7 +15,7 @@ from PyQt6.QtGui import QWindow
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
     from termin.mesh.mesh import Mesh3
     from termin.mesh import TcMesh
 

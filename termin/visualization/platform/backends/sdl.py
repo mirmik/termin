@@ -10,7 +10,7 @@ from termin._native.platform import (
 )
 from termin.graphics import OpenGLGraphicsBackend
 
-from .base import BackendWindow, WindowBackend
+from tgfx.window import BackendWindow, WindowBackend
 
 
 class _TcSurfaceWrapper:

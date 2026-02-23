@@ -12,7 +12,7 @@ from termin.visualization.render.texture_asset import TextureAsset
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPixmap
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from tgfx import GraphicsBackend
 
 
 class Texture:

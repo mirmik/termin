@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
-    from termin.visualization.ui.widgets.widget import Widget
+    from tcgui.widgets.widget import Widget
 
 
 class UIAsset(DataAsset["Widget"]):
@@ -53,7 +53,7 @@ class UIAsset(DataAsset["Widget"]):
 
     def _parse_content(self, content: str) -> "Widget | None":
         """Parse YAML content into Widget tree."""
-        from termin.visualization.ui.widgets.loader import UILoader
+        from tcgui.widgets.loader import UILoader
 
         loader = UILoader()
         return loader.load_string(content)
