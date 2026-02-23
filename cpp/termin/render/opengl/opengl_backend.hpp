@@ -771,8 +771,16 @@ public:
         return std::make_unique<OpenGLShaderHandle>(vertex_source, fragment_source, geometry_source);
     }
 
-    GPUMeshHandlePtr create_mesh(const tc_mesh* mesh) override {
-        return std::make_unique<OpenGLTcMeshHandle>(mesh);
+    GPUMeshHandlePtr create_mesh(
+        const void* vertex_data,
+        size_t vertex_count,
+        const uint32_t* indices,
+        size_t index_count,
+        const tc_vertex_layout* layout,
+        DrawMode mode = DrawMode::Triangles
+    ) override {
+        return std::make_unique<OpenGLLayoutMeshHandle>(
+            vertex_data, vertex_count, indices, index_count, layout, mode);
     }
 
     GPUTextureHandlePtr create_texture(

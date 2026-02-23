@@ -10,7 +10,7 @@
 #include "termin/render/types.hpp"
 
 extern "C" {
-#include "termin_core.h"
+#include "resources/tc_mesh.h"
 }
 
 namespace termin {
@@ -74,7 +74,14 @@ public:
         const char* geometry_source = nullptr
     ) = 0;
 
-    virtual GPUMeshHandlePtr create_mesh(const tc_mesh* mesh) = 0;
+    virtual GPUMeshHandlePtr create_mesh(
+        const void* vertex_data,
+        size_t vertex_count,
+        const uint32_t* indices,
+        size_t index_count,
+        const tc_vertex_layout* layout,
+        DrawMode mode = DrawMode::Triangles
+    ) = 0;
 
     virtual GPUTextureHandlePtr create_texture(
         const uint8_t* data,

@@ -182,9 +182,16 @@ RenderPipeline* RenderingManager::make_default_pipeline() {
         tc_pipeline_add_pass(ph, p);
     }
 
+    if (tc_pass* p = create_and_configure_pass("BloomPass", "Bloom", {
+        {"input_res", "color"},
+        {"output_res", "color_bloom"},
+    })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
     // 5. UIWidgetPass
     if (tc_pass* p = create_and_configure_pass("UIWidgetPass", "UIWidgets", {
-            {"input_res", "color"},
+            {"input_res", "color_bloom"},
             {"output_res", "color+widgets"}
         })) {
         tc_pipeline_add_pass(ph, p);

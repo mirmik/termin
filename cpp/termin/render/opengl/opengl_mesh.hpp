@@ -8,7 +8,7 @@
 #include "termin/render/handles.hpp"
 
 extern "C" {
-#include "termin_core.h"
+#include "resources/tc_mesh.h"
 }
 
 namespace termin {
@@ -18,14 +18,6 @@ namespace termin {
 inline const void* gl_offset(size_t offset) {
     return reinterpret_cast<const void*>(offset);
 }
-
-/**
- * Draw mode for mesh rendering.
- */
-enum class DrawMode {
-    Triangles,
-    Lines
-};
 
 /**
  * Generic mesh handle for raw vertex data with custom layout.
@@ -133,22 +125,69 @@ private:
     DrawMode draw_mode_;
 };
 
-/**
- * Mesh handle that works directly with tc_mesh.
- * Uses tc_mesh's layout to set up vertex attributes automatically.
- * Reads draw_mode from tc_mesh (TC_DRAW_TRIANGLES or TC_DRAW_LINES).
- */
-class OpenGLTcMeshHandle : public GPUMeshHandle {
+// Mesh handle that uses tc_vertex_layout to set up vertex attributes.
+class OpenGLLayoutMeshHandle : public GPUMeshHandle {
 public:
-    OpenGLTcMeshHandle(const tc_mesh* mesh)
-        : vao_(0), vbo_(0), ebo_(0), index_count_(0), draw_mode_(DrawMode::Triangles) {
-        if (mesh) {
-            draw_mode_ = (mesh->draw_mode == TC_DRAW_LINES) ? DrawMode::Lines : DrawMode::Triangles;
-            upload(mesh);
+    GLuint vao_ = 0;
+    GLuint vbo_ = 0;
+    GLuint ebo_ = 0;
+    GLsizei index_count_ = 0;
+    DrawMode draw_mode_ = DrawMode::Triangles;
+
+    OpenGLLayoutMeshHandle(
+        const void* vertex_data,
+        size_t vertex_count,
+        const uint32_t* indices,
+        size_t index_count,
+        const tc_vertex_layout* layout,
+        DrawMode mode = DrawMode::Triangles
+    ) : draw_mode_(mode) {
+        if (!vertex_data || vertex_count == 0 || !layout) return;
+
+        glGenVertexArrays(1, &vao_);
+        glGenBuffers(1, &vbo_);
+        glGenBuffers(1, &ebo_);
+
+        glBindVertexArray(vao_);
+
+        size_t vertex_bytes = vertex_count * layout->stride;
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_);
+        glBufferData(GL_ARRAY_BUFFER, vertex_bytes, vertex_data, GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
+        index_count_ = static_cast<GLsizei>(index_count);
+
+        GLsizei stride = layout->stride;
+        for (uint8_t i = 0; i < layout->attrib_count; i++) {
+            const tc_vertex_attrib& attr = layout->attribs[i];
+            GLuint location = attr.location;
+
+            glEnableVertexAttribArray(location);
+
+            GLenum gl_type = GL_FLOAT;
+            bool is_integer = false;
+            switch (attr.type) {
+                case TC_ATTRIB_FLOAT32: gl_type = GL_FLOAT; break;
+                case TC_ATTRIB_INT32: gl_type = GL_INT; is_integer = true; break;
+                case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; is_integer = true; break;
+                case TC_ATTRIB_INT16: gl_type = GL_SHORT; is_integer = true; break;
+                case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; is_integer = true; break;
+                case TC_ATTRIB_INT8: gl_type = GL_BYTE; is_integer = true; break;
+                case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; is_integer = true; break;
+            }
+
+            if (is_integer) {
+                glVertexAttribIPointer(location, attr.size, gl_type, stride, gl_offset(attr.offset));
+            } else {
+                glVertexAttribPointer(location, attr.size, gl_type, GL_FALSE, stride, gl_offset(attr.offset));
+            }
         }
+
+        glBindVertexArray(0);
     }
 
-    ~OpenGLTcMeshHandle() override {
+    ~OpenGLLayoutMeshHandle() override {
         release();
     }
 
@@ -165,68 +204,6 @@ public:
         if (vbo_ != 0) { glDeleteBuffers(1, &vbo_); vbo_ = 0; }
         if (ebo_ != 0) { glDeleteBuffers(1, &ebo_); ebo_ = 0; }
     }
-
-private:
-    void upload(const tc_mesh* mesh) {
-        if (!mesh || !mesh->vertices || mesh->vertex_count == 0) return;
-
-        glGenVertexArrays(1, &vao_);
-        glGenBuffers(1, &vbo_);
-        glGenBuffers(1, &ebo_);
-
-        glBindVertexArray(vao_);
-
-        // Upload raw vertex data from tc_mesh
-        size_t vertex_bytes = mesh->vertex_count * mesh->layout.stride;
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-        glBufferData(GL_ARRAY_BUFFER, vertex_bytes, mesh->vertices, GL_STATIC_DRAW);
-
-        // Upload indices
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh->index_count * sizeof(uint32_t), mesh->indices, GL_STATIC_DRAW);
-        index_count_ = static_cast<GLsizei>(mesh->index_count);
-
-        // Set up vertex attributes based on tc_mesh layout
-        // Location is stored in each attribute, no name-based lookup needed
-        const tc_vertex_layout& layout = mesh->layout;
-        GLsizei stride = layout.stride;
-
-        for (uint8_t i = 0; i < layout.attrib_count; i++) {
-            const tc_vertex_attrib& attr = layout.attribs[i];
-            GLuint location = attr.location;
-
-            glEnableVertexAttribArray(location);
-
-            // Determine GL type and whether it's an integer type
-            GLenum gl_type = GL_FLOAT;
-            bool is_integer = false;
-            switch (attr.type) {
-                case TC_ATTRIB_FLOAT32: gl_type = GL_FLOAT; break;
-                case TC_ATTRIB_INT32: gl_type = GL_INT; is_integer = true; break;
-                case TC_ATTRIB_UINT32: gl_type = GL_UNSIGNED_INT; is_integer = true; break;
-                case TC_ATTRIB_INT16: gl_type = GL_SHORT; is_integer = true; break;
-                case TC_ATTRIB_UINT16: gl_type = GL_UNSIGNED_SHORT; is_integer = true; break;
-                case TC_ATTRIB_INT8: gl_type = GL_BYTE; is_integer = true; break;
-                case TC_ATTRIB_UINT8: gl_type = GL_UNSIGNED_BYTE; is_integer = true; break;
-            }
-
-            // Use glVertexAttribIPointer for integer types (required for ivec4/uvec4 in shader)
-            // glVertexAttribPointer converts to float, which breaks integer attributes on AMD
-            if (is_integer) {
-                glVertexAttribIPointer(location, attr.size, gl_type, stride, gl_offset(attr.offset));
-            } else {
-                glVertexAttribPointer(location, attr.size, gl_type, GL_FALSE, stride, gl_offset(attr.offset));
-            }
-        }
-
-        glBindVertexArray(0);
-    }
-
-    GLuint vao_;
-    GLuint vbo_;
-    GLuint ebo_;
-    GLsizei index_count_;
-    DrawMode draw_mode_;
 };
 
 } // namespace termin

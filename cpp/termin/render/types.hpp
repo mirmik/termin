@@ -71,4 +71,10 @@ enum class TextureFilter {
     NEAREST   // GL_NEAREST - pixelated/blocky
 };
 
+// Draw mode for mesh rendering
+enum class DrawMode {
+    Triangles,
+    Lines
+};
+
 } // namespace termin

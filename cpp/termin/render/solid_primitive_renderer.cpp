@@ -335,25 +335,29 @@ void SolidPrimitiveRenderer::_ensure_initialized(GraphicsBackend* graphics) {
     {
         auto indexed = build_unit_torus(TORUS_MAJOR_SEGMENTS, TORUS_MINOR_SEGMENTS, TORUS_MINOR_RATIO);
         tc_mesh mesh = create_tc_mesh(indexed);
-        _torus_mesh = graphics->create_mesh(&mesh);
+        _torus_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
+            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
         free_tc_mesh_data(&mesh);
     }
     {
         auto indexed = build_unit_cylinder(CYLINDER_SEGMENTS);
         tc_mesh mesh = create_tc_mesh(indexed);
-        _cylinder_mesh = graphics->create_mesh(&mesh);
+        _cylinder_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
+            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
         free_tc_mesh_data(&mesh);
     }
     {
         auto indexed = build_unit_cone(CONE_SEGMENTS);
         tc_mesh mesh = create_tc_mesh(indexed);
-        _cone_mesh = graphics->create_mesh(&mesh);
+        _cone_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
+            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
         free_tc_mesh_data(&mesh);
     }
     {
         auto indexed = build_unit_quad();
         tc_mesh mesh = create_tc_mesh(indexed);
-        _quad_mesh = graphics->create_mesh(&mesh);
+        _quad_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
+            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
         free_tc_mesh_data(&mesh);
     }
 
