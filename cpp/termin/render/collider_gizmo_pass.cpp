@@ -6,7 +6,7 @@
 #include "termin/colliders/convex_hull_collider.hpp"
 #include "termin/geom/quat.hpp"
 #include "termin/geom/mat44.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "core/tc_scene.h"

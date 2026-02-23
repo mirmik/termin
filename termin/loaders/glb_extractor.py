@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.loaders.glb_loader import load_glb_file, GLBMeshData
 
 

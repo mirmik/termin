@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from termin.assets.data_asset import DataAsset
 from termin.assets.shader_asset import make_phase_uuid
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin._native.render import TcMaterial

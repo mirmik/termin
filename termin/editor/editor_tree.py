@@ -11,7 +11,7 @@ from termin.editor.drag_drop import (
     parse_entity_mime_data,
     parse_asset_path_mime_data,
 )
-from termin._native import log
+from tcbase import log
 
 
 class NodeWrapper:

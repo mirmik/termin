@@ -5,7 +5,7 @@
 #include <thread>
 
 extern "C" {
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 }
 
 namespace termin {

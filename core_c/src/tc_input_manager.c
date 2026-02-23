@@ -1,6 +1,6 @@
 // tc_input_manager.c - Input manager implementation
 #include "render/tc_input_manager.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 
 // ============================================================================

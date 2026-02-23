@@ -9,7 +9,7 @@
 #include "tc_profiler.h"
 #include <tgfx/resources/tc_mesh.h>
 #include <tgfx/resources/tc_material.h>
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "core/tc_entity_pool_registry.h"
 #include "termin_core.h"
 #include <stdlib.h>

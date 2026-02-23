@@ -6,7 +6,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from termin._native import log
+from tcbase import log
 from termin.assets.asset import Asset
 
 if TYPE_CHECKING:

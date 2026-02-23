@@ -21,7 +21,7 @@
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/geom/mat44.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"

@@ -4,7 +4,7 @@
 #include "termin/render/execute_context.hpp"
 #include "tgfx/graphics_backend.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "termin_core.h"

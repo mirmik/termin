@@ -4,7 +4,7 @@
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "../render/tc_value_trent.hpp"
-#include <tc_log.hpp>
+#include <tcbase/tc_log.hpp>
 #include <algorithm>
 
 namespace termin {

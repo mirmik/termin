@@ -3,7 +3,7 @@
 #include "render/tc_pipeline_pool.h"
 #include "render/tc_frame_graph.h"
 #include "tc_pipeline_registry.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

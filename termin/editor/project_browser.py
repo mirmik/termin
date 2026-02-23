@@ -24,7 +24,7 @@ from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo, QMimeData, QObject, Q
 from PyQt6.QtGui import QDrag
 from PyQt6.QtWidgets import QFileIconProvider
 
-from termin._native import log
+from tcbase import log
 from termin.editor.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, create_asset_path_mime_data
 

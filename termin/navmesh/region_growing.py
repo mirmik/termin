@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import deque
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.voxels.grid import VoxelGrid
 
 

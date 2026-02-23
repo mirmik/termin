@@ -1,7 +1,7 @@
 #pragma once
 
 #include "termin/voxels/voxel_grid.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

@@ -1,6 +1,6 @@
 #include "shadow_pass.hpp"
 #include "tc_shader_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {

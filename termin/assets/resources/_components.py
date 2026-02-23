@@ -34,7 +34,7 @@ class ComponentsMixin:
             Список имён успешно зарегистрированных компонентов.
         """
         import importlib
-        from termin._native import log
+        from tcbase import log
 
         registered = []
 
@@ -89,7 +89,7 @@ class ComponentsMixin:
             Список имён успешно зарегистрированных FramePass'ов.
         """
         import importlib
-        from termin._native import log
+        from tcbase import log
 
         registered = []
 
@@ -144,7 +144,7 @@ class ComponentsMixin:
             Список имён успешно зарегистрированных PostEffect'ов.
         """
         import importlib
-        from termin._native import log
+        from tcbase import log
 
         registered = []
 

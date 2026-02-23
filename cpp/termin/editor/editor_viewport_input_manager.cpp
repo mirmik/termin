@@ -5,7 +5,7 @@
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "core/tc_entity_pool.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 
 namespace termin {
 

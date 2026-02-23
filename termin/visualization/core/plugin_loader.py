@@ -13,7 +13,7 @@ import pkgutil
 import sys
 from typing import Callable, Set
 
-from termin._native import log
+from tcbase import log
 
 
 def scan_paths(

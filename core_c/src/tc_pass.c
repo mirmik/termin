@@ -4,7 +4,7 @@
 #include "tc_pipeline_registry.h"
 #include "tc_type_registry.h"
 #include "termin_core.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>

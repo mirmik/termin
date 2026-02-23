@@ -33,7 +33,7 @@ from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:

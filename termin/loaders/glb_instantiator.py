@@ -345,7 +345,7 @@ def _create_entity_from_node(
             tc_mesh = meshes[mesh_idx]
 
             if glb_mesh.is_skinned and pending_skinned is not None:
-                from termin._native import log
+                from tcbase import log
                 log.info(f"[glb_instantiator] pending skinned mesh={glb_mesh.name} tc_mesh.is_valid={tc_mesh.is_valid} uuid={tc_mesh.uuid}")
                 pending_skinned.append(_PendingSkinnedMesh(entity, tc_mesh, skinned_material))
             else:
@@ -528,7 +528,7 @@ def instantiate_glb(
         root_entity.add_component(skeleton_controller)
 
     # Step 3: Setup SkinnedMeshRenderers
-    from termin._native import log
+    from tcbase import log
     for pending in pending_skinned:
         if skeleton_controller is not None:
             log.info(f"[glb_instantiator] creating SkinnedMeshRenderer mesh.is_valid={pending.mesh.is_valid} uuid={pending.mesh.uuid} name={pending.mesh.name}")

@@ -14,7 +14,7 @@ Usage:
 """
 
 import traceback
-from termin._native import log as _native_log
+from tcbase import log as _native_log
 
 
 def debug(msg_or_exc, context: str = ""):

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, List
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.visualization.core.component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent
 from termin.visualization.platform.backends.base import MouseButton, Action

@@ -10,7 +10,7 @@ from typing import Tuple
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 
 
 @dataclass

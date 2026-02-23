@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6 import QtWidgets, QtCore, QtGui
 
-from termin._native import log
+from tcbase import log
 from termin.editor.module_watcher import get_module_watcher
 
 if TYPE_CHECKING:

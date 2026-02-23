@@ -8,7 +8,7 @@ import numpy as np
 from termin.visualization.core.python_component import PythonComponent
 from termin.fem.multibody3d_3 import RevoluteJoint3D
 from termin.editor.inspect_field import InspectField
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

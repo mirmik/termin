@@ -7,7 +7,7 @@
 #include "core/tc_entity_pool_registry.h"
 
 #include "../export.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

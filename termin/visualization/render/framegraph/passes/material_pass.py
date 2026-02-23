@@ -9,7 +9,7 @@ from typing import List, Tuple
 
 from termin._native.render import MaterialPass
 from termin.editor.inspect_field import InspectField
-from termin._native import log
+from tcbase import log
 
 __all__ = ["MaterialPass", "get_texture_inputs_for_material"]
 

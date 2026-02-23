@@ -7,7 +7,7 @@
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "tc_gpu.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"

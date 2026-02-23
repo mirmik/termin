@@ -20,7 +20,6 @@ extern "C" {
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
-#include "log_bindings.hpp"
 #include "kind_bindings.hpp"
 #include "tc_component_python_bindings.hpp"
 #include "assets/assets_bindings.hpp"
@@ -28,7 +27,7 @@ extern "C" {
 // For register_tc_mesh_kind
 #include "tgfx/tgfx_mesh_handle.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 
@@ -165,7 +164,7 @@ NB_MODULE(_native, m) {
     auto profiler_module = m.def_submodule("profiler", "Profiler module");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
     auto inspect_module = m.def_submodule("inspect", "Inspect module");
-    auto log_module = m.def_submodule("log", "Logging module");
+    // log_module removed — log is imported from tcbase
     auto kind_module = m.def_submodule("kind", "Kind serialization module");
     auto component_module = m.def_submodule("component", "Component module");
     auto assets_module = m.def_submodule("assets", "Assets module");
@@ -187,7 +186,9 @@ NB_MODULE(_native, m) {
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
-    termin::bind_log(log_module);
+    // Import log from tcbase instead of local bindings
+    nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
+    m.attr("log") = tcbase.attr("log");
     termin::bind_kind(kind_module);
     termin::bind_tc_component_python(component_module);
     termin::bind_assets(assets_module);

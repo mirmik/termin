@@ -4,7 +4,7 @@
 #include "shader_skinning.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <algorithm>
 #include <unordered_map>
 #include <cstring>

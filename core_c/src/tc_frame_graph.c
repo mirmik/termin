@@ -1,6 +1,6 @@
 // tc_frame_graph.c - Frame graph dependency resolution and scheduling
 #include "render/tc_frame_graph.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

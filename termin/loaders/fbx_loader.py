@@ -55,7 +55,7 @@ UFBX QUIRKS AND LIMITATIONS (discovered 2025-12):
 import numpy as np
 import ufbx
 
-from termin._native import log
+from tcbase import log
 
 
 class FBXMeshData:

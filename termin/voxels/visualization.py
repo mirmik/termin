@@ -10,7 +10,7 @@ import numpy as np
 from termin.mesh import TcMesh
 from termin.visualization.core.material import Material
 from termin.visualization.render.components import MeshRenderer
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity

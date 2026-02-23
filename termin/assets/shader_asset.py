@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.assets.data_asset import DataAsset
-from termin._native import log
+from tcbase import log
 from tgfx import TcShader
 
 if TYPE_CHECKING:

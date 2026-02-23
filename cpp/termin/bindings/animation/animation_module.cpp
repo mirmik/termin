@@ -8,7 +8,7 @@
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 using namespace termin;

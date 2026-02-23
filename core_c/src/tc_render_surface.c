@@ -1,6 +1,6 @@
 // tc_render_surface.c - Render surface implementation
 #include "render/tc_render_surface.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 
 // ============================================================================

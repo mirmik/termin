@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from typing import Callable
 
-from termin._native import log
+from tcbase import log
 
 
 class ModuleScanner:

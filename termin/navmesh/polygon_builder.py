@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 from termin.voxels.grid import VoxelGrid
 

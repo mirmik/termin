@@ -514,7 +514,7 @@ class MaterialInspector(QWidget):
         Returns:
             True если сохранение успешно
         """
-        from termin._native import log
+        from tcbase import log
 
         if self._material is None:
             log.warning("[MaterialInspector] save_material_file: material is None")
@@ -908,7 +908,7 @@ class MaterialInspector(QWidget):
             return
 
         from termin.visualization.core.resources import ResourceManager
-        from termin._native import log
+        from tcbase import log
 
         rm = ResourceManager.instance()
         program = rm.get_shader(shader_name)
@@ -934,7 +934,7 @@ class MaterialInspector(QWidget):
 
     def _on_texture_changed(self, uniform_name: str, texture_name: str) -> None:
         """Обработчик изменения текстуры."""
-        from termin._native import log
+        from tcbase import log
 
         if self._material is None:
             log.warning("[MaterialInspector] _on_texture_changed: material is None")

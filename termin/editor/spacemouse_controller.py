@@ -13,7 +13,7 @@ import ctypes
 import ctypes.util
 from typing import TYPE_CHECKING, Callable
 
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.camera import OrbitCameraController

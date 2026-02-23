@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-from termin._native import log
+from tcbase import log
 
 from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QTreeView, QListView, QLabel, QMenu, QTabWidget, QPlainTextEdit
@@ -885,7 +885,7 @@ class EditorWindow(QMainWindow):
 
     def _setup_native_log_callback(self) -> None:
         """Setup callback for native (C/C++) log messages."""
-        from termin._native import log as native_log
+        from tcbase import log as native_log
 
         level_names = {
             native_log.DEBUG: "DEBUG",

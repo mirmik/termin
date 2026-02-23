@@ -53,7 +53,7 @@ class PlayerRuntime:
 
     def initialize(self) -> bool:
         """Initialize player systems."""
-        from termin._native import log
+        from tcbase import log
 
         log.info(f"[PlayerRuntime] Initializing project: {self.project_path}")
 
@@ -147,7 +147,7 @@ class PlayerRuntime:
 
     def _load_modules(self) -> None:
         """Load all C++ and Python modules from the project directory."""
-        from termin._native import log
+        from tcbase import log
         from termin.editor.module_scanner import ModuleScanner
         from termin.editor.pymodule_scanner import PyModuleScanner
 
@@ -176,7 +176,7 @@ class PlayerRuntime:
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
         import os
-        from termin._native import log
+        from tcbase import log
         from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
@@ -248,7 +248,7 @@ class PlayerRuntime:
 
     def _setup_camera(self):
         """Find existing camera or create default one."""
-        from termin._native import log
+        from tcbase import log
         from termin.visualization.core.camera import CameraComponent
 
         log.info(f"[PlayerRuntime] Looking for camera in {len(self.scene.entities)} entities")
@@ -281,7 +281,7 @@ class PlayerRuntime:
 
     def run(self):
         """Run the game loop."""
-        from termin._native import log
+        from tcbase import log
 
         if not self.initialize():
             log.error("[PlayerRuntime] Initialization failed")
@@ -335,7 +335,7 @@ class PlayerRuntime:
     def shutdown(self):
         """Clean up resources."""
         import glfw
-        from termin._native import log
+        from tcbase import log
         from termin.visualization.render import RenderingManager
 
         log.info("[PlayerRuntime] Shutting down")

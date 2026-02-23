@@ -3,7 +3,7 @@
 #include <nanobind/stl/optional.h>
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "tc_gpu.h"

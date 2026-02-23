@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, Set
 
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QFileSystemWatcher, QTimer

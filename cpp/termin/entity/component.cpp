@@ -1,6 +1,6 @@
 // component.cpp - CxxComponent implementation
 #include "component.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

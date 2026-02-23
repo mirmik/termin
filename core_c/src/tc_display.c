@@ -1,7 +1,7 @@
 // tc_display.c - Display implementation
 #include "render/tc_display.h"
 #include "tc_gpu.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

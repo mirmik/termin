@@ -2,7 +2,7 @@
 #include "core/tc_scene_registry.h"
 #include "core/tc_scene.h"
 #include "core/tc_entity_pool.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>

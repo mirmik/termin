@@ -2,7 +2,7 @@
 // C is a dispatcher only - routes calls to language-specific vtables
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_kind.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

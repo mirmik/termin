@@ -11,7 +11,7 @@
 extern "C" {
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_kind.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "core/tc_scene.h"
 }
 

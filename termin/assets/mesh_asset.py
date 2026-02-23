@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from termin._native import log
+from tcbase import log
 from termin.mesh.mesh import Mesh3
 from tgfx import TcMesh
 from termin.assets.data_asset import DataAsset

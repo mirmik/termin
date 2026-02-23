@@ -8,7 +8,7 @@
 
 extern "C" {
 #include "tc_profiler.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 }
 
 namespace termin {

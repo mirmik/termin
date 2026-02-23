@@ -6,7 +6,7 @@ import json
 import os
 import time
 
-from termin._native import log
+from tcbase import log
 from termin.default_scene import write_default_scene
 
 MAX_RECENT = 10

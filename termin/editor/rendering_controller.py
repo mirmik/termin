@@ -805,7 +805,7 @@ class RenderingController:
 
     def get_editor_fbo_pool(self):
         """Get FBO pool (pipeline) for the editor viewport (for picking)."""
-        from termin._native import log
+        from tcbase import log
         result = self.get_display_fbo_pool(self.editor_display)
         if result is None:
             ed = self.editor_display

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstdint>
+#include <tcbase/input_enums.hpp>
 
 extern "C" {
 #include "tc_input_event.h"
@@ -118,32 +119,9 @@ struct KeyEvent : public tc_key_event {
     }
 };
 
-/**
- * Mouse button enum.
- */
-enum class MouseButton : int {
-    LEFT = 0,
-    RIGHT = 1,
-    MIDDLE = 2
-};
-
-/**
- * Action enum.
- */
-enum class Action : int {
-    RELEASE = 0,
-    PRESS = 1,
-    REPEAT = 2
-};
-
-/**
- * Modifier key flags enum.
- */
-enum class Mods : int {
-    SHIFT = 1,
-    CTRL = 2,
-    ALT = 4,
-    SUPER = 8
-};
+// Input enums from tcbase
+using tcbase::MouseButton;
+using tcbase::Action;
+using tcbase::Mods;
 
 } // namespace termin

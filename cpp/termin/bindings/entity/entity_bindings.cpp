@@ -10,7 +10,7 @@
 #include <functional>
 #include <cstring>
 
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry_python.hpp"
 #include "termin/entity/entity.hpp"

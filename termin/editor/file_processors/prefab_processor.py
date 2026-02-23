@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Set
 
-from termin._native import log
+from tcbase import log
 from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 

@@ -5,7 +5,7 @@
 #include "core/tc_component.h"
 #include "core/tc_entity_pool.h"
 #include "tc_input_event.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 
 #include <stdlib.h>
 

@@ -4,7 +4,7 @@
 #include "termin/tc_scene.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>

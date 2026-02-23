@@ -182,25 +182,7 @@ void bind_input_events(nb::module_& m) {
                    ", mods=" + std::to_string(e.mods) + ")";
         });
 
-    // Enums
-    nb::enum_<MouseButton>(m, "MouseButton", "Mouse button constants")
-        .value("LEFT", MouseButton::LEFT)
-        .value("RIGHT", MouseButton::RIGHT)
-        .value("MIDDLE", MouseButton::MIDDLE)
-        .export_values();
-
-    nb::enum_<Action>(m, "Action", "Action constants")
-        .value("RELEASE", Action::RELEASE)
-        .value("PRESS", Action::PRESS)
-        .value("REPEAT", Action::REPEAT)
-        .export_values();
-
-    nb::enum_<Mods>(m, "Mods", "Modifier key flags")
-        .value("SHIFT", Mods::SHIFT)
-        .value("CTRL", Mods::CTRL)
-        .value("ALT", Mods::ALT)
-        .value("SUPER", Mods::SUPER)
-        .export_values();
+    // MouseButton, Action, Mods enums moved to tcbase._tcbase_native
 }
 
 } // namespace termin

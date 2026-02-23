@@ -4,7 +4,7 @@
 #include "tc_hash_map.h"
 #include "core/tc_component.h"
 #include "core/tc_scene.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

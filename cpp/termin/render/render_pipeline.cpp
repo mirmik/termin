@@ -1,6 +1,6 @@
 // render_pipeline.cpp - C++ RenderPipeline implementation
 #include "termin/render/render_pipeline.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <cstring>
 
 extern "C" {

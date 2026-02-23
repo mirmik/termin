@@ -1,6 +1,6 @@
 // tc_archetype.c - SoA archetype storage implementation
 #include "core/tc_archetype.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

@@ -413,7 +413,7 @@ def get_portals_from_path(
     """
     portals: list[tuple[np.ndarray, np.ndarray]] = []
 
-    from termin._native import log as _log
+    from tcbase import log as _log
 
     # Храним индексы вершин для обеспечения консистентности
     prev_left_idx: int | None = None
@@ -529,7 +529,7 @@ def funnel_algorithm(
     Returns:
         Оптимизированный список точек пути.
     """
-    from termin._native import log as _log
+    from tcbase import log as _log
 
     if len(portals) == 0:
         return [start.copy(), end.copy()]
@@ -687,7 +687,7 @@ def navmesh_line_of_sight(
     Returns:
         True если прямой путь возможен.
     """
-    from termin._native import log as _log
+    from tcbase import log as _log
 
     direction = end - start
     dir_len = float(np.linalg.norm(direction))
@@ -902,7 +902,7 @@ def astar_triangles(
         start_tri: (0.0, initial_pos)
     }
 
-    from termin._native import log as _astar_log
+    from tcbase import log as _astar_log
 
     while open_set:
         f_val, _, current = heapq.heappop(open_set)

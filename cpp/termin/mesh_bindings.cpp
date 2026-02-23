@@ -10,7 +10,7 @@
 
 #include "termin/mesh/mesh3.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 
 namespace nb = nanobind;
 

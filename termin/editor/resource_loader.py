@@ -10,7 +10,7 @@ import os
 from typing import TYPE_CHECKING, Callable
 
 from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager

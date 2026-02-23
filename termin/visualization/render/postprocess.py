@@ -274,7 +274,7 @@ class PostProcessPass(RenderFramePass):
                 eff = PostEffect.deserialize(eff_data, resource_manager)
                 effects.append(eff)
             except ValueError as e:
-                from termin._native import log
+                from tcbase import log
                 log.error(f"Failed to deserialize PostEffect: {e}")
 
         return cls(

@@ -4,7 +4,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/ndarray.h>
-#include <tc_log.hpp>
+#include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 

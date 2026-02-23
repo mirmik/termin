@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <memory>
-#include <tc_log.hpp>
+#include <tcbase/tc_log.hpp>
 
 #ifdef TERMIN_HAS_NANOBIND
 #include "component_registry_python.hpp"

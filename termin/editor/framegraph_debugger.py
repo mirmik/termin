@@ -349,7 +349,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _connect(self) -> None:
         """Set up connection based on current mode and UI state."""
-        from termin._native import log
+        from tcbase import log
 
         pipeline = self._get_current_pipeline()
         if pipeline is None:
@@ -604,7 +604,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _present_capture(self) -> None:
         """Present phase: render capture FBO into SDL debug window."""
-        from termin._native import log
+        from tcbase import log
 
         if not self._core.capture.has_capture():
             log.debug("[FramegraphDebugger] _present_capture: no capture")
@@ -638,7 +638,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._sdl_window.swap_buffers()
 
         except Exception as e:
-            from termin._native import log
+            from tcbase import log
             log.error(f"[FramegraphDebugger] present failed: {e}")
 
         finally:
@@ -668,7 +668,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._sdl_window.swap_buffers()
 
         except Exception as e:
-            from termin._native import log
+            from tcbase import log
             log.error(f"[FramegraphDebugger] clear failed: {e}")
 
         finally:

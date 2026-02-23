@@ -102,6 +102,9 @@ set_target_properties(trent PROPERTIES
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
+# termin-base (provides shared enums: MouseButton, Action, Mods)
+find_package(termin_base REQUIRED)
+
 # termin-graphics (provides tgfx types, gpu_ops, opengl backend)
 find_package(termin_graphics REQUIRED)
 
@@ -175,7 +178,7 @@ target_include_directories(entity_lib PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 if(BUILD_CSHARP_BINDINGS)
-    target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base PRIVATE trent)
 else()
     # Find nanobind for entity_lib linking
     if(WIN32)
@@ -192,7 +195,7 @@ else()
         )
     endif()
     find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base PRIVATE trent nanobind-static Python::Python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)

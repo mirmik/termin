@@ -31,7 +31,6 @@ set(TC_SOURCES
     src/tc_hash_map.c
     src/tc_inspect.c
     src/tc_kind.c
-    src/tc_log.c
     src/tc_primitive_mesh.c
     src/tc_pass.c
     src/tc_pipeline.c
@@ -64,7 +63,6 @@ set(TC_HEADERS
     include/core/tc_entity_pool_registry.h
     include/tc_gpu.h
     include/tc_hash_map.h
-    include/tc_log.h
     include/tc_picking.h
     include/tc_profiler.h
     include/tc_project_settings.h
@@ -89,6 +87,9 @@ set(TC_HEADERS
     include/render/tc_viewport.h
     include/render/tc_frame_graph.h
 )
+
+# termin-base (provides tc_log, shared enums)
+find_package(termin_base REQUIRED)
 
 # termin-graphics (provides tgfx types, gpu_ops, opengl backend)
 find_package(termin_graphics REQUIRED)
@@ -115,7 +116,7 @@ target_include_directories(termin_core
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(termin_core PUBLIC tgfx::termin_graphics)
+target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
 
 # Platform-specific
 if(WIN32)

@@ -1,7 +1,7 @@
 // tc_entity_pool_registry.c - Registry for entity pools with generational handles
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_entity_pool.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

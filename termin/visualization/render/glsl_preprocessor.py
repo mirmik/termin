@@ -13,7 +13,7 @@ class GlslPreprocessorError(Exception):
 
 def _glsl_fallback_loader(name: str) -> bool:
     """Load GLSL include from ResourceManager if not already registered."""
-    from termin._native import log
+    from tcbase import log
     from termin.assets.resources import ResourceManager
 
     try:

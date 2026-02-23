@@ -5,7 +5,7 @@
 
 extern "C" {
 #include "tc_value.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 }
 
 namespace nb = nanobind;

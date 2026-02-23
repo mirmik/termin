@@ -113,7 +113,7 @@ class MeshDrawable:
         """Рисует меш."""
         tc_mesh = self._asset.mesh_data
         if tc_mesh is None or not tc_mesh.is_valid:
-            from termin._native import log
+            from tcbase import log
             log.warn(f"MeshDrawable.draw: invalid mesh (asset={self._asset})")
             return
         tc_mesh.draw_gpu()

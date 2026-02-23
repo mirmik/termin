@@ -1,6 +1,6 @@
 #include "sdl_render_surface.hpp"
 #include "render/tc_input_manager.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <SDL2/SDL_syswm.h>
 
 namespace termin {

@@ -1,6 +1,6 @@
 #include "orbit_camera_controller.hpp"
 #include "../entity/component_registry.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 #include <cmath>
 

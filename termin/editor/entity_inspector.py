@@ -264,7 +264,7 @@ class EntityInspector(QWidget):
         entities_and_old_layers: list[tuple["Entity", int]] = []
         self._collect_descendants(self._entity, entities_and_old_layers)
 
-        from termin._native import log
+        from tcbase import log
 
         if not entities_and_old_layers:
             log.info("No descendants to apply layer to")

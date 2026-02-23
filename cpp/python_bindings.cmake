@@ -159,7 +159,6 @@ nanobind_add_module(_native
     termin/profiler_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
-    termin/log_bindings.cpp
     termin/kind_bindings.cpp
     termin/assets/assets_bindings.cpp
     termin/assets/handles.cpp

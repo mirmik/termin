@@ -112,7 +112,7 @@ class SkyBoxPass(RenderFramePass):
         # Check type - skip if not a FramebufferHandle
         from termin.graphics import FramebufferHandle
         if not isinstance(fb, FramebufferHandle):
-            from termin._native import log
+            from tcbase import log
             log.warn(f"[SkyboxPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle")
             return
 

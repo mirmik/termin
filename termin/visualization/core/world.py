@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.resources import ResourceManager
-from termin._native import log
+from tcbase import log
 
 
 class World:

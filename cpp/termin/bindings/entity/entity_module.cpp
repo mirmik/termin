@@ -17,7 +17,7 @@
 #include <cstdio>
 #include <functional>
 
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "entity_helpers.hpp"
 
 extern "C" {

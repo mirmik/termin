@@ -6,7 +6,7 @@
 
 extern "C" {
 #include "termin_core.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 }
 
 #include <string>

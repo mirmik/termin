@@ -6,7 +6,7 @@
 #include "tgfx/render_state.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
 #include <tgfx/resources/tc_material_registry.h>

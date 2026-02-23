@@ -1,7 +1,7 @@
 // shader_skinning.cpp - Shader skinning injection implementation
 
 #include "shader_skinning.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <regex>
 #include <sstream>
 #include <vector>

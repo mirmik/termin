@@ -1,6 +1,6 @@
 #include "skeleton_controller.hpp"
 #include "termin/entity/entity.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

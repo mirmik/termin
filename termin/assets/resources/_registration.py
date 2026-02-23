@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.editor.project_file_watcher import PreLoadResult

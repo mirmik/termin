@@ -2,7 +2,7 @@
 #include "tonemap_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

@@ -3,7 +3,7 @@
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/handles.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 #include <string>
 #include <vector>

@@ -71,14 +71,14 @@ class ImmediateDepthPass(RenderFramePass):
 
         fb = ctx.writes_fbos.get(self.output_res)
         if fb is None:
-            from termin._native import log
+            from tcbase import log
             log.warn(f"[ImmediateDepthPass] output '{self.output_res}' is None")
             return
 
         # Check type - must be FramebufferHandle
         from termin.graphics import FramebufferHandle
         if not isinstance(fb, FramebufferHandle):
-            from termin._native import log
+            from tcbase import log
             log.warn(f"[ImmediateDepthPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle")
             return
 

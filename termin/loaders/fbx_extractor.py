@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.loaders.fbx_loader import load_fbx_file, FBXMeshData
 
 

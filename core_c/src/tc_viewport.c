@@ -3,7 +3,7 @@
 #include "render/tc_viewport_pool.h"
 #include "render/tc_input_manager.h"
 #include "core/tc_component.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

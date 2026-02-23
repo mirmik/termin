@@ -2,7 +2,7 @@
 
 #include "core/tc_scene_pipeline_template.h"
 #include "termin_core.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

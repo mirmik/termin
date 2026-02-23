@@ -3,7 +3,7 @@
 #include "tc_value_trent.hpp"
 #include "graph_compiler.hpp"
 #include "render_pipeline.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <trent/json.h>
 
 namespace termin {

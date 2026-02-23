@@ -1,5 +1,5 @@
 #include "graph_compiler.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "frame_pass.hpp"
 #include "tc_pass.hpp"
 #include "render_pipeline.hpp"

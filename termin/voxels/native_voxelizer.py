@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 
 # Try to import native module
 try:

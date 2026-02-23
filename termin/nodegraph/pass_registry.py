@@ -29,7 +29,7 @@ def get_pass_class(class_name: str) -> Type["FramePass"] | None:
         rm = ResourceManager.instance()
         return rm.get_frame_pass(class_name)
     except Exception as e:
-        from termin._native import log
+        from tcbase import log
         log.warn(f"[pass_registry] get_pass_class('{class_name}') failed: {e}")
         return None
 
@@ -41,7 +41,7 @@ def get_all_pass_names() -> List[str]:
         rm = ResourceManager.instance()
         return list(rm.frame_passes.keys())
     except Exception as e:
-        from termin._native import log
+        from tcbase import log
         log.warn(f"[pass_registry] get_all_pass_names() failed: {e}")
         return []
 
@@ -192,7 +192,7 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
                 params.append(param)
                 seen_names.add(param.name)
     except Exception as e:
-        from termin._native import log
+        from tcbase import log
         log.warn(f"[pass_registry] create_params_from_pass('{class_name}') C++ fields failed: {e}")
 
     # 2. Get Python-only inspect_fields from class

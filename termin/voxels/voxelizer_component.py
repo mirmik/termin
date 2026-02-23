@@ -19,7 +19,7 @@ from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

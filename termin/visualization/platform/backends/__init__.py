@@ -50,7 +50,7 @@ def set_default_graphics_backend(backend: GraphicsBackend):
 def get_default_graphics_backend() -> GraphicsBackend:
     global _default_graphics_backend
     if _default_graphics_backend is None:
-        from termin._native import log
+        from tcbase import log
         log.info(f"[get_default_graphics_backend] Creating default backend via get_instance()")
         _default_graphics_backend = OpenGLGraphicsBackend.get_instance()
         log.info(f"[get_default_graphics_backend] Got backend: {_default_graphics_backend}, id={id(_default_graphics_backend)}")

@@ -306,7 +306,7 @@ class GraphNode(QGraphicsItem):
                 keep_sockets={"output_res_target"},
             )
         except Exception as e:
-            from termin._native import log
+            from tcbase import log
             log.warn(f"[GraphNode] Failed to update MaterialPass inputs: {e}")
 
     def _update_widget_value(self, name: str, value: Any) -> None:

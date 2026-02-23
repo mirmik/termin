@@ -1,6 +1,6 @@
 #include "termin/render/id_pass.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "tc_picking.h"

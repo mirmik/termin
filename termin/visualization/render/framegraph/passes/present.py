@@ -236,7 +236,7 @@ class ResolvePass(RenderFramePass):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
-        from termin._native import log
+        from tcbase import log
         from termin.graphics import FramebufferHandle
 
         if isinstance(ctx.graphics, NOPGraphicsBackend):

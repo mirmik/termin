@@ -10,7 +10,7 @@
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 using namespace termin::voxels;

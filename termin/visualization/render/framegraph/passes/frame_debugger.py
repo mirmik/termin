@@ -81,7 +81,7 @@ class FrameDebuggerPass(RenderFramePass):
         return None
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        from termin._native import log
+        from tcbase import log
 
         if self._capture is None:
             log.debug("[FrameDebuggerPass] execute: no capture set")

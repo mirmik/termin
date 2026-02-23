@@ -14,7 +14,7 @@ import subprocess
 import sys
 from typing import Callable
 
-from termin._native import log
+from tcbase import log
 
 
 class PyModuleScanner:

@@ -75,7 +75,7 @@ def dispatch_input(
         return
 
     # Slow path with filter: iterate components and call methods
-    from termin._native import log
+    from tcbase import log
 
     def dispatch_to_component(component):
         if not filter_fn(component):

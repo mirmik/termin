@@ -1,6 +1,6 @@
 #include "solid_primitive_renderer.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include <tgfx/resources/tc_mesh.h>

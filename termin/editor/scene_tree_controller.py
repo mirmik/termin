@@ -19,7 +19,7 @@ from termin.kinematic.transform import Transform3
 from termin.geombase import Pose3
 from termin.editor.editor_tree import SceneTreeModel
 from termin.visualization.core.resources import ResourceManager
-from termin._native import log
+from tcbase import log
 
 
 class SceneTreeController:

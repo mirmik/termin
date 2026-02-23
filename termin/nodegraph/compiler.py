@@ -407,7 +407,7 @@ def create_pass_instance(
             try:
                 setattr(instance, key, value)
             except AttributeError as e:
-                from termin._native import log
+                from tcbase import log
                 log.warning(f"[compiler] setattr({class_name}, {key}, {value!r}) failed: {e}")
         else:
             # Dynamic input - add as extra texture if supported
@@ -421,7 +421,7 @@ def create_pass_instance(
             try:
                 setattr(instance, param.name, value)
             except AttributeError as e:
-                from termin._native import log
+                from tcbase import log
                 log.warning(f"[compiler] Cannot set param {param.name} on {class_name}: {e}")
 
     # Set viewport_name
@@ -533,7 +533,7 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
             for res_name in resource_params.values():
                 resource_to_passes.setdefault(res_name, []).append(class_name)
         except CompileError as e:
-            from termin._native import log
+            from tcbase import log
             log.error(f"[compiler] Failed to create pass: {e}")
             continue
 
@@ -545,7 +545,7 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
         # Get canonical resource names from FrameGraph
         canonical_map = frame_graph._canonical_resources
     except Exception as e:
-        from termin._native import log
+        from tcbase import log
         log.error(f"[compiler] Topological sort failed: {e}, using original order")
         sorted_passes = passes
         # Build our own canonical map
@@ -595,7 +595,7 @@ def compile_graph(scene: "NodeGraphScene", debug: bool = False) -> "RenderPipeli
                 spec = ResourceSpec(**spec_params)
                 pipeline_specs.append(spec)
             except Exception as e:
-                from termin._native import log
+                from tcbase import log
                 log.error(f"Failed to create ResourceSpec: {e}, params={spec_params}")
 
     return RenderPipeline(

@@ -2,7 +2,7 @@
 #include "tc_type_registry.h"
 #include <tgfx/tc_resource_map.h>
 #include "termin_core.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 

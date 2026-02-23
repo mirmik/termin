@@ -1,6 +1,6 @@
 #include "color_pass.hpp"
 #include "tc_shader_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/editor/frame_graph_debugger_core.hpp"
 extern "C" {

@@ -5,7 +5,7 @@ import numpy as np
 import os
 import sys
 
-from termin._native import log
+from tcbase import log
 from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
 
 

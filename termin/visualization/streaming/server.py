@@ -28,7 +28,7 @@ import threading
 from typing import TYPE_CHECKING, Optional, Set, Callable
 from weakref import WeakSet
 
-from termin._native import log
+from tcbase import log
 
 from termin.visualization.core.input_events import (
     MouseButtonEvent,

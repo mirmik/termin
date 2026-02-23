@@ -18,7 +18,7 @@ from termin.visualization.ui.widgets.basic import Label, Button, TextInput, Sepa
 from termin.visualization.ui.widgets.containers import HStack, VStack, Panel
 from termin.visualization.ui.widgets.units import px, pct
 from termin.visualization.platform.backends.base import Key
-from termin._native import log
+from tcbase import log
 from termin.launcher.recent import RecentProjects, create_project, write_launch_project
 
 

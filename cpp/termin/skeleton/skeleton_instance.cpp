@@ -2,7 +2,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <cstring>
 
 namespace termin {

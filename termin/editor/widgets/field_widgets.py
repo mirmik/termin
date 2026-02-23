@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, List
 
-from termin._native import log
+from tcbase import log
 
 from PyQt6.QtWidgets import (
     QWidget,
@@ -382,7 +382,7 @@ class ButtonFieldWidget(FieldWidget):
             try:
                 self._action(self._target)
             except Exception as e:
-                from termin._native import log
+                from tcbase import log
                 log.error(f"Button action failed: {e}")
 
 

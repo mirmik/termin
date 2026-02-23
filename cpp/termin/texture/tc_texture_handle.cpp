@@ -1,5 +1,5 @@
 #include "tc_texture_handle.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>

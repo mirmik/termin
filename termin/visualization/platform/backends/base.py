@@ -7,7 +7,7 @@ from enum import IntEnum
 from typing import Any, Callable, Optional, Tuple
 
 # Re-export C++ enums for Action, MouseButton, Mods
-from termin.entity._entity_native import Action, MouseButton, Mods
+from tcbase import Action, MouseButton, Mods
 
 
 class Key(IntEnum):

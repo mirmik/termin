@@ -1,6 +1,6 @@
 // render_pipeline_bindings.cpp - nanobind bindings for RenderPipeline
 #include "common.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>

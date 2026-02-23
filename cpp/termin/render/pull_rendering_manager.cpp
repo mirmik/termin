@@ -4,7 +4,7 @@
 #include "termin/camera/camera_component.hpp"
 
 extern "C" {
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "tc_gpu.h"
 #include "render/tc_viewport_pool.h"
 }

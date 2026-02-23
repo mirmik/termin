@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 from weakref import WeakValueDictionary
 
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

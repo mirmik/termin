@@ -1,6 +1,6 @@
 // fbo_pool.cpp - FBO pool implementation
 #include "fbo_pool.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

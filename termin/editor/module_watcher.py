@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, Set
 
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QFileSystemWatcher, QTimer

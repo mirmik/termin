@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 
 
 def signed_area_2d(polygon: np.ndarray) -> float:

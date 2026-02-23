@@ -82,7 +82,7 @@ class ViewportRenderState:
         Вызывайте при удалении viewport.
         """
         # Clear deprecated fbos
-        from termin._native import log
+        from tcbase import log
         for name, resource in self.fbos.items():
             if resource is not None:
                 try:

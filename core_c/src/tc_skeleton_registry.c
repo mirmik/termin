@@ -3,7 +3,7 @@
 #include <tgfx/tc_pool.h>
 #include <tgfx/tc_resource_map.h>
 #include <tgfx/tc_registry_utils.h>
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>

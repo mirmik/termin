@@ -2,7 +2,7 @@
 #include "render/tc_display_input_router.h"
 #include "render/tc_viewport.h"
 #include "render/tc_render_surface.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <stdlib.h>
 
 // ============================================================================

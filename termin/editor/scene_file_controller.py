@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication
 
 from termin.editor.settings import EditorSettings
 from termin.project.settings import ProjectSettingsManager
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager

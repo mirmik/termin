@@ -1,7 +1,7 @@
 #include "ground_grid_pass.hpp"
 #include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

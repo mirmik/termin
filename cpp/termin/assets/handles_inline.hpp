@@ -8,7 +8,7 @@
 // Note: MaterialHandle methods that access Material members are NOT inline
 // because they would create circular dependencies. They are in handles.cpp.
 
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace termin {
 

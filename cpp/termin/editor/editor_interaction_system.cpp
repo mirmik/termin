@@ -10,7 +10,7 @@
 #include "render/tc_display.h"
 #include "render/tc_render_surface.h"
 #include "tc_picking.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 
 #include <cmath>
 

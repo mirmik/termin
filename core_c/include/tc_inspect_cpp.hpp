@@ -4,7 +4,7 @@
 #pragma once
 
 #include "inspect/tc_inspect.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include <string>
 #include <vector>
 #include <unordered_map>

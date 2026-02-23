@@ -288,7 +288,7 @@ def get_skinned_shader_handle(original_handle):
     """
     from tgfx import TcShader, ShaderVariantOp
     from termin.visualization.render.glsl_preprocessor import preprocess_glsl, has_includes
-    from termin._native import log
+    from tcbase import log
 
     # Create TcShader from handle
     original = TcShader(original_handle)

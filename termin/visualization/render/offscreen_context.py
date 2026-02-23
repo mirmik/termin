@@ -140,7 +140,7 @@ class OffscreenContext:
             result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
             if result != 0:
                 import sdl2
-                from termin._native import log
+                from tcbase import log
                 log.error(f"[OffscreenContext] SDL_GL_MakeCurrent failed: {sdl2.SDL_GetError()}")
 
     def is_valid(self) -> bool:

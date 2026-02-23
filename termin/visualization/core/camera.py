@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.geombase import Pose3
 
 from termin.editor.inspect_field import inspect

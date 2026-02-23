@@ -1,5 +1,5 @@
 #include "render_engine.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include "tc_profiler.h"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light_component.hpp"

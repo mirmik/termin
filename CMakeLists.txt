@@ -159,6 +159,7 @@ if(BUNDLE_PYTHON)
         sdl2
         yaml
         tgfx
+        tcbase
     )
 
     # Install each package

@@ -4,7 +4,7 @@
 #include <nanobind/stl/tuple.h>
 
 #include "render/tc_render_surface.h"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 

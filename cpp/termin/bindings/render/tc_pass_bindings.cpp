@@ -13,7 +13,7 @@ extern "C" {
 #include "render/tc_pipeline.h"
 #include "tc_pipeline_registry.h"
 #include "render/tc_frame_graph.h"
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 #include "termin_core.h"
 #include "inspect/tc_inspect.h"
 #include "core/tc_scene_pool.h"

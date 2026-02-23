@@ -3,7 +3,7 @@
 
 #include "tc_inspect_python.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "core/tc_component.h"

@@ -274,7 +274,7 @@ def _get_qt_keyboard_mods() -> int:
             result |= 0x0004  # MOD_ALT
         return result
     except Exception as e:
-        from termin._native import log
+        from tcbase import log
         log.warn(f"[sdl_embedded] _get_qt_keyboard_mods failed: {e}")
         return 0
 
@@ -365,7 +365,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         # Initialize OpenGL function pointers (GLAD) after context is created
         if graphics is not None:
-            from termin._native import log
+            from tcbase import log
             log.info(f"About to call ensure_ready() on graphics={graphics}, type={type(graphics)}, id={id(graphics)}")
             log.info(f"graphics.__class__.__mro__ = {graphics.__class__.__mro__}")
             log.info(f"hasattr(graphics, 'ensure_ready') = {hasattr(graphics, 'ensure_ready')}")
@@ -396,7 +396,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         # Disable VSync (note: 10-bit mode may force vsync due to driver/DWM behavior)
         swap_result = video.SDL_GL_SetSwapInterval(0)
         if swap_result != 0:
-            from termin._native import log
+            from tcbase import log
             log.warn(f"[SDL] Failed to set SwapInterval=0: {sdl2.SDL_GetError()}")
 
         # Get native handle for Qt embedding
@@ -693,7 +693,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             height: Source framebuffer height
             depth_callback: Optional callback to receive depth buffer
         """
-        from termin._native import log
+        from tcbase import log
         from termin.visualization.render.framegraph.passes.present import (
             PresentToScreenPass,
             _get_texture_from_resource,

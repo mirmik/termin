@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 
-from termin._native import log
+from tcbase import log
 from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
 from termin.entity import Entity
 

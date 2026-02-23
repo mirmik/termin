@@ -21,7 +21,7 @@ from termin.nodegraph.scene import NodeGraphScene
 from termin.nodegraph.view import NodeGraphView
 from termin.nodegraph.nodes import create_node
 from termin.nodegraph.serialization import serialize_graph, deserialize_graph
-from termin._native import log
+from tcbase import log
 from termin.nodegraph.compiler import compile_graph_to_dict, CompileError
 
 if TYPE_CHECKING:

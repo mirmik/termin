@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import InspectField
 from termin.navmesh.pathfinding import (

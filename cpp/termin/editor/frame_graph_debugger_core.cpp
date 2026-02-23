@@ -2,7 +2,7 @@
 #include "termin/render/frame_pass.hpp"
 
 extern "C" {
-#include "tc_log.h"
+#include <tcbase/tc_log.h>
 }
 
 #include <algorithm>

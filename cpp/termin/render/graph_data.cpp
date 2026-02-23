@@ -1,5 +1,5 @@
 #include "graph_data.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 #include <trent/json.h>
 
 namespace tc {

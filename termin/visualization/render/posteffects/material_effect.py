@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Set
 from termin.visualization.render.postprocess import PostEffect
 from termin._native.render import TcMaterial
 from termin.editor.inspect_field import InspectField
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle

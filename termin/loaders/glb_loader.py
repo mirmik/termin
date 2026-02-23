@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any
 
 import numpy as np
 
-from termin._native import log
+from tcbase import log
 
 
 # ---------- DATA CLASSES ----------

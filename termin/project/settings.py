@@ -16,7 +16,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from termin._native import log
+from tcbase import log
 from termin._native import (
     RenderSyncMode as CRenderSyncMode,
     get_render_sync_mode as c_get_render_sync_mode,

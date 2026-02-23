@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.assets.asset import Asset
-from termin._native import log
+from tcbase import log
 from termin._native.render import TcScenePipelineTemplate
 
 if TYPE_CHECKING:

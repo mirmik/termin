@@ -1,5 +1,5 @@
 #include "shadow_camera.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 #include <cmath>
 #include <algorithm>

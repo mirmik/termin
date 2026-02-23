@@ -26,7 +26,7 @@ import ctypes
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from termin._native import log
+from tcbase import log
 from termin.assets.asset import Asset
 
 if TYPE_CHECKING:

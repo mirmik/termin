@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import QMimeData
 
-from termin._native import log
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity

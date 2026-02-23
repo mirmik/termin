@@ -21,7 +21,7 @@ def upgrade_unknown_components(scene) -> int:
     Returns:
         Number of components upgraded
     """
-    from termin._native import log
+    from tcbase import log
     from termin.entity._entity_native import ComponentRegistry
 
     if scene is None:

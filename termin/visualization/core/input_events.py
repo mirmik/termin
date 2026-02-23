@@ -20,15 +20,15 @@ the platform layer and C++ components.
 
 from __future__ import annotations
 
-# Import C++ event classes
+# Input enums from tcbase
+from tcbase import MouseButton, Action, Mods
+
+# Event classes from termin entity
 from termin.entity._entity_native import (
     MouseButtonEvent,
     MouseMoveEvent,
     ScrollEvent,
     KeyEvent,
-    MouseButton,
-    Action,
-    Mods,
 )
 
 # Re-export Viewport for type hints

@@ -2,7 +2,7 @@
 #include "camera_component.hpp"
 #include "../render/rendering_manager.hpp"
 #include "tc_inspect_cpp.hpp"
-#include "tc_log.hpp"
+#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "render/tc_display.h"

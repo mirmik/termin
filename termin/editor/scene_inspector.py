@@ -24,7 +24,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from termin.editor.color_dialog import ColorDialog
 from termin.editor.undo_stack import UndoCommand
 from termin.visualization.core.scene import Scene
-from termin._native import log
+from tcbase import log
 
 
 class ScenePropertyEditCommand(UndoCommand):
