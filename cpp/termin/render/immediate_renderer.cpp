@@ -1,6 +1,6 @@
 #include "immediate_renderer.hpp"
-#include "termin/render/graphics_backend.hpp"
-#include "termin/render/render_state.hpp"
+#include "tgfx/graphics_backend.hpp"
+#include "tgfx/render_state.hpp"
 
 extern "C" {
 #include "tc_profiler.h"

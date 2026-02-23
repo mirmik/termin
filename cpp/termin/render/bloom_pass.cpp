@@ -1,7 +1,7 @@
 // bloom_pass.cpp - HDR bloom post-processing pass implementation
 #include "bloom_pass.hpp"
 #include "termin/render/execute_context.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include "tc_log.hpp"
 
 namespace termin {

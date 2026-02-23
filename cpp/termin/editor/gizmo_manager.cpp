@@ -1,7 +1,7 @@
 #include "gizmo_manager.hpp"
 #include "termin/render/immediate_renderer.hpp"
 #include "termin/render/solid_primitive_renderer.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 
 extern "C" {
 #include "tc_profiler.h"

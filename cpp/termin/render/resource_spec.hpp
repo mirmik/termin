@@ -4,7 +4,7 @@
 #include <optional>
 #include <array>
 
-#include "termin/render/types.hpp"
+#include "tgfx/types.hpp"
 
 namespace termin {
 

@@ -88,10 +88,7 @@ target_compile_options(_texture_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FL
 nanobind_add_module(_graphics_native
     termin/bindings/graphics/graphics_module.cpp
 )
-target_include_directories(_graphics_native PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-)
-target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib render_lib)
+target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib render_lib tgfx::termin_graphics)
 target_compile_options(_graphics_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 set_target_properties(_graphics_native PROPERTIES
     INSTALL_RPATH "$ORIGIN"
@@ -217,10 +214,7 @@ nanobind_add_module(_native
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp
 )
-target_include_directories(_native PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-)
-target_link_libraries(_native PRIVATE OpenGL::GL trent entity_lib skeleton_lib navmesh_lib render_lib)
+target_link_libraries(_native PRIVATE OpenGL::GL trent entity_lib skeleton_lib navmesh_lib render_lib tgfx::termin_graphics)
 
 if(SDL2_FOUND)
     target_include_directories(_native PRIVATE ${SDL2_INCLUDE_DIRS})
@@ -237,9 +231,6 @@ set_target_properties(_native PROPERTIES
     INSTALL_RPATH "$ORIGIN"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-# Exclude glad.c from precompiled headers (it's C, not C++)
-set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-
 # ============== Tests module ==============
 
 if(BUILD_TESTS)

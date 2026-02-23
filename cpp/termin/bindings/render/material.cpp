@@ -3,7 +3,7 @@
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/render/shader_parser.hpp"
-#include "termin/render/render_state.hpp"
+#include "tgfx/render_state.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "tc_log.hpp"

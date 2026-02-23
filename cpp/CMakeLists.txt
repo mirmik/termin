@@ -102,11 +102,8 @@ set_target_properties(trent PROPERTIES
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
-# Disable optimizations for glad.c (large file, slow to compile with -O2)
-set_source_files_properties(
-    termin/render/glad/src/glad.c
-    PROPERTIES COMPILE_OPTIONS "-O0"
-)
+# termin-graphics (provides tgfx types, gpu_ops, opengl backend)
+find_package(termin_graphics REQUIRED)
 
 # Core C library
 if(BUILD_TESTS)
@@ -273,10 +270,6 @@ set(RENDER_LIB_SOURCES
     termin/render/tc_pass_ref.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
-    termin/render/opengl/opengl_backend.cpp
-    termin/render/opengl/opengl_backend_singleton.cpp
-    termin/render/opengl/opengl_framebuffer.cpp
-    termin/render/glad/src/glad.c
     termin/editor/frame_graph_debugger_core.cpp
     termin/camera/camera_viewport_component.cpp
 )
@@ -289,17 +282,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_include_directories(render_lib PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-)
-target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL)
-if(WIN32)
-    # GLAD export macros for Windows DLL
-    target_compile_definitions(render_lib
-        PRIVATE GLAD_API_CALL_EXPORT GLAD_API_CALL_EXPORT_BUILD RENDER_LIB_EXPORTS
-        PUBLIC GLAD_API_CALL_EXPORT
-    )
-endif()
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES
@@ -572,7 +555,6 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include/cpp
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
-    PATTERN "render/glad" EXCLUDE
 )
 install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
@@ -587,7 +569,7 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
 if(BUILD_CSHARP_BINDINGS)
     add_library(termin SHARED
         ${TERMIN_ROOT}/csharp/termin_wrap.cxx
-        termin/render/opengl/tc_opengl.cpp
+        termin/render/tc_opengl.cpp
         termin/tc_scene.cpp
         termin/tc_component_csharp.cpp
         termin/tc_inspect_csharp.cpp
@@ -595,7 +577,6 @@ if(BUILD_CSHARP_BINDINGS)
     target_include_directories(termin PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${TERMIN_ROOT}/core_c/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     )
     add_dependencies(termin render_lib)
     if(MSVC)

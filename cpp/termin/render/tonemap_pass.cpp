@@ -1,7 +1,7 @@
 // tonemap_pass.cpp - HDR to LDR tonemapping post-processing pass
 #include "tonemap_pass.hpp"
 #include "termin/render/execute_context.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include "tc_log.hpp"
 
 namespace termin {

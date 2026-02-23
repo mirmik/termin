@@ -3,7 +3,7 @@
 #include "termin/editor/gizmo.hpp"
 #include "termin/editor/gizmo_types.hpp"
 #include "termin/geom/mat44.hpp"
-#include "termin/render/types.hpp"
+#include "tgfx/types.hpp"
 
 #include <vector>
 #include <optional>

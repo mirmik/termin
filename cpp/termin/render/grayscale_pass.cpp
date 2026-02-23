@@ -1,7 +1,7 @@
 // grayscale_pass.cpp - Simple grayscale post-processing pass
 #include "grayscale_pass.hpp"
 #include "termin/render/execute_context.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include "tc_log.hpp"
 
 namespace termin {

@@ -112,6 +112,9 @@ set(TC_HEADERS
     include/render/tc_frame_graph.h
 )
 
+# termin-graphics (provides tgfx types, gpu_ops, opengl backend)
+find_package(termin_graphics REQUIRED)
+
 # Library target
 if(TC_BUILD_SHARED)
     add_library(termin_core SHARED ${TC_SOURCES} ${TC_HEADERS})
@@ -133,6 +136,8 @@ target_include_directories(termin_core
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
+
+target_link_libraries(termin_core PUBLIC tgfx::termin_graphics)
 
 # Platform-specific
 if(WIN32)

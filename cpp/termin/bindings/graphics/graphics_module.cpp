@@ -8,15 +8,17 @@
 #include <nanobind/stl/array.h>
 #include <nanobind/ndarray.h>
 
-#include "termin/render/graphics_backend.hpp"
-#include "termin/render/render_state.hpp"
-#include "termin/render/types.hpp"
-#include "termin/render/opengl/opengl_backend.hpp"
-#include "termin/render/opengl/opengl_mesh.hpp"
+#include "tgfx/graphics_backend.hpp"
+#include "tgfx/render_state.hpp"
+#include "tgfx/types.hpp"
+#include "tgfx/opengl/opengl_backend.hpp"
+#include "tgfx/opengl/opengl_mesh.hpp"
 #include "termin/geom/mat44.hpp"
+#include "tc_log.hpp"
 
 extern "C" {
 #include "tc_project_settings.h"
+#include "tc_gpu_context.h"
 }
 
 namespace nb = nanobind;
@@ -272,7 +274,11 @@ void bind_graphics_backend(nb::module_& m) {
 
     // GraphicsBackend (abstract)
     nb::class_<GraphicsBackend>(m, "GraphicsBackend")
-        .def("ensure_ready", &GraphicsBackend::ensure_ready)
+        .def("ensure_ready", [](GraphicsBackend& self) {
+            self.ensure_ready();
+            // Create default GPUContext if none set (standalone paths need this)
+            tc_ensure_default_gpu_context();
+        })
         .def("set_viewport", &GraphicsBackend::set_viewport)
         .def("enable_scissor", &GraphicsBackend::enable_scissor)
         .def("disable_scissor", &GraphicsBackend::disable_scissor)
@@ -381,8 +387,10 @@ void bind_graphics_backend(nb::module_& m) {
     // OpenGLGraphicsBackend (singleton)
     nb::class_<OpenGLGraphicsBackend, GraphicsBackend>(m, "OpenGLGraphicsBackend")
         .def_static("get_instance", &OpenGLGraphicsBackend::get_instance, nb::rv_policy::reference)
-        .def("ensure_ready", &OpenGLGraphicsBackend::ensure_ready)
-        .def("test_method", &OpenGLGraphicsBackend::test_method)
+        .def("ensure_ready", [](OpenGLGraphicsBackend& self) {
+            self.ensure_ready();
+            tc_ensure_default_gpu_context();
+        })
         .def("create_shader", [](OpenGLGraphicsBackend& self, const std::string& vert, const std::string& frag, nb::object geom) {
             const char* geom_ptr = nullptr;
             std::string geom_str;

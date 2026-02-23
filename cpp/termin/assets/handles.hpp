@@ -6,7 +6,7 @@
 
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
-#include "termin/render/handles.hpp"
+#include "tgfx/handles.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
 

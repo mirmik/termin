@@ -2,7 +2,7 @@
 
 #include "termin/geom/vec3.hpp"
 #include "termin/geom/mat44.hpp"
-#include "termin/render/types.hpp"
+#include "tgfx/types.hpp"
 
 #include <variant>
 #include <vector>

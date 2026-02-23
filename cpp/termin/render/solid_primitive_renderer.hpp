@@ -4,8 +4,8 @@
 #include <cstdint>
 
 #include "termin/geom/mat44.hpp"
-#include "termin/render/types.hpp"
-#include "termin/render/handles.hpp"
+#include "tgfx/types.hpp"
+#include "tgfx/handles.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 
 namespace termin {

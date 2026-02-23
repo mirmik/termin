@@ -1,7 +1,7 @@
 #include "common.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/render_pipeline.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/tc_scene.hpp"

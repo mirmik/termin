@@ -1,13 +1,17 @@
 #include "common.hpp"
 #include <nanobind/stl/unique_ptr.h>
 #include "termin/render/render.hpp"
-#include "termin/render/types.hpp"
-#include "termin/render/opengl/opengl_mesh.hpp"
+#include "tgfx/types.hpp"
+#include "tgfx/opengl/opengl_mesh.hpp"
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/geom/mat44.hpp"
 #include "tc_log.hpp"
+
+extern "C" {
+#include "tc_gpu_context.h"
+}
 
 namespace termin {
 
@@ -90,7 +94,10 @@ void bind_graphics_backend(nb::module_& m) {
     // --- GraphicsBackend ---
 
     nb::class_<GraphicsBackend>(m, "GraphicsBackend")
-        .def("ensure_ready", &GraphicsBackend::ensure_ready)
+        .def("ensure_ready", [](GraphicsBackend& self) {
+            self.ensure_ready();
+            tc_ensure_default_gpu_context();
+        })
         .def("set_viewport", &GraphicsBackend::set_viewport)
         .def("enable_scissor", &GraphicsBackend::enable_scissor)
         .def("disable_scissor", &GraphicsBackend::disable_scissor)

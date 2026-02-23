@@ -1,6 +1,7 @@
 // tc_opengl.cpp - OpenGL backend initialization C API implementation
 #include "tc_opengl.h"
-#include "termin/render/opengl/opengl_backend.hpp"
+#include "tgfx/opengl/opengl_backend.hpp"
+#include "tc_gpu_context.h"
 
 static bool g_opengl_initialized = false;
 static termin::OpenGLGraphicsBackend* g_graphics_backend = nullptr;
@@ -18,12 +19,15 @@ TC_API bool tc_opengl_init(void) {
         return false;
     }
 
-    // Register GPU operations vtable for tc_gpu module
+    // Register GPU operations vtable
     termin::gpu_ops_impl::register_gpu_ops();
 
     // Get graphics backend singleton
     g_graphics_backend = &termin::OpenGLGraphicsBackend::get_instance();
     g_graphics_backend->ensure_ready();
+
+    // Create default GPUContext if none set (standalone paths need this)
+    tc_ensure_default_gpu_context();
 
     g_opengl_initialized = true;
     return true;

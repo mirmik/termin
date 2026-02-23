@@ -70,7 +70,7 @@ tc_gpu_context* tc_gpu_context_new(uintptr_t key, tc_gpu_share_group* group) {
 void tc_gpu_context_free(tc_gpu_context* ctx) {
     if (!ctx) return;
 
-    const tc_gpu_ops* ops = tc_gpu_get_ops();
+    const tgfx_gpu_ops* ops = tgfx_gpu_get_ops();
 
     if (ops) {
         // Delete per-context mesh VAOs
@@ -106,6 +106,18 @@ void tc_gpu_set_context(tc_gpu_context* ctx) {
 
 tc_gpu_context* tc_gpu_get_context(void) {
     return g_current_gpu_context;
+}
+
+// Default context for standalone paths
+static tc_gpu_context* g_default_gpu_context = NULL;
+
+void tc_ensure_default_gpu_context(void) {
+    if (!g_current_gpu_context) {
+        if (!g_default_gpu_context) {
+            g_default_gpu_context = tc_gpu_context_new(0, NULL);
+        }
+        tc_gpu_set_context(g_default_gpu_context);
+    }
 }
 
 // ============================================================================

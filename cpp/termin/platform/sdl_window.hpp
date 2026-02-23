@@ -8,7 +8,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "termin/render/opengl/opengl_backend.hpp"
+#include "tgfx/opengl/opengl_backend.hpp"
 
 namespace termin {
 

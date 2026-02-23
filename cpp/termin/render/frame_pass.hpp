@@ -16,7 +16,7 @@ extern "C" {
 
 #include "tc_inspect_cpp.hpp"
 
-#include "termin/render/handles.hpp"
+#include "tgfx/handles.hpp"
 #include "termin/render/resource_spec.hpp"
 
 namespace termin {

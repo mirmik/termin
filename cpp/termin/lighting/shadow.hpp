@@ -3,7 +3,7 @@
 #include <vector>
 #include "termin/geom/mat44.hpp"
 #include "termin/lighting/shadow_settings.hpp"
-#include "termin/render/frame_graph_resource.hpp"
+#include "tgfx/frame_graph_resource.hpp"
 
 namespace termin {
 

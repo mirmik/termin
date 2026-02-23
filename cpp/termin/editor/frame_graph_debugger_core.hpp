@@ -1,7 +1,7 @@
 #pragma once
 
-#include "termin/render/graphics_backend.hpp"
-#include "termin/render/handles.hpp"
+#include "tgfx/graphics_backend.hpp"
+#include "tgfx/handles.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "tc_log.hpp"
 

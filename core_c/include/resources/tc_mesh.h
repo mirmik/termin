@@ -4,6 +4,7 @@
 #include "tc_types.h"
 #include "tc_handle.h"
 #include "resources/tc_resource.h"
+#include <tgfx/tgfx_types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,54 +17,27 @@ extern "C" {
 TC_DEFINE_HANDLE(tc_mesh_handle)
 
 // ============================================================================
-// Vertex attribute types
+// Vertex layout types — typedef from tgfx
 // ============================================================================
 
-typedef enum tc_attrib_type {
-    TC_ATTRIB_FLOAT32 = 0,
-    TC_ATTRIB_INT32   = 1,
-    TC_ATTRIB_UINT32  = 2,
-    TC_ATTRIB_INT16   = 3,
-    TC_ATTRIB_UINT16  = 4,
-    TC_ATTRIB_INT8    = 5,
-    TC_ATTRIB_UINT8   = 6,
-} tc_attrib_type;
+typedef tgfx_attrib_type tc_attrib_type;
+typedef tgfx_draw_mode tc_draw_mode;
+typedef tgfx_vertex_attrib tc_vertex_attrib;
+typedef tgfx_vertex_layout tc_vertex_layout;
 
-// ============================================================================
-// Draw mode - primitive type for rendering
-// ============================================================================
+#define TC_ATTRIB_FLOAT32 TGFX_ATTRIB_FLOAT32
+#define TC_ATTRIB_INT32   TGFX_ATTRIB_INT32
+#define TC_ATTRIB_UINT32  TGFX_ATTRIB_UINT32
+#define TC_ATTRIB_INT16   TGFX_ATTRIB_INT16
+#define TC_ATTRIB_UINT16  TGFX_ATTRIB_UINT16
+#define TC_ATTRIB_INT8    TGFX_ATTRIB_INT8
+#define TC_ATTRIB_UINT8   TGFX_ATTRIB_UINT8
 
-typedef enum tc_draw_mode {
-    TC_DRAW_TRIANGLES = 0,
-    TC_DRAW_LINES     = 1,
-} tc_draw_mode;
+#define TC_DRAW_TRIANGLES TGFX_DRAW_TRIANGLES
+#define TC_DRAW_LINES     TGFX_DRAW_LINES
 
-// ============================================================================
-// Vertex attribute descriptor
-// ============================================================================
-
-#define TC_ATTRIB_NAME_MAX 32
-#define TC_VERTEX_ATTRIBS_MAX 8
-
-typedef struct tc_vertex_attrib {
-    char name[TC_ATTRIB_NAME_MAX];  // "position", "normal", "uv", "color", ...
-    uint8_t size;                    // number of components: 1, 2, 3, 4
-    uint8_t type;                    // tc_attrib_type
-    uint8_t location;                // shader attribute location (0-15)
-    uint8_t _pad;
-    uint16_t offset;                 // byte offset from vertex start
-} tc_vertex_attrib;
-
-// ============================================================================
-// Vertex layout - describes vertex format
-// ============================================================================
-
-typedef struct tc_vertex_layout {
-    uint16_t stride;                              // bytes per vertex
-    uint8_t attrib_count;                         // number of attributes
-    uint8_t _pad;
-    tc_vertex_attrib attribs[TC_VERTEX_ATTRIBS_MAX];
-} tc_vertex_layout;
+#define TC_ATTRIB_NAME_MAX  TGFX_ATTRIB_NAME_MAX
+#define TC_VERTEX_ATTRIBS_MAX TGFX_VERTEX_ATTRIBS_MAX
 
 // ============================================================================
 // Load callback type (legacy alias)
@@ -92,9 +66,6 @@ typedef struct tc_mesh {
 // Mesh helper functions
 // ============================================================================
 
-// Get size in bytes of an attribute type
-TC_API size_t tc_attrib_type_size(tc_attrib_type type);
-
 // Calculate total vertex data size
 static inline size_t tc_mesh_vertices_size(const tc_mesh* mesh) {
     return mesh->vertex_count * mesh->layout.stride;
@@ -111,49 +82,24 @@ static inline size_t tc_mesh_triangle_count(const tc_mesh* mesh) {
 }
 
 // ============================================================================
-// Vertex layout builder helpers
+// Vertex layout functions — redirect to tgfx
 // ============================================================================
 
-// Initialize empty layout
-TC_API void tc_vertex_layout_init(tc_vertex_layout* layout);
-
-// Add attribute to layout (updates stride automatically)
-// Returns false if max attributes reached
-TC_API bool tc_vertex_layout_add(
-    tc_vertex_layout* layout,
-    const char* name,
-    uint8_t size,
-    tc_attrib_type type,
-    uint8_t location
-);
-
-// Find attribute by name, returns NULL if not found
-TC_API const tc_vertex_attrib* tc_vertex_layout_find(
-    const tc_vertex_layout* layout,
-    const char* name
-);
+#define tc_attrib_type_size      tgfx_attrib_type_size
+#define tc_vertex_layout_init    tgfx_vertex_layout_init
+#define tc_vertex_layout_add     tgfx_vertex_layout_add
+#define tc_vertex_layout_find    tgfx_vertex_layout_find
 
 // ============================================================================
-// Predefined layouts
+// Predefined layouts — redirect to tgfx
 // ============================================================================
 
-// Position only: vec3 position
-TC_API tc_vertex_layout tc_vertex_layout_pos(void);
-
-// Position + Normal: vec3 position, vec3 normal
-TC_API tc_vertex_layout tc_vertex_layout_pos_normal(void);
-
-// Position + Normal + UV (Mesh3 compatible): vec3 position, vec3 normal, vec2 uv
-TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv(void);
-
-// Position + Normal + UV + Tangent: vec3 position, vec3 normal, vec2 uv, vec4 tangent
-TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv_tangent(void);
-
-// Position + Normal + UV + Color: vec3 position, vec3 normal, vec2 uv, vec4 color
-TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv_color(void);
-
-// Skinned mesh: vec3 position, vec3 normal, vec2 uv, vec4 joints, vec4 weights
-TC_API tc_vertex_layout tc_vertex_layout_skinned(void);
+#define tc_vertex_layout_pos                tgfx_vertex_layout_pos
+#define tc_vertex_layout_pos_normal         tgfx_vertex_layout_pos_normal
+#define tc_vertex_layout_pos_normal_uv      tgfx_vertex_layout_pos_normal_uv
+#define tc_vertex_layout_pos_normal_uv_tangent tgfx_vertex_layout_pos_normal_uv_tangent
+#define tc_vertex_layout_pos_normal_uv_color   tgfx_vertex_layout_pos_normal_uv_color
+#define tc_vertex_layout_skinned            tgfx_vertex_layout_skinned
 
 // ============================================================================
 // Reference counting

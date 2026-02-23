@@ -1,7 +1,7 @@
 #include "common.hpp"
-#include "termin/render/types.hpp"
-#include "termin/render/render_state.hpp"
-#include "termin/render/opengl/opengl_mesh.hpp"
+#include "tgfx/types.hpp"
+#include "tgfx/render_state.hpp"
+#include "tgfx/opengl/opengl_mesh.hpp"
 
 namespace termin {
 

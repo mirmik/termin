@@ -1,5 +1,5 @@
 #include "wireframe_renderer.hpp"
-#include "glad/include/glad/glad.h"
+#include <glad/glad.h>
 
 #include <cmath>
 #include <cstring>

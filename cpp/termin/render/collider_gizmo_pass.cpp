@@ -1,5 +1,5 @@
 #include "collider_gizmo_pass.hpp"
-#include "termin/render/handles.hpp"
+#include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/colliders/collider_component.hpp"

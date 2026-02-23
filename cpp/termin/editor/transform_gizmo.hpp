@@ -5,7 +5,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/geom/general_pose3.hpp"
-#include "termin/render/types.hpp"
+#include "tgfx/types.hpp"
 
 #include <functional>
 #include <optional>

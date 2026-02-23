@@ -6,8 +6,8 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
-#include "termin/render/graphics_backend.hpp"
-#include "termin/render/handles.hpp"
+#include "tgfx/graphics_backend.hpp"
+#include "tgfx/handles.hpp"
 #include "termin/material/tc_material_handle.hpp"
 
 #include <string>

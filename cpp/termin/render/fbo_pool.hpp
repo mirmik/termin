@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <memory>
 
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include "termin/render/resource_spec.hpp"
 
 namespace termin {

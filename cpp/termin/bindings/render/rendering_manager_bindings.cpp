@@ -2,7 +2,7 @@
 #include "common.hpp"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/render_pipeline.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/tc_display_handle.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"

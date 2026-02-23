@@ -8,7 +8,7 @@
 #include "termin/editor/editor_viewport_input_manager.hpp"
 #include "termin/editor/selection_manager.hpp"
 #include "termin/entity/entity.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 
 namespace nb = nanobind;
 

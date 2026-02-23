@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "termin/render/wireframe_renderer.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/graphics_backend.hpp"
 
 namespace termin {
 

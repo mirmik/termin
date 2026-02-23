@@ -108,7 +108,7 @@ void tc_gpu_share_group_unref(tc_gpu_share_group* group) {
     if (group->refcount > 0) return;
 
     // Last reference — delete all GL resources
-    const tc_gpu_ops* ops = tc_gpu_get_ops();
+    const tgfx_gpu_ops* ops = tgfx_gpu_get_ops();
     if (ops) {
         // Delete textures
         for (uint32_t i = 0; i < group->texture_capacity; i++) {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "termin/geom/mat44.hpp"
-#include "termin/render/types.hpp"
+#include "tgfx/types.hpp"
 
 #include <cstdint>
 

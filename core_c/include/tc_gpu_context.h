@@ -66,6 +66,11 @@ TC_API void tc_gpu_set_context(tc_gpu_context* ctx);
 // Get current GPU context (NULL if not set).
 TC_API tc_gpu_context* tc_gpu_get_context(void);
 
+// Ensure a default GPU context exists for the current thread.
+// Creates one if none set. Used by standalone paths (launcher, examples)
+// where display/render manager doesn't set context explicitly.
+TC_API void tc_ensure_default_gpu_context(void);
+
 // ============================================================================
 // Slot access (delegates to share_group for shared resources)
 // ============================================================================

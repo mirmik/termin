@@ -1,8 +1,8 @@
 // viewport_render_state.hpp - Per-viewport GPU resource state
 #pragma once
 
-#include "termin/render/handles.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include "tgfx/handles.hpp"
+#include "tgfx/graphics_backend.hpp"
 #include <memory>
 
 namespace termin {
