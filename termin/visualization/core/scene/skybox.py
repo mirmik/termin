@@ -56,7 +56,7 @@ class SkyboxManager:
     def _create_gradient_material(self) -> "Material":
         """Create gradient skybox material."""
         from termin.visualization.core.material import Material
-        from termin._native.render import TcShader
+        from tgfx import TcShader
         from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_FRAGMENT_SHADER
         shader = TcShader.from_sources(
             SKYBOX_VERTEX_SHADER,
@@ -69,7 +69,7 @@ class SkyboxManager:
     def _create_solid_material(self) -> "Material":
         """Create solid color skybox material."""
         from termin.visualization.core.material import Material
-        from termin._native.render import TcShader
+        from tgfx import TcShader
         from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_SOLID_FRAGMENT_SHADER
         shader = TcShader.from_sources(
             SKYBOX_VERTEX_SHADER,

@@ -158,6 +158,7 @@ if(BUNDLE_PYTHON)
         pyopengl
         sdl2
         yaml
+        tgfx
     )
 
     # Install each package

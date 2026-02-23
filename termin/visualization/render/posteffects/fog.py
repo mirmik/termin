@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.visualization.render.postprocess import PostEffect
 from termin.editor.inspect_field import InspectField
 

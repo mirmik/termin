@@ -4,7 +4,7 @@ Uses progressive downsampling/upsampling for wide, high-quality bloom.
 Based on the approach used in Unreal Engine and Unity.
 """
 
-from termin._native.render import TcShader
+from tgfx import TcShader
 from ..postprocess import PostEffect
 from termin.editor.inspect_field import InspectField
 

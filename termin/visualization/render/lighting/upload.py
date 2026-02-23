@@ -7,7 +7,7 @@ from typing import Sequence
 import numpy as np
 
 from termin.lighting import Light, LightType
-from termin._native.render import TcShader
+from tgfx import TcShader
 
 # Максимальное число источников, поддерживаемых дефолтным forward-проходом.
 MAX_LIGHTS = 8

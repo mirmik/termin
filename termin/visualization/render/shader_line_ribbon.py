@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from termin._native.render import TcMaterial, TcRenderState
 
 if TYPE_CHECKING:
-    from termin._native.render import TcShader
+    from tgfx import TcShader
 
 
 # Geometry shader that expands lines into billboard quads facing camera

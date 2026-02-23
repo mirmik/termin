@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin._native.render import TcShader
+from tgfx import TcShader
 
 
 NAVMESH_VERTEX_SHADER = """#version 330 core

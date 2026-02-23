@@ -23,18 +23,16 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from termin.mesh._mesh_native import tc_mesh_get_all_info, tc_mesh_count
-from termin.texture._texture_native import tc_texture_get_all_info, tc_texture_count
+from tgfx import tc_mesh_get_all_info, tc_mesh_count
+from tgfx import tc_texture_get_all_info, tc_texture_count
 from termin._native.scene import (
     tc_scene_registry_get_all_info,
     tc_scene_registry_count,
     tc_scene_get_entities,
     tc_scene_get_component_types,
 )
+from tgfx import TcShader, shader_get_all_info, shader_count
 from termin._native.render import (
-    shader_get_all_info,
-    shader_count,
-    TcShader,
     tc_material_get_all_info,
     tc_material_count,
     TcMaterial,

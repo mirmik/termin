@@ -6,7 +6,7 @@ import re
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin._native.render import TcShader
+    from tgfx import TcShader
 
 
 # Skinning inputs to inject after existing layout declarations
@@ -286,7 +286,7 @@ def get_skinned_shader_handle(original_handle):
     Returns:
         TcShader of skinned variant, or None if injection fails
     """
-    from termin._native.render import TcShader, ShaderVariantOp
+    from tgfx import TcShader, ShaderVariantOp
     from termin.visualization.render.glsl_preprocessor import preprocess_glsl, has_includes
     from termin._native import log
 

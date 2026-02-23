@@ -1,8 +1,8 @@
 """Shader program - re-export from C++."""
 
 # Re-export C++ classes
+from tgfx import TcShader
 from termin._native.render import (
-    TcShader,
     GlslPreprocessor,
     glsl_preprocessor,
 )

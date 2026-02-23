@@ -11,9 +11,6 @@ namespace nb = nanobind;
 namespace termin {
 
 // Forward declarations for bind functions
-void bind_render_types(nb::module_& m);
-void bind_graphics_backend(nb::module_& m);
-void bind_shader(nb::module_& m);
 void bind_shader_parser(nb::module_& m);
 void bind_camera(nb::module_& m);
 void bind_shadow(nb::module_& m);

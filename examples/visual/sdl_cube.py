@@ -17,7 +17,8 @@ from termin.visualization.render.components import MeshRenderer
 from termin.mesh.mesh import CubeMesh
 from termin.mesh import TcMesh
 from termin.geombase import Pose3
-from termin._native.render import TcShader, RenderEngine
+from tgfx import TcShader
+from termin._native.render import RenderEngine
 from termin.graphics import OpenGLGraphicsBackend
 from termin.visualization.platform.backends.sdl import SDLWindowBackend
 

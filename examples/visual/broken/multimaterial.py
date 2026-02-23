@@ -22,7 +22,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin._native.render import TcShader
+from tgfx import TcShader
 
 
 # ----------------------------------------------------------------------

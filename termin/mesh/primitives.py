@@ -2,7 +2,7 @@
 
 import hashlib
 import numpy as np
-from ._mesh_native import Mesh3
+from tgfx import Mesh3
 
 
 def _primitive_uuid(name: str, *args) -> str:

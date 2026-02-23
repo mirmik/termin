@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.visualization.render.postprocess import PostEffect
 from termin.visualization.core.picking import id_to_rgb
 from termin.editor.inspect_field import InspectField

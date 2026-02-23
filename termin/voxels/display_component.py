@@ -18,7 +18,7 @@ from termin.visualization.core.material import Material
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import create_voxel_mesh
-from termin.mesh._mesh_native import TcMesh
+from tgfx import TcMesh
 from termin.editor.inspect_field import InspectField
 from termin._native import log
 

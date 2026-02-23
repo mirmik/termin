@@ -1,5 +1,5 @@
 import numpy as np
-from termin._native.render import TcShader
+from tgfx import TcShader
 from ..postprocess import PostEffect
 from termin.editor.inspect_field import InspectField
 

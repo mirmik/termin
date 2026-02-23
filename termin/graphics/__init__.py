@@ -1,9 +1,6 @@
 """Graphics module - graphics backend and GPU resource handles."""
 
-# Setup DLL paths before importing native extensions
-from termin import _dll_setup  # noqa: F401
-
-from termin.graphics._graphics_native import (
+from tgfx import (
     # Types
     Color4,
     Size2i,
@@ -25,7 +22,10 @@ from termin.graphics._graphics_native import (
     DrawMode,
     # Functions
     init_opengl,
-    # Project settings (render sync)
+)
+
+# Termin-specific project settings (RenderSyncMode)
+from termin._native import (
     RenderSyncMode,
     get_render_sync_mode,
     set_render_sync_mode,

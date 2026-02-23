@@ -60,40 +60,12 @@ nanobind_add_module(_lighting_native termin/lighting_bindings.cpp)
 target_link_libraries(_lighting_native PRIVATE entity_lib)
 target_compile_options(_lighting_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
-# Mesh native module (Mesh3, TcMesh, MeshHandle)
-nanobind_add_module(_mesh_native
-    termin/bindings/mesh/mesh_module.cpp
-    termin/mesh_bindings.cpp
-    termin/mesh/tc_mesh.cpp
-)
-target_link_libraries(_mesh_native PRIVATE trent entity_lib)
-target_compile_options(_mesh_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
 # Skeleton native module (Bone, SkeletonData, SkeletonInstance, SkeletonController)
 nanobind_add_module(_skeleton_native
     termin/bindings/skeleton/skeleton_module.cpp
 )
 target_link_libraries(_skeleton_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_skeleton_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
-# Texture native module (TcTexture)
-nanobind_add_module(_texture_native
-    termin/bindings/texture/texture_module.cpp
-    termin/texture/tc_texture_handle.cpp
-)
-target_link_libraries(_texture_native PRIVATE trent entity_lib)
-target_compile_options(_texture_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
-# Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles)
-nanobind_add_module(_graphics_native
-    termin/bindings/graphics/graphics_module.cpp
-)
-target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib render_lib tgfx::termin_graphics)
-target_compile_options(_graphics_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-set_target_properties(_graphics_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 
 # ============== Core entity/viewport modules ==============
 
@@ -150,7 +122,6 @@ endif()
 nanobind_add_module(_native
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
-    termin/bindings/render/shader.cpp
     termin/bindings/render/shader_parser.cpp
     termin/bindings/render/camera.cpp
     termin/bindings/render/shadow.cpp
@@ -198,7 +169,6 @@ nanobind_add_module(_native
     termin/render/wireframe_renderer.cpp
     termin/render/solid_primitive_renderer.cpp
     termin/render/glsl_preprocessor.cpp
-    termin/texture/tc_texture_handle.cpp
     termin/render/skinned_mesh_renderer.cpp
     termin/render/fbo_pool.cpp
     termin/render/render_engine.cpp
@@ -279,18 +249,6 @@ set_target_properties(_lighting_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_texture_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_graphics_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_mesh_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_skeleton_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -326,10 +284,7 @@ install(TARGETS _collision_native DESTINATION ${TERMIN_PYTHON_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_PREFIX}/visualization/animation)
 install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/navmesh)
 install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_PREFIX}/lighting)
-install(TARGETS _mesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/mesh)
 install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_PREFIX}/skeleton)
-install(TARGETS _texture_native DESTINATION ${TERMIN_PYTHON_PREFIX}/texture)
-install(TARGETS _graphics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/graphics)
 install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_PREFIX}/viewport)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_PREFIX})

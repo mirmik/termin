@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Set, TYPE_CHECKING
 
-from termin._native.render import TcShader, PresentToScreenPass
+from tgfx import TcShader
+from termin._native.render import PresentToScreenPass
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.editor.inspect_field import InspectField
 

@@ -25,7 +25,7 @@ from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.ui import Canvas, UIElement, UIRectangle
 from termin.visualization.core.material import Material
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.visualization.render.texture import Texture
 from termin.visualization.core.world import VisualizationWorld, Visualization
 from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action

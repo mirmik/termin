@@ -19,7 +19,7 @@ from termin.visualization import (
 )
 from termin.visualization.core.entity import Entity, Component
 from termin.visualization.render.components import MeshRenderer, LightComponent
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.colliders import BoxCollider
 from termin.colliders.collider_component import ColliderComponent
 from termin.geombase._geom_native import Vec3

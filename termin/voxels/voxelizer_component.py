@@ -511,7 +511,7 @@ class VoxelizerComponent(PythonComponent):
         """Создаёт материал для отрисовки контурных линий."""
         if self._debug_line_material is None:
             from termin.visualization.render.renderpass import RenderState
-            from termin._native.render import TcShader
+            from tgfx import TcShader
 
             # Простой шейдер для линий с vertex colors
             vertex_source = """

@@ -589,7 +589,7 @@ class NavMeshBuilderComponent(PythonComponent):
         """Create material for contour lines."""
         if self._debug_line_material is None:
             from termin.visualization.render.renderpass import RenderState
-            from termin._native.render import TcShader
+            from tgfx import TcShader
 
             vertex_source = """
 #version 330 core

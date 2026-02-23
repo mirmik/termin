@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from termin.visualization.platform.backends.base import GraphicsBackend
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.visualization.ui.font import FontTextureAtlas, get_default_font
 
 

@@ -13,12 +13,8 @@ namespace termin {
 void bind_render(nb::module_& m) {
     // Order matters - dependencies must be bound first
 
-    // NOTE: Basic types (Color4, Size2i, etc), enums (PolygonMode, etc),
-    // RenderState, GraphicsBackend, handles - all defined in _graphics_native
-    // They are imported in bindings.cpp before bind_render is called
-
-    // TcShader
-    bind_shader(m);
+    // NOTE: Shared types (Color4, Size2i, TcShader, TcTexture, TcMesh, etc.)
+    // are defined in tgfx._tgfx_native and imported in bindings.cpp
 
     // Shader parser (MaterialProperty, ShaderPhase, etc.)
     bind_shader_parser(m);

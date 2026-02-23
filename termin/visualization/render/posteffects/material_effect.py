@@ -11,7 +11,7 @@ from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
-    from termin._native.render import TcShader
+    from tgfx import TcShader
 
 # Callback type: (shader) -> None
 BeforeDrawCallback = Callable[["TcShader"], None]

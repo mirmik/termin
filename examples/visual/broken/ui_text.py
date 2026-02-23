@@ -15,7 +15,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.render.components import MeshRenderer
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.visualization.ui import Canvas, UIRectangle
 from termin.visualization.ui.elements import UIText
 from termin.visualization.ui.font import FontTextureAtlas

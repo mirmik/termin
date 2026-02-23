@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from termin.assets.data_asset import DataAsset
 from termin._native import log
-from termin._native.render import TcShader
+from tgfx import TcShader
 
 if TYPE_CHECKING:
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm

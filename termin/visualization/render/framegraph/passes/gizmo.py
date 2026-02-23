@@ -4,7 +4,7 @@ from typing import List, Optional, Set, Tuple
 
 from typing import TYPE_CHECKING
 
-from termin._native.render import TcShader
+from tgfx import TcShader
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.editor.inspect_field import InspectField
 

@@ -51,7 +51,7 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData", uuid: str = "") -> "TcMesh":
         glb_mesh: Mesh data from GLB file
         uuid: Optional UUID to use for TcMesh (if empty, generates new)
     """
-    from termin.mesh._mesh_native import TcMesh, TcVertexLayout
+    from tgfx import TcMesh, TcVertexLayout
 
     vertices = glb_mesh.vertices.astype(np.float32)
     indices = glb_mesh.indices.astype(np.uint32).ravel()
@@ -125,7 +125,7 @@ def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool
 
     Returns True if successful, False otherwise.
     """
-    from termin.mesh._mesh_native import TcVertexLayout, tc_mesh_set_data
+    from tgfx import TcVertexLayout, tc_mesh_set_data
 
     vertices = glb_mesh.vertices.astype(np.float32)
     indices = glb_mesh.indices.astype(np.uint32).ravel()

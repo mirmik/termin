@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Tuple
 
-from termin._native.render import TcShader, ShaderVariantOp as NativeShaderVariantOp
+from tgfx import TcShader, ShaderVariantOp as NativeShaderVariantOp
 
 
 # Re-export variant op for consistency

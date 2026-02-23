@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from termin._native import log
-from termin.graphics._graphics_native import (
+from termin._native import (
     RenderSyncMode as CRenderSyncMode,
     get_render_sync_mode as c_get_render_sync_mode,
     set_render_sync_mode as c_set_render_sync_mode,

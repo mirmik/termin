@@ -15,7 +15,7 @@ from termin.visualization import (
 )
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.components import MeshRenderer, LineRenderer
-from termin._native.render import TcShader
+from tgfx import TcShader
 
 vert = """
 #version 330 core

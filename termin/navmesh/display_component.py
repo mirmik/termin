@@ -173,7 +173,7 @@ class NavMeshDisplayComponent(PythonComponent):
         """Получить или создать материал для контуров."""
         if self._contour_material is None:
             from termin.visualization.render.renderpass import RenderState
-            from termin._native.render import TcShader
+            from tgfx import TcShader
 
             # Простой шейдер для линий
             vertex_source = """

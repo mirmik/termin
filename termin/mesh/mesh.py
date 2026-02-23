@@ -3,7 +3,7 @@
 import numpy as np
 from enum import Enum
 
-from termin.mesh._mesh_native import Mesh3
+from tgfx import Mesh3
 
 # GPU COMPATIBILITY
 
