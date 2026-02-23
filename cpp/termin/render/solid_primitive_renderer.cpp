@@ -3,7 +3,7 @@
 #include "tc_log.hpp"
 
 extern "C" {
-#include "resources/tc_mesh.h"
+#include <tgfx/resources/tc_mesh.h>
 }
 
 #include <vector>

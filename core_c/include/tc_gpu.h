@@ -4,11 +4,11 @@
 #pragma once
 
 #include "tc_types.h"
-#include "tc_gpu_context.h"
-#include "resources/tc_texture.h"
-#include "resources/tc_shader.h"
-#include "resources/tc_mesh.h"
-#include "resources/tc_material.h"
+#include <tgfx/tc_gpu_context.h>
+#include <tgfx/resources/tc_texture.h>
+#include <tgfx/resources/tc_shader.h>
+#include <tgfx/resources/tc_mesh.h>
+#include <tgfx/resources/tc_material.h>
 #include <tgfx/tgfx_gpu_ops.h>
 
 #ifdef __cplusplus

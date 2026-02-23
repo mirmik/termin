@@ -2,8 +2,8 @@
 #pragma once
 
 #include "tc_types.h"
-#include "tc_handle.h"
-#include "resources/tc_resource.h"
+#include <tgfx/tc_handle.h>
+#include <tgfx/resources/tc_resource.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus

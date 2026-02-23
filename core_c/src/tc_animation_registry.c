@@ -1,8 +1,8 @@
 // tc_animation_registry.c - Animation registry with pool + hash table
 #include "resources/tc_animation_registry.h"
-#include "tc_pool.h"
-#include "resources/tc_resource_map.h"
-#include "tc_registry_utils.h"
+#include <tgfx/tc_pool.h>
+#include <tgfx/tc_resource_map.h>
+#include <tgfx/tc_registry_utils.h>
 #include "tc_log.h"
 #include "termin_core.h"
 #include <stdlib.h>

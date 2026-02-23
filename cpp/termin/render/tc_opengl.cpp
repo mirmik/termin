@@ -1,7 +1,7 @@
 // tc_opengl.cpp - OpenGL backend initialization C API implementation
 #include "tc_opengl.h"
 #include "tgfx/opengl/opengl_backend.hpp"
-#include "tc_gpu_context.h"
+#include <tgfx/tc_gpu_context.h>
 
 static bool g_opengl_initialized = false;
 static termin::OpenGLGraphicsBackend* g_graphics_backend = nullptr;

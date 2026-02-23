@@ -4,11 +4,11 @@
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/editor/frame_graph_debugger_core.hpp"
 extern "C" {
-#include "resources/tc_shader.h"
-#include "resources/tc_shader_registry.h"
+#include <tgfx/resources/tc_shader.h>
+#include <tgfx/resources/tc_shader_registry.h>
 #include "tc_profiler.h"
 #include "core/tc_component.h"
-#include "resources/tc_material.h"
+#include <tgfx/resources/tc_material.h>
 #include "tc_gpu.h"
 #include "core/tc_scene_lighting.h"
 }

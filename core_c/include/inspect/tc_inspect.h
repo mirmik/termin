@@ -5,8 +5,8 @@
 #define TC_INSPECT_H
 
 #include "tc_value.h"
-#include "resources/tc_mesh.h"
-#include "resources/tc_material.h"
+#include <tgfx/resources/tc_mesh.h>
+#include <tgfx/resources/tc_material.h>
 #include <stdbool.h>
 #include <stddef.h>
 

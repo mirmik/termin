@@ -4,9 +4,9 @@
 #include <string.h>
 #include <math.h>
 #include "termin_core.h"
-#include "resources/tc_resource_map.h"
-#include "resources/tc_mesh.h"
-#include "resources/tc_mesh_registry.h"
+#include <tgfx/tc_resource_map.h>
+#include <tgfx/resources/tc_mesh.h>
+#include <tgfx/resources/tc_mesh_registry.h>
 
 #define TEST_ASSERT(cond, msg) \
     do { \

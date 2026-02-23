@@ -3,7 +3,7 @@
 #define TC_COMPONENT_H
 
 #include "tc_types.h"
-#include "resources/tc_shader.h"
+#include <tgfx/resources/tc_shader.h>
 #include "tc_type_registry.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"

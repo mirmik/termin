@@ -10,7 +10,7 @@
 #include "tc_log.hpp"
 
 extern "C" {
-#include "tc_gpu_context.h"
+#include <tgfx/tc_gpu_context.h>
 }
 
 namespace termin {

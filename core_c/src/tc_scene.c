@@ -5,10 +5,10 @@
 #include "core/tc_scene_skybox.h"
 #include "tc_viewport_config.h"
 #include "physics/tc_collision_world.h"
-#include "resources/tc_resource_map.h"
+#include <tgfx/tc_resource_map.h>
 #include "tc_profiler.h"
-#include "resources/tc_mesh.h"
-#include "resources/tc_material.h"
+#include <tgfx/resources/tc_mesh.h>
+#include <tgfx/resources/tc_material.h>
 #include "tc_log.h"
 #include "core/tc_entity_pool_registry.h"
 #include "termin_core.h"

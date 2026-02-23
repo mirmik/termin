@@ -4,7 +4,7 @@
 #define TC_RENDER_SURFACE_H
 
 #include "tc_types.h"
-#include "tc_gpu_context.h"
+#include <tgfx/tc_gpu_context.h>
 #include "render/tc_input_manager.h"
 #include <stdbool.h>
 #include <stdint.h>

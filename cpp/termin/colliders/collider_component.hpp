@@ -13,7 +13,7 @@
 
 extern "C" {
 #include "tc_types.h"
-#include "resources/tc_mesh.h"
+#include <tgfx/resources/tc_mesh.h>
 }
 
 namespace termin {

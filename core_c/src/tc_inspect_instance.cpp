@@ -9,8 +9,8 @@
 
 #include "tc_inspect_cpp.hpp"
 #include "render/tc_pass.h"
-#include "resources/tc_mesh_registry.h"
-#include "resources/tc_material_registry.h"
+#include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx/resources/tc_material_registry.h>
 #include "tc_log.hpp"
 #include "termin_core.h"
 #include "../../cpp/termin/inspect/tc_kind_cpp.hpp"

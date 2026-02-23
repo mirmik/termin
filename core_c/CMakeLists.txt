@@ -28,30 +28,21 @@ set(TC_SOURCES
     src/tc_viewport_input_manager.c
     src/tc_frame_graph.c
     src/tc_gpu.c
-    src/tc_gpu_context.c
-    src/tc_gpu_share_group.c
     src/tc_hash_map.c
     src/tc_inspect.c
     src/tc_kind.c
     src/tc_log.c
-    src/tc_material_registry.c
-    src/tc_mesh.c
-    src/tc_mesh_registry.c
     src/tc_primitive_mesh.c
     src/tc_pass.c
     src/tc_pipeline.c
     src/tc_picking.c
-    src/tc_pool.c
     src/tc_profiler.c
     src/tc_project_settings.c
     src/tc_render_surface.c
-    src/tc_resource_map.c
     src/tc_scene.c
     src/tc_scene_pipeline_template.c
     src/tc_scene_skybox.c
-    src/tc_shader_registry.c
     src/tc_skeleton_registry.c
-    src/tc_texture_registry.c
     src/tc_type_registry.c
     src/tc_viewport.c
     src/tc_viewport_config.c
@@ -72,30 +63,17 @@ set(TC_HEADERS
     include/core/tc_entity_pool.h
     include/core/tc_entity_pool_registry.h
     include/tc_gpu.h
-    include/tc_handle.h
     include/tc_hash_map.h
     include/tc_log.h
-    include/resources/tc_material.h
-    include/resources/tc_material_registry.h
-    include/resources/tc_mesh.h
-    include/resources/tc_mesh_registry.h
     include/tc_picking.h
-    include/tc_pool.h
     include/tc_profiler.h
     include/tc_project_settings.h
-    include/tc_registry_utils.h
-    include/resources/tc_resource.h
-    include/resources/tc_resource_map.h
+    include/resources/tc_skeleton.h
+    include/resources/tc_skeleton_registry.h
     include/core/tc_scene.h
     include/core/tc_scene_pipeline_template.h
     include/core/tc_scene_pool.h
     include/core/tc_scene_registry.h
-    include/resources/tc_shader.h
-    include/resources/tc_shader_registry.h
-    include/resources/tc_skeleton.h
-    include/resources/tc_skeleton_registry.h
-    include/resources/tc_texture.h
-    include/resources/tc_texture_registry.h
     include/tc_type_registry.h
     include/tc_types.h
     include/tc_viewport_config.h

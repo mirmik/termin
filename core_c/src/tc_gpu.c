@@ -2,9 +2,9 @@
 // Uses tgfx_gpu_ops from termin-graphics. Termin-specific wrappers for tc_mesh, tc_shader, etc.
 #include "tc_gpu.h"
 #include "tc_log.h"
-#include "resources/tc_material.h"
-#include "resources/tc_shader_registry.h"
-#include "resources/tc_texture_registry.h"
+#include <tgfx/resources/tc_material.h>
+#include <tgfx/resources/tc_shader_registry.h>
+#include <tgfx/resources/tc_texture_registry.h>
 #include <string.h>
 #include <stdlib.h>
 

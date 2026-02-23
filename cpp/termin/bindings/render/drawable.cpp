@@ -2,7 +2,7 @@
 #include "termin/render/drawable.hpp"
 #include "termin/entity/entity.hpp"
 extern "C" {
-#include "resources/tc_material.h"
+#include <tgfx/resources/tc_material.h>
 }
 
 namespace termin {

@@ -1,6 +1,6 @@
 // tc_type_registry.c - Unified type registry implementation
 #include "tc_type_registry.h"
-#include "resources/tc_resource_map.h"
+#include <tgfx/tc_resource_map.h>
 #include "termin_core.h"
 #include "tc_log.h"
 #include <stdlib.h>

@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tc_pool.h"
+#include <tgfx/tc_pool.h>
 #include "tc_hash_map.h"
 #include "core/tc_dlist.h"
 
