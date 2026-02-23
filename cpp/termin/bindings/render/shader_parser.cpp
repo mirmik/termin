@@ -77,7 +77,7 @@ void bind_shader_parser(nb::module_& m) {
     // Register the GLSL preprocess callback with tc_gpu
     // This should be called after set_fallback_loader to ensure includes can be resolved
     m.def("register_glsl_preprocessor", []() {
-        tc_gpu_set_shader_preprocess(glsl_preprocess_callback);
+        tgfx_gpu_set_shader_preprocess(glsl_preprocess_callback);
     }, "Register GLSL preprocessor with shader compilation system");
 
     // --- MaterialProperty (UniformProperty) ---
