@@ -57,7 +57,11 @@ def apply_dark_palette(app: QApplication):
 
 
 def _parse_editor_args():
-    """Parse command-line arguments for the editor. Returns (project, debug_resource) or exits."""
+    """Parse command-line arguments for the editor.
+
+    Returns (project, debug_resource, ui_backend) or exits.
+    ui_backend is one of: 'qt' (default), 'tcgui'
+    """
     args = sys.argv[1:]
 
     if '-h' in args or '--help' in args:
@@ -69,17 +73,22 @@ def _parse_editor_args():
         print("  PROJECT              Path to .terminproj file or project directory")
         print()
         print("Options:")
+        print("  --ui=qt|tcgui        UI backend (default: qt)")
         print("  --debug-resource RES Open framegraph debugger with this resource")
         print("  -h, --help           Show this help message and exit")
-        return "__help__", None
+        return "__help__", None, "qt"
 
     debug_resource = None
+    ui_backend = "qt"
     positional = []
     i = 0
     while i < len(args):
         if args[i] == '--debug-resource' and i + 1 < len(args):
             debug_resource = args[i + 1]
             i += 2
+        elif args[i].startswith('--ui='):
+            ui_backend = args[i].split('=', 1)[1]
+            i += 1
         elif not args[i].startswith('-'):
             positional.append(args[i])
             i += 1
@@ -92,9 +101,9 @@ def _parse_editor_args():
         project = resolve_project_path(positional[0])
         if project is None:
             print(f"Error: cannot find .terminproj at '{positional[0]}'", flush=True)
-            return "__error__", None
+            return "__error__", None, ui_backend
 
-    return project, debug_resource
+    return project, debug_resource, ui_backend
 
 
 def init_editor(debug_resource: str | None = None, no_scene: bool = False):
@@ -103,8 +112,8 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     Called from C++ before EngineCore.run().
     Does NOT call engine.run() - that's done in C++.
     """
-    # Parse CLI args (project path, --debug-resource)
-    cli_project, cli_debug = _parse_editor_args()
+    # Parse CLI args (project path, --debug-resource, --ui)
+    cli_project, cli_debug, ui_backend = _parse_editor_args()
     if cli_project in ("__help__", "__error__"):
         sys.exit(0 if cli_project == "__help__" else 1)
     if cli_debug is not None:
@@ -112,6 +121,12 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     if cli_project is not None:
         from termin.launcher.recent import write_launch_project
         write_launch_project(cli_project)
+
+    # Delegate to tcgui editor if requested
+    if ui_backend == "tcgui":
+        from termin.editor_tcgui.run_editor import init_editor_tcgui
+        init_editor_tcgui(debug_resource=debug_resource, no_scene=no_scene)
+        return
 
     from termin._native import EngineCore
 
