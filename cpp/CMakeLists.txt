@@ -426,7 +426,7 @@ if(BUILD_EDITOR_MINIMAL)
     endif()
     install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     set_target_properties(termin_editor PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN/../lib;$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )
@@ -453,7 +453,7 @@ if(BUILD_LAUNCHER)
     endif()
     install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     set_target_properties(termin_launcher PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib/python/termin;$ORIGIN/../lib;$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )

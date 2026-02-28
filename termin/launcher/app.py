@@ -514,7 +514,11 @@ class LauncherApp:
         self.recent.add(project_path)
 
         log.info(f"Launching editor: {editor_exe} for project {project_path}")
-        subprocess.Popen([editor_exe])
+        env = os.environ.copy()
+        lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
+        prev = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
+        subprocess.Popen([editor_exe], env=env)
         self.should_quit = True
 
     def _on_open_project(self) -> None:
@@ -576,7 +580,11 @@ def run():
             log.error("Cannot find termin_editor executable")
             return
         log.info(f"Launching editor: {editor_exe} for project {project}")
-        subprocess.Popen([editor_exe])
+        env = os.environ.copy()
+        lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
+        prev = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
+        subprocess.Popen([editor_exe], env=env)
         return
 
     window, gl_context = _create_sdl_window("Termin Launcher", 1024, 640)

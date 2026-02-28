@@ -40,11 +40,11 @@ install() {
 
     echo "Installing termin to $INSTALL_PREFIX..."
 
-    # Remove previous installation
-    rm -rf "$INSTALL_PREFIX"
+    # Do not wipe existing install to preserve extra bundled libs
+    mkdir -p "$INSTALL_PREFIX"
 
-    # Copy files
-    cp -a "$SOURCE_DIR" "$INSTALL_PREFIX"
+    # Copy files (overwrite existing)
+    cp -a "$SOURCE_DIR/." "$INSTALL_PREFIX/"
 
     # Create symlink
     ln -sf "$INSTALL_PREFIX/bin/termin_launcher" "$SYMLINK"

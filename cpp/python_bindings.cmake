@@ -220,56 +220,60 @@ endif()
 
 # ============== RPATH settings ==============
 
+# Ensure native Python modules can find bundled libs in /opt/termin/lib
+# by walking up from package subdirs.
+set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..")
+
 set_target_properties(entity_lib PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_geom_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_colliders_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_physics_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_voxels_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_collision_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_lighting_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_skeleton_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_viewport_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_entity_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_animation_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/../.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_navmesh_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
+    INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
