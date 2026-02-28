@@ -166,10 +166,9 @@ class EditorSceneAttachment:
         scene.notify_scene_active()
 
         # Attach scene to rendering (creates viewports from configs, notifies on_render_attach)
-        self._rendering_controller.attach_scene(scene)
-
-        # Refresh viewport list
-        self._rendering_controller._viewport_list.refresh()
+        if self._rendering_controller is not None:
+            self._rendering_controller.attach_scene(scene)
+            self._rendering_controller._viewport_list.refresh()
 
     def detach(self, save_state: bool = True) -> None:
         """
@@ -199,15 +198,15 @@ class EditorSceneAttachment:
             if self._camera_manager is not None and self._camera_manager.camera is not None:
                 self._camera_manager.camera.remove_viewport(self._viewport)
 
-            # Make offscreen GL context current before destroying GPU resources
-            # (offscreen context owns all GPU resources and is always valid)
-            self._rendering_controller.offscreen_context.make_current()
+            if self._rendering_controller is not None:
+                # Make offscreen GL context current before destroying GPU resources
+                self._rendering_controller.offscreen_context.make_current()
 
-            # Clear viewport state (output_fbo)
-            state = self._rendering_controller.get_viewport_state(self._viewport)
-            if state is not None:
-                state.clear_all()
-                self._rendering_controller._manager.remove_viewport_state(self._viewport)
+                # Clear viewport state (output_fbo)
+                state = self._rendering_controller.get_viewport_state(self._viewport)
+                if state is not None:
+                    state.clear_all()
+                    self._rendering_controller._manager.remove_viewport_state(self._viewport)
 
             # Destroy pipeline AFTER (C++ ShadowPass::fbo_pool_ is deleted here)
             if self._pipeline is not None:
@@ -224,8 +223,8 @@ class EditorSceneAttachment:
 
         self._attached_scene = None
 
-        # Refresh viewport list
-        self._rendering_controller._viewport_list.refresh()
+        if self._rendering_controller is not None:
+            self._rendering_controller._viewport_list.refresh()
 
     # --- State management ---
 
@@ -274,8 +273,8 @@ class EditorSceneAttachment:
         if not self._display.viewports:
             return
 
-        # Make offscreen GL context current before destroying GPU resources
-        self._rendering_controller.offscreen_context.make_current()
+        if self._rendering_controller is not None:
+            self._rendering_controller.offscreen_context.make_current()
 
         for vp in list(self._display.viewports):
             # Remove from camera
@@ -284,9 +283,9 @@ class EditorSceneAttachment:
             # Destroy pipeline
             if vp.pipeline is not None:
                 vp.pipeline.destroy()
-            # Clear viewport state (output_fbo)
-            state = self._rendering_controller.get_viewport_state(vp)
-            if state is not None:
-                state.clear_all()
-                self._rendering_controller._manager.remove_viewport_state(vp)
+            if self._rendering_controller is not None:
+                state = self._rendering_controller.get_viewport_state(vp)
+                if state is not None:
+                    state.clear_all()
+                    self._rendering_controller._manager.remove_viewport_state(vp)
             self._display.remove_viewport(vp)

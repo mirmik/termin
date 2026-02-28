@@ -114,6 +114,10 @@ class FBOSurface:
         self._width = max(1, width)
         self._height = max(1, height)
         self._create_fbo(self._width, self._height)
+        # Notify C++ render surface about size change → triggers Display.update_all_pixel_rects()
+        if self._tc_surface_ptr:
+            from termin._native.render import _render_surface_notify_resize
+            _render_surface_notify_resize(self._tc_surface_ptr, self._width, self._height)
         if self.on_resize is not None:
             self.on_resize(self._width, self._height)
 

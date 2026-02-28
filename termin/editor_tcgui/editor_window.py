@@ -53,6 +53,7 @@ from termin.visualization.platform.backends.fbo_backend import FBOSurface
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
+from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
 
 
 class EditorWindowTcgui:
@@ -100,6 +101,7 @@ class EditorWindowTcgui:
         self._menu_bar_controller: MenuBarControllerTcgui | None = None
         self.scene_tree_controller: SceneTreeControllerTcgui | None = None
         self._inspector_controller: InspectorControllerTcgui | None = None
+        self._project_browser: ProjectBrowserTcgui | None = None
         self._fbo_surface: FBOSurface | None = None
         self._viewport_widget: Viewport3D | None = None
         self._status_bar: StatusBar | None = None
@@ -142,7 +144,11 @@ class EditorWindowTcgui:
         """Create and attach the tcgui widget tree to ui."""
         self._ui = ui
 
+        from tcgui.widgets.units import pct
+
         root = VStack()
+        root.preferred_width = pct(100)
+        root.preferred_height = pct(100)
         root.spacing = 0
 
         # Menu bar
@@ -188,7 +194,7 @@ class EditorWindowTcgui:
         right_scroll.preferred_width = px(320)
         inspector_container = VStack()
         inspector_container.spacing = 4
-        right_scroll.content = inspector_container
+        right_scroll.add_child(inspector_container)
         main_area.add_child(Splitter(target=right_scroll, side="left"))
         main_area.add_child(right_scroll)
 
@@ -196,8 +202,41 @@ class EditorWindowTcgui:
 
         # --- Bottom: TabView [Project | Console] ---
         bottom_tabs = TabView()
-        project_tab_content = VStack()
-        project_tab_content.add_child(Label())  # Project browser placeholder
+        bottom_tabs.preferred_height = px(200)
+
+        from tcgui.widgets.hstack import HStack as HStackInner
+        from tcgui.widgets.tree import TreeWidget as TreeWidgetInner
+        from tcgui.widgets.list_widget import ListWidget
+        from tcgui.widgets.units import px as pxu
+
+        project_tab_content = HStackInner()
+        project_tab_content.spacing = 0
+        project_tab_content.stretch = True
+
+        project_dir_tree = TreeWidgetInner()
+        project_dir_tree.preferred_width = pxu(200)
+        project_dir_tree.stretch = True
+
+        from tcgui.widgets.splitter import Splitter as SplitterInner
+        from tcgui.widgets.scroll_area import ScrollArea as ScrollAreaInner
+
+        dir_tree_scroll = ScrollAreaInner()
+        dir_tree_scroll.preferred_width = pxu(200)
+        dir_tree_scroll.add_child(project_dir_tree)
+
+        project_file_list = ListWidget()
+        project_file_list.stretch = True
+        project_file_list.item_height = 28
+        project_file_list.empty_text = "Select a directory"
+
+        file_list_scroll = ScrollAreaInner()
+        file_list_scroll.stretch = True
+        file_list_scroll.add_child(project_file_list)
+
+        project_tab_content.add_child(dir_tree_scroll)
+        project_tab_content.add_child(SplitterInner(target=dir_tree_scroll, side="right"))
+        project_tab_content.add_child(file_list_scroll)
+
         bottom_tabs.add_tab("Project", project_tab_content)
 
         self._console_area = TextArea()
@@ -235,6 +274,13 @@ class EditorWindowTcgui:
         )
         self._inspector_controller.set_scene(self.scene)
 
+        # Setup project browser
+        self._project_browser = ProjectBrowserTcgui(
+            dir_tree=project_dir_tree,
+            file_list=project_file_list,
+            on_file_activated=self._on_project_file_activated,
+        )
+
         # Setup editor display and attach to scene
         if self._editor_display is not None:
             from termin.editor.editor_scene_attachment import EditorSceneAttachment
@@ -267,7 +313,7 @@ class EditorWindowTcgui:
 
         try:
             from termin.visualization.core.display import Display
-            display = Display(surface=self._fbo_surface.tc_surface(), name="Editor")
+            display = Display(surface=self._fbo_surface, name="Editor")
             display.connect_input()
             self._editor_display = display
 
@@ -286,12 +332,7 @@ class EditorWindowTcgui:
             self.scene_manager.request_render()
 
     def _on_fbo_resized(self, w: int, h: int) -> None:
-        """Called after FBO is recreated. Notify display."""
-        if self._editor_display is not None:
-            try:
-                self._editor_display.resize(w, h)
-            except Exception as e:
-                log.error(f"EditorWindowTcgui: failed to resize display: {e}")
+        """Called after FBO is recreated. FBOSurface already notified the C++ surface."""
         self._request_viewport_update()
 
     def _setup_menu_bar(self, menu_bar: MenuBar) -> None:
@@ -570,6 +611,8 @@ class EditorWindowTcgui:
         self._project_name = Path(path).name
         self._log_to_console(f"Project: {path}")
         self._project_file_watcher.set_root(path)
+        if self._project_browser is not None:
+            self._project_browser.set_root(path)
 
     def _load_project(self, path: str) -> None:
         project_dir = str(Path(path).parent)
@@ -578,6 +621,23 @@ class EditorWindowTcgui:
         self._log_to_console(f"Project: {path}")
         self._project_file_watcher.set_root(project_dir)
         self._rescan_file_resources()
+        if self._project_browser is not None:
+            self._project_browser.set_root(project_dir)
+
+    def _on_project_file_activated(self, path: str) -> None:
+        """Called when a file is double-clicked in the project browser."""
+        p = Path(path)
+        ext = p.suffix.lower()
+        if ext == ".tc_scene":
+            self._load_scene_from_file(path)
+        elif ext == ".tc_prefab":
+            self._open_prefab(path)
+        else:
+            from termin.editor.external_editor import open_in_text_editor
+            try:
+                open_in_text_editor(path)
+            except Exception as e:
+                log.error(f"Failed to open file in text editor: {e}")
 
     # ------------------------------------------------------------------
     # Rename entity dialog

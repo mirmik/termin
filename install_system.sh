@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/install"
 INSTALL_PREFIX="/opt/termin"
 SYMLINK="/usr/local/bin/termin"
+SYMLINK_EDITOR="/usr/local/bin/termin_editor"
 DESKTOP_FILE="/usr/share/applications/termin.desktop"
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -25,7 +26,7 @@ fi
 
 remove() {
     echo "Removing termin system installation..."
-    rm -f "$SYMLINK"
+    rm -f "$SYMLINK" "$SYMLINK_EDITOR"
     rm -f "$DESKTOP_FILE"
     rm -rf "$INSTALL_PREFIX"
     echo "Done."
@@ -49,6 +50,8 @@ install() {
     # Create symlink
     ln -sf "$INSTALL_PREFIX/bin/termin_launcher" "$SYMLINK"
     echo "  Symlink: $SYMLINK -> $INSTALL_PREFIX/bin/termin_launcher"
+    ln -sf "$INSTALL_PREFIX/bin/termin_editor" "$SYMLINK_EDITOR"
+    echo "  Symlink: $SYMLINK_EDITOR -> $INSTALL_PREFIX/bin/termin_editor"
 
     # Install .desktop file
     cat > "$DESKTOP_FILE" << 'DESKTOP'
@@ -65,8 +68,9 @@ DESKTOP
 
     echo ""
     echo "Installation complete."
-    echo "  Run: termin"
-    echo "  Or:  $INSTALL_PREFIX/bin/termin_editor"
+    echo "  Run: termin               (launcher)"
+    echo "  Run: termin_editor        (editor directly)"
+    echo "  Run: termin_editor --ui=tcgui  (new UI)"
 }
 
 case "${1:-}" in

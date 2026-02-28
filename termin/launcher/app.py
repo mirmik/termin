@@ -168,10 +168,11 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, graphics: OpenGLGraphicsBackend):
+    def __init__(self, graphics: OpenGLGraphicsBackend, ui_backend: str = "qt"):
         self.graphics = graphics
         self.ui = UI(graphics)
         self.recent = RecentProjects()
+        self._ui_backend = ui_backend
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
         self.should_quit: bool = False
 
@@ -513,12 +514,12 @@ class LauncherApp:
         write_launch_project(project_path)
         self.recent.add(project_path)
 
-        log.info(f"Launching editor: {editor_exe} for project {project_path}")
+        log.info(f"Launching editor: {editor_exe} for project {project_path} (ui={self._ui_backend})")
         env = os.environ.copy()
         lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
         prev = env.get("LD_LIBRARY_PATH", "")
         env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
-        subprocess.Popen([editor_exe], env=env)
+        subprocess.Popen([editor_exe, f"--ui={self._ui_backend}"], env=env)
         self.should_quit = True
 
     def _on_open_project(self) -> None:
@@ -532,45 +533,62 @@ class LauncherApp:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def _parse_launcher_args() -> str | None:
-    """Parse command-line arguments. Returns project path or None."""
+def _parse_launcher_args() -> tuple[str | None, str | None]:
+    """Parse command-line arguments.
+
+    Returns (project_path_or_sentinel, ui_backend_or_None).
+    project is None for UI mode, "__help__"/"__error__" for early exit.
+    ui_backend is None if not specified on command line.
+    """
     import sys
     from termin.launcher.recent import resolve_project_path
 
     args = sys.argv[1:]
 
     if '-h' in args or '--help' in args:
-        print("Usage: termin_launcher [PROJECT]")
+        print("Usage: termin_launcher [OPTIONS] [PROJECT]")
         print()
         print("Termin project launcher.")
         print()
         print("Arguments:")
-        print("  PROJECT     Path to .terminproj file or project directory")
+        print("  PROJECT         Path to .terminproj file or project directory")
         print()
         print("Without PROJECT, opens the launcher UI.")
         print()
         print("Options:")
-        print("  -h, --help  Show this help message and exit")
-        return "__help__"
+        print("  --ui=qt|tcgui   UI backend to use (overrides saved setting)")
+        print("  -h, --help      Show this help message and exit")
+        return "__help__", None
 
-    positional = [a for a in args if not a.startswith('-')]
+    ui_backend: str | None = None
+    positional = []
+    for a in args:
+        if a.startswith('--ui='):
+            ui_backend = a.split('=', 1)[1]
+        elif not a.startswith('-'):
+            positional.append(a)
+
+    project: str | None = None
     if positional:
         resolved = resolve_project_path(positional[0])
         if resolved is None:
             print(f"Error: cannot find .terminproj at '{positional[0]}'", flush=True)
-            return "__error__"
-        return resolved
+            return "__error__", None
+        project = resolved
 
-    return None
+    return project, ui_backend
 
 
 def run():
     """Entry point: create window, build UI, run event loop."""
-    project = _parse_launcher_args()
+    project, cli_ui_backend = _parse_launcher_args()
     if project == "__help__":
         return
     if project == "__error__":
         return
+
+    ui_backend = cli_ui_backend if cli_ui_backend is not None else "qt"
+
     if project is not None:
         # Direct launch: skip UI, open editor with given project
         write_launch_project(project)
@@ -579,12 +597,12 @@ def run():
         if editor_exe is None:
             log.error("Cannot find termin_editor executable")
             return
-        log.info(f"Launching editor: {editor_exe} for project {project}")
+        log.info(f"Launching editor: {editor_exe} for project {project} (ui={ui_backend})")
         env = os.environ.copy()
         lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
         prev = env.get("LD_LIBRARY_PATH", "")
         env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
-        subprocess.Popen([editor_exe], env=env)
+        subprocess.Popen([editor_exe, f"--ui={ui_backend}"], env=env)
         return
 
     window, gl_context = _create_sdl_window("Termin Launcher", 1024, 640)
@@ -593,7 +611,7 @@ def run():
     graphics.ensure_ready()
     set_default_graphics_backend(graphics)
 
-    app = LauncherApp(graphics)
+    app = LauncherApp(graphics, ui_backend=ui_backend)
 
     sdl2.SDL_StartTextInput()
 

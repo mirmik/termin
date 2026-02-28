@@ -10,6 +10,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$SCRIPT_DIR/build_standalone"
 INSTALL_DIR="$SCRIPT_DIR/install"
 
@@ -108,6 +109,25 @@ fi
 echo "Installing..."
 rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
+
+# Copy shared libraries from termin-base and termin-graphics
+echo "Copying shared libraries from termin-base and termin-graphics..."
+TERMIN_BASE_LIBDIR="$ENV_DIR/termin-base/python/tcbase/lib"
+TERMIN_GFX_LIBDIR="$ENV_DIR/termin-graphics/python/tgfx/lib"
+
+if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
+    cp -P "$TERMIN_BASE_LIBDIR"/libtermin_base.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_base from $TERMIN_BASE_LIBDIR"
+else
+    echo "  WARNING: $TERMIN_BASE_LIBDIR not found — skipping libtermin_base"
+fi
+
+if [[ -d "$TERMIN_GFX_LIBDIR" ]]; then
+    cp -P "$TERMIN_GFX_LIBDIR"/libtermin_graphics.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_graphics from $TERMIN_GFX_LIBDIR"
+else
+    echo "  WARNING: $TERMIN_GFX_LIBDIR not found — skipping libtermin_graphics"
+fi
 
 echo ""
 echo "=== Build complete ==="
