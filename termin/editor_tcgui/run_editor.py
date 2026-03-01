@@ -8,14 +8,18 @@ import sys
 import sdl2
 from sdl2 import video
 
-from tcbase import Key, log
+from tcbase import Key, MouseButton, log
+from tcgui.widgets.ui import UI
+
+from termin.editor_tcgui.window_manager import WindowManager, WindowEntry
 
 
 # ---------------------------------------------------------------------------
-# SDL helpers (copied from launcher/app.py)
+# SDL helpers
 # ---------------------------------------------------------------------------
 
-def _create_sdl_window(title: str, width: int, height: int):
+def _create_sdl_window(title: str, width: int, height: int,
+                       maximized: bool = True):
     """Create SDL window with OpenGL 3.3 core context.
 
     SDL_Init must be called before this function.
@@ -25,8 +29,9 @@ def _create_sdl_window(title: str, width: int, height: int):
         video.SDL_WINDOW_OPENGL
         | video.SDL_WINDOW_RESIZABLE
         | video.SDL_WINDOW_SHOWN
-        | video.SDL_WINDOW_MAXIMIZED
     )
+    if maximized:
+        flags |= video.SDL_WINDOW_MAXIMIZED
     window = video.SDL_CreateWindow(
         title.encode("utf-8"),
         video.SDL_WINDOWPOS_CENTERED,
@@ -44,13 +49,6 @@ def _create_sdl_window(title: str, width: int, height: int):
     video.SDL_GL_MakeCurrent(window, gl_context)
     video.SDL_GL_SetSwapInterval(1)
     return window, gl_context
-
-
-def _get_drawable_size(window) -> tuple[int, int]:
-    w = ctypes.c_int()
-    h = ctypes.c_int()
-    video.SDL_GL_GetDrawableSize(window, ctypes.byref(w), ctypes.byref(h))
-    return w.value, h.value
 
 
 def _translate_sdl_key(scancode: int) -> Key:
@@ -88,6 +86,119 @@ def _translate_sdl_mods(sdl_mods: int) -> int:
     if sdl_mods & (sdl2.KMOD_LALT | sdl2.KMOD_RALT):
         result |= 0x0004
     return result
+
+
+_BTN_MAP = {
+    sdl2.SDL_BUTTON_LEFT: MouseButton.LEFT,
+    sdl2.SDL_BUTTON_RIGHT: MouseButton.RIGHT,
+    sdl2.SDL_BUTTON_MIDDLE: MouseButton.MIDDLE,
+}
+
+
+# ---------------------------------------------------------------------------
+# SDL Window Manager
+# ---------------------------------------------------------------------------
+
+class SDLWindowManager(WindowManager):
+    """WindowManager implementation using SDL2."""
+
+    def _create_native_window(self, title: str, width: int,
+                              height: int) -> tuple:
+        video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1)
+        return _create_sdl_window(title, width, height, maximized=False)
+
+    def _destroy_native_window(self, entry: WindowEntry) -> None:
+        video.SDL_GL_DeleteContext(entry.gl_context)
+        video.SDL_DestroyWindow(entry.handle)
+
+    def _make_current(self, entry: WindowEntry) -> None:
+        video.SDL_GL_MakeCurrent(entry.handle, entry.gl_context)
+
+    def _get_drawable_size(self, entry: WindowEntry) -> tuple[int, int]:
+        w = ctypes.c_int()
+        h = ctypes.c_int()
+        video.SDL_GL_GetDrawableSize(entry.handle,
+                                     ctypes.byref(w), ctypes.byref(h))
+        return w.value, h.value
+
+    def _swap(self, entry: WindowEntry) -> None:
+        video.SDL_GL_SwapWindow(entry.handle)
+
+    def _get_window_id(self, entry: WindowEntry) -> int:
+        return video.SDL_GetWindowID(entry.handle)
+
+
+# ---------------------------------------------------------------------------
+# SDL event dispatch
+# ---------------------------------------------------------------------------
+
+def _get_event_window_id(event: sdl2.SDL_Event) -> int | None:
+    """Extract windowID from an SDL event, or None if not window-specific."""
+    etype = event.type
+    if etype in (sdl2.SDL_MOUSEMOTION,):
+        return event.motion.windowID
+    if etype in (sdl2.SDL_MOUSEBUTTONDOWN, sdl2.SDL_MOUSEBUTTONUP):
+        return event.button.windowID
+    if etype in (sdl2.SDL_MOUSEWHEEL,):
+        return event.wheel.windowID
+    if etype in (sdl2.SDL_KEYDOWN, sdl2.SDL_KEYUP):
+        return event.key.windowID
+    if etype == sdl2.SDL_TEXTINPUT:
+        return event.text.windowID
+    return None
+
+
+def _dispatch_sdl_events(wm: SDLWindowManager) -> bool:
+    """Poll SDL events and dispatch to the correct UI. Returns False on quit."""
+    event = sdl2.SDL_Event()
+    while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
+        etype = event.type
+
+        if etype == sdl2.SDL_QUIT:
+            return False
+
+        if etype == sdl2.SDL_WINDOWEVENT:
+            if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
+                if wm.handle_window_close(event.window.windowID):
+                    return False
+            continue
+
+        wid = _get_event_window_id(event)
+        if wid is None:
+            continue
+        target_ui = wm.get_ui_for_event(wid)
+        if target_ui is None:
+            continue
+
+        if etype == sdl2.SDL_MOUSEMOTION:
+            target_ui.mouse_move(float(event.motion.x),
+                                 float(event.motion.y))
+        elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
+            btn = _BTN_MAP.get(event.button.button, MouseButton.LEFT)
+            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            target_ui.mouse_down(float(event.button.x),
+                                 float(event.button.y), btn, mods)
+        elif etype == sdl2.SDL_MOUSEBUTTONUP:
+            btn = _BTN_MAP.get(event.button.button, MouseButton.LEFT)
+            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            target_ui.mouse_up(float(event.button.x),
+                               float(event.button.y), btn, mods)
+        elif etype == sdl2.SDL_MOUSEWHEEL:
+            mx = ctypes.c_int()
+            my = ctypes.c_int()
+            sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
+            target_ui.mouse_wheel(float(event.wheel.x),
+                                  float(event.wheel.y),
+                                  float(mx.value), float(my.value))
+        elif etype == sdl2.SDL_KEYDOWN:
+            key = _translate_sdl_key(event.key.keysym.scancode)
+            mods = _translate_sdl_mods(event.key.keysym.mod)
+            target_ui.key_down(key, mods)
+        elif etype == sdl2.SDL_TEXTINPUT:
+            text = event.text.text.decode("utf-8", errors="replace")
+            target_ui.text_input(text)
+
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -134,8 +245,11 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         world.add_scene(initial_scene)
 
     # Create tcgui UI
-    from tcgui.widgets.ui import UI
     ui = UI(graphics=graphics)
+
+    # Window manager — all windows are equal
+    wm = SDLWindowManager(graphics)
+    wm.register_main(window, gl_context, ui)
 
     # Create editor window and build UI
     from termin.editor_tcgui.editor_window import EditorWindowTcgui
@@ -154,82 +268,25 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     sdl2.SDL_StartTextInput()
 
-    # SDL event dispatch → tcgui UI
-    def _dispatch_sdl_events() -> bool:
-        """Poll SDL events and dispatch to tcgui UI. Returns False on quit."""
-        event = sdl2.SDL_Event()
-        while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-            etype = event.type
-            if etype == sdl2.SDL_QUIT:
-                return False
-            elif etype == sdl2.SDL_WINDOWEVENT:
-                if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
-                    return False
-            elif etype == sdl2.SDL_MOUSEMOTION:
-                ui.mouse_move(float(event.motion.x), float(event.motion.y))
-            elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
-                from tcbase import MouseButton
-                btn_map = {
-                    sdl2.SDL_BUTTON_LEFT: MouseButton.LEFT,
-                    sdl2.SDL_BUTTON_RIGHT: MouseButton.RIGHT,
-                    sdl2.SDL_BUTTON_MIDDLE: MouseButton.MIDDLE,
-                }
-                btn = btn_map.get(event.button.button, MouseButton.LEFT)
-                mods = _translate_sdl_mods(sdl2.SDL_GetModState())
-                ui.mouse_down(float(event.button.x), float(event.button.y), btn, mods)
-            elif etype == sdl2.SDL_MOUSEBUTTONUP:
-                from tcbase import MouseButton as _MB
-                _btn_map_up = {
-                    sdl2.SDL_BUTTON_LEFT: _MB.LEFT,
-                    sdl2.SDL_BUTTON_RIGHT: _MB.RIGHT,
-                    sdl2.SDL_BUTTON_MIDDLE: _MB.MIDDLE,
-                }
-                btn_up = _btn_map_up.get(event.button.button, _MB.LEFT)
-                mods_up = _translate_sdl_mods(sdl2.SDL_GetModState())
-                ui.mouse_up(float(event.button.x), float(event.button.y), btn_up, mods_up)
-            elif etype == sdl2.SDL_MOUSEWHEEL:
-                # Get current mouse position for hit testing
-                mx = ctypes.c_int()
-                my = ctypes.c_int()
-                sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
-                ui.mouse_wheel(float(event.wheel.x), float(event.wheel.y),
-                               float(mx.value), float(my.value))
-            elif etype == sdl2.SDL_KEYDOWN:
-                key = _translate_sdl_key(event.key.keysym.scancode)
-                mods = _translate_sdl_mods(event.key.keysym.mod)
-                ui.key_down(key, mods)
-            elif etype == sdl2.SDL_TEXTINPUT:
-                text = event.text.text.decode("utf-8", errors="replace")
-                ui.text_input(text)
-        return True
-
     # Setup engine callbacks
     def poll_events() -> None:
-        if not _dispatch_sdl_events():
+        if not _dispatch_sdl_events(wm):
             win.close()
             return
 
         win.poll_file_watcher()
-
-        # Switch back to main window GL context (tick_and_render may have
-        # switched to offscreen context for scene rendering)
-        video.SDL_GL_MakeCurrent(window, gl_context)
-
-        vw, vh = _get_drawable_size(window)
-        graphics.bind_framebuffer(None)
-        graphics.set_viewport(0, 0, vw, vh)
-        graphics.clear_color_depth(0.08, 0.08, 0.10, 1.0)
-        ui.render(vw, vh)
-        ui.process_deferred()
-        video.SDL_GL_SwapWindow(window)
+        wm.render_all()
 
     def should_continue() -> bool:
         return not win.should_close()
 
     def on_shutdown() -> None:
         offscreen_context.destroy()
-        video.SDL_GL_DeleteContext(gl_context)
-        video.SDL_DestroyWindow(window)
+        # Destroy all remaining windows
+        for entry in list(wm.windows):
+            video.SDL_GL_DeleteContext(entry.gl_context)
+            video.SDL_DestroyWindow(entry.handle)
+        wm.windows.clear()
         sdl2.SDL_Quit()
 
     engine.set_poll_events_callback(poll_events)
