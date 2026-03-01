@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -134,6 +135,16 @@ class EditorWindowTcgui:
         self._game_scene_name: str | None = None
         self._saved_tree_expanded_uuids: list[str] | None = None
         self._spacemouse = None
+
+        # Debug panels (Profiler / Modules)
+        self._debug_panel: TabView | None = None
+        self._debug_splitter: Splitter | None = None
+        self._profiler_panel = None
+        self._modules_panel = None
+        self._profiler_visible: bool = False
+        self._modules_visible: bool = False
+        self._last_profiler_update: float = 0.0
+        self._last_modules_update: float = 0.0
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -277,6 +288,26 @@ class EditorWindowTcgui:
         self._right_splitter = Splitter(target=right_scroll, side="left")
         main_area.add_child(self._right_splitter)
         main_area.add_child(right_scroll)
+
+        # --- Debug panel: Profiler / Modules (right of inspector, hidden) ---
+        from termin.editor_tcgui.profiler_panel import ProfilerPanel
+        from termin.editor_tcgui.modules_panel import ModulesPanel
+
+        debug_panel = TabView()
+        debug_panel.preferred_width = px(350)
+        debug_panel.visible = False
+        self._debug_panel = debug_panel
+
+        self._profiler_panel = ProfilerPanel()
+        debug_panel.add_tab("Profiler", self._profiler_panel)
+
+        self._modules_panel = ModulesPanel()
+        debug_panel.add_tab("Modules", self._modules_panel)
+
+        self._debug_splitter = Splitter(target=debug_panel, side="left")
+        self._debug_splitter.visible = False
+        main_area.add_child(self._debug_splitter)
+        main_area.add_child(debug_panel)
 
         root.add_child(main_area)
 
@@ -492,22 +523,22 @@ class EditorWindowTcgui:
             on_run_standalone=self._run_standalone,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._noop,
-            on_show_resource_manager_viewer=self._noop,
+            on_show_resource_manager_viewer=self._show_resource_manager_viewer,
             on_show_audio_debugger=self._show_audio_debugger,
-            on_show_core_registry_viewer=self._noop,
+            on_show_core_registry_viewer=self._show_core_registry_viewer,
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
-            on_toggle_profiler=self._noop,
-            on_toggle_modules=self._noop,
+            on_toggle_profiler=self._toggle_profiler,
+            on_toggle_modules=self._toggle_modules,
             on_toggle_fullscreen=self._toggle_fullscreen,
             on_show_agent_types=self._show_agent_types,
             on_show_spacemouse_settings=self._show_spacemouse_settings,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
-            is_profiler_visible=lambda: False,
-            is_modules_visible=lambda: False,
+            is_profiler_visible=lambda: self._profiler_visible,
+            is_modules_visible=lambda: self._modules_visible,
         )
 
     # ------------------------------------------------------------------
@@ -934,6 +965,18 @@ class EditorWindowTcgui:
         else:
             self._spacemouse = None
 
+    def _show_resource_manager_viewer(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.resource_manager_viewer import show_resource_manager_viewer
+        show_resource_manager_viewer(self._ui)
+
+    def _show_core_registry_viewer(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.core_registry_viewer import show_core_registry_viewer
+        show_core_registry_viewer(self._ui)
+
     def _show_inspect_registry_viewer(self) -> None:
         if self._ui is None:
             return
@@ -1162,12 +1205,40 @@ class EditorWindowTcgui:
         from termin.editor_tcgui.dialogs.undo_stack_viewer import show_undo_stack_viewer
         show_undo_stack_viewer(self._ui, self.undo_stack)
 
+    # ------------------------------------------------------------------
+    # Debug panels (Profiler / Modules)
+    # ------------------------------------------------------------------
+
+    def _toggle_profiler(self) -> None:
+        self._profiler_visible = not self._profiler_visible
+        self._update_debug_panel_visibility()
+
+    def _toggle_modules(self) -> None:
+        self._modules_visible = not self._modules_visible
+        self._update_debug_panel_visibility()
+
+    def _update_debug_panel_visibility(self) -> None:
+        visible = self._profiler_visible or self._modules_visible
+        if self._debug_panel is not None:
+            self._debug_panel.visible = visible
+        if self._debug_splitter is not None:
+            self._debug_splitter.visible = visible
+        # Switch to the relevant tab
+        if visible and self._debug_panel is not None:
+            if self._profiler_visible and not self._modules_visible:
+                self._debug_panel.selected_index = 0
+            elif self._modules_visible and not self._profiler_visible:
+                self._debug_panel.selected_index = 1
+        if self._ui is not None:
+            self._ui.request_layout()
+
     def _toggle_fullscreen(self) -> None:
         panels = [
             self._left_tabs, self._left_splitter,
             self._right_scroll, self._right_splitter,
             self._bottom_tabs, self._bottom_splitter,
             self._menu_bar_widget, self._status_bar,
+            self._debug_panel, self._debug_splitter,
         ]
         if self._is_fullscreen:
             # Restore panels
@@ -1341,8 +1412,18 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def poll_file_watcher(self) -> None:
-        """Process pending file system changes. Call from main loop."""
+        """Process pending file system changes and update debug panels. Call from main loop."""
         self._project_file_watcher.poll()
+
+        now = time.monotonic()
+        if self._profiler_visible and self._profiler_panel is not None:
+            if now - self._last_profiler_update > 0.1:
+                self._profiler_panel.update_display()
+                self._last_profiler_update = now
+        if self._modules_visible and self._modules_panel is not None:
+            if now - self._last_modules_update > 1.0:
+                self._modules_panel.update_display()
+                self._last_modules_update = now
 
     def _after_render(self) -> None:
         pass
