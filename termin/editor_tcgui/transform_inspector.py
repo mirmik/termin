@@ -7,9 +7,10 @@ from typing import Callable, Optional
 import numpy as np
 
 from tcgui.widgets.vstack import VStack
-from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.spin_box import SpinBox
+from tcgui.widgets.grid_layout import GridLayout
+from tcgui.widgets.units import px
 
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity
@@ -29,37 +30,54 @@ class TransformInspector(VStack):
         self._updating_from_model: bool = False
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
         self.on_transform_changed: Optional[Callable[[], None]] = None
+        self._row_labels: list[Label] = []
+        self._compact_mode: bool = False
+        self._labels_hide_threshold: float = 320.0
 
-        def make_vec3_row(label_text: str) -> tuple[HStack, tuple[SpinBox, SpinBox, SpinBox]]:
-            row = HStack()
-            row.spacing = 4
-            lbl = Label()
-            lbl.text = label_text
-            lbl.preferred_width = None
-            row.add_child(lbl)
-            spinboxes = []
-            for _ in range(3):
-                sb = SpinBox()
-                sb.decimals = 3
-                sb.step = 0.1
-                sb.min_value = -1e6
-                sb.max_value = 1e6
-                row.add_child(sb)
-                spinboxes.append(sb)
-            return row, tuple(spinboxes)  # type: ignore[return-value]
+        self._grid = GridLayout(columns=4)
+        self._grid.column_spacing = 4
+        self._grid.row_spacing = 4
+        self._grid.set_column_stretch(1, 1.0)
+        self._grid.set_column_stretch(2, 1.0)
+        self._grid.set_column_stretch(3, 1.0)
+        self.add_child(self._grid)
 
-        pos_row, self._pos = make_vec3_row("Position")
-        rot_row, self._rot = make_vec3_row("Rotation")
-        scale_row, self._scale = make_vec3_row("Scale")
-
-        self.add_child(pos_row)
-        self.add_child(rot_row)
-        self.add_child(scale_row)
+        self._pos = self._add_vec3_row(0, "Position")
+        self._rot = self._add_vec3_row(1, "Rotation (deg)")
+        self._scale = self._add_vec3_row(2, "Scale")
 
         for sb in (*self._pos, *self._rot, *self._scale):
-            sb.on_value_changed = self._on_value_changed
+            sb.on_changed = self._on_value_changed
 
         self._set_enabled(False)
+
+    def _add_vec3_row(self, row: int, label_text: str) -> tuple[SpinBox, SpinBox, SpinBox]:
+        lbl = Label()
+        lbl.text = label_text
+        lbl.preferred_width = px(92)
+        self._grid.add(lbl, row, 0)
+        self._row_labels.append(lbl)
+
+        spinboxes: list[SpinBox] = []
+        for col in range(3):
+            sb = SpinBox()
+            sb.decimals = 3
+            sb.step = 0.1
+            sb.min_value = -1e6
+            sb.max_value = 1e6
+            sb.preferred_width = px(74)
+            self._grid.add(sb, row, col + 1)
+            spinboxes.append(sb)
+        return (spinboxes[0], spinboxes[1], spinboxes[2])
+
+    def layout(self, x: float, y: float, width: float, height: float,
+               viewport_w: float, viewport_h: float) -> None:
+        compact = width < self._labels_hide_threshold
+        if compact != self._compact_mode:
+            self._compact_mode = compact
+            for lbl in self._row_labels:
+                lbl.visible = not compact
+        super().layout(x, y, width, height, viewport_w, viewport_h)
 
     def set_undo_command_handler(self, handler: Optional[Callable[[UndoCommand, bool], None]]) -> None:
         self._push_undo_command = handler

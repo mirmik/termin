@@ -12,7 +12,10 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.list_widget import ListWidget
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.menu import Menu, MenuItem
-from tcgui.widgets.scroll_area import ScrollArea
+from tcgui.widgets.text_input import TextInput
+from tcgui.widgets.combo_box import ComboBox
+from tcgui.widgets.grid_layout import GridLayout
+from tcgui.widgets.units import px
 
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
@@ -27,49 +30,147 @@ from termin.editor_tcgui.transform_inspector import TransformInspector
 from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 
 
+class EntityPropertyEditCommand(UndoCommand):
+    """Undo command for editing entity properties."""
+
+    def __init__(self, entity: Entity, property_name: str, old_value: Any, new_value: Any):
+        self._entity = entity
+        self._property_name = property_name
+        self._old_value = old_value
+        self._new_value = new_value
+
+    def _apply(self, value: Any) -> None:
+        if self._property_name == "name":
+            self._entity.name = str(value)
+            return
+        if self._property_name == "layer":
+            self._entity.layer = int(value)
+
+    def do(self) -> None:
+        self._apply(self._new_value)
+
+    def undo(self) -> None:
+        self._apply(self._old_value)
+
+    def merge_with(self, other: UndoCommand) -> bool:
+        if not isinstance(other, EntityPropertyEditCommand):
+            return False
+        if other._entity is not self._entity:
+            return False
+        if other._property_name != self._property_name:
+            return False
+        self._new_value = other._new_value
+        return True
+
+
+class RecursiveLayerChangeCommand(UndoCommand):
+    """Undo command for changing layer on entity descendants."""
+
+    def __init__(self, entities_and_old_layers: list[tuple[Entity, int]], new_layer: int):
+        self._entities_and_old_layers = entities_and_old_layers
+        self._new_layer = new_layer
+
+    def do(self) -> None:
+        for entity, _ in self._entities_and_old_layers:
+            entity.layer = self._new_layer
+
+    def undo(self) -> None:
+        for entity, old_layer in self._entities_and_old_layers:
+            entity.layer = old_layer
+
+    def merge_with(self, other: UndoCommand) -> bool:
+        return False
+
+
 class EntityInspector(VStack):
-    """Full entity inspector: transform + components list + component field editor."""
+    """Full entity inspector: entity props + transform + components + field editor."""
 
     def __init__(self, resources=None) -> None:
         super().__init__()
-        self.spacing = 6
+        self.spacing = 4
 
         self._entity: Optional[Entity] = None
         self._resources = resources
         self._scene = None
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
+        self._updating_entity_props: bool = False
 
         self.on_transform_changed: Optional[Callable[[], None]] = None
         self.on_component_changed: Optional[Callable[[], None]] = None
         # on_component_field_changed(component, field_key, new_value)
         self.on_component_field_changed: Optional[Callable[[Any, str, Any], None]] = None
 
-        # Entity name label
-        self._name_label = Label()
-        self._name_label.text = ""
-        self.add_child(self._name_label)
+        inspector_title = Label()
+        inspector_title.text = "Inspector"
+        self.add_child(inspector_title)
+
+        # Entity section
+        entity_title = Label()
+        entity_title.text = "Entity"
+        self.add_child(entity_title)
+
+        self._entity_grid = GridLayout(columns=3)
+        self._entity_grid.column_spacing = 4
+        self._entity_grid.row_spacing = 4
+        self._entity_grid.set_column_stretch(1, 1.0)
+        self.add_child(self._entity_grid)
+
+        name_lbl = Label()
+        name_lbl.text = "Name:"
+        name_lbl.preferred_width = px(96)
+        self._entity_grid.add(name_lbl, 0, 0)
+        self._name_input = TextInput()
+        self._name_input.on_submit = self._on_name_submitted
+        self._entity_grid.add(self._name_input, 0, 1, 1, 2)
+
+        uuid_lbl = Label()
+        uuid_lbl.text = "UUID:"
+        uuid_lbl.preferred_width = px(96)
+        self._entity_grid.add(uuid_lbl, 1, 0)
+        self._uuid_value = Label()
+        self._uuid_value.color = (0.55, 0.60, 0.68, 1.0)
+        self._entity_grid.add(self._uuid_value, 1, 1, 1, 2)
+
+        layer_lbl = Label()
+        layer_lbl.text = "Layer:"
+        layer_lbl.preferred_width = px(96)
+        self._entity_grid.add(layer_lbl, 2, 0)
+        self._layer_combo = ComboBox()
+        self._layer_combo.on_changed = self._on_layer_changed
+        self._entity_grid.add(self._layer_combo, 2, 1)
+
+        self._apply_layer_btn = Button()
+        self._apply_layer_btn.text = "!"
+        self._apply_layer_btn.preferred_width = px(24)
+        self._apply_layer_btn.on_click = self._on_apply_layer_to_children
+        self._entity_grid.add(self._apply_layer_btn, 2, 2)
+
+        self.add_child(Separator())
 
         # Transform inspector
         self._transform_inspector = TransformInspector()
         self._transform_inspector.on_transform_changed = self._on_transform_changed
         self.add_child(self._transform_inspector)
 
-        self.add_child(Separator())
-
         # Components list header
         comp_header = HStack()
         comp_header.spacing = 4
         comp_lbl = Label()
         comp_lbl.text = "Components"
+        comp_lbl.stretch = True
         comp_header.add_child(comp_lbl)
 
         self._add_comp_btn = Button()
         self._add_comp_btn.text = "+"
+        self._add_comp_btn.preferred_width = px(24)
         self._add_comp_btn.on_click = self._show_add_component_menu
         comp_header.add_child(self._add_comp_btn)
         self.add_child(comp_header)
 
         self._comp_list = ListWidget()
+        self._comp_list.item_height = 22
+        self._comp_list.item_spacing = 1
+        self._comp_list.preferred_height = px(130)
         self._comp_list.on_select = lambda idx, item: self._on_component_selected(idx)
         self.add_child(self._comp_list)
 
@@ -81,12 +182,42 @@ class EntityInspector(VStack):
         # Current component reference (for undo/context menu)
         self._selected_comp_ref = None
 
+        self._update_layer_combo()
+        self._set_enabled(False)
+
+    def _set_enabled(self, enabled: bool) -> None:
+        self._name_input.enabled = enabled
+        self._name_input.focusable = enabled
+        self._layer_combo.enabled = enabled
+        self._apply_layer_btn.enabled = enabled
+        self._add_comp_btn.enabled = enabled
+
     def set_undo_command_handler(self, handler: Optional[Callable[[UndoCommand, bool], None]]) -> None:
         self._push_undo_command = handler
         self._transform_inspector.set_undo_command_handler(handler)
 
     def set_scene(self, scene) -> None:
         self._scene = scene
+        self._update_layer_combo()
+        self._refresh_entity_props()
+
+    def _update_layer_combo(self) -> None:
+        old_cb = self._layer_combo.on_changed
+        self._layer_combo.on_changed = None
+        self._layer_combo.clear()
+        for i in range(64):
+            name = f"Layer {i}"
+            if self._scene is not None:
+                try:
+                    scene_name = self._scene.get_layer_name(i)
+                    if scene_name:
+                        name = scene_name
+                except Exception as e:
+                    log.error(f"EntityInspector: get_layer_name({i}) failed: {e}")
+            self._layer_combo.add_item(name)
+        self._layer_combo.on_changed = old_cb
+        if self._ui is not None:
+            self._ui.request_layout()
 
     def set_target(self, obj: Optional[object]) -> None:
         if isinstance(obj, Entity):
@@ -99,14 +230,103 @@ class EntityInspector(VStack):
         self._entity = ent
         self._selected_comp_ref = None
 
-        if ent is not None:
-            self._name_label.text = ent.name or "(unnamed)"
-        else:
-            self._name_label.text = ""
-
+        self._set_enabled(ent is not None)
+        self._refresh_entity_props()
         self._transform_inspector.set_target(ent)
         self._rebuild_component_list()
         self._field_panel.set_target(None)
+        if self._ui is not None:
+            self._ui.request_layout()
+
+    def _refresh_entity_props(self) -> None:
+        self._updating_entity_props = True
+        try:
+            if self._entity is None:
+                self._name_input.text = ""
+                self._uuid_value.text = ""
+                self._layer_combo.selected_index = -1
+                return
+            self._name_input.text = self._entity.name or ""
+            self._uuid_value.text = self._entity.uuid or "-"
+            layer_idx = int(self._entity.layer)
+            if 0 <= layer_idx < self._layer_combo.item_count:
+                self._layer_combo.selected_index = layer_idx
+            else:
+                self._layer_combo.selected_index = -1
+        finally:
+            self._updating_entity_props = False
+
+    def _on_name_submitted(self, text: str) -> None:
+        if self._updating_entity_props or self._entity is None:
+            return
+
+        new_name = text.strip() or "entity"
+        old_name = self._entity.name
+        if new_name == old_name:
+            return
+
+        if self._push_undo_command is not None:
+            cmd = EntityPropertyEditCommand(self._entity, "name", old_name, new_name)
+            self._push_undo_command(cmd, False)
+        else:
+            self._entity.name = new_name
+
+        if self.on_component_changed is not None:
+            self.on_component_changed()
+
+    def _on_layer_changed(self, index: int, _text: str) -> None:
+        if self._updating_entity_props or self._entity is None:
+            return
+        if index < 0:
+            return
+
+        old_layer = int(self._entity.layer)
+        new_layer = int(index)
+        if old_layer == new_layer:
+            return
+
+        if self._push_undo_command is not None:
+            cmd = EntityPropertyEditCommand(self._entity, "layer", old_layer, new_layer)
+            self._push_undo_command(cmd, False)
+        else:
+            self._entity.layer = new_layer
+
+        if self.on_component_changed is not None:
+            self.on_component_changed()
+
+    def _collect_descendants(self, entity: Entity, out: list[tuple[Entity, int]]) -> None:
+        if entity.transform is None:
+            return
+        for child_transform in entity.transform.children:
+            child_entity = child_transform.entity
+            if child_entity is None:
+                continue
+            out.append((child_entity, int(child_entity.layer)))
+            self._collect_descendants(child_entity, out)
+
+    def _on_apply_layer_to_children(self) -> None:
+        if self._entity is None:
+            return
+
+        new_layer = int(self._entity.layer)
+        entities_and_old_layers: list[tuple[Entity, int]] = []
+        self._collect_descendants(self._entity, entities_and_old_layers)
+        if not entities_and_old_layers:
+            return
+
+        has_changes = any(old_layer != new_layer for _, old_layer in entities_and_old_layers)
+        if not has_changes:
+            return
+
+        if self._push_undo_command is not None:
+            cmd = RecursiveLayerChangeCommand(entities_and_old_layers, new_layer)
+            self._push_undo_command(cmd, False)
+        else:
+            for ent, _old in entities_and_old_layers:
+                ent.layer = new_layer
+
+        if self.on_component_changed is not None:
+            self.on_component_changed()
 
     def refresh_transform(self) -> None:
         self._transform_inspector.refresh_transform()
@@ -123,6 +343,8 @@ class EntityInspector(VStack):
             items.append({"text": f"[SoA] {soa_name}"})
         self._comp_list.set_items(items)
         self._comp_list.selected_index = -1
+        if self._ui is not None:
+            self._ui.request_layout()
 
     def _get_component_display_name(self, ref) -> str:
         type_name = ref.type_name
@@ -147,6 +369,8 @@ class EntityInspector(VStack):
         ref = tc_components[index]
         self._selected_comp_ref = ref
         self._field_panel.set_target(ref)
+        if self._ui is not None:
+            self._ui.request_layout()
 
     def _on_transform_changed(self) -> None:
         if self.on_transform_changed is not None:
@@ -178,22 +402,16 @@ class EntityInspector(VStack):
         if self._entity is None:
             return
         from termin.entity import ComponentRegistry
-        component_names = ComponentRegistry.instance().list_all()
 
-        items = [
-            MenuItem(name, on_click=(lambda n=name: self._add_component(n)))
-            for name in component_names
-        ]
+        component_names = ComponentRegistry.instance().list_all()
+        items = [MenuItem(name, on_click=(lambda n=name: self._add_component(n))) for name in component_names]
         ctx = Menu()
         ctx.items = items
 
-        # Show as context menu at the button position
         if self._add_comp_btn._ui is not None:
             x = self._add_comp_btn.x
             y = self._add_comp_btn.y + self._add_comp_btn.height
-            w, h = ctx._compute_content_size()
-            ctx.layout(x, y, w, h, self._add_comp_btn._ui._viewport_w, self._add_comp_btn._ui._viewport_h)
-            self._add_comp_btn._ui.show_overlay(ctx, dismiss_on_outside=True)
+            ctx.show(self._add_comp_btn._ui, x, y)
 
     def _add_component(self, name: str) -> None:
         if self._entity is None:
@@ -240,6 +458,8 @@ class EntityInspector(VStack):
         self._selected_comp_ref = None
         self._field_panel.set_target(None)
         self._rebuild_component_list()
+        if self._ui is not None:
+            self._ui.request_layout()
 
         if self.on_component_changed is not None:
             self.on_component_changed()

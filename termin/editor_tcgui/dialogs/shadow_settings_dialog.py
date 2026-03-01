@@ -80,9 +80,9 @@ def show_shadow_settings_dialog(
         if on_changed:
             on_changed()
 
-    method_combo.on_selection_changed = lambda _idx: _apply()
-    softness_spin.on_value_changed = lambda _val: _apply()
-    bias_spin.on_value_changed = lambda _val: _apply()
+    method_combo.on_changed = lambda _idx, _text: _apply()
+    softness_spin.on_changed = lambda _val: _apply()
+    bias_spin.on_changed = lambda _val: _apply()
 
     dlg = Dialog()
     dlg.title = "Shadow Settings"

@@ -248,7 +248,7 @@ def show_scene_properties_dialog(
             scene.ambient_intensity = val
         _emit()
 
-    intensity_spin.on_value_changed = _on_intensity
+    intensity_spin.on_changed = _on_intensity
     intensity_row.add_child(intensity_spin)
     ambient_group.add_child(intensity_row)
     content.add_child(ambient_group)
@@ -391,7 +391,7 @@ def show_scene_properties_dialog(
         _update_skybox_visibility()
         _emit()
 
-    skybox_combo.on_selection_changed = _on_skybox_type
+    skybox_combo.on_changed = lambda idx, _text: _on_skybox_type(idx)
     content.add_child(skybox_group)
 
     # --- Scene Pipelines ---

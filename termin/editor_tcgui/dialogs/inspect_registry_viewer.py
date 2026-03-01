@@ -108,7 +108,7 @@ def show_inspect_registry_viewer(ui) -> None:
             types_list.set_rows(list(all_rows), list(all_data))
         details.text = ""
 
-    filter_input.on_text_changed = lambda _: _apply_filter()
+    filter_input.on_changed = lambda _text: _apply_filter()
 
     def _on_select(idx, type_name):
         if type_name is None:

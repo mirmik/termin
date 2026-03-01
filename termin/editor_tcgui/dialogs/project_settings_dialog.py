@@ -46,7 +46,7 @@ def show_project_settings_dialog(
         if on_changed:
             on_changed()
 
-    combo.on_selection_changed = _on_changed
+    combo.on_changed = lambda idx, _text: _on_changed(idx)
     row.add_child(combo)
     content.add_child(row)
 

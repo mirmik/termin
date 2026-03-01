@@ -150,11 +150,11 @@ def show_agent_types_dialog(
             agent_list.set_items(items)
             agent_list.selected_index = current_index[0]
 
-    name_input.on_text_changed = _on_property_changed
-    radius_spin.on_value_changed = _on_property_changed
-    height_spin.on_value_changed = _on_property_changed
-    slope_spin.on_value_changed = _on_property_changed
-    step_spin.on_value_changed = _on_property_changed
+    name_input.on_changed = _on_property_changed
+    radius_spin.on_changed = _on_property_changed
+    height_spin.on_changed = _on_property_changed
+    slope_spin.on_changed = _on_property_changed
+    step_spin.on_changed = _on_property_changed
 
     def _on_add():
         base_name = "New Agent"

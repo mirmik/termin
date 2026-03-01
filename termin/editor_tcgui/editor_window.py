@@ -281,7 +281,7 @@ class EditorWindowTcgui:
         # --- Right panel: Inspector ---
         right_scroll = ScrollArea()
         self._right_scroll = right_scroll
-        right_scroll.preferred_width = px(320)
+        right_scroll.preferred_width = px(430)
         inspector_container = VStack()
         inspector_container.spacing = 4
         right_scroll.add_child(inspector_container)

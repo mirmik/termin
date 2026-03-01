@@ -6,8 +6,9 @@ from typing import Any, Callable, Optional
 
 from tcbase import log
 from tcgui.widgets.vstack import VStack
-from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
+from tcgui.widgets.grid_layout import GridLayout
+from tcgui.widgets.units import px
 
 from termin.editor.inspect_field import InspectField
 from termin.editor_tcgui.widgets.field_widgets import FieldWidget, FieldWidgetFactory
@@ -116,6 +117,11 @@ class InspectFieldPanel(VStack):
         self._widgets: dict[str, FieldWidget] = {}
         self._updating_from_model: bool = False
         self._factory = FieldWidgetFactory(resources)
+        self._grid = GridLayout(columns=2)
+        self._grid.column_spacing = 4
+        self._grid.row_spacing = 4
+        self._grid.set_column_stretch(1, 1.0)
+        self.add_child(self._grid)
 
         # on_field_changed(key, old_value, new_value)
         self.on_field_changed: Optional[Callable[[str, Any, Any], None]] = None
@@ -128,43 +134,49 @@ class InspectFieldPanel(VStack):
 
     def set_target(self, target: Any) -> None:
         # Remove old rows
-        for child in list(self.children):
-            self.remove_child(child)
+        self._grid.clear()
+        self._fields.clear()
         self._widgets.clear()
         self._target = target
 
         if target is None:
+            if self._ui is not None:
+                self._ui.request_layout()
             return
 
         fields = _collect_inspect_fields(target)
         if not fields:
+            if self._ui is not None:
+                self._ui.request_layout()
             return
 
         self._fields = fields
         self._updating_from_model = True
 
         try:
+            row_index = 0
             for key, field in fields.items():
                 widget = self._factory.create(field)
                 self._widgets[key] = widget
 
                 if field.kind == "button":
-                    self.add_child(widget)
+                    self._grid.add(widget, row_index, 0, 1, 2)
                 else:
-                    row = HStack()
-                    row.spacing = 4
                     lbl = Label()
                     lbl.text = field.label or key
-                    row.add_child(lbl)
-                    row.add_child(widget)
-                    self.add_child(row)
+                    lbl.preferred_width = px(130)
+                    self._grid.add(lbl, row_index, 0)
+                    self._grid.add(widget, row_index, 1)
 
                     value = field.get_value(target)
                     widget.set_value(value)
 
                 self._connect_widget(widget, key, field)
+                row_index += 1
         finally:
             self._updating_from_model = False
+            if self._ui is not None:
+                self._ui.request_layout()
 
     def _connect_widget(self, widget: FieldWidget, key: str, field: InspectField) -> None:
         target = self._target

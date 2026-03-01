@@ -23,6 +23,7 @@ from tcgui.widgets.slider import Slider
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.widget import Widget
+from tcgui.widgets.units import px
 
 if TYPE_CHECKING:
     from termin.editor.inspect_field import InspectField
@@ -64,8 +65,8 @@ class FieldWidget(Widget):
             return False
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
-        w = self.preferred_width.to_pixels(viewport_w) if self.preferred_width else viewport_w
-        h = 28.0
+        w = self.preferred_width.to_pixels(viewport_w) if self.preferred_width else 180.0
+        h = 24.0
         return (w, h)
 
     def layout(self, x: float, y: float, width: float, height: float,
@@ -107,12 +108,13 @@ class FloatFieldWidget(FieldWidget):
         self._spinbox.decimals = 0 if is_int else 4
         self._spinbox.min_value = min_val if min_val is not None else -1e9
         self._spinbox.max_value = max_val if max_val is not None else 1e9
+        self._spinbox.preferred_width = px(92)
         if step is not None:
             self._spinbox.step = step
-        self._spinbox.on_value_changed = self._on_changed
+        self._spinbox.on_changed = self._on_changed
         self.add_child(self._spinbox)
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _value: float) -> None:
         self._emit()
 
     def get_value(self) -> float | int:
@@ -120,10 +122,10 @@ class FloatFieldWidget(FieldWidget):
         return int(v) if self._is_int else float(v)
 
     def set_value(self, value: Any) -> None:
-        old = self._spinbox.on_value_changed
-        self._spinbox.on_value_changed = None
+        old = self._spinbox.on_changed
+        self._spinbox.on_changed = None
         self._spinbox.value = float(value) if value is not None else 0.0
-        self._spinbox.on_value_changed = old
+        self._spinbox.on_changed = old
 
 
 # ------------------------------------------------------------------
@@ -139,7 +141,7 @@ class BoolFieldWidget(FieldWidget):
         self._checkbox.on_changed = self._on_changed
         self.add_child(self._checkbox)
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _checked: bool) -> None:
         self._emit()
 
     def get_value(self) -> bool:
@@ -164,11 +166,12 @@ class StringFieldWidget(FieldWidget):
         self._read_only = read_only
         self._input = TextInput()
         self._input.read_only = read_only
+        self._input.focusable = not read_only
         if not read_only:
             self._input.on_changed = self._on_changed
         self.add_child(self._input)
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _text: str) -> None:
         self._emit()
 
     def get_value(self) -> Optional[str]:
@@ -207,13 +210,14 @@ class Vec3FieldWidget(FieldWidget):
             sb.decimals = 4
             sb.min_value = min_val
             sb.max_value = max_val
+            sb.stretch = True
             if step is not None:
                 sb.step = step
-            sb.on_value_changed = self._on_changed
+            sb.on_changed = self._on_changed
             self._row.add_child(sb)
             self._boxes.append(sb)
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _value: float) -> None:
         self._emit()
 
     def get_value(self) -> list[float]:
@@ -226,10 +230,10 @@ class Vec3FieldWidget(FieldWidget):
             arr = list(value)
 
         for sb, v in zip(self._boxes, arr):
-            old = sb.on_value_changed
-            sb.on_value_changed = None
+            old = sb.on_changed
+            sb.on_changed = None
             sb.value = float(v)
-            sb.on_value_changed = old
+            sb.on_changed = old
 
     def layout(self, x: float, y: float, width: float, height: float,
                viewport_w: float, viewport_h: float) -> None:
@@ -262,37 +266,39 @@ class SliderFieldWidget(FieldWidget):
         self._slider = Slider()
         self._slider.min_value = float(min_val)
         self._slider.max_value = float(max_val)
-        self._slider.on_value_changed = self._on_slider_changed
+        self._slider.on_changed = self._on_slider_changed
 
         self._spinbox = SpinBox()
         self._spinbox.decimals = 0
         self._spinbox.min_value = float(min_val)
         self._spinbox.max_value = float(max_val)
-        self._spinbox.on_value_changed = self._on_spin_changed
+        self._spinbox.preferred_width = px(84)
+        self._spinbox.on_changed = self._on_spin_changed
 
+        self._slider.stretch = True
         self._row.add_child(self._slider)
         self._row.add_child(self._spinbox)
         self._syncing = False
 
-    def _on_slider_changed(self) -> None:
+    def _on_slider_changed(self, _value: float) -> None:
         if self._syncing:
             return
         self._syncing = True
-        old = self._spinbox.on_value_changed
-        self._spinbox.on_value_changed = None
+        old = self._spinbox.on_changed
+        self._spinbox.on_changed = None
         self._spinbox.value = self._slider.value
-        self._spinbox.on_value_changed = old
+        self._spinbox.on_changed = old
         self._syncing = False
         self._emit()
 
-    def _on_spin_changed(self) -> None:
+    def _on_spin_changed(self, _value: float) -> None:
         if self._syncing:
             return
         self._syncing = True
-        old = self._slider.on_value_changed
-        self._slider.on_value_changed = None
+        old = self._slider.on_changed
+        self._slider.on_changed = None
         self._slider.value = self._spinbox.value
-        self._slider.on_value_changed = old
+        self._slider.on_changed = old
         self._syncing = False
         self._emit()
 
@@ -302,14 +308,14 @@ class SliderFieldWidget(FieldWidget):
     def set_value(self, value: Any) -> None:
         v = float(int(value)) if value is not None else 0.0
         self._syncing = True
-        old_sl = self._slider.on_value_changed
-        old_sb = self._spinbox.on_value_changed
-        self._slider.on_value_changed = None
-        self._spinbox.on_value_changed = None
+        old_sl = self._slider.on_changed
+        old_sb = self._spinbox.on_changed
+        self._slider.on_changed = None
+        self._spinbox.on_changed = None
         self._slider.value = v
         self._spinbox.value = v
-        self._slider.on_value_changed = old_sl
-        self._spinbox.on_value_changed = old_sb
+        self._slider.on_changed = old_sl
+        self._spinbox.on_changed = old_sb
         self._syncing = False
 
     def layout(self, x: float, y: float, width: float, height: float,
@@ -336,7 +342,7 @@ class ColorFieldWidget(FieldWidget):
         self._color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
 
         self._btn = Button()
-        self._btn.label = self._color_label(self._color)
+        self._btn.text = self._color_label(self._color)
         self._btn.on_click = self._on_click
         self._btn.background_color = self._color
         self.add_child(self._btn)
@@ -359,7 +365,7 @@ class ColorFieldWidget(FieldWidget):
     def _on_color_result(self, color: tuple | None) -> None:
         if color is not None:
             self._color = color
-            self._btn.label = self._color_label(color)
+            self._btn.text = self._color_label(color)
             self._btn.background_color = color
             self._emit()
 
@@ -378,7 +384,7 @@ class ColorFieldWidget(FieldWidget):
                 max(0.0, min(1.0, b)),
                 max(0.0, min(1.0, a)),
             )
-        self._btn.label = self._color_label(self._color)
+        self._btn.text = self._color_label(self._color)
         self._btn.background_color = self._color
 
 
@@ -399,7 +405,7 @@ class ButtonFieldWidget(FieldWidget):
         self._target: Any = None
 
         self._btn = Button()
-        self._btn.label = label
+        self._btn.text = label
         self._btn.on_click = self._on_click
         self.add_child(self._btn)
 
@@ -440,7 +446,7 @@ class ComboFieldWidget(FieldWidget):
         self._combo.on_changed = self._on_changed
         self.add_child(self._combo)
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _index: int, _text: str) -> None:
         self._emit()
 
     def get_value(self) -> Any:
@@ -500,7 +506,7 @@ class AgentTypeFieldWidget(FieldWidget):
                     break
         self._combo.on_changed = old
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _index: int, _text: str) -> None:
         self._emit()
 
     def get_value(self) -> str:
@@ -559,7 +565,7 @@ class ClipSelectorWidget(FieldWidget):
                 break
         self._combo.on_changed = old
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _index: int, _text: str) -> None:
         self._emit()
 
     def get_value(self) -> str:
@@ -638,7 +644,7 @@ class HandleSelectorWidget(FieldWidget):
                 break
         self._combo.on_changed = old
 
-    def _on_changed(self) -> None:
+    def _on_changed(self, _index: int, _text: str) -> None:
         self._emit()
 
     def get_value(self) -> Optional[dict]:

@@ -65,14 +65,15 @@ class InspectorControllerTcgui:
             p.visible = False
         panel.visible = True
         self._active_panel = panel
+        if self._container._ui is not None:
+            self._container._ui.request_layout()
 
     def set_scene(self, scene) -> None:
         self._entity_inspector.set_scene(scene)
 
     def show_entity_inspector(self, entity=None) -> None:
         self._show_panel(self._entity_inspector)
-        if entity is not None:
-            self._entity_inspector.set_target(entity)
+        self._entity_inspector.set_target(entity)
 
     def show_material_inspector(self, material_name: str | None = None) -> None:
         # Stub: show entity inspector for now

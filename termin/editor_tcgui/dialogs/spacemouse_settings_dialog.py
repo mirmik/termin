@@ -140,13 +140,13 @@ def show_spacemouse_settings_dialog(
         if on_changed is not None:
             on_changed()
 
-    mode_combo.on_selection_changed = _apply
+    mode_combo.on_changed = _apply
     horizon_lock.on_changed = _apply
-    pan_spin.on_value_changed = _apply
-    zoom_spin.on_value_changed = _apply
-    orbit_spin.on_value_changed = _apply
-    fly_spin.on_value_changed = _apply
-    deadzone_spin.on_value_changed = _apply
+    pan_spin.on_changed = _apply
+    zoom_spin.on_changed = _apply
+    orbit_spin.on_changed = _apply
+    fly_spin.on_changed = _apply
+    deadzone_spin.on_changed = _apply
     invert_x.on_changed = _apply
     invert_y.on_changed = _apply
     invert_z.on_changed = _apply
