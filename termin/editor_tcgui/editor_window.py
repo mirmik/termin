@@ -133,6 +133,7 @@ class EditorWindowTcgui:
         self._pause_button = None
         self._game_scene_name: str | None = None
         self._saved_tree_expanded_uuids: list[str] | None = None
+        self._spacemouse = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -500,8 +501,8 @@ class EditorWindowTcgui:
             on_toggle_profiler=self._noop,
             on_toggle_modules=self._noop,
             on_toggle_fullscreen=self._toggle_fullscreen,
-            on_show_agent_types=self._noop,
-            on_show_spacemouse_settings=self._noop,
+            on_show_agent_types=self._show_agent_types,
+            on_show_spacemouse_settings=self._show_spacemouse_settings,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
@@ -883,7 +884,15 @@ class EditorWindowTcgui:
         show_project_settings_dialog(self._ui, on_changed=self._request_viewport_update)
 
     def _show_scene_properties(self) -> None:
-        pass  # TODO: Phase 12
+        if self._ui is None or self.scene is None:
+            return
+        from termin.editor_tcgui.dialogs.scene_inspector import show_scene_properties_dialog
+        show_scene_properties_dialog(
+            self._ui,
+            self.scene,
+            push_undo_command=self.push_undo_command,
+            on_changed=self._request_viewport_update,
+        )
 
     def _show_layers_settings(self) -> None:
         if self._ui is None or self.scene is None:
@@ -896,6 +905,34 @@ class EditorWindowTcgui:
             return
         from termin.editor_tcgui.dialogs.shadow_settings_dialog import show_shadow_settings_dialog
         show_shadow_settings_dialog(self._ui, self.scene, on_changed=self._request_viewport_update)
+
+    def _show_agent_types(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.agent_types_dialog import show_agent_types_dialog
+        show_agent_types_dialog(self._ui)
+
+    def _show_spacemouse_settings(self) -> None:
+        if self._ui is None:
+            return
+        if self._spacemouse is None:
+            self._init_spacemouse()
+        if self._spacemouse is None:
+            from tcbase import log
+            log.warn("SpaceMouse not available")
+            return
+        from termin.editor_tcgui.dialogs.spacemouse_settings_dialog import show_spacemouse_settings_dialog
+        show_spacemouse_settings_dialog(self._ui, self._spacemouse)
+
+    def _init_spacemouse(self) -> None:
+        """Initialize SpaceMouse controller if device available."""
+        from termin.editor.spacemouse_controller import SpaceMouseController
+        spacemouse = SpaceMouseController()
+        if spacemouse.open(self._editor_attachment, self._request_viewport_update):
+            self._spacemouse = spacemouse
+            self._log_to_console("[SpaceMouse] Device connected")
+        else:
+            self._spacemouse = None
 
     def _show_pipeline_editor(self) -> None:
         pass  # TODO: Phase 15
