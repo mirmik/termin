@@ -493,11 +493,11 @@ class EditorWindowTcgui:
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._noop,
             on_show_resource_manager_viewer=self._noop,
-            on_show_audio_debugger=self._noop,
+            on_show_audio_debugger=self._show_audio_debugger,
             on_show_core_registry_viewer=self._noop,
-            on_show_inspect_registry_viewer=self._noop,
-            on_show_navmesh_registry_viewer=self._noop,
-            on_show_scene_manager_viewer=self._noop,
+            on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
+            on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
+            on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_profiler=self._noop,
             on_toggle_modules=self._noop,
             on_toggle_fullscreen=self._toggle_fullscreen,
@@ -933,6 +933,51 @@ class EditorWindowTcgui:
             self._log_to_console("[SpaceMouse] Device connected")
         else:
             self._spacemouse = None
+
+    def _show_inspect_registry_viewer(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.inspect_registry_viewer import show_inspect_registry_viewer
+        show_inspect_registry_viewer(self._ui)
+
+    def _show_navmesh_registry_viewer(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.navmesh_registry_viewer import show_navmesh_registry_viewer
+        show_navmesh_registry_viewer(self._ui)
+
+    def _show_audio_debugger(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.audio_debugger import show_audio_debugger
+        show_audio_debugger(self._ui)
+
+    def _show_scene_manager_viewer(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.scene_manager_viewer import show_scene_manager_viewer
+
+        def _on_scene_edited(scene_name: str):
+            self._editor_scene_name = scene_name
+            self._sync_attachment_refs()
+            if self._interaction_system is not None:
+                self._interaction_system.selection.clear()
+                self._interaction_system.set_gizmo_target(None)
+            if self.scene_tree_controller is not None:
+                scene = self.scene_manager.get_scene(scene_name)
+                if scene is not None:
+                    self.scene_tree_controller.set_scene(scene)
+                    self.scene_tree_controller.rebuild()
+            self._update_window_title()
+            self._request_viewport_update()
+
+        show_scene_manager_viewer(
+            self._ui,
+            self.scene_manager,
+            get_rendering_controller=lambda: self._rendering_controller,
+            get_editor_attachment=lambda: self._editor_attachment,
+            on_scene_edited=_on_scene_edited,
+        )
 
     def _show_pipeline_editor(self) -> None:
         pass  # TODO: Phase 15

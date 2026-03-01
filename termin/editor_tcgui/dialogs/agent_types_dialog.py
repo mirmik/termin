@@ -29,6 +29,7 @@ def show_agent_types_dialog(
 
     content = HStack()
     content.spacing = 8
+    content.preferred_height = px(300)
 
     # --- Left panel: list + add/remove ---
     left = VStack()
