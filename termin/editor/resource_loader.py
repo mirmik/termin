@@ -116,6 +116,10 @@ class ResourceLoader:
         if not file_path:
             return
 
+        self.load_material_from_path(file_path)
+
+    def load_material_from_path(self, file_path: str) -> None:
+        """Load material from a shader file path."""
         try:
             from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
             from termin.visualization.core.material import Material
@@ -162,6 +166,10 @@ class ResourceLoader:
         if not path:
             return
 
+        self.load_components_from_path(path)
+
+    def load_components_from_path(self, path: str) -> None:
+        """Load components from a Python file path."""
         try:
             loaded = self._resource_manager.scan_components([path])
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+import shutil
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -21,6 +22,7 @@ from tcgui.widgets.viewport3d import Viewport3D
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.input_dialog import show_input_dialog
+from tcgui.widgets.message_box import MessageBox
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import (
@@ -384,6 +386,10 @@ class EditorWindowTcgui:
             push_undo_command=self.push_undo_command,
             on_transform_changed=self._on_inspector_transform_changed,
             on_component_changed=self._on_inspector_component_changed,
+            on_material_changed=self._request_viewport_update,
+            on_display_changed=self._request_viewport_update,
+            on_viewport_changed=self._request_viewport_update,
+            on_pipeline_changed=self._request_viewport_update,
             graphics=self._graphics,
         )
         self._inspector_controller.set_scene(self.scene)
@@ -393,7 +399,10 @@ class EditorWindowTcgui:
             dir_tree=project_dir_tree,
             file_list=project_file_list,
             on_file_activated=self._on_project_file_activated,
+            on_file_selected=self._on_project_file_selected,
         )
+
+        self._rendering_tree.on_select = self._on_render_tree_selected
 
         # Setup rendering controller and editor display
         if self._editor_display is not None:
@@ -635,6 +644,61 @@ class EditorWindowTcgui:
     def _on_inspector_component_changed(self) -> None:
         self._request_viewport_update()
 
+    def _on_render_tree_selected(self, node) -> None:
+        if self._inspector_controller is None:
+            return
+        if node is None:
+            self._inspector_controller.clear()
+            return
+
+        obj = node.data
+        from termin.visualization.core.display import Display
+        from termin.visualization.core.viewport import Viewport
+        from termin.visualization.core.entity import Entity
+
+        if isinstance(obj, Display):
+            self._inspector_controller.show_display_inspector(obj, obj.name or "Display")
+            return
+
+        if isinstance(obj, Viewport):
+            current_display = None
+            parent = self._find_tree_parent(node)
+            if parent is not None and isinstance(parent.data, Display):
+                current_display = parent.data
+            displays = self._rendering_controller.displays if self._rendering_controller is not None else None
+            self._inspector_controller.show_viewport_inspector(
+                viewport=obj,
+                displays=displays,
+                scene=self.scene,
+                current_display=current_display,
+            )
+            return
+
+        if isinstance(obj, Entity):
+            self._inspector_controller.show_entity_inspector(obj)
+            return
+
+        self._inspector_controller.clear()
+
+    def _find_tree_parent(self, target_node):
+        if self._rendering_tree is None:
+            return None
+
+        def walk(node):
+            for child in node.subnodes:
+                if child is target_node:
+                    return node
+                found = walk(child)
+                if found is not None:
+                    return found
+            return None
+
+        for root in self._rendering_tree.root_nodes:
+            found = walk(root)
+            if found is not None:
+                return found
+        return None
+
     # ------------------------------------------------------------------
     # Viewport update
     # ------------------------------------------------------------------
@@ -868,6 +932,27 @@ class EditorWindowTcgui:
                 open_in_text_editor(path)
             except Exception as e:
                 log.error(f"Failed to open file in text editor: {e}")
+
+    def _on_project_file_selected(self, path: str) -> None:
+        if self._inspector_controller is None:
+            return
+
+        ext = Path(path).suffix.lower()
+        if ext in (".tc_mat", ".material"):
+            self._inspector_controller.show_material_inspector_for_file(path)
+            return
+        if ext == ".tc_pipeline":
+            self._inspector_controller.show_pipeline_inspector_for_file(path)
+            return
+        if ext in (".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"):
+            self._inspector_controller.show_texture_inspector_for_file(path)
+            return
+        if ext in (".obj", ".fbx"):
+            self._inspector_controller.show_mesh_inspector_for_file(path)
+            return
+        if ext in (".glb", ".gltf"):
+            self._inspector_controller.show_glb_inspector_for_file(path)
+            return
 
     # ------------------------------------------------------------------
     # Rename entity dialog
@@ -1281,22 +1366,108 @@ class EditorWindowTcgui:
             self._is_fullscreen = True
 
     def _load_material_from_file(self) -> None:
-        pass  # TODO
+        if self._ui is None:
+            return
+        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
+        show_open_file_dialog(
+            self._ui,
+            title="Load Material",
+            directory=self._get_project_path() or str(Path.home()),
+            filter_str="Shader Files (*.shader);;All Files (*)",
+            on_result=self._on_material_file_selected,
+            windowed=True,
+        )
 
     def _load_components_from_file(self) -> None:
-        pass  # TODO
+        if self._ui is None:
+            return
+        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
+        show_open_file_dialog(
+            self._ui,
+            title="Load Components",
+            directory=self._get_project_path() or str(Path.home()),
+            filter_str="Python Files (*.py);;All Files (*)",
+            on_result=self._on_components_file_selected,
+            windowed=True,
+        )
 
     def _deploy_stdlib(self) -> None:
-        pass  # TODO
+        if self._ui is None:
+            return
+        import termin
+
+        stdlib_src = Path(termin.__file__).parent / "resources" / "stdlib"
+        if not stdlib_src.exists():
+            MessageBox.error(
+                self._ui,
+                "Standard Library Not Found",
+                f"Path not found:\n{stdlib_src}",
+            )
+            return
+
+        from tcgui.widgets.file_dialog_overlay import show_open_directory_dialog
+        show_open_directory_dialog(
+            self._ui,
+            title="Select Directory for Standard Library",
+            directory=self._get_project_path() or str(Path.home()),
+            on_result=lambda path: self._deploy_stdlib_to(path, stdlib_src),
+            windowed=True,
+        )
 
     def _migrate_spec_to_meta(self) -> None:
-        pass  # TODO
+        if self._ui is None:
+            return
+        project = self._get_project_path()
+        if not project:
+            MessageBox.warning(
+                self._ui,
+                "No Project",
+                "Open a project first to migrate .spec files.",
+            )
+            return
+        spec_files = list(Path(project).rglob("*.spec"))
+        if not spec_files:
+            MessageBox.info(
+                self._ui,
+                "No Files to Migrate",
+                "No .spec files found in the current project.",
+            )
+            return
+
+        migrated = 0
+        errors: list[str] = []
+        for spec_path in spec_files:
+            meta_path = spec_path.with_suffix(".meta")
+            try:
+                spec_path.rename(meta_path)
+                migrated += 1
+            except Exception as e:
+                errors.append(f"{spec_path.name}: {e}")
+
+        if errors:
+            MessageBox.warning(
+                self._ui,
+                "Migration Completed with Errors",
+                f"Migrated {migrated} files.\nErrors: {len(errors)}",
+            )
+            log.error("Spec->meta migration completed with errors:\n" + "\n".join(errors))
+        else:
+            MessageBox.info(
+                self._ui,
+                "Migration Complete",
+                f"Successfully migrated {migrated} files.",
+            )
 
     def close(self) -> None:
         self._should_close = True
 
     def _update_window_title(self) -> None:
-        pass  # Status bar or window title update
+        if self._status_bar is None:
+            return
+        scene_name = self._editor_scene_name or "No Scene"
+        project_name = self._project_name or "No Project"
+        mode = "Play" if self._game_scene_name is not None else "Edit"
+        self._status_bar.text = f"{project_name} | {scene_name} | {mode}"
 
     # ------------------------------------------------------------------
     # Logging
@@ -1415,7 +1586,9 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def _on_before_scene_close(self, scene_name: str) -> None:
-        pass
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is not None and self._rendering_controller is not None:
+            self._rendering_controller.remove_viewports_for_scene(scene)
 
     def switch_to_scene(self, scene_name: str) -> None:
         self._editor_scene_name = scene_name
@@ -1428,7 +1601,11 @@ class EditorWindowTcgui:
             self._inspector_controller.clear()
 
     def _open_prefab(self, path: str) -> None:
-        pass  # TODO
+        parent_entity = None
+        if self._interaction_system is not None:
+            parent_entity = self._interaction_system.selection.selected
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.handle_prefab_drop(path, parent_entity)
 
     # ------------------------------------------------------------------
     # Per-frame polling
@@ -1451,4 +1628,39 @@ class EditorWindowTcgui:
             self._framegraph_debugger.update()
 
     def _after_render(self) -> None:
-        pass
+        if self._interaction_system is not None:
+            self._interaction_system.after_render()
+        if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
+            self._framegraph_debugger.update()
+
+    def _on_material_file_selected(self, path: str | None) -> None:
+        if not path:
+            return
+        self._resource_loader.load_material_from_path(path)
+        if self._inspector_controller is not None:
+            self._inspector_controller.show_material_inspector_for_file(path)
+        self._request_viewport_update()
+
+    def _on_components_file_selected(self, path: str | None) -> None:
+        if not path:
+            return
+        self._resource_loader.load_components_from_path(path)
+
+    def _deploy_stdlib_to(self, path: str | None, stdlib_src: Path) -> None:
+        if not path or self._ui is None:
+            return
+        target_path = Path(path) / "stdlib"
+        try:
+            shutil.copytree(stdlib_src, target_path, dirs_exist_ok=True)
+            MessageBox.info(
+                self._ui,
+                "Standard Library Deployed",
+                f"Deployed to:\n{target_path}",
+            )
+            log.info(f"[Editor] Standard library deployed to {target_path}")
+        except Exception as e:
+            MessageBox.error(
+                self._ui,
+                "Deployment Failed",
+                f"Failed to deploy standard library:\n{e}",
+            )

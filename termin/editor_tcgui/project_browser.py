@@ -61,6 +61,7 @@ class ProjectBrowserTcgui:
         dir_tree,
         file_list,
         on_file_activated: Callable[[str], None] | None = None,
+        on_file_selected: Callable[[str], None] | None = None,
     ) -> None:
         from tcgui.widgets.tree import TreeWidget, TreeNode
         from tcgui.widgets.list_widget import ListWidget
@@ -68,6 +69,7 @@ class ProjectBrowserTcgui:
         self._dir_tree: TreeWidget = dir_tree
         self._file_list: ListWidget = file_list
         self.on_file_activated: Callable[[str], None] | None = on_file_activated
+        self.on_file_selected: Callable[[str], None] | None = on_file_selected
 
         self._root_path: Path | None = None
         self._selected_dir: Path | None = None
@@ -211,7 +213,11 @@ class ProjectBrowserTcgui:
         self._show_files(directory)
 
     def _on_file_selected(self, index: int, item: dict) -> None:
-        pass  # Could show file info in status bar
+        path: Path | None = item.get("data")
+        if path is None:
+            return
+        if self.on_file_selected is not None:
+            self.on_file_selected(str(path))
 
     def _on_file_activated(self, index: int, item: dict) -> None:
         path: Path | None = item.get("data")
