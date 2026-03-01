@@ -140,8 +140,9 @@ class EntityInspector(VStack):
         self._entity_grid.add(self._layer_combo, 2, 1)
 
         self._apply_layer_btn = Button()
-        self._apply_layer_btn.text = "!"
+        self._apply_layer_btn.text = "↓"
         self._apply_layer_btn.preferred_width = px(24)
+        self._apply_layer_btn.tooltip = "Apply layer to all children"
         self._apply_layer_btn.on_click = self._on_apply_layer_to_children
         self._entity_grid.add(self._apply_layer_btn, 2, 2)
 
@@ -172,6 +173,9 @@ class EntityInspector(VStack):
         self._comp_list.item_spacing = 1
         self._comp_list.preferred_height = px(130)
         self._comp_list.on_select = lambda idx, item: self._on_component_selected(idx)
+        self._comp_list.on_context_menu = (
+            lambda idx, item, x, y: self._on_component_context_menu(idx, x, y)
+        )
         self.add_child(self._comp_list)
 
         # Component field editor
@@ -412,6 +416,19 @@ class EntityInspector(VStack):
             x = self._add_comp_btn.x
             y = self._add_comp_btn.y + self._add_comp_btn.height
             ctx.show(self._add_comp_btn._ui, x, y)
+
+    def _on_component_context_menu(self, index: int, x: float, y: float) -> None:
+        if self._entity is None or self._ui is None:
+            return
+        tc_components = self._entity.tc_components
+        if index < 0 or index >= len(tc_components):
+            return
+        ref = tc_components[index]
+        ctx = Menu()
+        ctx.items = [
+            MenuItem("Remove Component", on_click=lambda r=ref: self._remove_component(r)),
+        ]
+        ctx.show(self._ui, x, y)
 
     def _add_component(self, name: str) -> None:
         if self._entity is None:

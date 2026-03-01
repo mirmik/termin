@@ -6,8 +6,26 @@ from typing import Callable, Optional, List, Any
 
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.widget import Widget
+from tcgui.widgets.label import Label
 
 from termin.editor_tcgui.entity_inspector import EntityInspector
+
+
+class _InfoInspector(VStack):
+    """Simple inspector placeholder for not-yet-ported panels."""
+
+    def __init__(self, title: str) -> None:
+        super().__init__()
+        self.spacing = 4
+        hdr = Label()
+        hdr.text = title
+        self.add_child(hdr)
+        self._text = Label()
+        self._text.color = (0.62, 0.66, 0.74, 1.0)
+        self.add_child(self._text)
+
+    def set_message(self, msg: str) -> None:
+        self._text.text = msg
 
 
 class InspectorControllerTcgui:
@@ -42,10 +60,36 @@ class InspectorControllerTcgui:
         self._entity_inspector.on_component_changed = on_component_changed
         container.add_child(self._entity_inspector)
 
-        # Additional inspectors are stubbed as labels for now;
-        # they will be implemented in follow-up phases.
-        # Each has .visible controlled by show_* methods.
-        self._panels: list[Widget] = [self._entity_inspector]
+        self._material_stub = _InfoInspector("Material Inspector")
+        self._display_stub = _InfoInspector("Display Inspector")
+        self._viewport_stub = _InfoInspector("Viewport Inspector")
+        self._pipeline_stub = _InfoInspector("Pipeline Inspector")
+        self._texture_stub = _InfoInspector("Texture Inspector")
+        self._mesh_stub = _InfoInspector("Mesh Inspector")
+        self._glb_stub = _InfoInspector("GLB Inspector")
+
+        for panel in (
+            self._material_stub,
+            self._display_stub,
+            self._viewport_stub,
+            self._pipeline_stub,
+            self._texture_stub,
+            self._mesh_stub,
+            self._glb_stub,
+        ):
+            panel.visible = False
+            container.add_child(panel)
+
+        self._panels: list[Widget] = [
+            self._entity_inspector,
+            self._material_stub,
+            self._display_stub,
+            self._viewport_stub,
+            self._pipeline_stub,
+            self._texture_stub,
+            self._mesh_stub,
+            self._glb_stub,
+        ]
         self._active_panel: Widget = self._entity_inspector
 
     # ------------------------------------------------------------------
@@ -76,14 +120,18 @@ class InspectorControllerTcgui:
         self._entity_inspector.set_target(entity)
 
     def show_material_inspector(self, material_name: str | None = None) -> None:
-        # Stub: show entity inspector for now
-        self._show_panel(self._entity_inspector)
+        self._material_stub.set_message(
+            f"Selected material: {material_name}" if material_name else "No material selected."
+        )
+        self._show_panel(self._material_stub)
 
     def show_material_inspector_for_file(self, file_path: str) -> None:
-        self._show_panel(self._entity_inspector)
+        self._material_stub.set_message(f"Selected file: {file_path}")
+        self._show_panel(self._material_stub)
 
     def show_display_inspector(self, display=None, name: str = "") -> None:
-        self._show_panel(self._entity_inspector)
+        self._display_stub.set_message(f"Display: {name}" if name else "No display selected.")
+        self._show_panel(self._display_stub)
 
     def show_viewport_inspector(
         self,
@@ -93,25 +141,39 @@ class InspectorControllerTcgui:
         scene=None,
         current_display=None,
     ) -> None:
-        self._show_panel(self._entity_inspector)
+        if viewport is None:
+            self._viewport_stub.set_message("No viewport selected.")
+        else:
+            self._viewport_stub.set_message("Viewport selected.")
+        self._show_panel(self._viewport_stub)
 
     def show_pipeline_inspector_for_file(self, file_path: str) -> None:
-        self._show_panel(self._entity_inspector)
+        self._pipeline_stub.set_message(f"Selected file: {file_path}")
+        self._show_panel(self._pipeline_stub)
 
     def show_texture_inspector(self, texture_name: str | None = None) -> None:
-        self._show_panel(self._entity_inspector)
+        self._texture_stub.set_message(
+            f"Selected texture: {texture_name}" if texture_name else "No texture selected."
+        )
+        self._show_panel(self._texture_stub)
 
     def show_texture_inspector_for_file(self, file_path: str) -> None:
-        self._show_panel(self._entity_inspector)
+        self._texture_stub.set_message(f"Selected file: {file_path}")
+        self._show_panel(self._texture_stub)
 
     def show_mesh_inspector(self, mesh_name: str | None = None) -> None:
-        self._show_panel(self._entity_inspector)
+        self._mesh_stub.set_message(
+            f"Selected mesh: {mesh_name}" if mesh_name else "No mesh selected."
+        )
+        self._show_panel(self._mesh_stub)
 
     def show_mesh_inspector_for_file(self, file_path: str) -> None:
-        self._show_panel(self._entity_inspector)
+        self._mesh_stub.set_message(f"Selected file: {file_path}")
+        self._show_panel(self._mesh_stub)
 
     def show_glb_inspector_for_file(self, file_path: str) -> None:
-        self._show_panel(self._entity_inspector)
+        self._glb_stub.set_message(f"Selected file: {file_path}")
+        self._show_panel(self._glb_stub)
 
     def set_entity_target(self, target: Any) -> None:
         self._entity_inspector.set_target(target)

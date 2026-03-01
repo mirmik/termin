@@ -9,6 +9,7 @@ from tcbase import log
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.label import Label
 from tcgui.widgets.menu import Menu, MenuItem
+from tcgui.widgets.message_box import MessageBox
 
 from termin.editor.undo_stack import UndoCommand
 from termin.editor.editor_commands import (
@@ -54,11 +55,10 @@ class SceneTreeControllerTcgui:
         self._tree.draggable = True
         self._tree.on_select = self._on_tree_select
         self._tree.on_drop = self._on_drop
+        self._tree.on_context_menu = self._on_tree_context_menu
 
-        # Context menu is placed on the TreeWidget itself;
-        # items are rebuilt each time selection changes.
+        # Reusable context menu; shown manually from right-click callback.
         self._ctx_menu = Menu()
-        self._tree.context_menu = self._ctx_menu
         self._rebuild_context_menu(None)
 
         self.rebuild()
@@ -298,6 +298,13 @@ class SceneTreeControllerTcgui:
         else:
             self._on_object_selected(node.data)
 
+    def _on_tree_context_menu(self, node: TreeNode | None, x: float, y: float) -> None:
+        entity = node.data if node is not None else None
+        entity = entity if isinstance(entity, Entity) else None
+        self._rebuild_context_menu(entity)
+        if self._tree._ui is not None:
+            self._ctx_menu.show(self._tree._ui, x, y)
+
     def _on_drop(self, dragged: TreeNode, target: TreeNode | None, position: str) -> None:
         """Handle drag-drop reparenting within the scene tree."""
         entity = dragged.data
@@ -386,6 +393,32 @@ class SceneTreeControllerTcgui:
         if not isinstance(entity, Entity):
             return
 
+        children = list(entity.transform.children) if entity.transform else []
+        if not children:
+            self._delete_entity_with_children(entity)
+            return
+
+        ui = self._tree._ui
+        if ui is None:
+            self._delete_entity_with_children(entity)
+            return
+
+        MessageBox.question(
+            ui,
+            title="Delete Entity",
+            message=f"Entity '{entity.name}' has {len(children)} child(ren).",
+            buttons=["Delete With Children", "Delete Only This", "Cancel"],
+            on_result=lambda button, ent=entity: self._on_delete_choice(ent, button),
+        )
+
+    def _on_delete_choice(self, entity: Entity, button: str) -> None:
+        if button == "Delete With Children":
+            self._delete_entity_with_children(entity)
+            return
+        if button == "Delete Only This":
+            self._delete_entity_only_this(entity)
+
+    def _delete_entity_with_children(self, entity: Entity) -> None:
         parent_ent = None
         if entity.transform and entity.transform.parent:
             parent_ent = entity.transform.parent.entity
@@ -395,6 +428,29 @@ class SceneTreeControllerTcgui:
 
         if parent_ent is not None:
             self.select_object(parent_ent)
+
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    def _delete_entity_only_this(self, entity: Entity) -> None:
+        parent_transform = entity.transform.parent if entity.transform else None
+        parent_entity = parent_transform.entity if parent_transform else None
+
+        if entity.transform is not None:
+            for child_transform in list(entity.transform.children):
+                child_entity = child_transform.entity
+                if child_entity is None:
+                    continue
+                cmd = ReparentEntityCommand(child_entity, entity.transform, parent_transform)
+                self._undo_handler(cmd, False)
+                self.move_entity(child_entity, parent_entity)
+
+        cmd = DeleteEntityCommand(self._scene, entity)
+        self._undo_handler(cmd, False)
+        self.remove_entity(entity, select_parent=False)
+
+        if parent_entity is not None:
+            self.select_object(parent_entity)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
