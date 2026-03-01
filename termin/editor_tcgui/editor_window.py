@@ -203,6 +203,7 @@ class EditorWindowTcgui:
         # --- Bottom: TabView [Project | Console] ---
         bottom_tabs = TabView()
         bottom_tabs.preferred_height = px(200)
+        root.add_child(Splitter(target=bottom_tabs, side="top"))
 
         from tcgui.widgets.hstack import HStack as HStackInner
         from tcgui.widgets.tree import TreeWidget as TreeWidgetInner
@@ -283,6 +284,10 @@ class EditorWindowTcgui:
 
         # Setup editor display and attach to scene
         if self._editor_display is not None:
+            # Register display in RenderingManager so render_all() renders to it
+            from termin._native.render import RenderingManager
+            RenderingManager.instance().add_display(self._editor_display, "Editor")
+
             from termin.editor.editor_scene_attachment import EditorSceneAttachment
             from termin.editor.editor_pipeline import make_editor_pipeline
             self._editor_attachment = EditorSceneAttachment(
@@ -501,13 +506,13 @@ class EditorWindowTcgui:
         if self._ui is None:
             return
         project_path = self._get_project_path()
-        initial_dir = project_path or str(Path.home())
+        directory = project_path or str(Path.home())
         from tcgui.widgets.file_dialog_overlay import show_save_file_dialog
         show_save_file_dialog(
             self._ui,
             title="Save Scene As",
-            initial_dir=initial_dir,
-            filter_string="Scene Files (*.tc_scene);;All Files (*)",
+            directory=directory,
+            filter_str="Scene Files (*.tc_scene);;All Files (*)",
             on_result=lambda path: self._save_scene_to_file(path) if path else None,
         )
 
@@ -515,13 +520,13 @@ class EditorWindowTcgui:
         if self._ui is None:
             return
         project_path = self._get_project_path()
-        initial_dir = project_path or str(Path.home())
+        directory = project_path or str(Path.home())
         from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
         show_open_file_dialog(
             self._ui,
             title="Load Scene",
-            initial_dir=initial_dir,
-            filter_string="Scene Files (*.tc_scene);;All Files (*)",
+            directory=directory,
+            filter_str="Scene Files (*.tc_scene);;All Files (*)",
             on_result=lambda path: self._load_scene_from_file(path) if path else None,
         )
 
@@ -602,7 +607,7 @@ class EditorWindowTcgui:
         show_open_file_dialog(
             self._ui,
             title="Open Project",
-            filter_string="Project Files (*.terminproj);;All Files (*)",
+            filter_str="Project Files (*.terminproj);;All Files (*)",
             on_result=lambda path: self._load_project(path) if path else None,
         )
 
@@ -610,7 +615,6 @@ class EditorWindowTcgui:
         self._current_project_path = path
         self._project_name = Path(path).name
         self._log_to_console(f"Project: {path}")
-        self._project_file_watcher.set_root(path)
         if self._project_browser is not None:
             self._project_browser.set_root(path)
 
@@ -619,7 +623,6 @@ class EditorWindowTcgui:
         self._current_project_path = project_dir
         self._project_name = Path(path).stem
         self._log_to_console(f"Project: {path}")
-        self._project_file_watcher.set_root(project_dir)
         self._rescan_file_resources()
         if self._project_browser is not None:
             self._project_browser.set_root(project_dir)

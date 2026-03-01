@@ -195,7 +195,52 @@ InteractionSystem) копируется без изменений — он Qt-fr
 
 ---
 
-## Фаза 11 — Переключение
+## Фаза 11 — Избавление от Qt в shared-модулях
+
+Четыре модуля из `termin/editor/` используются tcgui-редактором, но содержат Qt-зависимости.
+Нужно переписать их как чисто Python (без PyQt6).
+
+### 11.1 `ProjectFileWatcher` (HIGH)
+
+Файл: `termin/editor/project_file_watcher.py`
+Qt-зависимости: `QFileSystemWatcher`, `QTimer`
+
+Переписать на `watchdog` или `os.scandir`-based polling:
+- Обход директорий, отслеживание mtime
+- Периодический rescan через таймер (callback из main loop или `threading.Timer`)
+- Сохранить API: `watch_directory(path)`, `register_processor(...)`, `rescan()`, `project_path`
+
+### 11.2 `EditorSettings` (HIGH)
+
+Файл: `termin/editor/settings.py`
+Qt-зависимости: `QSettings`
+
+Переписать на `tcbase.Settings` (уже есть в termin-base):
+- `from tcbase import Settings` → JSON-хранилище в `~/.config/{app}/settings.json`
+- API: `get(key, default)`, `set(key, value)`, `contains(key)`, `group(prefix)` (context manager)
+- Автосохранение при каждом `set()`
+- `instance()`, `init_text_editor_if_empty()` — сохранить
+
+### 11.3 `ResourceLoader` (HIGH)
+
+Файл: `termin/editor/resource_loader.py`
+Qt-зависимости: `QWidget` (parent), `QFileDialog`, `QMessageBox`
+
+- Убрать `parent: QWidget` параметр
+- Заменить `QFileDialog` / `QMessageBox` на callback-интерфейс (tcgui вызывает свои диалоги)
+- Или: resource_loader уже не использует диалоги напрямую в tcgui пути — проверить и при необходимости вынести диалоговые вызовы в контроллер
+
+### 11.4 `external_editor` (MEDIUM)
+
+Файл: `termin/editor/external_editor.py`
+Qt-зависимости: `QWidget`, `QMessageBox`
+
+- `open_in_text_editor(path)` — ядро (`subprocess.Popen`) Qt-free
+- Убрать `QMessageBox` — логировать ошибки через `log.error`
+
+---
+
+## Фаза 12 — Переключение
 
 1. Переключить дефолт `run_editor.py` на `--ui=tcgui`
 2. Регрессия: открыть проект, сущности, undo/redo, save/load, drag-drop
