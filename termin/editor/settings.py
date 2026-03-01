@@ -2,7 +2,7 @@
 Настройки редактора.
 
 Централизованное хранение и загрузка настроек между сессиями.
-Использует QSettings для кроссплатформенного хранения.
+Использует tcbase.Settings (JSON) для кроссплатформенного хранения.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QSettings
+from tcbase import Settings
 
 
 class EditorSettings:
@@ -18,10 +18,7 @@ class EditorSettings:
     Менеджер настроек редактора.
 
     Singleton-класс для доступа к настройкам из любого места.
-    Настройки хранятся в:
-    - Windows: реестр HKEY_CURRENT_USER\\Software\\Termin\\TerminEditor
-    - Linux: ~/.config/Termin/TerminEditor.conf
-    - macOS: ~/Library/Preferences/com.termin.TerminEditor.plist
+    Настройки хранятся в JSON-файле через tcbase.Settings.
     """
 
     _instance: "EditorSettings | None" = None
@@ -29,13 +26,10 @@ class EditorSettings:
     # Ключи настроек
     KEY_LAST_PROJECT_PATH = "ProjectBrowser/lastProjectPath"
     KEY_LAST_SCENE_PATH = "Editor/lastScenePath"
-    KEY_WINDOW_GEOMETRY = "Editor/windowGeometry"
-    KEY_WINDOW_STATE = "Editor/windowState"
-    KEY_SPLITTER_SIZES = "Editor/splitterSizes"
     KEY_TEXT_EDITOR = "Editor/textEditor"
 
     def __init__(self):
-        self._settings = QSettings("Termin", "TerminEditor")
+        self._settings = Settings("TerminEditor")
 
     @classmethod
     def instance(cls) -> "EditorSettings":
@@ -46,15 +40,15 @@ class EditorSettings:
 
     def get(self, key: str, default: Any = None) -> Any:
         """Получить значение настройки."""
-        return self._settings.value(key, default)
+        return self._settings.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
         """Установить значение настройки."""
-        self._settings.setValue(key, value)
+        self._settings.set(key, value)
 
     def sync(self) -> None:
         """Принудительно сохранить настройки на диск."""
-        self._settings.sync()
+        self._settings.save()
 
     # --- Удобные методы для частых настроек ---
 
@@ -84,22 +78,6 @@ class EditorSettings:
     def set_last_scene_path(self, path: Path | str) -> None:
         """Сохранить путь сцены."""
         self.set(self.KEY_LAST_SCENE_PATH, str(path))
-
-    def get_window_geometry(self) -> bytes | None:
-        """Получить геометрию окна."""
-        return self.get(self.KEY_WINDOW_GEOMETRY)
-
-    def set_window_geometry(self, geometry: bytes) -> None:
-        """Сохранить геометрию окна."""
-        self.set(self.KEY_WINDOW_GEOMETRY, geometry)
-
-    def get_window_state(self) -> bytes | None:
-        """Получить состояние окна."""
-        return self.get(self.KEY_WINDOW_STATE)
-
-    def set_window_state(self, state: bytes) -> None:
-        """Сохранить состояние окна."""
-        self.set(self.KEY_WINDOW_STATE, state)
 
     def get_text_editor(self) -> str | None:
         """Получить путь к внешнему текстовому редактору."""
@@ -164,7 +142,4 @@ class EditorSettings:
 
     def set_text_editor(self, editor_path: str | None) -> None:
         """Сохранить путь к текстовому редактору."""
-        if editor_path:
-            self.set(self.KEY_TEXT_EDITOR, editor_path)
-        else:
-            self._settings.remove(self.KEY_TEXT_EDITOR)
+        self.set(self.KEY_TEXT_EDITOR, editor_path or "")

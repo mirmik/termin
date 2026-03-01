@@ -313,4 +313,4 @@ class EditorProjectController:
 
         else:
             # Все остальные файлы — открываем в текстовом редакторе
-            open_in_text_editor(str(path), parent=self._parent, log_message=self._log_message)
+            open_in_text_editor(str(path), log_message=self._log_message)

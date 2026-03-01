@@ -145,10 +145,10 @@ class EditorWindowTcgui:
         self._modules_visible: bool = False
         self._last_profiler_update: float = 0.0
         self._last_modules_update: float = 0.0
+        self._framegraph_debugger = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
-            parent=None,
             resource_manager=self.resource_manager,
             get_scene=lambda: self.scene,
             get_project_path=self._get_project_path,
@@ -522,7 +522,7 @@ class EditorWindowTcgui:
             on_toggle_game_mode=self._toggle_game_mode,
             on_run_standalone=self._run_standalone,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
-            on_show_framegraph_debugger=self._noop,
+            on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
             on_show_audio_debugger=self._show_audio_debugger,
             on_show_core_registry_viewer=self._show_core_registry_viewer,
@@ -989,6 +989,15 @@ class EditorWindowTcgui:
         from termin.editor_tcgui.dialogs.navmesh_registry_viewer import show_navmesh_registry_viewer
         show_navmesh_registry_viewer(self._ui)
 
+    def _show_framegraph_debugger(self) -> None:
+        if self._ui is None:
+            return
+        if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
+            return
+        from termin.editor_tcgui.dialogs.framegraph_debugger import show_framegraph_debugger
+        self._framegraph_debugger = show_framegraph_debugger(
+            self._ui, self._graphics, self._rendering_controller)
+
     def _show_audio_debugger(self) -> None:
         if self._ui is None:
             return
@@ -1424,6 +1433,8 @@ class EditorWindowTcgui:
             if now - self._last_modules_update > 1.0:
                 self._modules_panel.update_display()
                 self._last_modules_update = now
+        if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
+            self._framegraph_debugger.update()
 
     def _after_render(self) -> None:
         pass

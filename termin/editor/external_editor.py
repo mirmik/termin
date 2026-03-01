@@ -11,14 +11,13 @@ import platform
 import subprocess
 from typing import Callable
 
-from PyQt6.QtWidgets import QWidget, QMessageBox
+from tcbase import log
 
 from termin.editor.settings import EditorSettings
 
 
 def open_in_text_editor(
     file_path: str,
-    parent: QWidget | None = None,
     log_message: Callable[[str], None] | None = None,
 ) -> bool:
     """
@@ -28,7 +27,6 @@ def open_in_text_editor(
 
     Args:
         file_path: Path to file to open
-        parent: Parent widget for error dialogs
         log_message: Optional callback for logging
 
     Returns:
@@ -54,10 +52,5 @@ def open_in_text_editor(
         return True
 
     except Exception as e:
-        if parent is not None:
-            QMessageBox.warning(
-                parent,
-                "Error",
-                f"Failed to open file in text editor:\n{file_path}\n\nError: {e}",
-            )
+        log.error(f"Failed to open file in text editor: {file_path}: {e}")
         return False

@@ -301,6 +301,37 @@ class RenderingControllerTcgui:
     def get_viewport_state(self, viewport: "Viewport"):
         return self._manager.get_viewport_state(viewport)
 
+    def get_all_viewports_info(self) -> list[tuple["Viewport", str]]:
+        """Get list of all viewports with display names for UI selection."""
+        result: list[tuple["Viewport", str]] = []
+
+        scene_pipeline_viewports: dict[str, list[tuple["Viewport", str, int]]] = {}
+        unmanaged_viewports: list[tuple["Viewport", str, int]] = []
+
+        for display in self._manager.displays:
+            display_name = self._manager.get_display_name(display)
+            for i, viewport in enumerate(display.viewports):
+                if viewport.managed_by_scene_pipeline:
+                    pipeline_name = viewport.managed_by_scene_pipeline
+                    if pipeline_name not in scene_pipeline_viewports:
+                        scene_pipeline_viewports[pipeline_name] = []
+                    scene_pipeline_viewports[pipeline_name].append((viewport, display_name, i))
+                else:
+                    unmanaged_viewports.append((viewport, display_name, i))
+
+        for pipeline_name, viewports in sorted(scene_pipeline_viewports.items()):
+            for viewport, display_name, i in viewports:
+                vp_name = viewport.name or f"Viewport {i}"
+                label = f"[{pipeline_name}] {vp_name}"
+                result.append((viewport, label))
+
+        for viewport, display_name, i in unmanaged_viewports:
+            vp_name = viewport.name or f"Viewport {i}"
+            label = f"{display_name} / {vp_name}"
+            result.append((viewport, label))
+
+        return result
+
     # ------------------------------------------------------------------
     # EditorStateIO callbacks
     # ------------------------------------------------------------------

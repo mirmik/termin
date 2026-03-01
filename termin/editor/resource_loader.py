@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Callable
 
-from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from tcbase import log
 
 if TYPE_CHECKING:
@@ -30,19 +29,19 @@ class ResourceLoader:
 
     def __init__(
         self,
-        parent: QWidget,
         resource_manager: "ResourceManager",
         get_scene: Callable[[], "Scene"],
         get_project_path: Callable[[], str | None],
         on_resource_reloaded: Callable[[str, str], None],
         log_message: Callable[[str], None] | None = None,
+        show_open_file_dialog: Callable[[str, str], str | None] | None = None,
     ):
-        self._parent = parent
         self._resource_manager = resource_manager
         self._get_scene = get_scene
         self._get_project_path = get_project_path
         self._on_resource_reloaded = on_resource_reloaded
         self._log = log_message or (lambda msg: None)
+        self._show_open_file_dialog = show_open_file_dialog
 
     def scan_builtin_components(self) -> None:
         """Scan and register built-in component modules."""
@@ -106,12 +105,13 @@ class ResourceLoader:
 
     def load_material_from_file(self) -> None:
         """Open dialog to select .shader file, parse it and add to ResourceManager."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self._parent,
+        if self._show_open_file_dialog is None:
+            log.error("[ResourceLoader] load_material_from_file: no file dialog callback")
+            return
+
+        file_path = self._show_open_file_dialog(
             "Load Material",
-            "",
             "Shader Files (*.shader);;All Files (*)",
-            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not file_path:
             return
@@ -142,29 +142,22 @@ class ResourceLoader:
             material.name = material_name
             self._resource_manager.register_material(material_name, material)
 
-            QMessageBox.information(
-                self._parent,
-                "Material Loaded",
-                f"Material '{material_name}' loaded successfully.\n"
-                f"Phases: {len(material.phases)}\n"
-                f"Phase marks: {', '.join(p.phase_mark for p in material.phases)}",
-            )
+            log.info(f"[ResourceLoader] Material '{material_name}' loaded: "
+                     f"{len(material.phases)} phases, "
+                     f"marks: {', '.join(p.phase_mark for p in material.phases)}")
 
         except Exception as e:
-            QMessageBox.critical(
-                self._parent,
-                "Error Loading Material",
-                f"Failed to load material from:\n{file_path}\n\nError: {e}",
-            )
+            log.error(f"[ResourceLoader] Failed to load material from {file_path}: {e}")
 
     def load_components_from_file(self) -> None:
         """Load components from a Python file."""
-        path, _ = QFileDialog.getOpenFileName(
-            self._parent,
+        if self._show_open_file_dialog is None:
+            log.error("[ResourceLoader] load_components_from_file: no file dialog callback")
+            return
+
+        path = self._show_open_file_dialog(
             "Load Components",
-            "",
             "Python Files (*.py);;All Files (*)",
-            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
@@ -173,23 +166,10 @@ class ResourceLoader:
             loaded = self._resource_manager.scan_components([path])
 
             if loaded:
-                QMessageBox.information(
-                    self._parent,
-                    "Components Loaded",
-                    f"Successfully loaded {len(loaded)} component(s):\n\n"
-                    + "\n".join(f"• {name}" for name in loaded),
-                )
+                log.info(f"[ResourceLoader] Loaded {len(loaded)} component(s): "
+                         + ", ".join(loaded))
             else:
-                QMessageBox.warning(
-                    self._parent,
-                    "No Components Found",
-                    f"No new Component subclasses found in:\n{path}",
-                )
+                log.warn(f"[ResourceLoader] No new Component subclasses found in: {path}")
 
         except Exception as e:
-            import traceback
-            QMessageBox.critical(
-                self._parent,
-                "Error Loading Components",
-                f"Failed to load components from:\n{path}\n\nError: {e}\n\n{traceback.format_exc()}",
-            )
+            log.error(f"[ResourceLoader] Failed to load components from {path}: {e}")

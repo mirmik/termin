@@ -122,12 +122,12 @@ class EditorWindow(QMainWindow):
 
         # --- ResourceLoader ---
         self._resource_loader = ResourceLoader(
-            parent=self,
             resource_manager=self.resource_manager,
             get_scene=lambda: self.scene,
             get_project_path=self._get_project_path,
             on_resource_reloaded=self._on_resource_reloaded,
             log_message=self._log_to_console,
+            show_open_file_dialog=self._qt_open_file_dialog,
         )
 
         self._resource_loader.scan_builtin_components()
@@ -882,6 +882,15 @@ class EditorWindow(QMainWindow):
         """Log message to console output (native logs already print to stderr)."""
         if self.consoleOutput is not None:
             self.consoleOutput.appendPlainText(message)
+
+    def _qt_open_file_dialog(self, title: str, file_filter: str) -> str | None:
+        """Show Qt file dialog, return selected path or None."""
+        from PyQt6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self, title, "", file_filter,
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        return path or None
 
     def _setup_native_log_callback(self) -> None:
         """Setup callback for native (C/C++) log messages."""
