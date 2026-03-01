@@ -1036,7 +1036,17 @@ class EditorWindowTcgui:
         )
 
     def _show_pipeline_editor(self) -> None:
-        pass  # TODO: Phase 15
+        if self._ui is None:
+            return
+        try:
+            from termin.editor_tcgui.pipeline_editor_window import open_pipeline_editor_window
+            open_pipeline_editor_window(
+                self._ui,
+                directory=self._get_project_path() or str(Path.home()),
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor: {e}")
+            self._log_to_console(f"Pipeline Editor error: {e}")
 
     def _toggle_game_mode(self) -> None:
         if self._game_scene_name is not None:

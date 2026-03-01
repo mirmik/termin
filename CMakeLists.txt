@@ -162,6 +162,8 @@ if(BUNDLE_PYTHON)
         tgfx
         tcbase
         tcgui
+        tcnodegraph
+        termin_nodegraph
     )
 
     # Install each package
