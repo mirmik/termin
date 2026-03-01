@@ -112,6 +112,15 @@ class EditorWindowTcgui:
         self._editor_attachment = None
         self._current_project_path: str | None = None
         self._project_name: str | None = None
+        self._is_fullscreen: bool = False
+        self._pre_fullscreen_state: dict | None = None
+        self._left_tabs: TabView | None = None
+        self._right_scroll: ScrollArea | None = None
+        self._bottom_tabs: TabView | None = None
+        self._menu_bar_widget: MenuBar | None = None
+        self._left_splitter: Splitter | None = None
+        self._right_splitter: Splitter | None = None
+        self._bottom_splitter: Splitter | None = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -153,6 +162,7 @@ class EditorWindowTcgui:
 
         # Menu bar
         menu_bar = MenuBar()
+        self._menu_bar_widget = menu_bar
         root.add_child(menu_bar)
 
         # Main area: HStack with Splitter handles
@@ -166,6 +176,7 @@ class EditorWindowTcgui:
 
         # --- Left panel ---
         left_tabs = TabView()
+        self._left_tabs = left_tabs
         left_tabs.preferred_width = px(280)
 
         scene_tab_content = VStack()
@@ -182,7 +193,8 @@ class EditorWindowTcgui:
         left_tabs.add_tab("Rendering", rendering_tab_content)
 
         main_area.add_child(left_tabs)
-        main_area.add_child(Splitter(target=left_tabs, side="right"))
+        self._left_splitter = Splitter(target=left_tabs, side="right")
+        main_area.add_child(self._left_splitter)
 
         # --- Center: Viewport3D ---
         self._viewport_widget = Viewport3D()
@@ -191,19 +203,23 @@ class EditorWindowTcgui:
 
         # --- Right panel: Inspector ---
         right_scroll = ScrollArea()
+        self._right_scroll = right_scroll
         right_scroll.preferred_width = px(320)
         inspector_container = VStack()
         inspector_container.spacing = 4
         right_scroll.add_child(inspector_container)
-        main_area.add_child(Splitter(target=right_scroll, side="left"))
+        self._right_splitter = Splitter(target=right_scroll, side="left")
+        main_area.add_child(self._right_splitter)
         main_area.add_child(right_scroll)
 
         root.add_child(main_area)
 
         # --- Bottom: TabView [Project | Console] ---
         bottom_tabs = TabView()
+        self._bottom_tabs = bottom_tabs
         bottom_tabs.preferred_height = px(200)
-        root.add_child(Splitter(target=bottom_tabs, side="top"))
+        self._bottom_splitter = Splitter(target=bottom_tabs, side="top")
+        root.add_child(self._bottom_splitter)
 
         from tcgui.widgets.hstack import HStack as HStackInner
         from tcgui.widgets.tree import TreeWidget as TreeWidgetInner
@@ -365,7 +381,7 @@ class EditorWindowTcgui:
             on_pipeline_editor=self._show_pipeline_editor,
             on_toggle_game_mode=self._toggle_game_mode,
             on_run_standalone=self._run_standalone,
-            on_show_undo_stack_viewer=self._noop,
+            on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._noop,
             on_show_resource_manager_viewer=self._noop,
             on_show_audio_debugger=self._noop,
@@ -375,12 +391,12 @@ class EditorWindowTcgui:
             on_show_scene_manager_viewer=self._noop,
             on_toggle_profiler=self._noop,
             on_toggle_modules=self._noop,
-            on_toggle_fullscreen=self._noop,
+            on_toggle_fullscreen=self._toggle_fullscreen,
             on_show_agent_types=self._noop,
             on_show_spacemouse_settings=self._noop,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
-            is_fullscreen=lambda: False,
+            is_fullscreen=lambda: self._is_fullscreen,
             is_profiler_visible=lambda: False,
             is_modules_visible=lambda: False,
         )
@@ -680,28 +696,85 @@ class EditorWindowTcgui:
         pass
 
     def _show_settings(self) -> None:
-        pass  # TODO: settings dialog
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.settings_dialog import show_settings_dialog
+        show_settings_dialog(self._ui)
 
     def _show_project_settings(self) -> None:
-        pass  # TODO
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.project_settings_dialog import show_project_settings_dialog
+        show_project_settings_dialog(self._ui, on_changed=self._request_viewport_update)
 
     def _show_scene_properties(self) -> None:
-        pass  # TODO
+        pass  # TODO: Phase 12
 
     def _show_layers_settings(self) -> None:
-        pass  # TODO
+        if self._ui is None or self.scene is None:
+            return
+        from termin.editor_tcgui.dialogs.layers_dialog import show_layers_dialog
+        show_layers_dialog(self._ui, self.scene)
 
     def _show_shadow_settings(self) -> None:
-        pass  # TODO
+        if self._ui is None or self.scene is None:
+            return
+        from termin.editor_tcgui.dialogs.shadow_settings_dialog import show_shadow_settings_dialog
+        show_shadow_settings_dialog(self._ui, self.scene, on_changed=self._request_viewport_update)
 
     def _show_pipeline_editor(self) -> None:
-        pass  # TODO
+        pass  # TODO: Phase 15
 
     def _toggle_game_mode(self) -> None:
-        pass  # TODO
+        pass  # TODO: Phase 12
 
     def _run_standalone(self) -> None:
-        pass  # TODO
+        if self._current_project_path is None:
+            self._log_to_console("No project open — cannot run standalone.")
+            return
+        self._save_scene()
+        import subprocess
+        import sys
+        cmd = [sys.executable, "-m", "termin.main", "--project", self._current_project_path]
+        last_scene = EditorSettings.instance().get("last_scene_file")
+        if last_scene:
+            cmd.extend(["--scene", last_scene])
+        self._log_to_console(f"Launching standalone: {' '.join(cmd)}")
+        try:
+            subprocess.Popen(cmd)
+        except Exception as e:
+            log.error(f"Failed to launch standalone: {e}")
+            self._log_to_console(f"Error: {e}")
+
+    def _show_undo_stack_viewer(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.undo_stack_viewer import show_undo_stack_viewer
+        show_undo_stack_viewer(self._ui, self.undo_stack)
+
+    def _toggle_fullscreen(self) -> None:
+        panels = [
+            self._left_tabs, self._left_splitter,
+            self._right_scroll, self._right_splitter,
+            self._bottom_tabs, self._bottom_splitter,
+            self._menu_bar_widget, self._status_bar,
+        ]
+        if self._is_fullscreen:
+            # Restore panels
+            if self._pre_fullscreen_state is not None:
+                for w in panels:
+                    if w is not None and id(w) in self._pre_fullscreen_state:
+                        w.visible = self._pre_fullscreen_state[id(w)]
+            self._is_fullscreen = False
+            self._pre_fullscreen_state = None
+        else:
+            # Save state and hide panels
+            self._pre_fullscreen_state = {}
+            for w in panels:
+                if w is not None:
+                    self._pre_fullscreen_state[id(w)] = w.visible
+                    w.visible = False
+            self._is_fullscreen = True
 
     def _load_material_from_file(self) -> None:
         pass  # TODO
