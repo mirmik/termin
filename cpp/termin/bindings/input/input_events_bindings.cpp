@@ -43,18 +43,18 @@ void bind_input_events(nb::module_& m) {
         .def_rw("x", &MouseButtonEvent::x)
         .def_rw("y", &MouseButtonEvent::y)
         .def_prop_rw("button",
-            [](const MouseButtonEvent& self) {
-                return static_cast<MouseButton>(self.button);
+            [](const MouseButtonEvent& self) -> int {
+                return self.button;
             },
-            [](MouseButtonEvent& self, MouseButton b) {
-                self.button = static_cast<int>(b);
+            [](MouseButtonEvent& self, int b) {
+                self.button = b;
             })
         .def_prop_rw("action",
-            [](const MouseButtonEvent& self) {
-                return static_cast<Action>(self.action);
+            [](const MouseButtonEvent& self) -> int {
+                return self.action;
             },
-            [](MouseButtonEvent& self, Action a) {
-                self.action = static_cast<int>(a);
+            [](MouseButtonEvent& self, int a) {
+                self.action = a;
             })
         .def_rw("mods", &MouseButtonEvent::mods)
         .def("__repr__", [](const MouseButtonEvent& e) {
@@ -165,11 +165,11 @@ void bind_input_events(nb::module_& m) {
         .def_rw("key", &KeyEvent::key)
         .def_rw("scancode", &KeyEvent::scancode)
         .def_prop_rw("action",
-            [](const KeyEvent& self) {
-                return static_cast<Action>(self.action);
+            [](const KeyEvent& self) -> int {
+                return self.action;
             },
-            [](KeyEvent& self, Action a) {
-                self.action = static_cast<int>(a);
+            [](KeyEvent& self, int a) {
+                self.action = a;
             })
         .def_rw("mods", &KeyEvent::mods)
         .def("__repr__", [](const KeyEvent& e) {

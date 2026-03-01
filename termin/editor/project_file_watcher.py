@@ -14,18 +14,18 @@ PreLoaders don't parse files - they only:
 from __future__ import annotations
 
 import os
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, Set
+from typing import TYPE_CHECKING, Callable, Dict, Set
 
 from tcbase import log
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QFileSystemWatcher, QTimer
     from termin.visualization.core.resources import ResourceManager
 
-# Debounce delay in milliseconds
-DEBOUNCE_DELAY_MS = 300
+# Debounce delay in seconds
+DEBOUNCE_DELAY_S = 0.3
 
 
 @dataclass
@@ -266,19 +266,39 @@ class FilePreLoader(ABC):
 FileTypeProcessor = FilePreLoader
 
 
+class _WatchHandler:
+    """watchdog event handler that enqueues changes for ProjectFileWatcher."""
+
+    def __init__(self, watcher: ProjectFileWatcher) -> None:
+        from watchdog.events import FileSystemEventHandler
+        self._watcher = watcher
+        self._base = FileSystemEventHandler()
+
+    def dispatch(self, event) -> None:
+        if event.is_directory:
+            return
+        src = event.src_path
+        etype = event.event_type  # "created", "modified", "deleted", "moved"
+        if etype == "moved":
+            self._watcher._enqueue_change(event.dest_path, "created")
+            self._watcher._enqueue_change(src, "deleted")
+        else:
+            self._watcher._enqueue_change(src, etype)
+
+
 class ProjectFileWatcher:
     """
     Central file watcher for project resources.
 
-    Owns QFileSystemWatcher, tracks all files by extension,
-    and dispatches events to registered FilePreLoaders.
+    Uses watchdog for live filesystem monitoring and os.walk for initial scan.
+    Dispatches events to registered FilePreLoaders.
     """
 
     def __init__(
         self,
         on_resource_reloaded: Callable[[str, str], None] | None = None,
     ):
-        self._file_watcher: "QFileSystemWatcher | None" = None
+        self._observer = None  # watchdog Observer
         self._project_path: str | None = None
         self._watched_dirs: Set[str] = set()
         self._watched_files: Set[str] = set()
@@ -288,178 +308,170 @@ class ProjectFileWatcher:
         self._on_resource_reloaded = on_resource_reloaded
 
         # All project files by extension (for statistics)
-        self._all_files_by_ext: Dict[str, Set[str]] = {}  # ext -> set of paths
+        self._all_files_by_ext: Dict[str, Set[str]] = {}
 
-        # Debounce: pending file changes
-        self._pending_changes: Set[str] = set()
-        self._debounce_timer: "QTimer | None" = None
+        # Thread-safe pending changes from watchdog
+        self._lock = threading.Lock()
+        self._pending_changes: Dict[str, str] = {}  # path -> "created"/"modified"/"deleted"
+        self._debounce_timer: threading.Timer | None = None
 
     def register_processor(self, processor: FilePreLoader) -> None:
-        """
-        Register a FilePreLoader for its extensions.
-
-        Raises:
-            ValueError: If extension already registered.
-        """
         for ext in processor.extensions:
             if ext in self._processors:
                 raise ValueError(f"Extension {ext} already registered")
             self._processors[ext] = processor
 
     def enable(self, project_path: str | None = None) -> None:
-        """
-        Enable file watching.
-
-        Creates QFileSystemWatcher and starts monitoring project directory.
-        """
-        if self._file_watcher is not None:
-            return
-
-        from PyQt6.QtCore import QFileSystemWatcher, QTimer
-
-        self._file_watcher = QFileSystemWatcher()
-        self._file_watcher.directoryChanged.connect(self._on_directory_changed)
-        self._file_watcher.fileChanged.connect(self._on_file_changed_debounced)
-
-        # Debounce timer
-        self._debounce_timer = QTimer()
-        self._debounce_timer.setSingleShot(True)
-        self._debounce_timer.timeout.connect(self._process_pending_changes)
-
+        """Enable file watching. Starts watchdog observer."""
         if project_path:
             self.watch_directory(project_path)
 
     def disable(self) -> None:
-        """Disable file watching and clear all state."""
+        """Stop watchdog observer and clear all state."""
         if self._debounce_timer is not None:
-            self._debounce_timer.stop()
+            self._debounce_timer.cancel()
             self._debounce_timer = None
 
-        if self._file_watcher is not None:
-            self._file_watcher.directoryChanged.disconnect(self._on_directory_changed)
-            self._file_watcher.fileChanged.disconnect(self._on_file_changed_debounced)
-            self._file_watcher = None
+        if self._observer is not None:
+            self._observer.stop()
+            self._observer.join(timeout=2.0)
+            self._observer = None
 
         self._project_path = None
         self._watched_dirs.clear()
         self._watched_files.clear()
         self._all_files_by_ext.clear()
-        self._pending_changes.clear()
+        with self._lock:
+            self._pending_changes.clear()
 
     def rescan(self) -> None:
-        """
-        Rescan project directory for resources.
-
-        Clears tracked files and re-processes all resource files.
-        Used when resources need to be reloaded (e.g., after scene load).
-        """
         project_path = self._project_path
         if project_path is None:
             return
 
-        # Clear processor file tracking
         for processor in self.get_all_processors():
             processor._file_to_resources.clear()
 
-        # Clear watched files (but keep directories)
         self._watched_files.clear()
         self._all_files_by_ext.clear()
 
-        # Re-scan
-        self.watch_directory(project_path)
+        self._scan_directory(project_path)
 
     def watch_directory(self, path: str) -> None:
-        """
-        Recursively watch a directory for resource files.
-
-        Files are collected first, then processed in priority order
-        (lower priority values first) to handle dependencies correctly.
-        """
-        if self._file_watcher is None:
-            return
-
+        """Scan directory for resources and start live watching."""
         self._project_path = path
 
         if not os.path.exists(path):
             return
 
-        # Collect all files first (before processing)
-        # List of (priority, file_path, ext)
+        # Synchronous scan
+        self._scan_directory(path)
+
+        # Start watchdog observer for live changes
+        self._start_observer(path)
+
+    def _scan_directory(self, path: str) -> None:
+        """Recursively scan directory and process resource files."""
         pending_files: list[tuple[int, str, str]] = []
 
-        # Walk directory tree
         for root, dirs, files in os.walk(path):
-            # Skip hidden and __pycache__ directories
             dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+            self._watched_dirs.add(root)
 
-            # Watch directory
-            if root not in self._watched_dirs:
-                self._file_watcher.addPath(root)
-                self._watched_dirs.add(root)
-
-            # Collect all files
             for filename in files:
-                # Skip hidden files
                 if filename.startswith("."):
                     continue
 
                 file_path = os.path.join(root, filename)
                 ext = os.path.splitext(filename)[1].lower()
 
-                # Track all files for statistics
-                if ext:  # Only files with extension
+                if ext:
                     if ext not in self._all_files_by_ext:
                         self._all_files_by_ext[ext] = set()
                     self._all_files_by_ext[ext].add(file_path)
 
-                # Queue resource files for processing
                 if ext in self._processors:
                     priority = self._processors[ext].priority
                     pending_files.append((priority, file_path, ext))
-                # Also queue .meta/.spec files for known resource types
                 elif ext in (".meta", ".spec"):
                     base_ext = self._get_spec_base_ext(file_path)
                     if base_ext and base_ext in self._processors:
                         priority = self._processors[base_ext].priority
                         pending_files.append((priority, file_path, ext))
 
-        # Sort by priority (lower first), then by path for deterministic order
         pending_files.sort(key=lambda x: (x[0], x[1]))
 
-        # Process files in priority order
         for _priority, file_path, _ext in pending_files:
             self._add_file(file_path)
 
-    def _get_spec_base_ext(self, path: str) -> str | None:
-        """
-        For a .meta or .spec file, return the base file's extension.
+    def _start_observer(self, path: str) -> None:
+        """Start watchdog observer for live file change detection."""
+        if self._observer is not None:
+            self._observer.stop()
+            self._observer.join(timeout=2.0)
+            self._observer = None
 
-        Example: "model.stl.meta" -> ".stl", "image.png.spec" -> ".png"
-        Returns None if not a meta/spec file or base extension unknown.
-        """
+        try:
+            from watchdog.observers import Observer
+
+            handler = _WatchHandler(self)
+            self._observer = Observer()
+            self._observer.daemon = True
+            self._observer.schedule(handler, path, recursive=True)
+            self._observer.start()
+        except Exception as e:
+            log.error(f"[ProjectFileWatcher] Failed to start watchdog observer: {e}")
+
+    def _enqueue_change(self, path: str, kind: str) -> None:
+        """Called from watchdog thread. Enqueues change for poll() processing."""
+        if not self._should_watch_file(path):
+            return
+        with self._lock:
+            self._pending_changes[path] = kind
+        # Restart debounce
+        if self._debounce_timer is not None:
+            self._debounce_timer.cancel()
+        self._debounce_timer = threading.Timer(DEBOUNCE_DELAY_S, lambda: None)
+        self._debounce_timer.daemon = True
+        self._debounce_timer.start()
+
+    def poll(self) -> None:
+        """Process pending file changes. Call from main loop each frame."""
+        if self._debounce_timer is not None and self._debounce_timer.is_alive():
+            return  # Still debouncing
+        with self._lock:
+            if not self._pending_changes:
+                return
+            pending = dict(self._pending_changes)
+            self._pending_changes.clear()
+        for path, kind in pending.items():
+            if kind == "deleted":
+                self._on_file_removed(path)
+            elif kind == "created":
+                if os.path.exists(path):
+                    self._add_file(path)
+            else:
+                if os.path.exists(path):
+                    self._on_file_changed(path)
+
+    def _get_spec_base_ext(self, path: str) -> str | None:
         if path.endswith(".meta") or path.endswith(".spec"):
-            base_path = path[:-5]  # Remove ".meta" or ".spec"
+            base_path = path[:-5]
             return os.path.splitext(base_path)[1].lower() or None
         return None
 
     def _add_file(self, path: str) -> None:
-        """Add a file to watching and notify processor."""
-        if self._file_watcher is None:
-            return
-
-        if path not in self._watched_files:
-            self._file_watcher.addPath(path)
-            self._watched_files.add(path)
+        """Register a file with its processor."""
+        self._watched_files.add(path)
 
         ext = os.path.splitext(path)[1].lower()
 
-        # Handle .meta/.spec files specially
         if ext in (".meta", ".spec"):
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
                 if processor is not None:
-                    resource_path = path[:-5]  # Remove ".meta" or ".spec"
+                    resource_path = path[:-5]
                     try:
                         processor.on_spec_changed(path, resource_path)
                     except Exception:
@@ -472,78 +484,32 @@ class ProjectFileWatcher:
                 processor.on_file_added(path)
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error processing {path}")
-        else:
-            log.warn(f"[ProjectFileWatcher] No processor for {ext}: {path}")
 
     def _should_watch_file(self, path: str) -> bool:
-        """Check if file should be watched (resource or meta file)."""
         ext = os.path.splitext(path)[1].lower()
         if ext in self._processors:
             return True
-        # Also watch .meta/.spec files for known resource types
         if ext in (".meta", ".spec"):
             base_ext = self._get_spec_base_ext(path)
             return base_ext is not None and base_ext in self._processors
         return False
 
-    def _on_directory_changed(self, path: str) -> None:
-        """Handle directory changes (new files)."""
-        if self._file_watcher is None:
-            return
-
-        try:
-            entries = os.listdir(path)
-        except OSError:
-            # Directory may have been deleted
-            return
-
-        for filename in entries:
-            file_path = os.path.join(path, filename)
-
-            if os.path.isdir(file_path):
-                # New subdirectory
-                if file_path not in self._watched_dirs and not filename.startswith(
-                    (".", "__")
-                ):
-                    self._file_watcher.addPath(file_path)
-                    self._watched_dirs.add(file_path)
-            else:
-                if self._should_watch_file(file_path) and file_path not in self._watched_files:
-                    self._add_file(file_path)
-
-    def _on_file_changed_debounced(self, path: str) -> None:
-        """Handle file change with debouncing."""
-        # QFileSystemWatcher may remove path after change (Linux quirk)
-        if self._file_watcher is not None and os.path.exists(path):
-            if path not in self._file_watcher.files():
-                self._file_watcher.addPath(path)
-
-        # Add to pending and restart timer
-        self._pending_changes.add(path)
-        if self._debounce_timer is not None:
-            self._debounce_timer.start(DEBOUNCE_DELAY_MS)
-
-    def _process_pending_changes(self) -> None:
-        """Process all pending file changes after debounce delay."""
-        pending = self._pending_changes.copy()
-        self._pending_changes.clear()
-
-        for path in pending:
-            if not os.path.exists(path):
-                continue
-            self._on_file_changed(path)
+    def _on_file_removed(self, path: str) -> None:
+        ext = os.path.splitext(path)[1].lower()
+        processor = self._processors.get(ext)
+        if processor is not None:
+            processor.on_file_removed(path)
+        self._watched_files.discard(path)
 
     def _on_file_changed(self, path: str) -> None:
-        """Handle file modification (actual processing)."""
         ext = os.path.splitext(path)[1].lower()
 
-        # Handle .meta/.spec files specially
         if ext in (".meta", ".spec"):
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
                 if processor is not None:
-                    resource_path = path[:-5]  # Remove ".meta" or ".spec"
+                    resource_path = path[:-5]
                     try:
                         processor.on_spec_changed(path, resource_path)
                     except Exception:
@@ -557,46 +523,26 @@ class ProjectFileWatcher:
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error reloading {path}")
 
-    # Statistics methods
+    # ------------------------------------------------------------------
+    # Statistics
+    # ------------------------------------------------------------------
 
     def get_file_count(self, ext: str | None = None) -> int:
-        """
-        Get count of watched files (files with registered processors).
-
-        Args:
-            ext: Filter by extension (e.g., '.material'). None for all watched files.
-        """
         if ext is None:
             return len(self._watched_files)
-
         return sum(
             1 for f in self._watched_files if os.path.splitext(f)[1].lower() == ext
         )
 
     def get_all_files_count(self) -> int:
-        """Get total count of all project files."""
         return sum(len(files) for files in self._all_files_by_ext.values())
 
     def get_all_files_by_extension(self) -> Dict[str, int]:
-        """
-        Get statistics of all project files by extension.
-
-        Returns:
-            Dict mapping extension (e.g., '.py') to file count, sorted by count descending.
-        """
         stats = {ext: len(files) for ext, files in self._all_files_by_ext.items()}
-        # Sort by count descending, then by extension
         return dict(sorted(stats.items(), key=lambda x: (-x[1], x[0])))
 
     def get_stats(self) -> Dict[str, int]:
-        """
-        Get statistics by resource type.
-
-        Returns:
-            Dict mapping resource_type to file count.
-        """
         stats: Dict[str, int] = {}
-        # Deduplicate processors (same processor may handle multiple extensions)
         seen_processors: Set[int] = set()
         for processor in self._processors.values():
             if id(processor) not in seen_processors:
@@ -605,15 +551,12 @@ class ProjectFileWatcher:
         return stats
 
     def get_all_extensions(self) -> Set[str]:
-        """Get all registered extensions."""
         return set(self._processors.keys())
 
     def get_processor(self, ext: str) -> FilePreLoader | None:
-        """Get processor for extension."""
         return self._processors.get(ext)
 
     def get_all_processors(self) -> list[FilePreLoader]:
-        """Get list of unique processors."""
         seen: Set[int] = set()
         result: list[FilePreLoader] = []
         for processor in self._processors.values():
@@ -624,20 +567,16 @@ class ProjectFileWatcher:
 
     @property
     def project_path(self) -> str | None:
-        """Current project path being watched."""
         return self._project_path
 
     @property
     def watched_dirs(self) -> Set[str]:
-        """Set of watched directories (read-only copy)."""
         return self._watched_dirs.copy()
 
     @property
     def watched_files(self) -> Set[str]:
-        """Set of watched files (read-only copy)."""
         return self._watched_files.copy()
 
     @property
     def is_enabled(self) -> bool:
-        """Whether file watching is enabled."""
-        return self._file_watcher is not None
+        return self._observer is not None

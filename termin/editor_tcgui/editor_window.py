@@ -50,6 +50,7 @@ from termin.editor.settings import EditorSettings
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.platform.backends.fbo_backend import FBOSurface
 
+from termin.editor.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
@@ -69,9 +70,11 @@ class EditorWindowTcgui:
         initial_scene,
         scene_manager: SceneManager,
         graphics=None,
+        offscreen_context=None,
     ) -> None:
         self._world = world
         self._graphics = graphics
+        self._offscreen_context = offscreen_context
         self._should_close = False
         self._ui: UI | None = None
 
@@ -110,10 +113,14 @@ class EditorWindowTcgui:
         self._interaction_system = None
         self.gizmo_manager = None
         self._editor_attachment = None
+        self._rendering_controller = None
+        self._editor_viewport_input_managers: list = []
         self._current_project_path: str | None = None
         self._project_name: str | None = None
         self._is_fullscreen: bool = False
         self._pre_fullscreen_state: dict | None = None
+        self._editor_state_io: EditorStateIO | None = None
+        self._rendering_tree = None
         self._left_tabs: TabView | None = None
         self._right_scroll: ScrollArea | None = None
         self._bottom_tabs: TabView | None = None
@@ -189,7 +196,11 @@ class EditorWindowTcgui:
         left_tabs.add_tab("Scene", scene_tab_content)
 
         rendering_tab_content = VStack()
-        rendering_tab_content.add_child(Label())  # placeholder
+        rendering_tab_content.spacing = 4
+        from tcgui.widgets.tree import TreeWidget as RenderTreeWidget
+        self._rendering_tree = RenderTreeWidget()
+        self._rendering_tree.stretch = True
+        rendering_tab_content.add_child(self._rendering_tree)
         left_tabs.add_tab("Rendering", rendering_tab_content)
 
         main_area.add_child(left_tabs)
@@ -298,24 +309,50 @@ class EditorWindowTcgui:
             on_file_activated=self._on_project_file_activated,
         )
 
-        # Setup editor display and attach to scene
+        # Setup rendering controller and editor display
         if self._editor_display is not None:
-            # Register display in RenderingManager so render_all() renders to it
-            from termin._native.render import RenderingManager
-            RenderingManager.instance().add_display(self._editor_display, "Editor")
-
-            from termin.editor.editor_scene_attachment import EditorSceneAttachment
             from termin.editor.editor_pipeline import make_editor_pipeline
+            from termin.editor.editor_scene_attachment import EditorSceneAttachment
+            from termin.editor_tcgui.rendering_controller import RenderingControllerTcgui
+            from termin._native.render import RenderingManager
+
+            # Create rendering controller (registers factories with RenderingManager)
+            self._rendering_controller = RenderingControllerTcgui(
+                offscreen_context=self._offscreen_context,
+                get_scene=lambda: self.scene,
+                make_editor_pipeline=make_editor_pipeline,
+                on_request_update=self._request_viewport_update,
+                on_rendering_changed=self._refresh_rendering_panel,
+            )
+
+            # Register editor display and mark it as non-serializable
+            RenderingManager.instance().add_display(self._editor_display, "Editor")
+            self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
+
+            # Create editor scene attachment (now with rendering controller)
             self._editor_attachment = EditorSceneAttachment(
                 display=self._editor_display,
-                rendering_controller=None,
+                rendering_controller=self._rendering_controller,
                 make_editor_pipeline=make_editor_pipeline,
             )
             self._editor_attachment.attach(self.scene, restore_state=False)
+            self._setup_editor_viewport_input_managers(self._editor_display)
+
+            # EditorStateIO for save/load
+            self._editor_state_io = EditorStateIO(
+                self._editor_attachment,
+                self._interaction_system,
+            )
+            self._editor_state_io.get_scene = lambda: self.scene
+            self._editor_state_io.on_entity_selected = self._on_entity_selected_from_state
+            self._editor_state_io.get_displays_data = self._rendering_controller.get_displays_data
+            self._editor_state_io.set_displays_data = self._rendering_controller.set_displays_data
 
             self._interaction_system.selection.on_selection_changed = self._on_selection_changed
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
+
+        self._refresh_rendering_panel()
 
         # Setup menu bar (after scene tree and inspector are ready)
         self._setup_menu_bar(menu_bar)
@@ -324,10 +361,24 @@ class EditorWindowTcgui:
         # Load settings and last scene
         EditorSettings.instance().init_text_editor_if_empty()
         self._restore_project()
-        self._rescan_file_resources()
+        # _rescan_file_resources is called inside _load_project, don't call again
+        if self._current_project_path is None:
+            self._rescan_file_resources()
         self._load_last_scene()
 
         self._update_window_title()
+
+    def _setup_editor_viewport_input_managers(self, display) -> None:
+        """Create EditorViewportInputManager for each viewport on the display."""
+        from termin._native.editor import EditorViewportInputManager
+
+        self._editor_viewport_input_managers.clear()
+
+        display_id = display.tc_display_ptr
+        for vp in display.viewports:
+            vp_idx, vp_gen = vp._viewport_handle()
+            editor_im = EditorViewportInputManager(vp_idx, vp_gen, display_id)
+            self._editor_viewport_input_managers.append(editor_im)
 
     def _setup_viewport(self) -> None:
         """Create FBO surface, editor display, and connect to Viewport3D."""
@@ -464,6 +515,13 @@ class EditorWindowTcgui:
     # Selection / Inspector callbacks
     # ------------------------------------------------------------------
 
+    def _on_entity_selected_from_state(self, entity) -> None:
+        """Called by EditorStateIO when restoring selection from file."""
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.select_object(entity)
+        if self._inspector_controller is not None:
+            self._inspector_controller.show_entity_inspector(entity)
+
     def _on_tree_object_selected(self, obj) -> None:
         if self._inspector_controller is not None:
             self._inspector_controller.resync_from_tree_selection(obj)
@@ -564,7 +622,8 @@ class EditorWindowTcgui:
         if scene_name is None:
             return
         try:
-            self.scene_manager.save_scene(scene_name, path, None)
+            editor_data = self._editor_state_io.collect() if self._editor_state_io else None
+            self.scene_manager.save_scene(scene_name, path, editor_data)
             EditorSettings.instance().set_last_scene_path(path)
             from termin.project.settings import ProjectSettingsManager
             ProjectSettingsManager.instance().set_last_scene(path)
@@ -597,8 +656,18 @@ class EditorWindowTcgui:
             if self._inspector_controller is not None:
                 self._inspector_controller.set_scene(self.scene)
                 self._inspector_controller.clear()
+            # Extract editor data from file before attach
+            editor_data = EditorStateIO.extract_from_file(path)
+
             if self._editor_attachment is not None:
                 self._editor_attachment.attach(self.scene, restore_state=False)
+                if self._editor_display is not None:
+                    self._setup_editor_viewport_input_managers(self._editor_display)
+
+            # Apply editor state (camera, selection, etc.)
+            if self._editor_state_io is not None:
+                self._editor_state_io.apply(editor_data)
+            self._refresh_rendering_panel()
             self._request_viewport_update()
         except Exception as e:
             log.error(f"Failed to load scene: {e}")
@@ -863,6 +932,64 @@ class EditorWindowTcgui:
     def _on_resource_reloaded(self, name: str, kind: str) -> None:
         self._request_viewport_update()
 
+    def _refresh_rendering_panel(self) -> None:
+        """Rebuild the rendering tree to show all Display > Viewport > Entity hierarchies."""
+        if self._rendering_tree is None:
+            return
+        from tcgui.widgets.tree import TreeNode
+
+        # Clear existing
+        for node in list(self._rendering_tree.root_nodes):
+            self._rendering_tree.remove_root(node)
+
+        # Get all displays from RenderingManager
+        from termin._native.render import RenderingManager
+        rm = RenderingManager.instance()
+        displays = rm.displays
+
+        for display in displays:
+            display_name = display.name if display.name else "Display"
+            display_node = self._make_render_tree_node(display_name)
+            display_node.data = display
+
+            for vp in display.viewports:
+                vp_name = vp.name if vp.name else "Viewport"
+                camera_name = "No Camera"
+                camera = vp.camera
+                if camera is not None:
+                    entity = camera.entity
+                    if entity is not None:
+                        camera_name = entity.name or "Camera"
+                vp_node = self._make_render_tree_node(f"{vp_name} ({camera_name})")
+                vp_node.data = vp
+
+                # Internal entities hierarchy
+                internal = vp.internal_entities
+                if internal is not None:
+                    self._add_entity_to_render_tree(vp_node, internal)
+
+                display_node.add_node(vp_node)
+
+            self._rendering_tree.add_root(display_node)
+            display_node.expanded = True
+
+    def _make_render_tree_node(self, text: str):
+        from tcgui.widgets.tree import TreeNode
+        lbl = Label()
+        lbl.text = text
+        node = TreeNode(lbl)
+        return node
+
+    def _add_entity_to_render_tree(self, parent_node, entity) -> None:
+        name = entity.name or "(unnamed)"
+        node = self._make_render_tree_node(name)
+        node.data = entity
+        parent_node.add_node(node)
+        for child_tf in entity.transform.children:
+            child_entity = child_tf.entity
+            if child_entity is not None:
+                self._add_entity_to_render_tree(node, child_entity)
+
     def _rescan_file_resources(self) -> None:
         project_path = self._get_project_path()
         if project_path:
@@ -919,8 +1046,12 @@ class EditorWindowTcgui:
         pass  # TODO
 
     # ------------------------------------------------------------------
-    # After render (called per-frame)
+    # Per-frame polling
     # ------------------------------------------------------------------
+
+    def poll_file_watcher(self) -> None:
+        """Process pending file system changes. Call from main loop."""
+        self._project_file_watcher.poll()
 
     def _after_render(self) -> None:
         pass

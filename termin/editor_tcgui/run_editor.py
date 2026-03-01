@@ -16,19 +16,11 @@ from tcbase import Key, log
 # ---------------------------------------------------------------------------
 
 def _create_sdl_window(title: str, width: int, height: int):
-    """Create fullscreen SDL window with OpenGL 3.3 core context."""
-    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
+    """Create SDL window with OpenGL 3.3 core context.
 
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MINOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(
-        video.SDL_GL_CONTEXT_PROFILE_MASK,
-        video.SDL_GL_CONTEXT_PROFILE_CORE,
-    )
-    video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
-
+    SDL_Init must be called before this function.
+    GL attributes (version, profile, depth) should be set before calling.
+    """
     flags = (
         video.SDL_WINDOW_OPENGL
         | video.SDL_WINDOW_RESIZABLE
@@ -113,21 +105,22 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     if engine is None:
         raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
 
-    # Create SDL window FIRST — GL context must exist before FBO creation
+    # 1. SDL_Init
+    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
+        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
+
+    # 2. OffscreenContext — master GL context for all GPU resources
+    from termin.visualization.render.offscreen_context import OffscreenContext
+    offscreen_context = OffscreenContext()
+
+    # 3. Main window shares GL resources with OffscreenContext
+    video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1)
     window, gl_context = _create_sdl_window("Termin Editor", 1280, 720)
 
-    # Setup graphics backend (OpenGL) — must happen after context is current
-    from termin.visualization.platform.backends import (
-        OpenGLGraphicsBackend,
-        set_default_graphics_backend,
-    )
-    graphics = OpenGLGraphicsBackend.get_instance()
-    graphics.ensure_ready()
+    # Graphics backend is already initialized by OffscreenContext (singleton)
+    from termin.visualization.platform.backends import set_default_graphics_backend
+    graphics = offscreen_context.graphics
     set_default_graphics_backend(graphics)
-
-    # Set graphics on RenderingManager so render_all_offscreen works
-    from termin._native.render import RenderingManager
-    RenderingManager.instance().set_graphics(graphics)
 
     # Create world and scene
     from termin.visualization.core.world import World
@@ -151,6 +144,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         initial_scene=initial_scene,
         scene_manager=engine.scene_manager,
         graphics=graphics,
+        offscreen_context=offscreen_context,
     )
     win.build(ui)
 
@@ -184,7 +178,15 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
                 mods = _translate_sdl_mods(sdl2.SDL_GetModState())
                 ui.mouse_down(float(event.button.x), float(event.button.y), btn, mods)
             elif etype == sdl2.SDL_MOUSEBUTTONUP:
-                ui.mouse_up(float(event.button.x), float(event.button.y))
+                from tcbase import MouseButton as _MB
+                _btn_map_up = {
+                    sdl2.SDL_BUTTON_LEFT: _MB.LEFT,
+                    sdl2.SDL_BUTTON_RIGHT: _MB.RIGHT,
+                    sdl2.SDL_BUTTON_MIDDLE: _MB.MIDDLE,
+                }
+                btn_up = _btn_map_up.get(event.button.button, _MB.LEFT)
+                mods_up = _translate_sdl_mods(sdl2.SDL_GetModState())
+                ui.mouse_up(float(event.button.x), float(event.button.y), btn_up, mods_up)
             elif etype == sdl2.SDL_MOUSEWHEEL:
                 # Get current mouse position for hit testing
                 mx = ctypes.c_int()
@@ -207,6 +209,12 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
             win.close()
             return
 
+        win.poll_file_watcher()
+
+        # Switch back to main window GL context (tick_and_render may have
+        # switched to offscreen context for scene rendering)
+        video.SDL_GL_MakeCurrent(window, gl_context)
+
         vw, vh = _get_drawable_size(window)
         graphics.bind_framebuffer(None)
         graphics.set_viewport(0, 0, vw, vh)
@@ -219,6 +227,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         return not win.should_close()
 
     def on_shutdown() -> None:
+        offscreen_context.destroy()
         video.SDL_GL_DeleteContext(gl_context)
         video.SDL_DestroyWindow(window)
         sdl2.SDL_Quit()

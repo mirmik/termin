@@ -74,6 +74,9 @@ NB_MODULE(_entity_native, m) {
     // Import _viewport_native for TcViewport type (used by input events)
     nb::module_::import_("termin.viewport._viewport_native");
 
+    // Import tcbase for Action, MouseButton, Mods enums (used by input events)
+    nb::module_::import_("tcbase._tcbase_native");
+
     // --- Scene (TcScene, ViewportConfig) - must be before Entity bindings ---
     bind_tc_scene(m);
     bind_tc_scene_lighting(m);

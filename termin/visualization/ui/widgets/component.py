@@ -317,9 +317,9 @@ class UIComponent(InputComponent):
             self._viewport_w = pw
             self._viewport_h = ph
 
-        if event.action == Action.PRESS:
+        if event.action == Action.PRESS.value:
             self.mouse_down(event.x, event.y)
-        elif event.action == Action.RELEASE:
+        elif event.action == Action.RELEASE.value:
             self.mouse_up(event.x, event.y)
 
     def on_mouse_move(self, event: MouseMoveEvent):
