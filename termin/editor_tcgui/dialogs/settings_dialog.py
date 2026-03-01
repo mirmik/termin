@@ -41,6 +41,7 @@ def show_settings_dialog(ui) -> None:
             ui,
             on_result=lambda path: _set_editor_path(path) if path else None,
             title="Select Text Editor",
+            windowed=True,
         )
 
     def _set_editor_path(path: str):

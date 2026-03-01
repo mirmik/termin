@@ -8,7 +8,7 @@ from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.list_widget import ListWidget
+from tcgui.widgets.table_widget import TableWidget, TableColumn
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
@@ -44,9 +44,14 @@ def show_inspect_registry_viewer(ui) -> None:
     main_row.spacing = 8
     main_row.preferred_height = px(400)
 
-    # Left: types list
-    types_list = ListWidget()
-    types_list.item_height = 24
+    # Left: types table
+    types_list = TableWidget()
+    types_list.set_columns([
+        TableColumn("Type"),
+        TableColumn("Backend", 80),
+        TableColumn("Parent"),
+        TableColumn("Fields", 80),
+    ])
     types_list.preferred_width = px(400)
     types_list.stretch = True
 
@@ -67,10 +72,12 @@ def show_inspect_registry_viewer(ui) -> None:
     content.add_child(status_lbl)
 
     # All types data (for filtering)
-    all_items: list[dict] = []
+    all_rows: list[list[str]] = []
+    all_data: list[str] = []
 
     def _refresh():
-        all_items.clear()
+        all_rows.clear()
+        all_data.clear()
         type_names = registry.types()
 
         for type_name in sorted(type_names):
@@ -81,10 +88,8 @@ def show_inspect_registry_viewer(ui) -> None:
             all_fields = registry.all_fields(type_name)
             field_count = f"{len(own_fields)}/{len(all_fields)}"
 
-            all_items.append({
-                "text": f"{type_name}  [{backend_str}]  parent={parent}  fields={field_count}",
-                "data": type_name,
-            })
+            all_rows.append([type_name, backend_str, parent, field_count])
+            all_data.append(type_name)
 
         _apply_filter()
         status_lbl.text = f"Types: {len(type_names)}"
@@ -92,16 +97,20 @@ def show_inspect_registry_viewer(ui) -> None:
     def _apply_filter():
         text = filter_input.text.lower()
         if text:
-            filtered = [it for it in all_items if text in it["data"].lower()]
+            rows = []
+            data = []
+            for r, d in zip(all_rows, all_data):
+                if text in d.lower():
+                    rows.append(r)
+                    data.append(d)
+            types_list.set_rows(rows, data)
         else:
-            filtered = list(all_items)
-        types_list.set_items(filtered)
+            types_list.set_rows(list(all_rows), list(all_data))
         details.text = ""
 
     filter_input.on_text_changed = lambda _: _apply_filter()
 
-    def _on_select(idx, item):
-        type_name = item.get("data")
+    def _on_select(idx, type_name):
         if type_name is None:
             return
         _show_type_details(type_name)

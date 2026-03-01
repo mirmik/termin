@@ -9,7 +9,7 @@ from tcgui.widgets.vstack import VStack
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.list_widget import ListWidget
+from tcgui.widgets.table_widget import TableWidget, TableColumn
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
@@ -59,8 +59,13 @@ def show_scene_manager_viewer(
     left_lbl.font_size = 14
     left.add_child(left_lbl)
 
-    scene_list = ListWidget()
-    scene_list.item_height = 28
+    scene_list = TableWidget()
+    scene_list.set_columns([
+        TableColumn("Name"),
+        TableColumn("Mode", 80),
+        TableColumn("Entities", 70),
+        TableColumn("Handle", 100),
+    ])
     scene_list.stretch = True
     left.add_child(scene_list)
     main_row.add_child(left)
@@ -159,10 +164,11 @@ def show_scene_manager_viewer(
         edit_btn.enabled = has_sel
 
     def _refresh():
-        scene_list.set_items([])
+        scene_list.set_rows([], [])
         details.text = ""
 
-        items = []
+        rows = []
+        data = []
         for name in sorted(scene_manager.scene_names()):
             scene = scene_manager.get_scene(name)
             if scene is None:
@@ -170,6 +176,7 @@ def show_scene_manager_viewer(
             mode = scene_manager.get_mode(name)
             path = scene_manager.get_scene_path(name)
             entity_count = len(list(scene.entities))
+            handle = scene.scene_handle()
 
             if path:
                 import os
@@ -178,12 +185,11 @@ def show_scene_manager_viewer(
                 display = f"{name} (unsaved)"
 
             mode_str = mode.name if mode else "?"
-            items.append({
-                "text": f"{display}  mode={mode_str}  entities={entity_count}",
-                "data": name,
-            })
+            handle_str = f"{handle[0]}:{handle[1]}"
+            rows.append([display, mode_str, str(entity_count), handle_str])
+            data.append(name)
 
-        scene_list.set_items(items)
+        scene_list.set_rows(rows, data)
 
         # Update status
         total = len(items)
@@ -250,8 +256,7 @@ def show_scene_manager_viewer(
 
         details.text = "\n".join(lines)
 
-    def _on_select(idx, item):
-        name = item.get("data")
+    def _on_select(idx, name):
         selected_name[0] = name
         _update_action_buttons()
         if name is not None:

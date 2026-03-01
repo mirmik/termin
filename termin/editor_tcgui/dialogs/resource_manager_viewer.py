@@ -8,7 +8,7 @@ from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.tabs import TabView
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.list_widget import ListWidget
+from tcgui.widgets.table_widget import TableWidget, TableColumn
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
@@ -33,20 +33,30 @@ def show_resource_manager_viewer(ui) -> None:
     tabs = TabView()
     tabs.stretch = True
 
-    # Asset list per tab — each is a ListWidget
-    tab_lists: dict[str, ListWidget] = {}
-    tab_names = [
-        "Materials", "Shaders", "Meshes", "Textures",
-        "VoxelGrids", "NavMeshes", "Skeletons",
-        "Pipelines", "ScenePipelines",
-        "Components", "ComponentRegistry",
-    ]
-    for name in tab_names:
-        lw = ListWidget()
-        lw.item_height = 22
-        lw.stretch = True
-        tab_lists[name] = lw
-        tabs.add_tab(name, lw)
+    # Column definitions per tab
+    _asset_cols = [TableColumn("Name"), TableColumn("Status", 80), TableColumn("Ver", 50), TableColumn("UUID", 200)]
+    _pipeline_cols = [TableColumn("Name"), TableColumn("Passes", 70), TableColumn("Ver", 50), TableColumn("UUID", 200)]
+    tab_columns = {
+        "Materials": [TableColumn("Name"), TableColumn("Phases", 70), TableColumn("Source")],
+        "Shaders": _asset_cols,
+        "Meshes": _asset_cols,
+        "Textures": _asset_cols,
+        "VoxelGrids": _asset_cols,
+        "NavMeshes": _asset_cols,
+        "Skeletons": _asset_cols,
+        "Pipelines": _pipeline_cols,
+        "ScenePipelines": _pipeline_cols,
+        "Components": [TableColumn("Name"), TableColumn("Module")],
+        "ComponentRegistry": [TableColumn("Name"), TableColumn("Type", 80)],
+    }
+    tab_lists: dict[str, TableWidget] = {}
+    tab_names = list(tab_columns.keys())
+    for name, cols in tab_columns.items():
+        tw = TableWidget()
+        tw.set_columns(cols)
+        tw.stretch = True
+        tab_lists[name] = tw
+        tabs.add_tab(name, tw)
 
     left.add_child(tabs)
 
@@ -111,152 +121,98 @@ def show_resource_manager_viewer(ui) -> None:
     def _uuid_short(uuid: str) -> str:
         return uuid[:16] if uuid else ""
 
+    def _set_tab(tab_name: str, rows: list[list[str]], names: list[str]):
+        data = [(tab_name, n) for n in names]
+        all_data[tab_name] = data
+        tab_lists[tab_name].set_rows(rows, data)
+
+    def _refresh_asset_tab(tab_name: str, assets_dict: dict):
+        rows = []
+        names = []
+        for name, asset in sorted(assets_dict.items()):
+            rows.append([name, _make_status(name, asset.is_loaded), str(asset.version), _uuid_short(asset.uuid)])
+            names.append(name)
+        _set_tab(tab_name, rows, names)
+
     # --- Materials ---
     def _refresh_materials():
-        items = []
+        rows = []
+        names = []
         for name, mat in sorted(rm.materials.items()):
             phases = len(mat.phases) if mat.phases else 0
-            items.append({
-                "text": f"{name}  phases={phases}",
-                "data": ("Materials", name),
-            })
-        all_data["Materials"] = items
-        tab_lists["Materials"].set_items(items)
+            rows.append([name, str(phases), mat.source_path or ""])
+            names.append(name)
+        _set_tab("Materials", rows, names)
 
-    # --- Shaders ---
+    # --- Asset tabs ---
     def _refresh_shaders():
-        items = []
-        for name, asset in sorted(rm._shader_assets.items()):
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("Shaders", name),
-            })
-        all_data["Shaders"] = items
-        tab_lists["Shaders"].set_items(items)
+        _refresh_asset_tab("Shaders", rm._shader_assets)
 
-    # --- Meshes ---
     def _refresh_meshes():
-        items = []
-        for name, asset in sorted(rm._mesh_assets.items()):
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("Meshes", name),
-            })
-        all_data["Meshes"] = items
-        tab_lists["Meshes"].set_items(items)
+        _refresh_asset_tab("Meshes", rm._mesh_assets)
 
-    # --- Textures ---
     def _refresh_textures():
-        items = []
-        for name, asset in sorted(rm._texture_assets.items()):
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("Textures", name),
-            })
-        all_data["Textures"] = items
-        tab_lists["Textures"].set_items(items)
+        _refresh_asset_tab("Textures", rm._texture_assets)
 
-    # --- VoxelGrids ---
     def _refresh_voxelgrids():
-        items = []
-        for name, asset in sorted(rm._voxel_grid_assets.items()):
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("VoxelGrids", name),
-            })
-        all_data["VoxelGrids"] = items
-        tab_lists["VoxelGrids"].set_items(items)
+        _refresh_asset_tab("VoxelGrids", rm._voxel_grid_assets)
 
-    # --- NavMeshes ---
     def _refresh_navmeshes():
-        items = []
-        for name, asset in sorted(rm._navmesh_assets.items()):
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("NavMeshes", name),
-            })
-        all_data["NavMeshes"] = items
-        tab_lists["NavMeshes"].set_items(items)
+        _refresh_asset_tab("NavMeshes", rm._navmesh_assets)
 
-    # --- Skeletons ---
     def _refresh_skeletons():
-        items = []
-        for name, asset in sorted(rm._skeleton_assets.items()):
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("Skeletons", name),
-            })
-        all_data["Skeletons"] = items
-        tab_lists["Skeletons"].set_items(items)
+        _refresh_asset_tab("Skeletons", rm._skeleton_assets)
 
     # --- Pipelines ---
     def _refresh_pipelines():
-        items = []
+        rows = []
+        names = []
         for name in sorted(rm.list_pipeline_names()):
             asset = rm.get_pipeline_asset(name)
             if asset is None:
                 continue
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("Pipelines", name),
-            })
-        all_data["Pipelines"] = items
-        tab_lists["Pipelines"].set_items(items)
+            passes = str(len(asset.data.passes)) if asset.is_loaded and asset.data else _make_status(name, asset.is_loaded)
+            rows.append([name, passes, str(asset.version), _uuid_short(asset.uuid)])
+            names.append(name)
+        _set_tab("Pipelines", rows, names)
 
     # --- Scene Pipelines ---
     def _refresh_scene_pipelines():
-        items = []
+        rows = []
+        names = []
         for name in sorted(rm.list_scene_pipeline_names()):
             asset = rm.get_scene_pipeline_asset(name)
             if asset is None:
                 continue
-            status = _make_status(name, asset.is_loaded)
-            items.append({
-                "text": f"{name}  [{status}]  v{asset.version}",
-                "data": ("ScenePipelines", name),
-            })
-        all_data["ScenePipelines"] = items
-        tab_lists["ScenePipelines"].set_items(items)
+            rows.append([name, _make_status(name, asset.is_loaded), str(asset.version), _uuid_short(asset.uuid)])
+            names.append(name)
+        _set_tab("ScenePipelines", rows, names)
 
     # --- Components ---
     def _refresh_components():
-        items = []
+        rows = []
+        names = []
         for name, cls in sorted(rm.components.items()):
-            module = cls.__module__
-            items.append({
-                "text": f"{name}  [{module}]",
-                "data": ("Components", name),
-            })
-        all_data["Components"] = items
-        tab_lists["Components"].set_items(items)
+            rows.append([name, cls.__module__])
+            names.append(name)
+        _set_tab("Components", rows, names)
 
     # --- Component Registry ---
     def _refresh_component_registry():
-        items = []
+        rows = []
+        names = []
         try:
             from termin.entity import ComponentRegistry
             reg = ComponentRegistry.instance()
             for name in sorted(reg.list_native()):
-                items.append({
-                    "text": f"{name}  [C++]",
-                    "data": ("ComponentRegistry", name),
-                })
+                rows.append([name, "C++"])
+                names.append(name)
             for name in sorted(reg.list_python()):
-                items.append({
-                    "text": f"{name}  [Python]",
-                    "data": ("ComponentRegistry", name),
-                })
+                rows.append([name, "Python"])
+                names.append(name)
         except Exception as e:
             log.error(f"Failed to get ComponentRegistry: {e}")
-        all_data["ComponentRegistry"] = items
-        tab_lists["ComponentRegistry"].set_items(items)
+        _set_tab("ComponentRegistry", rows, names)
 
     # --- Status bar ---
     def _update_status():
@@ -268,17 +224,17 @@ def show_resource_manager_viewer(ui) -> None:
         status_lbl.text = "  |  ".join(parts) if parts else "No resources"
 
     # --- Selection handlers ---
-    def _on_select(idx, item):
-        data = item.get("data")
+    def _on_select(idx, data):
         if data is None:
             return
+        tab, name = data
         selected_item.clear()
-        selected_item["tab"] = data[0]
-        selected_item["name"] = data[1]
-        _show_details(data[0], data[1])
+        selected_item["tab"] = tab
+        selected_item["name"] = name
+        _show_details(tab, name)
 
-    for lw in tab_lists.values():
-        lw.on_select = _on_select
+    for tw in tab_lists.values():
+        tw.on_select = _on_select
 
     # --- Detail display ---
     def _show_details(tab: str, name: str):

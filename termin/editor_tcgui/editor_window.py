@@ -677,6 +677,7 @@ class EditorWindowTcgui:
             directory=directory,
             filter_str="Scene Files (*.tc_scene);;All Files (*)",
             on_result=lambda path: self._save_scene_to_file(path) if path else None,
+            windowed=True,
         )
 
     def _load_scene(self) -> None:
@@ -691,6 +692,7 @@ class EditorWindowTcgui:
             directory=directory,
             filter_str="Scene Files (*.tc_scene);;All Files (*)",
             on_result=lambda path: self._load_scene_from_file(path) if path else None,
+            windowed=True,
         )
 
     def _close_scene(self) -> None:
@@ -814,6 +816,7 @@ class EditorWindowTcgui:
             self._ui,
             title="New Project — Select Directory",
             on_result=lambda path: self._init_project(path) if path else None,
+            windowed=True,
         )
 
     def _open_project(self) -> None:
@@ -825,6 +828,7 @@ class EditorWindowTcgui:
             title="Open Project",
             filter_str="Project Files (*.terminproj);;All Files (*)",
             on_result=lambda path: self._load_project(path) if path else None,
+            windowed=True,
         )
 
     def _init_project(self, path: str) -> None:

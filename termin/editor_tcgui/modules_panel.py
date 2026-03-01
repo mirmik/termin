@@ -196,6 +196,7 @@ class ModulesPanel(VStack):
             ui,
             on_result=lambda path: self._load_module_file(path) if path else None,
             title="Select Module File",
+            windowed=True,
         )
 
     def _on_reload_clicked(self) -> None:

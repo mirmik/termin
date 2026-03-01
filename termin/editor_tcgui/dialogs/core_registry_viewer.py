@@ -8,7 +8,7 @@ from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.tabs import TabView
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.list_widget import ListWidget
+from tcgui.widgets.table_widget import TableWidget, TableColumn
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
@@ -58,17 +58,24 @@ def show_core_registry_viewer(ui) -> None:
     tabs = TabView()
     tabs.stretch = True
 
-    tab_names = [
-        "Meshes", "Textures", "Shaders", "Materials",
-        "Components", "SoA Types", "Pipelines", "Passes", "Scenes",
-    ]
-    tab_lists: dict[str, ListWidget] = {}
-    for name in tab_names:
-        lw = ListWidget()
-        lw.item_height = 22
-        lw.stretch = True
-        tab_lists[name] = lw
-        tabs.add_tab(name, lw)
+    tab_columns = {
+        "Meshes": [TableColumn("Name"), TableColumn("Vertices", 80), TableColumn("Triangles", 80), TableColumn("Memory", 80)],
+        "Textures": [TableColumn("Name"), TableColumn("Size", 80), TableColumn("Channels", 80), TableColumn("Memory", 80)],
+        "Shaders": [TableColumn("Name"), TableColumn("Type", 80), TableColumn("Version", 70), TableColumn("Size", 80)],
+        "Materials": [TableColumn("Name"), TableColumn("Phases", 70), TableColumn("Textures", 70), TableColumn("Version", 70)],
+        "Components": [TableColumn("Name"), TableColumn("Language", 80), TableColumn("Drawable", 70), TableColumn("Parent"), TableColumn("Descendants", 80)],
+        "SoA Types": [TableColumn("Name"), TableColumn("ID", 60), TableColumn("Size", 60), TableColumn("Align", 60), TableColumn("Init", 50), TableColumn("Destroy", 60)],
+        "Pipelines": [TableColumn("Name"), TableColumn("Pass Count", 80)],
+        "Passes": [TableColumn("Type Name"), TableColumn("Language", 80)],
+        "Scenes": [TableColumn("Name"), TableColumn("Entities", 80)],
+    }
+    tab_lists: dict[str, TableWidget] = {}
+    for name, cols in tab_columns.items():
+        tw = TableWidget()
+        tw.set_columns(cols)
+        tw.stretch = True
+        tab_lists[name] = tw
+        tabs.add_tab(name, tw)
 
     left.add_child(tabs)
 
@@ -113,124 +120,126 @@ def show_core_registry_viewer(ui) -> None:
         return f"{b / (1024 * 1024):.1f} MB"
 
     # --- Refresh functions ---
+    def _make_tab_data(tab_name: str, infos: list):
+        return [(tab_name, info) for info in infos]
+
     def _refresh_meshes():
         infos = tc_mesh_get_all_info()
         all_infos["Meshes"] = infos
-        items = []
+        rows = []
         for info in infos:
-            verts = info.get("vertex_count", 0)
-            tris = info.get("index_count", 0)
-            mem = _fmt_mem(info.get("memory_bytes", 0))
-            items.append({
-                "text": f"{info['name']}  V={verts}  T={tris}  {mem}",
-                "data": ("Meshes", info),
-            })
-        tab_lists["Meshes"].set_items(items)
+            rows.append([
+                info["name"],
+                str(info.get("vertex_count", 0)),
+                str(info.get("index_count", 0)),
+                _fmt_mem(info.get("memory_bytes", 0)),
+            ])
+        tab_lists["Meshes"].set_rows(rows, _make_tab_data("Meshes", infos))
 
     def _refresh_textures():
         infos = tc_texture_get_all_info()
         all_infos["Textures"] = infos
-        items = []
+        rows = []
         for info in infos:
-            w = info.get("width", 0)
-            h = info.get("height", 0)
-            ch = info.get("channels", 0)
-            mem = _fmt_mem(info.get("memory_bytes", 0))
-            items.append({
-                "text": f"{info['name']}  {w}x{h}  ch={ch}  {mem}",
-                "data": ("Textures", info),
-            })
-        tab_lists["Textures"].set_items(items)
+            rows.append([
+                info["name"],
+                f"{info.get('width', 0)}x{info.get('height', 0)}",
+                str(info.get("channels", 0)),
+                _fmt_mem(info.get("memory_bytes", 0)),
+            ])
+        tab_lists["Textures"].set_rows(rows, _make_tab_data("Textures", infos))
 
     def _refresh_shaders():
         infos = shader_get_all_info()
         all_infos["Shaders"] = infos
-        items = []
+        rows = []
         for info in infos:
             stype = "variant" if info.get("is_variant") else "standard"
             if info.get("has_geometry"):
                 stype += "+geom"
-            items.append({
-                "text": f"{info['name']}  [{stype}]  v{info.get('version', 0)}",
-                "data": ("Shaders", info),
-            })
-        tab_lists["Shaders"].set_items(items)
+            rows.append([
+                info["name"],
+                stype,
+                str(info.get("version", 0)),
+                str(info.get("source_size", 0)),
+            ])
+        tab_lists["Shaders"].set_rows(rows, _make_tab_data("Shaders", infos))
 
     def _refresh_materials():
         infos = tc_material_get_all_info()
         all_infos["Materials"] = infos
-        items = []
+        rows = []
         for info in infos:
-            phases = info.get("phase_count", 0)
-            textures = info.get("texture_count", 0)
-            items.append({
-                "text": f"{info['name']}  phases={phases}  tex={textures}  v{info.get('version', 0)}",
-                "data": ("Materials", info),
-            })
-        tab_lists["Materials"].set_items(items)
+            rows.append([
+                info["name"],
+                str(info.get("phase_count", 0)),
+                str(info.get("texture_count", 0)),
+                str(info.get("version", 0)),
+            ])
+        tab_lists["Materials"].set_rows(rows, _make_tab_data("Materials", infos))
 
     def _refresh_components():
         infos = component_registry_get_all_info()
         all_infos["Components"] = infos
-        items = []
+        rows = []
         for info in infos:
-            lang = info.get("language", "?")
-            drawable = "drawable" if info.get("is_drawable") else ""
-            parent = info.get("parent", "")
-            items.append({
-                "text": f"{info['name']}  [{lang}]  {drawable}  parent={parent}",
-                "data": ("Components", info),
-            })
-        tab_lists["Components"].set_items(items)
+            descendants = info.get("descendants", [])
+            rows.append([
+                info["name"],
+                info.get("language", "?"),
+                "yes" if info.get("is_drawable") else "",
+                info.get("parent", ""),
+                str(len(descendants)),
+            ])
+        tab_lists["Components"].set_rows(rows, _make_tab_data("Components", infos))
 
     def _refresh_soa_types():
         infos = soa_registry_get_all_info()
         all_infos["SoA Types"] = infos
-        items = []
+        rows = []
         for info in infos:
-            size = info.get("element_size", 0)
-            align = info.get("alignment", 0)
-            items.append({
-                "text": f"{info['name']}  id={info.get('id', '?')}  size={size}  align={align}",
-                "data": ("SoA Types", info),
-            })
-        tab_lists["SoA Types"].set_items(items)
+            rows.append([
+                info["name"],
+                str(info.get("id", "?")),
+                str(info.get("element_size", 0)),
+                str(info.get("alignment", 0)),
+                "yes" if info.get("has_init") else "",
+                "yes" if info.get("has_destroy") else "",
+            ])
+        tab_lists["SoA Types"].set_rows(rows, _make_tab_data("SoA Types", infos))
 
     def _refresh_pipelines():
         infos = tc_pipeline_registry_get_all_info()
         all_infos["Pipelines"] = infos
-        items = []
+        rows = []
         for info in infos:
-            passes = info.get("pass_count", 0)
-            items.append({
-                "text": f"{info['name']}  passes={passes}",
-                "data": ("Pipelines", info),
-            })
-        tab_lists["Pipelines"].set_items(items)
+            rows.append([
+                info["name"],
+                str(info.get("pass_count", 0)),
+            ])
+        tab_lists["Pipelines"].set_rows(rows, _make_tab_data("Pipelines", infos))
 
     def _refresh_passes():
         infos = tc_pass_registry_get_all_types()
         all_infos["Passes"] = infos
-        items = []
+        rows = []
         for info in infos:
-            lang = info.get("language", "?")
-            items.append({
-                "text": f"{info['type_name']}  [{lang}]",
-                "data": ("Passes", info),
-            })
-        tab_lists["Passes"].set_items(items)
+            rows.append([
+                info["type_name"],
+                info.get("language", "?"),
+            ])
+        tab_lists["Passes"].set_rows(rows, _make_tab_data("Passes", infos))
 
     def _refresh_scenes():
         infos = tc_scene_registry_get_all_info()
         all_infos["Scenes"] = infos
-        items = []
+        rows = []
         for info in infos:
-            entities = info.get("entity_count", 0)
-            items.append({
-                "text": f"{info['name']}  entities={entities}",
-                "data": ("Scenes", info),
-            })
-        tab_lists["Scenes"].set_items(items)
+            rows.append([
+                info["name"],
+                str(info.get("entity_count", 0)),
+            ])
+        tab_lists["Scenes"].set_rows(rows, _make_tab_data("Scenes", infos))
 
     def _refresh_all():
         _refresh_meshes()
@@ -261,8 +270,7 @@ def show_core_registry_viewer(ui) -> None:
         status_lbl.text = "  |  ".join(parts)
 
     # --- Selection ---
-    def _on_select(idx, item):
-        data = item.get("data")
+    def _on_select(idx, data):
         if data is None:
             return
         tab, info = data
@@ -271,8 +279,8 @@ def show_core_registry_viewer(ui) -> None:
         selected["info"] = info
         _show_details(tab, info)
 
-    for lw in tab_lists.values():
-        lw.on_select = _on_select
+    for tw in tab_lists.values():
+        tw.on_select = _on_select
 
     # --- Detail display ---
     def _show_details(tab: str, info: dict):
