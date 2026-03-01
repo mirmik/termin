@@ -444,6 +444,13 @@ class EditorWindowTcgui:
             self._editor_state_io.on_entity_selected = self._on_entity_selected_from_state
             self._editor_state_io.get_displays_data = self._rendering_controller.get_displays_data
             self._editor_state_io.set_displays_data = self._rendering_controller.set_displays_data
+            if self.scene_tree_controller is not None:
+                self._editor_state_io.get_expanded_entity_uuids = (
+                    self.scene_tree_controller.get_expanded_entity_uuids
+                )
+                self._editor_state_io.set_expanded_entity_uuids = (
+                    self.scene_tree_controller.set_expanded_entity_uuids
+                )
 
             self._interaction_system.selection.on_selection_changed = self._on_selection_changed
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed

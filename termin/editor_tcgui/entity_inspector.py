@@ -16,6 +16,7 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.grid_layout import GridLayout
 from tcgui.widgets.units import px
+from tcgui.widgets.input_dialog import show_input_dialog
 
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
@@ -403,6 +404,9 @@ class EntityInspector(VStack):
             self.on_component_changed()
 
     def _show_add_component_menu(self) -> None:
+        self._show_add_component_menu_at(None, None)
+
+    def _show_add_component_menu_at(self, x: float | None, y: float | None) -> None:
         if self._entity is None:
             return
         from termin.entity import ComponentRegistry
@@ -412,22 +416,67 @@ class EntityInspector(VStack):
         ctx = Menu()
         ctx.items = items
 
-        if self._add_comp_btn._ui is not None:
+        ui = self._ui or self._add_comp_btn._ui
+        if ui is None:
+            return
+        if x is None or y is None:
             x = self._add_comp_btn.x
             y = self._add_comp_btn.y + self._add_comp_btn.height
-            ctx.show(self._add_comp_btn._ui, x, y)
+        ctx.show(ui, x, y)
+
+    def _show_add_soa_component_menu_at(self, x: float | None, y: float | None) -> None:
+        if self._entity is None:
+            return
+        from termin.entity._entity_native import soa_registry_get_all_info
+
+        soa_infos = soa_registry_get_all_info()
+        items = [
+            MenuItem(
+                info["name"],
+                on_click=(lambda n=info["name"]: self._add_soa_component(n)),
+            )
+            for info in soa_infos
+        ]
+        if not items:
+            items = [MenuItem("(No SoA types)", enabled=False)]
+
+        ctx = Menu()
+        ctx.items = items
+        ui = self._ui or self._add_comp_btn._ui
+        if ui is None:
+            return
+        if x is None or y is None:
+            x = self._add_comp_btn.x
+            y = self._add_comp_btn.y + self._add_comp_btn.height
+        ctx.show(ui, x, y)
 
     def _on_component_context_menu(self, index: int, x: float, y: float) -> None:
         if self._entity is None or self._ui is None:
             return
         tc_components = self._entity.tc_components
-        if index < 0 or index >= len(tc_components):
-            return
-        ref = tc_components[index]
+
+        is_empty_area = index < 0
+        is_soa = index >= len(tc_components) and not is_empty_area
+        ref = tc_components[index] if not is_soa else None
+        soa_name = ""
+        if is_soa:
+            soa_index = index - len(tc_components)
+            if 0 <= soa_index < len(self._entity.soa_component_names):
+                soa_name = self._entity.soa_component_names[soa_index]
+
         ctx = Menu()
-        ctx.items = [
-            MenuItem("Remove Component", on_click=lambda r=ref: self._remove_component(r)),
-        ]
+        items: list[MenuItem] = []
+        if not is_empty_area and not is_soa and ref is not None:
+            items.append(MenuItem("Rename Component...", on_click=lambda r=ref: self._rename_component(r, index)))
+            items.append(MenuItem("Remove Component", on_click=lambda r=ref: self._remove_component(r)))
+        elif soa_name:
+            items.append(MenuItem("Remove SoA Component", on_click=lambda n=soa_name: self._remove_soa_component(n)))
+
+        if items:
+            items.append(MenuItem.sep())
+        items.append(MenuItem("Add Component...", on_click=lambda px=x, py=y: self._show_add_component_menu_at(px, py)))
+        items.append(MenuItem("Add SoA Component...", on_click=lambda px=x, py=y: self._show_add_soa_component_menu_at(px, py)))
+        ctx.items = items
         ctx.show(self._ui, x, y)
 
     def _add_component(self, name: str) -> None:
@@ -444,6 +493,44 @@ class EntityInspector(VStack):
             self._push_undo_command(cmd, False)
 
         self._rebuild_component_list()
+
+    def _add_soa_component(self, name: str) -> None:
+        if self._entity is None:
+            return
+        try:
+            self._entity.add_soa_by_name(name)
+        except Exception as e:
+            log.error(f"Failed to add SoA component {name}: {e}")
+            return
+        self._rebuild_component_list()
+        if self.on_component_changed is not None:
+            self.on_component_changed()
+
+    def _rename_component(self, ref, index: int) -> None:
+        if self._entity is None or self._ui is None:
+            return
+        current_name = ref.get_field("display_name") or ""
+        show_input_dialog(
+            self._ui,
+            title="Rename Component",
+            message="Name:",
+            default=current_name,
+            on_result=lambda value, r=ref, idx=index: self._apply_component_rename(r, idx, value),
+        )
+
+    def _apply_component_rename(self, ref, index: int, value: str | None) -> None:
+        if self._entity is None or value is None:
+            return
+        try:
+            ref.set_field("display_name", value.strip())
+        except Exception as e:
+            log.error(f"Failed to rename component: {e}")
+            return
+        self._rebuild_component_list()
+        self._comp_list.selected_index = index
+        self._on_component_selected(index)
+        if self.on_component_changed is not None:
+            self.on_component_changed()
 
     def show_context_menu_for_component(self, index: int) -> None:
         """Show context menu for component at index."""
@@ -478,5 +565,21 @@ class EntityInspector(VStack):
         if self._ui is not None:
             self._ui.request_layout()
 
+        if self.on_component_changed is not None:
+            self.on_component_changed()
+
+    def _remove_soa_component(self, soa_name: str) -> None:
+        if self._entity is None:
+            return
+        try:
+            self._entity.remove_soa_by_name(soa_name)
+        except Exception as e:
+            log.error(f"Failed to remove SoA component {soa_name}: {e}")
+            return
+        self._selected_comp_ref = None
+        self._field_panel.set_target(None)
+        self._rebuild_component_list()
+        if self._ui is not None:
+            self._ui.request_layout()
         if self.on_component_changed is not None:
             self.on_component_changed()

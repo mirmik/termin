@@ -72,11 +72,18 @@ class SceneTreeControllerTcgui:
 
     def rebuild(self, select_obj: object | None = None) -> None:
         """Rebuild the full tree from the current scene."""
+        expanded_uuids = set(self.get_expanded_entity_uuids())
+
         self._entity_to_node.clear()
         self._tree.clear()
 
         if self._scene is not None:
             self._build_subtree(parent_node=None, parent_entity=None)
+            if expanded_uuids:
+                self.set_expanded_entity_uuids(list(expanded_uuids))
+            else:
+                for root in self._tree.root_nodes:
+                    root.expanded = True
 
         if select_obj is not None:
             self.select_object(select_obj)
@@ -103,7 +110,6 @@ class SceneTreeControllerTcgui:
                 self._tree.add_root(node)
             else:
                 parent_node.add_node(node)
-            node.expanded = True
             self._build_subtree(node, ent)
 
     def _make_node(self, entity: Entity) -> TreeNode:
@@ -280,8 +286,8 @@ class SceneTreeControllerTcgui:
     def _restore_expanded_recursive(self, node: TreeNode, uuids: set[str]) -> None:
         if node.data is not None and isinstance(node.data, Entity):
             ent: Entity = node.data
-            if ent.uuid and ent.uuid in uuids:
-                node.expanded = True
+            if ent.uuid:
+                node.expanded = ent.uuid in uuids
         for child in node.subnodes:
             self._restore_expanded_recursive(child, uuids)
 
