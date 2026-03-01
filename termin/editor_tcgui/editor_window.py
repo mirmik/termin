@@ -128,6 +128,11 @@ class EditorWindowTcgui:
         self._left_splitter: Splitter | None = None
         self._right_splitter: Splitter | None = None
         self._bottom_splitter: Splitter | None = None
+        self._center_tabs: TabView | None = None
+        self._play_button = None
+        self._pause_button = None
+        self._game_scene_name: str | None = None
+        self._saved_tree_expanded_uuids: list[str] | None = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -207,10 +212,59 @@ class EditorWindowTcgui:
         self._left_splitter = Splitter(target=left_tabs, side="right")
         main_area.add_child(self._left_splitter)
 
-        # --- Center: Viewport3D ---
+        # --- Center: toolbar + TabView ---
+        from tcgui.widgets.button import Button
+
+        center_area = VStack()
+        center_area.stretch = True
+        center_area.spacing = 0
+
+        # Toolbar with Play/Stop and Pause buttons
+        toolbar = HStack()
+        toolbar.preferred_height = px(32)
+        toolbar.spacing = 4
+        toolbar.alignment = "center"
+
+        spacer_left = Label()
+        spacer_left.stretch = True
+        spacer_left.mouse_transparent = True
+        toolbar.add_child(spacer_left)
+
+        play_btn = Button()
+        play_btn.text = "Play"
+        play_btn.preferred_width = px(60)
+        play_btn.preferred_height = px(24)
+        play_btn.on_click = self._toggle_game_mode
+        self._play_button = play_btn
+        toolbar.add_child(play_btn)
+
+        pause_btn = Button()
+        pause_btn.text = "Pause"
+        pause_btn.preferred_width = px(60)
+        pause_btn.preferred_height = px(24)
+        pause_btn.visible = False
+        pause_btn.on_click = self._toggle_pause
+        self._pause_button = pause_btn
+        toolbar.add_child(pause_btn)
+
+        spacer_right = Label()
+        spacer_right.stretch = True
+        spacer_right.mouse_transparent = True
+        toolbar.add_child(spacer_right)
+
+        center_area.add_child(toolbar)
+
+        # Center tabs: Editor + dynamic display tabs
+        center_tabs = TabView()
+        center_tabs.stretch = True
+        self._center_tabs = center_tabs
+
         self._viewport_widget = Viewport3D()
         self._viewport_widget.stretch = True
-        main_area.add_child(self._viewport_widget)
+        center_tabs.add_tab("Editor", self._viewport_widget)
+
+        center_area.add_child(center_tabs)
+        main_area.add_child(center_area)
 
         # --- Right panel: Inspector ---
         right_scroll = ScrollArea()
@@ -324,6 +378,8 @@ class EditorWindowTcgui:
                 on_request_update=self._request_viewport_update,
                 on_rendering_changed=self._refresh_rendering_panel,
             )
+
+            self._rendering_controller.set_center_tabs(self._center_tabs)
 
             # Register editor display and mark it as non-serializable
             RenderingManager.instance().add_display(self._editor_display, "Editor")
@@ -845,7 +901,160 @@ class EditorWindowTcgui:
         pass  # TODO: Phase 15
 
     def _toggle_game_mode(self) -> None:
-        pass  # TODO: Phase 12
+        if self._game_scene_name is not None:
+            self._stop_game_mode()
+        else:
+            self._start_game_mode()
+
+    def _start_game_mode(self) -> None:
+        if self._game_scene_name is not None:
+            return
+        if self._editor_scene_name is None:
+            return
+
+        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
+        if editor_scene is None:
+            return
+
+        # Save expanded tree nodes
+        if self.scene_tree_controller is not None:
+            self._saved_tree_expanded_uuids = (
+                self.scene_tree_controller.get_expanded_entity_uuids()
+            )
+
+        # Save editor viewport camera to scene
+        self._save_editor_viewport_camera_to_scene(editor_scene)
+
+        # Save viewport configs before copying
+        if self._rendering_controller is not None:
+            self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
+
+        # Save editor entities state
+        if self._editor_attachment is not None:
+            self._editor_attachment.save_state()
+
+        # Copy scene for game mode
+        self._game_scene_name = f"{self._editor_scene_name}(game)"
+        self.scene_manager.copy_scene(
+            self._editor_scene_name,
+            self._game_scene_name,
+        )
+
+        # Detach editor scene from rendering BEFORE attaching game scene
+        if self._rendering_controller is not None:
+            self._rendering_controller.detach_scene(editor_scene)
+
+        # Attach to game scene
+        game_scene = self.scene_manager.get_scene(self._game_scene_name)
+        if self._editor_attachment is not None:
+            self._editor_attachment.attach(game_scene, transfer_camera_state=True)
+            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+
+        # Set modes
+        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
+        self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
+
+        self._on_game_mode_changed(True, game_scene)
+
+    def _stop_game_mode(self) -> None:
+        if self._game_scene_name is None:
+            return
+
+        # Detach from game scene (discard changes)
+        if self._editor_attachment is not None:
+            self._editor_attachment.detach(save_state=False)
+
+        # Detach game scene from rendering
+        game_scene = self.scene_manager.get_scene(self._game_scene_name)
+        if game_scene is not None and self._rendering_controller is not None:
+            self._rendering_controller.detach_scene(game_scene)
+
+        # Close game scene
+        self.scene_manager.close_scene(self._game_scene_name)
+        self._game_scene_name = None
+
+        # Return to editor scene
+        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
+        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
+
+        # Re-attach editor scene
+        if self._editor_attachment is not None:
+            self._editor_attachment.attach(editor_scene, restore_state=True)
+            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+
+        self._on_game_mode_changed(False, editor_scene)
+
+    def _toggle_pause(self) -> None:
+        if self._game_scene_name is None:
+            return
+
+        from tcgui.widgets.theme import current_theme as _t
+        current_mode = self.scene_manager.get_mode(self._game_scene_name)
+        if current_mode == SceneMode.PLAY:
+            self.scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
+            if self._pause_button is not None:
+                self._pause_button.text = "Resume"
+                self._pause_button.background_color = (0.85, 0.63, 0.29, 1.0)
+        else:
+            self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
+            if self._pause_button is not None:
+                self._pause_button.text = "Pause"
+                self._pause_button.background_color = _t.bg_surface
+
+        self._request_viewport_update()
+
+    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
+        # Update scene tree
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(scene)
+            self.scene_tree_controller.rebuild()
+            if self._saved_tree_expanded_uuids:
+                self.scene_tree_controller.set_expanded_entity_uuids(
+                    self._saved_tree_expanded_uuids
+                )
+            if not is_playing:
+                self._saved_tree_expanded_uuids = None
+
+        # Clear inspector
+        if self._inspector_controller is not None:
+            self._inspector_controller.clear()
+
+        self._update_game_mode_ui(is_playing)
+        self._request_viewport_update()
+
+    def _update_game_mode_ui(self, is_playing: bool) -> None:
+        from tcgui.widgets.theme import current_theme as _t
+        if self._play_button is not None:
+            self._play_button.text = "Stop" if is_playing else "Play"
+            self._play_button.background_color = _t.accent if is_playing else _t.bg_surface
+
+        if self._pause_button is not None:
+            self._pause_button.visible = is_playing
+            if not is_playing:
+                self._pause_button.background_color = _t.bg_surface
+                self._pause_button.text = "Pause"
+
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_play_action(is_playing)
+
+        self._update_window_title()
+
+        if self._status_bar is not None:
+            if is_playing:
+                self._status_bar.text = "Game mode"
+            else:
+                self._status_bar.text = "Editor mode"
+
+    def _save_editor_viewport_camera_to_scene(self, scene) -> None:
+        if self._rendering_controller is None:
+            return
+        if self._editor_display is None or not self._editor_display.viewports:
+            return
+        viewport = self._editor_display.viewports[0]
+        camera_name = None
+        if viewport.camera is not None and viewport.camera.entity is not None:
+            camera_name = viewport.camera.entity.name
+        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)
 
     def _run_standalone(self) -> None:
         if self._current_project_path is None:

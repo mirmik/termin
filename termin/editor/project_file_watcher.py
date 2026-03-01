@@ -274,11 +274,15 @@ class _WatchHandler:
         self._watcher = watcher
         self._base = FileSystemEventHandler()
 
+    _RELEVANT_EVENTS = frozenset(("created", "modified", "deleted", "moved"))
+
     def dispatch(self, event) -> None:
         if event.is_directory:
             return
+        etype = event.event_type
+        if etype not in self._RELEVANT_EVENTS:
+            return
         src = event.src_path
-        etype = event.event_type  # "created", "modified", "deleted", "moved"
         if etype == "moved":
             self._watcher._enqueue_change(event.dest_path, "created")
             self._watcher._enqueue_change(src, "deleted")
@@ -444,7 +448,6 @@ class ProjectFileWatcher:
                 return
             pending = dict(self._pending_changes)
             self._pending_changes.clear()
-        for path, kind in pending.items():
             if kind == "deleted":
                 self._on_file_removed(path)
             elif kind == "created":

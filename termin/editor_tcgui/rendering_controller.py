@@ -56,8 +56,10 @@ class RenderingControllerTcgui:
 
         self._editor_display_ptr: int | None = None
         self._display_surfaces: dict[int, object] = {}
+        self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
         self._display_input_managers: dict[int, object] = {}
         self._viewport_list = _NoOpViewportList()
+        self._center_tabs = None
 
         # Register offscreen context with RenderingManager
         self._manager.set_graphics(offscreen_context.graphics)
@@ -89,6 +91,9 @@ class RenderingControllerTcgui:
 
     def is_editor_display(self, display: "Display") -> bool:
         return display.tc_display_ptr == self._editor_display_ptr
+
+    def set_center_tabs(self, tabs) -> None:
+        self._center_tabs = tabs
 
     # ------------------------------------------------------------------
     # Factories
@@ -124,6 +129,15 @@ class RenderingControllerTcgui:
 
         display_id = display.tc_display_ptr
         self._display_surfaces[display_id] = fbo
+
+        # Add tab with Viewport3D for this display
+        if self._center_tabs is not None:
+            from tcgui.widgets.viewport3d import Viewport3D
+            vp3d = Viewport3D()
+            vp3d.stretch = True
+            vp3d.set_surface(fbo, display)
+            self._center_tabs.add_tab(name, vp3d)
+            self._display_viewports[display_id] = vp3d
 
         return display
 
@@ -349,6 +363,15 @@ class RenderingControllerTcgui:
 
     def _on_display_removed(self, display: "Display") -> None:
         display_id = display.tc_display_ptr
+
+        # Remove tab
+        if display_id in self._display_viewports:
+            vp3d = self._display_viewports.pop(display_id)
+            if self._center_tabs is not None:
+                for i, page in enumerate(self._center_tabs.pages):
+                    if page is vp3d:
+                        self._center_tabs.remove_tab(i)
+                        break
 
         if display_id in self._display_surfaces:
             del self._display_surfaces[display_id]
