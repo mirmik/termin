@@ -323,6 +323,7 @@ class EditorWindowTcgui:
 
         # Load settings and last scene
         EditorSettings.instance().init_text_editor_if_empty()
+        self._restore_project()
         self._rescan_file_resources()
         self._load_last_scene()
 
@@ -474,12 +475,12 @@ class EditorWindowTcgui:
             else:
                 self._interaction_system.selection.clear()
 
-    def _on_selection_changed(self, entities) -> None:
+    def _on_selection_changed(self, entity) -> None:
         self._request_viewport_update()
-        if self._inspector_controller is not None and entities:
-            self._inspector_controller.show_entity_inspector(entities[0])
+        if self._inspector_controller is not None and entity:
+            self._inspector_controller.show_entity_inspector(entity)
 
-    def _on_hover_changed(self) -> None:
+    def _on_hover_changed(self, entity) -> None:
         self._request_viewport_update()
 
     def _on_inspector_transform_changed(self) -> None:
@@ -559,14 +560,14 @@ class EditorWindowTcgui:
     def _save_scene_to_file(self, path: str) -> None:
         if not path:
             return
-        scene = self.scene
-        if scene is None:
+        scene_name = self._editor_scene_name
+        if scene_name is None:
             return
         try:
-            from termin.editor.scene_serializer import SceneSerializer
-            SceneSerializer.save(scene, path)
-            from termin.editor.settings import EditorSettings
-            EditorSettings.instance().set("last_scene_file", path)
+            self.scene_manager.save_scene(scene_name, path, None)
+            EditorSettings.instance().set_last_scene_path(path)
+            from termin.project.settings import ProjectSettingsManager
+            ProjectSettingsManager.instance().set_last_scene(path)
             self._log_to_console(f"Saved: {path}")
         except Exception as e:
             log.error(f"Failed to save scene: {e}")
@@ -576,31 +577,73 @@ class EditorWindowTcgui:
         if not path:
             return
         try:
-            from termin.editor.scene_serializer import SceneSerializer
             scene_name = self._editor_scene_name
-            self.scene_manager.create_scene(scene_name)
+
+            # Close existing scene
+            if self.scene_manager.has_scene(scene_name):
+                self.scene_manager.close_scene(scene_name)
+
+            self.scene_manager.load_scene(scene_name, path)
             self.scene_manager.set_mode(scene_name, SceneMode.STOP)
-            scene = self.scene_manager.get_scene(scene_name)
-            SceneSerializer.load(scene, path)
-            from termin.editor.settings import EditorSettings
-            EditorSettings.instance().set("last_scene_file", path)
+
+            EditorSettings.instance().set_last_scene_path(path)
+            from termin.project.settings import ProjectSettingsManager
+            ProjectSettingsManager.instance().set_last_scene(path)
+
             self._log_to_console(f"Loaded: {path}")
             if self.scene_tree_controller is not None:
-                self.scene_tree_controller.set_scene(scene)
+                self.scene_tree_controller.set_scene(self.scene)
                 self.scene_tree_controller.rebuild()
             if self._inspector_controller is not None:
-                self._inspector_controller.set_scene(scene)
+                self._inspector_controller.set_scene(self.scene)
                 self._inspector_controller.clear()
+            if self._editor_attachment is not None:
+                self._editor_attachment.attach(self.scene, restore_state=False)
             self._request_viewport_update()
         except Exception as e:
             log.error(f"Failed to load scene: {e}")
             self._log_to_console(f"Error loading: {e}")
 
     def _load_last_scene(self) -> None:
-        from termin.editor.settings import EditorSettings
-        last_file = EditorSettings.instance().get("last_scene_file")
-        if last_file and Path(last_file).exists():
-            self._load_scene_from_file(last_file)
+        # Per-project last scene has priority
+        from termin.project.settings import ProjectSettingsManager
+        psm = ProjectSettingsManager.instance()
+        project_scene = psm.get_last_scene()
+        if project_scene is not None and Path(project_scene).is_file():
+            self._load_scene_from_file(project_scene)
+            return
+
+        # Fallback to global editor settings
+        last_path = EditorSettings.instance().get_last_scene_path()
+        if last_path is not None:
+            self._load_scene_from_file(str(last_path))
+
+    # ------------------------------------------------------------------
+    # Project restore on startup
+    # ------------------------------------------------------------------
+
+    def _restore_project(self) -> None:
+        """Restore project from launcher or last session."""
+        from termin.launcher.recent import read_launch_project
+
+        project_file: str | None = None
+
+        # 1. Check launch_project.json (written by launcher)
+        launch_path = read_launch_project()
+        if launch_path is not None:
+            p = Path(launch_path)
+            if p.exists() and p.is_file() and p.suffix == ".terminproj":
+                project_file = str(p)
+
+        # 2. Fallback: last project from editor settings
+        if project_file is None:
+            last = EditorSettings.instance().get("last_project_file")
+            if last and Path(last).exists():
+                project_file = last
+
+        if project_file is not None:
+            self._load_project(project_file)
+            EditorSettings.instance().set("last_project_file", project_file)
 
     # ------------------------------------------------------------------
     # Project operations (stub — file dialogs via tcgui)
@@ -638,7 +681,14 @@ class EditorWindowTcgui:
         project_dir = str(Path(path).parent)
         self._current_project_path = project_dir
         self._project_name = Path(path).stem
-        self._log_to_console(f"Project: {path}")
+        self._log_to_console(f"Project: {project_dir}")
+
+        # Initialize project settings
+        from termin.project.settings import ProjectSettingsManager
+        ProjectSettingsManager.instance().set_project_path(Path(project_dir))
+
+        EditorSettings.instance().set("last_project_file", path)
+
         self._rescan_file_resources()
         if self._project_browser is not None:
             self._project_browser.set_root(project_dir)
@@ -817,7 +867,7 @@ class EditorWindowTcgui:
         project_path = self._get_project_path()
         if project_path:
             try:
-                self._resource_loader.scan_project(project_path)
+                self._project_file_watcher.watch_directory(project_path)
             except Exception as e:
                 log.error(f"Resource scan failed: {e}")
 

@@ -70,7 +70,7 @@ class EntityInspector(VStack):
         self.add_child(comp_header)
 
         self._comp_list = ListWidget()
-        self._comp_list.on_select = self._on_component_selected
+        self._comp_list.on_select = lambda idx, item: self._on_component_selected(idx)
         self.add_child(self._comp_list)
 
         # Component field editor
@@ -112,16 +112,16 @@ class EntityInspector(VStack):
         self._transform_inspector.refresh_transform()
 
     def _rebuild_component_list(self) -> None:
-        self._comp_list.items = []
         if self._entity is None:
+            self._comp_list.set_items([])
             return
 
         items = []
         for ref in self._entity.tc_components:
-            items.append(self._get_component_display_name(ref))
+            items.append({"text": self._get_component_display_name(ref)})
         for soa_name in self._entity.soa_component_names:
-            items.append(f"[SoA] {soa_name}")
-        self._comp_list.items = items
+            items.append({"text": f"[SoA] {soa_name}"})
+        self._comp_list.set_items(items)
         self._comp_list.selected_index = -1
 
     def _get_component_display_name(self, ref) -> str:
