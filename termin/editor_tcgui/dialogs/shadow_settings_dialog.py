@@ -92,4 +92,4 @@ def show_shadow_settings_dialog(
     dlg.cancel_button = "Close"
     dlg.min_width = 350
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

@@ -193,4 +193,4 @@ def show_navmesh_registry_viewer(ui) -> None:
     dlg.cancel_button = "Close"
     dlg.min_width = 750
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

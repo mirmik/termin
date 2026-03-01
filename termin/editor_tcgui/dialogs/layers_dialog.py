@@ -73,4 +73,4 @@ def show_layers_dialog(ui, scene) -> None:
             scene.set_flag_name(i, name)
 
     dlg.on_result = _on_result
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

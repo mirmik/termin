@@ -113,4 +113,4 @@ def show_audio_debugger(ui) -> None:
     dlg.cancel_button = "Close"
     dlg.min_width = 450
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

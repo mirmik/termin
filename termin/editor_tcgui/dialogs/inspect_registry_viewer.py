@@ -176,4 +176,4 @@ def show_inspect_registry_viewer(ui) -> None:
     dlg.cancel_button = "Close"
     dlg.min_width = 800
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

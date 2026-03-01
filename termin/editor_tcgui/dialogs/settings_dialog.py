@@ -65,4 +65,4 @@ def show_settings_dialog(ui) -> None:
             settings.sync()
 
     dlg.on_result = _on_result
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

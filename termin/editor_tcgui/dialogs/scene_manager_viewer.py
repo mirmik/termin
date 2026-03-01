@@ -391,4 +391,4 @@ def show_scene_manager_viewer(
     dlg.cancel_button = "Close"
     dlg.min_width = 700
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

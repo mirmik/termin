@@ -529,4 +529,4 @@ def show_scene_properties_dialog(
     dlg.cancel_button = "Close"
     dlg.min_width = 450
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

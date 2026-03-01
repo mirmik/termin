@@ -80,4 +80,4 @@ def show_undo_stack_viewer(ui, undo_stack: UndoStack) -> None:
     dlg.cancel_button = "Close"
     dlg.min_width = 500
 
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)

@@ -209,4 +209,4 @@ def show_agent_types_dialog(
                 on_changed()
 
     dlg.on_result = _on_result
-    dlg.show(ui)
+    dlg.show(ui, windowed=True)
