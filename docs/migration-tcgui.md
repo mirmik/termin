@@ -195,12 +195,74 @@ InteractionSystem) копируется без изменений — он Qt-fr
 
 ---
 
-## Фаза 11 — Избавление от Qt в shared-модулях
+## Фаза 11 — Простые диалоги и действия
+
+Форм-диалоги на основе field widgets (Фаза 6) + простые действия.
+
+| Диалог/действие | Qt-оригинал | Объём |
+|---|---|---|
+| Settings (text editor path) | `settings_dialog.py` (102) | форма с browse |
+| Project Settings (render sync) | `project_settings_dialog.py` (121) | 1 combo |
+| Shadow Settings | `shadow_settings_dialog.py` (124) | 3 поля + apply |
+| Layers & Flags | `layers_dialog.py` (128) | 2 скролла × 64 поля |
+| Fullscreen | `editor_mode_controller.py` (30) | show/hide панелей |
+| Run Standalone | `editor_window.py` (20) | subprocess + валидация |
+| Undo Stack Viewer | `undo_stack_viewer.py` (96) | 2 списка |
+
+---
+
+## Фаза 12 — Game Mode и Scene конфигурация
+
+| Диалог/действие | Qt-оригинал | Объём |
+|---|---|---|
+| Toggle Game Mode (Play/Stop) | `editor_mode_controller.py` (50+) | scene mode + UI state |
+| Scene Properties | `scene_inspector.py` (596) | multi-tab форма |
+| Agent Types | `agent_types_dialog.py` (279) | список + форма |
+| SpaceMouse Settings | `spacemouse_settings_dialog.py` (207) | multi-group форма |
+
+---
+
+## Фаза 13 — Debug Viewers (простые)
+
+Tree/list viewers для отладки. Паттерн: `Dialog` + `TreeWidget` + detail panel.
+
+| Viewer | Qt-оригинал | Объём |
+|---|---|---|
+| Inspect Registry | `inspect_registry_viewer.py` (205) | tree + search + detail |
+| NavMesh Registry | `navmesh_registry_viewer.py` (245) | tree + detail |
+| Audio Debugger | `audio_debugger.py` (193) | status + channel list |
+| Scene Manager Viewer | `scene_manager_viewer.py` (569) | tree + action buttons |
+
+---
+
+## Фаза 14 — Debug Viewers (сложные)
+
+| Viewer | Qt-оригинал | Объём |
+|---|---|---|
+| Resource Manager Viewer | `resource_manager_viewer.py` (803) | multi-tab tree |
+| Core Registry Viewer | `core_registry_viewer.py` (913) | multi-tab C API |
+| Profiler Panel | `profiler_panel.py` (409) | graph widget + table |
+| Modules Panel | `modules_panel.py` (513) | module list + compiler log |
+
+---
+
+## Фаза 15 — Сложные инструменты (отложить)
+
+Большие standalone-инструменты, можно портировать последними.
+
+| Инструмент | Qt-оригинал | Объём |
+|---|---|---|
+| Framegraph Debugger | `framegraph_debugger.py` (1116) | C++ core + dual modes + SDL |
+| Pipeline Editor | `termin.nodegraph` (1000+) | полноценный node-graph UI |
+
+---
+
+## Фаза 16 — Избавление от Qt в shared-модулях
 
 Четыре модуля из `termin/editor/` используются tcgui-редактором, но содержат Qt-зависимости.
 Нужно переписать их как чисто Python (без PyQt6).
 
-### 11.1 `ProjectFileWatcher` (HIGH)
+### 16.1 `ProjectFileWatcher` (HIGH)
 
 Файл: `termin/editor/project_file_watcher.py`
 Qt-зависимости: `QFileSystemWatcher`, `QTimer`
@@ -210,7 +272,7 @@ Qt-зависимости: `QFileSystemWatcher`, `QTimer`
 - Периодический rescan через таймер (callback из main loop или `threading.Timer`)
 - Сохранить API: `watch_directory(path)`, `register_processor(...)`, `rescan()`, `project_path`
 
-### 11.2 `EditorSettings` (HIGH)
+### 16.2 `EditorSettings` (HIGH)
 
 Файл: `termin/editor/settings.py`
 Qt-зависимости: `QSettings`
@@ -221,7 +283,7 @@ Qt-зависимости: `QSettings`
 - Автосохранение при каждом `set()`
 - `instance()`, `init_text_editor_if_empty()` — сохранить
 
-### 11.3 `ResourceLoader` (HIGH)
+### 16.3 `ResourceLoader` (HIGH)
 
 Файл: `termin/editor/resource_loader.py`
 Qt-зависимости: `QWidget` (parent), `QFileDialog`, `QMessageBox`
@@ -230,7 +292,7 @@ Qt-зависимости: `QWidget` (parent), `QFileDialog`, `QMessageBox`
 - Заменить `QFileDialog` / `QMessageBox` на callback-интерфейс (tcgui вызывает свои диалоги)
 - Или: resource_loader уже не использует диалоги напрямую в tcgui пути — проверить и при необходимости вынести диалоговые вызовы в контроллер
 
-### 11.4 `external_editor` (MEDIUM)
+### 16.4 `external_editor` (MEDIUM)
 
 Файл: `termin/editor/external_editor.py`
 Qt-зависимости: `QWidget`, `QMessageBox`
@@ -240,7 +302,7 @@ Qt-зависимости: `QWidget`, `QMessageBox`
 
 ---
 
-## Фаза 12 — Переключение
+## Фаза 17 — Переключение
 
 1. Переключить дефолт `run_editor.py` на `--ui=tcgui`
 2. Регрессия: открыть проект, сущности, undo/redo, save/load, drag-drop
