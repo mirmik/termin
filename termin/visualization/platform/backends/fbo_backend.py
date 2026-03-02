@@ -32,6 +32,12 @@ class FBOSurface:
     - ``set_should_close(v)``  → ignored
     - ``get_cursor_pos()``     → (0.0, 0.0); widget provides coords
     - ``share_group_key()``    → 0 (falls back to context_key)
+
+    Architecture note: the FBO is a per-GL-context object created in the
+    offscreen context (where present_display writes to it). The color
+    texture and depth renderbuffer are shared objects accessible from any
+    context. On resize, only the shared attachments are re-allocated —
+    no GL context switch is needed.
     """
 
     def __init__(self, width: int, height: int) -> None:
@@ -107,14 +113,39 @@ class FBOSurface:
         self._depth_rb = 0
 
     def resize(self, width: int, height: int) -> None:
-        """Recreate FBO at new dimensions and notify Display."""
+        """Resize the FBO attachments to new dimensions.
+
+        Only the shared color texture and depth renderbuffer are
+        re-allocated (they are shared GL objects accessible from any
+        context). The FBO object itself (per-context, lives in the
+        offscreen context) is kept — its attachments reference the same
+        texture/renderbuffer IDs, which now have new storage.
+        """
         if width == self._width and height == self._height:
             return
-        self._delete_fbo()
+
+        from OpenGL.GL import (
+            glBindTexture, GL_TEXTURE_2D,
+            glTexImage2D, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE,
+            glBindRenderbuffer, GL_RENDERBUFFER,
+            glRenderbufferStorage, GL_DEPTH_COMPONENT24,
+        )
+
         self._width = max(1, width)
         self._height = max(1, height)
-        self._create_fbo(self._width, self._height)
-        # Notify C++ render surface about size change → triggers Display.update_all_pixel_rects()
+        w, h = self._width, self._height
+
+        # Resize shared color texture
+        glBindTexture(GL_TEXTURE_2D, self._color_tex)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        # Resize shared depth renderbuffer
+        glBindRenderbuffer(GL_RENDERBUFFER, self._depth_rb)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h)
+        glBindRenderbuffer(GL_RENDERBUFFER, 0)
+
+        # Notify C++ render surface about size change
         if self._tc_surface_ptr:
             from termin._native.render import _render_surface_notify_resize
             _render_surface_notify_resize(self._tc_surface_ptr, self._width, self._height)

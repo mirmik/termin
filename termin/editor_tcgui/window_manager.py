@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-from tgfx import GraphicsBackend
+from tgfx import (
+    GraphicsBackend,
+    tc_gpu_context_new,
+    tc_gpu_set_context,
+    tc_gpu_context_set_name,
+    tc_gpu_context_free,
+    tc_gpu_share_group_get_or_create,
+    tc_gpu_share_group_unref,
+)
 from tcgui.widgets.ui import UI
 
 
@@ -16,6 +24,7 @@ class WindowEntry:
     gl_context: Any
     ui: UI
     is_main: bool = False
+    gpu_context: int = 0
 
 
 class WindowManager:
@@ -25,17 +34,33 @@ class WindowManager:
     windowing backend (SDL, GLFW, etc.).
     """
 
-    def __init__(self, graphics: GraphicsBackend):
+    def __init__(self, graphics: GraphicsBackend, share_group_key: int = 0):
         self._graphics = graphics
         self._windows: list[WindowEntry] = []
+        self._share_group_key = share_group_key
 
     @property
     def windows(self) -> list[WindowEntry]:
         return self._windows
 
+    def _create_gpu_context(self, name: str) -> int:
+        """Create a tc_gpu_context in the same share group."""
+        group = tc_gpu_share_group_get_or_create(self._share_group_key)
+        ctx = tc_gpu_context_new(0, group)
+        tc_gpu_context_set_name(ctx, name)
+        tc_gpu_share_group_unref(group)
+        return ctx
+
+    def _destroy_gpu_context(self, entry: WindowEntry) -> None:
+        if entry.gpu_context:
+            tc_gpu_context_free(entry.gpu_context)
+            entry.gpu_context = 0
+
     def register_main(self, handle: Any, gl_context: Any, ui: UI) -> None:
         """Register the main (already-created) window."""
         entry = WindowEntry(handle, gl_context, ui, is_main=True)
+        self._make_current(entry)
+        entry.gpu_context = self._create_gpu_context("main_window")
         self._windows.append(entry)
         ui.create_window = self.create_window
 
@@ -44,11 +69,15 @@ class WindowManager:
         handle, gl_context = self._create_native_window(title, width, height)
         window_ui = UI(graphics=self._graphics)
         entry = WindowEntry(handle, gl_context, window_ui)
+        self._make_current(entry)
+        entry.gpu_context = self._create_gpu_context(f"window:{title[:20]}")
         self._windows.append(entry)
 
         def _destroy():
             if entry in self._windows:
                 self._windows.remove(entry)
+                self._make_current(entry)
+                self._destroy_gpu_context(entry)
                 self._destroy_native_window(entry)
 
         window_ui.close_window = _destroy
@@ -60,6 +89,7 @@ class WindowManager:
         """Render all windows."""
         for entry in list(self._windows):
             self._make_current(entry)
+            tc_gpu_set_context(entry.gpu_context)
             vw, vh = self._get_drawable_size(entry)
             self._graphics.bind_framebuffer(None)
             self._graphics.set_viewport(0, 0, vw, vh)

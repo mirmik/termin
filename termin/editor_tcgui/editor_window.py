@@ -486,6 +486,7 @@ class EditorWindowTcgui:
 
     def _setup_viewport(self) -> None:
         """Create FBO surface, editor display, and connect to Viewport3D."""
+        self._offscreen_context.make_current()
         self._fbo_surface = FBOSurface(width=800, height=600)
 
         try:
@@ -1620,7 +1621,7 @@ class EditorWindowTcgui:
 
     def poll_file_watcher(self) -> None:
         """Process pending file system changes and update debug panels. Call from main loop."""
-        self._project_file_watcher.poll()
+        # self._project_file_watcher.poll()  # DEBUG: disabled to isolate rendering bug
 
         now = time.monotonic()
         if self._profiler_visible and self._profiler_panel is not None:

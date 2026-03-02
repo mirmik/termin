@@ -282,8 +282,13 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     def on_shutdown() -> None:
         offscreen_context.destroy()
-        # Destroy all remaining windows
+        # Destroy all remaining windows (free GPU contexts first)
+        from tgfx import tc_gpu_context_free
         for entry in list(wm.windows):
+            video.SDL_GL_MakeCurrent(entry.handle, entry.gl_context)
+            if entry.gpu_context:
+                tc_gpu_context_free(entry.gpu_context)
+                entry.gpu_context = 0
             video.SDL_GL_DeleteContext(entry.gl_context)
             video.SDL_DestroyWindow(entry.handle)
         wm.windows.clear()

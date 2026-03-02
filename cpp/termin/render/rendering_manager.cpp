@@ -673,6 +673,7 @@ void RenderingManager::render_all_offscreen() {
     // Set offscreen GPU context (lazy-create)
     if (!offscreen_gpu_context_) {
         offscreen_gpu_context_ = tc_gpu_context_new(0, NULL);
+        tc_gpu_context_set_name(offscreen_gpu_context_, "offscreen");
     }
     tc_gpu_set_context(offscreen_gpu_context_);
 
@@ -906,6 +907,10 @@ void RenderingManager::present_display(tc_display* display) {
             surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface), group);
             tc_gpu_share_group_unref(group);
         }
+        const char* dname = tc_display_get_name(display);
+        char ctx_name[32];
+        snprintf(ctx_name, sizeof(ctx_name), "display:%s", dname ? dname : "?");
+        tc_gpu_context_set_name(surface->gpu_context, ctx_name);
     }
     tc_gpu_set_context(surface->gpu_context);
 

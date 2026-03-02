@@ -152,6 +152,9 @@ void PullRenderingManager::render_display(tc_display* display) {
             surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface), group);
             tc_gpu_share_group_unref(group);
         }
+        char ctx_name[32];
+        snprintf(ctx_name, sizeof(ctx_name), "display:%s", dname ? dname : "?");
+        tc_gpu_context_set_name(surface->gpu_context, ctx_name);
     }
     tc_gpu_set_context(surface->gpu_context);
 

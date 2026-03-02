@@ -183,6 +183,10 @@ void tc_display_make_current(tc_display* display) {
             tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
             s->gpu_context = tc_gpu_context_new(ctx_key, group);
             tc_gpu_share_group_unref(group);
+            char ctx_name[32];
+            snprintf(ctx_name, sizeof(ctx_name), "display:%s",
+                     display->name ? display->name : "?");
+            tc_gpu_context_set_name(s->gpu_context, ctx_name);
         }
 
         tc_gpu_set_context(s->gpu_context);

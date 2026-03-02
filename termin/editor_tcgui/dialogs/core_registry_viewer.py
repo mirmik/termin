@@ -59,7 +59,7 @@ def show_core_registry_viewer(ui) -> None:
     tabs.stretch = True
 
     tab_columns = {
-        "Meshes": [TableColumn("Name"), TableColumn("Vertices", 80), TableColumn("Triangles", 80), TableColumn("Memory", 80)],
+        "Meshes": [TableColumn("Name"), TableColumn("Vertices", 80), TableColumn("Triangles", 80), TableColumn("Memory", 80), TableColumn("VBO/EBO/VAO", 110)],
         "Textures": [TableColumn("Name"), TableColumn("Size", 80), TableColumn("Channels", 80), TableColumn("Memory", 80)],
         "Shaders": [TableColumn("Name"), TableColumn("Type", 80), TableColumn("Version", 70), TableColumn("Size", 80)],
         "Materials": [TableColumn("Name"), TableColumn("Phases", 70), TableColumn("Textures", 70), TableColumn("Version", 70)],
@@ -128,11 +128,25 @@ def show_core_registry_viewer(ui) -> None:
         all_infos["Meshes"] = infos
         rows = []
         for info in infos:
+            gpu_str = ""
+            pool_index = info.get("pool_index")
+            if pool_index is not None:
+                try:
+                    from tgfx import tc_gpu_get_mesh_info
+                    gpu = tc_gpu_get_mesh_info(pool_index)
+                    if gpu:
+                        gpu_str = f"{gpu['vbo']}/{gpu['ebo']}"
+                        vaos = [str(c['vao']) for c in gpu['contexts'] if c['vao'] != 0]
+                        if vaos:
+                            gpu_str += "/" + ",".join(vaos)
+                except Exception:
+                    pass
             rows.append([
                 info["name"],
                 str(info.get("vertex_count", 0)),
                 str(info.get("index_count", 0)),
                 _fmt_mem(info.get("memory_bytes", 0)),
+                gpu_str,
             ])
         tab_lists["Meshes"].set_rows(rows, _make_tab_data("Meshes", infos))
 
@@ -312,6 +326,39 @@ def show_core_registry_viewer(ui) -> None:
         lines.append(f"Memory:    {_fmt_mem(info.get('memory_bytes', 0))}")
         lines.append(f"Ref count: {info.get('ref_count', 0)}")
         lines.append(f"Version:   {info.get('version', 0)}")
+
+        pool_index = info.get("pool_index")
+        if pool_index is not None:
+            try:
+                from tgfx import tc_gpu_get_mesh_info
+                gpu = tc_gpu_get_mesh_info(pool_index)
+                if gpu is not None:
+                    lines.append("")
+                    lines.append("--- GPU State (shared) ---")
+                    lines.append(f"VBO:       {gpu['vbo']}")
+                    lines.append(f"EBO:       {gpu['ebo']}")
+                    lines.append(f"GPU ver:   {gpu['shared_version']}")
+                    for ci in gpu["contexts"]:
+                        cname = ci.get('context_name', '')
+                        key_str = f"0x{ci['context_key']:x}"
+                        if cname:
+                            header = f"--- {cname} ({key_str}) ---"
+                        else:
+                            header = f"--- Context {key_str} ---"
+                        lines.append("")
+                        lines.append(header)
+                        lines.append(f"VAO:       {ci['vao']}")
+                        lines.append(f"Bound VBO: {ci['bound_vbo']}")
+                        lines.append(f"Bound EBO: {ci['bound_ebo']}")
+                        stale = "YES" if ci['vao_stale'] else "no"
+                        lines.append(f"Stale:     {stale}")
+                else:
+                    lines.append("")
+                    lines.append("(no GPU context)")
+            except ImportError:
+                lines.append("")
+                lines.append("(GPU bindings not available)")
+
         details.text = "\n".join(lines)
 
     def _show_texture_details(info: dict):
