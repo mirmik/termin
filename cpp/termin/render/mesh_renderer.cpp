@@ -264,7 +264,6 @@ void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) 
     if (!m) {
         return;
     }
-    tc_mesh_upload_gpu(m);
     tc_mesh_draw_gpu(m);
 }
 

@@ -422,7 +422,6 @@ void bind_mesh(nb::module_& m) {
         .def("draw_gpu", [](TcMesh& h) {
             tc_mesh* m = h.get();
             if (m) {
-                tc_mesh_upload_gpu(m);
                 tc_mesh_draw_gpu(m);
             }
         }, "Upload (if needed) and draw mesh")

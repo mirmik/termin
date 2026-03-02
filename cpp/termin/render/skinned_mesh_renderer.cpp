@@ -137,7 +137,6 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geomet
     // Draw the mesh via tc_mesh GPU API
     tc_mesh* m = mesh.get();
     if (m) {
-        tc_mesh_upload_gpu(m);
         tc_mesh_draw_gpu(m);
     }
 }

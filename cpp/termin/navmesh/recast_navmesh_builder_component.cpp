@@ -378,7 +378,6 @@ void RecastNavMeshBuilderComponent::draw_geometry(const RenderContext& context, 
     auto draw_mesh = [](TcMesh& mesh) {
         tc_mesh* m = mesh.get();
         if (m) {
-            tc_mesh_upload_gpu(m);
             tc_mesh_draw_gpu(m);
         }
     };
