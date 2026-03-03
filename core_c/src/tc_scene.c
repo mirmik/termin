@@ -106,7 +106,6 @@ typedef struct {
     tc_resource_map** type_heads;
     tc_scene_lighting* lightings;
     tc_scene_skybox* skyboxes;
-    void** collision_worlds;
     tc_value* metadata;  // Extensible metadata storage (dict per scene)
     const char** names;
     const char** uuids;
@@ -166,7 +165,6 @@ void tc_scene_pool_init(void) {
     g_pool->type_heads = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
     g_pool->lightings = (tc_scene_lighting*)calloc(cap, sizeof(tc_scene_lighting));
     g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
-    g_pool->collision_worlds = (void**)calloc(cap, sizeof(void*));
     g_pool->metadata = (tc_value*)calloc(cap, sizeof(tc_value));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
@@ -187,6 +185,9 @@ void tc_scene_pool_init(void) {
     g_pool->free_count = cap;
     g_pool->capacity = cap;
     g_pool->count = 0;
+
+    // Register built-in collision-world scene extension type.
+    tc_collision_world_extension_init();
 }
 
 void tc_scene_pool_shutdown(void) {
@@ -216,7 +217,6 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->type_heads);
     free(g_pool->lightings);
     free(g_pool->skyboxes);
-    free(g_pool->collision_worlds);
     free(g_pool->metadata);
     free(g_pool->names);
     free(g_pool->uuids);
@@ -260,7 +260,6 @@ static void pool_grow(void) {
     g_pool->type_heads = realloc(g_pool->type_heads, new_cap * sizeof(tc_resource_map*));
     g_pool->lightings = realloc(g_pool->lightings, new_cap * sizeof(tc_scene_lighting));
     g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
-    g_pool->collision_worlds = realloc(g_pool->collision_worlds, new_cap * sizeof(void*));
     g_pool->metadata = realloc(g_pool->metadata, new_cap * sizeof(tc_value));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
@@ -289,7 +288,6 @@ static void pool_grow(void) {
     memset(g_pool->type_heads + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
     memset(g_pool->lightings + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_lighting));
     memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
-    memset(g_pool->collision_worlds + old_cap, 0, (new_cap - old_cap) * sizeof(void*));
     memset(g_pool->metadata + old_cap, 0, (new_cap - old_cap) * sizeof(tc_value));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
@@ -365,7 +363,6 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
     tc_scene_lighting_init(&g_pool->lightings[idx]);
     tc_scene_skybox_init(&g_pool->skyboxes[idx]);
-    g_pool->collision_worlds[idx] = tc_collision_world_new();
     g_pool->metadata[idx] = tc_value_dict_new();
     g_pool->names[idx] = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
 
@@ -373,6 +370,9 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
 
     // Set scene handle on entity pool
     tc_entity_pool_set_scene(g_pool->pools[idx], h);
+
+    // Attach default collision-world extension (if registered and allocator is available).
+    tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_COLLISION_WORLD);
 
     g_pool->count++;
 
@@ -398,12 +398,6 @@ void tc_scene_free(tc_scene_handle h) {
 
     // Detach and destroy all scene extensions before scene-owned resources go away.
     tc_scene_ext_detach_all(h);
-
-    // Free collision world
-    if (g_pool->collision_worlds[idx]) {
-        tc_collision_world_free(g_pool->collision_worlds[idx]);
-        g_pool->collision_worlds[idx] = NULL;
-    }
 
     // Free metadata
     tc_value_free(&g_pool->metadata[idx]);
@@ -649,12 +643,12 @@ tc_entity_pool* tc_scene_entity_pool(tc_scene_handle h) {
 
 void* tc_scene_get_collision_world(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->collision_worlds[h.index];
+    return (void*)tc_collision_world_get_scene(h);
 }
 
 void tc_scene_set_collision_world(tc_scene_handle h, void* cw) {
     if (!handle_alive(h)) return;
-    g_pool->collision_worlds[h.index] = cw;
+    tc_collision_world_set_scene(h, (tc_collision_world*)cw);
 }
 
 // ============================================================================
