@@ -977,14 +977,14 @@ public static class TerminCore
     /// <summary>
     /// Set the collision world for a scene.
     /// </summary>
-    [DllImport(DLL, EntryPoint = "tc_scene_set_collision_world")]
-    public static extern void SceneSetCollisionWorld(TcSceneHandle scene, IntPtr cw);
+    [DllImport(DLL, EntryPoint = "tc_collision_world_set_scene")]
+    public static extern bool CollisionWorldSetScene(TcSceneHandle scene, IntPtr cw);
 
     /// <summary>
     /// Get the collision world for a scene.
     /// </summary>
-    [DllImport(DLL, EntryPoint = "tc_scene_get_collision_world")]
-    public static extern IntPtr SceneGetCollisionWorld(TcSceneHandle scene);
+    [DllImport(DLL, EntryPoint = "tc_collision_world_get_scene")]
+    public static extern IntPtr CollisionWorldGetScene(TcSceneHandle scene);
 
     // ========================================================================
     // C# Component Lifecycle (in termin.dll)

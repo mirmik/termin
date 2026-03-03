@@ -33,7 +33,12 @@ public class Scene : IDisposable
     {
         // Create collision world and attach it to the scene
         _collisionWorld = TerminCore.CollisionWorldCreate();
-        TerminCore.SceneSetCollisionWorld(_handle, _collisionWorld);
+        if (!TerminCore.CollisionWorldSetScene(_handle, _collisionWorld))
+        {
+            TerminCore.CollisionWorldDestroy(_collisionWorld);
+            _collisionWorld = IntPtr.Zero;
+            throw new InvalidOperationException("Failed to attach collision world to scene.");
+        }
     }
 
     public bool IsAlive => TerminCore.SceneAlive(_handle);
@@ -87,7 +92,7 @@ public class Scene : IDisposable
     /// <summary>
     /// Gets the collision world pointer (for debugging).
     /// </summary>
-    public IntPtr CollisionWorldPtr => _collisionWorld;
+    public IntPtr CollisionWorldPtr => TerminCore.CollisionWorldGetScene(_handle);
 
     /// <summary>
     /// Gets the number of colliders in the collision world.
@@ -99,7 +104,7 @@ public class Scene : IDisposable
         if (!_disposed && _handle.IsValid)
         {
             // Clear collision world from scene first
-            TerminCore.SceneSetCollisionWorld(_handle, IntPtr.Zero);
+            TerminCore.CollisionWorldSetScene(_handle, IntPtr.Zero);
 
             // Destroy collision world
             if (_collisionWorld != IntPtr.Zero)
