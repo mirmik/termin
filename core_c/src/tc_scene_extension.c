@@ -318,3 +318,29 @@ void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value* exten
         }
     }
 }
+
+void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt) {
+    if (!tc_scene_alive(scene)) return;
+    if (!g_registry) return;
+
+    for (size_t i = 0; i < g_registry->instance_count; i++) {
+        tc_scene_ext_instance_entry* e = &g_registry->instances[i];
+        if (!e->used) continue;
+        if (!tc_scene_handle_eq(e->scene, scene)) continue;
+        if (!e->vtable.on_scene_update) continue;
+        e->vtable.on_scene_update(e->instance, dt, e->type_userdata);
+    }
+}
+
+void tc_scene_ext_on_scene_before_render(tc_scene_handle scene) {
+    if (!tc_scene_alive(scene)) return;
+    if (!g_registry) return;
+
+    for (size_t i = 0; i < g_registry->instance_count; i++) {
+        tc_scene_ext_instance_entry* e = &g_registry->instances[i];
+        if (!e->used) continue;
+        if (!tc_scene_handle_eq(e->scene, scene)) continue;
+        if (!e->vtable.on_scene_before_render) continue;
+        e->vtable.on_scene_before_render(e->instance, e->type_userdata);
+    }
+}

@@ -17,6 +17,8 @@ typedef uint64_t tc_scene_ext_type_id;
 typedef struct tc_scene_ext_vtable {
     void* (*create)(tc_scene_handle scene, void* type_userdata);
     void (*destroy)(void* ext, void* type_userdata);
+    void (*on_scene_update)(void* ext, double dt, void* type_userdata);
+    void (*on_scene_before_render)(void* ext, void* type_userdata);
     bool (*serialize)(void* ext, tc_value* out_data, void* type_userdata);
     bool (*deserialize)(void* ext, const tc_value* in_data, void* type_userdata);
 } tc_scene_ext_vtable;
@@ -61,6 +63,10 @@ TC_API void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value
 // Internal lifecycle helpers (called from tc_init/tc_shutdown).
 TC_API void tc_scene_ext_registry_init(void);
 TC_API void tc_scene_ext_registry_shutdown(void);
+
+// Internal lifecycle hooks (called from tc_scene update/render loop).
+TC_API void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt);
+TC_API void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 
 #ifdef __cplusplus
 }

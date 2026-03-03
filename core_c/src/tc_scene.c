@@ -770,6 +770,9 @@ void tc_scene_update(tc_scene_handle h, double dt) {
         }
     }
     if (profile) tc_profiler_end_section();
+
+    // Extension update hooks
+    tc_scene_ext_on_scene_update(h, dt);
 }
 
 void tc_scene_editor_update(tc_scene_handle h, double dt) {
@@ -813,6 +816,9 @@ void tc_scene_editor_update(tc_scene_handle h, double dt) {
         }
     }
     if (profile) tc_profiler_end_section();
+
+    // Extension update hooks (editor mode uses same dt callback contract)
+    tc_scene_ext_on_scene_update(h, dt);
 }
 
 void tc_scene_before_render(tc_scene_handle h) {
@@ -830,6 +836,9 @@ void tc_scene_before_render(tc_scene_handle h) {
             if (profile) tc_profiler_end_section();
         }
     }
+
+    // Extension before-render hooks
+    tc_scene_ext_on_scene_before_render(h);
 }
 
 // ============================================================================
