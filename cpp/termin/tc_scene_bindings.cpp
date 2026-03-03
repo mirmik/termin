@@ -19,8 +19,7 @@
 #include "geom/vec3.hpp"
 #include "geom/vec4.hpp"
 #include "render/tc_value_trent.hpp"
-#include "core/tc_scene_lighting.h"
-#include "core/tc_scene_skybox.h"
+#include "core/tc_scene_render_state.h"
 #include "core/tc_component.h"
 
 namespace nb = nanobind;

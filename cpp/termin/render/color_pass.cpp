@@ -10,7 +10,7 @@ extern "C" {
 #include "core/tc_component.h"
 #include <tgfx/resources/tc_material.h>
 #include "tc_gpu.h"
-#include "core/tc_scene_lighting.h"
+#include "core/tc_scene_render_state.h"
 }
 
 #include <cmath>
