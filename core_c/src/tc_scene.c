@@ -1,6 +1,7 @@
 // tc_scene.c - Scene implementation using pool with generational indices
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
+#include "core/tc_scene_extension.h"
 #include "core/tc_scene_lighting.h"
 #include "core/tc_scene_skybox.h"
 #include "tc_viewport_config.h"
@@ -394,6 +395,9 @@ void tc_scene_free(tc_scene_handle h) {
     if (!handle_alive(h)) return;
 
     uint32_t idx = h.index;
+
+    // Detach and destroy all scene extensions before scene-owned resources go away.
+    tc_scene_ext_detach_all(h);
 
     // Free collision world
     if (g_pool->collision_worlds[idx]) {

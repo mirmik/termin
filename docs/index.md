@@ -36,5 +36,6 @@ while scene.running:
 
 getting-started
 concepts
+scene_extensions_architecture
 api/index
 ```

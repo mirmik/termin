@@ -29,6 +29,7 @@
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
+#include "core/tc_scene_extension.h"
 #include "inspect/tc_inspect.h"
 #include <tgfx/resources/tc_mesh.h>
 #include <tgfx/resources/tc_mesh_registry.h>

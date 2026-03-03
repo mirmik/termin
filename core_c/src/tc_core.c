@@ -150,6 +150,8 @@ extern void tc_pass_registry_cleanup(void);
 extern void tc_inspect_cleanup(void);
 extern void tc_kind_cleanup(void);
 extern void tc_viewport_pool_shutdown(void);
+extern void tc_scene_ext_registry_init(void);
+extern void tc_scene_ext_registry_shutdown(void);
 
 void tc_init(void) {
     if (g_initialized) return;
@@ -162,6 +164,7 @@ void tc_init(void) {
     tc_animation_init();
     tc_material_init();
     tc_scene_registry_init();
+    tc_scene_ext_registry_init();
     g_initialized = true;
 }
 
@@ -181,6 +184,7 @@ void tc_shutdown(void) {
     tc_pass_registry_cleanup();
     tc_inspect_cleanup();
     tc_kind_cleanup();
+    tc_scene_ext_registry_shutdown();
     tgfx_intern_cleanup();
 
     g_initialized = false;
