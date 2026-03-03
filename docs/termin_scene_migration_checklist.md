@@ -149,3 +149,88 @@ rg -n "tc_scene_get_collision_world|tc_scene_set_collision_world" /home/mirmik/p
 - [ ] Зафиксировать текущий baseline сборки `termin`.
 - [ ] Добавить smoke-тест: создать сцену, добавить сущность и компонент, прогнать `update()/before_render()`.
 - [ ] Прогнать сериализацию/десериализацию сцены с `extensions`.
+
+---
+
+## Дополнение: План выноса `tc_inspect` / `tc_kind` / component runtime
+
+Контекст: для полезного `termin-scene` недостаточно только C scene-core. Нужны:
+- `CxxComponent` / `PythonComponent`;
+- сериализация/десериализация через `tc_inspect` + `tc_kind`;
+- регистрация компонентных фабрик.
+
+### Наблюдаемая граница (по состоянию на March 4, 2026)
+
+Уже scene-core и переносимо в `termin-scene`:
+- `core_c/include/inspect/tc_inspect.h`, `core_c/src/tc_inspect.c` (C dispatcher)
+- `core_c/include/inspect/tc_kind.h`, `core_c/src/tc_kind.c` (C dispatcher)
+- `termin-scene` C registry/factory (`tc_component_registry_*`) уже вынесен.
+
+Сейчас смешано с `termin` runtime:
+- `core_c/src/tc_inspect_instance.cpp` тянет `CxxComponent`, `CxxFramePass`, mesh/material и C++ runtime.
+- `cpp/termin/inspect/tc_kind_cpp.cpp` регистрирует `tc_mesh` и `tc_material` через `TcMesh/TcMaterial`.
+- Python kind/inspect bridge (`bindings/inspect/*`) завязан на nanobind и модули `termin.*`.
+
+### Решение по границе
+
+Что уходит в `termin-scene`:
+- `tc_inspect`/`tc_kind` C dispatcher;
+- C++ inspect/kind scene-level registry (`InspectRegistry`, `KindRegistryCpp`);
+- `CxxComponent` / `tc_component_python` runtime;
+- scene-level component factory flow (C++/Python компоненты, без render/editor pass API).
+
+Что остается в `termin`:
+- pass-specific inspect (`tc_pass_inspect_*`);
+- render/editor-specific kinds (`tc_mesh`, `tc_material`, и т.п.) как extension registration;
+- C#-specific glue (если не переносится отдельным шагом).
+
+### Этап 7. Разрезать inspect API на scene-level и pass-level
+
+- [ ] Убрать `tc_pass_inspect_get/set` из переносимого `tc_inspect` API (оставить в `termin`-слое).
+- [ ] Оставить в `termin-scene` только inspect API, относящийся к компонентам/типам сцены.
+
+Критерий:
+- `termin-scene` не содержит зависимостей на `tc_pass`/render frame pass.
+
+### Этап 8. Перенос `tc_inspect`/`tc_kind` (C dispatcher) в `termin-scene`
+
+- [ ] Перенести `tc_inspect.[ch]`, `tc_kind.[ch]` в `termin-scene`.
+- [ ] Подключить в `termin-scene/CMakeLists.txt`, install/export.
+- [ ] Удалить дубли/старые копии в `termin/core_c`.
+
+Критерий:
+- `termin-scene` собирает inspect/kind dispatcher без зависимостей на `termin/cpp`.
+
+### Этап 9. Перенос C++ inspect/kind registry в `termin-scene`
+
+- [ ] Перенести `tc_inspect_cpp.hpp` и C++ реализацию registry.
+- [ ] Перенести `tc_kind_cpp.*` в `termin-scene` C++ слой.
+- [ ] Убрать из core-инициализации auto-registration `tc_mesh`/`tc_material`; перенести их регистрацию в `termin`.
+
+Критерий:
+- `KindRegistryCpp` и `InspectRegistry` доступны из `termin-scene` без include на `termin/mesh` и `termin/material`.
+
+### Этап 10. Перенос `CxxComponent` / `PythonComponent` runtime
+
+- [ ] Перенести `entity/component.[hc]pp` и `tc_component_python.*` в `termin-scene`.
+- [ ] Перенести/адаптировать `ComponentRegistry` bridge на новую границу.
+- [ ] Для Python class resolution ввести callback/resolver (убрать hardcoded import списки из scene-core).
+
+Критерий:
+- базовый жизненный цикл C++/Python компонентов работает при линковке только с `termin-scene`.
+
+### Этап 11. Тесты для inspect/kind/component runtime
+
+- [ ] Добавить C тесты:
+  - `tc_kind_parse`,
+  - `tc_kind_*` dispatcher (mock lang registries),
+  - `tc_inspect_serialize/deserialize` через mock vtable.
+- [ ] Добавить C++ тесты:
+  - roundtrip для `InspectRegistry + KindRegistryCpp` (int/float/string/vec3).
+- [ ] Добавить Python smoke:
+  - регистрация `PythonComponent`,
+  - фабричное создание через registry,
+  - serialize/deserialize поля через inspect.
+
+Критерий:
+- тесты переехавших слоев запускаются в CI `termin-scene`.
