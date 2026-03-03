@@ -9,7 +9,6 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Options
 option(TC_BUILD_SHARED "Build shared library" ON)
 option(TC_BUILD_TESTS "Build tests" ON)
-option(TC_USE_EXTERNAL_SCENE "Use external termin_scene package for scene-core ECS" OFF)
 
 # Source files (only .c)
 # Note: tc_collision.c is NOT included here because collision detection
@@ -17,19 +16,14 @@ option(TC_USE_EXTERNAL_SCENE "Use external termin_scene package for scene-core E
 # in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
     src/tc_animation_registry.c
-    src/tc_archetype.c
     src/tc_collision_world.c
-    src/tc_component.c
     src/tc_core.c
     src/tc_display.c
-    src/tc_entity_pool.c
-    src/tc_entity_pool_registry.c
     src/tc_input_manager.c
     src/tc_display_input_router.c
     src/tc_viewport_input_manager.c
     src/tc_frame_graph.c
     src/tc_gpu.c
-    src/tc_hash_map.c
     src/tc_inspect.c
     src/tc_kind.c
     src/tc_primitive_mesh.c
@@ -39,14 +33,11 @@ set(TC_SOURCES
     src/tc_profiler.c
     src/tc_project_settings.c
     src/tc_render_surface.c
-    src/tc_scene.c
-    src/tc_scene_extension.c
     src/tc_scene_render_mount.c
     src/tc_scene_render_state.c
     src/tc_scene_pipeline_template.c
     src/tc_scene_skybox.c
     src/tc_skeleton_registry.c
-    src/tc_type_registry.c
     src/tc_viewport.c
     src/tc_viewport_config.c
 )
@@ -61,25 +52,16 @@ set(TC_HEADERS
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
     include/physics/tc_collision.h
-    include/core/tc_archetype.h
-    include/core/tc_component.h
-    include/core/tc_entity_pool.h
-    include/core/tc_entity_pool_registry.h
     include/tc_gpu.h
-    include/tc_hash_map.h
     include/tc_picking.h
     include/tc_profiler.h
     include/tc_project_settings.h
     include/resources/tc_skeleton.h
     include/resources/tc_skeleton_registry.h
-    include/core/tc_scene.h
-    include/core/tc_scene_extension.h
     include/core/tc_scene_render_mount.h
     include/core/tc_scene_render_state.h
     include/core/tc_scene_pipeline_template.h
-    include/core/tc_scene_pool.h
     include/core/tc_scene_registry.h
-    include/tc_type_registry.h
     include/tc_types.h
     include/tc_viewport_config.h
     include/termin_core.h
@@ -95,20 +77,7 @@ set(TC_HEADERS
     include/render/tc_frame_graph.h
 )
 
-if(TC_USE_EXTERNAL_SCENE)
-    find_package(termin_scene REQUIRED)
-
-    list(REMOVE_ITEM TC_SOURCES
-        src/tc_archetype.c
-        src/tc_component.c
-        src/tc_entity_pool.c
-        src/tc_entity_pool_registry.c
-        src/tc_hash_map.c
-        src/tc_scene.c
-        src/tc_scene_extension.c
-        src/tc_type_registry.c
-    )
-endif()
+find_package(termin_scene REQUIRED)
 
 # termin-base (provides tc_log, shared enums)
 find_package(termin_base REQUIRED)
@@ -139,9 +108,7 @@ target_include_directories(termin_core
 )
 
 target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
-if(TC_USE_EXTERNAL_SCENE)
-    target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
-endif()
+target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
 
 # Platform-specific
 if(WIN32)
