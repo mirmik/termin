@@ -40,6 +40,7 @@ set(TC_SOURCES
     src/tc_render_surface.c
     src/tc_scene.c
     src/tc_scene_extension.c
+    src/tc_scene_render_mount.c
     src/tc_scene_render_state.c
     src/tc_scene_pipeline_template.c
     src/tc_scene_skybox.c
@@ -72,6 +73,7 @@ set(TC_HEADERS
     include/resources/tc_skeleton_registry.h
     include/core/tc_scene.h
     include/core/tc_scene_extension.h
+    include/core/tc_scene_render_mount.h
     include/core/tc_scene_render_state.h
     include/core/tc_scene_pipeline_template.h
     include/core/tc_scene_pool.h

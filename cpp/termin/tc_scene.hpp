@@ -10,6 +10,7 @@
 #include <trent/json.h>
 
 #include "core/tc_scene.h"
+#include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"

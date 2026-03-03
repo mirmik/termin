@@ -30,6 +30,7 @@
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_extension.h"
+#include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
 #include "inspect/tc_inspect.h"
 #include <tgfx/resources/tc_mesh.h>

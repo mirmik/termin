@@ -4,6 +4,7 @@
 #define TC_COLLISION_WORLD_H
 
 #include "tc_types.h"
+#include "core/tc_scene_pool.h"
 
 #ifdef __cplusplus
 extern "C" {

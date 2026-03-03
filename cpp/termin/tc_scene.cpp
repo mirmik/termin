@@ -12,8 +12,6 @@
 #include "colliders/collider_component.hpp"
 #include "geom/ray3.hpp"
 #include <tcbase/tc_log.hpp>
-#include <sstream>
-#include <iomanip>
 #include <functional>
 
 namespace termin {
@@ -584,93 +582,6 @@ SceneRaycastHit TcSceneRef::closest_to_ray(const Ray3& ray) const {
     return result;
 }
 
-// --- Serialization helpers ---
-
-namespace {
-
-nos::trent serialize_viewport_config(const ViewportConfig& vc) {
-    nos::trent data;
-    data["name"] = vc.name;
-    data["display_name"] = vc.display_name;
-    data["camera_uuid"] = vc.camera_uuid;
-
-    nos::trent region;
-    region.push_back(nos::trent(static_cast<double>(vc.region_x)));
-    region.push_back(nos::trent(static_cast<double>(vc.region_y)));
-    region.push_back(nos::trent(static_cast<double>(vc.region_w)));
-    region.push_back(nos::trent(static_cast<double>(vc.region_h)));
-    data["region"] = std::move(region);
-
-    data["depth"] = static_cast<int64_t>(vc.depth);
-    data["input_mode"] = vc.input_mode;
-    data["block_input_in_editor"] = vc.block_input_in_editor;
-
-    if (!vc.pipeline_uuid.empty()) {
-        data["pipeline_uuid"] = vc.pipeline_uuid;
-    }
-    if (!vc.pipeline_name.empty()) {
-        data["pipeline_name"] = vc.pipeline_name;
-    }
-
-    // Only serialize layer_mask if not all layers
-    if (vc.layer_mask != 0xFFFFFFFFFFFFFFFFULL) {
-        std::ostringstream oss;
-        oss << "0x" << std::hex << vc.layer_mask;
-        data["layer_mask"] = oss.str();
-    }
-
-    // Only serialize enabled if False
-    if (!vc.enabled) {
-        data["enabled"] = false;
-    }
-
-    return data;
-}
-
-ViewportConfig deserialize_viewport_config(const nos::trent& data) {
-    ViewportConfig vc;
-
-    vc.name = data["name"].as_string_default("");
-    vc.display_name = data["display_name"].as_string_default("Main");
-    vc.camera_uuid = data["camera_uuid"].as_string_default("");
-
-    if (data.contains("region") && data["region"].is_list()) {
-        const auto& r = data["region"].as_list();
-        if (r.size() >= 4) {
-            vc.region_x = static_cast<float>(r[0].as_numer_default(0.0));
-            vc.region_y = static_cast<float>(r[1].as_numer_default(0.0));
-            vc.region_w = static_cast<float>(r[2].as_numer_default(1.0));
-            vc.region_h = static_cast<float>(r[3].as_numer_default(1.0));
-        }
-    }
-
-    vc.depth = static_cast<int>(data["depth"].as_numer_default(0));
-    vc.input_mode = data["input_mode"].as_string_default("simple");
-    vc.block_input_in_editor = data["block_input_in_editor"].as_bool_default(false);
-    vc.pipeline_uuid = data["pipeline_uuid"].as_string_default("");
-    vc.pipeline_name = data["pipeline_name"].as_string_default("");
-    vc.enabled = data["enabled"].as_bool_default(true);
-
-    // Parse layer_mask (may be hex string or int)
-    if (data.contains("layer_mask")) {
-        auto& lm = data["layer_mask"];
-        if (lm.is_string()) {
-            std::string s = lm.as_string();
-            if (s.size() > 2 && s[0] == '0' && s[1] == 'x') {
-                vc.layer_mask = std::stoull(s.substr(2), nullptr, 16);
-            } else {
-                vc.layer_mask = std::stoull(s, nullptr, 10);
-            }
-        } else if (lm.is_numer()) {
-            vc.layer_mask = static_cast<uint64_t>(lm.as_numer());
-        }
-    }
-
-    return vc;
-}
-
-} // anonymous namespace
-
 nos::trent serialize_entity_recursive(const Entity& e) {
     if (!e.valid() || !e.serializable()) {
         return nos::trent();
@@ -762,27 +673,6 @@ nos::trent TcSceneRef::serialize() const {
     }
     result["flag_names"] = std::move(flag_names);
 
-    // Viewport configs
-    nos::trent viewport_configs_list;
-    viewport_configs_list.init(nos::trent::type::list);
-    for (const ViewportConfig& vc : viewport_configs()) {
-        viewport_configs_list.push_back(serialize_viewport_config(vc));
-    }
-    result["viewport_configs"] = std::move(viewport_configs_list);
-
-    // Pipeline templates
-    nos::trent pipelines;
-    pipelines.init(nos::trent::type::list);
-    for (size_t i = 0; i < pipeline_template_count(); i++) {
-        TcScenePipelineTemplate t = pipeline_template_at(i);
-        if (t.is_valid()) {
-            nos::trent p;
-            p["uuid"] = t.uuid();
-            pipelines.push_back(std::move(p));
-        }
-    }
-    result["scene_pipelines"] = std::move(pipelines);
-
     // Metadata
     nos::trent md = metadata();
     if (!md.is_nil() && md.is_dict() && !md.as_dict().empty()) {
@@ -818,27 +708,9 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
             }
         }
 
-        // Viewport configs
+        // Render mount state
         clear_viewport_configs();
-        if (data.contains("viewport_configs") && data["viewport_configs"].is_list()) {
-            for (const auto& vc_data : data["viewport_configs"].as_list()) {
-                add_viewport_config(deserialize_viewport_config(vc_data));
-            }
-        }
-
-        // Pipeline templates
         clear_pipeline_templates();
-        if (data.contains("scene_pipelines") && data["scene_pipelines"].is_list()) {
-            for (const auto& sp : data["scene_pipelines"].as_list()) {
-                std::string templ_uuid = sp["uuid"].as_string_default("");
-                if (!templ_uuid.empty()) {
-                    TcScenePipelineTemplate templ = TcScenePipelineTemplate::find_by_uuid(templ_uuid);
-                    if (templ.is_valid()) {
-                        add_pipeline_template(templ);
-                    }
-                }
-            }
-        }
 
         // Metadata
         if (data.contains("metadata")) {
@@ -846,12 +718,33 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
             tc_scene_set_metadata(_h, md_val);
         }
 
-        // Extensions
-        if (data.contains("extensions")) {
-            tc_value ext_val = tc::trent_to_tc_value(data["extensions"]);
-            tc_scene_ext_deserialize_scene(_h, &ext_val);
-            tc_value_free(&ext_val);
-        } else {
+        // Extensions (including legacy fallback adapters)
+        nos::trent merged_extensions;
+        if (data.contains("extensions") && data["extensions"].is_dict()) {
+            merged_extensions = data["extensions"];
+        }
+        if (!merged_extensions.is_dict()) {
+            merged_extensions.init(nos::trent::type::dict);
+        }
+
+        if (!merged_extensions.contains("render_mount")) {
+            bool has_legacy_render_mount =
+                (data.contains("viewport_configs") && data["viewport_configs"].is_list()) ||
+                (data.contains("scene_pipelines") && data["scene_pipelines"].is_list());
+
+            if (has_legacy_render_mount) {
+                nos::trent render_mount;
+                if (data.contains("viewport_configs") && data["viewport_configs"].is_list()) {
+                    render_mount["viewport_configs"] = data["viewport_configs"];
+                }
+                if (data.contains("scene_pipelines") && data["scene_pipelines"].is_list()) {
+                    render_mount["scene_pipelines"] = data["scene_pipelines"];
+                }
+                merged_extensions["render_mount"] = std::move(render_mount);
+            }
+        }
+
+        if (!merged_extensions.contains("render_state")) {
             bool has_legacy_render_state =
                 data.contains("background_color") ||
                 data.contains("ambient_color") ||
@@ -863,7 +756,6 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
                 data.contains("skybox_bottom_color");
 
             if (has_legacy_render_state) {
-                nos::trent legacy_ext;
                 nos::trent render_state;
 
                 if (data.contains("background_color")) {
@@ -914,11 +806,14 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
                     render_state["skybox"] = std::move(skybox);
                 }
 
-                legacy_ext["render_state"] = std::move(render_state);
-                tc_value ext_val = tc::trent_to_tc_value(legacy_ext);
-                tc_scene_ext_deserialize_scene(_h, &ext_val);
-                tc_value_free(&ext_val);
+                merged_extensions["render_state"] = std::move(render_state);
             }
+        }
+
+        if (!merged_extensions.as_dict().empty()) {
+            tc_value ext_val = tc::trent_to_tc_value(merged_extensions);
+            tc_scene_ext_deserialize_scene(_h, &ext_val);
+            tc_value_free(&ext_val);
         }
     }
 

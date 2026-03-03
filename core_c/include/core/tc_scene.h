@@ -6,8 +6,6 @@
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_component.h"
-#include "core/tc_scene_pipeline_template.h"
-#include "tc_viewport_config.h"
 #include "tc_value.h"
 
 #ifdef __cplusplus
@@ -219,25 +217,6 @@ TC_API const char* tc_scene_get_flag_name(tc_scene_handle h, int index);
 TC_API void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name);
 
 // ============================================================================
-// Viewport Configurations
-// ============================================================================
-
-// Add a viewport configuration (copies the config)
-TC_API void tc_scene_add_viewport_config(tc_scene_handle h, const tc_viewport_config* config);
-
-// Remove viewport configuration by index
-TC_API void tc_scene_remove_viewport_config(tc_scene_handle h, size_t index);
-
-// Clear all viewport configurations
-TC_API void tc_scene_clear_viewport_configs(tc_scene_handle h);
-
-// Get number of viewport configurations
-TC_API size_t tc_scene_viewport_config_count(tc_scene_handle h);
-
-// Get viewport configuration by index (returns pointer to internal storage)
-TC_API tc_viewport_config* tc_scene_viewport_config_at(tc_scene_handle h, size_t index);
-
-// ============================================================================
 // Collision World
 // ============================================================================
 
@@ -256,25 +235,6 @@ TC_API tc_value* tc_scene_get_metadata(tc_scene_handle h);
 
 // Set scene metadata (takes ownership of value, frees previous)
 TC_API void tc_scene_set_metadata(tc_scene_handle h, tc_value value);
-
-// ============================================================================
-// Scene Pipeline Templates
-// ============================================================================
-
-// Add a pipeline template handle to scene
-TC_API void tc_scene_add_pipeline_template(tc_scene_handle h, tc_spt_handle spt);
-
-// Remove a pipeline template handle from scene
-TC_API void tc_scene_remove_pipeline_template(tc_scene_handle h, tc_spt_handle spt);
-
-// Clear all pipeline template handles
-TC_API void tc_scene_clear_pipeline_templates(tc_scene_handle h);
-
-// Get number of pipeline templates
-TC_API size_t tc_scene_pipeline_template_count(tc_scene_handle h);
-
-// Get pipeline template handle by index
-TC_API tc_spt_handle tc_scene_pipeline_template_at(tc_scene_handle h, size_t index);
 
 // ============================================================================
 // Render Lifecycle Notifications

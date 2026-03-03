@@ -120,14 +120,16 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 - Этап 1: инфраструктура extension-ов (`register/attach/get/detach`).
 - Этап 2: `collision_world` перенесён в extension; старый scene API работает как shim.
 - Этап 3: `lighting/skybox/background` перенесены в `render_state` extension.
+- Этап 4: `pipeline_templates` и `viewport_configs` перенесены в `render_mount` extension.
 - Scene serialization пишет extension state в `extensions.*`.
+- `TcSceneRef::serialize()` больше не пишет top-level `scene_pipelines`/`viewport_configs`; данные идут через `extensions.render_mount`.
+- `TcSceneRef::load_from_data()` поддерживает legacy top-level поля, адаптируя их в `extensions.render_mount`.
 - Добавлены runtime hooks `on_scene_update` и `on_scene_before_render`.
 
 ### Что осталось
 
 - Перевести потребителей на extension-first API и убрать legacy shim API из минимального `tc_scene`.
-- Решить, выносить ли `pipeline_templates` и `viewport_configs` в отдельный extension (`render_mount`).
-- После полного перевода потребителей удалить fallback чтения legacy top-level render полей.
+- После полного перевода потребителей удалить fallback чтения legacy top-level полей (`render_state` и `render_mount`).
 
 ## Минимальный итоговый инвариант
 

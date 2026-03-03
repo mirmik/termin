@@ -2,8 +2,8 @@
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
+#include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
-#include "tc_viewport_config.h"
 #include "physics/tc_collision_world.h"
 #include <tgfx/tc_resource_map.h>
 #include "tc_profiler.h"
@@ -94,16 +94,6 @@ typedef struct {
     const char** layer_names;  // [capacity * 64]
     const char** flag_names;   // [capacity * 64]
 
-    // Pipeline templates (dynamic arrays of tc_spt_handle per scene)
-    tc_spt_handle** pipeline_templates;
-    size_t* pipeline_template_counts;
-    size_t* pipeline_template_capacities;
-
-    // Viewport configurations (dynamic arrays per scene)
-    tc_viewport_config** viewport_configs;
-    size_t* viewport_config_counts;
-    size_t* viewport_config_capacities;
-
     // Pool management
     uint32_t* free_stack;
     size_t free_count;
@@ -147,13 +137,6 @@ void tc_scene_pool_init(void) {
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
     g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
-    g_pool->pipeline_templates = (tc_spt_handle**)calloc(cap, sizeof(tc_spt_handle*));
-    g_pool->pipeline_template_counts = (size_t*)calloc(cap, sizeof(size_t));
-    g_pool->pipeline_template_capacities = (size_t*)calloc(cap, sizeof(size_t));
-    g_pool->viewport_configs = (tc_viewport_config**)calloc(cap, sizeof(tc_viewport_config*));
-    g_pool->viewport_config_counts = (size_t*)calloc(cap, sizeof(size_t));
-    g_pool->viewport_config_capacities = (size_t*)calloc(cap, sizeof(size_t));
-
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
         g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
@@ -161,6 +144,9 @@ void tc_scene_pool_init(void) {
     g_pool->free_count = cap;
     g_pool->capacity = cap;
     g_pool->count = 0;
+
+    // Register built-in render-mount scene extension type.
+    tc_scene_render_mount_extension_init();
 
     // Register built-in render-state scene extension type.
     tc_scene_render_state_extension_init();
@@ -199,12 +185,6 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->uuids);
     free(g_pool->layer_names);
     free(g_pool->flag_names);
-    free(g_pool->pipeline_templates);
-    free(g_pool->pipeline_template_counts);
-    free(g_pool->pipeline_template_capacities);
-    free(g_pool->viewport_configs);
-    free(g_pool->viewport_config_counts);
-    free(g_pool->viewport_config_capacities);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -239,12 +219,6 @@ static void pool_grow(void) {
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
     g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
     g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
-    g_pool->pipeline_templates = realloc(g_pool->pipeline_templates, new_cap * sizeof(tc_spt_handle*));
-    g_pool->pipeline_template_counts = realloc(g_pool->pipeline_template_counts, new_cap * sizeof(size_t));
-    g_pool->pipeline_template_capacities = realloc(g_pool->pipeline_template_capacities, new_cap * sizeof(size_t));
-    g_pool->viewport_configs = realloc(g_pool->viewport_configs, new_cap * sizeof(tc_viewport_config*));
-    g_pool->viewport_config_counts = realloc(g_pool->viewport_config_counts, new_cap * sizeof(size_t));
-    g_pool->viewport_config_capacities = realloc(g_pool->viewport_config_capacities, new_cap * sizeof(size_t));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
 
     // Initialize new slots
@@ -264,13 +238,6 @@ static void pool_grow(void) {
     memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
-    memset(g_pool->pipeline_templates + old_cap, 0, (new_cap - old_cap) * sizeof(tc_spt_handle*));
-    memset(g_pool->pipeline_template_counts + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
-    memset(g_pool->pipeline_template_capacities + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
-    memset(g_pool->viewport_configs + old_cap, 0, (new_cap - old_cap) * sizeof(tc_viewport_config*));
-    memset(g_pool->viewport_config_counts + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
-    memset(g_pool->viewport_config_capacities + old_cap, 0, (new_cap - old_cap) * sizeof(size_t));
-
     // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->free_stack[g_pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
@@ -339,6 +306,9 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     // Set scene handle on entity pool
     tc_entity_pool_set_scene(g_pool->pools[idx], h);
 
+    // Attach default render-mount extension.
+    tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_MOUNT);
+
     // Attach default render-state extension.
     tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_STATE);
 
@@ -382,18 +352,6 @@ void tc_scene_free(tc_scene_handle h) {
     // Free type heads map
     tc_resource_map_free(g_pool->type_heads[idx]);
     g_pool->type_heads[idx] = NULL;
-
-    // Free pipeline templates array
-    free(g_pool->pipeline_templates[idx]);
-    g_pool->pipeline_templates[idx] = NULL;
-    g_pool->pipeline_template_counts[idx] = 0;
-    g_pool->pipeline_template_capacities[idx] = 0;
-
-    // Free viewport configs array
-    free(g_pool->viewport_configs[idx]);
-    g_pool->viewport_configs[idx] = NULL;
-    g_pool->viewport_config_counts[idx] = 0;
-    g_pool->viewport_config_capacities[idx] = 0;
 
     // Destroy entity pool via registry to invalidate handles
     tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->pools[idx]);
@@ -478,56 +436,6 @@ void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name) {
     if (!handle_alive(h)) return;
     if (index < 0 || index >= 64) return;
     g_pool->flag_names[h.index * 64 + index] = (name && name[0]) ? tc_intern_string(name) : NULL;
-}
-
-// ============================================================================
-// Viewport Configurations
-// ============================================================================
-
-void tc_scene_add_viewport_config(tc_scene_handle h, const tc_viewport_config* config) {
-    if (!handle_alive(h) || !config) return;
-    uint32_t idx = h.index;
-
-    // Grow array if needed
-    if (g_pool->viewport_config_counts[idx] >= g_pool->viewport_config_capacities[idx]) {
-        size_t new_cap = g_pool->viewport_config_capacities[idx] == 0 ? 4 : g_pool->viewport_config_capacities[idx] * 2;
-        g_pool->viewport_configs[idx] = realloc(g_pool->viewport_configs[idx], new_cap * sizeof(tc_viewport_config));
-        g_pool->viewport_config_capacities[idx] = new_cap;
-    }
-
-    // Copy config (interns strings)
-    tc_viewport_config_copy(&g_pool->viewport_configs[idx][g_pool->viewport_config_counts[idx]], config);
-    g_pool->viewport_config_counts[idx]++;
-}
-
-void tc_scene_remove_viewport_config(tc_scene_handle h, size_t index) {
-    if (!handle_alive(h)) return;
-    uint32_t idx = h.index;
-    if (index >= g_pool->viewport_config_counts[idx]) return;
-
-    // Swap with last and decrement count
-    if (index < g_pool->viewport_config_counts[idx] - 1) {
-        g_pool->viewport_configs[idx][index] = g_pool->viewport_configs[idx][g_pool->viewport_config_counts[idx] - 1];
-    }
-    g_pool->viewport_config_counts[idx]--;
-}
-
-void tc_scene_clear_viewport_configs(tc_scene_handle h) {
-    if (!handle_alive(h)) return;
-    uint32_t idx = h.index;
-    g_pool->viewport_config_counts[idx] = 0;
-}
-
-size_t tc_scene_viewport_config_count(tc_scene_handle h) {
-    if (!handle_alive(h)) return 0;
-    return g_pool->viewport_config_counts[h.index];
-}
-
-tc_viewport_config* tc_scene_viewport_config_at(tc_scene_handle h, size_t index) {
-    if (!handle_alive(h)) return NULL;
-    uint32_t idx = h.index;
-    if (index >= g_pool->viewport_config_counts[idx]) return NULL;
-    return &g_pool->viewport_configs[idx][index];
 }
 
 // ============================================================================
@@ -1187,54 +1095,4 @@ static bool notify_render_detach_callback(tc_entity_pool* pool, tc_entity_id id,
 void tc_scene_notify_render_detach(tc_scene_handle h) {
     if (!handle_alive(h)) return;
     tc_entity_pool_foreach(g_pool->pools[h.index], notify_render_detach_callback, NULL);
-}
-
-// ============================================================================
-// Scene Pipeline Templates
-// ============================================================================
-
-void tc_scene_add_pipeline_template(tc_scene_handle h, tc_spt_handle spt) {
-    if (!handle_alive(h)) return;
-    if (!tc_spt_is_valid(spt)) return;
-    uint32_t idx = h.index;
-
-    // Grow array if needed
-    if (g_pool->pipeline_template_counts[idx] >= g_pool->pipeline_template_capacities[idx]) {
-        size_t new_cap = g_pool->pipeline_template_capacities[idx] == 0 ? 4 : g_pool->pipeline_template_capacities[idx] * 2;
-        g_pool->pipeline_templates[idx] = realloc(g_pool->pipeline_templates[idx], new_cap * sizeof(tc_spt_handle));
-        g_pool->pipeline_template_capacities[idx] = new_cap;
-    }
-
-    g_pool->pipeline_templates[idx][g_pool->pipeline_template_counts[idx]++] = spt;
-}
-
-void tc_scene_remove_pipeline_template(tc_scene_handle h, tc_spt_handle spt) {
-    if (!handle_alive(h)) return;
-    uint32_t idx = h.index;
-
-    for (size_t i = 0; i < g_pool->pipeline_template_counts[idx]; i++) {
-        if (tc_spt_handle_eq(g_pool->pipeline_templates[idx][i], spt)) {
-            // Swap with last and decrement count
-            g_pool->pipeline_templates[idx][i] = g_pool->pipeline_templates[idx][--g_pool->pipeline_template_counts[idx]];
-            return;
-        }
-    }
-}
-
-void tc_scene_clear_pipeline_templates(tc_scene_handle h) {
-    if (!handle_alive(h)) return;
-    uint32_t idx = h.index;
-    g_pool->pipeline_template_counts[idx] = 0;
-}
-
-size_t tc_scene_pipeline_template_count(tc_scene_handle h) {
-    if (!handle_alive(h)) return 0;
-    return g_pool->pipeline_template_counts[h.index];
-}
-
-tc_spt_handle tc_scene_pipeline_template_at(tc_scene_handle h, size_t index) {
-    if (!handle_alive(h)) return TC_SPT_HANDLE_INVALID;
-    uint32_t idx = h.index;
-    if (index >= g_pool->pipeline_template_counts[idx]) return TC_SPT_HANDLE_INVALID;
-    return g_pool->pipeline_templates[idx][index];
 }
