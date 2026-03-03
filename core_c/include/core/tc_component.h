@@ -3,7 +3,6 @@
 #define TC_COMPONENT_H
 
 #include "tc_types.h"
-#include <tgfx/resources/tc_shader.h>
 #include "tc_type_registry.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
@@ -23,9 +22,6 @@ typedef enum tc_component_kind {
     TC_PYTHON_COMPONENT = 1,    // Python component
     TC_CSHARP_COMPONENT = 2     // C# component
 } tc_component_kind;
-
-// Language enum
-#include "inspect/tc_binding.h"
 
 // ============================================================================
 // Drawable VTable - for components that can render geometry

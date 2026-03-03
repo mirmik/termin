@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <tcbase/tc_binding_types.h>
 
 #ifdef __cplusplus
 extern "C" {
