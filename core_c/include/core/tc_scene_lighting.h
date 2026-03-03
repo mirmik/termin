@@ -31,7 +31,7 @@ typedef struct tc_scene_lighting {
 TC_API void tc_scene_lighting_init(tc_scene_lighting* lighting);
 
 // Note: Scene lighting API functions (tc_scene_get_lighting, tc_scene_set_ambient, etc.)
-// are declared in tc_scene.h with tc_scene_handle parameter
+// are declared in tc_scene_render_state.h with tc_scene_handle parameter
 
 #ifdef __cplusplus
 }

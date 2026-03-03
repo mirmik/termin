@@ -44,7 +44,7 @@ TC_API struct tc_mesh* tc_scene_skybox_ensure_mesh(tc_scene_skybox* skybox);
 TC_API struct tc_material* tc_scene_skybox_ensure_material(tc_scene_skybox* skybox, int type);
 
 // Note: Scene skybox API functions (tc_scene_get_skybox, tc_scene_set_skybox_*, etc.)
-// are declared in tc_scene.h with tc_scene_handle parameter
+// are declared in tc_scene_render_state.h with tc_scene_handle parameter
 
 #ifdef __cplusplus
 }
