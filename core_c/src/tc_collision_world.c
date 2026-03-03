@@ -9,7 +9,6 @@
 // Registered collision-world allocator functions (set by entity_lib)
 static tc_collision_world_alloc_fn s_collision_world_alloc_fn = NULL;
 static tc_collision_world_free_fn s_collision_world_free_fn = NULL;
-static bool g_extension_registered = false;
 
 typedef struct tc_collision_world_ext_instance {
     tc_collision_world* world;
@@ -50,7 +49,7 @@ static void collision_world_ext_destroy(void* ext, void* type_userdata) {
 }
 
 void tc_collision_world_extension_init(void) {
-    if (g_extension_registered) return;
+    if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD)) return;
 
     tc_scene_ext_vtable vtable = {
         .create = collision_world_ext_create,
@@ -64,15 +63,9 @@ void tc_collision_world_extension_init(void) {
             &vtable,
             NULL
         )) {
-        if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
-            g_extension_registered = true;
-            return;
-        }
         tc_log_error("[tc_collision_world] failed to register collision_world extension type");
         return;
     }
-
-    g_extension_registered = true;
 }
 
 void tc_collision_world_set_allocator(

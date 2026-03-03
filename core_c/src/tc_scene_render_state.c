@@ -7,8 +7,6 @@
 #include <tgfx/resources/tc_material.h>
 #include <stdlib.h>
 
-static bool g_extension_registered = false;
-
 void tc_scene_lighting_init(tc_scene_lighting* lighting) {
     if (!lighting) return;
     lighting->ambient_color[0] = 1.0f;
@@ -222,7 +220,7 @@ static bool render_state_deserialize(void* ext, const tc_value* in_data, void* t
 }
 
 void tc_scene_render_state_extension_init(void) {
-    if (g_extension_registered) return;
+    if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE)) return;
 
     tc_scene_ext_vtable vtable = {
         .create = render_state_create,
@@ -238,14 +236,8 @@ void tc_scene_render_state_extension_init(void) {
             &vtable,
             NULL
         )) {
-        if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE)) {
-            g_extension_registered = true;
-            return;
-        }
         return;
     }
-
-    g_extension_registered = true;
 }
 
 tc_scene_render_state* tc_scene_render_state_get(tc_scene_handle scene) {

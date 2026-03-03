@@ -13,7 +13,8 @@
 ## Текущее состояние (факт)
 
 - `termin-scene` инициализирован и собирается как отдельная C-библиотека.
-- В `termin-scene` уже перенесен базовый scene-core набор (`tc_scene`, `tc_entity_pool`, `tc_component`, `tc_type_registry`, `tc_archetype`, `tc_hash_map`, `tc_value`, `tc_scene_extension`).
+- В `termin-scene` уже перенесен базовый scene-core набор (`tc_scene`, `tc_entity_pool`, `tc_component`, `tc_type_registry`, `tc_archetype`, `tc_hash_map`, `tc_scene_extension`).
+- `tc_types`/`tc_value`/`tc_dlist` вынесены в `termin-base`; в `termin` и `termin-scene` оставлены совместимые thin-wrapper заголовки.
 - В перенесенной версии `tc_scene` удалены прямые зависимости на render/collision shim API.
 - В `termin` extension-инфраструктура уже реализована (`tc_scene_ext_*`).
 - В `termin/core_c` пока остается legacy-реализация до переключения `termin` на внешний `termin-scene`.
@@ -49,12 +50,12 @@
 - [x] `tc_type_registry.[ch]`
 - [x] `tc_archetype.[ch]`
 - [x] `tc_hash_map.[ch]` (или зависимость на `termin-base`, см. decision gate ниже)
-- [ ] `tc_types.h` (или эквивалентный shared base import)
+- [x] `tc_types.h` (или эквивалентный shared base import)
 
 Что уходит в `termin-base`:
 
-- [ ] `tc_value.[ch]` (общий контейнерный тип для C API; временно находится в `termin-scene`)
-- [ ] `tc_dlist.h` (общая intrusive list utility; временно находится в `termin-scene`)
+- [x] `tc_value.[ch]` (общий контейнерный тип для C API; вынесен в `termin-base`)
+- [x] `tc_dlist.h` (общая intrusive list utility; вынесена в `termin-base`)
 
 Минимальные внешние зависимости:
 
@@ -112,7 +113,7 @@ rg -n "tc_scene_get_collision_world|tc_scene_set_collision_world" core_c/include
 - [x] В `termin/cpp/CMakeLists.txt` убрать `add_subdirectory(${TERMIN_ROOT}/core_c ...)` для перенесенных модулей.
   - Реализовано через `TC_USE_EXTERNAL_SCENE=ON`: `termin_core` собирается без scene-core исходников и линкуется с внешним `termin_scene`.
 - [x] Линковать `termin` на установленный пакет `termin_scene`.
-- [ ] Поправить include paths/exports для заголовков scene-core.
+- [x] Поправить include paths/exports для заголовков scene-core.
 
 Критерий готовности:
 

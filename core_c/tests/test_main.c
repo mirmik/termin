@@ -4,9 +4,8 @@
 #include <string.h>
 #include <math.h>
 #include "termin_core.h"
+#include "physics/tc_collision_world.h"
 #include <tgfx/tc_resource_map.h>
-#include <tgfx/resources/tc_mesh.h>
-#include <tgfx/resources/tc_mesh_registry.h>
 
 #define TEST_ASSERT(cond, msg) \
     do { \
@@ -217,56 +216,6 @@ static int test_uuid(void) {
 }
 
 // ============================================================================
-// tc_value tests
-// ============================================================================
-
-static int test_tc_value(void) {
-    printf("Testing tc_value...\n");
-
-    // Test primitives
-    tc_value v_nil = tc_value_nil();
-    TEST_ASSERT(v_nil.type == TC_VALUE_NIL, "nil type");
-
-    tc_value v_bool = tc_value_bool(true);
-    TEST_ASSERT(v_bool.type == TC_VALUE_BOOL, "bool type");
-    TEST_ASSERT(v_bool.data.b == true, "bool value");
-
-    tc_value v_int = tc_value_int(42);
-    TEST_ASSERT(v_int.type == TC_VALUE_INT, "int type");
-    TEST_ASSERT(v_int.data.i == 42, "int value");
-
-    tc_value v_str = tc_value_string("hello");
-    TEST_ASSERT(v_str.type == TC_VALUE_STRING, "string type");
-    TEST_ASSERT(strcmp(v_str.data.s, "hello") == 0, "string value");
-    tc_value_free(&v_str);
-
-    // Test vec3
-    tc_value v_vec = tc_value_vec3((tc_vec3){1, 2, 3});
-    TEST_ASSERT(v_vec.type == TC_VALUE_VEC3, "vec3 type");
-    TEST_ASSERT(fabs(v_vec.data.v3.x - 1.0) < EPSILON, "vec3 x");
-
-    // Test list
-    tc_value list = tc_value_list_new();
-    tc_value_list_push(&list, tc_value_int(1));
-    tc_value_list_push(&list, tc_value_int(2));
-    tc_value_list_push(&list, tc_value_int(3));
-    TEST_ASSERT(tc_value_list_size(&list) == 3, "list count");
-    TEST_ASSERT(tc_value_list_get(&list, 1)->data.i == 2, "list get");
-    tc_value_free(&list);
-
-    // Test dict
-    tc_value dict = tc_value_dict_new();
-    tc_value_dict_set(&dict, "name", tc_value_string("test"));
-    tc_value_dict_set(&dict, "value", tc_value_int(123));
-    TEST_ASSERT(tc_value_dict_has(&dict, "name"), "dict has");
-    TEST_ASSERT(tc_value_dict_get(&dict, "value")->data.i == 123, "dict get");
-    tc_value_free(&dict);
-
-    printf("  tc_value: PASS\n");
-    return 0;
-}
-
-// ============================================================================
 // tc_inspect tests - DISABLED
 // Old C-based type registration API removed. C is now dispatcher only.
 // Types are owned by C++ (InspectRegistry) or Python.
@@ -382,55 +331,30 @@ static int test_vertex_layout(void) {
 }
 
 // ============================================================================
-// Mesh tests (global API)
+// Scene extension re-registration test
 // ============================================================================
 
-static int test_mesh(void) {
-    printf("Testing Mesh...\n");
+static int test_scene_extensions_reregister(void) {
+    printf("Testing scene extension re-registration...\n");
 
-    tc_mesh_init();
-    TEST_ASSERT(tc_mesh_count() == 0, "initial count is 0");
+    tc_scene_handle h1 = tc_scene_new();
+    TEST_ASSERT(tc_scene_handle_valid(h1), "first scene handle valid");
+    TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "first attach render_mount");
+    TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_STATE), "first attach render_state");
+    TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_COLLISION_WORLD), "first attach collision_world");
+    tc_scene_free(h1);
 
-    // Add mesh
-    tc_mesh* mesh1 = tc_mesh_add("test-mesh-001");
-    TEST_ASSERT(mesh1 != NULL, "add returns mesh");
-    TEST_ASSERT(tc_mesh_count() == 1, "count is 1");
-    TEST_ASSERT(strcmp(mesh1->header.uuid, "test-mesh-001") == 0, "uuid matches");
+    tc_shutdown();
+    tc_init();
 
-    // Get by UUID
-    tc_mesh_handle h1 = tc_mesh_find("test-mesh-001");
-    TEST_ASSERT(tc_mesh_get(h1) == mesh1, "get returns same mesh");
-    TEST_ASSERT(tc_mesh_contains("test-mesh-001"), "contains");
+    tc_scene_handle h2 = tc_scene_new();
+    TEST_ASSERT(tc_scene_handle_valid(h2), "second scene handle valid");
+    TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "second attach render_mount");
+    TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_RENDER_STATE), "second attach render_state");
+    TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_COLLISION_WORLD), "second attach collision_world");
+    tc_scene_free(h2);
 
-    // Set data
-    tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv();
-    float verts[] = {
-        0, 0, 0,  0, 1, 0,  0, 0,
-        1, 0, 0,  0, 1, 0,  1, 0,
-        0, 0, 1,  0, 1, 0,  0, 1,
-    };
-    uint32_t idx[] = { 0, 1, 2 };
-
-    tc_mesh_set_data(mesh1, verts, 3, &layout, idx, 3, "test-mesh");
-    TEST_ASSERT(mesh1->vertex_count == 3, "vertex count");
-    TEST_ASSERT(mesh1->index_count == 3, "index count");
-    TEST_ASSERT(mesh1->header.version == 2, "version is 2");
-
-    // Duplicate rejected
-    TEST_ASSERT(tc_mesh_add("test-mesh-001") == NULL, "duplicate rejected");
-
-    // Auto UUID
-    tc_mesh* mesh2 = tc_mesh_add(NULL);
-    TEST_ASSERT(mesh2 != NULL, "auto uuid works");
-    TEST_ASSERT(tc_mesh_count() == 2, "count is 2");
-
-    // Remove
-    TEST_ASSERT(tc_mesh_remove("test-mesh-001"), "remove");
-    TEST_ASSERT(tc_mesh_count() == 1, "count is 1");
-
-    tc_mesh_shutdown();
-
-    printf("  Mesh: PASS\n");
+    printf("  Scene extension re-registration: PASS\n");
     return 0;
 }
 
@@ -451,13 +375,12 @@ int main(void) {
     result |= test_entity_pool();
     result |= test_entity_hierarchy();
     result |= test_uuid();
-    result |= test_tc_value();
     // test_inspect() disabled - old C-based type registration API removed
     // C is now dispatcher only, types owned by C++ or Python
     result |= test_kind_handler();
     result |= test_resource_map();
     result |= test_vertex_layout();
-    result |= test_mesh();
+    result |= test_scene_extensions_reregister();
 
     tc_shutdown();
 

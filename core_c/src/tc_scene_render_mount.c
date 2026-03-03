@@ -6,8 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool g_extension_registered = false;
-
 static bool value_to_float(const tc_value* v, float* out) {
     if (!v || !out) return false;
     switch (v->type) {
@@ -220,7 +218,7 @@ static bool render_mount_deserialize(void* ext, const tc_value* in_data, void* t
 }
 
 void tc_scene_render_mount_extension_init(void) {
-    if (g_extension_registered) return;
+    if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT)) return;
 
     tc_scene_ext_vtable vtable = {
         .create = render_mount_create,
@@ -236,14 +234,8 @@ void tc_scene_render_mount_extension_init(void) {
             &vtable,
             NULL
         )) {
-        if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT)) {
-            g_extension_registered = true;
-            return;
-        }
         return;
     }
-
-    g_extension_registered = true;
 }
 
 tc_scene_render_mount* tc_scene_render_mount_get(tc_scene_handle scene) {
