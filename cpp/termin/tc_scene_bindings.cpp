@@ -414,53 +414,88 @@ void bind_tc_scene(nb::module_& m) {
 
         // Skybox type
         .def("get_skybox_type", [](TcSceneRef& self) -> int {
-            return tc_scene_get_skybox_type(self._h);
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            return state ? state->skybox.type : TC_SKYBOX_GRADIENT;
         })
         .def("set_skybox_type", [](TcSceneRef& self, int type) {
-            tc_scene_set_skybox_type(self._h, type);
+            if (!tc_scene_render_state_ensure(self._h)) return;
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            if (!state) return;
+            state->skybox.type = type;
         })
 
         // Skybox colors
         .def("get_skybox_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
-            float r, g, b;
-            tc_scene_get_skybox_color(self._h, &r, &g, &b);
+            float r = 0.5f, g = 0.7f, b = 0.9f;
+            if (tc_scene_render_state* state = tc_scene_render_state_get(self._h)) {
+                r = state->skybox.color[0];
+                g = state->skybox.color[1];
+                b = state->skybox.color[2];
+            }
             return {r, g, b};
         })
         .def("set_skybox_color", [](TcSceneRef& self, float r, float g, float b) {
-            tc_scene_set_skybox_color(self._h, r, g, b);
+            if (!tc_scene_render_state_ensure(self._h)) return;
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            if (!state) return;
+            state->skybox.color[0] = r;
+            state->skybox.color[1] = g;
+            state->skybox.color[2] = b;
         })
         .def("get_skybox_top_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
-            float r, g, b;
-            tc_scene_get_skybox_top_color(self._h, &r, &g, &b);
+            float r = 0.4f, g = 0.6f, b = 0.9f;
+            if (tc_scene_render_state* state = tc_scene_render_state_get(self._h)) {
+                r = state->skybox.top_color[0];
+                g = state->skybox.top_color[1];
+                b = state->skybox.top_color[2];
+            }
             return {r, g, b};
         })
         .def("set_skybox_top_color", [](TcSceneRef& self, float r, float g, float b) {
-            tc_scene_set_skybox_top_color(self._h, r, g, b);
+            if (!tc_scene_render_state_ensure(self._h)) return;
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            if (!state) return;
+            state->skybox.top_color[0] = r;
+            state->skybox.top_color[1] = g;
+            state->skybox.top_color[2] = b;
         })
         .def("get_skybox_bottom_color", [](TcSceneRef& self) -> std::tuple<float, float, float> {
-            float r, g, b;
-            tc_scene_get_skybox_bottom_color(self._h, &r, &g, &b);
+            float r = 0.6f, g = 0.5f, b = 0.4f;
+            if (tc_scene_render_state* state = tc_scene_render_state_get(self._h)) {
+                r = state->skybox.bottom_color[0];
+                g = state->skybox.bottom_color[1];
+                b = state->skybox.bottom_color[2];
+            }
             return {r, g, b};
         })
         .def("set_skybox_bottom_color", [](TcSceneRef& self, float r, float g, float b) {
-            tc_scene_set_skybox_bottom_color(self._h, r, g, b);
+            if (!tc_scene_render_state_ensure(self._h)) return;
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            if (!state) return;
+            state->skybox.bottom_color[0] = r;
+            state->skybox.bottom_color[1] = g;
+            state->skybox.bottom_color[2] = b;
         })
 
         // Skybox mesh (lazy creation)
         .def("get_skybox_mesh", [](TcSceneRef& self) -> TcMesh {
-            tc_mesh* mesh = tc_scene_get_skybox_mesh(self._h);
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            tc_mesh* mesh = state ? tc_scene_skybox_ensure_mesh(&state->skybox) : nullptr;
             return TcMesh(mesh);
         })
         .def("skybox_mesh", [](TcSceneRef& self) -> TcMesh {
-            tc_mesh* mesh = tc_scene_get_skybox_mesh(self._h);
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            tc_mesh* mesh = state ? tc_scene_skybox_ensure_mesh(&state->skybox) : nullptr;
             return TcMesh(mesh);
         })
         .def("skybox_material", [](TcSceneRef& self) -> TcMaterial {
-            tc_material* mat = tc_scene_get_skybox_material(self._h);
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            tc_material* mat = state ? state->skybox.material : nullptr;
             return TcMaterial(mat);
         })
         .def("ensure_skybox_material", [](TcSceneRef& self, int skybox_type) -> TcMaterial {
-            tc_scene_skybox* skybox = tc_scene_get_skybox(self._h);
+            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+            tc_scene_skybox* skybox = state ? &state->skybox : nullptr;
             if (!skybox) return TcMaterial(nullptr);
 
             // ensure_material already sets skybox->material internally
@@ -691,7 +726,8 @@ void bind_tc_scene(nb::module_& m) {
         // --- Skybox type as string ---
         .def_prop_rw("skybox_type",
             [](TcSceneRef& self) -> std::string {
-                int t = tc_scene_get_skybox_type(self._h);
+                tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+                int t = state ? state->skybox.type : TC_SKYBOX_GRADIENT;
                 if (t == TC_SKYBOX_NONE) return "none";
                 if (t == TC_SKYBOX_SOLID) return "solid";
                 return "gradient";
@@ -700,7 +736,10 @@ void bind_tc_scene(nb::module_& m) {
                 int t = TC_SKYBOX_GRADIENT;
                 if (s == "none") t = TC_SKYBOX_NONE;
                 else if (s == "solid") t = TC_SKYBOX_SOLID;
-                tc_scene_set_skybox_type(self._h, t);
+                if (!tc_scene_render_state_ensure(self._h)) return;
+                tc_scene_render_state* state = tc_scene_render_state_get(self._h);
+                if (!state) return;
+                state->skybox.type = t;
             },
             "Skybox type as string: 'none', 'solid', or 'gradient'")
 

@@ -6,6 +6,7 @@
 #include "render/rendering_manager.hpp"
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_skybox.h"
+#include "physics/tc_collision_world.h"
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
 #include "collision/collision_world.hpp"
@@ -191,69 +192,105 @@ void TcSceneRef::set_flag_name(int index, const std::string& name) {
 
 std::tuple<float, float, float, float> TcSceneRef::get_background_color() const {
     float r = 0, g = 0, b = 0, a = 1;
-    tc_scene_get_background_color(_h, &r, &g, &b, &a);
+    if (tc_scene_render_state* state = tc_scene_render_state_get(_h)) {
+        r = state->background_color[0];
+        g = state->background_color[1];
+        b = state->background_color[2];
+        a = state->background_color[3];
+    }
     return {r, g, b, a};
 }
 
 void TcSceneRef::set_background_color(float r, float g, float b, float a) {
-    tc_scene_set_background_color(_h, r, g, b, a);
+    if (!tc_scene_render_state_ensure(_h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    if (!state) return;
+    state->background_color[0] = r;
+    state->background_color[1] = g;
+    state->background_color[2] = b;
+    state->background_color[3] = a;
 }
 
 Vec4 TcSceneRef::background_color() const {
     float r = 0, g = 0, b = 0, a = 1;
-    tc_scene_get_background_color(_h, &r, &g, &b, &a);
+    if (tc_scene_render_state* state = tc_scene_render_state_get(_h)) {
+        r = state->background_color[0];
+        g = state->background_color[1];
+        b = state->background_color[2];
+        a = state->background_color[3];
+    }
     return Vec4(r, g, b, a);
 }
 
 void TcSceneRef::set_background_color(const Vec4& color) {
-    tc_scene_set_background_color(_h,
+    set_background_color(
         static_cast<float>(color.x),
         static_cast<float>(color.y),
         static_cast<float>(color.z),
-        static_cast<float>(color.w));
+        static_cast<float>(color.w)
+    );
 }
 
 Vec3 TcSceneRef::skybox_color() const {
-    float r, g, b;
-    tc_scene_get_skybox_color(_h, &r, &g, &b);
+    float r = 0.5f, g = 0.7f, b = 0.9f;
+    if (tc_scene_render_state* state = tc_scene_render_state_get(_h)) {
+        r = state->skybox.color[0];
+        g = state->skybox.color[1];
+        b = state->skybox.color[2];
+    }
     return Vec3(r, g, b);
 }
 
 void TcSceneRef::set_skybox_color(const Vec3& color) {
-    tc_scene_set_skybox_color(_h,
-        static_cast<float>(color.x),
-        static_cast<float>(color.y),
-        static_cast<float>(color.z));
+    if (!tc_scene_render_state_ensure(_h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    if (!state) return;
+    state->skybox.color[0] = static_cast<float>(color.x);
+    state->skybox.color[1] = static_cast<float>(color.y);
+    state->skybox.color[2] = static_cast<float>(color.z);
 }
 
 Vec3 TcSceneRef::skybox_top_color() const {
-    float r, g, b;
-    tc_scene_get_skybox_top_color(_h, &r, &g, &b);
+    float r = 0.4f, g = 0.6f, b = 0.9f;
+    if (tc_scene_render_state* state = tc_scene_render_state_get(_h)) {
+        r = state->skybox.top_color[0];
+        g = state->skybox.top_color[1];
+        b = state->skybox.top_color[2];
+    }
     return Vec3(r, g, b);
 }
 
 void TcSceneRef::set_skybox_top_color(const Vec3& color) {
-    tc_scene_set_skybox_top_color(_h,
-        static_cast<float>(color.x),
-        static_cast<float>(color.y),
-        static_cast<float>(color.z));
+    if (!tc_scene_render_state_ensure(_h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    if (!state) return;
+    state->skybox.top_color[0] = static_cast<float>(color.x);
+    state->skybox.top_color[1] = static_cast<float>(color.y);
+    state->skybox.top_color[2] = static_cast<float>(color.z);
 }
 
 Vec3 TcSceneRef::skybox_bottom_color() const {
-    float r, g, b;
-    tc_scene_get_skybox_bottom_color(_h, &r, &g, &b);
+    float r = 0.6f, g = 0.5f, b = 0.4f;
+    if (tc_scene_render_state* state = tc_scene_render_state_get(_h)) {
+        r = state->skybox.bottom_color[0];
+        g = state->skybox.bottom_color[1];
+        b = state->skybox.bottom_color[2];
+    }
     return Vec3(r, g, b);
 }
 
 void TcSceneRef::set_skybox_bottom_color(const Vec3& color) {
-    tc_scene_set_skybox_bottom_color(_h,
-        static_cast<float>(color.x),
-        static_cast<float>(color.y),
-        static_cast<float>(color.z));
+    if (!tc_scene_render_state_ensure(_h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    if (!state) return;
+    state->skybox.bottom_color[0] = static_cast<float>(color.x);
+    state->skybox.bottom_color[1] = static_cast<float>(color.y);
+    state->skybox.bottom_color[2] = static_cast<float>(color.z);
 }
 
 Vec3 TcSceneRef::ambient_color() const {
-    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    tc_scene_lighting* lit = state ? &state->lighting : nullptr;
     if (lit) {
         return Vec3(lit->ambient_color[0], lit->ambient_color[1], lit->ambient_color[2]);
     }
@@ -261,7 +298,9 @@ Vec3 TcSceneRef::ambient_color() const {
 }
 
 void TcSceneRef::set_ambient_color(const Vec3& color) {
-    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    if (!tc_scene_render_state_ensure(_h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    tc_scene_lighting* lit = state ? &state->lighting : nullptr;
     if (lit) {
         lit->ambient_color[0] = static_cast<float>(color.x);
         lit->ambient_color[1] = static_cast<float>(color.y);
@@ -270,12 +309,15 @@ void TcSceneRef::set_ambient_color(const Vec3& color) {
 }
 
 float TcSceneRef::ambient_intensity() const {
-    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    tc_scene_lighting* lit = state ? &state->lighting : nullptr;
     return lit ? lit->ambient_intensity : 0.1f;
 }
 
 void TcSceneRef::set_ambient_intensity(float intensity) {
-    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
+    if (!tc_scene_render_state_ensure(_h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    tc_scene_lighting* lit = state ? &state->lighting : nullptr;
     if (lit) {
         lit->ambient_intensity = intensity;
     }
@@ -295,20 +337,26 @@ void TcSceneRef::clear_viewport_configs() {
 }
 
 size_t TcSceneRef::viewport_config_count() const {
-    return tc_scene_viewport_config_count(_h);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(_h);
+    return mount ? mount->viewport_config_count : 0;
 }
 
 ViewportConfig TcSceneRef::viewport_config_at(size_t index) const {
-    tc_viewport_config* c = tc_scene_viewport_config_at(_h, index);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(_h);
+    if (!mount || index >= mount->viewport_config_count) {
+        return ViewportConfig();
+    }
+    tc_viewport_config* c = &mount->viewport_configs[index];
     return ViewportConfig::from_c(c);
 }
 
 std::vector<ViewportConfig> TcSceneRef::viewport_configs() const {
     std::vector<ViewportConfig> result;
-    size_t count = tc_scene_viewport_config_count(_h);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(_h);
+    size_t count = mount ? mount->viewport_config_count : 0;
     result.reserve(count);
     for (size_t i = 0; i < count; ++i) {
-        tc_viewport_config* c = tc_scene_viewport_config_at(_h, i);
+        tc_viewport_config* c = &mount->viewport_configs[i];
         result.push_back(ViewportConfig::from_c(c));
     }
     return result;
@@ -417,7 +465,8 @@ void TcSceneRef::metadata_from_json(const std::string& json_str) {
 }
 
 tc_scene_lighting* TcSceneRef::lighting() {
-    return tc_scene_get_lighting(_h);
+    tc_scene_render_state* state = tc_scene_render_state_get(_h);
+    return state ? &state->lighting : nullptr;
 }
 
 std::vector<Entity> TcSceneRef::get_all_entities() const {
@@ -462,11 +511,16 @@ void TcSceneRef::clear_pipeline_templates() {
 }
 
 size_t TcSceneRef::pipeline_template_count() const {
-    return tc_scene_pipeline_template_count(_h);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(_h);
+    return mount ? mount->pipeline_template_count : 0;
 }
 
 TcScenePipelineTemplate TcSceneRef::pipeline_template_at(size_t index) const {
-    return TcScenePipelineTemplate(tc_scene_pipeline_template_at(_h, index));
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(_h);
+    if (!mount || index >= mount->pipeline_template_count) {
+        return TcScenePipelineTemplate(TC_SPT_HANDLE_INVALID);
+    }
+    return TcScenePipelineTemplate(mount->pipeline_templates[index]);
 }
 
 RenderPipeline* TcSceneRef::get_pipeline(const std::string& name) const {
@@ -482,7 +536,7 @@ const std::vector<std::string>& TcSceneRef::get_pipeline_targets(const std::stri
 }
 
 collision::CollisionWorld* TcSceneRef::collision_world() const {
-    return reinterpret_cast<collision::CollisionWorld*>(tc_scene_get_collision_world(_h));
+    return reinterpret_cast<collision::CollisionWorld*>(tc_collision_world_get_scene(_h));
 }
 
 SceneRaycastHit TcSceneRef::raycast(const Ray3& ray) const {

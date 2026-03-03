@@ -723,7 +723,8 @@ void ColorPass::execute(ExecuteContext& ctx) {
     ShadowSettings shadow_settings;
 
     if (tc_scene_handle_valid(scene)) {
-        tc_scene_lighting* lighting = tc_scene_get_lighting(scene);
+        tc_scene_render_state* render_state = tc_scene_render_state_get(scene);
+        tc_scene_lighting* lighting = render_state ? &render_state->lighting : nullptr;
         if (lighting) {
             ambient_color = Vec3{
                 lighting->ambient_color[0],

@@ -125,10 +125,12 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 - `TcSceneRef::serialize()` больше не пишет top-level `scene_pipelines`/`viewport_configs`; данные идут через `extensions.render_mount`.
 - `TcSceneRef::load_from_data()` поддерживает legacy top-level поля, адаптируя их в `extensions.render_mount`.
 - Добавлены runtime hooks `on_scene_update` и `on_scene_before_render`.
+- Основные C/C++ потребители переведены на extension-first доступ к `collision_world`, `render_state`, `render_mount`.
 
 ### Что осталось
 
 - Перевести потребителей на extension-first API и убрать legacy shim API из минимального `tc_scene`.
+- Дочистить внешние ABI-слои (например, C# P/Invoke), которые ещё ссылаются на legacy `tc_scene_get/set_collision_world`.
 - После полного перевода потребителей удалить fallback чтения legacy top-level полей (`render_state` и `render_mount`).
 
 ## Минимальный итоговый инвариант

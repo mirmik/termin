@@ -10,6 +10,7 @@ extern "C" {
 #include <tcbase/tc_log.h>
 #include "tc_gpu.h"
 #include "core/tc_scene.h"
+#include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
@@ -415,12 +416,13 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         return viewports;
     }
 
-    size_t config_count = tc_scene_viewport_config_count(scene);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
+    size_t config_count = mount ? mount->viewport_config_count : 0;
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
     tc_entity_pool_handle pool_handle = pool ? tc_entity_pool_registry_find(pool) : TC_ENTITY_POOL_HANDLE_INVALID;
 
     for (size_t i = 0; i < config_count; i++) {
-        tc_viewport_config* config = tc_scene_viewport_config_at(scene, i);
+        tc_viewport_config* config = mount ? &mount->viewport_configs[i] : nullptr;
         if (!config) continue;
 
         // Get or create display
@@ -572,9 +574,10 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
     }
 
     // Mark viewports as managed by their scene pipeline
-    size_t template_count = tc_scene_pipeline_template_count(scene);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
+    size_t template_count = mount ? mount->pipeline_template_count : 0;
     for (size_t i = 0; i < template_count; i++) {
-        tc_spt_handle spt_handle = tc_scene_pipeline_template_at(scene, i);
+        tc_spt_handle spt_handle = mount->pipeline_templates[i];
         if (!tc_spt_is_valid(spt_handle)) continue;
 
         TcScenePipelineTemplate templ(spt_handle);
@@ -976,11 +979,12 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
     // Clear existing pipelines (without notify_render_detach — attach will notify attach)
     clear_scene_pipelines(scene);
 
-    size_t template_count = tc_scene_pipeline_template_count(scene);
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
+    size_t template_count = mount ? mount->pipeline_template_count : 0;
     uint64_t key = scene_key(scene);
 
     for (size_t i = 0; i < template_count; i++) {
-        tc_spt_handle spt_handle = tc_scene_pipeline_template_at(scene, i);
+        tc_spt_handle spt_handle = mount->pipeline_templates[i];
         if (!tc_spt_is_valid(spt_handle)) continue;
 
         TcScenePipelineTemplate templ(spt_handle);

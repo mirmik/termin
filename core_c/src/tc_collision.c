@@ -4,7 +4,7 @@
  */
 
 #include "physics/tc_collision.h"
-#include "core/tc_scene.h"
+#include "physics/tc_collision_world.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,14 +25,14 @@ static tc_contact_manifold* s_manifolds = NULL;
 static size_t s_manifold_count = 0;
 
 void tc_scene_collision_update(tc_scene_handle scene) {
-    void* cw = tc_scene_get_collision_world(scene);
+    void* cw = tc_collision_world_get_scene(scene);
     if (cw) {
         tc_collision_world_update_all(cw);
     }
 }
 
 int tc_scene_has_collisions(tc_scene_handle scene) {
-    void* cw = tc_scene_get_collision_world(scene);
+    void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return 0;
 
     tc_contact_manifold* manifolds = NULL;
@@ -45,7 +45,7 @@ size_t tc_scene_collision_count(tc_scene_handle scene) {
 }
 
 tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count) {
-    void* cw = tc_scene_get_collision_world(scene);
+    void* cw = tc_collision_world_get_scene(scene);
 
     if (out_count) *out_count = 0;
     if (!cw) return NULL;

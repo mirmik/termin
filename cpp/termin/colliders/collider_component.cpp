@@ -1,6 +1,7 @@
 #include "collider_component.hpp"
 #include <tcbase/tc_log.hpp>
 #include "core/tc_entity_pool.h"
+#include "physics/tc_collision_world.h"
 #include "tc_inspect_cpp.hpp"
 #include <algorithm>
 
@@ -208,7 +209,7 @@ collision::CollisionWorld* ColliderComponent::_get_collision_world() const {
     if (!tc_scene_alive(_scene_handle)) {
         return nullptr;
     }
-    void* cw = tc_scene_get_collision_world(_scene_handle);
+    void* cw = tc_collision_world_get_scene(_scene_handle);
     return static_cast<collision::CollisionWorld*>(cw);
 }
 

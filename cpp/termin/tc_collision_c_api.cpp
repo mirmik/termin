@@ -10,7 +10,7 @@
 #include "collision/collision_world.hpp"
 #include "colliders/attached_collider.hpp"
 #include "physics/tc_collision.h"
-#include "core/tc_scene.h"
+#include "physics/tc_collision_world.h"
 #include <vector>
 
 using namespace termin;
@@ -93,7 +93,7 @@ static size_t detect_and_cache_contacts(void* cw) {
 extern "C" {
 
 COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
-    void* cw = tc_scene_get_collision_world(scene);
+    void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return;
 
     auto* world = static_cast<CollisionWorld*>(cw);
@@ -101,7 +101,7 @@ COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
 }
 
 COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene) {
-    void* cw = tc_scene_get_collision_world(scene);
+    void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return 0;
 
     size_t count = detect_and_cache_contacts(cw);
@@ -116,7 +116,7 @@ COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene) {
 COLLISION_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count) {
     if (out_count) *out_count = 0;
 
-    void* cw = tc_scene_get_collision_world(scene);
+    void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return nullptr;
 
     size_t count = detect_and_cache_contacts(cw);
