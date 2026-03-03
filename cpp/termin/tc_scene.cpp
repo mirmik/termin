@@ -17,8 +17,28 @@
 
 namespace termin {
 
+static void ensure_builtin_scene_extensions_registered() {
+    tc_scene_render_mount_extension_init();
+    tc_scene_render_state_extension_init();
+    tc_collision_world_extension_init();
+}
+
 TcSceneRef TcSceneRef::create(const std::string& name, const std::string& uuid) {
+    ensure_builtin_scene_extensions_registered();
+
     tc_scene_handle h = tc_scene_new();
+    if (tc_scene_handle_valid(h)) {
+        if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_MOUNT)) {
+            tc::Log::error("[TcSceneRef] failed to attach render_mount extension to scene (%u,%u)", h.index, h.generation);
+        }
+        if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_STATE)) {
+            tc::Log::error("[TcSceneRef] failed to attach render_state extension to scene (%u,%u)", h.index, h.generation);
+        }
+        if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
+            tc::Log::warn("[TcSceneRef] failed to attach collision_world extension to scene (%u,%u)", h.index, h.generation);
+        }
+    }
+
     if (!name.empty()) {
         tc_scene_set_name(h, name.c_str());
     }

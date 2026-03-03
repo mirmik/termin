@@ -9,6 +9,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Options
 option(TC_BUILD_SHARED "Build shared library" ON)
 option(TC_BUILD_TESTS "Build tests" ON)
+option(TC_USE_EXTERNAL_SCENE "Use external termin_scene package for scene-core ECS" OFF)
 
 # Source files (only .c)
 # Note: tc_collision.c is NOT included here because collision detection
@@ -94,6 +95,21 @@ set(TC_HEADERS
     include/render/tc_frame_graph.h
 )
 
+if(TC_USE_EXTERNAL_SCENE)
+    find_package(termin_scene REQUIRED)
+
+    list(REMOVE_ITEM TC_SOURCES
+        src/tc_archetype.c
+        src/tc_component.c
+        src/tc_entity_pool.c
+        src/tc_entity_pool_registry.c
+        src/tc_hash_map.c
+        src/tc_scene.c
+        src/tc_scene_extension.c
+        src/tc_type_registry.c
+    )
+endif()
+
 # termin-base (provides tc_log, shared enums)
 find_package(termin_base REQUIRED)
 
@@ -123,6 +139,9 @@ target_include_directories(termin_core
 )
 
 target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
+if(TC_USE_EXTERNAL_SCENE)
+    target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
+endif()
 
 # Platform-specific
 if(WIN32)

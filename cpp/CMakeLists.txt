@@ -114,6 +114,7 @@ if(BUILD_TESTS)
 else()
     set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 endif()
+set(TC_USE_EXTERNAL_SCENE ON CACHE BOOL "" FORCE)
 add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
 # Recast library only (from recastnavigation, avoids configure_file race conditions)

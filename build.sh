@@ -110,9 +110,10 @@ echo "Installing..."
 rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
 
-# Copy shared libraries from termin-base and termin-graphics
-echo "Copying shared libraries from termin-base and termin-graphics..."
+# Copy shared libraries from termin-base, termin-scene and termin-graphics
+echo "Copying shared libraries from termin-base, termin-scene and termin-graphics..."
 TERMIN_BASE_LIBDIR="$ENV_DIR/termin-base/python/tcbase/lib"
+TERMIN_SCENE_LIBDIR="/usr/local/lib"
 TERMIN_GFX_LIBDIR="$ENV_DIR/termin-graphics/python/tgfx/lib"
 
 if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
@@ -120,6 +121,13 @@ if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
     echo "  Copied libtermin_base from $TERMIN_BASE_LIBDIR"
 else
     echo "  WARNING: $TERMIN_BASE_LIBDIR not found — skipping libtermin_base"
+fi
+
+if [[ -d "$TERMIN_SCENE_LIBDIR" ]] && compgen -G "$TERMIN_SCENE_LIBDIR/libtermin_scene.so*" > /dev/null; then
+    cp -P "$TERMIN_SCENE_LIBDIR"/libtermin_scene.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_scene from $TERMIN_SCENE_LIBDIR"
+else
+    echo "  WARNING: libtermin_scene not found in $TERMIN_SCENE_LIBDIR — skipping libtermin_scene"
 fi
 
 if [[ -d "$TERMIN_GFX_LIBDIR" ]]; then

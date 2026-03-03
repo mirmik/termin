@@ -8,10 +8,20 @@
 
 extern "C" {
 #include "tc_profiler.h"
+#include "core/tc_scene_extension.h"
+#include "core/tc_scene_render_mount.h"
+#include "core/tc_scene_render_state.h"
+#include "physics/tc_collision_world.h"
 #include <tcbase/tc_log.h>
 }
 
 namespace termin {
+
+static void ensure_builtin_scene_extensions_registered() {
+    tc_scene_render_mount_extension_init();
+    tc_scene_render_state_extension_init();
+    tc_collision_world_extension_init();
+}
 
 SceneManager::SceneManager() {
     tc_scene_manager_set_instance(reinterpret_cast<tc_scene_manager*>(this));
@@ -32,6 +42,8 @@ tc_scene_handle SceneManager::create_scene(const std::string& name) {
         return TC_SCENE_HANDLE_INVALID;
     }
 
+    ensure_builtin_scene_extensions_registered();
+
     tc_scene_handle h = tc_scene_new();
     if (!tc_scene_handle_valid(h)) {
         tc_log(TC_LOG_ERROR, "[SceneManager] create_scene: failed to create scene '%s'", name.c_str());
@@ -39,6 +51,15 @@ tc_scene_handle SceneManager::create_scene(const std::string& name) {
     }
 
     tc_scene_set_name(h, name.c_str());
+    if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_MOUNT)) {
+        tc_log(TC_LOG_ERROR, "[SceneManager] failed to attach render_mount extension to scene '%s'", name.c_str());
+    }
+    if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_STATE)) {
+        tc_log(TC_LOG_ERROR, "[SceneManager] failed to attach render_state extension to scene '%s'", name.c_str());
+    }
+    if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
+        tc_log(TC_LOG_WARN, "[SceneManager] failed to attach collision_world extension to scene '%s'", name.c_str());
+    }
     _scenes[name] = h;
     return h;
 }
