@@ -4,6 +4,7 @@
 #include "entity/component.hpp"
 #include "entity/tc_component_ref.hpp"
 #include "render/rendering_manager.hpp"
+#include "core/tc_scene_extension.h"
 #include "core/tc_scene_skybox.h"
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
@@ -858,6 +859,14 @@ nos::trent TcSceneRef::serialize() const {
         result["metadata"] = std::move(md);
     }
 
+    // Extensions
+    tc_value ext_val = tc_scene_ext_serialize_scene(_h);
+    nos::trent ext = tc::tc_value_to_trent(ext_val);
+    tc_value_free(&ext_val);
+    if (!ext.is_nil() && ext.is_dict() && !ext.as_dict().empty()) {
+        result["extensions"] = std::move(ext);
+    }
+
     return result;
 }
 
@@ -974,6 +983,13 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
         if (data.contains("metadata")) {
             tc_value md_val = tc::trent_to_tc_value(data["metadata"]);
             tc_scene_set_metadata(_h, md_val);
+        }
+
+        // Extensions
+        if (data.contains("extensions")) {
+            tc_value ext_val = tc::trent_to_tc_value(data["extensions"]);
+            tc_scene_ext_deserialize_scene(_h, &ext_val);
+            tc_value_free(&ext_val);
         }
     }
 

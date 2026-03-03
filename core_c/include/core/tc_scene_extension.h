@@ -3,6 +3,7 @@
 #define TC_SCENE_EXTENSION_H
 
 #include "core/tc_scene_pool.h"
+#include "tc_value.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -16,12 +17,15 @@ typedef uint64_t tc_scene_ext_type_id;
 typedef struct tc_scene_ext_vtable {
     void* (*create)(tc_scene_handle scene, void* type_userdata);
     void (*destroy)(void* ext, void* type_userdata);
+    bool (*serialize)(void* ext, tc_value* out_data, void* type_userdata);
+    bool (*deserialize)(void* ext, const tc_value* in_data, void* type_userdata);
 } tc_scene_ext_vtable;
 
 // Register extension type globally.
 TC_API bool tc_scene_ext_register(
     tc_scene_ext_type_id type_id,
     const char* debug_name,
+    const char* persistence_key,
     const tc_scene_ext_vtable* vtable,
     void* type_userdata
 );
@@ -44,6 +48,15 @@ TC_API size_t tc_scene_ext_get_attached_types(
     tc_scene_ext_type_id* out_ids,
     size_t max_count
 );
+
+// Serialize all attached extensions for scene into dict:
+// { "<persistence_key>": <extension data dict>, ... }
+TC_API tc_value tc_scene_ext_serialize_scene(tc_scene_handle scene);
+
+// Deserialize extension data from dict:
+// { "<persistence_key>": <extension data dict>, ... }
+// Attaches registered extensions found in input before deserialize callback.
+TC_API void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value* extensions_dict);
 
 // Internal lifecycle helpers (called from tc_init/tc_shutdown).
 TC_API void tc_scene_ext_registry_init(void);

@@ -11,6 +11,7 @@
 typedef struct {
     tc_scene_ext_type_id type_id;
     const char* debug_name;
+    const char* persistence_key;
     tc_scene_ext_vtable vtable;
     void* type_userdata;
     bool used;
@@ -20,6 +21,7 @@ typedef struct {
     tc_scene_handle scene;
     tc_scene_ext_type_id type_id;
     void* instance;
+    const char* persistence_key;
     tc_scene_ext_vtable vtable;
     void* type_userdata;
     bool used;
@@ -113,6 +115,7 @@ void tc_scene_ext_registry_shutdown(void) {
 bool tc_scene_ext_register(
     tc_scene_ext_type_id type_id,
     const char* debug_name,
+    const char* persistence_key,
     const tc_scene_ext_vtable* vtable,
     void* type_userdata
 ) {
@@ -137,6 +140,7 @@ bool tc_scene_ext_register(
     tc_scene_ext_type_entry* e = &g_registry->types[g_registry->type_count++];
     e->type_id = type_id;
     e->debug_name = debug_name;
+    e->persistence_key = persistence_key ? persistence_key : debug_name;
     e->vtable = *vtable;
     e->type_userdata = type_userdata;
     e->used = true;
@@ -176,6 +180,7 @@ bool tc_scene_ext_attach(tc_scene_handle scene, tc_scene_ext_type_id type_id) {
     e->scene = scene;
     e->type_id = type_id;
     e->instance = instance;
+    e->persistence_key = type_entry->persistence_key;
     e->vtable = type_entry->vtable;
     e->type_userdata = type_entry->type_userdata;
     e->used = true;
@@ -249,4 +254,67 @@ size_t tc_scene_ext_get_attached_types(
         out_ids[count++] = e->type_id;
     }
     return count;
+}
+
+tc_value tc_scene_ext_serialize_scene(tc_scene_handle scene) {
+    tc_value result = tc_value_dict_new();
+    if (!tc_scene_alive(scene)) return result;
+    if (!g_registry) return result;
+
+    for (size_t i = 0; i < g_registry->instance_count; i++) {
+        tc_scene_ext_instance_entry* e = &g_registry->instances[i];
+        if (!e->used) continue;
+        if (!tc_scene_handle_eq(e->scene, scene)) continue;
+        if (!e->persistence_key || !e->persistence_key[0]) continue;
+
+        tc_value payload = tc_value_dict_new();
+        if (e->vtable.serialize) {
+            if (!e->vtable.serialize(e->instance, &payload, e->type_userdata)) {
+                tc_log_warn(
+                    "[tc_scene_ext_serialize_scene] serialize failed: type_id=%llu",
+                    (unsigned long long)e->type_id
+                );
+            }
+        }
+        tc_value_dict_set(&result, e->persistence_key, payload);
+    }
+
+    return result;
+}
+
+void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value* extensions_dict) {
+    if (!tc_scene_alive(scene)) return;
+    if (!g_registry) return;
+    if (!extensions_dict || extensions_dict->type != TC_VALUE_DICT) return;
+
+    for (size_t i = 0; i < g_registry->type_count; i++) {
+        tc_scene_ext_type_entry* type_entry = &g_registry->types[i];
+        if (!type_entry->used) continue;
+        if (!type_entry->persistence_key || !type_entry->persistence_key[0]) continue;
+
+        tc_value* payload = tc_value_dict_get((tc_value*)extensions_dict, type_entry->persistence_key);
+        if (!payload) continue;
+        if (payload->type != TC_VALUE_DICT) continue;
+
+        if (!tc_scene_ext_has(scene, type_entry->type_id)) {
+            if (!tc_scene_ext_attach(scene, type_entry->type_id)) {
+                tc_log_warn(
+                    "[tc_scene_ext_deserialize_scene] attach failed: type_id=%llu",
+                    (unsigned long long)type_entry->type_id
+                );
+                continue;
+            }
+        }
+
+        tc_scene_ext_instance_entry* inst = find_instance(scene, type_entry->type_id);
+        if (!inst) continue;
+        if (!inst->vtable.deserialize) continue;
+
+        if (!inst->vtable.deserialize(inst->instance, payload, inst->type_userdata)) {
+            tc_log_warn(
+                "[tc_scene_ext_deserialize_scene] deserialize failed: type_id=%llu",
+                (unsigned long long)inst->type_id
+            );
+        }
+    }
 }

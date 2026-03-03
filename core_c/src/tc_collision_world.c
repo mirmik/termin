@@ -60,6 +60,7 @@ void tc_collision_world_extension_init(void) {
     if (!tc_scene_ext_register(
             TC_SCENE_EXT_TYPE_COLLISION_WORLD,
             "collision_world",
+            "collision_world",
             &vtable,
             NULL
         )) {
