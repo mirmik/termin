@@ -2,8 +2,7 @@
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
-#include "core/tc_scene_lighting.h"
-#include "core/tc_scene_skybox.h"
+#include "core/tc_scene_render_state.h"
 #include "tc_viewport_config.h"
 #include "physics/tc_collision_world.h"
 #include <tgfx/tc_resource_map.h>
@@ -16,21 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-// ============================================================================
-// Scene Lighting Defaults
-// ============================================================================
-
-void tc_scene_lighting_init(tc_scene_lighting* lighting) {
-    if (!lighting) return;
-    lighting->ambient_color[0] = 1.0f;
-    lighting->ambient_color[1] = 1.0f;
-    lighting->ambient_color[2] = 1.0f;
-    lighting->ambient_intensity = 0.1f;
-    lighting->shadow_method = TC_SHADOW_METHOD_PCF;
-    lighting->shadow_softness = 1.0f;
-    lighting->shadow_bias = 0.005f;
-}
 
 // ============================================================================
 // Dynamic array for components
@@ -104,12 +88,9 @@ typedef struct {
     double* fixed_timesteps;
     double* accumulated_times;
     tc_resource_map** type_heads;
-    tc_scene_lighting* lightings;
-    tc_scene_skybox* skyboxes;
     tc_value* metadata;  // Extensible metadata storage (dict per scene)
     const char** names;
     const char** uuids;
-    float* background_colors;  // [capacity * 4] RGBA
 
     // Layer and flag names (64 each per scene, interned strings)
     const char** layer_names;  // [capacity * 64]
@@ -163,12 +144,9 @@ void tc_scene_pool_init(void) {
     g_pool->fixed_timesteps = (double*)calloc(cap, sizeof(double));
     g_pool->accumulated_times = (double*)calloc(cap, sizeof(double));
     g_pool->type_heads = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
-    g_pool->lightings = (tc_scene_lighting*)calloc(cap, sizeof(tc_scene_lighting));
-    g_pool->skyboxes = (tc_scene_skybox*)calloc(cap, sizeof(tc_scene_skybox));
     g_pool->metadata = (tc_value*)calloc(cap, sizeof(tc_value));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
-    g_pool->background_colors = (float*)calloc(cap * 4, sizeof(float));
     g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->pipeline_templates = (tc_spt_handle**)calloc(cap, sizeof(tc_spt_handle*));
@@ -185,6 +163,9 @@ void tc_scene_pool_init(void) {
     g_pool->free_count = cap;
     g_pool->capacity = cap;
     g_pool->count = 0;
+
+    // Register built-in render-state scene extension type.
+    tc_scene_render_state_extension_init();
 
     // Register built-in collision-world scene extension type.
     tc_collision_world_extension_init();
@@ -215,12 +196,9 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->fixed_timesteps);
     free(g_pool->accumulated_times);
     free(g_pool->type_heads);
-    free(g_pool->lightings);
-    free(g_pool->skyboxes);
     free(g_pool->metadata);
     free(g_pool->names);
     free(g_pool->uuids);
-    free(g_pool->background_colors);
     free(g_pool->layer_names);
     free(g_pool->flag_names);
     free(g_pool->pipeline_templates);
@@ -258,12 +236,9 @@ static void pool_grow(void) {
     g_pool->fixed_timesteps = realloc(g_pool->fixed_timesteps, new_cap * sizeof(double));
     g_pool->accumulated_times = realloc(g_pool->accumulated_times, new_cap * sizeof(double));
     g_pool->type_heads = realloc(g_pool->type_heads, new_cap * sizeof(tc_resource_map*));
-    g_pool->lightings = realloc(g_pool->lightings, new_cap * sizeof(tc_scene_lighting));
-    g_pool->skyboxes = realloc(g_pool->skyboxes, new_cap * sizeof(tc_scene_skybox));
     g_pool->metadata = realloc(g_pool->metadata, new_cap * sizeof(tc_value));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
-    g_pool->background_colors = realloc(g_pool->background_colors, new_cap * 4 * sizeof(float));
     g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
     g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
     g_pool->pipeline_templates = realloc(g_pool->pipeline_templates, new_cap * sizeof(tc_spt_handle*));
@@ -286,12 +261,9 @@ static void pool_grow(void) {
     memset(g_pool->fixed_timesteps + old_cap, 0, (new_cap - old_cap) * sizeof(double));
     memset(g_pool->accumulated_times + old_cap, 0, (new_cap - old_cap) * sizeof(double));
     memset(g_pool->type_heads + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
-    memset(g_pool->lightings + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_lighting));
-    memset(g_pool->skyboxes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_skybox));
     memset(g_pool->metadata + old_cap, 0, (new_cap - old_cap) * sizeof(tc_value));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
-    memset(g_pool->background_colors + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
     memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->pipeline_templates + old_cap, 0, (new_cap - old_cap) * sizeof(tc_spt_handle*));
@@ -361,8 +333,6 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->fixed_timesteps[idx] = 1.0 / 60.0;
     g_pool->accumulated_times[idx] = 0.0;
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
-    tc_scene_lighting_init(&g_pool->lightings[idx]);
-    tc_scene_skybox_init(&g_pool->skyboxes[idx]);
     g_pool->metadata[idx] = tc_value_dict_new();
     g_pool->names[idx] = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
 
@@ -370,6 +340,9 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
 
     // Set scene handle on entity pool
     tc_entity_pool_set_scene(g_pool->pools[idx], h);
+
+    // Attach default render-state extension.
+    tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_STATE);
 
     // Attach default collision-world extension (if registered and allocator is available).
     tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_COLLISION_WORLD);
@@ -401,9 +374,6 @@ void tc_scene_free(tc_scene_handle h) {
 
     // Free metadata
     tc_value_free(&g_pool->metadata[idx]);
-
-    // Release skybox resources
-    tc_scene_skybox_free(&g_pool->skyboxes[idx]);
 
     // Free component lists
     list_free(&g_pool->pending_starts[idx]);
@@ -518,7 +488,10 @@ void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name) {
 
 void tc_scene_set_background_color(tc_scene_handle h, float r, float g, float b, float a) {
     if (!handle_alive(h)) return;
-    float* c = g_pool->background_colors + h.index * 4;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    float* c = state->background_color;
     c[0] = r;
     c[1] = g;
     c[2] = b;
@@ -527,7 +500,9 @@ void tc_scene_set_background_color(tc_scene_handle h, float r, float g, float b,
 
 void tc_scene_get_background_color(tc_scene_handle h, float* r, float* g, float* b, float* a) {
     if (!handle_alive(h)) return;
-    float* c = g_pool->background_colors + h.index * 4;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    float* c = state->background_color;
     if (r) *r = c[0];
     if (g) *g = c[1];
     if (b) *b = c[2];
@@ -1187,64 +1162,87 @@ void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode) {
 
 tc_scene_skybox* tc_scene_get_skybox(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return &g_pool->skyboxes[h.index];
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    return state ? &state->skybox : NULL;
 }
 
 void tc_scene_set_skybox_type(tc_scene_handle h, int type) {
     if (!handle_alive(h)) return;
-    g_pool->skyboxes[h.index].type = type;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    state->skybox.type = type;
 }
 
 int tc_scene_get_skybox_type(tc_scene_handle h) {
     if (!handle_alive(h)) return TC_SKYBOX_GRADIENT;
-    return g_pool->skyboxes[h.index].type;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    return state ? state->skybox.type : TC_SKYBOX_GRADIENT;
 }
 
 void tc_scene_set_skybox_color(tc_scene_handle h, float r, float g, float b) {
     if (!handle_alive(h)) return;
-    g_pool->skyboxes[h.index].color[0] = r;
-    g_pool->skyboxes[h.index].color[1] = g;
-    g_pool->skyboxes[h.index].color[2] = b;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    state->skybox.color[0] = r;
+    state->skybox.color[1] = g;
+    state->skybox.color[2] = b;
 }
 
 void tc_scene_get_skybox_color(tc_scene_handle h, float* r, float* g, float* b) {
     if (!handle_alive(h)) return;
-    if (r) *r = g_pool->skyboxes[h.index].color[0];
-    if (g) *g = g_pool->skyboxes[h.index].color[1];
-    if (b) *b = g_pool->skyboxes[h.index].color[2];
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    if (r) *r = state->skybox.color[0];
+    if (g) *g = state->skybox.color[1];
+    if (b) *b = state->skybox.color[2];
 }
 
 void tc_scene_set_skybox_top_color(tc_scene_handle h, float r, float g, float b) {
     if (!handle_alive(h)) return;
-    g_pool->skyboxes[h.index].top_color[0] = r;
-    g_pool->skyboxes[h.index].top_color[1] = g;
-    g_pool->skyboxes[h.index].top_color[2] = b;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    state->skybox.top_color[0] = r;
+    state->skybox.top_color[1] = g;
+    state->skybox.top_color[2] = b;
 }
 
 void tc_scene_get_skybox_top_color(tc_scene_handle h, float* r, float* g, float* b) {
     if (!handle_alive(h)) return;
-    if (r) *r = g_pool->skyboxes[h.index].top_color[0];
-    if (g) *g = g_pool->skyboxes[h.index].top_color[1];
-    if (b) *b = g_pool->skyboxes[h.index].top_color[2];
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    if (r) *r = state->skybox.top_color[0];
+    if (g) *g = state->skybox.top_color[1];
+    if (b) *b = state->skybox.top_color[2];
 }
 
 void tc_scene_set_skybox_bottom_color(tc_scene_handle h, float r, float g, float b) {
     if (!handle_alive(h)) return;
-    g_pool->skyboxes[h.index].bottom_color[0] = r;
-    g_pool->skyboxes[h.index].bottom_color[1] = g;
-    g_pool->skyboxes[h.index].bottom_color[2] = b;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    state->skybox.bottom_color[0] = r;
+    state->skybox.bottom_color[1] = g;
+    state->skybox.bottom_color[2] = b;
 }
 
 void tc_scene_get_skybox_bottom_color(tc_scene_handle h, float* r, float* g, float* b) {
     if (!handle_alive(h)) return;
-    if (r) *r = g_pool->skyboxes[h.index].bottom_color[0];
-    if (g) *g = g_pool->skyboxes[h.index].bottom_color[1];
-    if (b) *b = g_pool->skyboxes[h.index].bottom_color[2];
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    if (r) *r = state->skybox.bottom_color[0];
+    if (g) *g = state->skybox.bottom_color[1];
+    if (b) *b = state->skybox.bottom_color[2];
 }
 
 void tc_scene_set_skybox_mesh(tc_scene_handle h, tc_mesh* mesh) {
     if (!handle_alive(h)) return;
-    tc_scene_skybox* skybox = &g_pool->skyboxes[h.index];
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    tc_scene_skybox* skybox = &state->skybox;
     if (skybox->mesh) {
         tc_mesh_release(skybox->mesh);
     }
@@ -1256,12 +1254,17 @@ void tc_scene_set_skybox_mesh(tc_scene_handle h, tc_mesh* mesh) {
 
 tc_mesh* tc_scene_get_skybox_mesh(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return tc_scene_skybox_ensure_mesh(&g_pool->skyboxes[h.index]);
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return NULL;
+    return tc_scene_skybox_ensure_mesh(&state->skybox);
 }
 
 void tc_scene_set_skybox_material(tc_scene_handle h, tc_material* material) {
     if (!handle_alive(h)) return;
-    tc_scene_skybox* skybox = &g_pool->skyboxes[h.index];
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    tc_scene_skybox* skybox = &state->skybox;
     if (skybox->material) {
         tc_material_release(skybox->material);
     }
@@ -1273,7 +1276,8 @@ void tc_scene_set_skybox_material(tc_scene_handle h, tc_material* material) {
 
 tc_material* tc_scene_get_skybox_material(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->skyboxes[h.index].material;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    return state ? state->skybox.material : NULL;
 }
 
 // ============================================================================
@@ -1297,22 +1301,29 @@ void tc_scene_set_metadata(tc_scene_handle h, tc_value value) {
 
 tc_scene_lighting* tc_scene_get_lighting(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return &g_pool->lightings[h.index];
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    return state ? &state->lighting : NULL;
 }
 
 void tc_scene_set_ambient(tc_scene_handle h, float r, float g, float b, float intensity) {
     if (!handle_alive(h)) return;
-    g_pool->lightings[h.index].ambient_color[0] = r;
-    g_pool->lightings[h.index].ambient_color[1] = g;
-    g_pool->lightings[h.index].ambient_color[2] = b;
-    g_pool->lightings[h.index].ambient_intensity = intensity;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    state->lighting.ambient_color[0] = r;
+    state->lighting.ambient_color[1] = g;
+    state->lighting.ambient_color[2] = b;
+    state->lighting.ambient_intensity = intensity;
 }
 
 void tc_scene_set_shadow_settings(tc_scene_handle h, int method, float softness, float bias) {
     if (!handle_alive(h)) return;
-    g_pool->lightings[h.index].shadow_method = method;
-    g_pool->lightings[h.index].shadow_softness = softness;
-    g_pool->lightings[h.index].shadow_bias = bias;
+    if (!tc_scene_render_state_ensure(h)) return;
+    tc_scene_render_state* state = tc_scene_render_state_get(h);
+    if (!state) return;
+    state->lighting.shadow_method = method;
+    state->lighting.shadow_softness = softness;
+    state->lighting.shadow_bias = bias;
 }
 
 // ============================================================================

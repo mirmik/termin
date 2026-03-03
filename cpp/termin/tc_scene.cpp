@@ -669,26 +669,6 @@ ViewportConfig deserialize_viewport_config(const nos::trent& data) {
     return vc;
 }
 
-nos::trent serialize_shadow_settings(const tc_scene_lighting* lighting) {
-    nos::trent data;
-    data["method"] = static_cast<int64_t>(lighting->shadow_method);
-    data["softness"] = static_cast<double>(lighting->shadow_softness);
-    data["bias"] = static_cast<double>(lighting->shadow_bias);
-    return data;
-}
-
-void deserialize_shadow_settings(tc_scene_lighting* lighting, const nos::trent& data) {
-    if (data.contains("method")) {
-        lighting->shadow_method = static_cast<int>(data["method"].as_numer_default(1));
-    }
-    if (data.contains("softness")) {
-        lighting->shadow_softness = static_cast<float>(data["softness"].as_numer_default(1.0));
-    }
-    if (data.contains("bias")) {
-        lighting->shadow_bias = static_cast<float>(data["bias"].as_numer_default(0.005));
-    }
-}
-
 } // anonymous namespace
 
 nos::trent serialize_entity_recursive(const Entity& e) {
@@ -744,15 +724,6 @@ nos::trent TcSceneRef::serialize() const {
     nos::trent result;
 
     result["uuid"] = uuid();
-
-    // Background color
-    auto [r, g, b, a] = get_background_color();
-    nos::trent bg;
-    bg.push_back(nos::trent(static_cast<double>(r)));
-    bg.push_back(nos::trent(static_cast<double>(g)));
-    bg.push_back(nos::trent(static_cast<double>(b)));
-    bg.push_back(nos::trent(static_cast<double>(a)));
-    result["background_color"] = std::move(bg);
 
     // Root entities (no parent, serializable)
     nos::trent entities;
@@ -812,47 +783,6 @@ nos::trent TcSceneRef::serialize() const {
     }
     result["scene_pipelines"] = std::move(pipelines);
 
-    // Lighting
-    tc_scene_lighting* lit = tc_scene_get_lighting(_h);
-    if (lit) {
-        nos::trent ambient;
-        ambient.push_back(nos::trent(static_cast<double>(lit->ambient_color[0])));
-        ambient.push_back(nos::trent(static_cast<double>(lit->ambient_color[1])));
-        ambient.push_back(nos::trent(static_cast<double>(lit->ambient_color[2])));
-        result["ambient_color"] = std::move(ambient);
-        result["ambient_intensity"] = static_cast<double>(lit->ambient_intensity);
-        result["shadow_settings"] = serialize_shadow_settings(lit);
-    }
-
-    // Skybox
-    float sr, sg, sb_c, str, stg, stb, sbr, sbg, sbb;
-    tc_scene_get_skybox_color(_h, &sr, &sg, &sb_c);
-    tc_scene_get_skybox_top_color(_h, &str, &stg, &stb);
-    tc_scene_get_skybox_bottom_color(_h, &sbr, &sbg, &sbb);
-
-    // Convert skybox type to string for JSON compatibility
-    int skybox_type_int = tc_scene_get_skybox_type(_h);
-    const char* skybox_type_str = "gradient";
-    if (skybox_type_int == TC_SKYBOX_NONE) skybox_type_str = "none";
-    else if (skybox_type_int == TC_SKYBOX_SOLID) skybox_type_str = "solid";
-    result["skybox_type"] = skybox_type_str;
-
-    nos::trent sc, st, sb;
-    sc.push_back(nos::trent(static_cast<double>(sr)));
-    sc.push_back(nos::trent(static_cast<double>(sg)));
-    sc.push_back(nos::trent(static_cast<double>(sb_c)));
-    result["skybox_color"] = std::move(sc);
-
-    st.push_back(nos::trent(static_cast<double>(str)));
-    st.push_back(nos::trent(static_cast<double>(stg)));
-    st.push_back(nos::trent(static_cast<double>(stb)));
-    result["skybox_top_color"] = std::move(st);
-
-    sb.push_back(nos::trent(static_cast<double>(sbr)));
-    sb.push_back(nos::trent(static_cast<double>(sbg)));
-    sb.push_back(nos::trent(static_cast<double>(sbb)));
-    result["skybox_bottom_color"] = std::move(sb);
-
     // Metadata
     nos::trent md = metadata();
     if (!md.is_nil() && md.is_dict() && !md.as_dict().empty()) {
@@ -872,75 +802,6 @@ nos::trent TcSceneRef::serialize() const {
 
 int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
     if (update_settings) {
-        // Background color
-        if (data.contains("background_color") && data["background_color"].is_list()) {
-            const auto& bg = data["background_color"].as_list();
-            if (bg.size() >= 4) {
-                set_background_color(
-                    static_cast<float>(bg[0].as_numer_default(0.05)),
-                    static_cast<float>(bg[1].as_numer_default(0.05)),
-                    static_cast<float>(bg[2].as_numer_default(0.08)),
-                    static_cast<float>(bg[3].as_numer_default(1.0))
-                );
-            }
-        }
-
-        // Lighting
-        tc_scene_lighting* lit = tc_scene_get_lighting(_h);
-        if (lit) {
-            if (data.contains("ambient_color") && data["ambient_color"].is_list()) {
-                const auto& ac = data["ambient_color"].as_list();
-                if (ac.size() >= 3) {
-                    lit->ambient_color[0] = static_cast<float>(ac[0].as_numer_default(1.0));
-                    lit->ambient_color[1] = static_cast<float>(ac[1].as_numer_default(1.0));
-                    lit->ambient_color[2] = static_cast<float>(ac[2].as_numer_default(1.0));
-                }
-            }
-            if (data.contains("ambient_intensity")) {
-                lit->ambient_intensity = static_cast<float>(data["ambient_intensity"].as_numer_default(0.1));
-            }
-            if (data.contains("shadow_settings")) {
-                deserialize_shadow_settings(lit, data["shadow_settings"]);
-            }
-        }
-
-        // Skybox
-        if (data.contains("skybox_type")) {
-            // Convert string to int enum
-            std::string type_str = data["skybox_type"].as_string_default("gradient");
-            int type_int = TC_SKYBOX_GRADIENT;
-            if (type_str == "none") type_int = TC_SKYBOX_NONE;
-            else if (type_str == "solid") type_int = TC_SKYBOX_SOLID;
-            tc_scene_set_skybox_type(_h, type_int);
-        }
-        if (data.contains("skybox_color") && data["skybox_color"].is_list()) {
-            const auto& c = data["skybox_color"].as_list();
-            if (c.size() >= 3) {
-                tc_scene_set_skybox_color(_h,
-                    static_cast<float>(c[0].as_numer_default(0.5)),
-                    static_cast<float>(c[1].as_numer_default(0.7)),
-                    static_cast<float>(c[2].as_numer_default(0.9)));
-            }
-        }
-        if (data.contains("skybox_top_color") && data["skybox_top_color"].is_list()) {
-            const auto& c = data["skybox_top_color"].as_list();
-            if (c.size() >= 3) {
-                tc_scene_set_skybox_top_color(_h,
-                    static_cast<float>(c[0].as_numer_default(0.4)),
-                    static_cast<float>(c[1].as_numer_default(0.6)),
-                    static_cast<float>(c[2].as_numer_default(0.9)));
-            }
-        }
-        if (data.contains("skybox_bottom_color") && data["skybox_bottom_color"].is_list()) {
-            const auto& c = data["skybox_bottom_color"].as_list();
-            if (c.size() >= 3) {
-                tc_scene_set_skybox_bottom_color(_h,
-                    static_cast<float>(c[0].as_numer_default(0.6)),
-                    static_cast<float>(c[1].as_numer_default(0.5)),
-                    static_cast<float>(c[2].as_numer_default(0.4)));
-            }
-        }
-
         // Layer names
         if (data.contains("layer_names") && data["layer_names"].is_dict()) {
             for (const auto& [k, v] : data["layer_names"].as_dict()) {
@@ -990,6 +851,74 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
             tc_value ext_val = tc::trent_to_tc_value(data["extensions"]);
             tc_scene_ext_deserialize_scene(_h, &ext_val);
             tc_value_free(&ext_val);
+        } else {
+            bool has_legacy_render_state =
+                data.contains("background_color") ||
+                data.contains("ambient_color") ||
+                data.contains("ambient_intensity") ||
+                data.contains("shadow_settings") ||
+                data.contains("skybox_type") ||
+                data.contains("skybox_color") ||
+                data.contains("skybox_top_color") ||
+                data.contains("skybox_bottom_color");
+
+            if (has_legacy_render_state) {
+                nos::trent legacy_ext;
+                nos::trent render_state;
+
+                if (data.contains("background_color")) {
+                    render_state["background_color"] = data["background_color"];
+                }
+
+                nos::trent lighting;
+                bool has_lighting = false;
+                if (data.contains("ambient_color")) {
+                    lighting["ambient_color"] = data["ambient_color"];
+                    has_lighting = true;
+                }
+                if (data.contains("ambient_intensity")) {
+                    lighting["ambient_intensity"] = data["ambient_intensity"];
+                    has_lighting = true;
+                }
+                if (data.contains("shadow_settings")) {
+                    lighting["shadow_settings"] = data["shadow_settings"];
+                    has_lighting = true;
+                }
+                if (has_lighting) {
+                    render_state["lighting"] = std::move(lighting);
+                }
+
+                nos::trent skybox;
+                bool has_skybox = false;
+                if (data.contains("skybox_type")) {
+                    std::string type_str = data["skybox_type"].as_string_default("gradient");
+                    int type_int = TC_SKYBOX_GRADIENT;
+                    if (type_str == "none") type_int = TC_SKYBOX_NONE;
+                    else if (type_str == "solid") type_int = TC_SKYBOX_SOLID;
+                    skybox["type"] = static_cast<int64_t>(type_int);
+                    has_skybox = true;
+                }
+                if (data.contains("skybox_color")) {
+                    skybox["color"] = data["skybox_color"];
+                    has_skybox = true;
+                }
+                if (data.contains("skybox_top_color")) {
+                    skybox["top_color"] = data["skybox_top_color"];
+                    has_skybox = true;
+                }
+                if (data.contains("skybox_bottom_color")) {
+                    skybox["bottom_color"] = data["skybox_bottom_color"];
+                    has_skybox = true;
+                }
+                if (has_skybox) {
+                    render_state["skybox"] = std::move(skybox);
+                }
+
+                legacy_ext["render_state"] = std::move(render_state);
+                tc_value ext_val = tc::trent_to_tc_value(legacy_ext);
+                tc_scene_ext_deserialize_scene(_h, &ext_val);
+                tc_value_free(&ext_val);
+            }
         }
     }
 
