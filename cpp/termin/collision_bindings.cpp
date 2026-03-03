@@ -5,11 +5,29 @@
 #include <nanobind/stl/string.h>
 
 #include "termin/collision/collision.hpp"
+#include "termin/entity/entity.hpp"
+#include "termin/colliders/collider_component.hpp"
+
+extern "C" {
+#include "core/tc_scene.h"
+}
 
 namespace nb = nanobind;
 using namespace termin;
 using namespace termin::collision;
 using namespace termin::colliders;
+
+static tc_scene_handle extract_scene_handle(nb::handle scene_obj) {
+    tc_scene_handle h = TC_SCENE_HANDLE_INVALID;
+    if (scene_obj.is_none()) return h;
+
+    if (nb::hasattr(scene_obj, "scene_handle")) {
+        auto t = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_obj.attr("scene_handle")());
+        h.index = std::get<0>(t);
+        h.generation = std::get<1>(t);
+    }
+    return h;
+}
 
 NB_MODULE(_collision_native, m) {
     m.doc() = "Native C++ collision detection module for termin";
@@ -17,6 +35,7 @@ NB_MODULE(_collision_native, m) {
     // Import dependencies
     nb::module_::import_("termin.geombase._geom_native");
     nb::module_::import_("termin.colliders._colliders_native");
+    nb::module_::import_("termin.entity._entity_native");
 
     // ==================== ContactID ====================
 
@@ -73,6 +92,30 @@ NB_MODULE(_collision_native, m) {
         .def_rw("distance", &collision::RayHit::distance)
         .def("hit", &collision::RayHit::hit);
 
+    nb::class_<SceneRaycastHit>(m, "SceneRaycastHit")
+        .def_prop_ro("valid", &SceneRaycastHit::valid)
+        .def_prop_ro("entity", [](const SceneRaycastHit& h) -> nb::object {
+            if (!h.valid()) return nb::none();
+            return nb::cast(Entity(h.entity));
+        })
+        .def_prop_ro("component", [](const SceneRaycastHit& h) -> nb::object {
+            if (!h.component) return nb::none();
+            return nb::cast(h.component, nb::rv_policy::reference);
+        })
+        .def_prop_ro("point_on_ray", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_ray[0], h.point_on_ray[1], h.point_on_ray[2]);
+        })
+        .def_prop_ro("point_on_collider", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_collider[0], h.point_on_collider[1], h.point_on_collider[2]);
+        })
+        .def_prop_ro("point", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_ray[0], h.point_on_ray[1], h.point_on_ray[2]);
+        })
+        .def_prop_ro("collider_point", [](const SceneRaycastHit& h) {
+            return std::make_tuple(h.point_on_collider[0], h.point_on_collider[1], h.point_on_collider[2]);
+        })
+        .def_ro("distance", &SceneRaycastHit::distance);
+
     // ==================== ColliderPair ====================
 
     nb::class_<ColliderPair>(m, "ColliderPair")
@@ -119,6 +162,28 @@ NB_MODULE(_collision_native, m) {
 
     nb::class_<CollisionWorld>(m, "CollisionWorld")
         .def(nb::init<>())
+        .def_static("from_scene", [](nb::handle scene_obj) -> CollisionWorld* {
+            tc_scene_handle scene = extract_scene_handle(scene_obj);
+            if (!tc_scene_handle_valid(scene)) return nullptr;
+            return CollisionWorld::from_scene(scene);
+        }, nb::arg("scene"), nb::rv_policy::reference,
+        "Get scene collision world extension")
+        .def_static("raycast_scene", [](nb::handle scene_obj, const Ray3& ray) {
+            tc_scene_handle scene = extract_scene_handle(scene_obj);
+            if (!tc_scene_handle_valid(scene)) {
+                return SceneRaycastHit{};
+            }
+            return CollisionWorld::raycast_scene(scene, ray);
+        }, nb::arg("scene"), nb::arg("ray"),
+        "Raycast against ColliderComponent objects in scene")
+        .def_static("closest_to_ray_scene", [](nb::handle scene_obj, const Ray3& ray) {
+            tc_scene_handle scene = extract_scene_handle(scene_obj);
+            if (!tc_scene_handle_valid(scene)) {
+                return SceneRaycastHit{};
+            }
+            return CollisionWorld::closest_to_ray_scene(scene, ray);
+        }, nb::arg("scene"), nb::arg("ray"),
+        "Find closest ColliderComponent hit in scene")
         .def("add", &CollisionWorld::add, nb::arg("collider"),
              nb::keep_alive<1, 2>())  // Keep collider alive while in world
         .def("remove", &CollisionWorld::remove, nb::arg("collider"))

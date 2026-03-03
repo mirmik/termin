@@ -17,6 +17,7 @@
 #include "viewport_config.hpp"
 #include "geom/vec3.hpp"
 #include "geom/vec4.hpp"
+#include "collision/collision_world.hpp"
 
 namespace termin {
 
@@ -26,23 +27,7 @@ class CxxComponent;
 class TcScenePipelineTemplate;
 class RenderPipeline;
 class RenderingManager;
-class ColliderComponent;
-struct Ray3;
-
-namespace collision {
-    class CollisionWorld;
-}
-
-// Result of scene raycast
-struct SceneRaycastHit {
-    tc_entity_handle entity = TC_ENTITY_HANDLE_INVALID;
-    ColliderComponent* component = nullptr;
-    double point_on_ray[3] = {0, 0, 0};
-    double point_on_collider[3] = {0, 0, 0};
-    double distance = 0.0;
-
-    bool valid() const { return component != nullptr; }
-};
+using SceneRaycastHit = collision::SceneRaycastHit;
 
 // C++ wrapper for tc_scene_handle (non-owning reference)
 // Scene lifetime is managed by tc_scene_pool, not by TcSceneRef instances.
@@ -206,15 +191,6 @@ public:
 
     // Migrate entity to this scene's pool
     Entity migrate_entity(Entity& entity);
-
-    // Collision world access
-    collision::CollisionWorld* collision_world() const;
-
-    // Raycast - find first intersection (distance == 0)
-    SceneRaycastHit raycast(const Ray3& ray) const;
-
-    // Closest to ray - find closest object (minimum distance)
-    SceneRaycastHit closest_to_ray(const Ray3& ray) const;
 
     // Pipeline Templates (stored in tc_scene, compiled by RenderingManager)
     void add_pipeline_template(const TcScenePipelineTemplate& templ);

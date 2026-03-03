@@ -7,6 +7,7 @@ import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.geombase._geom_native import Vec3
+from termin.collision import CollisionWorld
 from termin.physics._physics_native import PhysicsWorld
 from termin.editor.inspect_field import InspectField
 
@@ -161,7 +162,8 @@ class PhysicsWorldComponent(PythonComponent):
         if not scene:
             return
         # Передаём CollisionWorld из сцены в PhysicsWorld
-        self._physics_world.set_collision_world(scene.collision_world)
+        scene_collision_world = CollisionWorld.from_scene(scene)
+        self._physics_world.set_collision_world(scene_collision_world)
         self._collect_rigid_bodies(scene)
         self._initialized = True
 

@@ -11,13 +11,27 @@
 #include "bvh.hpp"
 #include "contact_manifold.hpp"
 #include "termin/colliders/colliders.hpp"
+#include "core/tc_scene.h"
+#include "core/tc_entity_pool.h"
 #include <vector>
 #include <algorithm>
 
 namespace termin {
+class ColliderComponent;
+
 namespace collision {
 
 using colliders::Collider;
+
+struct SceneRaycastHit {
+    tc_entity_handle entity = TC_ENTITY_HANDLE_INVALID;
+    ColliderComponent* component = nullptr;
+    double point_on_ray[3] = {0, 0, 0};
+    double point_on_collider[3] = {0, 0, 0};
+    double distance = 0.0;
+
+    bool valid() const { return component != nullptr; }
+};
 
 /**
  * Collision world manages colliders and performs collision detection.
@@ -25,6 +39,13 @@ using colliders::Collider;
 class CollisionWorld {
 public:
     CollisionWorld() = default;
+
+    // Get scene collision world extension as C++ object.
+    static CollisionWorld* from_scene(tc_scene_handle scene);
+
+    // Scene-level raycast helpers (moved from TcSceneRef).
+    static SceneRaycastHit raycast_scene(tc_scene_handle scene, const Ray3& ray);
+    static SceneRaycastHit closest_to_ray_scene(tc_scene_handle scene, const Ray3& ray);
 
     // ==================== Collider management ====================
 

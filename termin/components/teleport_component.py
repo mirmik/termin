@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from termin.visualization.core.component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent
+from termin.collision import CollisionWorld
 from tcbase import MouseButton, Action
 
 
@@ -30,8 +31,8 @@ class TeleportComponent(InputComponent):
 
         # Рейкаст по сцене
         scene = event.viewport.scene
-        hit = scene.raycast(ray)
-        if hit is None:
+        hit = CollisionWorld.raycast_scene(scene, ray)
+        if not hit.valid:
             return
 
         # Не телепортируемся в себя
