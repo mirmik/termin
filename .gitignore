@@ -187,3 +187,5 @@ install_win/
 
 
 !cpp/python_bindings.cmake
+
+build-*/
