@@ -9,7 +9,7 @@
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "termin/bindings/inspect/tc_inspect_python.hpp"
+#include "inspect/tc_inspect_python.hpp"
 #include "../skeleton/tc_skeleton_handle.hpp"
 #include <tcbase/tc_log.hpp>
 

@@ -4,7 +4,7 @@
 #pragma once
 
 #include "inspect/tc_kind_cpp.hpp"
-#include "../bindings/inspect/tc_kind_python.hpp"
+#include "inspect/tc_kind_python.hpp"
 
 namespace tc {
 

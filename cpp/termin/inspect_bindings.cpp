@@ -3,7 +3,7 @@
 #include <nanobind/stl/vector.h>
 #include <cstdint>
 
-#include "termin/bindings/inspect/tc_inspect_python.hpp"
+#include "inspect/tc_inspect_python.hpp"
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
 #include "inspect/tc_inspect_init.h"

@@ -19,7 +19,7 @@ extern "C" {
 #include "core/tc_scene_pool.h"
 }
 
-#include "termin/bindings/inspect/tc_inspect_python.hpp"
+#include "inspect/tc_inspect_python.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
 
 #include "termin/render/frame_pass.hpp"

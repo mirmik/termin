@@ -107,6 +107,8 @@ find_package(termin_base REQUIRED)
 
 # termin-graphics (provides tgfx types, gpu_ops, opengl backend)
 find_package(termin_graphics REQUIRED)
+# termin-inspect (extracted inspect/kind core + python bridge)
+find_package(termin_inspect REQUIRED)
 
 # Core C library
 if(BUILD_TESTS)
@@ -172,13 +174,6 @@ if(NOT TC_EXTERNAL_INSPECT_ACTIVE)
 else()
     message(STATUS "entity_lib: using inspect/kind C++ core from external termin_inspect")
 endif()
-# Python-specific sources (require nanobind)
-if(NOT BUILD_CSHARP_BINDINGS)
-    list(APPEND ENTITY_LIB_SOURCES
-        termin/bindings/inspect/tc_kind_python_instance.cpp
-        termin/bindings/inspect/tc_inspect_python.cpp
-    )
-endif()
 add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
 target_include_directories(entity_lib PUBLIC
     $<BUILD_INTERFACE:${TERMIN_ROOT}/core_c/include>
@@ -188,7 +183,7 @@ target_include_directories(entity_lib PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 if(BUILD_CSHARP_BINDINGS)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect PRIVATE trent)
 else()
     # Find nanobind for entity_lib linking
     if(WIN32)
@@ -205,7 +200,7 @@ else()
         )
     endif()
     find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base PRIVATE trent nanobind-static Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect PRIVATE trent nanobind-static Python::Python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
