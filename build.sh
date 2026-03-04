@@ -110,11 +110,12 @@ echo "Installing..."
 rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
 
-# Copy shared libraries from termin-base, termin-scene and termin-graphics
-echo "Copying shared libraries from termin-base, termin-scene and termin-graphics..."
+# Copy shared libraries from termin-base, termin-scene, termin-graphics and termin-inspect
+echo "Copying shared libraries from termin-base, termin-scene, termin-graphics and termin-inspect..."
 TERMIN_BASE_LIBDIR="$ENV_DIR/termin-base/python/tcbase/lib"
 TERMIN_SCENE_LIBDIR="/usr/local/lib"
 TERMIN_GFX_LIBDIR="$ENV_DIR/termin-graphics/python/tgfx/lib"
+TERMIN_INSPECT_LIBDIR="/usr/local/lib"
 
 if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
     cp -P "$TERMIN_BASE_LIBDIR"/libtermin_base.so* "$INSTALL_DIR/lib/"
@@ -135,6 +136,13 @@ if [[ -d "$TERMIN_GFX_LIBDIR" ]]; then
     echo "  Copied libtermin_graphics from $TERMIN_GFX_LIBDIR"
 else
     echo "  WARNING: $TERMIN_GFX_LIBDIR not found — skipping libtermin_graphics"
+fi
+
+if [[ -d "$TERMIN_INSPECT_LIBDIR" ]] && compgen -G "$TERMIN_INSPECT_LIBDIR/libtermin_inspect.so*" > /dev/null; then
+    cp -P "$TERMIN_INSPECT_LIBDIR"/libtermin_inspect.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_inspect from $TERMIN_INSPECT_LIBDIR"
+else
+    echo "  WARNING: libtermin_inspect not found in $TERMIN_INSPECT_LIBDIR — skipping libtermin_inspect"
 fi
 
 echo ""

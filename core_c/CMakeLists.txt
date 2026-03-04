@@ -9,6 +9,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Options
 option(TC_BUILD_SHARED "Build shared library" ON)
 option(TC_BUILD_TESTS "Build tests" ON)
+option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/kind core" ON)
 
 # Source files (only .c)
 # Note: tc_collision.c is NOT included here because collision detection
@@ -24,8 +25,6 @@ set(TC_SOURCES
     src/tc_viewport_input_manager.c
     src/tc_frame_graph.c
     src/tc_gpu.c
-    src/tc_inspect.c
-    src/tc_kind.c
     src/tc_primitive_mesh.c
     src/tc_pass.c
     src/tc_pipeline.c
@@ -42,17 +41,23 @@ set(TC_SOURCES
     src/tc_viewport_config.c
 )
 
+if(NOT TC_USE_EXTERNAL_INSPECT)
+    message(FATAL_ERROR "TC_USE_EXTERNAL_INSPECT=OFF is no longer supported: inspect/kind core sources were moved to termin_inspect")
+endif()
+
+find_package(termin_inspect REQUIRED)
+set(TC_EXTERNAL_INSPECT_ACTIVE ON CACHE INTERNAL "termin_core uses external termin_inspect")
+message(STATUS "termin_core: using external termin_inspect package")
+
 # Header files (only .h, for IDE integration)
 set(TC_HEADERS
     include/geom/tc_pose.h
     include/geom/tc_vec3.h
     include/geom/tc_quat.h
-    include/inspect/tc_inspect.h
     include/inspect/tc_inspect_init.h
     include/inspect/tc_inspect_context.h
     include/inspect/tc_inspect_component_adapter.h
     include/inspect/tc_inspect_pass_adapter.h
-    include/inspect/tc_kind.h
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
     include/physics/tc_collision.h
@@ -113,6 +118,7 @@ target_include_directories(termin_core
 
 target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
 target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
+target_link_libraries(termin_core PUBLIC termin_inspect::termin_inspect)
 
 # Platform-specific
 if(WIN32)

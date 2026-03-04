@@ -3,7 +3,7 @@
 // For C++-only code, use tc_kind_cpp.hpp instead.
 #pragma once
 
-#include "tc_kind_cpp.hpp"
+#include "inspect/tc_kind_cpp.hpp"
 #include "../bindings/inspect/tc_kind_python.hpp"
 
 namespace tc {

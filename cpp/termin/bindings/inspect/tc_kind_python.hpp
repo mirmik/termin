@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "termin/inspect/tc_kind_cpp.hpp"
+#include "inspect/tc_kind_cpp.hpp"
 
 // DLL export/import macros - singletons must be in entity_lib
 #ifdef _WIN32

@@ -19,7 +19,7 @@
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
-#include "termin/inspect/tc_kind_cpp.hpp"
+#include "inspect/tc_kind_cpp.hpp"
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_component_adapter.h"
