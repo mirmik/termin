@@ -2,8 +2,6 @@
 // Compiled into entity_lib to ensure single instance across all modules
 
 #include "tc_kind_cpp.hpp"
-#include "termin/mesh/tc_mesh_handle.hpp"
-#include "termin/material/tc_material_handle.hpp"
 #include <cstring>
 
 extern "C" {
@@ -93,46 +91,6 @@ static void init_cpp_lang_vtable() {
     tc_kind_set_lang_registry(TC_KIND_LANG_CPP, &cpp_registry);
 }
 
-// ============================================================================
-// Handle kind registration
-// ============================================================================
-
-static bool g_handle_kinds_registered = false;
-
-static void register_handle_kinds() {
-    if (g_handle_kinds_registered) return;
-    g_handle_kinds_registered = true;
-
-    auto& reg = KindRegistryCpp::instance();
-
-    // tc_mesh kind
-    reg.register_kind("tc_mesh",
-        [](const std::any& value) -> tc_value {
-            const termin::TcMesh& m = std::any_cast<const termin::TcMesh&>(value);
-            return m.serialize_to_value();
-        },
-        [](const tc_value* v, tc_scene_handle scene) -> std::any {
-            termin::TcMesh m;
-            m.deserialize_from(v, scene);
-            return m;
-        }
-    );
-
-    // tc_material kind
-    reg.register_kind("tc_material",
-        [](const std::any& value) -> tc_value {
-            const termin::TcMaterial& m = std::any_cast<const termin::TcMaterial&>(value);
-            return m.serialize_to_value();
-        },
-        [](const tc_value* v, tc_scene_handle scene) -> std::any {
-            termin::TcMaterial m;
-            m.deserialize_from(v, scene);
-            return m;
-        }
-    );
-}
-
-// ============================================================================
 // Singleton
 // ============================================================================
 
@@ -147,7 +105,6 @@ KindRegistryCpp& KindRegistryCpp::instance() {
     if (!builtins_registered) {
         builtins_registered = true;
         register_builtin_cpp_kinds();
-        register_handle_kinds();
     }
 
     return inst;

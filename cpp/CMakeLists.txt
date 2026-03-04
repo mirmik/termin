@@ -154,7 +154,9 @@ set(ENTITY_LIB_SOURCES
     termin/tc_collision_c_api.cpp
     termin/collision/collision_world_c.cpp
     termin/collision/collision_world_scene.cpp
-    ${TERMIN_ROOT}/core_c/src/tc_inspect_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_inspect_core_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_inspect_pass_adapter.cpp
     ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_engine_core_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_scene_manager_instance.cpp

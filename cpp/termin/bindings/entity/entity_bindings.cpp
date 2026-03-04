@@ -20,6 +20,7 @@
 #include "termin/geom/pose3.hpp"
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_component_adapter.h"
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "termin/bindings/inspect/tc_kind_python.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"

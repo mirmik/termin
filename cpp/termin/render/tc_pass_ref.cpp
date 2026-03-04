@@ -4,6 +4,7 @@
 
 extern "C" {
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_pass_adapter.h"
 }
 
 namespace termin {

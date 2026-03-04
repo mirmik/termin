@@ -20,6 +20,7 @@ extern "C" {
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_pass_adapter.h"
 }
 
 #include <algorithm>

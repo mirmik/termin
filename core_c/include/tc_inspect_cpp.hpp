@@ -14,8 +14,6 @@
 
 #include "../../cpp/termin/inspect/tc_kind_cpp.hpp"
 
-struct tc_component;  // Forward declaration
-
 namespace tc {
 
 // ============================================================================
@@ -37,6 +35,11 @@ struct EnumChoice {
     std::string label;
 };
 
+struct InspectContext {
+    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+    void* user_context = nullptr;
+};
+
 // ============================================================================
 // InspectFieldInfo - field metadata + callbacks (C++ only)
 // ============================================================================
@@ -52,10 +55,8 @@ struct InspectFieldInfo {
     bool is_serializable = true;
     bool is_inspectable = true;
     std::vector<EnumChoice> choices;
-    // Unified action callback — always expects tc_component*.
-    // For C++ buttons: two-level callback wraps tc_component* → CxxComponent* → C*.
-    // For Python buttons: wraps tc_component* → tc->body (PyObject*) → callable.
-    std::function<void(tc_component*)> action;
+    // Unified action callback with generic object pointer and optional context.
+    std::function<void(void*, const InspectContext&)> action;
 
     // Unified getter/setter via tc_value
     std::function<tc_value(void*)> getter;
@@ -326,7 +327,7 @@ public:
     }
 
     void add_button(const std::string& type_name, const std::string& path,
-                    const std::string& label, std::function<void(tc_component*)> action_fn) {
+                    const std::string& label, std::function<void(void*, const InspectContext&)> action_fn) {
         InspectFieldInfo info;
         info.type_name = type_name;
         info.path = path;
@@ -437,10 +438,11 @@ public:
         f->setter(obj, value, scene);
     }
 
-    void action_field(tc_component* tc, const std::string& type_name, const std::string& field_path) {
+    void action_field(void* obj, const std::string& type_name, const std::string& field_path,
+                      const InspectContext& context = InspectContext{}) {
         const InspectFieldInfo* f = find_field(type_name, field_path);
         if (!f || !f->action) return;
-        f->action(tc);
+        f->action(obj, context);
     }
 
     // ========================================================================
@@ -594,7 +596,7 @@ struct InspectButtonRegistrar {
         const char* type_name,
         const char* path,
         const char* label,
-        std::function<void(tc_component*)> action_fn
+        std::function<void(void*, const tc::InspectContext&)> action_fn
     ) {
         InspectRegistry::instance().add_button(type_name, path, label, std::move(action_fn));
     }
@@ -631,7 +633,7 @@ struct InspectButtonRegistrar {
 #define INSPECT_BUTTON(cls, name, label, method) \
     inline static ::tc::InspectButtonRegistrar \
         _inspect_btn_##cls##_##name{#cls, #name, label, \
-            [](tc_component* tc) { \
-                auto* self = static_cast<cls*>(CxxComponent::from_tc(tc)); \
+            [](void* obj, const ::tc::InspectContext&) { \
+                auto* self = static_cast<cls*>(obj); \
                 if (self) (self->*method)(); \
             }};

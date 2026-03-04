@@ -33,6 +33,9 @@
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_init.h"
+#include "inspect/tc_inspect_component_adapter.h"
+#include "inspect/tc_inspect_pass_adapter.h"
 #include <tgfx/resources/tc_mesh.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_texture.h>

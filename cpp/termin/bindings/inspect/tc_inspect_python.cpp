@@ -5,10 +5,6 @@
 #include "termin/inspect/tc_kind.hpp"
 #include <tcbase/tc_log.hpp>
 
-extern "C" {
-#include "core/tc_component.h"
-}
-
 #include <iostream>
 
 namespace tc {
@@ -24,13 +20,13 @@ void InspectRegistryPythonExt::add_button(InspectRegistry& reg, const std::strin
     info.is_serializable = false;
     info.is_inspectable = true;
 
-    // Wrap Python callable into unified action: tc_component* → body (PyObject*) → callable
+    // Wrap Python callable into unified action: PyObject* → callable
     nb::object py_action = std::move(action);
     py_action.inc_ref();  // prevent GC
-    info.action = [py_action](tc_component* tc) {
-        if (!tc || !tc->body) return;
+    info.action = [py_action](void* obj, const InspectContext&) {
+        if (!obj) return;
         nb::object py_obj = nb::borrow<nb::object>(
-            nb::handle(static_cast<PyObject*>(tc->body)));
+            nb::handle(static_cast<PyObject*>(obj)));
         py_action(py_obj);
     };
 
@@ -112,10 +108,10 @@ void InspectRegistryPythonExt::register_python_fields(InspectRegistry& reg, cons
         if (nb::hasattr(field_obj, "action") && !field_obj.attr("action").is_none()) {
             nb::object py_action = field_obj.attr("action");
             py_action.inc_ref();  // prevent GC
-            info.action = [py_action](tc_component* tc) {
-                if (!tc || !tc->body) return;
+            info.action = [py_action](void* obj, const InspectContext&) {
+                if (!obj) return;
                 nb::object py_obj = nb::borrow<nb::object>(
-                    nb::handle(static_cast<PyObject*>(tc->body)));
+                    nb::handle(static_cast<PyObject*>(obj)));
                 py_action(py_obj);
             };
         }
