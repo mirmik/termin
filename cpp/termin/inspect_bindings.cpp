@@ -1,14 +1,12 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <cstdint>
 
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "entity/component.hpp"
 #include "material/tc_material_handle.hpp"
-
-extern "C" {
-#include "core/tc_component.h"
-}
+#include "inspect/tc_inspect_init.h"
 #include "render/frame_pass.hpp"
 #include "inspect/tc_kind.hpp"
 #include "inspect_bindings.hpp"
@@ -147,11 +145,15 @@ static bool ensure_list_handler_impl(const std::string& kind) {
 }
 
 void bind_inspect(nb::module_& m) {
-    // Register C++ builtin kinds (bool, int, float, string, etc.)
-    tc::register_builtin_kinds();
-
-    // Register C++ inspect vtable in C dispatcher
-    tc::init_cpp_inspect_vtable();
+    // Explicit layered startup order for inspect subsystem.
+    // 1) Generic inspect/kind core.
+    tc_inspect_kind_core_init();
+    // 2) Scene/component adapter (domain kinds like tc_mesh/tc_material).
+    tc_inspect_component_adapter_init();
+    // 3) Render/pass adapter.
+    tc_inspect_pass_adapter_init();
+    // 4) Python adapter hook (consumer-owned wiring).
+    tc_inspect_python_adapter_init();
 
     // Register Python language vtable in C kind dispatcher
     tc::init_python_lang_vtable();
@@ -161,6 +163,14 @@ void bind_inspect(nb::module_& m) {
 
     // Set callback for lazy list handler creation
     tc::set_ensure_list_handler(ensure_list_handler_impl);
+
+    // Topology diagnostics: registry owners should resolve to a single instance.
+    m.def("inspect_registry_address", []() -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(&tc::InspectRegistry::instance());
+    });
+    m.def("kind_registry_cpp_address", []() -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(&tc::KindRegistryCpp::instance());
+    });
 
     // TypeBackend enum
     nb::enum_<TypeBackend>(m, "TypeBackend")
@@ -185,16 +195,21 @@ void bind_inspect(nb::module_& m) {
         .def_ro("is_serializable", &InspectFieldInfo::is_serializable)
         .def_ro("is_inspectable", &InspectFieldInfo::is_inspectable)
         .def_ro("choices", &InspectFieldInfo::choices)
+        .def("invoke_action", [](InspectFieldInfo& self, nb::object obj) {
+            if (!self.action) return;
+            void* ptr = get_raw_pointer(std::move(obj));
+            if (!ptr) return;
+            tc::InspectContext inspect_context;
+            self.action(ptr, inspect_context);
+        }, nb::arg("obj"))
         .def_prop_ro("action", [](InspectFieldInfo& self) -> nb::object {
             if (!self.action) return nb::none();
-            // Wrap unified action: extract tc_component* from TcComponentRef, call action
             auto action_fn = self.action;
             return nb::cpp_function([action_fn](nb::object obj) {
-                uintptr_t c_ptr = nb::cast<uintptr_t>(obj.attr("tc_component_ptr"));
-                tc_component* tc = reinterpret_cast<tc_component*>(c_ptr);
-                if (tc) {
-                    action_fn(tc);
-                }
+                void* ptr = get_raw_pointer(std::move(obj));
+                if (!ptr) return;
+                tc::InspectContext inspect_context;
+                action_fn(ptr, inspect_context);
             });
         });
 

@@ -48,6 +48,9 @@ set(TC_HEADERS
     include/geom/tc_vec3.h
     include/geom/tc_quat.h
     include/inspect/tc_inspect.h
+    include/inspect/tc_inspect_init.h
+    include/inspect/tc_inspect_component_adapter.h
+    include/inspect/tc_inspect_pass_adapter.h
     include/inspect/tc_kind.h
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h

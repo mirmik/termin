@@ -9,6 +9,7 @@
 #include <nanobind/ndarray.h>
 #include <functional>
 #include <cstring>
+#include <cstdint>
 
 #include <tcbase/tc_log.hpp>
 #include "termin/entity/component.hpp"
@@ -18,6 +19,7 @@
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 #include "termin/geom/pose3.hpp"
+#include "termin/inspect/tc_kind_cpp.hpp"
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_component_adapter.h"
@@ -250,6 +252,13 @@ public:
 };
 
 void bind_entity_class(nb::module_& m) {
+    m.def("_inspect_registry_address", []() -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(&tc::InspectRegistry::instance());
+    });
+    m.def("_kind_registry_cpp_address", []() -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(&tc::KindRegistryCpp::instance());
+    });
+
     // Ancestor iterator
     nb::class_<EntityAncestorIterator>(m, "_EntityAncestorIterator")
         .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })

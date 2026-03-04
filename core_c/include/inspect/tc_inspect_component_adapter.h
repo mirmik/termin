@@ -15,6 +15,7 @@ typedef struct tc_component tc_component;
 
 // Component field access (unified API for native and external components)
 // Works with tc_component* directly, handles both C++ and Python components.
+// Kept as compatibility adapter surface during migration.
 TC_API tc_value tc_component_inspect_get(tc_component* c, const char* path);
 TC_API void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene_handle scene);
 

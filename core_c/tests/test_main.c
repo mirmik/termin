@@ -216,10 +216,139 @@ static int test_uuid(void) {
 }
 
 // ============================================================================
-// tc_inspect tests - DISABLED
-// Old C-based type registration API removed. C is now dispatcher only.
-// Types are owned by C++ (InspectRegistry) or Python.
-// Test can be rewritten when C-based registry is needed.
+// tc_inspect dispatcher mock tests
+
+// ============================================================================
+// Inspect dispatcher mock tests
+// ============================================================================
+
+typedef struct {
+    int64_t value;
+    bool action_called;
+} mock_dispatch_obj;
+
+static bool mock_has_type(const char* type_name, void* ctx) {
+    (void)ctx;
+    return type_name && strcmp(type_name, "MockDispatchType") == 0;
+}
+
+static const char* mock_get_parent(const char* type_name, void* ctx) {
+    (void)type_name;
+    (void)ctx;
+    return NULL;
+}
+
+static size_t mock_field_count(const char* type_name, void* ctx) {
+    (void)ctx;
+    if (!type_name || strcmp(type_name, "MockDispatchType") != 0) return 0;
+    return 1;
+}
+
+static bool mock_get_field(const char* type_name, size_t index, tc_field_info* out, void* ctx) {
+    (void)ctx;
+    if (!out || !type_name || strcmp(type_name, "MockDispatchType") != 0 || index != 0) return false;
+    out->path = "value";
+    out->label = "Value";
+    out->kind = "int";
+    out->min = 0.0;
+    out->max = 10000.0;
+    out->step = 1.0;
+    out->is_serializable = true;
+    out->is_inspectable = true;
+    out->choices = NULL;
+    out->choice_count = 0;
+    return true;
+}
+
+static bool mock_find_field(const char* type_name, const char* path, tc_field_info* out, void* ctx) {
+    (void)ctx;
+    if (!out || !type_name || !path) return false;
+    if (strcmp(type_name, "MockDispatchType") != 0) return false;
+    if (strcmp(path, "value") != 0) return false;
+    return mock_get_field(type_name, 0, out, ctx);
+}
+
+static tc_value mock_get(void* obj, const char* type_name, const char* path, void* ctx) {
+    (void)ctx;
+    if (!obj || !type_name || !path) return tc_value_nil();
+    if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return tc_value_nil();
+    mock_dispatch_obj* m = (mock_dispatch_obj*)obj;
+    return tc_value_int(m->value);
+}
+
+static void mock_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx) {
+    (void)scene;
+    (void)ctx;
+    if (!obj || !type_name || !path) return;
+    if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return;
+    mock_dispatch_obj* m = (mock_dispatch_obj*)obj;
+    if (value.type == TC_VALUE_INT) m->value = value.data.i;
+    else if (value.type == TC_VALUE_FLOAT) m->value = (int64_t)value.data.f;
+    else if (value.type == TC_VALUE_DOUBLE) m->value = (int64_t)value.data.d;
+}
+
+static void mock_action(void* obj, const char* type_name, const char* path, void* ctx) {
+    (void)ctx;
+    if (!obj || !type_name || !path) return;
+    if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return;
+    mock_dispatch_obj* m = (mock_dispatch_obj*)obj;
+    m->action_called = true;
+}
+
+static int test_inspect_dispatcher_mock(void) {
+    printf("Testing inspect dispatcher mock...\n");
+
+    tc_inspect_lang_vtable vtable = {
+        mock_has_type,
+        mock_get_parent,
+        mock_field_count,
+        mock_get_field,
+        mock_find_field,
+        mock_get,
+        mock_set,
+        mock_action,
+        NULL
+    };
+    tc_inspect_set_lang_vtable(TC_INSPECT_LANG_C, &vtable);
+
+    TEST_ASSERT(tc_inspect_has_type("MockDispatchType"), "mock type registered");
+    TEST_ASSERT(tc_inspect_type_lang("MockDispatchType") == TC_INSPECT_LANG_C, "mock type language");
+    TEST_ASSERT(tc_inspect_field_count("MockDispatchType") == 1, "mock field count");
+
+    tc_field_info info;
+    TEST_ASSERT(tc_inspect_find_field_info("MockDispatchType", "value", &info), "mock field lookup");
+    TEST_ASSERT(strcmp(info.kind, "int") == 0, "mock field kind");
+
+    mock_dispatch_obj obj = { .value = 11, .action_called = false };
+    tc_value v = tc_inspect_get(&obj, "MockDispatchType", "value");
+    TEST_ASSERT(v.type == TC_VALUE_INT, "mock get type int");
+    TEST_ASSERT(v.data.i == 11, "mock get value");
+    tc_value_free(&v);
+
+    tc_value set_v = tc_value_int(77);
+    tc_inspect_set(&obj, "MockDispatchType", "value", set_v, TC_SCENE_HANDLE_INVALID);
+    tc_value_free(&set_v);
+    TEST_ASSERT(obj.value == 77, "mock set value");
+
+    tc_inspect_action(&obj, "MockDispatchType", "value");
+    TEST_ASSERT(obj.action_called, "mock action called");
+
+    tc_value serialized = tc_inspect_serialize(&obj, "MockDispatchType");
+    tc_value* val_ptr = tc_value_dict_get(&serialized, "value");
+    TEST_ASSERT(val_ptr && val_ptr->type == TC_VALUE_INT && val_ptr->data.i == 77, "mock serialize");
+    tc_value_free(&serialized);
+
+    tc_value data = tc_value_dict_new();
+    tc_value_dict_set(&data, "value", tc_value_int(1234));
+    tc_inspect_deserialize(&obj, "MockDispatchType", &data, TC_SCENE_HANDLE_INVALID);
+    tc_value_free(&data);
+    TEST_ASSERT(obj.value == 1234, "mock deserialize");
+
+    tc_inspect_cleanup();
+
+    printf("  Inspect dispatcher mock: PASS\n");
+    return 0;
+}
 
 // ============================================================================
 // Kind handler tests
@@ -375,8 +504,7 @@ int main(void) {
     result |= test_entity_pool();
     result |= test_entity_hierarchy();
     result |= test_uuid();
-    // test_inspect() disabled - old C-based type registration API removed
-    // C is now dispatcher only, types owned by C++ or Python
+    result |= test_inspect_dispatcher_mock();
     result |= test_kind_handler();
     result |= test_resource_map();
     result |= test_vertex_layout();

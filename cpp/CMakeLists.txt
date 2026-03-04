@@ -132,7 +132,7 @@ target_include_directories(Recast PUBLIC
 )
 
 # ============== Entity shared library ==============
-# Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
+# Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, KindRegistryCpp, EntityRegistry)
 # are the same instance across all Python extension modules.
 set(ENTITY_LIB_SOURCES
     termin/entity/entity.cpp
@@ -519,6 +519,7 @@ if(BUILD_TESTS)
         tests/tests_gjk.cpp
         tests/tests_quickhull.cpp
         tests/tests_convex_hull_collider.cpp
+        tests/tests_inspect_registry.cpp
     )
     target_include_directories(termin_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
