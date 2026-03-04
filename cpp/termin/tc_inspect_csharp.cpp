@@ -105,11 +105,11 @@ static tc_value cs_get(void* obj, const char* type_name, const char* path, void*
     return g_cs_inspect_get(obj, type_name, path);
 }
 
-static void cs_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx) {
+static void cs_set(void* obj, const char* type_name, const char* path, tc_value value, void* context, void* ctx) {
     (void)ctx;
     if (!obj || !type_name || !path || !g_cs_inspect_set)
         return;
-    g_cs_inspect_set(obj, type_name, path, value, scene);
+    g_cs_inspect_set(obj, type_name, path, value, context);
 }
 
 static void cs_action(void* obj, const char* type_name, const char* path, void* ctx) {

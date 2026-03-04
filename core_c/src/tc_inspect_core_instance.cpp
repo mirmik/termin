@@ -58,9 +58,9 @@ static tc_value cpp_get(void* obj, const char* type_name, const char* path, void
     return InspectRegistry::instance().get_tc_value(obj, type_name, path);
 }
 
-static void cpp_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx) {
+static void cpp_set(void* obj, const char* type_name, const char* path, tc_value value, void* context, void* ctx) {
     (void)ctx;
-    InspectRegistry::instance().set_tc_value(obj, type_name, path, value, scene);
+    InspectRegistry::instance().set_tc_value(obj, type_name, path, value, context);
 }
 
 static void cpp_action(void* obj, const char* type_name, const char* path, void* ctx) {

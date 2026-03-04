@@ -52,7 +52,7 @@ tc_value tc_component_inspect_get(tc_component* c, const char* path) {
     return tc_inspect_get(obj, type_name, path);
 }
 
-void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, tc_scene_handle scene) {
+void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, void* context) {
     if (!c || !path) return;
 
     const char* type_name = tc_component_type_name(c);
@@ -61,12 +61,12 @@ void tc_component_inspect_set(tc_component* c, const char* path, tc_value value,
     void* obj = get_inspect_object(c);
     if (!obj) return;
 
-    tc_inspect_set(obj, type_name, path, value, scene);
+    tc_inspect_set(obj, type_name, path, value, context);
 }
 
-void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, tc_scene_handle scene) {
+void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, void* context) {
     tc_value v = tc_value_vec3(value);
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
@@ -80,9 +80,9 @@ tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path) {
     return result;
 }
 
-void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat value, tc_scene_handle scene) {
+void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat value, void* context) {
     tc_value v = tc_value_quat(value);
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
@@ -96,37 +96,37 @@ tc_quat tc_component_get_field_quat(tc_component* c, const char* path) {
     return result;
 }
 
-void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, tc_scene_handle scene) {
+void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, void* context) {
     tc_value v = tc_value_int(value);
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_float(tc_component* c, const char* path, float value, tc_scene_handle scene) {
+void tc_component_set_field_float(tc_component* c, const char* path, float value, void* context) {
     tc_value v = tc_value_float(value);
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_double(tc_component* c, const char* path, double value, tc_scene_handle scene) {
+void tc_component_set_field_double(tc_component* c, const char* path, double value, void* context) {
     tc_value v = tc_value_double(value);
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_bool(tc_component* c, const char* path, bool value, tc_scene_handle scene) {
+void tc_component_set_field_bool(tc_component* c, const char* path, bool value, void* context) {
     tc_value v = tc_value_bool(value);
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_string(tc_component* c, const char* path, const char* value, tc_scene_handle scene) {
+void tc_component_set_field_string(tc_component* c, const char* path, const char* value, void* context) {
     tc_value v = tc_value_string(value ? value : "");
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, tc_scene_handle scene) {
+void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, void* context) {
     const char* uuid = tc_mesh_uuid(handle);
     if (!uuid) return;
 
@@ -135,11 +135,11 @@ void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_hand
     const char* name = tc_mesh_name(handle);
     if (name) tc_value_dict_set(&v, "name", tc_value_string(name));
 
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 
-void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, tc_scene_handle scene) {
+void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, void* context) {
     const char* uuid = tc_material_uuid(handle);
     if (!uuid) return;
 
@@ -148,7 +148,7 @@ void tc_component_set_field_material(tc_component* c, const char* path, tc_mater
     const char* name = tc_material_name(handle);
     if (name) tc_value_dict_set(&v, "name", tc_value_string(name));
 
-    tc_component_inspect_set(c, path, v, scene);
+    tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
 

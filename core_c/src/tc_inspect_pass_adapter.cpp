@@ -27,7 +27,7 @@ tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
     return tc_inspect_get(obj, type_name, path);
 }
 
-void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_handle scene) {
+void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, void* context) {
     if (!p || !path) return;
 
     const char* type_name = tc_pass_type_name(p);
@@ -41,7 +41,7 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, tc_scene_
     }
     if (!obj) return;
 
-    tc_inspect_set(obj, type_name, path, value, scene);
+    tc_inspect_set(obj, type_name, path, value, context);
 }
 
 } // extern "C"

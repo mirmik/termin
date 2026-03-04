@@ -19,9 +19,9 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             return h.serialize_to_value();
         },
         // deserialize: tc_value, scene → std::any(H)
-        [](const tc_value* v, tc_scene_handle scene) -> std::any {
+        [](const tc_value* v, void* context) -> std::any {
             H h;
-            h.deserialize_from(v, scene);
+            h.deserialize_from(v, context);
             return h;
         }
     );
@@ -39,12 +39,12 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             return result;
         },
         // deserialize: tc_value, scene → std::any(vector<H>)
-        [](const tc_value* v, tc_scene_handle scene) -> std::any {
+        [](const tc_value* v, void* context) -> std::any {
             std::vector<H> vec;
             if (v->type == TC_VALUE_LIST) {
                 for (size_t i = 0; i < v->data.list.count; i++) {
                     H h;
-                    h.deserialize_from(&v->data.list.items[i], scene);
+                    h.deserialize_from(&v->data.list.items[i], context);
                     vec.push_back(h);
                 }
             }

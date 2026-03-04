@@ -185,8 +185,8 @@ public:
     static Entity deserialize(tc_entity_pool_handle pool_handle, const tc_value* data);
     static Entity deserialize(tc_entity_pool* pool, const tc_value* data);
 
-    // Deserialize from tc_value with scene context for entity resolution
-    void deserialize_from(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
+    // Deserialize from tc_value with optional SceneInspectContext for entity resolution
+    void deserialize_from(const tc_value* data, void* context = nullptr);
 
     // --- Serialization (trent-based, for C++ scene serialization) ---
 

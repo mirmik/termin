@@ -276,8 +276,8 @@ static tc_value mock_get(void* obj, const char* type_name, const char* path, voi
     return tc_value_int(m->value);
 }
 
-static void mock_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx) {
-    (void)scene;
+static void mock_set(void* obj, const char* type_name, const char* path, tc_value value, void* context, void* ctx) {
+    (void)context;
     (void)ctx;
     if (!obj || !type_name || !path) return;
     if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return;
@@ -326,7 +326,7 @@ static int test_inspect_dispatcher_mock(void) {
     tc_value_free(&v);
 
     tc_value set_v = tc_value_int(77);
-    tc_inspect_set(&obj, "MockDispatchType", "value", set_v, TC_SCENE_HANDLE_INVALID);
+    tc_inspect_set(&obj, "MockDispatchType", "value", set_v, nullptr);
     tc_value_free(&set_v);
     TEST_ASSERT(obj.value == 77, "mock set value");
 
@@ -340,7 +340,7 @@ static int test_inspect_dispatcher_mock(void) {
 
     tc_value data = tc_value_dict_new();
     tc_value_dict_set(&data, "value", tc_value_int(1234));
-    tc_inspect_deserialize(&obj, "MockDispatchType", &data, TC_SCENE_HANDLE_INVALID);
+    tc_inspect_deserialize(&obj, "MockDispatchType", &data, nullptr);
     tc_value_free(&data);
     TEST_ASSERT(obj.value == 1234, "mock deserialize");
 

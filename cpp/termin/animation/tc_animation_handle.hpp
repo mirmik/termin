@@ -204,7 +204,7 @@ public:
     }
 
     // Deserialize from tc_value data
-    void deserialize_from(const tc_value* data, tc_scene_handle = TC_SCENE_HANDLE_INVALID) {
+    void deserialize_from(const tc_value* data, void* = nullptr) {
         // Release current handle
         if (tc_animation* a = tc_animation_get(handle)) {
             tc_animation_release(a);

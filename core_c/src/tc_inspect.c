@@ -144,7 +144,7 @@ tc_value tc_inspect_get(void* obj, const char* type_name, const char* path) {
     return g_vtables[lang].get(obj, type_name, path, g_vtables[lang].ctx);
 }
 
-void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene) {
+void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, void* context) {
     tc_inspect_lang lang = tc_inspect_type_lang(type_name);
     if (lang >= TC_INSPECT_LANG_COUNT) {
         tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_set: type '%s' not found in any language vtable", type_name ? type_name : "null");
@@ -154,7 +154,7 @@ void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value
         tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_set: no setter for type '%s' (lang=%d)", type_name ? type_name : "null", lang);
         return;
     }
-    g_vtables[lang].set(obj, type_name, path, value, scene, g_vtables[lang].ctx);
+    g_vtables[lang].set(obj, type_name, path, value, context, g_vtables[lang].ctx);
 }
 
 void tc_inspect_action(void* obj, const char* type_name, const char* path) {
@@ -197,7 +197,7 @@ tc_value tc_inspect_serialize(void* obj, const char* type_name) {
     return result;
 }
 
-void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, tc_scene_handle scene) {
+void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, void* context) {
     if (!obj) {
         tc_log(TC_LOG_WARN, "[Inspect] tc_inspect_deserialize: obj is NULL for type '%s'", type_name ? type_name : "unknown");
         return;
@@ -231,16 +231,16 @@ void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* da
 
         // Try tc_kind deserialization
         if (tc_kind_exists(f.kind)) {
-            tc_value deserialized = tc_kind_deserialize_any(f.kind, field_data, scene);
+            tc_value deserialized = tc_kind_deserialize_any(f.kind, field_data, context);
             if (deserialized.type != TC_VALUE_NIL) {
-                tc_inspect_set(obj, type_name, f.path, deserialized, scene);
+                tc_inspect_set(obj, type_name, f.path, deserialized, context);
                 tc_value_free(&deserialized);
                 continue;
             }
         }
 
         // No deserializer - set value as-is
-        tc_inspect_set(obj, type_name, f.path, *field_data, scene);
+        tc_inspect_set(obj, type_name, f.path, *field_data, context);
     }
 }
 

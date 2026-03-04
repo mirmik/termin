@@ -57,9 +57,6 @@ typedef struct tc_field_info {
 // Language vtable - each language registers its implementation
 // ============================================================================
 
-// Include scene pool for tc_scene_handle
-#include "core/tc_scene_pool.h"
-
 // Callback types
 typedef bool (*tc_inspect_has_type_fn)(const char* type_name, void* ctx);
 typedef const char* (*tc_inspect_get_parent_fn)(const char* type_name, void* ctx);
@@ -67,7 +64,7 @@ typedef size_t (*tc_inspect_field_count_fn)(const char* type_name, void* ctx);
 typedef bool (*tc_inspect_get_field_fn)(const char* type_name, size_t index, tc_field_info* out, void* ctx);
 typedef bool (*tc_inspect_find_field_fn)(const char* type_name, const char* path, tc_field_info* out, void* ctx);
 typedef tc_value (*tc_inspect_getter_fn)(void* obj, const char* type_name, const char* path, void* ctx);
-typedef void (*tc_inspect_setter_fn)(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene, void* ctx);
+typedef void (*tc_inspect_setter_fn)(void* obj, const char* type_name, const char* path, tc_value value, void* context, void* ctx);
 typedef void (*tc_inspect_action_fn)(void* obj, const char* type_name, const char* path, void* ctx);
 
 typedef struct tc_inspect_lang_vtable {
@@ -123,7 +120,7 @@ TC_API bool tc_inspect_find_field_info(const char* type_name, const char* path, 
 // ============================================================================
 
 TC_API tc_value tc_inspect_get(void* obj, const char* type_name, const char* path);
-TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene);
+TC_API void tc_inspect_set(void* obj, const char* type_name, const char* path, tc_value value, void* context);
 TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path);
 
 // ============================================================================
@@ -133,8 +130,8 @@ TC_API void tc_inspect_action(void* obj, const char* type_name, const char* path
 // Serialize all fields to dict (only is_serializable fields)
 TC_API tc_value tc_inspect_serialize(void* obj, const char* type_name);
 
-// Deserialize from dict with scene context
-TC_API void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, tc_scene_handle scene);
+// Deserialize from dict with runtime context
+TC_API void tc_inspect_deserialize(void* obj, const char* type_name, const tc_value* data, void* context);
 
 // ============================================================================
 // Parameterized kinds (e.g., "list[entity_handle]")

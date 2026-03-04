@@ -12,7 +12,6 @@ extern "C" {
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_kind.h"
 #include <tcbase/tc_log.h>
-#include "core/tc_scene.h"
 }
 
 // DLL export/import macros - singletons must be in entity_lib
@@ -32,7 +31,7 @@ namespace tc {
 struct KindCpp {
     std::string name;
     std::function<tc_value(const std::any&)> serialize;
-    std::function<std::any(const tc_value*, tc_scene_handle)> deserialize;
+    std::function<std::any(const tc_value*, void*)> deserialize;
 
     bool is_valid() const {
         return serialize && deserialize;
@@ -53,7 +52,7 @@ public:
     void register_kind(
         const std::string& name,
         std::function<tc_value(const std::any&)> serialize,
-        std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
+        std::function<std::any(const tc_value*, void*)> deserialize
     );
 
     // Get handler (returns nullptr if not found)
@@ -69,7 +68,7 @@ public:
     tc_value serialize(const std::string& kind_name, const std::any& value) const;
 
     // Deserialize value
-    std::any deserialize(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const;
+    std::any deserialize(const std::string& kind_name, const tc_value* data, void* context = nullptr) const;
 };
 
 // Helper to get int from tc_value (handles both INT and DOUBLE)
@@ -101,70 +100,70 @@ inline void register_builtin_cpp_kinds() {
     // bool
     reg.register_kind("bool",
         [](const std::any& v) { return tc_value_bool(std::any_cast<bool>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return v->data.b; }
+        [](const tc_value* v, void*) -> std::any { return v->data.b; }
     );
     reg.register_kind("checkbox",
         [](const std::any& v) { return tc_value_bool(std::any_cast<bool>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return v->data.b; }
+        [](const tc_value* v, void*) -> std::any { return v->data.b; }
     );
 
     // int
     reg.register_kind("int",
         [](const std::any& v) { return tc_value_int(std::any_cast<int>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_int(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_int(v); }
     );
     reg.register_kind("slider_int",
         [](const std::any& v) { return tc_value_int(std::any_cast<int>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_int(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_int(v); }
     );
     // enum (C++ uses int for enum-like fields with choices)
     reg.register_kind("enum",
         [](const std::any& v) { return tc_value_int(std::any_cast<int>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_int(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_int(v); }
     );
 
     // float
     reg.register_kind("float",
         [](const std::any& v) { return tc_value_float(std::any_cast<float>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return static_cast<float>(tc_value_to_double(v)); }
+        [](const tc_value* v, void*) -> std::any { return static_cast<float>(tc_value_to_double(v)); }
     );
     reg.register_kind("slider",
         [](const std::any& v) { return tc_value_float(std::any_cast<float>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return static_cast<float>(tc_value_to_double(v)); }
+        [](const tc_value* v, void*) -> std::any { return static_cast<float>(tc_value_to_double(v)); }
     );
     reg.register_kind("drag_float",
         [](const std::any& v) { return tc_value_float(std::any_cast<float>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return static_cast<float>(tc_value_to_double(v)); }
+        [](const tc_value* v, void*) -> std::any { return static_cast<float>(tc_value_to_double(v)); }
     );
 
     // double
     reg.register_kind("double",
         [](const std::any& v) { return tc_value_double(std::any_cast<double>(v)); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_double(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_double(v); }
     );
 
     // string
     reg.register_kind("string",
         [](const std::any& v) { return tc_value_string(std::any_cast<std::string>(v).c_str()); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_string(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_string(v); }
     );
     reg.register_kind("text",
         [](const std::any& v) { return tc_value_string(std::any_cast<std::string>(v).c_str()); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_string(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_string(v); }
     );
     reg.register_kind("multiline_text",
         [](const std::any& v) { return tc_value_string(std::any_cast<std::string>(v).c_str()); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_string(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_string(v); }
     );
     reg.register_kind("clip_selector",
         [](const std::any& v) { return tc_value_string(std::any_cast<std::string>(v).c_str()); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_string(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_string(v); }
     );
 
     // agent_type (string-based, used for navmesh agent type selection)
     reg.register_kind("agent_type",
         [](const std::any& v) { return tc_value_string(std::any_cast<std::string>(v).c_str()); },
-        [](const tc_value* v, tc_scene_handle) -> std::any { return tc_value_to_string(v); }
+        [](const tc_value* v, void*) -> std::any { return tc_value_to_string(v); }
     );
 
     // vec3 - serialized as list [x, y, z], deserialized to TC_VALUE_VEC3
@@ -174,7 +173,7 @@ inline void register_builtin_cpp_kinds() {
             auto vec = std::any_cast<tc_vec3>(v);
             return tc_value_vec3(vec);
         },
-        [](const tc_value* v, tc_scene_handle) -> std::any {
+        [](const tc_value* v, void*) -> std::any {
             tc_vec3 result = {0, 0, 0};
             if (v->type == TC_VALUE_VEC3) {
                 result = v->data.v3;
@@ -193,7 +192,7 @@ inline void register_builtin_cpp_kinds() {
             auto q = std::any_cast<tc_quat>(v);
             return tc_value_quat(q);
         },
-        [](const tc_value* v, tc_scene_handle) -> std::any {
+        [](const tc_value* v, void*) -> std::any {
             tc_quat result = {0, 0, 0, 1};
             if (v->type == TC_VALUE_QUAT) {
                 result = v->data.q;

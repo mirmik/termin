@@ -31,10 +31,10 @@ static tc_value python_serialize(const char* kind_name, const tc_value* input, v
     return tc_value_copy(input);
 }
 
-static tc_value python_deserialize(const char* kind_name, const tc_value* input, tc_scene_handle scene, void* ctx) {
+static tc_value python_deserialize(const char* kind_name, const tc_value* input, void* context, void* ctx) {
     (void)ctx;
     (void)kind_name;
-    (void)scene;
+    (void)context;
     // For Python kinds, actual deserialization is done via KindRegistryPython::deserialize()
     // which works with nb::object. This callback is pass-through.
     if (!input) return tc_value_nil();
@@ -188,7 +188,7 @@ std::vector<std::string> KindRegistry::kinds() const {
 void KindRegistry::register_cpp(
     const std::string& name,
     std::function<tc_value(const std::any&)> serialize,
-    std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
+    std::function<std::any(const tc_value*, void*)> deserialize
 ) {
     KindRegistryCpp::instance().register_kind(name, serialize, deserialize);
 }
@@ -201,8 +201,8 @@ tc_value KindRegistry::serialize_cpp(const std::string& kind_name, const std::an
     return KindRegistryCpp::instance().serialize(kind_name, value);
 }
 
-std::any KindRegistry::deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene_handle scene) const {
-    return KindRegistryCpp::instance().deserialize(kind_name, data, scene);
+std::any KindRegistry::deserialize_cpp(const std::string& kind_name, const tc_value* data, void* context) const {
+    return KindRegistryCpp::instance().deserialize(kind_name, data, context);
 }
 
 nb::object KindRegistry::serialize_python(const std::string& kind_name, nb::object obj) const {

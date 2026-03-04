@@ -611,7 +611,7 @@ void bind_tc_pass(nb::module_& m) {
             if (!obj_ptr) return;
 
             tc_value v = py_to_tc_value(data);
-            tc_inspect_deserialize(obj_ptr, tc_pass_type_name(p), &v, TC_SCENE_HANDLE_INVALID);
+            tc_inspect_deserialize(obj_ptr, tc_pass_type_name(p), &v, nullptr);
             tc_value_free(&v);
         }, nb::arg("data"))
         .def("get_field", [](TcPassRef& self, const std::string& field_name) -> nb::object {
@@ -647,7 +647,7 @@ void bind_tc_pass(nb::module_& m) {
 
             try {
                 tc::InspectRegistry_set(tc::InspectRegistry::instance(),
-                    obj_ptr, tc_pass_type_name(p), field_name, value, TC_SCENE_HANDLE_INVALID);
+                    obj_ptr, tc_pass_type_name(p), field_name, value, nullptr);
             } catch (...) {
                 // Field not found or setter failed - silently ignore
             }

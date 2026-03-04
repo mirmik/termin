@@ -411,7 +411,7 @@ public:
 
     // Deserialize from tc_value data
     // Accepts: string (material name), or dict with "uuid" or "name"
-    void deserialize_from(const tc_value* data, tc_scene_handle = TC_SCENE_HANDLE_INVALID) {
+    void deserialize_from(const tc_value* data, void* = nullptr) {
         // Release current handle
         if (tc_material* m = tc_material_get(handle)) {
             tc_material_release(m);

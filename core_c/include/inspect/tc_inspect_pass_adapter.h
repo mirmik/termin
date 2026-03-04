@@ -3,6 +3,7 @@
 #define TC_INSPECT_PASS_ADAPTER_H
 
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_context.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,7 +15,7 @@ struct tc_pass;
 // Works with tc_pass* directly, handles both C++ and Python passes.
 // Kept as compatibility adapter surface during migration.
 TC_API tc_value tc_pass_inspect_get(struct tc_pass* p, const char* path);
-TC_API void tc_pass_inspect_set(struct tc_pass* p, const char* path, tc_value value, tc_scene_handle scene);
+TC_API void tc_pass_inspect_set(struct tc_pass* p, const char* path, tc_value value, void* context);
 
 #ifdef __cplusplus
 }

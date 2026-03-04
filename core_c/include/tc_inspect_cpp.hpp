@@ -36,7 +36,7 @@ struct EnumChoice {
 };
 
 struct InspectContext {
-    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+    void* context = nullptr;
     void* user_context = nullptr;
 };
 
@@ -60,7 +60,7 @@ struct InspectFieldInfo {
 
     // Unified getter/setter via tc_value
     std::function<tc_value(void*)> getter;
-    std::function<void(void*, tc_value, tc_scene_handle)> setter;
+    std::function<void(void*, tc_value, void*)> setter;
 
     // Fill tc_field_info from this InspectFieldInfo
     void fill_c_info(tc_field_info* out) const {
@@ -174,8 +174,8 @@ public:
         std::string type_copy = type_name;
         std::string path_copy = path;
 
-        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene_handle scene) {
-            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
+        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, void* context) {
+            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, context);
             if (val.has_value()) {
                 try {
                     static_cast<C*>(obj)->*member = std::any_cast<T>(val);
@@ -222,8 +222,8 @@ public:
         std::string type_copy = type_name;
         std::string path_copy = path;
 
-        info.setter = [setter_fn, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene_handle scene) {
-            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
+        info.setter = [setter_fn, kind_copy, type_copy, path_copy](void* obj, tc_value value, void* context) {
+            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, context);
             if (val.has_value()) {
                 try {
                     setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
@@ -263,8 +263,8 @@ public:
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [setter_fn, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene_handle scene) {
-            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
+        info.setter = [setter_fn, kind_copy, type_copy, path_copy](void* obj, tc_value value, void* context) {
+            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, context);
             if (val.has_value()) {
                 try {
                     setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
@@ -300,8 +300,8 @@ public:
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene_handle scene) {
-            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
+        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, void* context) {
+            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, context);
             if (val.has_value()) {
                 try {
                     static_cast<C*>(obj)->*member = std::any_cast<H>(val);
@@ -425,7 +425,7 @@ public:
         return f->getter(obj);
     }
 
-    void set_tc_value(void* obj, const std::string& type_name, const std::string& field_path, tc_value value, tc_scene_handle scene) {
+    void set_tc_value(void* obj, const std::string& type_name, const std::string& field_path, tc_value value, void* context) {
         const InspectFieldInfo* f = find_field(type_name, field_path);
         if (!f) {
             tc_log(TC_LOG_WARN, "[Inspect] Field '%s.%s' not found", type_name.c_str(), field_path.c_str());
@@ -435,7 +435,7 @@ public:
             tc_log(TC_LOG_WARN, "[Inspect] Field '%s.%s' has no setter", type_name.c_str(), field_path.c_str());
             return;
         }
-        f->setter(obj, value, scene);
+        f->setter(obj, value, context);
     }
 
     void action_field(void* obj, const std::string& type_name, const std::string& field_path,
@@ -464,14 +464,14 @@ public:
         return result;
     }
 
-    void deserialize_all(void* obj, const std::string& type_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
+    void deserialize_all(void* obj, const std::string& type_name, const tc_value* data, void* context = nullptr) {
         if (!data || data->type != TC_VALUE_DICT) return;
         for (const auto& f : all_fields(type_name)) {
             if (!f.is_serializable) continue;
             if (!f.setter) continue;
             tc_value* field_val = tc_value_dict_get(const_cast<tc_value*>(data), f.path.c_str());
             if (!field_val || field_val->type == TC_VALUE_NIL) continue;
-            f.setter(obj, *field_val, scene);
+            f.setter(obj, *field_val, context);
         }
     }
 };
@@ -546,8 +546,8 @@ struct InspectFieldChoicesRegistrar {
             return KindRegistryCpp::instance().serialize(kind_copy, std::any(val));
         };
 
-        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, tc_scene_handle scene) {
-            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, scene);
+        info.setter = [member, kind_copy, type_copy, path_copy](void* obj, tc_value value, void* context) {
+            std::any val = KindRegistryCpp::instance().deserialize(kind_copy, &value, context);
             if (val.has_value()) {
                 try {
                     static_cast<C*>(obj)->*member = std::any_cast<T>(val);
@@ -583,7 +583,7 @@ struct SerializableFieldRegistrar {
             return tc_getter(static_cast<C*>(obj));
         };
 
-        info.setter = [tc_setter](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [tc_setter](void* obj, tc_value value, void*) {
             tc_setter(static_cast<C*>(obj), &value);
         };
 

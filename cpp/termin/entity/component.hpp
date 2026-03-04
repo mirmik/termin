@@ -6,6 +6,7 @@
 #include <atomic>
 #include <unordered_set>
 #include "core/tc_component.h"
+#include "inspect/tc_inspect_context.h"
 #include "tc_inspect_cpp.hpp"
 #include "core/tc_entity_pool.h"
 #include "termin/tc_scene.hpp"
@@ -157,11 +158,12 @@ public:
 
     virtual void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
         if (!data) return;
+        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
         tc_inspect_deserialize(
             static_cast<void*>(this),
             type_name(),
             data,
-            scene
+            &inspect_ctx
         );
     }
 

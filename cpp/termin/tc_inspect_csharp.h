@@ -29,7 +29,7 @@ TC_API void tc_inspect_csharp_register_type(const char* type_name);
 // These are called from the inspect dispatcher when accessing C# component fields.
 // obj is the void* body from tc_component (GCHandle IntPtr).
 typedef tc_value (*tc_cs_inspect_get_fn)(void* obj, const char* type_name, const char* path);
-typedef void (*tc_cs_inspect_set_fn)(void* obj, const char* type_name, const char* path, tc_value value, tc_scene_handle scene);
+typedef void (*tc_cs_inspect_set_fn)(void* obj, const char* type_name, const char* path, tc_value value, void* context);
 
 TC_API void tc_inspect_set_csharp_callbacks(
     tc_cs_inspect_get_fn getter,

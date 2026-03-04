@@ -157,7 +157,7 @@ void InspectRegistryPythonExt::register_python_fields(InspectRegistry& reg, cons
             return nb_to_tc_value(result);
         };
 
-        info.setter = [path_copy, kind_copy, py_setter](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [path_copy, kind_copy, py_setter](void* obj, tc_value value, void*) {
             try {
                 // obj is PyObject* for Python types
                 nb::object py_obj = nb::borrow<nb::object>(
@@ -220,7 +220,7 @@ nb::object InspectRegistryPythonExt::get(InspectRegistry& reg, void* obj,
 }
 
 void InspectRegistryPythonExt::set(InspectRegistry& reg, void* obj, const std::string& type_name,
-                                   const std::string& field_path, nb::object value, tc_scene_handle scene) {
+                                   const std::string& field_path, nb::object value, void* context) {
     const InspectFieldInfo* f = reg.find_field(type_name, field_path);
     if (!f) {
         throw nb::attribute_error(("Field not found: " + field_path).c_str());
@@ -229,13 +229,13 @@ void InspectRegistryPythonExt::set(InspectRegistry& reg, void* obj, const std::s
         throw nb::type_error(("No setter for field: " + field_path).c_str());
     }
     tc_value val = nb_to_tc_value(value);
-    f->setter(obj, val, scene);
+    f->setter(obj, val, context);
     tc_value_free(&val);
 }
 
 void InspectRegistryPythonExt::deserialize_all_py(InspectRegistry& reg, void* obj,
                                                    const std::string& type_name,
-                                                   const nb::dict& data, tc_scene_handle scene) {
+                                                   const nb::dict& data, void* context) {
     for (const auto& f : reg.all_fields(type_name)) {
         if (!f.is_serializable) continue;
         if (!f.setter) continue;
@@ -247,17 +247,17 @@ void InspectRegistryPythonExt::deserialize_all_py(InspectRegistry& reg, void* ob
         if (field_data.is_none()) continue;
 
         tc_value val = nb_to_tc_value(field_data);
-        f.setter(obj, val, scene);
+        f.setter(obj, val, context);
         tc_value_free(&val);
     }
 }
 
 void InspectRegistryPythonExt::deserialize_component_fields_over_python(
     InspectRegistry& reg, void* ptr, nb::object obj, const std::string& type_name,
-    const nb::dict& data, tc_scene_handle scene) {
+    const nb::dict& data, void* context) {
     // For C++ components ptr is the object, for Python components obj.ptr() is used
     void* target = (reg.get_type_backend(type_name) == TypeBackend::Cpp) ? ptr : obj.ptr();
-    deserialize_all_py(reg, target, type_name, data, scene);
+    deserialize_all_py(reg, target, type_name, data, context);
 }
 
 } // namespace tc

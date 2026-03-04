@@ -6,6 +6,7 @@
 #include <trent/trent.h>
 #include "core/tc_component.h"
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_context.h"
 #include "core/tc_scene.h"
 #include "../render/tc_value_trent.hpp"
 #include "component.hpp"
@@ -113,7 +114,8 @@ public:
         if (!obj_ptr) return;
 
         tc_value v = tc::trent_to_tc_value(data);
-        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene);
+        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
+        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
         tc_value_free(&v);
     }
 

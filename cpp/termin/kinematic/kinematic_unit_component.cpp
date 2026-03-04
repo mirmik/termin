@@ -26,7 +26,7 @@ static struct _KinematicAxisRegistrar {
             return tc_value_vec3(v);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             if (value.type == TC_VALUE_VEC3) {
                 c->set_axis(value.data.v3.x, value.data.v3.y, value.data.v3.z);
@@ -54,7 +54,7 @@ static struct _KinematicCoordinateRegistrar {
             return tc_value_double(c->coordinate);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             double v = 0.0;
             if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
@@ -84,7 +84,7 @@ static struct _KinematicBasePositionRegistrar {
             return tc_value_vec3(c->base_position);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             if (value.type == TC_VALUE_VEC3) {
                 c->base_position = value.data.v3;
@@ -110,7 +110,7 @@ static struct _KinematicBaseRotationRegistrar {
             return tc_value_quat(c->base_rotation);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             if (value.type == TC_VALUE_QUAT) {
                 c->base_rotation = value.data.q;
@@ -139,7 +139,7 @@ static struct _KinematicBaseScaleRegistrar {
             return tc_value_vec3(c->base_scale);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             if (value.type == TC_VALUE_VEC3) {
                 c->base_scale = value.data.v3;
@@ -164,7 +164,7 @@ static struct _KinematicCaptureBaseRegistrar {
             return tc_value_bool(false);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             if (value.type == TC_VALUE_BOOL && value.data.b) {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 c->capture_base();

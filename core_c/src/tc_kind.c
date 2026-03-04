@@ -56,14 +56,14 @@ tc_value tc_kind_serialize(const char* name, tc_kind_lang lang, const tc_value* 
     return g_registries[lang].serialize(name, input, g_registries[lang].ctx);
 }
 
-tc_value tc_kind_deserialize(const char* name, tc_kind_lang lang, const tc_value* input, tc_scene_handle scene) {
+tc_value tc_kind_deserialize(const char* name, tc_kind_lang lang, const tc_value* input, void* context) {
     if (!name || !input || lang < 0 || lang >= TC_KIND_LANG_COUNT) {
         return tc_value_nil();
     }
     if (!g_registries[lang].deserialize) {
         return tc_value_nil();
     }
-    return g_registries[lang].deserialize(name, input, scene, g_registries[lang].ctx);
+    return g_registries[lang].deserialize(name, input, context, g_registries[lang].ctx);
 }
 
 tc_value tc_kind_serialize_any(const char* name, const tc_value* input) {
@@ -82,7 +82,7 @@ tc_value tc_kind_serialize_any(const char* name, const tc_value* input) {
     return tc_value_nil();
 }
 
-tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_scene_handle scene) {
+tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, void* context) {
     if (!name || !input) {
         return tc_value_nil();
     }
@@ -91,7 +91,7 @@ tc_value tc_kind_deserialize_any(const char* name, const tc_value* input, tc_sce
     for (int i = 0; i < TC_KIND_LANG_COUNT; i++) {
         if (g_registries[i].has && g_registries[i].deserialize) {
             if (g_registries[i].has(name, g_registries[i].ctx)) {
-                return g_registries[i].deserialize(name, input, scene, g_registries[i].ctx);
+                return g_registries[i].deserialize(name, input, context, g_registries[i].ctx);
             }
         }
     }

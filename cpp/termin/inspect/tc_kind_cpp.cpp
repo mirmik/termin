@@ -28,8 +28,9 @@ static tc_value cpp_serialize(const char* kind_name, const tc_value* input, void
     return tc_value_copy(input);
 }
 
-static tc_value cpp_deserialize(const char* kind_name, const tc_value* input, tc_scene_handle scene, void* ctx) {
+static tc_value cpp_deserialize(const char* kind_name, const tc_value* input, void* context, void* ctx) {
     (void)ctx;
+    (void)context;
     if (!input || !kind_name) return tc_value_nil();
 
     // vec3: list [x, y, z] → TC_VALUE_VEC3
@@ -117,7 +118,7 @@ KindRegistryCpp& KindRegistryCpp::instance() {
 void KindRegistryCpp::register_kind(
     const std::string& name,
     std::function<tc_value(const std::any&)> serialize,
-    std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
+    std::function<std::any(const tc_value*, void*)> deserialize
 ) {
     KindCpp kind;
     kind.name = name;
@@ -157,7 +158,7 @@ tc_value KindRegistryCpp::serialize(const std::string& kind_name, const std::any
     return tc_value_nil();
 }
 
-std::any KindRegistryCpp::deserialize(const std::string& kind_name, const tc_value* data, tc_scene_handle scene) const {
+std::any KindRegistryCpp::deserialize(const std::string& kind_name, const tc_value* data, void* context) const {
     auto* kind = get(kind_name);
     if (!kind) {
         tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' not registered in KindRegistryCpp", kind_name.c_str());
@@ -167,7 +168,7 @@ std::any KindRegistryCpp::deserialize(const std::string& kind_name, const tc_val
         tc_log(TC_LOG_WARN, "[Inspect] Kind '%s' has no deserialize handler", kind_name.c_str());
         return std::any{};
     }
-    return kind->deserialize(data, scene);
+    return kind->deserialize(data, context);
 }
 
 } // namespace tc

@@ -34,7 +34,7 @@ bool TcPassRef::set_field(const std::string& field_name, const tc_value& value) 
     }
 
     // tc_pass_inspect_set handles both C++ and Python passes via InspectRegistry::set_tc_value
-    tc_pass_inspect_set(_c, field_name.c_str(), value, TC_SCENE_HANDLE_INVALID);
+    tc_pass_inspect_set(_c, field_name.c_str(), value, nullptr);
     return true;
 }
 

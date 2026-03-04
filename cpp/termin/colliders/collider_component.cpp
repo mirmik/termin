@@ -24,7 +24,7 @@ static struct _ColliderTypeFieldRegistrar {
             return tc_value_string(c->collider_type.c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<ColliderComponent*>(obj);
             if (value.type == TC_VALUE_STRING) {
                 c->set_collider_type(value.data.s);

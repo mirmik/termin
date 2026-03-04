@@ -23,6 +23,7 @@
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_component_adapter.h"
+#include "inspect/tc_inspect_context.h"
 #include "termin/bindings/inspect/tc_inspect_python.hpp"
 #include "termin/bindings/inspect/tc_kind_python.hpp"
 #include "termin/bindings/tc_value_helpers.hpp"
@@ -202,7 +203,8 @@ public:
         }
 
         tc_value v = py_to_tc_value(data);
-        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, scene_handle);
+        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
+        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
         tc_value_free(&v);
     }
 
@@ -242,7 +244,9 @@ public:
         }
 
         tc_value v = py_to_tc_value(to_convert);
-        tc_component_inspect_set(_c, field_name.c_str(), v, scene.handle());
+        tc_scene_handle scene_handle = scene.handle();
+        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
+        tc_component_inspect_set(_c, field_name.c_str(), v, &inspect_ctx);
         tc_value_free(&v);
     }
 

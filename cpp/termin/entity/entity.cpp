@@ -3,6 +3,7 @@
 #include "termin/tc_scene.hpp"
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_context.h"
 #include "../render/tc_value_trent.hpp"
 #include <tcbase/tc_log.hpp>
 #include <algorithm>
@@ -18,7 +19,8 @@ Entity::Entity(tc_entity_pool* pool, tc_entity_id id) {
     _h.id = id;
 }
 
-void Entity::deserialize_from(const tc_value* data, tc_scene_handle scene) {
+void Entity::deserialize_from(const tc_value* data, void* context) {
+    tc_scene_handle scene = tc_scene_inspect_context_scene(context);
     // Get UUID from tc_value
     std::string uuid_str;
     if (data && data->type == TC_VALUE_STRING && data->data.s) {
@@ -548,11 +550,12 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
                 void* obj_ptr = (unk->kind == TC_CXX_COMPONENT) ? CxxComponent::from_tc(unk) : unk->body;
                 if (obj_ptr && comp_data.contains("data")) {
                     tc_value orig_type = tc_value_string(type_name.c_str());
-                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_type", orig_type, scene);
+                    tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
+                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_type", orig_type, &inspect_ctx);
                     tc_value_free(&orig_type);
 
                     tc_value orig_data = tc::trent_to_tc_value(comp_data["data"]);
-                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_data", orig_data, scene);
+                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_data", orig_data, &inspect_ctx);
                     tc_value_free(&orig_data);
                 }
             }
@@ -578,7 +581,8 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
 
             if (obj_ptr) {
                 tc_value v = tc::trent_to_tc_value(comp_data["data"]);
-                tc_inspect_deserialize(obj_ptr, type_name.c_str(), &v, scene);
+                tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
+                tc_inspect_deserialize(obj_ptr, type_name.c_str(), &v, &inspect_ctx);
                 tc_value_free(&v);
             }
         }

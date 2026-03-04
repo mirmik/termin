@@ -97,7 +97,7 @@ public:
     void register_cpp(
         const std::string& name,
         std::function<tc_value(const std::any&)> serialize,
-        std::function<std::any(const tc_value*, tc_scene_handle)> deserialize
+        std::function<std::any(const tc_value*, void*)> deserialize
     );
 
     // Register Python handler (delegates to KindRegistryPython)
@@ -113,7 +113,7 @@ public:
     tc_value serialize_cpp(const std::string& kind_name, const std::any& value) const;
 
     // Deserialize using C++ handler
-    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) const;
+    std::any deserialize_cpp(const std::string& kind_name, const tc_value* data, void* context = nullptr) const;
 
     // Serialize using Python handler
     nb::object serialize_python(const std::string& kind_name, nb::object obj) const;

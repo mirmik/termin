@@ -29,7 +29,7 @@ static struct _CameraViewportLayerMaskRegistrar {
             return tc_value_string(buf);
         };
 
-        info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+        info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<CameraViewportComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->layer_mask = strtoull(value.data.s, nullptr, 0);

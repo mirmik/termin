@@ -46,12 +46,12 @@ TEST_CASE("InspectRegistry add/get/set and inheritance")
     tc_value_free(&gain_v);
 
     tc_value set_base = tc_value_int(42);
-    reg.set_tc_value(&obj, "InspectTestDerived", "base_value", set_base, TC_SCENE_HANDLE_INVALID);
+    reg.set_tc_value(&obj, "InspectTestDerived", "base_value", set_base, nullptr);
     tc_value_free(&set_base);
     CHECK_EQ(obj.base_value, 42);
 
     tc_value set_gain = tc_value_float(3.25f);
-    reg.set_tc_value(&obj, "InspectTestDerived", "gain", set_gain, TC_SCENE_HANDLE_INVALID);
+    reg.set_tc_value(&obj, "InspectTestDerived", "gain", set_gain, nullptr);
     tc_value_free(&set_gain);
     CHECK_EQ(obj.gain, guard::Approx(3.25).epsilon(1e-6));
 

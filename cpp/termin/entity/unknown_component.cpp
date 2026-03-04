@@ -68,7 +68,7 @@ static struct _UnknownComponentFieldRegistrar {
                 return tc_value_string(c->original_type.c_str());
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            info.setter = [](void* obj, tc_value value, void*) {
                 auto* c = static_cast<UnknownComponent*>(obj);
                 if (value.type == TC_VALUE_STRING && value.data.s) {
                     c->original_type = value.data.s;
@@ -93,7 +93,7 @@ static struct _UnknownComponentFieldRegistrar {
                 return tc_value_copy(&c->original_data);
             };
 
-            info.setter = [](void* obj, tc_value value, tc_scene_handle) {
+            info.setter = [](void* obj, tc_value value, void*) {
                 auto* c = static_cast<UnknownComponent*>(obj);
                 tc_value_free(&c->original_data);
                 c->original_data = tc_value_copy(&value);

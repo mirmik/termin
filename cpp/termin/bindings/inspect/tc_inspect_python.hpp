@@ -174,16 +174,16 @@ public:
     static nb::object get(InspectRegistry& reg, void* obj, const std::string& type_name,
                           const std::string& field_path);
     static void set(InspectRegistry& reg, void* obj, const std::string& type_name,
-                    const std::string& field_path, nb::object value, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
+                    const std::string& field_path, nb::object value, void* context = nullptr);
 
     // Deserialization from nb::dict
     static void deserialize_all_py(InspectRegistry& reg, void* obj, const std::string& type_name,
-                                   const nb::dict& data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
+                                   const nb::dict& data, void* context = nullptr);
 
     // Legacy compatibility
     static void deserialize_component_fields_over_python(
         InspectRegistry& reg, void* ptr, nb::object obj, const std::string& type_name,
-        const nb::dict& data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID);
+        const nb::dict& data, void* context = nullptr);
 };
 
 // Convenience methods added to InspectRegistry when nanobind is available
@@ -205,20 +205,20 @@ inline nb::object InspectRegistry_get(InspectRegistry& reg, void* obj,
 }
 
 inline void InspectRegistry_set(InspectRegistry& reg, void* obj, const std::string& type_name,
-                                const std::string& field_path, nb::object value, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
-    InspectRegistryPythonExt::set(reg, obj, type_name, field_path, std::move(value), scene);
+                                const std::string& field_path, nb::object value, void* context = nullptr) {
+    InspectRegistryPythonExt::set(reg, obj, type_name, field_path, std::move(value), context);
 }
 
 inline void InspectRegistry_deserialize_all_py(InspectRegistry& reg, void* obj,
                                                const std::string& type_name,
-                                               const nb::dict& data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
-    InspectRegistryPythonExt::deserialize_all_py(reg, obj, type_name, data, scene);
+                                               const nb::dict& data, void* context = nullptr) {
+    InspectRegistryPythonExt::deserialize_all_py(reg, obj, type_name, data, context);
 }
 
 inline void InspectRegistry_deserialize_component_fields_over_python(
     InspectRegistry& reg, void* ptr, nb::object obj, const std::string& type_name,
-    const nb::dict& data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
-    InspectRegistryPythonExt::deserialize_component_fields_over_python(reg, ptr, obj, type_name, data, scene);
+    const nb::dict& data, void* context = nullptr) {
+    InspectRegistryPythonExt::deserialize_component_fields_over_python(reg, ptr, obj, type_name, data, context);
 }
 
 } // namespace tc

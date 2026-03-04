@@ -138,7 +138,7 @@ static tc_pass* create_and_configure_pass(
     tc_pass_set_name(pass, pass_name);
     for (auto& [field, value] : fields) {
         tc_value v = tc_value_string(value);
-        tc_pass_inspect_set(pass, field, v, TC_SCENE_HANDLE_INVALID);
+        tc_pass_inspect_set(pass, field, v, nullptr);
         tc_value_free(&v);
     }
     return pass;
