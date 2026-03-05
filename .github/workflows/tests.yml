@@ -42,7 +42,8 @@ jobs:
           cmake -S . -B build_test \
             -DBUILD_TESTS=ON \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_PREFIX_PATH=/opt/termin
+            -DCMAKE_PREFIX_PATH=/opt/termin \
+            -DPython_EXECUTABLE=$(which python3)
 
       - name: Build
         run: cmake --build build_test --parallel
