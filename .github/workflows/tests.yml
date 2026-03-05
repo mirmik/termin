@@ -155,15 +155,5 @@ jobs:
           CMAKE_PREFIX_PATH: /opt/termin
         run: pip install --no-build-isolation -e .
 
-      - name: Link SDK Python subpackages
-        run: |
-          for pkg in scene inspect colliders collision; do
-            sdk_dir="/opt/termin/lib/python/termin/$pkg"
-            local_dir="termin/$pkg"
-            if [ -d "$sdk_dir" ] && [ ! -d "$local_dir" ]; then
-              ln -s "$sdk_dir" "$local_dir"
-            fi
-          done
-
       - name: Run Python tests
         run: python -m pytest tests/ -v
