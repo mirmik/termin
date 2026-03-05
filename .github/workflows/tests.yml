@@ -150,9 +150,13 @@ jobs:
       - name: Install Python dependencies
         run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2 /opt/termin/wheels/*.whl
 
-      - name: Build and install
-        env:
-          CMAKE_PREFIX_PATH: /opt/termin
+      - name: Build native modules
+        run: ./build.sh
+
+      - name: Install to /opt/termin
+        run: sudo ./install_system.sh
+
+      - name: Install Python package (editable)
         run: pip install --no-build-isolation -e .
 
       - name: Run Python tests
