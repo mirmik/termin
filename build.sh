@@ -106,6 +106,7 @@ if [[ $ASAN -eq 1 ]]; then
         -DCMAKE_PREFIX_PATH="$SDK_DIR" \
         -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
         -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
+        -DPython_EXECUTABLE="$(which python3)" \
         -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
         -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
         -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
@@ -126,6 +127,7 @@ else
         -DCMAKE_PREFIX_PATH="$SDK_DIR" \
         -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
         -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
+        -DPython_EXECUTABLE="$(which python3)" \
         -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
         -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
         -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
