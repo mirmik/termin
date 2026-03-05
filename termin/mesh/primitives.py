@@ -410,8 +410,8 @@ def TorusMesh(
             v1 = next_i * minor_segments + j
             v2 = next_i * minor_segments + next_j
             v3 = i * minor_segments + next_j
-            triangles.append([v0, v1, v2])
-            triangles.append([v0, v2, v3])
+            triangles.append([v0, v2, v1])
+            triangles.append([v0, v3, v2])
 
     mesh = Mesh3(
         vertices=np.array(vertices, dtype=np.float32),
