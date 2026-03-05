@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [master]
 
+env:
+  LD_LIBRARY_PATH: /opt/termin/lib
+
 jobs:
   cpp-tests:
     name: C/C++ Tests
@@ -15,30 +18,31 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            python3-dev \
-            libgl1-mesa-dev \
-            libsdl2-dev \
-            qt6-base-dev
+          sudo apt-get install -y build-essential cmake python3-dev libgl1-mesa-dev libsdl2-dev qt6-base-dev
 
-      - name: Install nanobind
+      - name: Install Python dependencies
         run: pip install nanobind
+
+      - name: Download full SDK
+        env:
+          GH_TOKEN: ${{ secrets.CLONETOKEN }}
+        run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-components -p sdk-components.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
       - name: Configure with tests
         run: |
           cmake -S . -B build_test \
             -DBUILD_TESTS=ON \
-            -DCMAKE_BUILD_TYPE=Debug
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH=/opt/termin
 
       - name: Build
         run: cmake --build build_test --parallel
@@ -54,24 +58,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            python3-dev \
-            libgl1-mesa-dev \
-            libsdl2-dev \
-            qt6-base-dev
+          sudo apt-get install -y build-essential cmake python3-dev libgl1-mesa-dev libsdl2-dev qt6-base-dev
 
-      - name: Install nanobind
+      - name: Install Python dependencies
         run: pip install nanobind
+
+      - name: Download full SDK
+        env:
+          GH_TOKEN: ${{ secrets.CLONETOKEN }}
+        run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-components -p sdk-components.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
       - name: Build via build.sh
         run: ./build.sh
@@ -90,24 +94,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            python3-dev \
-            libgl1-mesa-dev \
-            libsdl2-dev \
-            qt6-base-dev
+          sudo apt-get install -y build-essential cmake python3-dev libgl1-mesa-dev libsdl2-dev qt6-base-dev
+
+      - name: Download full SDK
+        env:
+          GH_TOKEN: ${{ secrets.CLONETOKEN }}
+        run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-components -p sdk-components.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
       - name: Install Python dependencies
-        run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2
+        run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2 /opt/termin/wheels/*.whl
 
       - name: Build and install
         run: pip install --no-build-isolation -e .
