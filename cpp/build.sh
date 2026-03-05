@@ -18,5 +18,4 @@ cmake --build . -j$(nproc)
 cmake --install .
 
 echo "Build complete!"
-echo "  termin/geombase/_geom_native.so"
 echo "  termin/physics/_physics_native.so"

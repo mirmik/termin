@@ -19,22 +19,6 @@ find_package(nanobind CONFIG REQUIRED)
 
 # ============== Small utility modules ==============
 
-# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3, Transform, AABB)
-nanobind_add_module(_geom_native NB_SHARED
-    termin/bindings/geom/geom_module.cpp
-    termin/bindings/geom/vec3.cpp
-    termin/bindings/geom/vec4.cpp
-    termin/bindings/geom/quat.cpp
-    termin/bindings/geom/mat44.cpp
-    termin/bindings/geom/pose3.cpp
-    termin/bindings/geom/general_pose3.cpp
-    termin/bindings/geom/screw3.cpp
-    termin/bindings/geom/transform.cpp
-    termin/bindings/geom/aabb.cpp
-)
-target_compile_options(_geom_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_link_libraries(_geom_native PRIVATE entity_lib)
-
 # Physics native module (RigidBody, PhysicsWorld, Contact)
 nanobind_add_module(_physics_native NB_SHARED termin/physics_bindings.cpp)
 target_link_libraries(_physics_native PRIVATE entity_lib)
@@ -216,10 +200,6 @@ set_target_properties(entity_lib PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_geom_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_physics_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -259,7 +239,6 @@ set_target_properties(_native PROPERTIES
 
 # ============== Install targets ==============
 
-install(TARGETS _geom_native DESTINATION ${TERMIN_PYTHON_PREFIX}/geombase)
 install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/physics)
 install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_PREFIX}/voxels)
 install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_PREFIX}/visualization/animation)

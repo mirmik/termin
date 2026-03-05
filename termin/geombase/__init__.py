@@ -22,10 +22,11 @@ from ._geom_native import (
     Mat44f,
     Pose3,
     GeneralPose3,
-    GeneralTransform3,
     Screw3,
     AABB,
 )
+
+from termin.scene import GeneralTransform3
 
 from .pose2 import Pose2
 from .screw import Screw, Screw2

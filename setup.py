@@ -68,7 +68,6 @@ class CMakeBuildExt(build_ext):
         # Copy all native modules into source tree for editable/pytest runs
         module_mappings = [
             ("tests", "_cpp_tests"),
-            ("geombase", "_geom_native"),
             ("colliders", "_colliders_native"),
             ("physics", "_physics_native"),
             ("voxels", "_voxels_native"),
@@ -171,6 +170,7 @@ if __name__ == "__main__":
         },
         include_package_data=True,
         install_requires=[
+            "tcbase",
             "numpy",
             "PyOpenGL>=3.1",
             "glfw>=2.5.0",
@@ -182,7 +182,6 @@ if __name__ == "__main__":
         extras_require={
         },
         ext_modules=[
-            Extension("termin.geombase._geom_native", sources=[]),
             Extension("termin.colliders._colliders_native", sources=[]),
             Extension("termin.physics._physics_native", sources=[]),
             Extension("termin.voxels._voxels_native", sources=[]),
