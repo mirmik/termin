@@ -114,6 +114,7 @@ if [[ $ASAN -eq 1 ]]; then
         -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
         -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
+        -Dtermin_components_kinematic_DIR="$SDK_DIR/lib/cmake/termin_components_kinematic" \
         -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
         -DCMAKE_CXX_FLAGS="$ASAN_FLAGS" \
         -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
@@ -134,7 +135,8 @@ else
         -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
         -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
-        -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh"
+        -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
+        -Dtermin_components_kinematic_DIR="$SDK_DIR/lib/cmake/termin_components_kinematic"
 fi
 
 # Build
@@ -149,7 +151,7 @@ rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
 
 # Copy shared libraries from extracted modules
-echo "Copying shared libraries from termin-base, termin-scene, termin-graphics, termin-inspect, termin-collision, termin-components-collision and termin-components-mesh..."
+echo "Copying shared libraries from termin-base, termin-scene, termin-graphics, termin-inspect, termin-collision, termin-components-collision, termin-components-mesh and termin-components-kinematic..."
 TERMIN_BASE_LIBDIR="$SDK_DIR/lib"
 TERMIN_SCENE_LIBDIR="$SDK_DIR/lib"
 TERMIN_GFX_LIBDIR="$SDK_DIR/lib"
@@ -157,6 +159,7 @@ TERMIN_INSPECT_LIBDIR="$SDK_DIR/lib"
 TERMIN_COLLISION_LIBDIR="$SDK_DIR/lib"
 TERMIN_COMPONENTS_COLLISION_LIBDIR="$SDK_DIR/lib"
 TERMIN_COMPONENTS_MESH_LIBDIR="$SDK_DIR/lib"
+TERMIN_COMPONENTS_KINEMATIC_LIBDIR="$SDK_DIR/lib"
 
 if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
     cp -P "$TERMIN_BASE_LIBDIR"/libtermin_base.so* "$INSTALL_DIR/lib/"
@@ -219,8 +222,15 @@ else
     echo "  WARNING: libtermin_components_mesh not found in $TERMIN_COMPONENTS_MESH_LIBDIR — skipping libtermin_components_mesh"
 fi
 
+if [[ -d "$TERMIN_COMPONENTS_KINEMATIC_LIBDIR" ]] && compgen -G "$TERMIN_COMPONENTS_KINEMATIC_LIBDIR/libtermin_components_kinematic.so*" > /dev/null; then
+    cp -P "$TERMIN_COMPONENTS_KINEMATIC_LIBDIR"/libtermin_components_kinematic.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_components_kinematic from $TERMIN_COMPONENTS_KINEMATIC_LIBDIR"
+else
+    echo "  WARNING: libtermin_components_kinematic not found in $TERMIN_COMPONENTS_KINEMATIC_LIBDIR — skipping libtermin_components_kinematic"
+fi
+
 # Copy Python packages from extracted modules
-echo "Copying Python packages from termin-inspect, termin-scene, termin-collision, termin-components-collision and termin-components-mesh..."
+echo "Copying Python packages from termin-inspect, termin-scene, termin-collision, termin-components-collision, termin-components-mesh and termin-components-kinematic..."
 PYTHON_DEST="$INSTALL_DIR/lib/python"
 
 TERMIN_INSPECT_PY="$ENV_DIR/termin-inspect/python"
@@ -307,6 +317,22 @@ if [[ -n "$COMPONENTS_MESH_SO" ]]; then
     echo "  Copied _components_mesh_native from $TERMIN_COMPONENTS_MESH_BUILD"
 else
     echo "  WARNING: _components_mesh_native.so not found in $TERMIN_COMPONENTS_MESH_BUILD"
+fi
+
+TERMIN_COMPONENTS_KINEMATIC_BUILD="$ENV_DIR/termin-components/termin-components-kinematic/build"
+mkdir -p "$PYTHON_DEST/termin/kinematic"
+
+# Copy .py files from SDK if available
+if [[ -d "$SDK_DIR/lib/python/termin/kinematic" ]]; then
+    cp -n "$SDK_DIR/lib/python/termin/kinematic/"*.py "$PYTHON_DEST/termin/kinematic/" 2>/dev/null || true
+fi
+
+COMPONENTS_KINEMATIC_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_KINEMATIC_BUILD" "_components_kinematic_native*.so")
+if [[ -n "$COMPONENTS_KINEMATIC_SO" ]]; then
+    cp "$COMPONENTS_KINEMATIC_SO" "$PYTHON_DEST/termin/kinematic/"
+    echo "  Copied _components_kinematic_native from $TERMIN_COMPONENTS_KINEMATIC_BUILD"
+else
+    echo "  WARNING: _components_kinematic_native.so not found in $TERMIN_COMPONENTS_KINEMATIC_BUILD"
 fi
 
 echo ""
