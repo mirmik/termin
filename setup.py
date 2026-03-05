@@ -67,50 +67,9 @@ class CMakeBuildExt(build_ext):
         for ext in self.extensions:
             self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
 
-        # Copy all native modules into source tree for editable/pytest runs
-        module_mappings = [
-            ("tests", "_cpp_tests"),
-            ("colliders", "_colliders_native"),
-            ("physics", "_physics_native"),
-            ("voxels", "_voxels_native"),
-            ("collision", "_collision_native"),
-            ("visualization/animation", "_animation_native"),
-            ("viewport", "_viewport_native"),
-            ("entity", "_entity_native"),
-            ("lighting", "_lighting_native"),
-            ("skeleton", "_skeleton_native"),
-            ("navmesh", "_navmesh_native"),
-            ("mesh", "_mesh_native"),
-            ("texture", "_texture_native"),
-            ("graphics", "_graphics_native"),
-            ("", "_native"),  # unified render module
-        ]
-        for subdir, module_name in module_mappings:
-            dst_dir = Path(directory) / "termin" / subdir
-            dst_dir.mkdir(parents=True, exist_ok=True)
-            src_dir = install_prefix / subdir
-            for so in src_dir.glob(f"{module_name}.*"):
-                shutil.copy2(so, dst_dir / so.name)
-
-        # Copy shared libraries to termin/ directory (source tree for editable install)
-        # All DLLs/SOs should come from install_prefix (single source of truth)
-        source_termin_dir = Path(directory) / "termin"
-
-        if sys.platform == "win32":
-            # Windows: copy .dll files from install_prefix (where CMake installs them)
-            for dll in install_prefix.glob("*.dll"):
-                shutil.copy2(dll, source_termin_dir / dll.name)
-                print(f"Copied {dll.name} to {source_termin_dir}")
-        else:
-            # Linux/macOS: copy .so/.dylib from install_prefix
-            for lib in install_prefix.glob("*.so"):
-                if lib.is_file() and not lib.is_symlink():
-                    shutil.copy2(lib, source_termin_dir / lib.name)
-                    print(f"Copied {lib.name} to {source_termin_dir}")
-            for lib in install_prefix.glob("*.dylib"):
-                if lib.is_file():
-                    shutil.copy2(lib, source_termin_dir / lib.name)
-                    print(f"Copied {lib.name} to {source_termin_dir}")
+        # Native modules are installed by CMake into build_lib/termin/.
+        # For editable installs, setuptools handles sys.path so that
+        # build_lib is importable — no need to copy anything into source tree.
 
 
 directory = os.path.dirname(os.path.realpath(__file__))
@@ -184,19 +143,17 @@ if __name__ == "__main__":
         extras_require={
         },
         ext_modules=[
-            Extension("termin.colliders._colliders_native", sources=[]),
+            # Only modules built by termin's own CMake.
+            # External modules (colliders, collision, mesh, texture, graphics)
+            # come from SDK via __path__ extension.
             Extension("termin.physics._physics_native", sources=[]),
             Extension("termin.voxels._voxels_native", sources=[]),
-            Extension("termin.collision._collision_native", sources=[]),
             Extension("termin.visualization.animation._animation_native", sources=[]),
             Extension("termin.viewport._viewport_native", sources=[]),
             Extension("termin.entity._entity_native", sources=[]),
             Extension("termin.lighting._lighting_native", sources=[]),
             Extension("termin.skeleton._skeleton_native", sources=[]),
             Extension("termin.navmesh._navmesh_native", sources=[]),
-            Extension("termin.mesh._mesh_native", sources=[]),
-            Extension("termin.texture._texture_native", sources=[]),
-            Extension("termin.graphics._graphics_native", sources=[]),
             Extension("termin._native", sources=[]),  # unified render module
             Extension("termin.tests._cpp_tests", sources=[]),
         ],

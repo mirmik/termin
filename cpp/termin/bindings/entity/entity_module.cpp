@@ -43,6 +43,9 @@ NB_MODULE(_entity_native, m) {
     // Import _scene_native — canonical owner of core types
     nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
 
+    // Import _inspect_native for singleton address checks
+    nb::module_ inspect_native = nb::module_::import_("termin.inspect._inspect_native");
+
     // Re-export core types from _scene_native
     m.attr("TcScene") = scene_native.attr("TcScene");
     m.attr("Component") = scene_native.attr("Component");
@@ -57,6 +60,10 @@ NB_MODULE(_entity_native, m) {
     m.attr("component_registry_type_count") = scene_native.attr("component_registry_type_count");
     m.attr("soa_registry_get_all_info") = scene_native.attr("soa_registry_get_all_info");
     m.attr("soa_registry_type_count") = scene_native.attr("soa_registry_type_count");
+
+    // Re-export singleton address helpers from _inspect_native
+    m.attr("_inspect_registry_address") = inspect_native.attr("inspect_registry_address");
+    m.attr("_kind_registry_cpp_address") = inspect_native.attr("kind_registry_cpp_address");
 
     // --- TcScene render extensions (ViewportConfig, background_color, pipelines, etc.) ---
     // TcScene base is in _scene_native; bind_tc_scene extends it with render methods
