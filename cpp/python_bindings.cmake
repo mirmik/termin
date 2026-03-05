@@ -193,7 +193,7 @@ endif()
 
 # Ensure native Python modules can find bundled libs in /opt/termin/lib
 # by walking up from package subdirs.
-set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..")
+set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;/opt/termin/lib")
 
 set_target_properties(entity_lib PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"

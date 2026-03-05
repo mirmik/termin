@@ -186,6 +186,18 @@ else
     echo "  WARNING: libtermin_inspect not found in $TERMIN_INSPECT_LIBDIR — skipping libtermin_inspect"
 fi
 
+if compgen -G "$TERMIN_INSPECT_LIBDIR/libtermin_inspect_python.so*" > /dev/null; then
+    cp -P "$TERMIN_INSPECT_LIBDIR"/libtermin_inspect_python.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_inspect_python from $TERMIN_INSPECT_LIBDIR"
+else
+    echo "  WARNING: libtermin_inspect_python not found in $TERMIN_INSPECT_LIBDIR — skipping"
+fi
+
+if compgen -G "$SDK_DIR/lib/libnanobind.so*" > /dev/null; then
+    cp -P "$SDK_DIR/lib"/libnanobind.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libnanobind from $SDK_DIR/lib"
+fi
+
 if [[ -d "$TERMIN_COLLISION_LIBDIR" ]] && compgen -G "$TERMIN_COLLISION_LIBDIR/libtermin_collision.so*" > /dev/null; then
     cp -P "$TERMIN_COLLISION_LIBDIR"/libtermin_collision.so* "$INSTALL_DIR/lib/"
     echo "  Copied libtermin_collision from $TERMIN_COLLISION_LIBDIR"
@@ -246,7 +258,17 @@ else
 fi
 
 TERMIN_COLLISION_BUILD="$ENV_DIR/termin-collision/build"
+TERMIN_COLLISION_PY="$ENV_DIR/termin-collision/python"
 mkdir -p "$PYTHON_DEST/termin/colliders" "$PYTHON_DEST/termin/collision"
+
+# Copy .py files from SDK if available
+if [[ -d "$SDK_DIR/lib/python/termin/colliders" ]]; then
+    cp -n "$SDK_DIR/lib/python/termin/colliders/"*.py "$PYTHON_DEST/termin/colliders/" 2>/dev/null || true
+fi
+if [[ -d "$SDK_DIR/lib/python/termin/collision" ]]; then
+    cp -n "$SDK_DIR/lib/python/termin/collision/"*.py "$PYTHON_DEST/termin/collision/" 2>/dev/null || true
+fi
+
 COLLIDERS_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_colliders_native*.so")
 COLLISION_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_collision_native*.so")
 if [[ -n "$COLLIDERS_SO" ]]; then
@@ -272,9 +294,15 @@ else
 fi
 
 TERMIN_COMPONENTS_MESH_BUILD="$ENV_DIR/termin-components/termin-components-mesh/build"
+mkdir -p "$PYTHON_DEST/termin/mesh"
+
+# Copy .py files from SDK if available
+if [[ -d "$SDK_DIR/lib/python/termin/mesh" ]]; then
+    cp -n "$SDK_DIR/lib/python/termin/mesh/"*.py "$PYTHON_DEST/termin/mesh/" 2>/dev/null || true
+fi
+
 COMPONENTS_MESH_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_MESH_BUILD" "_components_mesh_native*.so")
 if [[ -n "$COMPONENTS_MESH_SO" ]]; then
-    mkdir -p "$PYTHON_DEST/termin/mesh"
     cp "$COMPONENTS_MESH_SO" "$PYTHON_DEST/termin/mesh/"
     echo "  Copied _components_mesh_native from $TERMIN_COMPONENTS_MESH_BUILD"
 else
