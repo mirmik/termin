@@ -20,7 +20,7 @@ find_package(nanobind CONFIG REQUIRED)
 # ============== Small utility modules ==============
 
 # Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3, Transform, AABB)
-nanobind_add_module(_geom_native
+nanobind_add_module(_geom_native NB_SHARED
     termin/bindings/geom/geom_module.cpp
     termin/bindings/geom/vec3.cpp
     termin/bindings/geom/vec4.cpp
@@ -36,22 +36,22 @@ target_compile_options(_geom_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS
 target_link_libraries(_geom_native PRIVATE entity_lib)
 
 # Physics native module (RigidBody, PhysicsWorld, Contact)
-nanobind_add_module(_physics_native termin/physics_bindings.cpp)
+nanobind_add_module(_physics_native NB_SHARED termin/physics_bindings.cpp)
 target_link_libraries(_physics_native PRIVATE entity_lib)
 target_compile_options(_physics_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # Voxels native module (VoxelGrid, voxelization, VoxelGridHandle)
-nanobind_add_module(_voxels_native termin/voxels_bindings.cpp)
+nanobind_add_module(_voxels_native NB_SHARED termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_link_libraries(_voxels_native PRIVATE entity_lib trent)
 
 # Lighting native module (Light, AttenuationCoefficients, LightComponent)
-nanobind_add_module(_lighting_native termin/lighting_bindings.cpp)
+nanobind_add_module(_lighting_native NB_SHARED termin/lighting_bindings.cpp)
 target_link_libraries(_lighting_native PRIVATE entity_lib)
 target_compile_options(_lighting_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # Skeleton native module (Bone, SkeletonData, SkeletonInstance, SkeletonController)
-nanobind_add_module(_skeleton_native
+nanobind_add_module(_skeleton_native NB_SHARED
     termin/bindings/skeleton/skeleton_module.cpp
 )
 target_link_libraries(_skeleton_native PRIVATE trent entity_lib skeleton_lib)
@@ -60,7 +60,7 @@ target_compile_options(_skeleton_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_F
 # ============== Core entity/viewport modules ==============
 
 # Viewport native module (TcViewport)
-nanobind_add_module(_viewport_native
+nanobind_add_module(_viewport_native NB_SHARED
     termin/bindings/viewport/viewport_module.cpp
 )
 target_link_libraries(_viewport_native PRIVATE entity_lib)
@@ -68,7 +68,7 @@ target_compile_definitions(_viewport_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_viewport_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # Entity native module (Component, Entity, Scene, registries)
-nanobind_add_module(_entity_native
+nanobind_add_module(_entity_native NB_SHARED
     termin/bindings/entity/entity_module.cpp
     termin/bindings/camera/camera_bindings.cpp
     termin/bindings/camera/orbit_camera_bindings.cpp
@@ -82,7 +82,7 @@ target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_entity_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # Animation native module (TcAnimationClip, AnimationPlayer)
-nanobind_add_module(_animation_native
+nanobind_add_module(_animation_native NB_SHARED
     termin/bindings/animation/animation_module.cpp
     termin/animation/animation_player.cpp
 )
@@ -90,7 +90,7 @@ target_link_libraries(_animation_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_animation_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # NavMesh native module (RecastNavMeshBuilderComponent)
-nanobind_add_module(_navmesh_native
+nanobind_add_module(_navmesh_native NB_SHARED
     termin/bindings/navmesh/navmesh_module.cpp
 )
 target_link_libraries(_navmesh_native PRIVATE trent entity_lib navmesh_lib render_lib)
@@ -107,7 +107,7 @@ if(SDL2_FOUND)
     )
 endif()
 
-nanobind_add_module(_native
+nanobind_add_module(_native NB_SHARED
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
     termin/bindings/render/shader_parser.cpp
@@ -191,7 +191,7 @@ set_target_properties(_native PROPERTIES
 # ============== Tests module ==============
 
 if(BUILD_TESTS)
-    nanobind_add_module(_cpp_tests
+    nanobind_add_module(_cpp_tests NB_SHARED
         tests/tests_binding.cpp
         tests/tests_general_pose3.cpp
         tests/tests_colliders.cpp
@@ -269,3 +269,6 @@ install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_PREFIX}/skeleton)
 install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_PREFIX}/viewport)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_PREFIX})
+if(TARGET nanobind)
+    install(TARGETS nanobind DESTINATION ${TERMIN_PYTHON_PREFIX})
+endif()
