@@ -87,6 +87,13 @@ if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]] || [[ $CLEAN -eq 1 ]]; then
             -DBUILD_LAUNCHER=ON \
             -DBUNDLE_PYTHON=ON \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_PREFIX_PATH="$SDK_DIR" \
+            -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
+            -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
+            -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
+            -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
+            -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
+            -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
             -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
             -DCMAKE_CXX_FLAGS="$ASAN_FLAGS" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
@@ -96,7 +103,14 @@ if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]] || [[ $CLEAN -eq 1 ]]; then
             -DBUILD_EDITOR_MINIMAL=ON \
             -DBUILD_LAUNCHER=ON \
             -DBUNDLE_PYTHON=ON \
-            -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_PREFIX_PATH="$SDK_DIR" \
+            -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
+            -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
+            -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
+            -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
+            -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
+            -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision"
     fi
 fi
 
@@ -112,12 +126,13 @@ rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
 
 # Copy shared libraries from extracted modules
-echo "Copying shared libraries from termin-base, termin-scene, termin-graphics, termin-inspect and termin-collision..."
+echo "Copying shared libraries from termin-base, termin-scene, termin-graphics, termin-inspect, termin-collision and termin-components-collision..."
 TERMIN_BASE_LIBDIR="$SDK_DIR/lib"
 TERMIN_SCENE_LIBDIR="$SDK_DIR/lib"
 TERMIN_GFX_LIBDIR="$SDK_DIR/lib"
 TERMIN_INSPECT_LIBDIR="$SDK_DIR/lib"
 TERMIN_COLLISION_LIBDIR="$SDK_DIR/lib"
+TERMIN_COMPONENTS_COLLISION_LIBDIR="$SDK_DIR/lib"
 
 if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
     cp -P "$TERMIN_BASE_LIBDIR"/libtermin_base.so* "$INSTALL_DIR/lib/"
@@ -154,8 +169,15 @@ else
     echo "  WARNING: libtermin_collision not found in $TERMIN_COLLISION_LIBDIR — skipping libtermin_collision"
 fi
 
+if [[ -d "$TERMIN_COMPONENTS_COLLISION_LIBDIR" ]] && compgen -G "$TERMIN_COMPONENTS_COLLISION_LIBDIR/libtermin_components_collision.so*" > /dev/null; then
+    cp -P "$TERMIN_COMPONENTS_COLLISION_LIBDIR"/libtermin_components_collision.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_components_collision from $TERMIN_COMPONENTS_COLLISION_LIBDIR"
+else
+    echo "  WARNING: libtermin_components_collision not found in $TERMIN_COMPONENTS_COLLISION_LIBDIR — skipping libtermin_components_collision"
+fi
+
 # Copy Python packages from extracted modules
-echo "Copying Python packages from termin-inspect, termin-scene and termin-collision..."
+echo "Copying Python packages from termin-inspect, termin-scene, termin-collision and termin-components-collision..."
 PYTHON_DEST="$INSTALL_DIR/lib/python"
 
 TERMIN_INSPECT_PY="$ENV_DIR/termin-inspect/python"
@@ -207,6 +229,15 @@ if [[ -n "$COLLISION_SO" ]]; then
     echo "  Copied _collision_native from $TERMIN_COLLISION_BUILD"
 else
     echo "  WARNING: _collision_native.so not found in $TERMIN_COLLISION_BUILD"
+fi
+
+TERMIN_COMPONENTS_COLLISION_BUILD="$ENV_DIR/termin-components-collision/build"
+COMPONENTS_COLLISION_SO=$(find "$TERMIN_COMPONENTS_COLLISION_BUILD" -maxdepth 3 -name "_components_collision_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+if [[ -n "$COMPONENTS_COLLISION_SO" ]]; then
+    cp "$COMPONENTS_COLLISION_SO" "$PYTHON_DEST/termin/colliders/"
+    echo "  Copied _components_collision_native from $TERMIN_COMPONENTS_COLLISION_BUILD"
+else
+    echo "  WARNING: _components_collision_native.so not found in $TERMIN_COMPONENTS_COLLISION_BUILD"
 fi
 
 echo ""

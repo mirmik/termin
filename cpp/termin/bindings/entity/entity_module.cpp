@@ -3,7 +3,7 @@
 // Core types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
 // TcComponent, SoA) are registered in _scene_native and re-exported here.
 // This module adds domain-specific bindings: EntityRegistry, CameraComponent,
-// OrbitCameraController, ColliderComponent, InputEvents, ModuleLoader, lighting.
+// OrbitCameraController, InputEvents, ModuleLoader, lighting.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -14,7 +14,6 @@
 
 #include "../camera/camera_bindings.hpp"
 #include "../camera/orbit_camera_bindings.hpp"
-#include "../colliders/collider_bindings.hpp"
 #include "../input/input_events_bindings.hpp"
 #include "../../scene_bindings.hpp"
 
@@ -65,9 +64,6 @@ NB_MODULE(_entity_native, m) {
 
     // --- OrbitCameraController ---
     bind_orbit_camera_controller(m);
-
-    // --- ColliderComponent ---
-    bind_collider_component(m);
 
     // --- Input Events ---
     bind_input_events(m);

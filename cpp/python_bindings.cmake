@@ -56,7 +56,6 @@ nanobind_add_module(_entity_native NB_SHARED
     termin/bindings/entity/entity_module.cpp
     termin/bindings/camera/camera_bindings.cpp
     termin/bindings/camera/orbit_camera_bindings.cpp
-    termin/bindings/colliders/collider_bindings.cpp
     termin/bindings/input/input_events_bindings.cpp
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp

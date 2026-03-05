@@ -110,13 +110,15 @@ find_package(termin_graphics REQUIRED)
 # termin-inspect (extracted inspect/kind core + python bridge)
 find_package(termin_inspect REQUIRED)
 if(NOT BUILD_CSHARP_BINDINGS AND NOT TARGET termin_inspect::termin_inspect_python)
-    message(FATAL_ERROR "termin Python build requires termin_inspect::termin_inspect_python. Rebuild/install termin-inspect with TERMIN_INSPECT_BUILD_PYTHON=ON.")
+    message(FATAL_ERROR "termin Python build requires termin_inspect::termin_inspect_python. Rebuild/install termin-inspect with TERMIN_BUILD_PYTHON=ON.")
 endif()
 
 # termin-scene (C ECS core + C++ wrappers: Entity, Component, TcSceneRef)
 find_package(termin_scene REQUIRED)
-# termin-collision (colliders + collision world + collider component)
+# termin-collision (colliders + collision world)
 find_package(termin_collision REQUIRED)
+# termin-components-collision (ColliderComponent)
+find_package(termin_components_collision REQUIRED)
 
 # Core C library
 if(BUILD_TESTS)
@@ -182,7 +184,7 @@ target_include_directories(entity_lib PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 if(BUILD_CSHARP_BINDINGS)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision PRIVATE trent)
 else()
     # Find nanobind for entity_lib linking
     if(WIN32)
@@ -202,7 +204,7 @@ else()
     if(NOT TARGET nanobind)
         nanobind_build_library(nanobind)
     endif()
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision PRIVATE trent nanobind Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision PRIVATE trent nanobind Python::Python)
     target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 endif()
@@ -295,7 +297,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics)
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_components_collision::termin_components_collision)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES
