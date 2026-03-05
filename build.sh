@@ -262,7 +262,7 @@ else
     echo "  WARNING: _collision_native.so not found in $TERMIN_COLLISION_BUILD"
 fi
 
-TERMIN_COMPONENTS_COLLISION_BUILD="$ENV_DIR/termin-components-collision/build"
+TERMIN_COMPONENTS_COLLISION_BUILD="$ENV_DIR/termin-components/termin-components-collision/build"
 COMPONENTS_COLLISION_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_COLLISION_BUILD" "_components_collision_native*.so")
 if [[ -n "$COMPONENTS_COLLISION_SO" ]]; then
     cp "$COMPONENTS_COLLISION_SO" "$PYTHON_DEST/termin/colliders/"
@@ -271,7 +271,7 @@ else
     echo "  WARNING: _components_collision_native.so not found in $TERMIN_COMPONENTS_COLLISION_BUILD"
 fi
 
-TERMIN_COMPONENTS_MESH_BUILD="$ENV_DIR/termin-components-mesh/build"
+TERMIN_COMPONENTS_MESH_BUILD="$ENV_DIR/termin-components/termin-components-mesh/build"
 COMPONENTS_MESH_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_MESH_BUILD" "_components_mesh_native*.so")
 if [[ -n "$COMPONENTS_MESH_SO" ]]; then
     mkdir -p "$PYTHON_DEST/termin/mesh"
