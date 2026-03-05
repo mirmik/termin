@@ -151,6 +151,8 @@ jobs:
         run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2 /opt/termin/wheels/*.whl
 
       - name: Build and install
+        env:
+          CMAKE_PREFIX_PATH: /opt/termin
         run: pip install --no-build-isolation -e .
 
       - name: Run Python tests
